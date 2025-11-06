@@ -586,6 +586,30 @@ class DICOMViewerApp(QObject):
             # Display ROIs for this slice
             self._display_rois_for_slice(slice_index)
     
+    def eventFilter(self, obj, event) -> bool:
+        """
+        Event filter for handling key events.
+        
+        Args:
+            obj: Object that received the event
+            event: Event
+            
+        Returns:
+            True if event was handled, False otherwise
+        """
+        from PySide6.QtGui import QKeyEvent
+        if isinstance(event, QKeyEvent) and event.type() == QKeyEvent.Type.KeyPress:
+            # Delete key to delete selected ROI
+            if event.key() == Qt.Key.Key_Delete or event.key() == Qt.Key.Key_Backspace:
+                selected_roi = self.roi_manager.get_selected_roi()
+                if selected_roi:
+                    self.roi_manager.delete_roi(selected_roi, self.image_viewer.scene)
+                    self.roi_list_panel.update_roi_list(self.current_slice_index)
+                    self.roi_statistics_panel.clear_statistics()
+                    return True
+        
+        return super().eventFilter(obj, event)
+    
     def run(self) -> int:
         """
         Run the application.
