@@ -44,6 +44,10 @@ class ImageViewer(QGraphicsView):
     # Signals
     zoom_changed = Signal(float)  # Emitted when zoom level changes
     image_clicked = Signal(QPointF)  # Emitted when image is clicked
+    roi_drawing_started = Signal(QPointF)  # Emitted when ROI drawing starts
+    roi_drawing_updated = Signal(QPointF)  # Emitted when ROI drawing updates
+    roi_drawing_finished = Signal()  # Emitted when ROI drawing finishes
+    wheel_event_for_slice = Signal(int)  # Emitted when wheel event should navigate slices
     
     def __init__(self, parent: Optional[QWidget] = None):
         """
@@ -70,6 +74,13 @@ class ImageViewer(QGraphicsView):
         # Pan settings
         self.pan_start_pos = QPointF()
         self.panning = False
+        
+        # ROI drawing mode
+        self.roi_drawing_mode: Optional[str] = None  # "rectangle", "ellipse", or None
+        self.roi_drawing_start: Optional[QPointF] = None
+        
+        # Scroll wheel mode
+        self.scroll_wheel_mode = "slice"  # "slice" or "zoom"
         
         # View settings
         self.setDragMode(QGraphicsView.DragMode.NoDrag)
@@ -157,33 +168,67 @@ class ImageViewer(QGraphicsView):
         self.current_zoom = 1.0
         self.zoom_changed.emit(self.current_zoom)
     
+    def set_scroll_wheel_mode(self, mode: str) -> None:
+        """
+        Set scroll wheel mode.
+        
+        Args:
+            mode: "slice" or "zoom"
+        """
+        if mode in ["slice", "zoom"]:
+            self.scroll_wheel_mode = mode
+    
     def wheelEvent(self, event: QWheelEvent) -> None:
         """
-        Handle mouse wheel events for zooming.
+        Handle mouse wheel events for zooming or slice navigation.
         
         Args:
             event: Wheel event
         """
-        # Check if zoom mode is enabled (will be controlled by scroll wheel mode setting)
-        # For now, always zoom
-        if event.angleDelta().y() > 0:
-            self.zoom_in()
+        # Use scroll wheel mode to determine behavior
+        if self.scroll_wheel_mode == "zoom":
+            # Zoom mode
+            if event.angleDelta().y() > 0:
+                self.zoom_in()
+            else:
+                self.zoom_out()
         else:
-            self.zoom_out()
+            # Slice navigation mode - emit signal for slice navigator
+            self.wheel_event_for_slice.emit(event.angleDelta().y())
         
         event.accept()
     
+    def set_roi_drawing_mode(self, mode: Optional[str]) -> None:
+        """
+        Set ROI drawing mode.
+        
+        Args:
+            mode: "rectangle", "ellipse", or None to disable
+        """
+        self.roi_drawing_mode = mode
+        if mode:
+            self.setCursor(Qt.CursorShape.CrossCursor)
+        else:
+            self.setCursor(Qt.CursorShape.ArrowCursor)
+    
     def mousePressEvent(self, event: QMouseEvent) -> None:
         """
-        Handle mouse press events for panning.
+        Handle mouse press events for panning or ROI drawing.
         
         Args:
             event: Mouse event
         """
         if event.button() == Qt.MouseButton.LeftButton:
-            self.pan_start_pos = event.position()
-            self.panning = True
-            self.setCursor(Qt.CursorShape.ClosedHandCursor)
+            if self.roi_drawing_mode:
+                # Start ROI drawing
+                scene_pos = self.mapToScene(event.position().toPoint())
+                self.roi_drawing_start = scene_pos
+                self.roi_drawing_started.emit(scene_pos)
+            else:
+                # Pan mode
+                self.pan_start_pos = event.position()
+                self.panning = True
+                self.setCursor(Qt.CursorShape.ClosedHandCursor)
         elif event.button() == Qt.MouseButton.RightButton:
             # Right click for context menu or other actions
             pass
@@ -192,12 +237,18 @@ class ImageViewer(QGraphicsView):
     
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
         """
-        Handle mouse move events for panning.
+        Handle mouse move events for panning or ROI drawing.
         
         Args:
             event: Mouse event
         """
-        if self.panning and event.buttons() & Qt.MouseButton.LeftButton:
+        if self.roi_drawing_mode and self.roi_drawing_start is not None:
+            # ROI drawing mode
+            if event.buttons() & Qt.MouseButton.LeftButton:
+                scene_pos = self.mapToScene(event.position().toPoint())
+                self.roi_drawing_updated.emit(scene_pos)
+        elif self.panning and event.buttons() & Qt.MouseButton.LeftButton:
+            # Pan mode
             # Calculate pan delta
             delta = event.position() - self.pan_start_pos
             self.pan_start_pos = event.position()
@@ -220,8 +271,15 @@ class ImageViewer(QGraphicsView):
             event: Mouse event
         """
         if event.button() == Qt.MouseButton.LeftButton:
-            self.panning = False
-            self.setCursor(Qt.CursorShape.ArrowCursor)
+            if self.roi_drawing_mode and self.roi_drawing_start is not None:
+                # Finish ROI drawing
+                self.roi_drawing_finished.emit()
+                self.roi_drawing_start = None
+            else:
+                # Pan mode
+                self.panning = False
+                if not self.roi_drawing_mode:
+                    self.setCursor(Qt.CursorShape.ArrowCursor)
         
         super().mouseReleaseEvent(event)
     

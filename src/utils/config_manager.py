@@ -61,6 +61,10 @@ class ConfigManager:
             "theme": "light",
             "overlay_mode": "minimal",  # minimal, detailed, hidden
             "overlay_custom_fields": [],
+            "overlay_font_size": 8,  # Default smaller font size
+            "overlay_font_color_r": 255,  # Yellow default
+            "overlay_font_color_g": 255,
+            "overlay_font_color_b": 0,
             "window_width": 1200,
             "window_height": 800,
             "scroll_wheel_mode": "slice",  # slice or zoom
@@ -228,5 +232,52 @@ class ConfigManager:
         """
         if mode in ["slice", "zoom"]:
             self.config["scroll_wheel_mode"] = mode
+            self.save_config()
+    
+    def get_overlay_font_size(self) -> int:
+        """
+        Get overlay font size.
+        
+        Returns:
+            Font size in points
+        """
+        return self.config.get("overlay_font_size", 8)
+    
+    def set_overlay_font_size(self, size: int) -> None:
+        """
+        Set overlay font size.
+        
+        Args:
+            size: Font size in points
+        """
+        if size > 0:
+            self.config["overlay_font_size"] = size
+            self.save_config()
+    
+    def get_overlay_font_color(self) -> tuple:
+        """
+        Get overlay font color as RGB tuple.
+        
+        Returns:
+            Tuple of (r, g, b) values (0-255)
+        """
+        r = self.config.get("overlay_font_color_r", 255)
+        g = self.config.get("overlay_font_color_g", 255)
+        b = self.config.get("overlay_font_color_b", 0)
+        return (r, g, b)
+    
+    def set_overlay_font_color(self, r: int, g: int, b: int) -> None:
+        """
+        Set overlay font color.
+        
+        Args:
+            r: Red component (0-255)
+            g: Green component (0-255)
+            b: Blue component (0-255)
+        """
+        if 0 <= r <= 255 and 0 <= g <= 255 and 0 <= b <= 255:
+            self.config["overlay_font_color_r"] = r
+            self.config["overlay_font_color_g"] = g
+            self.config["overlay_font_color_b"] = b
             self.save_config()
 
