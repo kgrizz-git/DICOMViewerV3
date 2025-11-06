@@ -25,7 +25,7 @@ src_dir = Path(__file__).parent
 sys.path.insert(0, str(src_dir))
 
 from PySide6.QtWidgets import QApplication, QMessageBox
-from PySide6.QtCore import Qt, QPointF
+from PySide6.QtCore import Qt, QPointF, QObject
 from PySide6.QtGui import QKeyEvent
 from typing import Optional
 import pydicom
@@ -53,7 +53,7 @@ from tools.histogram_widget import HistogramWidget
 from gui.overlay_manager import OverlayManager
 
 
-class DICOMViewerApp:
+class DICOMViewerApp(QObject):
     """
     Main application class for DICOM Viewer.
     
@@ -62,6 +62,9 @@ class DICOMViewerApp:
     
     def __init__(self):
         """Initialize the application."""
+        # Initialize QObject first
+        super().__init__()
+        
         # Create Qt application first (before any widgets)
         self.app = QApplication(sys.argv)
         self.app.setApplicationName("DICOM Viewer V2")
