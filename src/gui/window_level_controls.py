@@ -74,6 +74,7 @@ class WindowLevelControls(QWidget):
         self.center_slider = QSlider(Qt.Orientation.Horizontal)
         self.center_slider.setRange(0, 1000)
         self.center_slider.setValue(500)
+        self.center_slider.setMinimumWidth(150)  # Ensure slider is visible
         self.center_slider.valueChanged.connect(self._on_center_slider_changed)
         center_layout.addWidget(self.center_slider)
         
@@ -96,6 +97,7 @@ class WindowLevelControls(QWidget):
         self.width_slider = QSlider(Qt.Orientation.Horizontal)
         self.width_slider.setRange(1, 1000)
         self.width_slider.setValue(100)
+        self.width_slider.setMinimumWidth(150)  # Ensure slider is visible
         self.width_slider.valueChanged.connect(self._on_width_slider_changed)
         width_layout.addWidget(self.width_slider)
         

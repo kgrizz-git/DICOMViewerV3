@@ -61,10 +61,13 @@ class ConfigManager:
             "theme": "light",
             "overlay_mode": "minimal",  # minimal, detailed, hidden
             "overlay_custom_fields": [],
-            "overlay_font_size": 8,  # Default smaller font size
+            "overlay_font_size": 6,  # Default font size (6pt)
             "overlay_font_color_r": 255,  # Yellow default
             "overlay_font_color_g": 255,
             "overlay_font_color_b": 0,
+            # Overlay tag configuration: modality -> corner -> list of tags
+            # Default: current minimal fields go to upper-left for all modalities
+            "overlay_tags": {},  # Will store {modality: {corner: [tags]}}
             "window_width": 1200,
             "window_height": 800,
             "scroll_wheel_mode": "slice",  # slice or zoom
@@ -241,7 +244,7 @@ class ConfigManager:
         Returns:
             Font size in points
         """
-        return self.config.get("overlay_font_size", 8)
+        return self.config.get("overlay_font_size", 6)
     
     def set_overlay_font_size(self, size: int) -> None:
         """
@@ -280,4 +283,63 @@ class ConfigManager:
             self.config["overlay_font_color_g"] = g
             self.config["overlay_font_color_b"] = b
             self.save_config()
+    
+    def get_overlay_tags(self, modality: str = "default") -> Dict[str, List[str]]:
+        """
+        Get overlay tags for a modality, organized by corner.
+        
+        Args:
+            modality: Modality name (e.g., "CT", "MR", "default")
+            
+        Returns:
+            Dictionary with keys "upper_left", "upper_right", "lower_left", "lower_right"
+            and values as lists of tag keywords
+        """
+        if "overlay_tags" not in self.config:
+            self.config["overlay_tags"] = {}
+        
+        if modality not in self.config["overlay_tags"]:
+            # Return default: current minimal fields in upper-left
+            return {
+                "upper_left": ["PatientName", "StudyDate", "SeriesDescription", "InstanceNumber"],
+                "upper_right": [],
+                "lower_left": [],
+                "lower_right": []
+            }
+        
+        tags = self.config["overlay_tags"][modality]
+        # Ensure all corners exist
+        result = {
+            "upper_left": tags.get("upper_left", []),
+            "upper_right": tags.get("upper_right", []),
+            "lower_left": tags.get("lower_left", []),
+            "lower_right": tags.get("lower_right", [])
+        }
+        return result
+    
+    def set_overlay_tags(self, modality: str, corner_tags: Dict[str, List[str]]) -> None:
+        """
+        Set overlay tags for a modality.
+        
+        Args:
+            modality: Modality name (e.g., "CT", "MR")
+            corner_tags: Dictionary with keys "upper_left", "upper_right", "lower_left", "lower_right"
+                        and values as lists of tag keywords
+        """
+        if "overlay_tags" not in self.config:
+            self.config["overlay_tags"] = {}
+        
+        self.config["overlay_tags"][modality] = corner_tags
+        self.save_config()
+    
+    def get_all_modalities(self) -> List[str]:
+        """
+        Get list of all modalities with saved overlay configurations.
+        
+        Returns:
+            List of modality names
+        """
+        if "overlay_tags" not in self.config:
+            return []
+        return list(self.config["overlay_tags"].keys())
 

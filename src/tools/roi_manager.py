@@ -18,7 +18,7 @@ Requirements:
     - numpy for statistics calculations
 """
 
-from PySide6.QtWidgets import QGraphicsEllipseItem, QGraphicsRectItem
+from PySide6.QtWidgets import QGraphicsEllipseItem, QGraphicsRectItem, QGraphicsItem
 from PySide6.QtCore import Qt, QRectF, QPointF
 from PySide6.QtGui import QPen, QColor
 from typing import List, Optional, Tuple, Dict
@@ -43,11 +43,19 @@ class ROIItem:
         self.item = item
         self.id = id(self)
         
-        # Set pen style
-        pen = QPen(QColor(255, 0, 0), 2)  # Red, 2px width
+        # Set pen style - thinner line (1px)
+        pen = QPen(QColor(255, 0, 0), 1)  # Red, 1px width
         pen.setStyle(Qt.PenStyle.DashLine)
         self.item.setPen(pen)
         self.item.setBrush(Qt.BrushStyle.NoBrush)
+        
+        # Make item selectable and movable
+        self.item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
+        self.item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
+        self.item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemSendsGeometryChanges, True)
+        
+        # Store callback for when ROI is moved
+        self.on_moved_callback = None
     
     def get_bounds(self) -> QRectF:
         """
@@ -110,6 +118,7 @@ class ROIManager:
         self.drawing_start_pos: Optional[QPointF] = None
         self.current_roi_item: Optional[ROIItem] = None
         self.current_shape_type = "rectangle"  # "rectangle" or "ellipse"
+        self.selected_roi: Optional[ROIItem] = None  # Currently selected ROI
     
     def set_current_slice(self, slice_index: int) -> None:
         """
@@ -165,6 +174,9 @@ class ROIManager:
             item = QGraphicsEllipseItem(rect)
         
         self.current_roi_item = ROIItem(self.current_shape_type, item)
+        # Don't make drawing ROI selectable/movable yet (will be enabled when finished)
+        self.current_roi_item.item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, False)
+        self.current_roi_item.item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, False)
         scene.addItem(item)
     
     def finish_drawing(self) -> Optional[ROIItem]:
@@ -184,12 +196,84 @@ class ROIManager:
         
         self.rois[self.current_slice_index].append(self.current_roi_item)
         
+        # Enable selectable/movable now that drawing is finished
+        self.current_roi_item.item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
+        self.current_roi_item.item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
+        
+        # Select the newly created ROI
+        self.select_roi(self.current_roi_item)
+        
         self.drawing = False
         self.drawing_start_pos = None
         roi = self.current_roi_item
         self.current_roi_item = None
         
         return roi
+    
+    def select_roi(self, roi: Optional[ROIItem]) -> None:
+        """
+        Select a ROI.
+        
+        Args:
+            roi: ROI item to select, or None to deselect
+        """
+        # Deselect previous ROI
+        if self.selected_roi is not None:
+            self.selected_roi.item.setSelected(False)
+        
+        # Select new ROI
+        self.selected_roi = roi
+        if roi is not None:
+            roi.item.setSelected(True)
+    
+    def get_selected_roi(self) -> Optional[ROIItem]:
+        """
+        Get currently selected ROI.
+        
+        Returns:
+            Selected ROI item or None
+        """
+        return self.selected_roi
+    
+    def find_roi_by_item(self, item) -> Optional[ROIItem]:
+        """
+        Find ROI item by graphics item.
+        
+        Args:
+            item: QGraphicsItem
+            
+        Returns:
+            ROIItem or None
+        """
+        for slice_index, roi_list in self.rois.items():
+            for roi in roi_list:
+                if roi.item == item:
+                    return roi
+        return None
+    
+    def delete_roi(self, roi: ROIItem, scene) -> bool:
+        """
+        Delete a ROI.
+        
+        Args:
+            roi: ROI item to delete
+            scene: QGraphicsScene to remove item from
+            
+        Returns:
+            True if deleted, False otherwise
+        """
+        # Find and remove from rois dict
+        for slice_index, roi_list in self.rois.items():
+            if roi in roi_list:
+                roi_list.remove(roi)
+                scene.removeItem(roi.item)
+                
+                # Deselect if this was the selected ROI
+                if self.selected_roi == roi:
+                    self.selected_roi = None
+                
+                return True
+        return False
     
     def get_rois_for_slice(self, slice_index: int) -> List[ROIItem]:
         """
@@ -240,6 +324,27 @@ class ROIManager:
             Dictionary with statistics (mean, std, min, max, etc.)
         """
         height, width = pixel_array.shape[:2]
+        
+        # Get ROI bounds in scene coordinates
+        bounds = roi.get_bounds()
+        
+        # Convert scene coordinates to pixel coordinates
+        # Note: This assumes 1:1 mapping - may need adjustment based on image scaling
+        x1 = int(max(0, bounds.left()))
+        y1 = int(max(0, bounds.top()))
+        x2 = int(min(width, bounds.right()))
+        y2 = int(min(height, bounds.bottom()))
+        
+        if x2 <= x1 or y2 <= y1:
+            return {
+                "mean": 0.0,
+                "std": 0.0,
+                "min": 0.0,
+                "max": 0.0,
+                "count": 0
+            }
+        
+        # Get mask for ROI shape
         mask = roi.get_mask(width, height)
         
         # Get pixels within ROI

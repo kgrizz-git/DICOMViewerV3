@@ -49,6 +49,7 @@ class MainWindow(QMainWindow):
     export_requested = Signal()
     settings_requested = Signal()
     tag_viewer_requested = Signal()
+    overlay_config_requested = Signal()
     
     def __init__(self, config_manager: Optional[ConfigManager] = None):
         """
@@ -144,6 +145,12 @@ class MainWindow(QMainWindow):
         tag_viewer_action.setShortcut(QKeySequence("Ctrl+T"))
         tag_viewer_action.triggered.connect(self.tag_viewer_requested.emit)
         tools_menu.addAction(tag_viewer_action)
+        
+        # Overlay Configuration action
+        overlay_config_action = QAction("Overlay &Configuration...", self)
+        overlay_config_action.setShortcut(QKeySequence("Ctrl+O"))
+        overlay_config_action.triggered.connect(self.overlay_config_requested.emit)
+        tools_menu.addAction(overlay_config_action)
         
         # Help menu
         help_menu = menubar.addMenu("&Help")

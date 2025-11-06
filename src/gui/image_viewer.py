@@ -48,6 +48,7 @@ class ImageViewer(QGraphicsView):
     roi_drawing_updated = Signal(QPointF)  # Emitted when ROI drawing updates
     roi_drawing_finished = Signal()  # Emitted when ROI drawing finishes
     wheel_event_for_slice = Signal(int)  # Emitted when wheel event should navigate slices
+    roi_clicked = Signal(object)  # Emitted when ROI is clicked (ROIItem)
     
     def __init__(self, parent: Optional[QWidget] = None):
         """
@@ -225,10 +226,20 @@ class ImageViewer(QGraphicsView):
                 self.roi_drawing_start = scene_pos
                 self.roi_drawing_started.emit(scene_pos)
             else:
-                # Pan mode
-                self.pan_start_pos = event.position()
-                self.panning = True
-                self.setCursor(Qt.CursorShape.ClosedHandCursor)
+                # Check if clicking on ROI
+                scene_pos = self.mapToScene(event.position().toPoint())
+                item = self.scene.itemAt(scene_pos, self.transform())
+                
+                # Check if it's a ROI item (QGraphicsRectItem or QGraphicsEllipseItem)
+                from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsEllipseItem
+                if isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem)):
+                    # Emit signal for ROI click (will be handled by main app)
+                    self.roi_clicked.emit(item)
+                else:
+                    # Pan mode
+                    self.pan_start_pos = event.position()
+                    self.panning = True
+                    self.setCursor(Qt.CursorShape.ClosedHandCursor)
         elif event.button() == Qt.MouseButton.RightButton:
             # Right click for context menu or other actions
             pass

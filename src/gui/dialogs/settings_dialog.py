@@ -70,8 +70,8 @@ class SettingsDialog(QDialog):
         
         # Font Size
         self.font_size_spinbox = QSpinBox()
-        self.font_size_spinbox.setRange(6, 24)
-        self.font_size_spinbox.setValue(8)
+        self.font_size_spinbox.setRange(1, 24)
+        self.font_size_spinbox.setValue(6)
         self.font_size_spinbox.setSuffix(" pt")
         overlay_layout.addRow("Font Size:", self.font_size_spinbox)
         
