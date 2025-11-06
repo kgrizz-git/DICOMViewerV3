@@ -126,17 +126,20 @@ class WindowLevelControls(QWidget):
         # We'll map the actual ranges to slider positions
         pass  # Implementation can be added if needed
     
-    def set_window_level(self, center: float, width: float) -> None:
+    def set_window_level(self, center: float, width: float, block_signals: bool = False) -> None:
         """
         Set window center and width values.
         
         Args:
             center: Window center value
             width: Window width value
+            block_signals: If True, don't emit window_changed signal
         """
         # Block signals to prevent recursive updates
         self.center_spinbox.blockSignals(True)
         self.width_spinbox.blockSignals(True)
+        self.center_slider.blockSignals(True)
+        self.width_slider.blockSignals(True)
         
         self.window_center = center
         self.window_width = width
@@ -145,18 +148,30 @@ class WindowLevelControls(QWidget):
         self.width_spinbox.setValue(width)
         
         # Update sliders (normalize to 0-1000 range)
-        center_normalized = int((center - self.center_range[0]) / 
-                               (self.center_range[1] - self.center_range[0]) * 1000)
-        center_normalized = max(0, min(1000, center_normalized))
+        center_range_size = self.center_range[1] - self.center_range[0]
+        if center_range_size > 0:
+            center_normalized = int((center - self.center_range[0]) / center_range_size * 1000)
+            center_normalized = max(0, min(1000, center_normalized))
+        else:
+            center_normalized = 500
         self.center_slider.setValue(center_normalized)
         
-        width_normalized = int((width - self.width_range[0]) / 
-                              (self.width_range[1] - self.width_range[0]) * 1000)
-        width_normalized = max(1, min(1000, width_normalized))
+        width_range_size = self.width_range[1] - self.width_range[0]
+        if width_range_size > 0:
+            width_normalized = int((width - self.width_range[0]) / width_range_size * 1000)
+            width_normalized = max(1, min(1000, width_normalized))
+        else:
+            width_normalized = 100
         self.width_slider.setValue(width_normalized)
         
         self.center_spinbox.blockSignals(False)
         self.width_spinbox.blockSignals(False)
+        self.center_slider.blockSignals(False)
+        self.width_slider.blockSignals(False)
+        
+        # Emit signal if not blocking
+        if not block_signals:
+            self.window_changed.emit(self.window_center, self.window_width)
     
     def _on_center_changed(self, value: float) -> None:
         """
@@ -186,8 +201,20 @@ class WindowLevelControls(QWidget):
             value: Slider value (0-1000)
         """
         # Convert slider value to actual range
-        center = self.center_range[0] + (value / 1000.0) * (self.center_range[1] - self.center_range[0])
-        self.set_window_level(center, self.window_width)
+        center_range_size = self.center_range[1] - self.center_range[0]
+        if center_range_size > 0:
+            center = self.center_range[0] + (value / 1000.0) * center_range_size
+        else:
+            center = self.window_center
+        
+        # Update values without blocking signals (slider signals already handled)
+        self.window_center = center
+        self.center_spinbox.blockSignals(True)
+        self.center_spinbox.setValue(center)
+        self.center_spinbox.blockSignals(False)
+        
+        # Emit signal
+        self.window_changed.emit(self.window_center, self.window_width)
     
     def _on_width_slider_changed(self, value: int) -> None:
         """
@@ -197,8 +224,20 @@ class WindowLevelControls(QWidget):
             value: Slider value (0-1000)
         """
         # Convert slider value to actual range
-        width = self.width_range[0] + (value / 1000.0) * (self.width_range[1] - self.width_range[0])
-        self.set_window_level(self.window_center, width)
+        width_range_size = self.width_range[1] - self.width_range[0]
+        if width_range_size > 0:
+            width = self.width_range[0] + (value / 1000.0) * width_range_size
+        else:
+            width = self.window_width
+        
+        # Update values without blocking signals (slider signals already handled)
+        self.window_width = width
+        self.width_spinbox.blockSignals(True)
+        self.width_spinbox.setValue(width)
+        self.width_spinbox.blockSignals(False)
+        
+        # Emit signal
+        self.window_changed.emit(self.window_center, self.window_width)
     
     def get_window_level(self) -> tuple:
         """

@@ -164,17 +164,6 @@ class DICOMViewerApp(QObject):
         # Overlay configuration
         self.main_window.overlay_config_requested.connect(self._open_overlay_config)
         
-        # ROI tools
-        self.main_window.roi_rectangle_action.triggered.connect(
-            lambda: self._set_roi_mode("rectangle")
-        )
-        self.main_window.roi_ellipse_action.triggered.connect(
-            lambda: self._set_roi_mode("ellipse")
-        )
-        self.main_window.roi_none_action.triggered.connect(
-            lambda: self._set_roi_mode(None)
-        )
-        
         # ROI drawing signals
         self.image_viewer.roi_drawing_started.connect(self._on_roi_drawing_started)
         self.image_viewer.roi_drawing_updated.connect(self._on_roi_drawing_updated)
@@ -200,6 +189,9 @@ class DICOMViewerApp(QObject):
         
         # Slice navigation
         self.slice_navigator.slice_changed.connect(self._on_slice_changed)
+        
+        # Mouse mode changes
+        self.main_window.mouse_mode_changed.connect(self._on_mouse_mode_changed)
     
     def _open_files(self) -> None:
         """Handle open files request."""
@@ -336,10 +328,28 @@ class DICOMViewerApp(QObject):
             if self.tag_viewer_dialog is not None and self.tag_viewer_dialog.isVisible():
                 self.tag_viewer_dialog.set_dataset(dataset)
             
-            # Update window/level controls
+            # Calculate pixel value range for window/level controls
+            pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(dataset)
+            if pixel_min is not None and pixel_max is not None:
+                # Set ranges based on actual pixel values
+                # Add some margin for window center range
+                center_range = (pixel_min - (pixel_max - pixel_min) * 0.1, 
+                              pixel_max + (pixel_max - pixel_min) * 0.1)
+                # Width range from 1 to 2x the pixel range
+                width_range = (1.0, max(1.0, (pixel_max - pixel_min) * 2.0))
+                self.window_level_controls.set_ranges(center_range, width_range)
+            
+            # Update window/level controls with values from dataset
             wc, ww = self.dicom_processor.get_window_level_from_dataset(dataset)
             if wc is not None and ww is not None:
-                self.window_level_controls.set_window_level(wc, ww)
+                self.window_level_controls.set_window_level(wc, ww, block_signals=True)
+            elif pixel_min is not None and pixel_max is not None:
+                # Use default window/level based on pixel range
+                default_center = (pixel_min + pixel_max) / 2.0
+                default_width = pixel_max - pixel_min
+                if default_width <= 0:
+                    default_width = 1.0
+                self.window_level_controls.set_window_level(default_center, default_width, block_signals=True)
             
             # Update overlay
             parser = DICOMParser(dataset)
@@ -358,14 +368,37 @@ class DICOMViewerApp(QObject):
         """
         Display ROIs for a slice.
         
+        Ensures all ROIs for the current slice are visible in the scene.
+        
         Args:
             slice_index: Slice index
         """
+        # Get all ROIs for this slice
         rois = self.roi_manager.get_rois_for_slice(slice_index)
+        
+        # Remove ROIs from other slices from the scene
+        # (but keep them in the manager's storage)
+        current_scene_items = list(self.image_viewer.scene.items())
+        for item in current_scene_items:
+            # Check if this item is an ROI from a different slice
+            roi = self.roi_manager.find_roi_by_item(item)
+            if roi is not None:
+                # Check if this ROI belongs to current slice
+                roi_slice = None
+                for s_idx, roi_list in self.roi_manager.rois.items():
+                    if roi in roi_list:
+                        roi_slice = s_idx
+                        break
+                # Remove ROI if it's from a different slice
+                if roi_slice is not None and roi_slice != slice_index:
+                    self.image_viewer.scene.removeItem(item)
+        
+        # Add ROIs for current slice to scene if not already there
         for roi in rois:
-            # Add ROI item to scene if not already there
             if roi.item.scene() != self.image_viewer.scene:
                 self.image_viewer.scene.addItem(roi.item)
+                # Ensure ROI is visible (set appropriate Z-value)
+                roi.item.setZValue(100)  # Above image but below overlay
     
     def _open_settings(self) -> None:
         """Handle settings dialog request."""
@@ -452,9 +485,18 @@ class DICOMViewerApp(QObject):
                         parser
                     )
     
+    def _on_mouse_mode_changed(self, mode: str) -> None:
+        """
+        Handle mouse mode change from toolbar.
+        
+        Args:
+            mode: Mouse mode ("roi_ellipse", "roi_rectangle", "measure", "zoom", "pan")
+        """
+        self.image_viewer.set_mouse_mode(mode)
+    
     def _set_roi_mode(self, mode: Optional[str]) -> None:
         """
-        Set ROI drawing mode.
+        Set ROI drawing mode (legacy method for backward compatibility).
         
         Args:
             mode: "rectangle", "ellipse", or None

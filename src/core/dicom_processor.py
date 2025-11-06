@@ -260,4 +260,37 @@ class DICOMProcessor:
         mip = np.max(stacked, axis=0).astype(np.float32)
         
         return mip
+    
+    @staticmethod
+    def get_pixel_value_range(dataset: Dataset) -> Tuple[Optional[float], Optional[float]]:
+        """
+        Get the minimum and maximum pixel values from a DICOM dataset.
+        Considers rescale slope and intercept if present.
+        
+        Args:
+            dataset: pydicom Dataset
+            
+        Returns:
+            Tuple of (min_value, max_value) or (None, None) if extraction fails
+        """
+        try:
+            pixel_array = DICOMProcessor.get_pixel_array(dataset)
+            if pixel_array is None:
+                return None, None
+            
+            # Get rescale parameters
+            rescale_slope = getattr(dataset, 'RescaleSlope', None)
+            rescale_intercept = getattr(dataset, 'RescaleIntercept', None)
+            
+            # Apply rescale if present
+            if rescale_slope is not None and rescale_intercept is not None:
+                pixel_array = pixel_array.astype(np.float32) * float(rescale_slope) + float(rescale_intercept)
+            
+            pixel_min = float(np.min(pixel_array))
+            pixel_max = float(np.max(pixel_array))
+            
+            return pixel_min, pixel_max
+        except Exception as e:
+            print(f"Error calculating pixel value range: {e}")
+            return None, None
 

@@ -76,7 +76,10 @@ class ImageViewer(QGraphicsView):
         self.pan_start_pos = QPointF()
         self.panning = False
         
-        # ROI drawing mode
+        # Mouse interaction mode
+        self.mouse_mode = "pan"  # "roi_ellipse", "roi_rectangle", "measure", "zoom", "pan"
+        
+        # ROI drawing mode (derived from mouse_mode)
         self.roi_drawing_mode: Optional[str] = None  # "rectangle", "ellipse", or None
         self.roi_drawing_start: Optional[QPointF] = None
         
@@ -96,6 +99,8 @@ class ImageViewer(QGraphicsView):
     def set_image(self, image: Image.Image) -> None:
         """
         Set the image to display.
+        
+        Preserves existing ROIs and overlay items when changing images.
         
         Args:
             image: PIL Image to display
@@ -117,12 +122,15 @@ class ImageViewer(QGraphicsView):
         
         pixmap = QPixmap.fromImage(qimage)
         
-        # Remove old image item
+        # Remove old image item only
+        # Note: ROIs and overlays will be preserved and re-added by their managers
         if self.image_item is not None:
             self.scene.removeItem(self.image_item)
         
         # Create new image item
         self.image_item = QGraphicsPixmapItem(pixmap)
+        # Set image item to lowest Z-value so other items appear on top
+        self.image_item.setZValue(0)
         self.scene.addItem(self.image_item)
         
         # Reset zoom and fit to view
@@ -199,9 +207,35 @@ class ImageViewer(QGraphicsView):
         
         event.accept()
     
+    def set_mouse_mode(self, mode: str) -> None:
+        """
+        Set mouse interaction mode.
+        
+        Args:
+            mode: "roi_ellipse", "roi_rectangle", "measure", "zoom", or "pan"
+        """
+        self.mouse_mode = mode
+        
+        # Update ROI drawing mode based on mouse mode
+        if mode == "roi_ellipse":
+            self.roi_drawing_mode = "ellipse"
+            self.setCursor(Qt.CursorShape.CrossCursor)
+        elif mode == "roi_rectangle":
+            self.roi_drawing_mode = "rectangle"
+            self.setCursor(Qt.CursorShape.CrossCursor)
+        elif mode == "measure":
+            self.roi_drawing_mode = None
+            self.setCursor(Qt.CursorShape.CrossCursor)  # Could use different cursor
+        elif mode == "zoom":
+            self.roi_drawing_mode = None
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
+        else:  # pan
+            self.roi_drawing_mode = None
+            self.setCursor(Qt.CursorShape.ArrowCursor)
+    
     def set_roi_drawing_mode(self, mode: Optional[str]) -> None:
         """
-        Set ROI drawing mode.
+        Set ROI drawing mode (legacy method for backward compatibility).
         
         Args:
             mode: "rectangle", "ellipse", or None to disable
@@ -220,26 +254,27 @@ class ImageViewer(QGraphicsView):
             event: Mouse event
         """
         if event.button() == Qt.MouseButton.LeftButton:
-            if self.roi_drawing_mode:
-                # Start ROI drawing
-                scene_pos = self.mapToScene(event.position().toPoint())
+            # First check if clicking on existing ROI item
+            scene_pos = self.mapToScene(event.position().toPoint())
+            item = self.scene.itemAt(scene_pos, self.transform())
+            
+            # Check if it's a ROI item (QGraphicsRectItem or QGraphicsEllipseItem)
+            from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsEllipseItem
+            is_roi_item = isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem))
+            
+            if is_roi_item:
+                # Clicking on existing ROI - emit signal for ROI click
+                # This allows ROI selection/movement without starting new drawing
+                self.roi_clicked.emit(item)
+            elif self.roi_drawing_mode:
+                # Start ROI drawing only if not clicking on existing ROI
                 self.roi_drawing_start = scene_pos
                 self.roi_drawing_started.emit(scene_pos)
             else:
-                # Check if clicking on ROI
-                scene_pos = self.mapToScene(event.position().toPoint())
-                item = self.scene.itemAt(scene_pos, self.transform())
-                
-                # Check if it's a ROI item (QGraphicsRectItem or QGraphicsEllipseItem)
-                from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsEllipseItem
-                if isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem)):
-                    # Emit signal for ROI click (will be handled by main app)
-                    self.roi_clicked.emit(item)
-                else:
-                    # Pan mode
-                    self.pan_start_pos = event.position()
-                    self.panning = True
-                    self.setCursor(Qt.CursorShape.ClosedHandCursor)
+                # Pan mode
+                self.pan_start_pos = event.position()
+                self.panning = True
+                self.setCursor(Qt.CursorShape.ClosedHandCursor)
         elif event.button() == Qt.MouseButton.RightButton:
             # Right click for context menu or other actions
             pass

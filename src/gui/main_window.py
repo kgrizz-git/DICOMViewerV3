@@ -50,6 +50,7 @@ class MainWindow(QMainWindow):
     settings_requested = Signal()
     tag_viewer_requested = Signal()
     overlay_config_requested = Signal()
+    mouse_mode_changed = Signal(str)  # Emitted when mouse mode changes ("roi_ellipse", "roi_rectangle", "measure", "zoom", "pan")
     
     def __init__(self, config_manager: Optional[ConfigManager] = None):
         """
@@ -115,19 +116,19 @@ class MainWindow(QMainWindow):
         # View menu
         view_menu = menubar.addMenu("&View")
         
-        # Theme actions
+        # Theme actions (exclusive)
         theme_menu = view_menu.addMenu("&Theme")
-        light_theme_action = QAction("&Light", self)
-        light_theme_action.setCheckable(True)
-        light_theme_action.setChecked(self.config_manager.get_theme() == "light")
-        light_theme_action.triggered.connect(lambda: self._set_theme("light"))
-        theme_menu.addAction(light_theme_action)
+        self.light_theme_action = QAction("&Light", self)
+        self.light_theme_action.setCheckable(True)
+        self.light_theme_action.setChecked(self.config_manager.get_theme() == "light")
+        self.light_theme_action.triggered.connect(lambda: self._set_theme("light"))
+        theme_menu.addAction(self.light_theme_action)
         
-        dark_theme_action = QAction("&Dark", self)
-        dark_theme_action.setCheckable(True)
-        dark_theme_action.setChecked(self.config_manager.get_theme() == "dark")
-        dark_theme_action.triggered.connect(lambda: self._set_theme("dark"))
-        theme_menu.addAction(dark_theme_action)
+        self.dark_theme_action = QAction("&Dark", self)
+        self.dark_theme_action.setCheckable(True)
+        self.dark_theme_action.setChecked(self.config_manager.get_theme() == "dark")
+        self.dark_theme_action.triggered.connect(lambda: self._set_theme("dark"))
+        theme_menu.addAction(self.dark_theme_action)
         
         # Tools menu
         tools_menu = menubar.addMenu("&Tools")
@@ -172,30 +173,42 @@ class MainWindow(QMainWindow):
         
         toolbar.addSeparator()
         
-        # ROI tools
-        self.roi_rectangle_action = QAction("Rectangle ROI", self)
-        self.roi_rectangle_action.setCheckable(True)
-        toolbar.addAction(self.roi_rectangle_action)
-        
-        self.roi_ellipse_action = QAction("Ellipse ROI", self)
-        self.roi_ellipse_action.setCheckable(True)
-        toolbar.addAction(self.roi_ellipse_action)
-        
-        self.roi_none_action = QAction("None", self)
-        self.roi_none_action.setCheckable(True)
-        self.roi_none_action.setChecked(True)
-        toolbar.addAction(self.roi_none_action)
-        
-        # Connect actions to handle exclusivity manually
-        self.roi_rectangle_action.triggered.connect(
-            lambda: self._on_roi_action_triggered("rectangle")
+        # Mouse interaction mode buttons (exclusive)
+        self.mouse_mode_ellipse_roi_action = QAction("Ellipse ROI", self)
+        self.mouse_mode_ellipse_roi_action.setCheckable(True)
+        self.mouse_mode_ellipse_roi_action.triggered.connect(
+            lambda: self._on_mouse_mode_changed("roi_ellipse")
         )
-        self.roi_ellipse_action.triggered.connect(
-            lambda: self._on_roi_action_triggered("ellipse")
+        toolbar.addAction(self.mouse_mode_ellipse_roi_action)
+        
+        self.mouse_mode_rectangle_roi_action = QAction("Rectangle ROI", self)
+        self.mouse_mode_rectangle_roi_action.setCheckable(True)
+        self.mouse_mode_rectangle_roi_action.triggered.connect(
+            lambda: self._on_mouse_mode_changed("roi_rectangle")
         )
-        self.roi_none_action.triggered.connect(
-            lambda: self._on_roi_action_triggered(None)
+        toolbar.addAction(self.mouse_mode_rectangle_roi_action)
+        
+        self.mouse_mode_measure_action = QAction("Measure", self)
+        self.mouse_mode_measure_action.setCheckable(True)
+        self.mouse_mode_measure_action.triggered.connect(
+            lambda: self._on_mouse_mode_changed("measure")
         )
+        toolbar.addAction(self.mouse_mode_measure_action)
+        
+        self.mouse_mode_zoom_action = QAction("Zoom", self)
+        self.mouse_mode_zoom_action.setCheckable(True)
+        self.mouse_mode_zoom_action.triggered.connect(
+            lambda: self._on_mouse_mode_changed("zoom")
+        )
+        toolbar.addAction(self.mouse_mode_zoom_action)
+        
+        self.mouse_mode_pan_action = QAction("Pan", self)
+        self.mouse_mode_pan_action.setCheckable(True)
+        self.mouse_mode_pan_action.setChecked(True)  # Default mode
+        self.mouse_mode_pan_action.triggered.connect(
+            lambda: self._on_mouse_mode_changed("pan")
+        )
+        toolbar.addAction(self.mouse_mode_pan_action)
     
     def _create_status_bar(self) -> None:
         """Create the status bar."""
@@ -267,9 +280,20 @@ class MainWindow(QMainWindow):
         """
         Set the application theme.
         
+        Ensures theme actions are mutually exclusive and saves preference.
+        
         Args:
             theme: Theme name ("light" or "dark")
         """
+        # Update action states to ensure exclusivity
+        if theme == "light":
+            self.light_theme_action.setChecked(True)
+            self.dark_theme_action.setChecked(False)
+        else:  # dark
+            self.light_theme_action.setChecked(False)
+            self.dark_theme_action.setChecked(True)
+        
+        # Save to config and apply
         self.config_manager.set_theme(theme)
         self._apply_theme()
     
@@ -284,23 +308,36 @@ class MainWindow(QMainWindow):
                          "- Customizable metadata overlays\n"
                          "- Export to multiple formats")
     
-    def _on_roi_action_triggered(self, mode: Optional[str]) -> None:
+    def _on_mouse_mode_changed(self, mode: str) -> None:
         """
-        Handle ROI action trigger to ensure exclusivity.
+        Handle mouse mode change to ensure exclusivity.
         
         Args:
-            mode: ROI mode ("rectangle", "ellipse", or None)
+            mode: Mouse mode ("roi_ellipse", "roi_rectangle", "measure", "zoom", "pan")
         """
-        # Uncheck other actions
-        if mode == "rectangle":
-            self.roi_ellipse_action.setChecked(False)
-            self.roi_none_action.setChecked(False)
-        elif mode == "ellipse":
-            self.roi_rectangle_action.setChecked(False)
-            self.roi_none_action.setChecked(False)
-        else:  # None
-            self.roi_rectangle_action.setChecked(False)
-            self.roi_ellipse_action.setChecked(False)
+        # Uncheck all other actions
+        all_actions = [
+            self.mouse_mode_ellipse_roi_action,
+            self.mouse_mode_rectangle_roi_action,
+            self.mouse_mode_measure_action,
+            self.mouse_mode_zoom_action,
+            self.mouse_mode_pan_action
+        ]
+        
+        for action in all_actions:
+            if action != self.mouse_mode_ellipse_roi_action and mode == "roi_ellipse":
+                action.setChecked(False)
+            elif action != self.mouse_mode_rectangle_roi_action and mode == "roi_rectangle":
+                action.setChecked(False)
+            elif action != self.mouse_mode_measure_action and mode == "measure":
+                action.setChecked(False)
+            elif action != self.mouse_mode_zoom_action and mode == "zoom":
+                action.setChecked(False)
+            elif action != self.mouse_mode_pan_action and mode == "pan":
+                action.setChecked(False)
+        
+        # Emit signal
+        self.mouse_mode_changed.emit(mode)
     
     def update_status(self, message: str) -> None:
         """
