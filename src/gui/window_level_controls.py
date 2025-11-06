@@ -1,0 +1,206 @@
+"""
+Window/Level Controls
+
+This module provides controls for adjusting window width and level
+with numerical input and mouse controls.
+
+Inputs:
+    - Window center and width values
+    - User input (sliders, spinboxes, mouse)
+    
+Outputs:
+    - Updated window/level values
+    - Signals for value changes
+    
+Requirements:
+    - PySide6 for GUI controls
+"""
+
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+                                QDoubleSpinBox, QSlider)
+from PySide6.QtCore import Qt, Signal
+from typing import Optional
+
+
+class WindowLevelControls(QWidget):
+    """
+    Widget for controlling window width and level.
+    
+    Provides:
+    - Numerical input (spinboxes)
+    - Slider controls
+    - Mouse adjustment capability (via signals)
+    """
+    
+    # Signals
+    window_changed = Signal(float, float)  # (center, width)
+    
+    def __init__(self, parent=None):
+        """
+        Initialize window/level controls.
+        
+        Args:
+            parent: Parent widget
+        """
+        super().__init__(parent)
+        
+        self.window_center = 0.0
+        self.window_width = 0.0
+        self.center_range = (-10000.0, 10000.0)
+        self.width_range = (1.0, 10000.0)
+        
+        self._create_ui()
+    
+    def _create_ui(self) -> None:
+        """Create the UI components."""
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(5, 5, 5, 5)
+        
+        # Window Center
+        center_layout = QHBoxLayout()
+        center_label = QLabel("Window Center:")
+        center_label.setMinimumWidth(100)
+        center_layout.addWidget(center_label)
+        
+        self.center_spinbox = QDoubleSpinBox()
+        self.center_spinbox.setRange(*self.center_range)
+        self.center_spinbox.setValue(0.0)
+        self.center_spinbox.setDecimals(1)
+        self.center_spinbox.valueChanged.connect(self._on_center_changed)
+        center_layout.addWidget(self.center_spinbox)
+        
+        self.center_slider = QSlider(Qt.Orientation.Horizontal)
+        self.center_slider.setRange(0, 1000)
+        self.center_slider.setValue(500)
+        self.center_slider.valueChanged.connect(self._on_center_slider_changed)
+        center_layout.addWidget(self.center_slider)
+        
+        layout.addLayout(center_layout)
+        
+        # Window Width
+        width_layout = QHBoxLayout()
+        width_label = QLabel("Window Width:")
+        width_label.setMinimumWidth(100)
+        width_layout.addWidget(width_label)
+        
+        self.width_spinbox = QDoubleSpinBox()
+        self.width_spinbox.setRange(*self.width_range)
+        self.width_spinbox.setValue(100.0)
+        self.width_spinbox.setDecimals(1)
+        self.width_spinbox.valueChanged.connect(self._on_width_changed)
+        width_layout.addWidget(self.width_spinbox)
+        
+        self.width_slider = QSlider(Qt.Orientation.Horizontal)
+        self.width_slider.setRange(1, 1000)
+        self.width_slider.setValue(100)
+        self.width_slider.valueChanged.connect(self._on_width_slider_changed)
+        width_layout.addWidget(self.width_slider)
+        
+        layout.addLayout(width_layout)
+    
+    def set_ranges(self, center_range: tuple, width_range: tuple) -> None:
+        """
+        Set the value ranges for window center and width.
+        
+        Args:
+            center_range: (min, max) for window center
+            width_range: (min, max) for window width
+        """
+        self.center_range = center_range
+        self.width_range = width_range
+        
+        self.center_spinbox.setRange(*center_range)
+        self.width_spinbox.setRange(*width_range)
+        
+        # Update slider ranges (normalized to 0-1000)
+        self._update_slider_ranges()
+    
+    def _update_slider_ranges(self) -> None:
+        """Update slider ranges based on current value ranges."""
+        # Sliders are normalized to 0-1000
+        # We'll map the actual ranges to slider positions
+        pass  # Implementation can be added if needed
+    
+    def set_window_level(self, center: float, width: float) -> None:
+        """
+        Set window center and width values.
+        
+        Args:
+            center: Window center value
+            width: Window width value
+        """
+        # Block signals to prevent recursive updates
+        self.center_spinbox.blockSignals(True)
+        self.width_spinbox.blockSignals(True)
+        
+        self.window_center = center
+        self.window_width = width
+        
+        self.center_spinbox.setValue(center)
+        self.width_spinbox.setValue(width)
+        
+        # Update sliders (normalize to 0-1000 range)
+        center_normalized = int((center - self.center_range[0]) / 
+                               (self.center_range[1] - self.center_range[0]) * 1000)
+        center_normalized = max(0, min(1000, center_normalized))
+        self.center_slider.setValue(center_normalized)
+        
+        width_normalized = int((width - self.width_range[0]) / 
+                              (self.width_range[1] - self.width_range[0]) * 1000)
+        width_normalized = max(1, min(1000, width_normalized))
+        self.width_slider.setValue(width_normalized)
+        
+        self.center_spinbox.blockSignals(False)
+        self.width_spinbox.blockSignals(False)
+    
+    def _on_center_changed(self, value: float) -> None:
+        """
+        Handle window center value change.
+        
+        Args:
+            value: New center value
+        """
+        self.window_center = value
+        self.window_changed.emit(self.window_center, self.window_width)
+    
+    def _on_width_changed(self, value: float) -> None:
+        """
+        Handle window width value change.
+        
+        Args:
+            value: New width value
+        """
+        self.window_width = value
+        self.window_changed.emit(self.window_center, self.window_width)
+    
+    def _on_center_slider_changed(self, value: int) -> None:
+        """
+        Handle window center slider change.
+        
+        Args:
+            value: Slider value (0-1000)
+        """
+        # Convert slider value to actual range
+        center = self.center_range[0] + (value / 1000.0) * (self.center_range[1] - self.center_range[0])
+        self.set_window_level(center, self.window_width)
+    
+    def _on_width_slider_changed(self, value: int) -> None:
+        """
+        Handle window width slider change.
+        
+        Args:
+            value: Slider value (0-1000)
+        """
+        # Convert slider value to actual range
+        width = self.width_range[0] + (value / 1000.0) * (self.width_range[1] - self.width_range[0])
+        self.set_window_level(self.window_center, width)
+    
+    def get_window_level(self) -> tuple:
+        """
+        Get current window center and width.
+        
+        Returns:
+            Tuple of (center, width)
+        """
+        return (self.window_center, self.window_width)
+

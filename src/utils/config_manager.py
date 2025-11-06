@@ -1,0 +1,232 @@
+"""
+Configuration Manager
+
+This module handles persistent storage and retrieval of user preferences and settings.
+Settings are stored in a JSON file in the user's application data directory.
+
+Inputs:
+    - User preferences (last opened path, theme, overlay settings, etc.)
+    
+Outputs:
+    - Loaded configuration values
+    - Saved configuration file
+    
+Requirements:
+    - json module (standard library)
+    - pathlib module (standard library)
+    - os module (standard library)
+"""
+
+import json
+import os
+from pathlib import Path
+from typing import Any, Dict, Optional
+
+
+class ConfigManager:
+    """
+    Manages application configuration and user preferences.
+    
+    Handles loading and saving of settings including:
+    - Last opened file/folder path
+    - Theme preference (dark/light)
+    - Overlay customization settings
+    - Window geometry
+    - Other user preferences
+    """
+    
+    def __init__(self, config_filename: str = "dicom_viewer_config.json"):
+        """
+        Initialize the configuration manager.
+        
+        Args:
+            config_filename: Name of the configuration file to use
+        """
+        # Get application data directory
+        if os.name == 'nt':  # Windows
+            app_data = os.getenv('APPDATA', os.path.expanduser('~'))
+            self.config_dir = Path(app_data) / "DICOMViewerV2"
+        else:  # Mac/Linux
+            self.config_dir = Path.home() / ".config" / "DICOMViewerV2"
+        
+        # Create config directory if it doesn't exist
+        self.config_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Full path to config file
+        self.config_path = self.config_dir / config_filename
+        
+        # Default configuration values
+        self.default_config = {
+            "last_path": "",
+            "theme": "light",
+            "overlay_mode": "minimal",  # minimal, detailed, hidden
+            "overlay_custom_fields": [],
+            "window_width": 1200,
+            "window_height": 800,
+            "scroll_wheel_mode": "slice",  # slice or zoom
+            "window_level_default": None,
+            "window_width_default": None,
+        }
+        
+        # Load configuration
+        self.config = self._load_config()
+    
+    def _load_config(self) -> Dict[str, Any]:
+        """
+        Load configuration from file, or return defaults if file doesn't exist.
+        
+        Returns:
+            Dictionary containing configuration values
+        """
+        if self.config_path.exists():
+            try:
+                with open(self.config_path, 'r', encoding='utf-8') as f:
+                    loaded_config = json.load(f)
+                    # Merge with defaults to ensure all keys exist
+                    config = self.default_config.copy()
+                    config.update(loaded_config)
+                    return config
+            except (json.JSONDecodeError, IOError) as e:
+                # If file is corrupted, use defaults
+                print(f"Warning: Could not load config file: {e}")
+                return self.default_config.copy()
+        else:
+            # File doesn't exist, use defaults
+            return self.default_config.copy()
+    
+    def save_config(self) -> bool:
+        """
+        Save current configuration to file.
+        
+        Returns:
+            True if save was successful, False otherwise
+        """
+        try:
+            with open(self.config_path, 'w', encoding='utf-8') as f:
+                json.dump(self.config, f, indent=4, ensure_ascii=False)
+            return True
+        except IOError as e:
+            print(f"Error saving config file: {e}")
+            return False
+    
+    def get(self, key: str, default: Any = None) -> Any:
+        """
+        Get a configuration value.
+        
+        Args:
+            key: Configuration key to retrieve
+            default: Default value if key doesn't exist
+            
+        Returns:
+            Configuration value or default
+        """
+        return self.config.get(key, default)
+    
+    def set(self, key: str, value: Any) -> None:
+        """
+        Set a configuration value.
+        
+        Args:
+            key: Configuration key to set
+            value: Value to set
+        """
+        self.config[key] = value
+    
+    def get_last_path(self) -> str:
+        """
+        Get the last opened file or folder path.
+        
+        Returns:
+            Path string, empty if not set
+        """
+        return self.config.get("last_path", "")
+    
+    def set_last_path(self, path: str) -> None:
+        """
+        Set the last opened file or folder path.
+        
+        Args:
+            path: Path to save
+        """
+        self.config["last_path"] = path
+        self.save_config()
+    
+    def get_theme(self) -> str:
+        """
+        Get the current theme preference.
+        
+        Returns:
+            Theme name ("light" or "dark")
+        """
+        return self.config.get("theme", "light")
+    
+    def set_theme(self, theme: str) -> None:
+        """
+        Set the theme preference.
+        
+        Args:
+            theme: Theme name ("light" or "dark")
+        """
+        if theme in ["light", "dark"]:
+            self.config["theme"] = theme
+            self.save_config()
+    
+    def get_overlay_mode(self) -> str:
+        """
+        Get the overlay display mode.
+        
+        Returns:
+            Overlay mode ("minimal", "detailed", or "hidden")
+        """
+        return self.config.get("overlay_mode", "minimal")
+    
+    def set_overlay_mode(self, mode: str) -> None:
+        """
+        Set the overlay display mode.
+        
+        Args:
+            mode: Overlay mode ("minimal", "detailed", or "hidden")
+        """
+        if mode in ["minimal", "detailed", "hidden"]:
+            self.config["overlay_mode"] = mode
+            self.save_config()
+    
+    def get_overlay_custom_fields(self) -> list:
+        """
+        Get the list of custom overlay fields.
+        
+        Returns:
+            List of field names
+        """
+        return self.config.get("overlay_custom_fields", [])
+    
+    def set_overlay_custom_fields(self, fields: list) -> None:
+        """
+        Set the list of custom overlay fields.
+        
+        Args:
+            fields: List of field names
+        """
+        self.config["overlay_custom_fields"] = fields
+        self.save_config()
+    
+    def get_scroll_wheel_mode(self) -> str:
+        """
+        Get the scroll wheel mode.
+        
+        Returns:
+            Mode ("slice" or "zoom")
+        """
+        return self.config.get("scroll_wheel_mode", "slice")
+    
+    def set_scroll_wheel_mode(self, mode: str) -> None:
+        """
+        Set the scroll wheel mode.
+        
+        Args:
+            mode: Mode ("slice" or "zoom")
+        """
+        if mode in ["slice", "zoom"]:
+            self.config["scroll_wheel_mode"] = mode
+            self.save_config()
+

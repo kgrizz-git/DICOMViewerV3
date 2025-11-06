@@ -1,0 +1,19 @@
+# DICOM Viewer V2 Requirements
+# 
+# This file lists all Python package dependencies required for the DICOM viewer application.
+# 
+# Installation: pip install -r requirements.txt
+#
+# Requirements:
+# - PySide6: Cross-platform GUI framework for the application interface
+# - pydicom: Library for reading, writing, and working with DICOM files
+# - numpy: Numerical computing library for image array operations
+# - Pillow: Image processing library for image format conversions
+# - matplotlib: Plotting library for histogram display
+
+PySide6>=6.5.0
+pydicom>=2.4.0
+numpy>=1.24.0
+Pillow>=10.0.0
+matplotlib>=3.7.0
+
