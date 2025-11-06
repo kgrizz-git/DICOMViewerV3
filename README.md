@@ -66,5 +66,14 @@ DICOMViewerV2/
 
 ## Technology Stack
 
-(To be determined based on project requirements)
+- **Language**: Python 3.9+
+- **GUI Framework**: PySide6
+- **DICOM Library**: pydicom
+- **Image Processing**: NumPy, PIL/Pillow
+- **Additional**: matplotlib (for histograms)
 
+## Installation
+
+1. Clone the repository
+2. Install dependencies: `pip install -r requirements.txt`
+3. Run the application: `python src/main.py`
