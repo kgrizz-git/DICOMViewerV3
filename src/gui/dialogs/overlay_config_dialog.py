@@ -29,15 +29,33 @@ from core.dicom_parser import DICOMParser
 
 
 # Common DICOM tag keywords
+# Includes tags for all modalities: MR, CT, US, XA, CR, DX, RF, and common tags
 COMMON_TAGS = [
+    # Patient information
     "PatientName", "PatientID", "PatientBirthDate", "PatientSex", "PatientAge",
+    # Study information
     "StudyDate", "StudyTime", "StudyDescription", "StudyInstanceUID",
+    # Series information
     "SeriesNumber", "SeriesDescription", "SeriesInstanceUID", "SeriesDate",
+    # Equipment information
     "Modality", "Manufacturer", "ManufacturerModelName",
-    "InstanceNumber", "SliceLocation", "SliceThickness",
-    "WindowCenter", "WindowWidth", "RescaleIntercept", "RescaleSlope",
+    # Image information
+    "InstanceNumber", "SliceLocation", "SliceThickness", "SpacingBetweenSlices",
+    # Window/Level
+    "WindowCenter", "WindowWidth", "RescaleIntercept", "RescaleSlope", "RescaleType",
+    # Image geometry
     "ImagePositionPatient", "ImageOrientationPatient",
-    "Rows", "Columns", "PixelSpacing", "BitsAllocated", "BitsStored"
+    # Image matrix
+    "Rows", "Columns", "PixelSpacing", "ImagerPixelSpacing", "BitsAllocated", "BitsStored",
+    # MR-specific tags
+    "RepetitionTime", "EchoTime", "EchoTrainLength", "FlipAngle", "MagneticFieldStrength",
+    # CT-specific tags
+    "RevolutionTime", "KVP", "ExposureTime", "Exposure", "XRayTubeCurrent", "ExposureInmAs",
+    "TableHeight", "GantryDetectorTilt",
+    # US-specific tags
+    "TransducerFrequency", "MechanicalIndex", "ThermalIndex",
+    # XA/CR/DX/RF-specific tags (some overlap with CT)
+    "BodyPartThickness"
 ]
 
 

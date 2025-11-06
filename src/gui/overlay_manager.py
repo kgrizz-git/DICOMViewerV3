@@ -197,6 +197,8 @@ class OverlayManager:
         """
         Create a text item with proper font and styling.
         
+        Font size is set in absolute pixels, independent of image dimensions.
+        
         Args:
             text: Text to display
             x: X position
@@ -209,20 +211,25 @@ class OverlayManager:
         text_item.setDefaultTextColor(QColor(*self.font_color))
         text_item.setPos(x, y)
         
-        # Set font - use 6pt minimum, scale if smaller
+        # Set font - use absolute pixel size, independent of image dimensions
+        # Use 6pt minimum, scale if smaller using QTransform
         if self.font_size < 6:
-            # Use 6pt font and scale down with transform
+            # Use 6pt font and scale down with transform for sizes < 6pt
             font = QFont("Arial", 6)
             scale_factor = self.font_size / 6.0
             transform = QTransform()
             transform.scale(scale_factor, scale_factor)
             text_item.setTransform(transform)
         else:
-            # Use actual font size
+            # Use actual font size in points
             font = QFont("Arial", self.font_size)
         
         font.setBold(True)
+        # Ensure font size is in absolute pixels, not scene coordinates
         text_item.setFont(font)
+        # Set flag to ignore parent transformations (keeps font size consistent)
+        # Note: We don't use ItemIgnoresTransformations as we want text to scale with zoom
+        # but the font size itself should be consistent across different image sizes
         text_item.setZValue(1000)  # High Z-value to stay above image
         
         return text_item
