@@ -36,13 +36,22 @@ class OverlayManager:
     - Customizable overlay fields
     - Multiple display modes (minimal, detailed, hidden)
     - Text positioning and styling
+    - Customizable font size and color
     """
     
-    def __init__(self):
-        """Initialize the overlay manager."""
+    def __init__(self, font_size: int = 8, font_color: tuple = (255, 255, 0)):
+        """
+        Initialize the overlay manager.
+        
+        Args:
+            font_size: Default font size in points
+            font_color: Default font color as (r, g, b) tuple
+        """
         self.mode = "minimal"  # minimal, detailed, hidden
         self.custom_fields: List[str] = []
         self.overlay_items: List[QGraphicsTextItem] = []
+        self.font_size = font_size
+        self.font_color = font_color
         
         # Default fields for minimal mode
         self.minimal_fields = [
@@ -86,6 +95,27 @@ class OverlayManager:
             fields: List of DICOM tag keywords
         """
         self.custom_fields = fields
+    
+    def set_font_size(self, size: int) -> None:
+        """
+        Set overlay font size.
+        
+        Args:
+            size: Font size in points
+        """
+        if size > 0:
+            self.font_size = size
+    
+    def set_font_color(self, r: int, g: int, b: int) -> None:
+        """
+        Set overlay font color.
+        
+        Args:
+            r: Red component (0-255)
+            g: Green component (0-255)
+            b: Blue component (0-255)
+        """
+        self.font_color = (r, g, b)
     
     def get_overlay_text(self, parser: DICOMParser) -> str:
         """
@@ -148,13 +178,17 @@ class OverlayManager:
         
         # Create text item
         text_item = QGraphicsTextItem(text)
-        text_item.setDefaultTextColor(QColor(255, 255, 255))  # White text
+        # Use configured font color (default yellow)
+        text_item.setDefaultTextColor(QColor(*self.font_color))
         text_item.setPos(position[0], position[1])
         
-        # Set font
-        font = QFont("Arial", 10)
+        # Set font with configured size (default 8)
+        font = QFont("Arial", self.font_size)
         font.setBold(True)
         text_item.setFont(font)
+        
+        # Set Z-value to ensure overlay stays on top
+        text_item.setZValue(1000)  # High Z-value to stay above image
         
         # Add to scene
         scene.addItem(text_item)

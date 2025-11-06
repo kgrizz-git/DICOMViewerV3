@@ -17,7 +17,8 @@ Requirements:
 """
 
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-                                QDoubleSpinBox, QSlider)
+                                QDoubleSpinBox, QSlider, QPushButton)
+from PySide6.QtGui import QKeySequence
 from PySide6.QtCore import Qt, Signal
 from typing import Optional
 
@@ -66,6 +67,7 @@ class WindowLevelControls(QWidget):
         self.center_spinbox.setRange(*self.center_range)
         self.center_spinbox.setValue(0.0)
         self.center_spinbox.setDecimals(1)
+        self.center_spinbox.setSingleStep(1.0)  # Step size for up/down buttons
         self.center_spinbox.valueChanged.connect(self._on_center_changed)
         center_layout.addWidget(self.center_spinbox)
         
@@ -87,6 +89,7 @@ class WindowLevelControls(QWidget):
         self.width_spinbox.setRange(*self.width_range)
         self.width_spinbox.setValue(100.0)
         self.width_spinbox.setDecimals(1)
+        self.width_spinbox.setSingleStep(1.0)  # Step size for up/down buttons
         self.width_spinbox.valueChanged.connect(self._on_width_changed)
         width_layout.addWidget(self.width_spinbox)
         

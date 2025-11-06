@@ -19,7 +19,7 @@ Requirements:
 
 from PySide6.QtWidgets import (QMainWindow, QMenuBar, QToolBar, QStatusBar,
                                 QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
-                                QMessageBox)
+                                QMessageBox, QButtonGroup)
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QAction, QIcon, QKeySequence
 from typing import Optional
@@ -48,6 +48,7 @@ class MainWindow(QMainWindow):
     open_folder_requested = Signal()
     export_requested = Signal()
     settings_requested = Signal()
+    tag_viewer_requested = Signal()
     
     def __init__(self, config_manager: Optional[ConfigManager] = None):
         """
@@ -136,6 +137,14 @@ class MainWindow(QMainWindow):
         settings_action.triggered.connect(self.settings_requested.emit)
         tools_menu.addAction(settings_action)
         
+        tools_menu.addSeparator()
+        
+        # Tag Viewer action
+        tag_viewer_action = QAction("DICOM Tag &Viewer...", self)
+        tag_viewer_action.setShortcut(QKeySequence("Ctrl+T"))
+        tag_viewer_action.triggered.connect(self.tag_viewer_requested.emit)
+        tools_menu.addAction(tag_viewer_action)
+        
         # Help menu
         help_menu = menubar.addMenu("&Help")
         
@@ -156,8 +165,25 @@ class MainWindow(QMainWindow):
         
         toolbar.addSeparator()
         
-        # Add more toolbar actions as needed
-        # (Will be populated as other components are implemented)
+        # ROI tools
+        self.roi_rectangle_action = QAction("Rectangle ROI", self)
+        self.roi_rectangle_action.setCheckable(True)
+        toolbar.addAction(self.roi_rectangle_action)
+        
+        self.roi_ellipse_action = QAction("Ellipse ROI", self)
+        self.roi_ellipse_action.setCheckable(True)
+        toolbar.addAction(self.roi_ellipse_action)
+        
+        self.roi_none_action = QAction("None", self)
+        self.roi_none_action.setCheckable(True)
+        self.roi_none_action.setChecked(True)
+        toolbar.addAction(self.roi_none_action)
+        
+        # Create button group for ROI tools
+        self.roi_button_group = QButtonGroup()
+        self.roi_button_group.addButton(self.roi_rectangle_action, 0)
+        self.roi_button_group.addButton(self.roi_ellipse_action, 1)
+        self.roi_button_group.addButton(self.roi_none_action, 2)
     
     def _create_status_bar(self) -> None:
         """Create the status bar."""
