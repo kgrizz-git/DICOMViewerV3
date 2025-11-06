@@ -19,7 +19,7 @@ Requirements:
 
 from PySide6.QtWidgets import (QMainWindow, QMenuBar, QToolBar, QStatusBar,
                                 QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
-                                QMessageBox, QButtonGroup)
+                                QMessageBox)
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QAction, QIcon, QKeySequence
 from typing import Optional
@@ -179,11 +179,16 @@ class MainWindow(QMainWindow):
         self.roi_none_action.setChecked(True)
         toolbar.addAction(self.roi_none_action)
         
-        # Create button group for ROI tools
-        self.roi_button_group = QButtonGroup()
-        self.roi_button_group.addButton(self.roi_rectangle_action, 0)
-        self.roi_button_group.addButton(self.roi_ellipse_action, 1)
-        self.roi_button_group.addButton(self.roi_none_action, 2)
+        # Connect actions to handle exclusivity manually
+        self.roi_rectangle_action.triggered.connect(
+            lambda: self._on_roi_action_triggered("rectangle")
+        )
+        self.roi_ellipse_action.triggered.connect(
+            lambda: self._on_roi_action_triggered("ellipse")
+        )
+        self.roi_none_action.triggered.connect(
+            lambda: self._on_roi_action_triggered(None)
+        )
     
     def _create_status_bar(self) -> None:
         """Create the status bar."""
@@ -271,6 +276,24 @@ class MainWindow(QMainWindow):
                          "- Draw ROIs and measure distances\n"
                          "- Customizable metadata overlays\n"
                          "- Export to multiple formats")
+    
+    def _on_roi_action_triggered(self, mode: Optional[str]) -> None:
+        """
+        Handle ROI action trigger to ensure exclusivity.
+        
+        Args:
+            mode: ROI mode ("rectangle", "ellipse", or None)
+        """
+        # Uncheck other actions
+        if mode == "rectangle":
+            self.roi_ellipse_action.setChecked(False)
+            self.roi_none_action.setChecked(False)
+        elif mode == "ellipse":
+            self.roi_rectangle_action.setChecked(False)
+            self.roi_none_action.setChecked(False)
+        else:  # None
+            self.roi_rectangle_action.setChecked(False)
+            self.roi_ellipse_action.setChecked(False)
     
     def update_status(self, message: str) -> None:
         """
