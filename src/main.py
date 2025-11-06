@@ -53,7 +53,7 @@ from tools.histogram_widget import HistogramWidget
 from gui.overlay_manager import OverlayManager
 
 
-class DICOMViewerApp(QApplication):
+class DICOMViewerApp:
     """
     Main application class for DICOM Viewer.
     
@@ -62,6 +62,10 @@ class DICOMViewerApp(QApplication):
     
     def __init__(self):
         """Initialize the application."""
+        # Create Qt application first (before any widgets)
+        self.app = QApplication(sys.argv)
+        self.app.setApplicationName("DICOM Viewer V2")
+        
         # Initialize managers
         self.config_manager = ConfigManager()
         self.dicom_loader = DICOMLoader()
@@ -587,7 +591,7 @@ class DICOMViewerApp(QApplication):
             Exit code
         """
         self.main_window.show()
-        return self.exec()
+        return self.app.exec()
 
 
 def main():
