@@ -51,7 +51,7 @@ class MainWindow(QMainWindow):
     settings_requested = Signal()
     tag_viewer_requested = Signal()
     overlay_config_requested = Signal()
-    mouse_mode_changed = Signal(str)  # Emitted when mouse mode changes ("roi_ellipse", "roi_rectangle", "measure", "zoom", "pan")
+    mouse_mode_changed = Signal(str)  # Emitted when mouse mode changes ("roi_ellipse", "roi_rectangle", "measure", "zoom", "pan", "auto_window_level")
     scroll_wheel_mode_changed = Signal(str)  # Emitted when scroll wheel mode changes ("slice" or "zoom")
     overlay_font_size_changed = Signal(int)  # Emitted when overlay font size changes
     overlay_font_color_changed = Signal(int, int, int)  # Emitted when overlay font color changes (r, g, b)
@@ -215,6 +215,14 @@ class MainWindow(QMainWindow):
         )
         toolbar.addAction(self.mouse_mode_pan_action)
         
+        # Auto Window/Level ROI tool
+        self.mouse_mode_auto_window_level_action = QAction("Auto Window/Level", self)
+        self.mouse_mode_auto_window_level_action.setCheckable(True)
+        self.mouse_mode_auto_window_level_action.triggered.connect(
+            lambda: self._on_mouse_mode_changed("auto_window_level")
+        )
+        toolbar.addAction(self.mouse_mode_auto_window_level_action)
+        
         toolbar.addSeparator()
         
         # Reset View button
@@ -377,7 +385,7 @@ class MainWindow(QMainWindow):
         Handle mouse mode change to ensure exclusivity.
         
         Args:
-            mode: Mouse mode ("roi_ellipse", "roi_rectangle", "measure", "zoom", "pan")
+            mode: Mouse mode ("roi_ellipse", "roi_rectangle", "measure", "zoom", "pan", "auto_window_level")
         """
         # Uncheck all other actions
         all_actions = [
@@ -385,7 +393,8 @@ class MainWindow(QMainWindow):
             self.mouse_mode_rectangle_roi_action,
             self.mouse_mode_measure_action,
             self.mouse_mode_zoom_action,
-            self.mouse_mode_pan_action
+            self.mouse_mode_pan_action,
+            self.mouse_mode_auto_window_level_action
         ]
         
         for action in all_actions:
@@ -398,6 +407,8 @@ class MainWindow(QMainWindow):
             elif action != self.mouse_mode_zoom_action and mode == "zoom":
                 action.setChecked(False)
             elif action != self.mouse_mode_pan_action and mode == "pan":
+                action.setChecked(False)
+            elif action != self.mouse_mode_auto_window_level_action and mode == "auto_window_level":
                 action.setChecked(False)
         
         # Emit signal

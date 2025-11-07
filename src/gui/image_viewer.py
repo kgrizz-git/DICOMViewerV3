@@ -53,6 +53,8 @@ class ImageViewer(QGraphicsView):
     roi_clicked = Signal(object)  # Emitted when ROI is clicked (ROIItem)
     roi_delete_requested = Signal(object)  # Emitted when ROI deletion is requested (QGraphicsItem)
     reset_view_requested = Signal()  # Emitted when reset view is requested from context menu
+    context_menu_mouse_mode_changed = Signal(str)  # Emitted when mouse mode is changed from context menu
+    context_menu_scroll_wheel_mode_changed = Signal(str)  # Emitted when scroll wheel mode is changed from context menu
     
     def __init__(self, parent: Optional[QWidget] = None):
         """
@@ -361,7 +363,7 @@ class ImageViewer(QGraphicsView):
         Set mouse interaction mode.
         
         Args:
-            mode: "roi_ellipse", "roi_rectangle", "measure", "zoom", or "pan"
+            mode: "roi_ellipse", "roi_rectangle", "measure", "zoom", "pan", or "auto_window_level"
         """
         self.mouse_mode = mode
         
@@ -371,6 +373,11 @@ class ImageViewer(QGraphicsView):
             self.setDragMode(QGraphicsView.DragMode.NoDrag)
             self.setCursor(Qt.CursorShape.CrossCursor)
         elif mode == "roi_rectangle":
+            self.roi_drawing_mode = "rectangle"
+            self.setDragMode(QGraphicsView.DragMode.NoDrag)
+            self.setCursor(Qt.CursorShape.CrossCursor)
+        elif mode == "auto_window_level":
+            # Auto window/level mode - use rectangle ROI drawing
             self.roi_drawing_mode = "rectangle"
             self.setDragMode(QGraphicsView.DragMode.NoDrag)
             self.setCursor(Qt.CursorShape.CrossCursor)
@@ -477,8 +484,53 @@ class ImageViewer(QGraphicsView):
             else:
                 # Show context menu for image (not on ROI)
                 context_menu = QMenu(self)
+                
+                # Reset View action
                 reset_action = context_menu.addAction("Reset View")
                 reset_action.triggered.connect(self.reset_view_requested.emit)
+                
+                context_menu.addSeparator()
+                
+                # Left Mouse Button submenu
+                left_mouse_menu = context_menu.addMenu("Left Mouse Button")
+                left_mouse_actions = {
+                    "Ellipse ROI": "roi_ellipse",
+                    "Rectangle ROI": "roi_rectangle",
+                    "Measure": "measure",
+                    "Zoom": "zoom",
+                    "Pan": "pan",
+                    "Auto Window/Level": "auto_window_level"
+                }
+                for action_text, mode in left_mouse_actions.items():
+                    action = left_mouse_menu.addAction(action_text)
+                    action.setCheckable(True)
+                    # Check the current mode
+                    if self.mouse_mode == mode:
+                        action.setChecked(True)
+                    action.triggered.connect(
+                        lambda checked, m=mode: self.context_menu_mouse_mode_changed.emit(m)
+                    )
+                
+                context_menu.addSeparator()
+                
+                # Scroll Wheel Mode submenu
+                scroll_wheel_menu = context_menu.addMenu("Scroll Wheel Mode")
+                slice_action = scroll_wheel_menu.addAction("Slice")
+                slice_action.setCheckable(True)
+                if self.scroll_wheel_mode == "slice":
+                    slice_action.setChecked(True)
+                slice_action.triggered.connect(
+                    lambda: self.context_menu_scroll_wheel_mode_changed.emit("slice")
+                )
+                
+                zoom_action = scroll_wheel_menu.addAction("Zoom")
+                zoom_action.setCheckable(True)
+                if self.scroll_wheel_mode == "zoom":
+                    zoom_action.setChecked(True)
+                zoom_action.triggered.connect(
+                    lambda: self.context_menu_scroll_wheel_mode_changed.emit("zoom")
+                )
+                
                 context_menu.exec(event.globalPosition().toPoint())
                 return
         
