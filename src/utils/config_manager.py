@@ -73,6 +73,7 @@ class ConfigManager:
             "scroll_wheel_mode": "slice",  # slice or zoom
             "window_level_default": None,
             "window_width_default": None,
+            "recent_files": [],  # List of recently opened file/folder paths (max 10)
         }
         
         # Load configuration
@@ -342,4 +343,37 @@ class ConfigManager:
         if "overlay_tags" not in self.config:
             return []
         return list(self.config["overlay_tags"].keys())
+    
+    def get_recent_files(self) -> List[str]:
+        """
+        Get list of recently opened files and folders.
+        
+        Returns:
+            List of file/folder paths (most recent first)
+        """
+        return self.config.get("recent_files", [])
+    
+    def add_recent_file(self, file_path: str) -> None:
+        """
+        Add a file or folder to recent files list.
+        
+        Removes duplicates and keeps only the most recent 10 items.
+        
+        Args:
+            file_path: Path to file or folder
+        """
+        recent_files = self.config.get("recent_files", [])
+        
+        # Remove if already exists (to move to top)
+        if file_path in recent_files:
+            recent_files.remove(file_path)
+        
+        # Add to beginning
+        recent_files.insert(0, file_path)
+        
+        # Keep only last 10
+        recent_files = recent_files[:10]
+        
+        self.config["recent_files"] = recent_files
+        self.save_config()
 

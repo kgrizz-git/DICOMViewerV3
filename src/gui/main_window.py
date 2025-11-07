@@ -46,6 +46,7 @@ class MainWindow(QMainWindow):
     # Signals
     open_file_requested = Signal()
     open_folder_requested = Signal()
+    open_recent_file_requested = Signal(str)  # Emitted when a recent file/folder is selected (path)
     export_requested = Signal()
     settings_requested = Signal()
     tag_viewer_requested = Signal()
@@ -97,6 +98,12 @@ class MainWindow(QMainWindow):
         open_folder_action.setShortcut(QKeySequence("Ctrl+Shift+O"))
         open_folder_action.triggered.connect(self.open_folder_requested.emit)
         file_menu.addAction(open_folder_action)
+        
+        file_menu.addSeparator()
+        
+        # Recent Files submenu
+        self.recent_menu = file_menu.addMenu("&Recent")
+        self._update_recent_menu()
         
         file_menu.addSeparator()
         
@@ -371,6 +378,46 @@ class MainWindow(QMainWindow):
         """
         mode = "slice" if text == "Slice" else "zoom"
         self.scroll_wheel_mode_changed.emit(mode)
+    
+    def _update_recent_menu(self) -> None:
+        """Update the Recent Files submenu with current recent files."""
+        # Clear existing actions
+        self.recent_menu.clear()
+        
+        # Get recent files from config
+        recent_files = self.config_manager.get_recent_files()
+        
+        if not recent_files:
+            # Show "No recent files" if empty
+            no_recent_action = QAction("No recent files", self)
+            no_recent_action.setEnabled(False)
+            self.recent_menu.addAction(no_recent_action)
+        else:
+            # Add action for each recent file
+            for i, file_path in enumerate(recent_files):
+                # Create display name (truncate if too long)
+                display_name = os.path.basename(file_path) if os.path.isfile(file_path) else os.path.basename(file_path)
+                if len(display_name) > 50:
+                    display_name = display_name[:47] + "..."
+                
+                # Add number prefix for keyboard shortcuts (1-9, 0)
+                number = (i + 1) % 10
+                if number == 0:
+                    number = 10
+                action_text = f"&{number} {display_name}"
+                
+                recent_action = QAction(action_text, self)
+                recent_action.setData(file_path)  # Store full path in action data
+                recent_action.triggered.connect(
+                    lambda checked, path=file_path: self.open_recent_file_requested.emit(path)
+                )
+                self.recent_menu.addAction(recent_action)
+    
+    def update_recent_menu(self) -> None:
+        """
+        Public method to update recent menu (called from outside).
+        """
+        self._update_recent_menu()
     
     def update_status(self, message: str) -> None:
         """

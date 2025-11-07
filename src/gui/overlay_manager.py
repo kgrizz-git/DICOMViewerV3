@@ -197,7 +197,7 @@ class OverlayManager:
                 lines.append(f"{tag}: {value_str}")
         return "\n".join(lines)
     
-    def _create_text_item(self, text: str, x: float, y: float, alignment: Qt.AlignmentFlag = Qt.AlignmentFlag.AlignLeft) -> QGraphicsTextItem:
+    def _create_text_item(self, text: str, x: float, y: float, alignment: Qt.AlignmentFlag = Qt.AlignmentFlag.AlignLeft, text_width: Optional[float] = None) -> QGraphicsTextItem:
         """
         Create a text item with proper font and styling.
         
@@ -235,6 +235,8 @@ class OverlayManager:
         # Set text with alignment using QTextDocument
         document = QTextDocument()
         document.setDefaultFont(font)
+        # Remove default margins to get accurate bounding rect and tighter spacing
+        document.setDocumentMargin(0)
         # Set text option with proper alignment
         text_option = QTextOption()
         if alignment & Qt.AlignmentFlag.AlignRight:
@@ -245,6 +247,10 @@ class OverlayManager:
             text_option.setAlignment(Qt.AlignmentFlag.AlignLeft)
         document.setDefaultTextOption(text_option)
         document.setPlainText(text)
+        # For right-aligned text, set a fixed width if provided
+        # This ensures all lines in a corner have the same width and align properly
+        if text_width is not None and (alignment & Qt.AlignmentFlag.AlignRight):
+            document.setTextWidth(text_width)
         text_item.setDocument(document)
         
         # Set flag to ignore parent transformations (keeps font size consistent)
@@ -352,12 +358,30 @@ class OverlayManager:
             bottom_right_scene = view.mapToScene(viewport_width, viewport_height)
             
             # Update corner positions based on viewport-to-scene mapping
+            # For right-aligned corners, use the actual right edge (top_right_scene.x()) without subtracting margin
+            # This ensures text is flush with the viewport right edge, matching left-aligned text behavior
             corners = [
                 ("upper_left", top_left_scene.x() + margin, top_left_scene.y() + margin, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop),
-                ("upper_right", top_right_scene.x() - margin, top_right_scene.y() + margin, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop),
+                ("upper_right", top_right_scene.x(), top_right_scene.y() + margin, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop),
                 ("lower_left", bottom_left_scene.x() + margin, bottom_left_scene.y() - margin, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom),
-                ("lower_right", bottom_right_scene.x() - margin, bottom_right_scene.y() - margin, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom)
+                ("lower_right", bottom_right_scene.x(), bottom_right_scene.y() - margin, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom)
             ]
+        
+        # Calculate viewport-to-scene scale factor once for all corners
+        # This is needed for converting viewport pixel dimensions to scene coordinates
+        # when using ItemIgnoresTransformations
+        if view is not None:
+            # Get the scale factor from the view's transform
+            # m11() gives the horizontal scale factor
+            view_scale = view.transform().m11()
+            if view_scale > 0:
+                # Convert viewport pixels to scene coordinates
+                # If view is zoomed 2x, 1 viewport pixel = 0.5 scene units
+                viewport_to_scene_scale = 1.0 / view_scale
+            else:
+                viewport_to_scene_scale = 1.0
+        else:
+            viewport_to_scene_scale = 1.0
         
         for corner_key, x, y, alignment in corners:
             tags = corner_tags.get(corner_key, [])
@@ -371,23 +395,55 @@ class OverlayManager:
                     if is_right_aligned:
                         # Split text into lines and create separate items for each
                         lines = [line for line in text.split('\n') if line.strip()]  # Filter empty lines
-                        line_height = None
+                        
+                        # First pass: calculate maximum text width for all lines in viewport pixels
+                        # With ItemIgnoresTransformations, text renders at fixed viewport size
+                        # so we need to calculate width in viewport pixels, then convert to scene coords
+                        max_text_width_viewport = 0
+                        temp_items = []
+                        for line in lines:
+                            temp_item = self._create_text_item(line, 0, 0, alignment)
+                            # Get width in viewport pixels (ItemIgnoresTransformations renders at fixed size)
+                            temp_width = temp_item.boundingRect().width()
+                            max_text_width_viewport = max(max_text_width_viewport, temp_width)
+                            temp_items.append(temp_item)
+                        
+                        # Clean up temp items
+                        for item in temp_items:
+                            del item
+                        
+                        # Add some padding to max width for better appearance
+                        max_text_width_viewport += 5
+                        
+                        # Convert viewport pixel width to scene coordinates
+                        # viewport_to_scene_scale is already calculated above for all corners
+                        max_text_width_scene = max_text_width_viewport * viewport_to_scene_scale
+                        
+                        # Position: right edge should be at (x - margin) in scene coordinates
+                        # where x is the viewport right edge in scene coords
+                        # So left edge is at (x - margin - max_text_width_scene)
+                        right_edge_x = x - margin  # x is viewport right edge in scene coords
+                        left_edge_x = right_edge_x - max_text_width_scene
+                        
+                        line_height_viewport = None
                         
                         for line_idx, line in enumerate(lines):
-                            # Create text item for this line with right alignment
-                            text_item = self._create_text_item(line, x, y, alignment)
+                            # Create text item with fixed width for right alignment
+                            # Use viewport pixel width for the document
+                            text_item = self._create_text_item(line, 0, 0, alignment, text_width=max_text_width_viewport)
                             
-                            # Get line height from first line
-                            if line_height is None:
-                                line_height = text_item.boundingRect().height()
+                            # Get line height from first line (in viewport pixels)
+                            if line_height_viewport is None:
+                                line_height_viewport = text_item.boundingRect().height()
                             
-                            # Position: for right-aligned, position at viewport right edge (mapped to scene)
-                            # With ItemIgnoresTransformations, position is in scene coordinates
-                            # x is already the right edge position from viewport mapping
-                            text_width = text_item.boundingRect().width()
+                            # Convert line height from viewport pixels to scene coordinates
+                            # This ensures spacing remains constant when zooming
+                            line_height_scene = line_height_viewport * viewport_to_scene_scale
                             
                             # Calculate vertical position based on line index
-                            line_spacing = line_height * 1.2
+                            # Use tighter spacing (0.9) for minimal gaps between lines
+                            # This ensures consistent spacing across all modalities
+                            line_spacing = line_height_scene * 0.9
                             if alignment & Qt.AlignmentFlag.AlignBottom:
                                 # Bottom alignment: stack from bottom
                                 # y is already the bottom edge position from viewport mapping
@@ -397,9 +453,8 @@ class OverlayManager:
                                 # y is already the top edge position from viewport mapping
                                 text_y = y + line_idx * line_spacing
                             
-                            # Position at right edge: x - text_width (x is already right edge)
-                            # This ensures text aligns to the right edge of the viewport
-                            text_item.setPos(x - text_width, text_y)
+                            # Position at left edge (right edge will align at right_edge_x)
+                            text_item.setPos(left_edge_x, text_y)
                             
                             scene.addItem(text_item)
                             self.overlay_items.append(text_item)
@@ -414,8 +469,12 @@ class OverlayManager:
                         
                         # Adjust y position for bottom alignment
                         if alignment & Qt.AlignmentFlag.AlignBottom:
-                            text_height = text_item.boundingRect().height()
-                            text_item.setPos(text_item.pos().x(), y - text_height)
+                            # Get text height in viewport pixels (ItemIgnoresTransformations renders at fixed size)
+                            text_height_viewport = text_item.boundingRect().height()
+                            # Convert from viewport pixels to scene coordinates
+                            # This ensures the text stays anchored when zooming
+                            text_height_scene = text_height_viewport * viewport_to_scene_scale
+                            text_item.setPos(text_item.pos().x(), y - text_height_scene)
                         
                         scene.addItem(text_item)
                         self.overlay_items.append(text_item)
