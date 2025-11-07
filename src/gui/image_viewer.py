@@ -76,10 +76,6 @@ class ImageViewer(QGraphicsView):
         self.zoom_factor = 1.1  # Reduced from 1.15 for less sensitive scroll wheel zoom
         self.current_zoom = 1.0
         
-        # Pan settings
-        self.pan_start_pos = QPointF()
-        self.panning = False
-        
         # Mouse interaction mode
         self.mouse_mode = "pan"  # "roi_ellipse", "roi_rectangle", "measure", "zoom", "pan"
         
@@ -125,6 +121,60 @@ class ImageViewer(QGraphicsView):
         # Background - darker grey for better yellow text contrast
         darker_grey = QColor(64, 64, 64)
         self.setBackgroundBrush(darker_grey)
+    
+    def _expand_scene_rect_for_panning(self) -> None:
+        """
+        Expand scene rect to enable panning when ScrollHandDrag is active.
+        
+        This creates a virtual panning area even when image fits viewport.
+        The scene rect will be at least as large as the viewport in scene coordinates,
+        ensuring ScrollHandDrag can work properly.
+        """
+        if self.image_item is None:
+            return
+        
+        image_rect = self.image_item.boundingRect()
+        if image_rect.isEmpty():
+            return
+        
+        # Get viewport size in scene coordinates (at current zoom)
+        viewport_width = self.viewport().width()
+        viewport_height = self.viewport().height()
+        
+        # Calculate viewport size in scene coordinates
+        zoom = self.current_zoom if self.current_zoom > 0 else 1.0
+        viewport_width_scene = viewport_width / zoom
+        viewport_height_scene = viewport_height / zoom
+        
+        # Calculate how much larger the viewport is than the image (in scene coordinates)
+        # If viewport is 2x the image, we want scene rect to be at least 2x the image
+        image_width = image_rect.width()
+        image_height = image_rect.height()
+        
+        # Calculate the multiple: how many times larger is viewport than image?
+        width_multiple = viewport_width_scene / image_width if image_width > 0 else 1.0
+        height_multiple = viewport_height_scene / image_height if image_height > 0 else 1.0
+        
+        # Use the larger multiple to ensure scene rect is at least as large as viewport
+        # Add 50% margin on top of that for comfortable panning
+        target_multiple = max(width_multiple, height_multiple, 1.0)  # At least 1.0x
+        margin_factor = 1.5  # 50% margin
+        
+        # Calculate margins to make scene rect at least (target_multiple * margin_factor) times the image size
+        margin_x = image_width * (target_multiple * margin_factor - 1.0) / 2.0
+        margin_y = image_height * (target_multiple * margin_factor - 1.0) / 2.0
+        
+        # Ensure minimum margins (at least 50% of image size)
+        margin_x = max(margin_x, image_width * 0.5)
+        margin_y = max(margin_y, image_height * 0.5)
+        
+        expanded_rect = QRectF(
+            image_rect.x() - margin_x,
+            image_rect.y() - margin_y,
+            image_rect.width() + 2 * margin_x,
+            image_rect.height() + 2 * margin_y
+        )
+        self.scene.setSceneRect(expanded_rect)
     
     def set_image(self, image: Image.Image, preserve_view: bool = False) -> None:
         """
@@ -176,7 +226,13 @@ class ImageViewer(QGraphicsView):
         
         # Set scene rect to image dimensions to ensure proper overlay positioning
         image_rect = self.image_item.boundingRect()
-        self.scene.setSceneRect(image_rect)
+        
+        # For ScrollHandDrag to work when image fits viewport, expand the scene rect
+        # This creates a "virtual" panning area even when image fits viewport
+        if self.dragMode() == QGraphicsView.DragMode.ScrollHandDrag:
+            self._expand_scene_rect_for_panning()
+        else:
+            self.scene.setSceneRect(image_rect)
         
         if preserve_view and saved_zoom is not None:
             # Restore zoom and pan
@@ -220,6 +276,11 @@ class ImageViewer(QGraphicsView):
         self.current_zoom = transform.m11()
         self.last_transform = transform
         self.zoom_changed.emit(self.current_zoom)
+        
+        # If ScrollHandDrag is active, re-expand scene rect after fit_to_view
+        # (fitInView doesn't change scene rect, but we want to ensure it's expanded)
+        if self.dragMode() == QGraphicsView.DragMode.ScrollHandDrag:
+            self._expand_scene_rect_for_panning()
         
         # Update scrollbar ranges to allow panning even when image fits
         # Center the image when fitting to view
@@ -296,21 +357,34 @@ class ImageViewer(QGraphicsView):
         # Update ROI drawing mode based on mouse mode
         if mode == "roi_ellipse":
             self.roi_drawing_mode = "ellipse"
+            self.setDragMode(QGraphicsView.DragMode.NoDrag)
             self.setCursor(Qt.CursorShape.CrossCursor)
         elif mode == "roi_rectangle":
             self.roi_drawing_mode = "rectangle"
+            self.setDragMode(QGraphicsView.DragMode.NoDrag)
             self.setCursor(Qt.CursorShape.CrossCursor)
         elif mode == "measure":
             self.roi_drawing_mode = None
+            self.setDragMode(QGraphicsView.DragMode.NoDrag)
             self.setCursor(Qt.CursorShape.CrossCursor)  # Could use different cursor
         elif mode == "zoom":
             self.roi_drawing_mode = None
+            self.setDragMode(QGraphicsView.DragMode.NoDrag)
             self.setCursor(Qt.CursorShape.PointingHandCursor)
             # Store zoom start position for click-to-zoom
             self.zoom_start_pos: Optional[QPointF] = None
         else:  # pan
             self.roi_drawing_mode = None
-            self.setCursor(Qt.CursorShape.ArrowCursor)
+            # Use ScrollHandDrag for panning - this works even when image fits viewport
+            self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+            self.setCursor(Qt.CursorShape.OpenHandCursor)
+            # Ensure scrollbars are enabled for ScrollHandDrag to work
+            self.horizontalScrollBar().setEnabled(True)
+            self.verticalScrollBar().setEnabled(True)
+            # Expand scene rect if image is loaded - this is critical for ScrollHandDrag to work
+            # when image fits viewport. We need to do this here because set_image() might have
+            # been called before pan mode was activated.
+            self._expand_scene_rect_for_panning()
     
     def set_roi_drawing_mode(self, mode: Optional[str]) -> None:
         """
@@ -333,6 +407,27 @@ class ImageViewer(QGraphicsView):
             event: Mouse event
         """
         if event.button() == Qt.MouseButton.LeftButton:
+            # If ScrollHandDrag is active (pan mode), let Qt handle it unless clicking on ROI
+            if self.dragMode() == QGraphicsView.DragMode.ScrollHandDrag:
+                # Check if clicking on ROI item first
+                scene_pos = self.mapToScene(event.position().toPoint())
+                item = self.scene.itemAt(scene_pos, self.transform())
+                
+                from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsEllipseItem
+                is_roi_item = isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem))
+                
+                if is_roi_item:
+                    # Clicking on ROI - disable ScrollHandDrag temporarily
+                    self.setDragMode(QGraphicsView.DragMode.NoDrag)
+                    self.roi_clicked.emit(item)
+                    return
+                else:
+                    # Not clicking on ROI - let ScrollHandDrag handle panning
+                    # This is critical: we must let Qt handle the event for ScrollHandDrag to work
+                    super().mousePressEvent(event)
+                    return
+            
+            # For other modes, handle normally
             # First check if clicking on existing ROI item
             scene_pos = self.mapToScene(event.position().toPoint())
             item = self.scene.itemAt(scene_pos, self.transform())
@@ -343,7 +438,6 @@ class ImageViewer(QGraphicsView):
             
             if is_roi_item:
                 # Clicking on existing ROI - emit signal for ROI click
-                # This allows ROI selection/movement without starting new drawing
                 self.roi_clicked.emit(item)
             elif self.mouse_mode == "zoom":
                 # Zoom mode - start zoom operation
@@ -353,11 +447,6 @@ class ImageViewer(QGraphicsView):
                 # Start ROI drawing only if not clicking on existing ROI
                 self.roi_drawing_start = scene_pos
                 self.roi_drawing_started.emit(scene_pos)
-            else:
-                # Pan mode
-                self.pan_start_pos = event.position()
-                self.panning = True
-                self.setCursor(Qt.CursorShape.ClosedHandCursor)
         elif event.button() == Qt.MouseButton.RightButton:
             # Right click for context menu
             scene_pos = self.mapToScene(event.position().toPoint())
@@ -393,6 +482,10 @@ class ImageViewer(QGraphicsView):
         """
         if self.mouse_mode == "zoom" and self.zoom_start_pos is not None and event.buttons() & Qt.MouseButton.LeftButton:
             # Zoom mode - adjust zoom based on vertical drag distance
+            # Ensure ScrollHandDrag is disabled for zoom mode
+            if self.dragMode() == QGraphicsView.DragMode.ScrollHandDrag:
+                self.setDragMode(QGraphicsView.DragMode.NoDrag)
+            
             current_pos = self.mapToScene(event.position().toPoint())
             start_pos = self.zoom_start_pos
             
@@ -413,28 +506,16 @@ class ImageViewer(QGraphicsView):
             self.zoom_changed.emit(self.current_zoom)
             self._check_transform_changed()
         elif self.roi_drawing_mode and self.roi_drawing_start is not None:
-            # ROI drawing mode
+            # ROI drawing mode - ensure ScrollHandDrag is disabled
+            if self.dragMode() == QGraphicsView.DragMode.ScrollHandDrag:
+                self.setDragMode(QGraphicsView.DragMode.NoDrag)
+            
             if event.buttons() & Qt.MouseButton.LeftButton:
                 scene_pos = self.mapToScene(event.position().toPoint())
                 self.roi_drawing_updated.emit(scene_pos)
-        elif self.panning and event.buttons() & Qt.MouseButton.LeftButton:
-            # Pan mode
-            # Calculate pan delta
-            delta = event.position() - self.pan_start_pos
-            self.pan_start_pos = event.position()
-            
-            # Translate view
-            self.horizontalScrollBar().setValue(
-                self.horizontalScrollBar().value() - int(delta.x())
-            )
-            self.verticalScrollBar().setValue(
-                self.verticalScrollBar().value() - int(delta.y())
-            )
-            # Emit transform changed signal after panning
-            self._check_transform_changed()
-            # Update scrollbar ranges to ensure panning limits are correct
-            # (ranges may need adjustment if we're at the edge)
-            QTimer.singleShot(10, self._update_scrollbar_ranges)
+        # Pan mode is handled automatically by ScrollHandDrag, no manual code needed
+        # But we need to emit transform_changed signal when panning occurs
+        # This is handled by connecting to scrollbar valueChanged signals
         
         super().mouseMoveEvent(event)
     
@@ -450,15 +531,17 @@ class ImageViewer(QGraphicsView):
                 # Finish zoom operation
                 self.zoom_start_pos = None
                 self.zoom_start_zoom = None
+                # Restore ScrollHandDrag if we're in pan mode
+                if self.mouse_mode == "pan":
+                    self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
             elif self.roi_drawing_mode and self.roi_drawing_start is not None:
                 # Finish ROI drawing
                 self.roi_drawing_finished.emit()
                 self.roi_drawing_start = None
-            else:
-                # Pan mode
-                self.panning = False
-                if not self.roi_drawing_mode:
-                    self.setCursor(Qt.CursorShape.ArrowCursor)
+                # Restore ScrollHandDrag if we're in pan mode
+                if self.mouse_mode == "pan":
+                    self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+            # Pan mode is handled automatically by ScrollHandDrag, no cleanup needed
         
         super().mouseReleaseEvent(event)
     
@@ -501,9 +584,21 @@ class ImageViewer(QGraphicsView):
         aligns with the viewport center.
         QGraphicsView scrollbars work in scene coordinates.
         
+        NOTE: This method should NOT be called when ScrollHandDrag is active,
+        as Qt manages scrollbars automatically in that mode. Calling this method
+        when ScrollHandDrag is active causes conflicts, leading to jittering and
+        panning failures.
+        
         Args:
             center_image: If True, center the scrollbars to align image center with viewport center
         """
+        # Skip custom scrollbar range management when ScrollHandDrag is active
+        # Qt handles scrollbars automatically in ScrollHandDrag mode, and our
+        # custom range updates interfere with Qt's management, causing jittering
+        # and preventing panning from working properly.
+        if self.dragMode() == QGraphicsView.DragMode.ScrollHandDrag:
+            return
+        
         if self.image_item is None:
             return
         
