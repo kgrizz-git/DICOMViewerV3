@@ -65,6 +65,10 @@ class ImageViewer(QGraphicsView):
         """
         super().__init__(parent)
         
+        # Set transformation anchor to viewport center for consistent zoom behavior
+        self.setTransformationAnchor(QGraphicsView.AnchorViewCenter)
+        self.setResizeAnchor(QGraphicsView.AnchorViewCenter)
+        
         # Create graphics scene
         self.scene = QGraphicsScene(self)
         self.setScene(self.scene)
@@ -101,8 +105,8 @@ class ImageViewer(QGraphicsView):
         
         # View settings
         self.setDragMode(QGraphicsView.DragMode.NoDrag)
-        self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
-        self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
+        # Transformation anchor is already set to AnchorViewCenter above for viewport-centered zoom
+        # Resize anchor is already set to AnchorViewCenter above
         self.setRenderHint(QPainter.RenderHint.Antialiasing)
         self.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         
@@ -599,10 +603,10 @@ class ImageViewer(QGraphicsView):
             if self.dragMode() == QGraphicsView.DragMode.ScrollHandDrag:
                 self.setDragMode(QGraphicsView.DragMode.NoDrag)
             
-            current_pos = self.mapToScene(event.position().toPoint())
+            current_pos = event.position()
             start_pos = self.zoom_start_pos
             
-            # Calculate vertical distance moved
+            # Calculate vertical distance moved (in viewport coordinates)
             delta_y = current_pos.y() - start_pos.y()
             
             # Convert to zoom factor (negative delta = zoom in, positive = zoom out)
@@ -612,10 +616,11 @@ class ImageViewer(QGraphicsView):
             # Clamp zoom
             new_zoom = max(self.min_zoom, min(self.max_zoom, new_zoom))
             
-            # Apply zoom centered on start position
+            # Apply zoom - AnchorViewCenter will automatically center on viewport center
             zoom_factor = new_zoom / self.current_zoom
             self.scale(zoom_factor, zoom_factor)
             self.current_zoom = new_zoom
+            
             self.zoom_changed.emit(self.current_zoom)
             self._check_transform_changed()
             # Re-expand scene rect if ScrollHandDrag is active (viewport size in scene coords changed)

@@ -844,15 +844,21 @@ class DICOMViewerApp(QObject):
                     self.image_viewer.scene.removeItem(item)
         
         # Add ROIs for current slice to scene if not already there
-        # If no ROIs or no selected ROI, clear statistics
-        if not rois or not self.roi_manager.get_selected_roi():
-            self.roi_statistics_panel.clear_statistics()
-        
         for roi in rois:
             if roi.item.scene() != self.image_viewer.scene:
                 self.image_viewer.scene.addItem(roi.item)
                 # Ensure ROI is visible (set appropriate Z-value)
                 roi.item.setZValue(100)  # Above image but below overlay
+        
+        # Check if there's a selected ROI for this slice and restore UI state
+        selected_roi = self.roi_manager.get_selected_roi()
+        if selected_roi is not None and selected_roi in rois:
+            # Selected ROI belongs to current slice - restore UI state
+            self.roi_list_panel.select_roi_in_list(selected_roi)
+            self._update_roi_statistics(selected_roi)
+        else:
+            # No selected ROI for this slice - clear statistics
+            self.roi_statistics_panel.clear_statistics()
     
     def _open_settings(self) -> None:
         """Handle settings dialog request."""

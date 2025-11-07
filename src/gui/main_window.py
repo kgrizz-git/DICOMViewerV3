@@ -387,7 +387,7 @@ class MainWindow(QMainWindow):
         Args:
             mode: Mouse mode ("roi_ellipse", "roi_rectangle", "measure", "zoom", "pan", "auto_window_level")
         """
-        # Uncheck all other actions
+        # Uncheck all actions first
         all_actions = [
             self.mouse_mode_ellipse_roi_action,
             self.mouse_mode_rectangle_roi_action,
@@ -397,21 +397,34 @@ class MainWindow(QMainWindow):
             self.mouse_mode_auto_window_level_action
         ]
         
+        # Block signals when updating toolbar buttons to prevent recursive loops
+        # This prevents setChecked() from triggering the action's triggered signal
         for action in all_actions:
-            if action != self.mouse_mode_ellipse_roi_action and mode == "roi_ellipse":
-                action.setChecked(False)
-            elif action != self.mouse_mode_rectangle_roi_action and mode == "roi_rectangle":
-                action.setChecked(False)
-            elif action != self.mouse_mode_measure_action and mode == "measure":
-                action.setChecked(False)
-            elif action != self.mouse_mode_zoom_action and mode == "zoom":
-                action.setChecked(False)
-            elif action != self.mouse_mode_pan_action and mode == "pan":
-                action.setChecked(False)
-            elif action != self.mouse_mode_auto_window_level_action and mode == "auto_window_level":
-                action.setChecked(False)
+            action.blockSignals(True)
         
-        # Emit signal
+        # Uncheck all actions
+        for action in all_actions:
+            action.setChecked(False)
+        
+        # Check the action corresponding to the selected mode
+        if mode == "roi_ellipse":
+            self.mouse_mode_ellipse_roi_action.setChecked(True)
+        elif mode == "roi_rectangle":
+            self.mouse_mode_rectangle_roi_action.setChecked(True)
+        elif mode == "measure":
+            self.mouse_mode_measure_action.setChecked(True)
+        elif mode == "zoom":
+            self.mouse_mode_zoom_action.setChecked(True)
+        elif mode == "pan":
+            self.mouse_mode_pan_action.setChecked(True)
+        elif mode == "auto_window_level":
+            self.mouse_mode_auto_window_level_action.setChecked(True)
+        
+        # Unblock signals after updating toolbar buttons
+        for action in all_actions:
+            action.blockSignals(False)
+        
+        # Emit signal AFTER updating toolbar buttons
         self.mouse_mode_changed.emit(mode)
     
     def _on_scroll_wheel_mode_combo_changed(self, text: str) -> None:
