@@ -21,9 +21,9 @@ Requirements:
 
 from PySide6.QtWidgets import (QGraphicsView, QGraphicsScene, QGraphicsPixmapItem,
                                 QWidget, QVBoxLayout, QMenu)
-from PySide6.QtCore import Qt, QRectF, Signal, QPointF
+from PySide6.QtCore import Qt, QRectF, Signal, QPointF, QTimer
 from PySide6.QtGui import (QPixmap, QImage, QWheelEvent, QKeyEvent, QMouseEvent,
-                          QPainter, QColor)
+                          QPainter, QColor, QTransform)
 from PIL import Image
 import numpy as np
 from typing import Optional
@@ -43,11 +43,13 @@ class ImageViewer(QGraphicsView):
     
     # Signals
     zoom_changed = Signal(float)  # Emitted when zoom level changes
+    transform_changed = Signal()  # Emitted when view transform changes (zoom/pan)
     image_clicked = Signal(QPointF)  # Emitted when image is clicked
     roi_drawing_started = Signal(QPointF)  # Emitted when ROI drawing starts
     roi_drawing_updated = Signal(QPointF)  # Emitted when ROI drawing updates
     roi_drawing_finished = Signal()  # Emitted when ROI drawing finishes
     wheel_event_for_slice = Signal(int)  # Emitted when wheel event should navigate slices
+    arrow_key_pressed = Signal(int)  # Emitted when arrow key is pressed (1 = up, -1 = down)
     roi_clicked = Signal(object)  # Emitted when ROI is clicked (ROIItem)
     roi_delete_requested = Signal(object)  # Emitted when ROI deletion is requested (QGraphicsItem)
     
@@ -91,12 +93,18 @@ class ImageViewer(QGraphicsView):
         # Scroll wheel mode
         self.scroll_wheel_mode = "slice"  # "slice" or "zoom"
         
+        # Track transform for change detection
+        self.last_transform = QTransform()
+        
         # View settings
         self.setDragMode(QGraphicsView.DragMode.NoDrag)
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
         self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
         self.setRenderHint(QPainter.RenderHint.Antialiasing)
         self.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        
+        # Enable focus to receive key events
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         
         # Background - darker grey for better yellow text contrast
         darker_grey = QColor(64, 64, 64)
@@ -163,6 +171,7 @@ class ImageViewer(QGraphicsView):
         # Update zoom level
         transform = self.transform()
         self.current_zoom = transform.m11()
+        self.last_transform = transform
         self.zoom_changed.emit(self.current_zoom)
     
     def zoom_in(self) -> None:
@@ -172,6 +181,7 @@ class ImageViewer(QGraphicsView):
         if self.current_zoom > self.max_zoom:
             self.current_zoom = self.max_zoom
         self.zoom_changed.emit(self.current_zoom)
+        self._check_transform_changed()
     
     def zoom_out(self) -> None:
         """Zoom out from the image."""
@@ -180,12 +190,14 @@ class ImageViewer(QGraphicsView):
         if self.current_zoom < self.min_zoom:
             self.current_zoom = self.min_zoom
         self.zoom_changed.emit(self.current_zoom)
+        self._check_transform_changed()
     
     def reset_zoom(self) -> None:
         """Reset zoom to 1:1."""
         self.resetTransform()
         self.current_zoom = 1.0
         self.zoom_changed.emit(self.current_zoom)
+        self._check_transform_changed()
     
     def set_scroll_wheel_mode(self, mode: str) -> None:
         """
@@ -337,6 +349,7 @@ class ImageViewer(QGraphicsView):
             self.scale(zoom_factor, zoom_factor)
             self.current_zoom = new_zoom
             self.zoom_changed.emit(self.current_zoom)
+            self._check_transform_changed()
         elif self.roi_drawing_mode and self.roi_drawing_start is not None:
             # ROI drawing mode
             if event.buttons() & Qt.MouseButton.LeftButton:
@@ -355,6 +368,8 @@ class ImageViewer(QGraphicsView):
             self.verticalScrollBar().setValue(
                 self.verticalScrollBar().value() - int(delta.y())
             )
+            # Emit transform changed signal after panning
+            self._check_transform_changed()
         
         super().mouseMoveEvent(event)
     
@@ -381,6 +396,36 @@ class ImageViewer(QGraphicsView):
                     self.setCursor(Qt.CursorShape.ArrowCursor)
         
         super().mouseReleaseEvent(event)
+    
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        """
+        Handle key press events for arrow key navigation.
+        
+        Args:
+            event: Key event
+        """
+        if event.key() == Qt.Key.Key_Up:
+            # Up arrow: next slice
+            self.arrow_key_pressed.emit(1)
+            event.accept()
+        elif event.key() == Qt.Key.Key_Down:
+            # Down arrow: previous slice
+            self.arrow_key_pressed.emit(-1)
+            event.accept()
+        else:
+            super().keyPressEvent(event)
+    
+    def _check_transform_changed(self) -> None:
+        """
+        Check if transform has changed and emit signal if so.
+        
+        Uses QTimer to delay signal emission slightly to ensure transform is fully applied.
+        """
+        current_transform = self.transform()
+        if current_transform != self.last_transform:
+            self.last_transform = current_transform
+            # Use QTimer to delay signal emission slightly, ensuring transform is fully applied
+            QTimer.singleShot(10, lambda: self.transform_changed.emit())
     
     def resizeEvent(self, event) -> None:
         """

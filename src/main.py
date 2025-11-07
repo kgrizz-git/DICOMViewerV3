@@ -159,6 +159,7 @@ class DICOMViewerApp(QObject):
         # File operations
         self.main_window.open_file_requested.connect(self._open_files)
         self.main_window.open_folder_requested.connect(self._open_folder)
+        self.main_window.open_recent_file_requested.connect(self._open_recent_file)
         
         # Settings
         self.main_window.settings_requested.connect(self._open_settings)
@@ -206,12 +207,24 @@ class DICOMViewerApp(QObject):
         
         # Zoom changes - update overlay positions to keep text anchored
         self.image_viewer.zoom_changed.connect(self._on_zoom_changed)
+        
+        # Transform changes (zoom/pan) - update overlay positions to keep text anchored
+        # This signal fires after transform is applied, ensuring accurate viewport-to-scene mapping
+        self.image_viewer.transform_changed.connect(self._on_transform_changed)
+        
+        # Arrow key navigation from image viewer
+        self.image_viewer.arrow_key_pressed.connect(self._on_arrow_key_pressed)
     
     def _open_files(self) -> None:
         """Handle open files request."""
         file_paths = self.file_dialog.open_files(self.main_window)
         if not file_paths:
             return
+        
+        # Add first file to recent files (representing this file selection)
+        if file_paths:
+            self.config_manager.add_recent_file(file_paths[0])
+            self.main_window.update_recent_menu()
         
         try:
             # Load files
@@ -258,6 +271,10 @@ class DICOMViewerApp(QObject):
         if not folder_path:
             return
         
+        # Add folder to recent files
+        self.config_manager.add_recent_file(folder_path)
+        self.main_window.update_recent_menu()
+        
         try:
             # Load folder (recursive)
             datasets = self.dicom_loader.load_directory(folder_path, recursive=True)
@@ -291,6 +308,89 @@ class DICOMViewerApp(QObject):
                 "Error",
                 f"Error loading folder: {str(e)}"
             )
+    
+    def _open_recent_file(self, file_path: str) -> None:
+        """
+        Handle open recent file/folder request.
+        
+        Args:
+            file_path: Path to file or folder to open
+        """
+        import os.path
+        
+        # Check if path exists
+        if not os.path.exists(file_path):
+            self.file_dialog.show_error(
+                self.main_window,
+                "Error",
+                f"File or folder not found:\n{file_path}"
+            )
+            # Remove from recent files if it doesn't exist
+            recent_files = self.config_manager.get_recent_files()
+            if file_path in recent_files:
+                recent_files.remove(file_path)
+                self.config_manager.config["recent_files"] = recent_files
+                self.config_manager.save_config()
+                self.main_window.update_recent_menu()
+            return
+        
+        # Determine if it's a file or folder
+        if os.path.isfile(file_path):
+            # Open as file
+            try:
+                datasets = self.dicom_loader.load_files([file_path])
+                
+                if not datasets:
+                    self.file_dialog.show_error(
+                        self.main_window,
+                        "Error",
+                        "No DICOM files could be loaded."
+                    )
+                    return
+                
+                # Organize into studies/series
+                self.current_datasets = datasets
+                self.current_studies = self.dicom_organizer.organize(datasets, [file_path])
+                
+                # Display first slice
+                self._load_first_slice()
+                
+                self.main_window.update_status(f"Loaded {len(datasets)} DICOM file(s)")
+                
+            except Exception as e:
+                self.file_dialog.show_error(
+                    self.main_window,
+                    "Error",
+                    f"Error loading file: {str(e)}"
+                )
+        else:
+            # Open as folder
+            try:
+                datasets = self.dicom_loader.load_directory(file_path, recursive=True)
+                
+                if not datasets:
+                    self.file_dialog.show_error(
+                        self.main_window,
+                        "Error",
+                        "No DICOM files found in folder."
+                    )
+                    return
+                
+                # Organize
+                self.current_datasets = datasets
+                self.current_studies = self.dicom_organizer.organize(datasets)
+                
+                # Display first slice
+                self._load_first_slice()
+                
+                self.main_window.update_status(f"Loaded {len(datasets)} DICOM file(s) from folder")
+                
+            except Exception as e:
+                self.file_dialog.show_error(
+                    self.main_window,
+                    "Error",
+                    f"Error loading folder: {str(e)}"
+                )
     
     def _load_first_slice(self) -> None:
         """Load and display the first slice."""
@@ -630,14 +730,37 @@ class DICOMViewerApp(QObject):
         """
         Handle zoom level change.
         
-        Updates overlay positions to keep text anchored to viewport edges.
-        
         Args:
             zoom_level: Current zoom level
         """
-        # Update overlay positions when zoom changes
+        # Note: Overlay position updates are handled by _on_transform_changed
+        # which fires after the transform is fully applied
+        pass
+    
+    def _on_transform_changed(self) -> None:
+        """
+        Handle view transform change (zoom/pan).
+        
+        Updates overlay positions to keep text anchored to viewport edges.
+        This is called after the transform is fully applied.
+        """
+        # Update overlay positions when transform changes
         if self.current_dataset is not None:
             self.overlay_manager.update_overlay_positions(self.image_viewer.scene)
+    
+    def _on_arrow_key_pressed(self, direction: int) -> None:
+        """
+        Handle arrow key press from image viewer.
+        
+        Args:
+            direction: 1 for up (next slice), -1 for down (previous slice)
+        """
+        if direction == 1:
+            # Up arrow: next slice
+            self.slice_navigator.next_slice()
+        elif direction == -1:
+            # Down arrow: previous slice
+            self.slice_navigator.previous_slice()
     
     def _on_scene_selection_changed(self) -> None:
         """Handle scene selection change (e.g., when ROI is moved)."""
@@ -743,7 +866,8 @@ class DICOMViewerApp(QObject):
         Returns:
             Exit code
         """
-        self.main_window.show()
+        # Show window maximized (full-screen)
+        self.main_window.showMaximized()
         return self.app.exec()
 
 
