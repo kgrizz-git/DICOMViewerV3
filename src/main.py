@@ -253,6 +253,11 @@ class DICOMViewerApp(QObject):
         if not file_paths:
             return
         
+        # Clear all ROIs when opening new files
+        self.roi_manager.clear_all_rois(self.image_viewer.scene)
+        self.roi_list_panel.update_roi_list("", "", 0)  # Clear list
+        self.roi_statistics_panel.clear_statistics()
+        
         # Add first file to recent files (representing this file selection)
         if file_paths:
             self.config_manager.add_recent_file(file_paths[0])
@@ -303,6 +308,11 @@ class DICOMViewerApp(QObject):
         if not folder_path:
             return
         
+        # Clear all ROIs when opening new folder
+        self.roi_manager.clear_all_rois(self.image_viewer.scene)
+        self.roi_list_panel.update_roi_list("", "", 0)  # Clear list
+        self.roi_statistics_panel.clear_statistics()
+        
         # Add folder to recent files
         self.config_manager.add_recent_file(folder_path)
         self.main_window.update_recent_menu()
@@ -349,6 +359,11 @@ class DICOMViewerApp(QObject):
             file_path: Path to file or folder to open
         """
         import os.path
+        
+        # Clear all ROIs when opening new file/folder
+        self.roi_manager.clear_all_rois(self.image_viewer.scene)
+        self.roi_list_panel.update_roi_list("", "", 0)  # Clear list
+        self.roi_statistics_panel.clear_statistics()
         
         # Check if path exists
         if not os.path.exists(file_path):
@@ -645,7 +660,7 @@ class DICOMViewerApp(QObject):
             )
             
             # Display ROIs for current slice
-            self._display_rois_for_slice(self.current_slice_index)
+            self._display_rois_for_slice(dataset)
         
         except Exception as e:
             self.main_window.update_status(f"Error displaying slice: {str(e)}")
@@ -814,33 +829,45 @@ class DICOMViewerApp(QObject):
                             parser
                         )
     
-    def _display_rois_for_slice(self, slice_index: int) -> None:
+    def _display_rois_for_slice(self, dataset) -> None:
         """
         Display ROIs for a slice.
         
         Ensures all ROIs for the current slice are visible in the scene.
         
         Args:
-            slice_index: Slice index
+            dataset: pydicom Dataset for the current slice
         """
-        # Get all ROIs for this slice
-        rois = self.roi_manager.get_rois_for_slice(slice_index)
+        # Extract DICOM identifiers
+        study_uid = getattr(dataset, 'StudyInstanceUID', '')
+        series_uid = getattr(dataset, 'SeriesInstanceUID', '')
+        # Try to get InstanceNumber from DICOM, fall back to slice_index
+        instance_number = getattr(dataset, 'InstanceNumber', None)
+        if instance_number is None:
+            instance_identifier = self.current_slice_index
+        else:
+            instance_identifier = int(instance_number)
+        
+        # Get all ROIs for this slice using composite key
+        rois = self.roi_manager.get_rois_for_slice(study_uid, series_uid, instance_identifier)
         
         # Remove ROIs from other slices from the scene
         # (but keep them in the manager's storage)
         current_scene_items = list(self.image_viewer.scene.items())
         for item in current_scene_items:
-            # Check if this item is an ROI from a different slice
+            # Check if this item is an ROI
             roi = self.roi_manager.find_roi_by_item(item)
             if roi is not None:
                 # Check if this ROI belongs to current slice
-                roi_slice = None
-                for s_idx, roi_list in self.roi_manager.rois.items():
+                roi_belongs_to_current = False
+                for key, roi_list in self.roi_manager.rois.items():
                     if roi in roi_list:
-                        roi_slice = s_idx
+                        # Check if this key matches current slice
+                        if key == (study_uid, series_uid, instance_identifier):
+                            roi_belongs_to_current = True
                         break
                 # Remove ROI if it's from a different slice
-                if roi_slice is not None and roi_slice != slice_index:
+                if not roi_belongs_to_current:
                     self.image_viewer.scene.removeItem(item)
         
         # Add ROIs for current slice to scene if not already there
@@ -859,6 +886,9 @@ class DICOMViewerApp(QObject):
         else:
             # No selected ROI for this slice - clear statistics
             self.roi_statistics_panel.clear_statistics()
+        
+        # Update ROI list panel with composite key
+        self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
     
     def _open_settings(self) -> None:
         """Handle settings dialog request."""
@@ -976,7 +1006,20 @@ class DICOMViewerApp(QObject):
         Args:
             pos: Starting position
         """
-        self.roi_manager.set_current_slice(self.current_slice_index)
+        if self.current_dataset is None:
+            return
+        
+        # Extract DICOM identifiers
+        study_uid = getattr(self.current_dataset, 'StudyInstanceUID', '')
+        series_uid = getattr(self.current_dataset, 'SeriesInstanceUID', '')
+        # Try to get InstanceNumber from DICOM, fall back to slice_index
+        instance_number = getattr(self.current_dataset, 'InstanceNumber', None)
+        if instance_number is None:
+            instance_identifier = self.current_slice_index
+        else:
+            instance_identifier = int(instance_number)
+        
+        self.roi_manager.set_current_slice(study_uid, series_uid, instance_identifier)
         self.roi_manager.start_drawing(pos, self.image_viewer.roi_drawing_mode)
     
     def _on_roi_drawing_updated(self, pos: QPointF) -> None:
@@ -991,6 +1034,17 @@ class DICOMViewerApp(QObject):
     def _on_roi_drawing_finished(self) -> None:
         """Handle ROI drawing finish."""
         roi_item = self.roi_manager.finish_drawing()
+        
+        # Extract DICOM identifiers for updating ROI list
+        study_uid = ""
+        series_uid = ""
+        instance_identifier = self.current_slice_index
+        if self.current_dataset is not None:
+            study_uid = getattr(self.current_dataset, 'StudyInstanceUID', '')
+            series_uid = getattr(self.current_dataset, 'SeriesInstanceUID', '')
+            instance_number = getattr(self.current_dataset, 'InstanceNumber', None)
+            if instance_number is not None:
+                instance_identifier = int(instance_number)
         
         # Check if we're in auto_window_level mode
         if self.image_viewer.mouse_mode == "auto_window_level" and roi_item is not None:
@@ -1017,7 +1071,7 @@ class DICOMViewerApp(QObject):
                             self.roi_manager.delete_roi(roi, self.image_viewer.scene)
                             
                             # Update ROI list panel
-                            self.roi_list_panel.update_roi_list(self.current_slice_index)
+                            self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
                             
                             # Switch back to pan mode
                             self.image_viewer.set_mouse_mode("pan")
@@ -1032,7 +1086,7 @@ class DICOMViewerApp(QObject):
                 if roi_item is not None:
                     # roi_item is already the ROIItem we need
                     self.roi_manager.delete_roi(roi_item, self.image_viewer.scene)
-                    self.roi_list_panel.update_roi_list(self.current_slice_index)
+                    self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
                 self.image_viewer.set_mouse_mode("pan")
                 self.main_window.mouse_mode_pan_action.setChecked(True)
                 self.main_window.mouse_mode_auto_window_level_action.setChecked(False)
@@ -1040,11 +1094,13 @@ class DICOMViewerApp(QObject):
         
         # Normal ROI drawing finish (not auto window/level)
         # Update ROI list
-        self.roi_list_panel.update_roi_list(self.current_slice_index)
+        self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
         
-        # Calculate and display statistics if ROI was created
-        if roi_item is not None and self.current_dataset is not None:
-            self._update_roi_statistics(roi_item)
+        # Auto-select the newly drawn ROI: highlight in list and show statistics
+        if roi_item is not None:
+            self.roi_list_panel.select_roi_in_list(roi_item)
+            if self.current_dataset is not None:
+                self._update_roi_statistics(roi_item)
     
     def _on_roi_clicked(self, item) -> None:
         """
@@ -1078,7 +1134,16 @@ class DICOMViewerApp(QObject):
         roi = self.roi_manager.find_roi_by_item(item)
         if roi:
             self.roi_manager.delete_roi(roi, self.image_viewer.scene)
-            self.roi_list_panel.update_roi_list(self.current_slice_index)
+            # Update ROI list panel - extract identifiers from current dataset
+            if self.current_dataset is not None:
+                study_uid = getattr(self.current_dataset, 'StudyInstanceUID', '')
+                series_uid = getattr(self.current_dataset, 'SeriesInstanceUID', '')
+                instance_number = getattr(self.current_dataset, 'InstanceNumber', None)
+                if instance_number is None:
+                    instance_identifier = self.current_slice_index
+                else:
+                    instance_identifier = int(instance_number)
+                self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
             if self.roi_manager.get_selected_roi() is None:
                 self.roi_statistics_panel.clear_statistics()
     
@@ -1112,8 +1177,10 @@ class DICOMViewerApp(QObject):
         Args:
             mode: Mouse mode string
         """
-        # Emit the main_window signal to update toolbar and trigger normal flow
-        self.main_window.mouse_mode_changed.emit(mode)
+        # Call main_window's _on_mouse_mode_changed() directly to update toolbar buttons
+        # This method will update toolbar button states and then emit the signal
+        # which will trigger the normal flow (setting mouse mode in image_viewer)
+        self.main_window._on_mouse_mode_changed(mode)
     
     def _on_context_menu_scroll_wheel_mode_changed(self, mode: str) -> None:
         """
@@ -1248,9 +1315,18 @@ class DICOMViewerApp(QObject):
             return
         
         try:
+            # Extract DICOM identifiers
+            study_uid = getattr(self.current_dataset, 'StudyInstanceUID', '')
+            series_uid = getattr(self.current_dataset, 'SeriesInstanceUID', '')
+            instance_number = getattr(self.current_dataset, 'InstanceNumber', None)
+            if instance_number is None:
+                instance_identifier = self.current_slice_index
+            else:
+                instance_identifier = int(instance_number)
+            
             # Get ROI identifier (e.g., "ROI 1 (rectangle)")
             roi_identifier = None
-            rois = self.roi_manager.get_rois_for_slice(self.current_slice_index)
+            rois = self.roi_manager.get_rois_for_slice(study_uid, series_uid, instance_identifier)
             for i, r in enumerate(rois):
                 if r == roi:
                     roi_identifier = f"ROI {i+1} ({roi.shape_type})"
@@ -1276,19 +1352,11 @@ class DICOMViewerApp(QObject):
         datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
         if 0 <= slice_index < len(datasets):
             self.current_slice_index = slice_index
-            self._display_slice(datasets[slice_index])
+            dataset = datasets[slice_index]
+            self._display_slice(dataset)
             
-            # Update ROI manager for current slice
-            self.roi_manager.set_current_slice(slice_index)
-            
-            # Update ROI list panel
-            self.roi_list_panel.update_roi_list(slice_index)
-            
-            # Clear ROI statistics when changing slices
-            self.roi_statistics_panel.clear_statistics()
-            
-            # Display ROIs for this slice
-            self._display_rois_for_slice(slice_index)
+            # Display ROIs for this slice (will update ROI manager and list panel internally)
+            self._display_rois_for_slice(dataset)
     
     def eventFilter(self, obj, event) -> bool:
         """
