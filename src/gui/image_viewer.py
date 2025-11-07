@@ -55,6 +55,9 @@ class ImageViewer(QGraphicsView):
     reset_view_requested = Signal()  # Emitted when reset view is requested from context menu
     context_menu_mouse_mode_changed = Signal(str)  # Emitted when mouse mode is changed from context menu
     context_menu_scroll_wheel_mode_changed = Signal(str)  # Emitted when scroll wheel mode is changed from context menu
+    window_level_drag_changed = Signal(float, float)  # Emitted when window/level is adjusted via right mouse drag (center_delta, width_delta)
+    right_mouse_press_for_drag = Signal()  # Emitted when right mouse is pressed (not on ROI) to request window/level values for drag
+    series_navigation_requested = Signal(int)  # Emitted when series navigation is requested (-1 for left/previous, 1 for right/next)
     
     def __init__(self, parent: Optional[QWidget] = None):
         """
@@ -102,6 +105,17 @@ class ImageViewer(QGraphicsView):
         # Track scrollbar positions for panning detection
         self.last_horizontal_scroll = 0
         self.last_vertical_scroll = 0
+        
+        # Right mouse drag for window/level adjustment
+        self.right_mouse_drag_start_pos: Optional[QPointF] = None
+        self.right_mouse_drag_start_center: Optional[float] = None
+        self.right_mouse_drag_start_width: Optional[float] = None
+        self.right_mouse_context_menu_shown = False  # Track if context menu was shown
+        
+        # Sensitivity factors for window/level adjustment (pixels to units)
+        # These will be set dynamically based on current ranges
+        self.window_center_sensitivity = 1.0  # pixels per unit
+        self.window_width_sensitivity = 1.0  # pixels per unit
         
         # View settings
         self.setDragMode(QGraphicsView.DragMode.NoDrag)
@@ -520,7 +534,7 @@ class ImageViewer(QGraphicsView):
                 self.roi_drawing_start = scene_pos
                 self.roi_drawing_started.emit(scene_pos)
         elif event.button() == Qt.MouseButton.RightButton:
-            # Right click for context menu
+            # Right click - prepare for potential drag or context menu
             scene_pos = self.mapToScene(event.position().toPoint())
             item = self.scene.itemAt(scene_pos, self.transform())
             
@@ -529,63 +543,20 @@ class ImageViewer(QGraphicsView):
             is_roi_item = isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem))
             
             if is_roi_item:
-                # Show context menu for ROI
+                # Show context menu for ROI immediately
                 context_menu = QMenu(self)
                 delete_action = context_menu.addAction("Delete ROI")
                 delete_action.triggered.connect(lambda: self.roi_delete_requested.emit(item))
                 context_menu.exec(event.globalPosition().toPoint())
+                self.right_mouse_context_menu_shown = True
                 return
             else:
-                # Show context menu for image (not on ROI)
-                context_menu = QMenu(self)
-                
-                # Reset View action
-                reset_action = context_menu.addAction("Reset View")
-                reset_action.triggered.connect(self.reset_view_requested.emit)
-                
-                context_menu.addSeparator()
-                
-                # Left Mouse Button submenu
-                left_mouse_menu = context_menu.addMenu("Left Mouse Button")
-                left_mouse_actions = {
-                    "Ellipse ROI": "roi_ellipse",
-                    "Rectangle ROI": "roi_rectangle",
-                    "Measure": "measure",
-                    "Zoom": "zoom",
-                    "Pan": "pan",
-                    "Auto Window/Level": "auto_window_level"
-                }
-                for action_text, mode in left_mouse_actions.items():
-                    action = left_mouse_menu.addAction(action_text)
-                    action.setCheckable(True)
-                    # Check the current mode
-                    if self.mouse_mode == mode:
-                        action.setChecked(True)
-                    action.triggered.connect(
-                        lambda checked, m=mode: self.context_menu_mouse_mode_changed.emit(m)
-                    )
-                
-                context_menu.addSeparator()
-                
-                # Scroll Wheel Mode submenu
-                scroll_wheel_menu = context_menu.addMenu("Scroll Wheel Mode")
-                slice_action = scroll_wheel_menu.addAction("Slice")
-                slice_action.setCheckable(True)
-                if self.scroll_wheel_mode == "slice":
-                    slice_action.setChecked(True)
-                slice_action.triggered.connect(
-                    lambda: self.context_menu_scroll_wheel_mode_changed.emit("slice")
-                )
-                
-                zoom_action = scroll_wheel_menu.addAction("Zoom")
-                zoom_action.setCheckable(True)
-                if self.scroll_wheel_mode == "zoom":
-                    zoom_action.setChecked(True)
-                zoom_action.triggered.connect(
-                    lambda: self.context_menu_scroll_wheel_mode_changed.emit("zoom")
-                )
-                
-                context_menu.exec(event.globalPosition().toPoint())
+                # Not clicking on ROI - prepare for drag or context menu
+                # Store initial position for potential drag
+                self.right_mouse_drag_start_pos = event.position()
+                self.right_mouse_context_menu_shown = False
+                # Request window/level values from main.py
+                self.right_mouse_press_for_drag.emit()
                 return
         
         super().mousePressEvent(event)
@@ -635,6 +606,26 @@ class ImageViewer(QGraphicsView):
             if event.buttons() & Qt.MouseButton.LeftButton:
                 scene_pos = self.mapToScene(event.position().toPoint())
                 self.roi_drawing_updated.emit(scene_pos)
+        elif event.buttons() & Qt.MouseButton.RightButton and self.right_mouse_drag_start_pos is not None:
+            # Right mouse drag for window/level adjustment
+            # Only if we have initial window/level values and context menu wasn't shown
+            if (self.right_mouse_drag_start_center is not None and 
+                self.right_mouse_drag_start_width is not None and
+                not self.right_mouse_context_menu_shown):
+                
+                current_pos = event.position()
+                start_pos = self.right_mouse_drag_start_pos
+                
+                # Calculate deltas (in viewport pixels)
+                delta_x = current_pos.x() - start_pos.x()  # Horizontal: positive = right (wider), negative = left (narrower)
+                delta_y = start_pos.y() - current_pos.y()  # Vertical: positive = up (higher center), negative = down (lower center)
+                
+                # Convert to window/level units using sensitivity
+                center_delta = delta_y * self.window_center_sensitivity
+                width_delta = delta_x * self.window_width_sensitivity
+                
+                # Emit signal with deltas
+                self.window_level_drag_changed.emit(center_delta, width_delta)
         # Pan mode is handled automatically by ScrollHandDrag, no manual code needed
         # But we need to emit transform_changed signal when panning occurs
         # This is handled by connecting to scrollbar valueChanged signals
@@ -664,6 +655,82 @@ class ImageViewer(QGraphicsView):
                 if self.mouse_mode == "pan":
                     self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
             # Pan mode is handled automatically by ScrollHandDrag, no cleanup needed
+        elif event.button() == Qt.MouseButton.RightButton:
+            # Right mouse release - check if we were dragging or should show context menu
+            if (self.right_mouse_drag_start_pos is not None and 
+                not self.right_mouse_context_menu_shown):
+                
+                # Check if mouse moved significantly (drag threshold: 5 pixels)
+                current_pos = event.position()
+                start_pos = self.right_mouse_drag_start_pos
+                drag_distance = ((current_pos.x() - start_pos.x()) ** 2 + 
+                               (current_pos.y() - start_pos.y()) ** 2) ** 0.5
+                
+                if drag_distance < 5.0:
+                    # Mouse didn't move much - show context menu
+                    scene_pos = self.mapToScene(event.position().toPoint())
+                    item = self.scene.itemAt(scene_pos, self.transform())
+                    
+                    from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsEllipseItem
+                    is_roi_item = isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem))
+                    
+                    if not is_roi_item:
+                        # Show context menu for image (not on ROI)
+                        context_menu = QMenu(self)
+                        
+                        # Reset View action
+                        reset_action = context_menu.addAction("Reset View")
+                        reset_action.triggered.connect(self.reset_view_requested.emit)
+                        
+                        context_menu.addSeparator()
+                        
+                        # Left Mouse Button submenu
+                        left_mouse_menu = context_menu.addMenu("Left Mouse Button")
+                        left_mouse_actions = {
+                            "Ellipse ROI": "roi_ellipse",
+                            "Rectangle ROI": "roi_rectangle",
+                            "Measure": "measure",
+                            "Zoom": "zoom",
+                            "Pan": "pan",
+                            "Auto Window/Level": "auto_window_level"
+                        }
+                        for action_text, mode in left_mouse_actions.items():
+                            action = left_mouse_menu.addAction(action_text)
+                            action.setCheckable(True)
+                            # Check the current mode
+                            if self.mouse_mode == mode:
+                                action.setChecked(True)
+                            action.triggered.connect(
+                                lambda checked, m=mode: self.context_menu_mouse_mode_changed.emit(m)
+                            )
+                        
+                        context_menu.addSeparator()
+                        
+                        # Scroll Wheel Mode submenu
+                        scroll_wheel_menu = context_menu.addMenu("Scroll Wheel Mode")
+                        slice_action = scroll_wheel_menu.addAction("Slice")
+                        slice_action.setCheckable(True)
+                        if self.scroll_wheel_mode == "slice":
+                            slice_action.setChecked(True)
+                        slice_action.triggered.connect(
+                            lambda: self.context_menu_scroll_wheel_mode_changed.emit("slice")
+                        )
+                        
+                        zoom_action = scroll_wheel_menu.addAction("Zoom")
+                        zoom_action.setCheckable(True)
+                        if self.scroll_wheel_mode == "zoom":
+                            zoom_action.setChecked(True)
+                        zoom_action.triggered.connect(
+                            lambda: self.context_menu_scroll_wheel_mode_changed.emit("zoom")
+                        )
+                        
+                        context_menu.exec(event.globalPosition().toPoint())
+            
+            # Reset right mouse drag tracking
+            self.right_mouse_drag_start_pos = None
+            self.right_mouse_drag_start_center = None
+            self.right_mouse_drag_start_width = None
+            self.right_mouse_context_menu_shown = False
         
         super().mouseReleaseEvent(event)
     
@@ -682,8 +749,49 @@ class ImageViewer(QGraphicsView):
             # Down arrow: previous slice
             self.arrow_key_pressed.emit(-1)
             event.accept()
+        elif event.key() == Qt.Key.Key_Left:
+            # Left arrow: previous series
+            self.series_navigation_requested.emit(-1)
+            event.accept()
+        elif event.key() == Qt.Key.Key_Right:
+            # Right arrow: next series
+            self.series_navigation_requested.emit(1)
+            event.accept()
         else:
             super().keyPressEvent(event)
+    
+    def set_window_level_for_drag(self, center: float, width: float, 
+                                   center_range: tuple, width_range: tuple) -> None:
+        """
+        Set window/level values for right mouse drag adjustment.
+        Also updates sensitivity based on ranges.
+        
+        Args:
+            center: Current window center value
+            width: Current window width value
+            center_range: (min, max) range for window center
+            width_range: (min, max) range for window width
+        """
+        self.right_mouse_drag_start_center = center
+        self.right_mouse_drag_start_width = width
+        
+        # Calculate sensitivity based on ranges
+        # Sensitivity: pixels per unit
+        # Use a reasonable default: 1 pixel = 1% of range
+        center_range_size = center_range[1] - center_range[0]
+        width_range_size = width_range[1] - width_range[0]
+        
+        if center_range_size > 0:
+            # 100 pixels of movement = 10% of range
+            self.window_center_sensitivity = center_range_size / 1000.0
+        else:
+            self.window_center_sensitivity = 1.0
+        
+        if width_range_size > 0:
+            # 100 pixels of movement = 10% of range
+            self.window_width_sensitivity = width_range_size / 1000.0
+        else:
+            self.window_width_sensitivity = 1.0
     
     def _check_transform_changed(self) -> None:
         """
