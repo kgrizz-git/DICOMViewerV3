@@ -296,6 +296,9 @@ class ImageViewer(QGraphicsView):
             self.current_zoom = self.max_zoom
         self.zoom_changed.emit(self.current_zoom)
         self._check_transform_changed()
+        # Re-expand scene rect if ScrollHandDrag is active (viewport size in scene coords changed)
+        if self.dragMode() == QGraphicsView.DragMode.ScrollHandDrag:
+            self._expand_scene_rect_for_panning()
         # Update scrollbar ranges after zoom
         QTimer.singleShot(10, self._update_scrollbar_ranges)
     
@@ -307,6 +310,9 @@ class ImageViewer(QGraphicsView):
             self.current_zoom = self.min_zoom
         self.zoom_changed.emit(self.current_zoom)
         self._check_transform_changed()
+        # Re-expand scene rect if ScrollHandDrag is active (viewport size in scene coords changed)
+        if self.dragMode() == QGraphicsView.DragMode.ScrollHandDrag:
+            self._expand_scene_rect_for_panning()
         # Update scrollbar ranges after zoom
         QTimer.singleShot(10, self._update_scrollbar_ranges)
     
@@ -316,6 +322,9 @@ class ImageViewer(QGraphicsView):
         self.current_zoom = 1.0
         self.zoom_changed.emit(self.current_zoom)
         self._check_transform_changed()
+        # Re-expand scene rect if ScrollHandDrag is active (viewport size in scene coords changed)
+        if self.dragMode() == QGraphicsView.DragMode.ScrollHandDrag:
+            self._expand_scene_rect_for_panning()
     
     def set_scroll_wheel_mode(self, mode: str) -> None:
         """
@@ -507,6 +516,10 @@ class ImageViewer(QGraphicsView):
             self.current_zoom = new_zoom
             self.zoom_changed.emit(self.current_zoom)
             self._check_transform_changed()
+            # Re-expand scene rect if ScrollHandDrag is active (viewport size in scene coords changed)
+            # Note: ScrollHandDrag is disabled during zoom mode, but we check anyway for safety
+            if self.dragMode() == QGraphicsView.DragMode.ScrollHandDrag:
+                self._expand_scene_rect_for_panning()
         elif self.roi_drawing_mode and self.roi_drawing_start is not None:
             # ROI drawing mode - ensure ScrollHandDrag is disabled
             if self.dragMode() == QGraphicsView.DragMode.ScrollHandDrag:
