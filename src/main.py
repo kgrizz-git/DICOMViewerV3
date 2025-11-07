@@ -212,6 +212,10 @@ class DICOMViewerApp(QObject):
         # Scroll wheel mode changes
         self.main_window.scroll_wheel_mode_changed.connect(self._on_scroll_wheel_mode_changed)
         
+        # Context menu changes (from image viewer)
+        self.image_viewer.context_menu_mouse_mode_changed.connect(self._on_context_menu_mouse_mode_changed)
+        self.image_viewer.context_menu_scroll_wheel_mode_changed.connect(self._on_context_menu_scroll_wheel_mode_changed)
+        
         # Zoom changes - update overlay positions to keep text anchored
         self.image_viewer.zoom_changed.connect(self._on_zoom_changed)
         
@@ -232,6 +236,9 @@ class DICOMViewerApp(QObject):
         
         # Viewport resize (when splitter moves)
         self.main_window.viewport_resized.connect(self._on_viewport_resized)
+        
+        # Initialize pan mode to match toolbar state (Pan button is checked by default)
+        self.image_viewer.set_mouse_mode("pan")
     
     def _open_files(self) -> None:
         """Handle open files request."""
@@ -769,6 +776,53 @@ class DICOMViewerApp(QObject):
         """Handle ROI drawing finish."""
         roi_item = self.roi_manager.finish_drawing()
         
+        # Check if we're in auto_window_level mode
+        if self.image_viewer.mouse_mode == "auto_window_level" and roi_item is not None:
+            # Auto window/level mode - calculate window/level from ROI and delete ROI
+            try:
+                # roi_item is already the ROIItem we need (finish_drawing returns ROIItem directly)
+                roi = roi_item
+                if roi is not None and self.current_dataset is not None:
+                    # Get pixel array
+                    pixel_array = self.dicom_processor.get_pixel_array(self.current_dataset)
+                    if pixel_array is not None:
+                        # Calculate statistics
+                        stats = self.roi_manager.calculate_statistics(roi, pixel_array)
+                        if stats and "min" in stats and "max" in stats:
+                            # Set window width = max - min
+                            window_width = stats["max"] - stats["min"]
+                            # Set window center = midpoint (halfway between min and max)
+                            window_center = (stats["min"] + stats["max"]) / 2.0
+                            
+                            # Update window/level controls
+                            self.window_level_controls.set_window_level(window_center, window_width)
+                            
+                            # Delete the ROI (it was only used for calculation)
+                            self.roi_manager.delete_roi(roi, self.image_viewer.scene)
+                            
+                            # Update ROI list panel
+                            self.roi_list_panel.update_roi_list(self.current_slice_index)
+                            
+                            # Switch back to pan mode
+                            self.image_viewer.set_mouse_mode("pan")
+                            # Update toolbar button state
+                            self.main_window.mouse_mode_pan_action.setChecked(True)
+                            self.main_window.mouse_mode_auto_window_level_action.setChecked(False)
+            except Exception as e:
+                print(f"Error in auto window/level: {e}")
+                import traceback
+                traceback.print_exc()
+                # If error occurs, still delete ROI and switch back to pan mode
+                if roi_item is not None:
+                    # roi_item is already the ROIItem we need
+                    self.roi_manager.delete_roi(roi_item, self.image_viewer.scene)
+                    self.roi_list_panel.update_roi_list(self.current_slice_index)
+                self.image_viewer.set_mouse_mode("pan")
+                self.main_window.mouse_mode_pan_action.setChecked(True)
+                self.main_window.mouse_mode_auto_window_level_action.setChecked(False)
+            return
+        
+        # Normal ROI drawing finish (not auto window/level)
         # Update ROI list
         self.roi_list_panel.update_roi_list(self.current_slice_index)
         
@@ -833,6 +887,34 @@ class DICOMViewerApp(QObject):
         self.config_manager.set_scroll_wheel_mode(mode)
         self.image_viewer.set_scroll_wheel_mode(mode)
         self.slice_navigator.set_scroll_wheel_mode(mode)
+    
+    def _on_context_menu_mouse_mode_changed(self, mode: str) -> None:
+        """
+        Handle mouse mode change from context menu.
+        Updates toolbar to reflect the change.
+        
+        Args:
+            mode: Mouse mode string
+        """
+        # Emit the main_window signal to update toolbar and trigger normal flow
+        self.main_window.mouse_mode_changed.emit(mode)
+    
+    def _on_context_menu_scroll_wheel_mode_changed(self, mode: str) -> None:
+        """
+        Handle scroll wheel mode change from context menu.
+        Updates toolbar combo box to reflect the change.
+        
+        Args:
+            mode: "slice" or "zoom"
+        """
+        # Update toolbar combo box
+        if mode == "slice":
+            self.main_window.scroll_wheel_mode_combo.setCurrentText("Slice")
+        else:  # zoom
+            self.main_window.scroll_wheel_mode_combo.setCurrentText("Zoom")
+        
+        # Emit the main_window signal to trigger normal flow
+        self.main_window.scroll_wheel_mode_changed.emit(mode)
     
     def _on_zoom_changed(self, zoom_level: float) -> None:
         """
