@@ -52,6 +52,7 @@ class ImageViewer(QGraphicsView):
     arrow_key_pressed = Signal(int)  # Emitted when arrow key is pressed (1 = up, -1 = down)
     roi_clicked = Signal(object)  # Emitted when ROI is clicked (ROIItem)
     roi_delete_requested = Signal(object)  # Emitted when ROI deletion is requested (QGraphicsItem)
+    reset_view_requested = Signal()  # Emitted when reset view is requested from context menu
     
     def __init__(self, parent: Optional[QWidget] = None):
         """
@@ -72,7 +73,7 @@ class ImageViewer(QGraphicsView):
         # Zoom settings
         self.min_zoom = 0.1
         self.max_zoom = 10.0
-        self.zoom_factor = 1.15
+        self.zoom_factor = 1.1  # Reduced from 1.15 for less sensitive scroll wheel zoom
         self.current_zoom = 1.0
         
         # Pan settings
@@ -110,6 +111,12 @@ class ImageViewer(QGraphicsView):
         # Enable focus to receive key events
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         
+        # Set scrollbar policies to allow scrollbars when content fits
+        # ScrollBarAsNeeded allows scrollbars to appear when needed, but we'll enable them explicitly
+        # when setting custom ranges for images that fit
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        
         # Connect scrollbar signals to detect panning
         # Panning via scrollbars doesn't change the transform, so we need to track scrollbar changes
         self.horizontalScrollBar().valueChanged.connect(self._on_scrollbar_changed)
@@ -119,7 +126,7 @@ class ImageViewer(QGraphicsView):
         darker_grey = QColor(64, 64, 64)
         self.setBackgroundBrush(darker_grey)
     
-    def set_image(self, image: Image.Image) -> None:
+    def set_image(self, image: Image.Image, preserve_view: bool = False) -> None:
         """
         Set the image to display.
         
@@ -127,7 +134,18 @@ class ImageViewer(QGraphicsView):
         
         Args:
             image: PIL Image to display
+            preserve_view: If True, preserve current zoom and pan position
         """
+        # Store current view state if preserving
+        if preserve_view and self.image_item is not None:
+            saved_zoom = self.current_zoom
+            saved_h_scroll = self.horizontalScrollBar().value()
+            saved_v_scroll = self.verticalScrollBar().value()
+        else:
+            saved_zoom = None
+            saved_h_scroll = None
+            saved_v_scroll = None
+        
         # Convert PIL Image to QPixmap
         if image.mode == 'L':
             # Grayscale
@@ -160,9 +178,29 @@ class ImageViewer(QGraphicsView):
         image_rect = self.image_item.boundingRect()
         self.scene.setSceneRect(image_rect)
         
-        # Reset zoom and fit to view
-        self.current_zoom = 1.0
-        self.fit_to_view()
+        if preserve_view and saved_zoom is not None:
+            # Restore zoom and pan
+            # First, reset transform and set zoom
+            self.resetTransform()
+            self.scale(saved_zoom, saved_zoom)
+            self.current_zoom = saved_zoom
+            
+            # Update scrollbar ranges first, then restore positions
+            # Need to wait for scene to update, so use QTimer
+            QTimer.singleShot(10, lambda: (
+                self._update_scrollbar_ranges(),
+                self.horizontalScrollBar().setValue(saved_h_scroll),
+                self.verticalScrollBar().setValue(saved_v_scroll)
+            ))
+            
+            self.last_transform = self.transform()
+            self.zoom_changed.emit(self.current_zoom)
+        else:
+            # Reset zoom and fit to view
+            self.current_zoom = 1.0
+            self.fit_to_view()
+            # fit_to_view() already calls _update_scrollbar_ranges() synchronously,
+            # so no need to call it again here
     
     def fit_to_view(self) -> None:
         """Fit the image to the current view size."""
@@ -182,6 +220,10 @@ class ImageViewer(QGraphicsView):
         self.current_zoom = transform.m11()
         self.last_transform = transform
         self.zoom_changed.emit(self.current_zoom)
+        
+        # Update scrollbar ranges to allow panning even when image fits
+        # Center the image when fitting to view
+        self._update_scrollbar_ranges(center_image=True)
     
     def zoom_in(self) -> None:
         """Zoom in on the image."""
@@ -191,6 +233,8 @@ class ImageViewer(QGraphicsView):
             self.current_zoom = self.max_zoom
         self.zoom_changed.emit(self.current_zoom)
         self._check_transform_changed()
+        # Update scrollbar ranges after zoom
+        QTimer.singleShot(10, self._update_scrollbar_ranges)
     
     def zoom_out(self) -> None:
         """Zoom out from the image."""
@@ -200,6 +244,8 @@ class ImageViewer(QGraphicsView):
             self.current_zoom = self.min_zoom
         self.zoom_changed.emit(self.current_zoom)
         self._check_transform_changed()
+        # Update scrollbar ranges after zoom
+        QTimer.singleShot(10, self._update_scrollbar_ranges)
     
     def reset_zoom(self) -> None:
         """Reset zoom to 1:1."""
@@ -328,6 +374,13 @@ class ImageViewer(QGraphicsView):
                 delete_action.triggered.connect(lambda: self.roi_delete_requested.emit(item))
                 context_menu.exec(event.globalPosition().toPoint())
                 return
+            else:
+                # Show context menu for image (not on ROI)
+                context_menu = QMenu(self)
+                reset_action = context_menu.addAction("Reset View")
+                reset_action.triggered.connect(self.reset_view_requested.emit)
+                context_menu.exec(event.globalPosition().toPoint())
+                return
         
         super().mousePressEvent(event)
     
@@ -379,6 +432,9 @@ class ImageViewer(QGraphicsView):
             )
             # Emit transform changed signal after panning
             self._check_transform_changed()
+            # Update scrollbar ranges to ensure panning limits are correct
+            # (ranges may need adjustment if we're at the edge)
+            QTimer.singleShot(10, self._update_scrollbar_ranges)
         
         super().mouseMoveEvent(event)
     
@@ -436,6 +492,195 @@ class ImageViewer(QGraphicsView):
             # Use QTimer to delay signal emission slightly, ensuring transform is fully applied
             QTimer.singleShot(10, lambda: self.transform_changed.emit())
     
+    def _update_scrollbar_ranges(self, center_image: bool = False) -> None:
+        """
+        Update scrollbar ranges to allow panning even when image fully fits in viewport.
+        
+        Ensures at least one pixel of the image remains visible when panning.
+        Scrollbars are calculated so that when at the center of their range, the image center
+        aligns with the viewport center.
+        QGraphicsView scrollbars work in scene coordinates.
+        
+        Args:
+            center_image: If True, center the scrollbars to align image center with viewport center
+        """
+        if self.image_item is None:
+            return
+        
+        # Get scene rect (image bounds)
+        scene_rect = self.image_item.boundingRect()
+        if scene_rect.isEmpty():
+            return
+        
+        scene_width = scene_rect.width()
+        scene_height = scene_rect.height()
+        
+        # Get viewport size
+        viewport_width = self.viewport().width()
+        viewport_height = self.viewport().height()
+        
+        # Get current zoom level
+        zoom = self.current_zoom
+        
+        # Calculate scaled image size (in viewport pixels)
+        scaled_width = scene_width * zoom
+        scaled_height = scene_height * zoom
+        
+        # Calculate viewport size in scene coordinates
+        viewport_width_scene = viewport_width / zoom if zoom > 0 else viewport_width
+        viewport_height_scene = viewport_height / zoom if zoom > 0 else viewport_height
+        
+        # Image center in scene coordinates
+        image_center_x = scene_width / 2.0
+        image_center_y = scene_height / 2.0
+        
+        # Viewport center in scene coordinates
+        viewport_center_x = viewport_width_scene / 2.0
+        viewport_center_y = viewport_height_scene / 2.0
+        
+        # Update horizontal scrollbar range
+        if scaled_width > viewport_width:
+            # Image is larger than viewport - QGraphicsView handles range automatically
+            # But we can still ensure centering works by not interfering
+            pass
+        else:
+            # Image fits horizontally - calculate symmetric range based on actual panning limits
+            # The scrollbar value represents the scene position of the viewport's left edge
+            # 1 pixel in viewport = 1/zoom in scene coords
+            min_pixel_size = 1.0 / zoom if zoom > 0 else 1.0
+            
+            # Calculate panning limits:
+            # Minimum scrollbar value: pan right until 1 pixel visible at left edge
+            # Viewport left edge at: min_pixel_size
+            h_min = int(min_pixel_size)
+            
+            # Maximum scrollbar value: pan left until 1 pixel visible at right edge
+            # Viewport right edge at: scene_width - min_pixel_size
+            # Viewport left edge at: scene_width - min_pixel_size - viewport_width_scene
+            h_max = int(scene_width - viewport_width_scene - min_pixel_size)
+            
+            # Ensure valid range
+            if h_max < h_min:
+                # If image is very small, ensure at least some range
+                h_max = h_min + 1
+            
+            # Center value: when image center aligns with viewport center
+            # This should be at the midpoint of the range
+            center_value = (scene_width - viewport_width_scene) / 2.0
+            
+            # Verify center is at midpoint (should always be true with correct calculation)
+            # center_value should equal (h_min + h_max) / 2
+            
+            # Store current scrollbar value and old range before changing range
+            current_h_value = self.horizontalScrollBar().value()
+            old_h_min = self.horizontalScrollBar().minimum()
+            old_h_max = self.horizontalScrollBar().maximum()
+            old_h_range = old_h_max - old_h_min
+            
+            self.horizontalScrollBar().setRange(h_min, h_max)
+            # Set page step to viewport width in scene coordinates
+            self.horizontalScrollBar().setPageStep(int(viewport_width_scene))
+            
+            # Set scrollbar value: center if requested, otherwise preserve relative position
+            if center_image:
+                # Center the scrollbar to align image center with viewport center
+                center_scrollbar_value = int(center_value)
+                # Clamp to range
+                center_scrollbar_value = max(h_min, min(h_max, center_scrollbar_value))
+                self.horizontalScrollBar().setValue(center_scrollbar_value)
+            else:
+                # Preserve relative position in the new range
+                if old_h_range > 0:
+                    # Calculate relative position (0.0 to 1.0) in old range
+                    relative_pos = (current_h_value - old_h_min) / old_h_range
+                    # Map to new range
+                    new_value = h_min + int(relative_pos * (h_max - h_min))
+                    new_value = max(h_min, min(h_max, new_value))
+                    self.horizontalScrollBar().setValue(new_value)
+                else:
+                    # No previous range, center it
+                    center_scrollbar_value = int(center_value)
+                    center_scrollbar_value = max(h_min, min(h_max, center_scrollbar_value))
+                    self.horizontalScrollBar().setValue(center_scrollbar_value)
+            
+            # Explicitly enable scrollbar to allow panning even when image fits
+            # QGraphicsView may disable scrollbars when content fits, so we force enable
+            self.horizontalScrollBar().setEnabled(True)
+            # Ensure scrollbar is visible and functional immediately
+            self.horizontalScrollBar().show()
+            self.horizontalScrollBar().update()
+        
+        # Update vertical scrollbar range
+        if scaled_height > viewport_height:
+            # Image is larger than viewport - QGraphicsView handles range automatically
+            pass
+        else:
+            # Image fits vertically - calculate symmetric range based on actual panning limits
+            # The scrollbar value represents the scene position of the viewport's top edge
+            # 1 pixel in viewport = 1/zoom in scene coords
+            min_pixel_size = 1.0 / zoom if zoom > 0 else 1.0
+            
+            # Calculate panning limits:
+            # Minimum scrollbar value: pan down until 1 pixel visible at top edge
+            # Viewport top edge at: min_pixel_size
+            v_min = int(min_pixel_size)
+            
+            # Maximum scrollbar value: pan up until 1 pixel visible at bottom edge
+            # Viewport bottom edge at: scene_height - min_pixel_size
+            # Viewport top edge at: scene_height - min_pixel_size - viewport_height_scene
+            v_max = int(scene_height - viewport_height_scene - min_pixel_size)
+            
+            # Ensure valid range
+            if v_max < v_min:
+                # If image is very small, ensure at least some range
+                v_max = v_min + 1
+            
+            # Center value: when image center aligns with viewport center
+            # This should be at the midpoint of the range
+            center_value = (scene_height - viewport_height_scene) / 2.0
+            
+            # Verify center is at midpoint (should always be true with correct calculation)
+            # center_value should equal (v_min + v_max) / 2
+            
+            # Store current scrollbar value and old range before changing range
+            current_v_value = self.verticalScrollBar().value()
+            old_v_min = self.verticalScrollBar().minimum()
+            old_v_max = self.verticalScrollBar().maximum()
+            old_v_range = old_v_max - old_v_min
+            
+            self.verticalScrollBar().setRange(v_min, v_max)
+            # Set page step to viewport height in scene coordinates
+            self.verticalScrollBar().setPageStep(int(viewport_height_scene))
+            
+            # Set scrollbar value: center if requested, otherwise preserve relative position
+            if center_image:
+                # Center the scrollbar to align image center with viewport center
+                center_scrollbar_value = int(center_value)
+                # Clamp to range
+                center_scrollbar_value = max(v_min, min(v_max, center_scrollbar_value))
+                self.verticalScrollBar().setValue(center_scrollbar_value)
+            else:
+                # Preserve relative position in the new range
+                if old_v_range > 0:
+                    # Calculate relative position (0.0 to 1.0) in old range
+                    relative_pos = (current_v_value - old_v_min) / old_v_range
+                    # Map to new range
+                    new_value = v_min + int(relative_pos * (v_max - v_min))
+                    new_value = max(v_min, min(v_max, new_value))
+                    self.verticalScrollBar().setValue(new_value)
+                else:
+                    # No previous range, center it
+                    center_scrollbar_value = int(center_value)
+                    center_scrollbar_value = max(v_min, min(v_max, center_scrollbar_value))
+                    self.verticalScrollBar().setValue(center_scrollbar_value)
+            
+            # Explicitly enable scrollbar to allow panning even when image fits
+            # QGraphicsView may disable scrollbars when content fits, so we force enable
+            self.verticalScrollBar().setEnabled(True)
+            # Ensure scrollbar is visible and functional immediately
+            self.verticalScrollBar().show()
+            self.verticalScrollBar().update()
+    
     def _on_scrollbar_changed(self) -> None:
         """
         Handle scrollbar value changes (panning).
@@ -463,6 +708,11 @@ class ImageViewer(QGraphicsView):
             event: Resize event
         """
         super().resizeEvent(event)
+        # Update scrollbar ranges after resize
+        QTimer.singleShot(10, self._update_scrollbar_ranges)
+        # Emit transform_changed signal to update overlay positions
+        # Viewport size change affects overlay positioning
+        QTimer.singleShot(10, lambda: self.transform_changed.emit())
         # Optionally auto-fit on resize
         # self.fit_to_view()
 
