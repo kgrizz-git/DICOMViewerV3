@@ -27,7 +27,7 @@ sys.path.insert(0, str(src_dir))
 from PySide6.QtWidgets import QApplication, QMessageBox
 from PySide6.QtCore import Qt, QPointF, QObject
 from PySide6.QtGui import QKeyEvent
-from typing import Optional
+from typing import Optional, Dict
 import pydicom
 from pydicom.dataset import Dataset
 
@@ -132,6 +132,13 @@ class DICOMViewerApp(QObject):
         self.initial_v_scroll: Optional[int] = None
         self.initial_window_center: Optional[float] = None
         self.initial_window_width: Optional[float] = None
+        
+        # Series defaults storage: key is series identifier (StudyInstanceUID + SeriesInstanceUID)
+        # Value is dict with: window_center, window_width, zoom, h_scroll, v_scroll
+        self.series_defaults: Dict[str, Dict] = {}
+        
+        # Track current series identifier for comparison
+        self.current_series_identifier: Optional[str] = None
         
         # Tag viewer dialog (persistent)
         self.tag_viewer_dialog: Optional[TagViewerDialog] = None
@@ -427,6 +434,11 @@ class DICOMViewerApp(QObject):
         self.current_window_width = None
         self.window_level_user_modified = False
         
+        # Reset series tracking
+        self.current_series_identifier = None
+        # Note: We keep series_defaults to preserve across file loads if desired
+        # If you want to clear them, uncomment: self.series_defaults.clear()
+        
         # Get first study and series
         study_uid = list(self.current_studies.keys())[0]
         series_uid = list(self.current_studies[study_uid].keys())[0]
@@ -461,13 +473,86 @@ class DICOMViewerApp(QObject):
             new_series_uid = getattr(dataset, 'SeriesInstanceUID', '')
             is_same_series = (new_series_uid == self.current_series_uid and self.current_series_uid != "")
             
+            # Detect if this is a new study/series
+            is_new_study_series = self._is_new_study_or_series(dataset)
+            series_identifier = self._get_series_identifier(dataset)
+            
+            # If new study/series, check for stored defaults or calculate new ones
+            stored_window_center = None
+            stored_window_width = None
+            stored_zoom = None
+            stored_h_scroll = None
+            stored_v_scroll = None
+            
+            if is_new_study_series:
+                # Check if we have stored defaults for this series
+                if series_identifier in self.series_defaults:
+                    # Restore stored defaults
+                    defaults = self.series_defaults[series_identifier]
+                    stored_zoom = defaults.get('zoom')
+                    stored_h_scroll = defaults.get('h_scroll')
+                    stored_v_scroll = defaults.get('v_scroll')
+                    stored_window_center = defaults.get('window_center')
+                    stored_window_width = defaults.get('window_width')
+                    
+                    # Reset window/level state
+                    self.window_level_user_modified = False
+                else:
+                    # New series - need to calculate defaults
+                    # Get all datasets for this series to calculate pixel range
+                    study_uid = getattr(dataset, 'StudyInstanceUID', '')
+                    if study_uid and new_series_uid and self.current_studies:
+                        if study_uid in self.current_studies and new_series_uid in self.current_studies[study_uid]:
+                            series_datasets = self.current_studies[study_uid][new_series_uid]
+                            
+                            # Calculate pixel range for entire series
+                            series_pixel_min, series_pixel_max = self.dicom_processor.get_series_pixel_value_range(series_datasets)
+                            
+                            # Check for window/level in DICOM metadata (use first dataset)
+                            wc, ww = self.dicom_processor.get_window_level_from_dataset(dataset)
+                            
+                            if wc is not None and ww is not None:
+                                # Use DICOM metadata window/level
+                                stored_window_center = wc
+                                stored_window_width = ww
+                            elif series_pixel_min is not None and series_pixel_max is not None:
+                                # Calculate from series pixel range
+                                stored_window_center = (series_pixel_min + series_pixel_max) / 2.0
+                                stored_window_width = series_pixel_max - series_pixel_min
+                                if stored_window_width <= 0:
+                                    stored_window_width = 1.0
+                            else:
+                                # Fallback to single slice
+                                pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(dataset)
+                                if pixel_min is not None and pixel_max is not None:
+                                    stored_window_center = (pixel_min + pixel_max) / 2.0
+                                    stored_window_width = pixel_max - pixel_min
+                                    if stored_window_width <= 0:
+                                        stored_window_width = 1.0
+                            
+                            # Reset window/level state
+                            self.window_level_user_modified = False
+                
+                # Update current series identifier
+                self.current_series_identifier = series_identifier
+            
             # Convert to image
             image = self.dicom_processor.dataset_to_image(dataset)
             if image is None:
                 return
             
             # Set image in viewer - preserve zoom/pan if same series
-            self.image_viewer.set_image(image, preserve_view=is_same_series)
+            self.image_viewer.set_image(image, preserve_view=is_same_series and not is_new_study_series)
+            
+            # If new study/series, fit to view and center
+            if is_new_study_series:
+                self.image_viewer.fit_to_view()
+                # Center image
+                self.image_viewer._update_scrollbar_ranges(center_image=True)
+                # Store zoom after fit_to_view
+                stored_zoom = self.image_viewer.current_zoom
+                stored_h_scroll = self.image_viewer.horizontalScrollBar().value()
+                stored_v_scroll = self.image_viewer.verticalScrollBar().value()
             
             # Update current series UID
             if new_series_uid:
@@ -490,9 +575,21 @@ class DICOMViewerApp(QObject):
                 self.window_level_controls.set_ranges(center_range, width_range)
             
             # Update window/level controls
-            # If user has modified window/level, preserve it when navigating between slices
-            if self.window_level_user_modified and self.current_window_center is not None and self.current_window_width is not None:
-                # Use preserved window/level values
+            if is_new_study_series and stored_window_center is not None and stored_window_width is not None:
+                # Use stored defaults for new series
+                self.window_level_controls.set_window_level(stored_window_center, stored_window_width, block_signals=True)
+                self.current_window_center = stored_window_center
+                self.current_window_width = stored_window_width
+                # Store defaults for this series
+                self.series_defaults[series_identifier] = {
+                    'window_center': stored_window_center,
+                    'window_width': stored_window_width,
+                    'zoom': stored_zoom,
+                    'h_scroll': stored_h_scroll,
+                    'v_scroll': stored_v_scroll
+                }
+            elif self.window_level_user_modified and self.current_window_center is not None and self.current_window_width is not None:
+                # Use preserved window/level values (user modified)
                 self.window_level_controls.set_window_level(self.current_window_center, self.current_window_width, block_signals=True)
             else:
                 # Use values from dataset or calculate defaults
@@ -510,6 +607,17 @@ class DICOMViewerApp(QObject):
                     self.window_level_controls.set_window_level(default_center, default_width, block_signals=True)
                     self.current_window_center = default_center
                     self.current_window_width = default_width
+                
+                # Store defaults if this is a new series
+                if is_new_study_series and stored_zoom is not None:
+                    self.series_defaults[series_identifier] = {
+                        'window_center': self.current_window_center,
+                        'window_width': self.current_window_width,
+                        'zoom': stored_zoom,
+                        'h_scroll': stored_h_scroll,
+                        'v_scroll': stored_v_scroll
+                    }
+                
                 self.window_level_user_modified = False  # Reset flag after setting from dataset
             
             # Store initial view state if this is the first image
@@ -531,61 +639,148 @@ class DICOMViewerApp(QObject):
         except Exception as e:
             self.main_window.update_status(f"Error displaying slice: {str(e)}")
     
+    def _get_series_identifier(self, dataset: Dataset) -> str:
+        """
+        Get a unique identifier for a study/series combination.
+        Uses StudyInstanceUID and SeriesInstanceUID.
+        
+        Args:
+            dataset: pydicom Dataset
+            
+        Returns:
+            Series identifier string
+        """
+        study_uid = getattr(dataset, 'StudyInstanceUID', '')
+        series_uid = getattr(dataset, 'SeriesInstanceUID', '')
+        return f"{study_uid}_{series_uid}"
+    
+    def _is_new_study_or_series(self, dataset: Dataset) -> bool:
+        """
+        Detect if this is a new study or series by comparing DICOM tags.
+        
+        Compares:
+        - Study Date (0008,0020)
+        - Modality (0008,0060)
+        - Series Number (0020,0011)
+        - Series Description (0008,103E)
+        - Study Time (0008,0030)
+        - Series Time (0008,0031)
+        
+        Args:
+            dataset: pydicom Dataset
+            
+        Returns:
+            True if this is a new study/series, False otherwise
+        """
+        if self.current_series_identifier is None:
+            return True
+        
+        # Get current series identifier
+        new_series_identifier = self._get_series_identifier(dataset)
+        
+        # If series identifier changed, it's a new study/series
+        if new_series_identifier != self.current_series_identifier:
+            return True
+        
+        return False
+    
     def _store_initial_view_state(self) -> None:
         """
         Store the initial view state (zoom, pan, window/level) for reset functionality.
+        Stores per-series defaults in addition to global initial values.
         
         Called after the first image is displayed and the view has settled.
         """
         if self.image_viewer.image_item is None:
             return
         
-        # Store initial zoom
-        self.initial_zoom = self.image_viewer.current_zoom
+        # Store initial zoom (global fallback)
+        if self.initial_zoom is None:
+            self.initial_zoom = self.image_viewer.current_zoom
         
-        # Store initial pan position (scrollbar values)
-        self.initial_h_scroll = self.image_viewer.horizontalScrollBar().value()
-        self.initial_v_scroll = self.image_viewer.verticalScrollBar().value()
+        # Store initial pan position (scrollbar values) - global fallback
+        if self.initial_h_scroll is None:
+            self.initial_h_scroll = self.image_viewer.horizontalScrollBar().value()
+        if self.initial_v_scroll is None:
+            self.initial_v_scroll = self.image_viewer.verticalScrollBar().value()
         
-        # Store initial window/level
-        self.initial_window_center = self.current_window_center
-        self.initial_window_width = self.current_window_width
+        # Store initial window/level (global fallback)
+        if self.initial_window_center is None:
+            self.initial_window_center = self.current_window_center
+        if self.initial_window_width is None:
+            self.initial_window_width = self.current_window_width
+        
+        # Store per-series defaults if we have a current series identifier
+        if self.current_series_identifier and self.current_series_identifier not in self.series_defaults:
+            self.series_defaults[self.current_series_identifier] = {
+                'window_center': self.current_window_center,
+                'window_width': self.current_window_width,
+                'zoom': self.image_viewer.current_zoom,
+                'h_scroll': self.image_viewer.horizontalScrollBar().value(),
+                'v_scroll': self.image_viewer.verticalScrollBar().value()
+            }
     
     def _reset_view(self) -> None:
         """
         Reset view to initial state (zoom, pan, window center/level).
         
-        Restores the view state that was stored when the first image was loaded.
+        Uses series-specific defaults if available, otherwise falls back to global initial values.
         """
-        if self.initial_zoom is None or self.current_dataset is None:
-            # No initial state stored or no current dataset
+        if self.current_dataset is None:
+            # No current dataset
+            return
+        
+        # Get series identifier
+        series_identifier = self._get_series_identifier(self.current_dataset)
+        
+        # Try to get series-specific defaults
+        if series_identifier in self.series_defaults:
+            defaults = self.series_defaults[series_identifier]
+            reset_zoom = defaults.get('zoom')
+            reset_h_scroll = defaults.get('h_scroll')
+            reset_v_scroll = defaults.get('v_scroll')
+            reset_window_center = defaults.get('window_center')
+            reset_window_width = defaults.get('window_width')
+        else:
+            # Fall back to global initial values
+            reset_zoom = self.initial_zoom
+            reset_h_scroll = self.initial_h_scroll
+            reset_v_scroll = self.initial_v_scroll
+            reset_window_center = self.initial_window_center
+            reset_window_width = self.initial_window_width
+        
+        if reset_zoom is None:
+            # No reset values available
             return
         
         # Reset zoom and pan
         self.image_viewer.resetTransform()
-        self.image_viewer.scale(self.initial_zoom, self.initial_zoom)
-        self.image_viewer.current_zoom = self.initial_zoom
+        self.image_viewer.scale(reset_zoom, reset_zoom)
+        self.image_viewer.current_zoom = reset_zoom
         
         # Restore scrollbar positions
         from PySide6.QtCore import QTimer
-        QTimer.singleShot(10, lambda: (
-            self.image_viewer.horizontalScrollBar().setValue(self.initial_h_scroll),
-            self.image_viewer.verticalScrollBar().setValue(self.initial_v_scroll),
-            self.image_viewer._update_scrollbar_ranges()
-        ))
+        if reset_h_scroll is not None and reset_v_scroll is not None:
+            QTimer.singleShot(10, lambda: (
+                self.image_viewer.horizontalScrollBar().setValue(reset_h_scroll),
+                self.image_viewer.verticalScrollBar().setValue(reset_v_scroll),
+                self.image_viewer._update_scrollbar_ranges()
+            ))
+        else:
+            QTimer.singleShot(10, lambda: self.image_viewer._update_scrollbar_ranges())
         
         self.image_viewer.last_transform = self.image_viewer.transform()
         self.image_viewer.zoom_changed.emit(self.image_viewer.current_zoom)
         
         # Reset window/level to initial values
-        if self.initial_window_center is not None and self.initial_window_width is not None:
+        if reset_window_center is not None and reset_window_width is not None:
             self.window_level_controls.set_window_level(
-                self.initial_window_center, 
-                self.initial_window_width, 
+                reset_window_center, 
+                reset_window_width, 
                 block_signals=True
             )
-            self.current_window_center = self.initial_window_center
-            self.current_window_width = self.initial_window_width
+            self.current_window_center = reset_window_center
+            self.current_window_width = reset_window_width
             self.window_level_user_modified = False
             
             # Re-display current slice with reset window/level
@@ -595,8 +790,8 @@ class DICOMViewerApp(QObject):
                     dataset = datasets[self.current_slice_index]
                     image = self.dicom_processor.dataset_to_image(
                         dataset,
-                        window_center=self.initial_window_center,
-                        window_width=self.initial_window_width
+                        window_center=reset_window_center,
+                        window_width=reset_window_width
                     )
                     if image:
                         # Preserve view when resetting window/level

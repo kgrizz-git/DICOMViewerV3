@@ -293,4 +293,49 @@ class DICOMProcessor:
         except Exception as e:
             print(f"Error calculating pixel value range: {e}")
             return None, None
+    
+    @staticmethod
+    def get_series_pixel_value_range(datasets: List[Dataset]) -> Tuple[Optional[float], Optional[float]]:
+        """
+        Get the minimum and maximum pixel values across an entire series.
+        Considers rescale slope and intercept if present.
+        
+        Args:
+            datasets: List of pydicom Dataset objects for the series
+            
+        Returns:
+            Tuple of (min_value, max_value) across all slices, or (None, None) if extraction fails
+        """
+        if not datasets:
+            return None, None
+        
+        try:
+            series_min = None
+            series_max = None
+            
+            for dataset in datasets:
+                pixel_array = DICOMProcessor.get_pixel_array(dataset)
+                if pixel_array is None:
+                    continue
+                
+                # Get rescale parameters
+                rescale_slope = getattr(dataset, 'RescaleSlope', None)
+                rescale_intercept = getattr(dataset, 'RescaleIntercept', None)
+                
+                # Apply rescale if present
+                if rescale_slope is not None and rescale_intercept is not None:
+                    pixel_array = pixel_array.astype(np.float32) * float(rescale_slope) + float(rescale_intercept)
+                
+                slice_min = float(np.min(pixel_array))
+                slice_max = float(np.max(pixel_array))
+                
+                if series_min is None or slice_min < series_min:
+                    series_min = slice_min
+                if series_max is None or slice_max > series_max:
+                    series_max = slice_max
+            
+            return series_min, series_max
+        except Exception as e:
+            print(f"Error calculating series pixel value range: {e}")
+            return None, None
 
