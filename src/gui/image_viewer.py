@@ -20,10 +20,10 @@ Requirements:
 """
 
 from PySide6.QtWidgets import (QGraphicsView, QGraphicsScene, QGraphicsPixmapItem,
-                                QWidget, QVBoxLayout)
+                                QWidget, QVBoxLayout, QMenu)
 from PySide6.QtCore import Qt, QRectF, Signal, QPointF
 from PySide6.QtGui import (QPixmap, QImage, QWheelEvent, QKeyEvent, QMouseEvent,
-                          QPainter)
+                          QPainter, QColor)
 from PIL import Image
 import numpy as np
 from typing import Optional
@@ -49,6 +49,7 @@ class ImageViewer(QGraphicsView):
     roi_drawing_finished = Signal()  # Emitted when ROI drawing finishes
     wheel_event_for_slice = Signal(int)  # Emitted when wheel event should navigate slices
     roi_clicked = Signal(object)  # Emitted when ROI is clicked (ROIItem)
+    roi_delete_requested = Signal(object)  # Emitted when ROI deletion is requested (QGraphicsItem)
     
     def __init__(self, parent: Optional[QWidget] = None):
         """
@@ -83,6 +84,10 @@ class ImageViewer(QGraphicsView):
         self.roi_drawing_mode: Optional[str] = None  # "rectangle", "ellipse", or None
         self.roi_drawing_start: Optional[QPointF] = None
         
+        # Zoom mode state
+        self.zoom_start_pos: Optional[QPointF] = None
+        self.zoom_start_zoom: Optional[float] = None
+        
         # Scroll wheel mode
         self.scroll_wheel_mode = "slice"  # "slice" or "zoom"
         
@@ -93,8 +98,9 @@ class ImageViewer(QGraphicsView):
         self.setRenderHint(QPainter.RenderHint.Antialiasing)
         self.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         
-        # Background
-        self.setBackgroundBrush(Qt.GlobalColor.darkGray)
+        # Background - darker grey for better yellow text contrast
+        darker_grey = QColor(64, 64, 64)
+        self.setBackgroundBrush(darker_grey)
     
     def set_image(self, image: Image.Image) -> None:
         """
@@ -132,6 +138,10 @@ class ImageViewer(QGraphicsView):
         # Set image item to lowest Z-value so other items appear on top
         self.image_item.setZValue(0)
         self.scene.addItem(self.image_item)
+        
+        # Set scene rect to image dimensions to ensure proper overlay positioning
+        image_rect = self.image_item.boundingRect()
+        self.scene.setSceneRect(image_rect)
         
         # Reset zoom and fit to view
         self.current_zoom = 1.0
@@ -229,6 +239,8 @@ class ImageViewer(QGraphicsView):
         elif mode == "zoom":
             self.roi_drawing_mode = None
             self.setCursor(Qt.CursorShape.PointingHandCursor)
+            # Store zoom start position for click-to-zoom
+            self.zoom_start_pos: Optional[QPointF] = None
         else:  # pan
             self.roi_drawing_mode = None
             self.setCursor(Qt.CursorShape.ArrowCursor)
@@ -266,6 +278,10 @@ class ImageViewer(QGraphicsView):
                 # Clicking on existing ROI - emit signal for ROI click
                 # This allows ROI selection/movement without starting new drawing
                 self.roi_clicked.emit(item)
+            elif self.mouse_mode == "zoom":
+                # Zoom mode - start zoom operation
+                self.zoom_start_pos = scene_pos
+                self.zoom_start_zoom = self.current_zoom
             elif self.roi_drawing_mode:
                 # Start ROI drawing only if not clicking on existing ROI
                 self.roi_drawing_start = scene_pos
@@ -276,19 +292,52 @@ class ImageViewer(QGraphicsView):
                 self.panning = True
                 self.setCursor(Qt.CursorShape.ClosedHandCursor)
         elif event.button() == Qt.MouseButton.RightButton:
-            # Right click for context menu or other actions
-            pass
+            # Right click for context menu
+            scene_pos = self.mapToScene(event.position().toPoint())
+            item = self.scene.itemAt(scene_pos, self.transform())
+            
+            # Check if it's a ROI item
+            from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsEllipseItem
+            is_roi_item = isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem))
+            
+            if is_roi_item:
+                # Show context menu for ROI
+                context_menu = QMenu(self)
+                delete_action = context_menu.addAction("Delete ROI")
+                delete_action.triggered.connect(lambda: self.roi_delete_requested.emit(item))
+                context_menu.exec(event.globalPosition().toPoint())
+                return
         
         super().mousePressEvent(event)
     
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
         """
-        Handle mouse move events for panning or ROI drawing.
+        Handle mouse move events for panning, ROI drawing, or zooming.
         
         Args:
             event: Mouse event
         """
-        if self.roi_drawing_mode and self.roi_drawing_start is not None:
+        if self.mouse_mode == "zoom" and self.zoom_start_pos is not None and event.buttons() & Qt.MouseButton.LeftButton:
+            # Zoom mode - adjust zoom based on vertical drag distance
+            current_pos = self.mapToScene(event.position().toPoint())
+            start_pos = self.zoom_start_pos
+            
+            # Calculate vertical distance moved
+            delta_y = current_pos.y() - start_pos.y()
+            
+            # Convert to zoom factor (negative delta = zoom in, positive = zoom out)
+            zoom_delta = -delta_y / 300.0  # Reduced sensitivity (was 100.0)
+            new_zoom = self.zoom_start_zoom * (1.0 + zoom_delta)
+            
+            # Clamp zoom
+            new_zoom = max(self.min_zoom, min(self.max_zoom, new_zoom))
+            
+            # Apply zoom centered on start position
+            zoom_factor = new_zoom / self.current_zoom
+            self.scale(zoom_factor, zoom_factor)
+            self.current_zoom = new_zoom
+            self.zoom_changed.emit(self.current_zoom)
+        elif self.roi_drawing_mode and self.roi_drawing_start is not None:
             # ROI drawing mode
             if event.buttons() & Qt.MouseButton.LeftButton:
                 scene_pos = self.mapToScene(event.position().toPoint())
@@ -317,7 +366,11 @@ class ImageViewer(QGraphicsView):
             event: Mouse event
         """
         if event.button() == Qt.MouseButton.LeftButton:
-            if self.roi_drawing_mode and self.roi_drawing_start is not None:
+            if self.mouse_mode == "zoom" and self.zoom_start_pos is not None:
+                # Finish zoom operation
+                self.zoom_start_pos = None
+                self.zoom_start_zoom = None
+            elif self.roi_drawing_mode and self.roi_drawing_start is not None:
                 # Finish ROI drawing
                 self.roi_drawing_finished.emit()
                 self.roi_drawing_start = None

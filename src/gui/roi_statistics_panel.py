@@ -46,10 +46,10 @@ class ROIStatisticsPanel(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(5, 5, 5, 5)
         
-        # Title
-        title_label = QLabel("ROI Statistics")
-        title_label.setStyleSheet("font-weight: bold; font-size: 12pt;")
-        layout.addWidget(title_label)
+        # Title (will be updated with ROI identifier)
+        self.title_label = QLabel("ROI Statistics")
+        self.title_label.setStyleSheet("font-weight: bold; font-size: 12pt;")
+        layout.addWidget(self.title_label)
         
         # Statistics table
         self.stats_table = QTableWidget()
@@ -75,14 +75,21 @@ class ROIStatisticsPanel(QWidget):
         layout.addWidget(self.stats_table)
         layout.addStretch()
     
-    def update_statistics(self, statistics: Dict[str, float]) -> None:
+    def update_statistics(self, statistics: Dict[str, float], roi_identifier: Optional[str] = None) -> None:
         """
         Update displayed statistics.
         
         Args:
             statistics: Dictionary with statistics (mean, std, min, max, count)
+            roi_identifier: Optional ROI identifier string (e.g., "ROI 1 (rectangle)")
         """
         self.current_statistics = statistics
+        
+        # Update title with ROI identifier
+        if roi_identifier:
+            self.title_label.setText(f"ROI Statistics - {roi_identifier}")
+        else:
+            self.title_label.setText("ROI Statistics")
         
         # Update table
         self.stats_table.setItem(0, 1, QTableWidgetItem(f"{statistics.get('mean', 0):.2f}"))
@@ -96,4 +103,5 @@ class ROIStatisticsPanel(QWidget):
         for i in range(5):
             self.stats_table.setItem(i, 1, QTableWidgetItem(""))
         self.current_statistics = None
+        self.title_label.setText("ROI Statistics")
 

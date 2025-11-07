@@ -20,7 +20,7 @@ Requirements:
 
 from PySide6.QtWidgets import QGraphicsTextItem, QGraphicsItem
 from PySide6.QtCore import Qt, QRectF
-from PySide6.QtGui import QFont, QColor, QTransform
+from PySide6.QtGui import QFont, QColor, QTransform, QTextDocument, QTextOption
 from typing import List, Dict, Optional
 import pydicom
 from pydicom.dataset import Dataset
@@ -55,6 +55,10 @@ class OverlayManager:
         self.font_size = font_size
         self.font_color = font_color
         self.config_manager = config_manager
+        
+        # Store current parser and scene for updating positions
+        self.current_parser: Optional[DICOMParser] = None
+        self.current_scene = None
         
         # Default fields for minimal mode
         self.minimal_fields = [
@@ -193,25 +197,26 @@ class OverlayManager:
                 lines.append(f"{tag}: {value_str}")
         return "\n".join(lines)
     
-    def _create_text_item(self, text: str, x: float, y: float) -> QGraphicsTextItem:
+    def _create_text_item(self, text: str, x: float, y: float, alignment: Qt.AlignmentFlag = Qt.AlignmentFlag.AlignLeft) -> QGraphicsTextItem:
         """
         Create a text item with proper font and styling.
         
         Font size is set in absolute pixels, independent of image dimensions.
+        Uses ItemIgnoresTransformations to keep font size constant.
         
         Args:
             text: Text to display
             x: X position
             y: Y position
+            alignment: Text alignment (AlignLeft, AlignRight, etc.)
             
         Returns:
             QGraphicsTextItem
         """
-        text_item = QGraphicsTextItem(text)
+        text_item = QGraphicsTextItem()
         text_item.setDefaultTextColor(QColor(*self.font_color))
-        text_item.setPos(x, y)
         
-        # Set font - use absolute pixel size, independent of image dimensions
+        # Set font - use absolute pixel size
         # Use 6pt minimum, scale if smaller using QTransform
         if self.font_size < 6:
             # Use 6pt font and scale down with transform for sizes < 6pt
@@ -225,12 +230,34 @@ class OverlayManager:
             font = QFont("Arial", self.font_size)
         
         font.setBold(True)
-        # Ensure font size is in absolute pixels, not scene coordinates
         text_item.setFont(font)
+        
+        # Set text with alignment using QTextDocument
+        document = QTextDocument()
+        document.setDefaultFont(font)
+        # Set text option with proper alignment
+        text_option = QTextOption()
+        if alignment & Qt.AlignmentFlag.AlignRight:
+            text_option.setAlignment(Qt.AlignmentFlag.AlignRight)
+        elif alignment & Qt.AlignmentFlag.AlignLeft:
+            text_option.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        else:
+            text_option.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        document.setDefaultTextOption(text_option)
+        document.setPlainText(text)
+        text_item.setDocument(document)
+        
         # Set flag to ignore parent transformations (keeps font size consistent)
-        # Note: We don't use ItemIgnoresTransformations as we want text to scale with zoom
-        # but the font size itself should be consistent across different image sizes
+        # This ensures font size doesn't change when view is zoomed or image size changes
+        text_item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations, True)
         text_item.setZValue(1000)  # High Z-value to stay above image
+        
+        # Set position - for right-aligned text, adjust x position
+        if alignment & Qt.AlignmentFlag.AlignRight:
+            # Position at x, then adjust based on text width
+            text_item.setPos(x, y)
+        else:
+            text_item.setPos(x, y)
         
         return text_item
     
@@ -247,6 +274,10 @@ class OverlayManager:
         Returns:
             List of overlay text items
         """
+        # Store current parser and scene for position updates
+        self.current_parser = parser
+        self.current_scene = scene
+        
         # Clear existing items
         self.clear_overlay_items(scene)
         
@@ -305,23 +336,89 @@ class OverlayManager:
             ("lower_right", scene_width - margin, scene_height - margin, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom)
         ]
         
+        # Get view for coordinate conversion (needed for ItemIgnoresTransformations)
+        view = scene.views()[0] if scene.views() else None
+        
+        # For ItemIgnoresTransformations items, we need to position based on viewport edges
+        # mapped to scene coordinates, so text stays anchored to viewport when zooming
+        if view is not None:
+            viewport_width = view.viewport().width()
+            viewport_height = view.viewport().height()
+            
+            # Map viewport edges to scene coordinates
+            top_left_scene = view.mapToScene(0, 0)
+            top_right_scene = view.mapToScene(viewport_width, 0)
+            bottom_left_scene = view.mapToScene(0, viewport_height)
+            bottom_right_scene = view.mapToScene(viewport_width, viewport_height)
+            
+            # Update corner positions based on viewport-to-scene mapping
+            corners = [
+                ("upper_left", top_left_scene.x() + margin, top_left_scene.y() + margin, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop),
+                ("upper_right", top_right_scene.x() - margin, top_right_scene.y() + margin, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop),
+                ("lower_left", bottom_left_scene.x() + margin, bottom_left_scene.y() - margin, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom),
+                ("lower_right", bottom_right_scene.x() - margin, bottom_right_scene.y() - margin, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom)
+            ]
+        
         for corner_key, x, y, alignment in corners:
             tags = corner_tags.get(corner_key, [])
             if tags:
                 text = self._get_corner_text(parser, tags)
                 if text:
-                    text_item = self._create_text_item(text, x, y)
+                    # For right-aligned corners, create separate text items for each line
+                    # so each row can be individually right-aligned
+                    is_right_aligned = bool(alignment & Qt.AlignmentFlag.AlignRight)
                     
-                    # Adjust position based on alignment
-                    if alignment & Qt.AlignmentFlag.AlignRight:
-                        # Right align: adjust x position based on text width
-                        text_item.setPos(x - text_item.boundingRect().width(), y)
-                    if alignment & Qt.AlignmentFlag.AlignBottom:
-                        # Bottom align: adjust y position based on text height
-                        text_item.setPos(text_item.pos().x(), y - text_item.boundingRect().height())
-                    
-                    scene.addItem(text_item)
-                    self.overlay_items.append(text_item)
+                    if is_right_aligned:
+                        # Split text into lines and create separate items for each
+                        lines = [line for line in text.split('\n') if line.strip()]  # Filter empty lines
+                        line_height = None
+                        
+                        for line_idx, line in enumerate(lines):
+                            # Create text item for this line with right alignment
+                            text_item = self._create_text_item(line, x, y, alignment)
+                            
+                            # Get line height from first line
+                            if line_height is None:
+                                line_height = text_item.boundingRect().height()
+                            
+                            # Position: for right-aligned, position at viewport right edge (mapped to scene)
+                            # With ItemIgnoresTransformations, position is in scene coordinates
+                            # x is already the right edge position from viewport mapping
+                            text_width = text_item.boundingRect().width()
+                            
+                            # Calculate vertical position based on line index
+                            line_spacing = line_height * 1.2
+                            if alignment & Qt.AlignmentFlag.AlignBottom:
+                                # Bottom alignment: stack from bottom
+                                # y is already the bottom edge position from viewport mapping
+                                text_y = y - (len(lines) - line_idx) * line_spacing
+                            else:
+                                # Top alignment: stack from top
+                                # y is already the top edge position from viewport mapping
+                                text_y = y + line_idx * line_spacing
+                            
+                            # Position at right edge: x - text_width (x is already right edge)
+                            # This ensures text aligns to the right edge of the viewport
+                            text_item.setPos(x - text_width, text_y)
+                            
+                            scene.addItem(text_item)
+                            self.overlay_items.append(text_item)
+                    else:
+                        # Left-aligned corners: create single multi-line text item
+                        text_item = self._create_text_item(text, x, y, alignment)
+                        
+                        # Position: for left-aligned, use viewport edge positions (mapped to scene)
+                        # With ItemIgnoresTransformations, position is in scene coordinates
+                        # x and y are already set from viewport-to-scene mapping
+                        text_item.setPos(x, y)
+                        
+                        # Adjust y position for bottom alignment
+                        if alignment & Qt.AlignmentFlag.AlignBottom:
+                            text_height = text_item.boundingRect().height()
+                            text_item.setPos(text_item.pos().x(), y - text_height)
+                        
+                        scene.addItem(text_item)
+                        self.overlay_items.append(text_item)
         
         return self.overlay_items
     
@@ -335,4 +432,43 @@ class OverlayManager:
         for item in self.overlay_items:
             scene.removeItem(item)
         self.overlay_items.clear()
+    
+    def update_overlay_positions(self, scene) -> None:
+        """
+        Update overlay item positions when view transform changes (zoom/pan).
+        
+        This ensures text stays anchored to viewport edges when zooming.
+        
+        Args:
+            scene: QGraphicsScene containing overlay items
+        """
+        if not self.overlay_items or self.current_parser is None:
+            return
+        
+        # Get view for coordinate conversion
+        view = scene.views()[0] if scene.views() else None
+        if view is None:
+            return
+        
+        # Get scene dimensions
+        scene_rect = scene.sceneRect()
+        if scene_rect.width() <= 0 or scene_rect.height() <= 0:
+            return
+        
+        scene_width = scene_rect.width()
+        scene_height = scene_rect.height()
+        margin = 10
+        
+        # Get viewport dimensions
+        viewport_width = view.viewport().width()
+        viewport_height = view.viewport().height()
+        
+        # Update positions for each overlay item
+        # We need to determine which corner each item belongs to
+        # For now, we'll recreate the overlay items with updated positions
+        # This is simpler than tracking which item belongs to which corner
+        
+        # Clear and recreate with current view transform
+        if self.current_parser is not None:
+            self.create_overlay_items(scene, self.current_parser)
 
