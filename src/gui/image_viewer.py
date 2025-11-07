@@ -127,8 +127,8 @@ class ImageViewer(QGraphicsView):
         Expand scene rect to enable panning when ScrollHandDrag is active.
         
         This creates a virtual panning area even when image fits viewport.
-        The scene rect will be at least as large as the viewport in scene coordinates,
-        ensuring ScrollHandDrag can work properly.
+        When the image is smaller than the viewport, the scene rect will be
+        at least 2 times the viewport dimensions in scene coordinates.
         """
         if self.image_item is None:
             return
@@ -146,8 +146,6 @@ class ImageViewer(QGraphicsView):
         viewport_width_scene = viewport_width / zoom
         viewport_height_scene = viewport_height / zoom
         
-        # Calculate how much larger the viewport is than the image (in scene coordinates)
-        # If viewport is 2x the image, we want scene rect to be at least 2x the image
         image_width = image_rect.width()
         image_height = image_rect.height()
         
@@ -155,18 +153,22 @@ class ImageViewer(QGraphicsView):
         width_multiple = viewport_width_scene / image_width if image_width > 0 else 1.0
         height_multiple = viewport_height_scene / image_height if image_height > 0 else 1.0
         
-        # Use the larger multiple to ensure scene rect is at least as large as viewport
-        # Add 50% margin on top of that for comfortable panning
-        target_multiple = max(width_multiple, height_multiple, 1.0)  # At least 1.0x
-        margin_factor = 1.5  # 50% margin
+        # Use the larger multiple
+        target_multiple = max(width_multiple, height_multiple, 1.0)
         
-        # Calculate margins to make scene rect at least (target_multiple * margin_factor) times the image size
-        margin_x = image_width * (target_multiple * margin_factor - 1.0) / 2.0
-        margin_y = image_height * (target_multiple * margin_factor - 1.0) / 2.0
+        # When image is smaller than viewport (target_multiple > 1.0),
+        # make scene rect at least 2x the viewport dimensions
+        # This means scene rect = target_multiple * 2.0 times the image size
+        if target_multiple > 1.0:
+            # Image is smaller than viewport - scene rect should be 2x viewport
+            scene_multiple = target_multiple * 2.0
+        else:
+            # Image is larger than or equal to viewport - use minimum 2x image size
+            scene_multiple = 2.0
         
-        # Ensure minimum margins (at least 50% of image size)
-        margin_x = max(margin_x, image_width * 0.5)
-        margin_y = max(margin_y, image_height * 0.5)
+        # Calculate margins to make scene rect scene_multiple times the image size
+        margin_x = image_width * (scene_multiple - 1.0) / 2.0
+        margin_y = image_height * (scene_multiple - 1.0) / 2.0
         
         expanded_rect = QRectF(
             image_rect.x() - margin_x,
