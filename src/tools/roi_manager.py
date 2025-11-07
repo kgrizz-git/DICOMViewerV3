@@ -112,24 +112,33 @@ class ROIManager:
     
     def __init__(self):
         """Initialize the ROI manager."""
-        self.rois: Dict[int, List[ROIItem]] = {}  # slice_index -> list of ROIs
-        self.current_slice_index = 0
+        # Key format: (StudyInstanceUID, SeriesInstanceUID, instance_identifier)
+        # instance_identifier can be InstanceNumber from DICOM or slice_index as fallback
+        self.rois: Dict[Tuple[str, str, int], List[ROIItem]] = {}
+        self.current_study_uid = ""
+        self.current_series_uid = ""
+        self.current_instance_identifier = 0
         self.drawing = False
         self.drawing_start_pos: Optional[QPointF] = None
         self.current_roi_item: Optional[ROIItem] = None
         self.current_shape_type = "rectangle"  # "rectangle" or "ellipse"
         self.selected_roi: Optional[ROIItem] = None  # Currently selected ROI
     
-    def set_current_slice(self, slice_index: int) -> None:
+    def set_current_slice(self, study_uid: str, series_uid: str, instance_identifier: int) -> None:
         """
-        Set the current slice index.
+        Set the current slice using composite key.
         
         Args:
-            slice_index: Current slice index
+            study_uid: StudyInstanceUID
+            series_uid: SeriesInstanceUID
+            instance_identifier: InstanceNumber from DICOM or slice_index as fallback
         """
-        self.current_slice_index = slice_index
-        if slice_index not in self.rois:
-            self.rois[slice_index] = []
+        self.current_study_uid = study_uid
+        self.current_series_uid = series_uid
+        self.current_instance_identifier = instance_identifier
+        key = (study_uid, series_uid, instance_identifier)
+        if key not in self.rois:
+            self.rois[key] = []
     
     def start_drawing(self, pos: QPointF, shape_type: str = "rectangle") -> None:
         """
@@ -190,11 +199,12 @@ class ROIManager:
             self.drawing = False
             return None
         
-        # Add to current slice
-        if self.current_slice_index not in self.rois:
-            self.rois[self.current_slice_index] = []
+        # Add to current slice using composite key
+        key = (self.current_study_uid, self.current_series_uid, self.current_instance_identifier)
+        if key not in self.rois:
+            self.rois[key] = []
         
-        self.rois[self.current_slice_index].append(self.current_roi_item)
+        self.rois[key].append(self.current_roi_item)
         
         # Enable selectable/movable now that drawing is finished
         self.current_roi_item.item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
@@ -245,7 +255,7 @@ class ROIManager:
         Returns:
             ROIItem or None
         """
-        for slice_index, roi_list in self.rois.items():
+        for roi_list in self.rois.values():
             for roi in roi_list:
                 if roi.item == item:
                     return roi
@@ -263,7 +273,7 @@ class ROIManager:
             True if deleted, False otherwise
         """
         # Find and remove from rois dict
-        for slice_index, roi_list in self.rois.items():
+        for roi_list in self.rois.values():
             if roi in roi_list:
                 roi_list.remove(roi)
                 scene.removeItem(roi.item)
@@ -275,30 +285,36 @@ class ROIManager:
                 return True
         return False
     
-    def get_rois_for_slice(self, slice_index: int) -> List[ROIItem]:
+    def get_rois_for_slice(self, study_uid: str, series_uid: str, instance_identifier: int) -> List[ROIItem]:
         """
-        Get all ROIs for a slice.
+        Get all ROIs for a slice using composite key.
         
         Args:
-            slice_index: Slice index
+            study_uid: StudyInstanceUID
+            series_uid: SeriesInstanceUID
+            instance_identifier: InstanceNumber from DICOM or slice_index as fallback
             
         Returns:
             List of ROI items
         """
-        return self.rois.get(slice_index, [])
+        key = (study_uid, series_uid, instance_identifier)
+        return self.rois.get(key, [])
     
-    def clear_slice_rois(self, slice_index: int, scene) -> None:
+    def clear_slice_rois(self, study_uid: str, series_uid: str, instance_identifier: int, scene) -> None:
         """
-        Clear all ROIs from a slice.
+        Clear all ROIs from a slice using composite key.
         
         Args:
-            slice_index: Slice index
+            study_uid: StudyInstanceUID
+            series_uid: SeriesInstanceUID
+            instance_identifier: InstanceNumber from DICOM or slice_index as fallback
             scene: QGraphicsScene to remove items from
         """
-        if slice_index in self.rois:
-            for roi in self.rois[slice_index]:
+        key = (study_uid, series_uid, instance_identifier)
+        if key in self.rois:
+            for roi in self.rois[key]:
                 scene.removeItem(roi.item)
-            del self.rois[slice_index]
+            del self.rois[key]
     
     def clear_all_rois(self, scene) -> None:
         """

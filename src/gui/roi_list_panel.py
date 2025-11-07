@@ -49,7 +49,9 @@ class ROIListPanel(QWidget):
         super().__init__(parent)
         
         self.roi_manager: Optional[ROIManager] = None
-        self.current_slice_index = 0
+        self.current_study_uid = ""
+        self.current_series_uid = ""
+        self.current_instance_identifier = 0
         
         self._create_ui()
     
@@ -88,14 +90,18 @@ class ROIListPanel(QWidget):
         """
         self.roi_manager = roi_manager
     
-    def update_roi_list(self, slice_index: int) -> None:
+    def update_roi_list(self, study_uid: str, series_uid: str, instance_identifier: int) -> None:
         """
-        Update the ROI list for a slice.
+        Update the ROI list for a slice using composite key.
         
         Args:
-            slice_index: Current slice index
+            study_uid: StudyInstanceUID
+            series_uid: SeriesInstanceUID
+            instance_identifier: InstanceNumber from DICOM or slice_index as fallback
         """
-        self.current_slice_index = slice_index
+        self.current_study_uid = study_uid
+        self.current_series_uid = series_uid
+        self.current_instance_identifier = instance_identifier
         
         # Store current selection
         current_item = self.roi_list.currentItem()
@@ -106,8 +112,8 @@ class ROIListPanel(QWidget):
         if self.roi_manager is None:
             return
         
-        # Get ROIs for current slice
-        rois = self.roi_manager.get_rois_for_slice(slice_index)
+        # Get ROIs for current slice using composite key
+        rois = self.roi_manager.get_rois_for_slice(study_uid, series_uid, instance_identifier)
         
         # Add to list
         for i, roi in enumerate(rois):
@@ -148,7 +154,7 @@ class ROIListPanel(QWidget):
                     self.roi_manager.delete_roi(roi, scene)
                     self.roi_deleted.emit(roi)
                     # Update list
-                    self.update_roi_list(self.current_slice_index)
+                    self.update_roi_list(self.current_study_uid, self.current_series_uid, self.current_instance_identifier)
     
     def select_roi_in_list(self, roi: Optional[ROIItem]) -> None:
         """
