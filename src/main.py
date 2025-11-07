@@ -233,6 +233,13 @@ class DICOMViewerApp(QObject):
         # Arrow key navigation from image viewer
         self.image_viewer.arrow_key_pressed.connect(self._on_arrow_key_pressed)
         
+        # Right mouse drag for window/level adjustment
+        self.image_viewer.right_mouse_press_for_drag.connect(self._on_right_mouse_press_for_drag)
+        self.image_viewer.window_level_drag_changed.connect(self._on_window_level_drag_changed)
+        
+        # Series navigation
+        self.image_viewer.series_navigation_requested.connect(self._on_series_navigation_requested)
+        
         # Overlay font size and color changes
         self.main_window.overlay_font_size_changed.connect(self._on_overlay_font_size_changed)
         self.main_window.overlay_font_color_changed.connect(self._on_overlay_font_color_changed)
@@ -1245,6 +1252,102 @@ class DICOMViewerApp(QObject):
         elif direction == -1:
             # Down arrow: previous slice
             self.slice_navigator.previous_slice()
+    
+    def _on_right_mouse_press_for_drag(self) -> None:
+        """
+        Handle right mouse press for drag - provide window/level values to image viewer.
+        """
+        # Get current window/level values and ranges
+        center, width = self.window_level_controls.get_window_level()
+        center_range = self.window_level_controls.center_range
+        width_range = self.window_level_controls.width_range
+        
+        # Set values in image viewer for drag tracking
+        self.image_viewer.set_window_level_for_drag(center, width, center_range, width_range)
+    
+    def _on_window_level_drag_changed(self, center_delta: float, width_delta: float) -> None:
+        """
+        Handle window/level drag adjustment from image viewer.
+        
+        Args:
+            center_delta: Change in window center (positive = up, negative = down)
+            width_delta: Change in window width (positive = right/wider, negative = left/narrower)
+        """
+        # Get initial values from image_viewer (these are set when drag starts)
+        if (self.image_viewer.right_mouse_drag_start_center is None or 
+            self.image_viewer.right_mouse_drag_start_width is None):
+            return  # Drag not properly initialized
+        
+        # Apply deltas to initial values
+        new_center = self.image_viewer.right_mouse_drag_start_center + center_delta
+        new_width = self.image_viewer.right_mouse_drag_start_width + width_delta
+        
+        # Clamp to valid ranges
+        center_range = self.window_level_controls.center_range
+        width_range = self.window_level_controls.width_range
+        
+        new_center = max(center_range[0], min(center_range[1], new_center))
+        new_width = max(width_range[0], min(width_range[1], new_width))
+        
+        # Update window/level controls (block signals to prevent recursive updates during drag)
+        self.window_level_controls.set_window_level(new_center, new_width, block_signals=True)
+        
+        # Manually trigger window change to update image
+        self._on_window_changed(new_center, new_width)
+    
+    def _on_series_navigation_requested(self, direction: int) -> None:
+        """
+        Handle series navigation request from image viewer.
+        
+        Args:
+            direction: -1 for left/previous series, 1 for right/next series
+        """
+        if not self.current_studies or not self.current_study_uid:
+            return
+        
+        # Get all series for current study
+        study_series = self.current_studies[self.current_study_uid]
+        series_uids = list(study_series.keys())
+        
+        # Check if there are multiple series
+        if len(series_uids) <= 1:
+            return  # No navigation needed if only one series
+        
+        # Find current series index
+        try:
+            current_index = series_uids.index(self.current_series_uid)
+        except ValueError:
+            return  # Current series not found
+        
+        # Calculate new series index
+        new_index = current_index + direction
+        
+        # Clamp to valid range
+        if new_index < 0 or new_index >= len(series_uids):
+            return  # Already at first or last series
+        
+        # Get new series UID
+        new_series_uid = series_uids[new_index]
+        
+        # Switch to new series
+        self.current_series_uid = new_series_uid
+        
+        # Get first dataset of new series
+        datasets = study_series[new_series_uid]
+        if not datasets:
+            return
+        
+        # Reset slice index to 0 and display first slice
+        self.current_slice_index = 0
+        dataset = datasets[0]
+        self._display_slice(dataset)
+        
+        # Update slice navigator with new series slice count
+        self.slice_navigator.set_total_slices(len(datasets))
+        self.slice_navigator.set_current_slice(0)
+        
+        # Display ROIs for this slice
+        self._display_rois_for_slice(dataset)
     
     def _on_overlay_font_size_changed(self, font_size: int) -> None:
         """
