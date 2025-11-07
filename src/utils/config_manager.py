@@ -59,9 +59,9 @@ class ConfigManager:
         self.default_config = {
             "last_path": "",
             "theme": "light",
-            "overlay_mode": "minimal",  # minimal, detailed, hidden
-            "overlay_custom_fields": [],
-            "overlay_font_size": 6,  # Default font size (6pt)
+        "overlay_mode": "minimal",  # minimal, detailed, hidden
+        "overlay_custom_fields": [],
+        "overlay_font_size": 10,  # Default font size (10pt)
             "overlay_font_color_r": 255,  # Yellow default
             "overlay_font_color_g": 255,
             "overlay_font_color_b": 0,
@@ -244,7 +244,7 @@ class ConfigManager:
         Returns:
             Font size in points
         """
-        return self.config.get("overlay_font_size", 6)
+        return self.config.get("overlay_font_size", 10)
     
     def set_overlay_font_size(self, size: int) -> None:
         """

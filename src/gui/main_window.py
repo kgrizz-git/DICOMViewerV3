@@ -19,7 +19,7 @@ Requirements:
 
 from PySide6.QtWidgets import (QMainWindow, QMenuBar, QToolBar, QStatusBar,
                                 QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
-                                QMessageBox)
+                                QMessageBox, QComboBox, QLabel, QSizePolicy)
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QAction, QIcon, QKeySequence
 from typing import Optional
@@ -51,6 +51,7 @@ class MainWindow(QMainWindow):
     tag_viewer_requested = Signal()
     overlay_config_requested = Signal()
     mouse_mode_changed = Signal(str)  # Emitted when mouse mode changes ("roi_ellipse", "roi_rectangle", "measure", "zoom", "pan")
+    scroll_wheel_mode_changed = Signal(str)  # Emitted when scroll wheel mode changes ("slice" or "zoom")
     
     def __init__(self, config_manager: Optional[ConfigManager] = None):
         """
@@ -209,6 +210,28 @@ class MainWindow(QMainWindow):
             lambda: self._on_mouse_mode_changed("pan")
         )
         toolbar.addAction(self.mouse_mode_pan_action)
+        
+        # Add stretch to push scroll wheel mode toggle to the right
+        toolbar.addSeparator()
+        
+        # Create spacer widget that expands
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        toolbar.addWidget(spacer)
+        
+        toolbar.addWidget(QLabel("Scroll Wheel:"))
+        
+        # Scroll wheel mode toggle (right-aligned)
+        self.scroll_wheel_mode_combo = QComboBox()
+        self.scroll_wheel_mode_combo.addItems(["Slice", "Zoom"])
+        # Set current mode from config
+        current_mode = self.config_manager.get_scroll_wheel_mode() if self.config_manager else "slice"
+        if current_mode == "zoom":
+            self.scroll_wheel_mode_combo.setCurrentIndex(1)
+        else:
+            self.scroll_wheel_mode_combo.setCurrentIndex(0)
+        self.scroll_wheel_mode_combo.currentTextChanged.connect(self._on_scroll_wheel_mode_combo_changed)
+        toolbar.addWidget(self.scroll_wheel_mode_combo)
     
     def _create_status_bar(self) -> None:
         """Create the status bar."""
@@ -338,6 +361,16 @@ class MainWindow(QMainWindow):
         
         # Emit signal
         self.mouse_mode_changed.emit(mode)
+    
+    def _on_scroll_wheel_mode_combo_changed(self, text: str) -> None:
+        """
+        Handle scroll wheel mode combo box change.
+        
+        Args:
+            text: Selected text ("Slice" or "Zoom")
+        """
+        mode = "slice" if text == "Slice" else "zoom"
+        self.scroll_wheel_mode_changed.emit(mode)
     
     def update_status(self, message: str) -> None:
         """

@@ -121,6 +121,11 @@ class DICOMViewerApp(QObject):
         self.current_study_uid = ""
         self.current_dataset: Optional[Dataset] = None
         
+        # Window/level state - preserve between slices
+        self.current_window_center: Optional[float] = None
+        self.current_window_width: Optional[float] = None
+        self.window_level_user_modified = False  # Track if user has manually changed window/level
+        
         # Tag viewer dialog (persistent)
         self.tag_viewer_dialog: Optional[TagViewerDialog] = None
     
@@ -172,6 +177,9 @@ class DICOMViewerApp(QObject):
         # ROI click signal
         self.image_viewer.roi_clicked.connect(self._on_roi_clicked)
         
+        # ROI delete signal (from right-click context menu)
+        self.image_viewer.roi_delete_requested.connect(self._on_roi_delete_requested)
+        
         # ROI list panel signals
         self.roi_list_panel.roi_selected.connect(self._on_roi_selected)
         self.roi_list_panel.roi_deleted.connect(self._on_roi_deleted)
@@ -192,6 +200,12 @@ class DICOMViewerApp(QObject):
         
         # Mouse mode changes
         self.main_window.mouse_mode_changed.connect(self._on_mouse_mode_changed)
+        
+        # Scroll wheel mode changes
+        self.main_window.scroll_wheel_mode_changed.connect(self._on_scroll_wheel_mode_changed)
+        
+        # Zoom changes - update overlay positions to keep text anchored
+        self.image_viewer.zoom_changed.connect(self._on_zoom_changed)
     
     def _open_files(self) -> None:
         """Handle open files request."""
@@ -283,6 +297,11 @@ class DICOMViewerApp(QObject):
         if not self.current_studies:
             return
         
+        # Reset window/level state when loading new files
+        self.current_window_center = None
+        self.current_window_width = None
+        self.window_level_user_modified = False
+        
         # Get first study and series
         study_uid = list(self.current_studies.keys())[0]
         series_uid = list(self.current_studies[study_uid].keys())[0]
@@ -339,17 +358,28 @@ class DICOMViewerApp(QObject):
                 width_range = (1.0, max(1.0, (pixel_max - pixel_min) * 2.0))
                 self.window_level_controls.set_ranges(center_range, width_range)
             
-            # Update window/level controls with values from dataset
-            wc, ww = self.dicom_processor.get_window_level_from_dataset(dataset)
-            if wc is not None and ww is not None:
-                self.window_level_controls.set_window_level(wc, ww, block_signals=True)
-            elif pixel_min is not None and pixel_max is not None:
-                # Use default window/level based on pixel range
-                default_center = (pixel_min + pixel_max) / 2.0
-                default_width = pixel_max - pixel_min
-                if default_width <= 0:
-                    default_width = 1.0
-                self.window_level_controls.set_window_level(default_center, default_width, block_signals=True)
+            # Update window/level controls
+            # If user has modified window/level, preserve it when navigating between slices
+            if self.window_level_user_modified and self.current_window_center is not None and self.current_window_width is not None:
+                # Use preserved window/level values
+                self.window_level_controls.set_window_level(self.current_window_center, self.current_window_width, block_signals=True)
+            else:
+                # Use values from dataset or calculate defaults
+                wc, ww = self.dicom_processor.get_window_level_from_dataset(dataset)
+                if wc is not None and ww is not None:
+                    self.window_level_controls.set_window_level(wc, ww, block_signals=True)
+                    self.current_window_center = wc
+                    self.current_window_width = ww
+                elif pixel_min is not None and pixel_max is not None:
+                    # Use default window/level based on pixel range
+                    default_center = (pixel_min + pixel_max) / 2.0
+                    default_width = pixel_max - pixel_min
+                    if default_width <= 0:
+                        default_width = 1.0
+                    self.window_level_controls.set_window_level(default_center, default_width, block_signals=True)
+                    self.current_window_center = default_center
+                    self.current_window_width = default_width
+                self.window_level_user_modified = False  # Reset flag after setting from dataset
             
             # Update overlay
             parser = DICOMParser(dataset)
@@ -466,6 +496,11 @@ class DICOMViewerApp(QObject):
             center: Window center
             width: Window width
         """
+        # Store current window/level values
+        self.current_window_center = center
+        self.current_window_width = width
+        self.window_level_user_modified = True  # Mark as user-modified
+        
         # Re-display current slice with new window/level
         if self.current_studies and self.current_series_uid:
             datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
@@ -531,13 +566,7 @@ class DICOMViewerApp(QObject):
         
         # Calculate and display statistics if ROI was created
         if roi_item is not None and self.current_dataset is not None:
-            try:
-                pixel_array = self.dicom_processor.get_pixel_array(self.current_dataset)
-                if pixel_array is not None:
-                    stats = self.roi_manager.calculate_statistics(roi_item, pixel_array)
-                    self.roi_statistics_panel.update_statistics(stats)
-            except Exception as e:
-                print(f"Error calculating ROI statistics: {e}")
+            self._update_roi_statistics(roi_item)
     
     def _on_roi_clicked(self, item) -> None:
         """
@@ -561,6 +590,20 @@ class DICOMViewerApp(QObject):
         """
         self._update_roi_statistics(roi)
     
+    def _on_roi_delete_requested(self, item) -> None:
+        """
+        Handle ROI deletion request from context menu.
+        
+        Args:
+            item: QGraphicsItem to delete
+        """
+        roi = self.roi_manager.find_roi_by_item(item)
+        if roi:
+            self.roi_manager.delete_roi(roi, self.image_viewer.scene)
+            self.roi_list_panel.update_roi_list(self.current_slice_index)
+            if self.roi_manager.get_selected_roi() is None:
+                self.roi_statistics_panel.clear_statistics()
+    
     def _on_roi_deleted(self, roi) -> None:
         """
         Handle ROI deletion.
@@ -571,6 +614,30 @@ class DICOMViewerApp(QObject):
         # Clear statistics if this was the selected ROI
         if self.roi_manager.get_selected_roi() is None:
             self.roi_statistics_panel.clear_statistics()
+    
+    def _on_scroll_wheel_mode_changed(self, mode: str) -> None:
+        """
+        Handle scroll wheel mode change.
+        
+        Args:
+            mode: "slice" or "zoom"
+        """
+        self.config_manager.set_scroll_wheel_mode(mode)
+        self.image_viewer.set_scroll_wheel_mode(mode)
+        self.slice_navigator.set_scroll_wheel_mode(mode)
+    
+    def _on_zoom_changed(self, zoom_level: float) -> None:
+        """
+        Handle zoom level change.
+        
+        Updates overlay positions to keep text anchored to viewport edges.
+        
+        Args:
+            zoom_level: Current zoom level
+        """
+        # Update overlay positions when zoom changes
+        if self.current_dataset is not None:
+            self.overlay_manager.update_overlay_positions(self.image_viewer.scene)
     
     def _on_scene_selection_changed(self) -> None:
         """Handle scene selection change (e.g., when ROI is moved)."""
@@ -597,10 +664,18 @@ class DICOMViewerApp(QObject):
             return
         
         try:
+            # Get ROI identifier (e.g., "ROI 1 (rectangle)")
+            roi_identifier = None
+            rois = self.roi_manager.get_rois_for_slice(self.current_slice_index)
+            for i, r in enumerate(rois):
+                if r == roi:
+                    roi_identifier = f"ROI {i+1} ({roi.shape_type})"
+                    break
+            
             pixel_array = self.dicom_processor.get_pixel_array(self.current_dataset)
             if pixel_array is not None:
                 stats = self.roi_manager.calculate_statistics(roi, pixel_array)
-                self.roi_statistics_panel.update_statistics(stats)
+                self.roi_statistics_panel.update_statistics(stats, roi_identifier)
         except Exception as e:
             print(f"Error calculating ROI statistics: {e}")
     
@@ -649,6 +724,15 @@ class DICOMViewerApp(QObject):
                     self.roi_list_panel.update_roi_list(self.current_slice_index)
                     self.roi_statistics_panel.clear_statistics()
                     return True
+            # Arrow keys for slice navigation
+            elif event.key() == Qt.Key.Key_Up:
+                # Up arrow: next slice
+                self.slice_navigator.next_slice()
+                return True
+            elif event.key() == Qt.Key.Key_Down:
+                # Down arrow: previous slice
+                self.slice_navigator.previous_slice()
+                return True
         
         return super().eventFilter(obj, event)
     
