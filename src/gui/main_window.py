@@ -19,9 +19,9 @@ Requirements:
 
 from PySide6.QtWidgets import (QMainWindow, QMenuBar, QToolBar, QStatusBar,
                                 QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
-                                QMessageBox, QComboBox, QLabel, QSizePolicy)
+                                QMessageBox, QComboBox, QLabel, QSizePolicy, QColorDialog)
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QAction, QIcon, QKeySequence
+from PySide6.QtGui import QAction, QIcon, QKeySequence, QColor
 from typing import Optional
 import sys
 import os
@@ -53,6 +53,10 @@ class MainWindow(QMainWindow):
     overlay_config_requested = Signal()
     mouse_mode_changed = Signal(str)  # Emitted when mouse mode changes ("roi_ellipse", "roi_rectangle", "measure", "zoom", "pan")
     scroll_wheel_mode_changed = Signal(str)  # Emitted when scroll wheel mode changes ("slice" or "zoom")
+    overlay_font_size_changed = Signal(int)  # Emitted when overlay font size changes
+    overlay_font_color_changed = Signal(int, int, int)  # Emitted when overlay font color changes (r, g, b)
+    reset_view_requested = Signal()  # Emitted when reset view is requested
+    viewport_resized = Signal()  # Emitted when splitter moves and viewport size changes
     
     def __init__(self, config_manager: Optional[ConfigManager] = None):
         """
@@ -174,13 +178,6 @@ class MainWindow(QMainWindow):
         toolbar.setMovable(False)
         self.addToolBar(toolbar)
         
-        # Open file action
-        open_file_action = QAction("Open File", self)
-        open_file_action.triggered.connect(self.open_file_requested.emit)
-        toolbar.addAction(open_file_action)
-        
-        toolbar.addSeparator()
-        
         # Mouse interaction mode buttons (exclusive)
         self.mouse_mode_ellipse_roi_action = QAction("Ellipse ROI", self)
         self.mouse_mode_ellipse_roi_action.setCheckable(True)
@@ -218,6 +215,39 @@ class MainWindow(QMainWindow):
         )
         toolbar.addAction(self.mouse_mode_pan_action)
         
+        toolbar.addSeparator()
+        
+        # Reset View button
+        reset_view_action = QAction("Reset View", self)
+        reset_view_action.setToolTip("Reset zoom, pan, window center and level to initial values")
+        reset_view_action.triggered.connect(self.reset_view_requested.emit)
+        toolbar.addAction(reset_view_action)
+        
+        toolbar.addSeparator()
+        
+        # Overlay font size controls
+        toolbar.addWidget(QLabel("Font Size:"))
+        
+        # Font size decrease button
+        font_size_decrease_action = QAction("−", self)
+        font_size_decrease_action.setToolTip("Decrease overlay font size")
+        font_size_decrease_action.triggered.connect(self._on_font_size_decrease)
+        toolbar.addAction(font_size_decrease_action)
+        
+        # Font size increase button
+        font_size_increase_action = QAction("+", self)
+        font_size_increase_action.setToolTip("Increase overlay font size")
+        font_size_increase_action.triggered.connect(self._on_font_size_increase)
+        toolbar.addAction(font_size_increase_action)
+        
+        toolbar.addSeparator()
+        
+        # Font color picker button
+        font_color_action = QAction("Font Color", self)
+        font_color_action.setToolTip("Change overlay font color")
+        font_color_action.triggered.connect(self._on_font_color_picker)
+        toolbar.addAction(font_color_action)
+        
         # Add stretch to push scroll wheel mode toggle to the right
         toolbar.addSeparator()
         
@@ -254,33 +284,40 @@ class MainWindow(QMainWindow):
         main_layout.setContentsMargins(0, 0, 0, 0)
         
         # Splitter for resizable panels
-        splitter = QSplitter(Qt.Horizontal)
-        main_layout.addWidget(splitter)
+        self.splitter = QSplitter(Qt.Horizontal)
+        main_layout.addWidget(self.splitter)
         
         # Left panel (for metadata, series list, etc.)
         self.left_panel = QWidget()
         self.left_panel.setMaximumWidth(300)
         self.left_panel.setMinimumWidth(200)
-        splitter.addWidget(self.left_panel)
+        self.splitter.addWidget(self.left_panel)
         
         # Center panel (for image viewer)
         self.center_panel = QWidget()
-        splitter.addWidget(self.center_panel)
+        self.splitter.addWidget(self.center_panel)
         
         # Right panel (for tools, histogram, etc.)
         self.right_panel = QWidget()
         self.right_panel.setMaximumWidth(300)
         self.right_panel.setMinimumWidth(200)
-        splitter.addWidget(self.right_panel)
+        self.splitter.addWidget(self.right_panel)
         
         # Set splitter proportions
-        splitter.setSizes([200, 800, 200])
+        self.splitter.setSizes([200, 800, 200])
+        
+        # Connect to splitter moved signal to update overlay positions when panels are resized
+        self.splitter.splitterMoved.connect(self._on_splitter_moved)
     
     def _apply_theme(self) -> None:
         """Apply the current theme to the window."""
         theme = self.config_manager.get_theme()
         
         if theme == "dark":
+            # Dark theme - apply light colors (stylesheets are reversed)
+            self.setStyleSheet("")
+        else:
+            # Light theme (default) - apply dark colors (stylesheets are reversed)
             self.setStyleSheet("""
                 QMainWindow {
                     background-color: #2b2b2b;
@@ -302,9 +339,6 @@ class MainWindow(QMainWindow):
                     color: #ffffff;
                 }
             """)
-        else:
-            # Light theme (default)
-            self.setStyleSheet("")
     
     def _set_theme(self, theme: str) -> None:
         """
@@ -379,6 +413,36 @@ class MainWindow(QMainWindow):
         mode = "slice" if text == "Slice" else "zoom"
         self.scroll_wheel_mode_changed.emit(mode)
     
+    def _on_font_size_decrease(self) -> None:
+        """Handle font size decrease button click."""
+        current_size = self.config_manager.get_overlay_font_size()
+        new_size = max(1, current_size - 1)  # Minimum is 1pt
+        if new_size != current_size:
+            self.config_manager.set_overlay_font_size(new_size)
+            self.overlay_font_size_changed.emit(new_size)
+    
+    def _on_font_size_increase(self) -> None:
+        """Handle font size increase button click."""
+        current_size = self.config_manager.get_overlay_font_size()
+        new_size = min(24, current_size + 1)  # Maximum is 24pt
+        if new_size != current_size:
+            self.config_manager.set_overlay_font_size(new_size)
+            self.overlay_font_size_changed.emit(new_size)
+    
+    def _on_font_color_picker(self) -> None:
+        """Handle font color picker button click."""
+        # Get current color from config
+        current_color = self.config_manager.get_overlay_font_color()
+        qcolor = QColor(current_color[0], current_color[1], current_color[2])
+        
+        # Open color dialog
+        color = QColorDialog.getColor(qcolor, self, "Select Overlay Font Color")
+        
+        if color.isValid():
+            # Save to config and emit signal
+            self.config_manager.set_overlay_font_color(color.red(), color.green(), color.blue())
+            self.overlay_font_color_changed.emit(color.red(), color.green(), color.blue())
+    
     def _update_recent_menu(self) -> None:
         """Update the Recent Files submenu with current recent files."""
         # Clear existing actions
@@ -418,6 +482,22 @@ class MainWindow(QMainWindow):
         Public method to update recent menu (called from outside).
         """
         self._update_recent_menu()
+    
+    def _on_splitter_moved(self, pos: int, index: int) -> None:
+        """
+        Handle splitter movement.
+        
+        When the splitter moves, the viewport size changes, so we need to
+        update overlay positions to keep them anchored to viewport edges.
+        
+        Args:
+            pos: New position of the splitter handle
+            index: Index of the splitter handle that moved
+        """
+        # Emit signal to notify that viewport size changed
+        # Use QTimer to batch rapid splitter movements
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(10, lambda: self.viewport_resized.emit())
     
     def update_status(self, message: str) -> None:
         """

@@ -126,6 +126,13 @@ class DICOMViewerApp(QObject):
         self.current_window_width: Optional[float] = None
         self.window_level_user_modified = False  # Track if user has manually changed window/level
         
+        # Initial view state for reset functionality
+        self.initial_zoom: Optional[float] = None
+        self.initial_h_scroll: Optional[int] = None
+        self.initial_v_scroll: Optional[int] = None
+        self.initial_window_center: Optional[float] = None
+        self.initial_window_width: Optional[float] = None
+        
         # Tag viewer dialog (persistent)
         self.tag_viewer_dialog: Optional[TagViewerDialog] = None
     
@@ -218,6 +225,13 @@ class DICOMViewerApp(QObject):
         # Overlay font size and color changes
         self.main_window.overlay_font_size_changed.connect(self._on_overlay_font_size_changed)
         self.main_window.overlay_font_color_changed.connect(self._on_overlay_font_color_changed)
+        
+        # Reset view request (from toolbar and context menu)
+        self.main_window.reset_view_requested.connect(self._reset_view)
+        self.image_viewer.reset_view_requested.connect(self._reset_view)
+        
+        # Viewport resize (when splitter moves)
+        self.main_window.viewport_resized.connect(self._on_viewport_resized)
     
     def _open_files(self) -> None:
         """Handle open files request."""
@@ -436,13 +450,21 @@ class DICOMViewerApp(QObject):
             # Store current dataset
             self.current_dataset = dataset
             
+            # Get series UID from dataset to check if we're in the same series
+            new_series_uid = getattr(dataset, 'SeriesInstanceUID', '')
+            is_same_series = (new_series_uid == self.current_series_uid and self.current_series_uid != "")
+            
             # Convert to image
             image = self.dicom_processor.dataset_to_image(dataset)
             if image is None:
                 return
             
-            # Set image in viewer
-            self.image_viewer.set_image(image)
+            # Set image in viewer - preserve zoom/pan if same series
+            self.image_viewer.set_image(image, preserve_view=is_same_series)
+            
+            # Update current series UID
+            if new_series_uid:
+                self.current_series_uid = new_series_uid
             
             # Update metadata panel
             self.metadata_panel.set_dataset(dataset)
@@ -483,6 +505,12 @@ class DICOMViewerApp(QObject):
                     self.current_window_width = default_width
                 self.window_level_user_modified = False  # Reset flag after setting from dataset
             
+            # Store initial view state if this is the first image
+            if self.initial_zoom is None:
+                # Wait a bit for view to settle, then store initial state
+                from PySide6.QtCore import QTimer
+                QTimer.singleShot(100, self._store_initial_view_state)
+            
             # Update overlay
             parser = DICOMParser(dataset)
             self.overlay_manager.create_overlay_items(
@@ -495,6 +523,83 @@ class DICOMViewerApp(QObject):
         
         except Exception as e:
             self.main_window.update_status(f"Error displaying slice: {str(e)}")
+    
+    def _store_initial_view_state(self) -> None:
+        """
+        Store the initial view state (zoom, pan, window/level) for reset functionality.
+        
+        Called after the first image is displayed and the view has settled.
+        """
+        if self.image_viewer.image_item is None:
+            return
+        
+        # Store initial zoom
+        self.initial_zoom = self.image_viewer.current_zoom
+        
+        # Store initial pan position (scrollbar values)
+        self.initial_h_scroll = self.image_viewer.horizontalScrollBar().value()
+        self.initial_v_scroll = self.image_viewer.verticalScrollBar().value()
+        
+        # Store initial window/level
+        self.initial_window_center = self.current_window_center
+        self.initial_window_width = self.current_window_width
+    
+    def _reset_view(self) -> None:
+        """
+        Reset view to initial state (zoom, pan, window center/level).
+        
+        Restores the view state that was stored when the first image was loaded.
+        """
+        if self.initial_zoom is None or self.current_dataset is None:
+            # No initial state stored or no current dataset
+            return
+        
+        # Reset zoom and pan
+        self.image_viewer.resetTransform()
+        self.image_viewer.scale(self.initial_zoom, self.initial_zoom)
+        self.image_viewer.current_zoom = self.initial_zoom
+        
+        # Restore scrollbar positions
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(10, lambda: (
+            self.image_viewer.horizontalScrollBar().setValue(self.initial_h_scroll),
+            self.image_viewer.verticalScrollBar().setValue(self.initial_v_scroll),
+            self.image_viewer._update_scrollbar_ranges()
+        ))
+        
+        self.image_viewer.last_transform = self.image_viewer.transform()
+        self.image_viewer.zoom_changed.emit(self.image_viewer.current_zoom)
+        
+        # Reset window/level to initial values
+        if self.initial_window_center is not None and self.initial_window_width is not None:
+            self.window_level_controls.set_window_level(
+                self.initial_window_center, 
+                self.initial_window_width, 
+                block_signals=True
+            )
+            self.current_window_center = self.initial_window_center
+            self.current_window_width = self.initial_window_width
+            self.window_level_user_modified = False
+            
+            # Re-display current slice with reset window/level
+            if self.current_studies and self.current_series_uid:
+                datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
+                if self.current_slice_index < len(datasets):
+                    dataset = datasets[self.current_slice_index]
+                    image = self.dicom_processor.dataset_to_image(
+                        dataset,
+                        window_center=self.initial_window_center,
+                        window_width=self.initial_window_width
+                    )
+                    if image:
+                        # Preserve view when resetting window/level
+                        self.image_viewer.set_image(image, preserve_view=True)
+                        # Recreate overlay
+                        parser = DICOMParser(dataset)
+                        self.overlay_manager.create_overlay_items(
+                            self.image_viewer.scene,
+                            parser
+                        )
     
     def _display_rois_for_slice(self, slice_index: int) -> None:
         """
@@ -614,7 +719,8 @@ class DICOMViewerApp(QObject):
                     window_width=width
                 )
                 if image:
-                    self.image_viewer.set_image(image)
+                    # Preserve view when window/level changes (same slice)
+                    self.image_viewer.set_image(image, preserve_view=True)
                     # Recreate overlay to ensure it stays on top
                     parser = DICOMParser(dataset)
                     self.overlay_manager.create_overlay_items(
@@ -747,6 +853,17 @@ class DICOMViewerApp(QObject):
         This is called after the transform is fully applied.
         """
         # Update overlay positions when transform changes
+        if self.current_dataset is not None:
+            self.overlay_manager.update_overlay_positions(self.image_viewer.scene)
+    
+    def _on_viewport_resized(self) -> None:
+        """
+        Handle viewport resize (when splitter moves).
+        
+        Updates overlay positions to keep text anchored to viewport edges
+        when the left or right panels are resized.
+        """
+        # Update overlay positions when viewport size changes
         if self.current_dataset is not None:
             self.overlay_manager.update_overlay_positions(self.image_viewer.scene)
     
