@@ -96,6 +96,10 @@ class ImageViewer(QGraphicsView):
         # Track transform for change detection
         self.last_transform = QTransform()
         
+        # Track scrollbar positions for panning detection
+        self.last_horizontal_scroll = 0
+        self.last_vertical_scroll = 0
+        
         # View settings
         self.setDragMode(QGraphicsView.DragMode.NoDrag)
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
@@ -105,6 +109,11 @@ class ImageViewer(QGraphicsView):
         
         # Enable focus to receive key events
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        
+        # Connect scrollbar signals to detect panning
+        # Panning via scrollbars doesn't change the transform, so we need to track scrollbar changes
+        self.horizontalScrollBar().valueChanged.connect(self._on_scrollbar_changed)
+        self.verticalScrollBar().valueChanged.connect(self._on_scrollbar_changed)
         
         # Background - darker grey for better yellow text contrast
         darker_grey = QColor(64, 64, 64)
@@ -425,6 +434,25 @@ class ImageViewer(QGraphicsView):
         if current_transform != self.last_transform:
             self.last_transform = current_transform
             # Use QTimer to delay signal emission slightly, ensuring transform is fully applied
+            QTimer.singleShot(10, lambda: self.transform_changed.emit())
+    
+    def _on_scrollbar_changed(self) -> None:
+        """
+        Handle scrollbar value changes (panning).
+        
+        When panning via scrollbars, the view's transform doesn't change,
+        but the viewport-to-scene mapping does change. We need to update
+        overlay positions to keep them anchored to viewport edges.
+        """
+        # Check if scrollbar values actually changed
+        current_h = self.horizontalScrollBar().value()
+        current_v = self.verticalScrollBar().value()
+        
+        if current_h != self.last_horizontal_scroll or current_v != self.last_vertical_scroll:
+            self.last_horizontal_scroll = current_h
+            self.last_vertical_scroll = current_v
+            # Emit transform_changed signal to update overlay positions
+            # Use QTimer to batch rapid scrollbar changes
             QTimer.singleShot(10, lambda: self.transform_changed.emit())
     
     def resizeEvent(self, event) -> None:
