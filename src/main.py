@@ -214,6 +214,10 @@ class DICOMViewerApp(QObject):
         
         # Arrow key navigation from image viewer
         self.image_viewer.arrow_key_pressed.connect(self._on_arrow_key_pressed)
+        
+        # Overlay font size and color changes
+        self.main_window.overlay_font_size_changed.connect(self._on_overlay_font_size_changed)
+        self.main_window.overlay_font_color_changed.connect(self._on_overlay_font_color_changed)
     
     def _open_files(self) -> None:
         """Handle open files request."""
@@ -450,12 +454,10 @@ class DICOMViewerApp(QObject):
             # Calculate pixel value range for window/level controls
             pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(dataset)
             if pixel_min is not None and pixel_max is not None:
-                # Set ranges based on actual pixel values
-                # Add some margin for window center range
-                center_range = (pixel_min - (pixel_max - pixel_min) * 0.1, 
-                              pixel_max + (pixel_max - pixel_min) * 0.1)
-                # Width range from 1 to 2x the pixel range
-                width_range = (1.0, max(1.0, (pixel_max - pixel_min) * 2.0))
+                # Set ranges based on actual pixel values (no margins)
+                center_range = (pixel_min, pixel_max)
+                # Width range from 1 to the pixel range (not 2x)
+                width_range = (1.0, max(1.0, pixel_max - pixel_min))
                 self.window_level_controls.set_ranges(center_range, width_range)
             
             # Update window/level controls
@@ -761,6 +763,50 @@ class DICOMViewerApp(QObject):
         elif direction == -1:
             # Down arrow: previous slice
             self.slice_navigator.previous_slice()
+    
+    def _on_overlay_font_size_changed(self, font_size: int) -> None:
+        """
+        Handle overlay font size change from toolbar.
+        
+        Args:
+            font_size: New font size in points
+        """
+        # Update overlay manager
+        self.overlay_manager.set_font_size(font_size)
+        
+        # Recreate overlay if we have a current dataset
+        if self.current_studies and self.current_series_uid:
+            datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
+            if self.current_slice_index < len(datasets):
+                dataset = datasets[self.current_slice_index]
+                parser = DICOMParser(dataset)
+                self.overlay_manager.create_overlay_items(
+                    self.image_viewer.scene,
+                    parser
+                )
+    
+    def _on_overlay_font_color_changed(self, r: int, g: int, b: int) -> None:
+        """
+        Handle overlay font color change from toolbar.
+        
+        Args:
+            r: Red component (0-255)
+            g: Green component (0-255)
+            b: Blue component (0-255)
+        """
+        # Update overlay manager
+        self.overlay_manager.set_font_color(r, g, b)
+        
+        # Recreate overlay if we have a current dataset
+        if self.current_studies and self.current_series_uid:
+            datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
+            if self.current_slice_index < len(datasets):
+                dataset = datasets[self.current_slice_index]
+                parser = DICOMParser(dataset)
+                self.overlay_manager.create_overlay_items(
+                    self.image_viewer.scene,
+                    parser
+                )
     
     def _on_scene_selection_changed(self) -> None:
         """Handle scene selection change (e.g., when ROI is moved)."""

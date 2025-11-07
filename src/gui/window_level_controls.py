@@ -58,10 +58,13 @@ class WindowLevelControls(QWidget):
         layout.setContentsMargins(5, 5, 5, 5)
         
         # Window Center
-        center_layout = QHBoxLayout()
+        center_layout = QVBoxLayout()
+        
+        # Row 1: Label and Spinbox (horizontal)
+        center_row1 = QHBoxLayout()
         center_label = QLabel("Window Center:")
         center_label.setMinimumWidth(100)
-        center_layout.addWidget(center_label)
+        center_row1.addWidget(center_label)
         
         self.center_spinbox = QDoubleSpinBox()
         self.center_spinbox.setRange(*self.center_range)
@@ -69,25 +72,29 @@ class WindowLevelControls(QWidget):
         self.center_spinbox.setDecimals(1)
         self.center_spinbox.setSingleStep(1.0)  # Step size for up/down buttons
         self.center_spinbox.valueChanged.connect(self._on_center_changed)
-        center_layout.addWidget(self.center_spinbox)
+        center_row1.addWidget(self.center_spinbox)
+        center_row1.addStretch()  # Push label and spinbox to the left
+        center_layout.addLayout(center_row1)
         
+        # Row 2: Slider (full width, below)
         self.center_slider = QSlider(Qt.Orientation.Horizontal)
         self.center_slider.setRange(0, 1000)
         self.center_slider.setValue(500)
-        self.center_slider.setMinimumWidth(150)  # Ensure slider is visible
-        # Set size policy to prevent slider from expanding beyond available space
+        # Use Expanding size policy to fill available width
         self.center_slider.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        self.center_slider.setMaximumWidth(300)  # Maximum width constraint
         self.center_slider.valueChanged.connect(self._on_center_slider_changed)
         center_layout.addWidget(self.center_slider)
         
         layout.addLayout(center_layout)
         
         # Window Width
-        width_layout = QHBoxLayout()
+        width_layout = QVBoxLayout()
+        
+        # Row 1: Label and Spinbox (horizontal)
+        width_row1 = QHBoxLayout()
         width_label = QLabel("Window Width:")
         width_label.setMinimumWidth(100)
-        width_layout.addWidget(width_label)
+        width_row1.addWidget(width_label)
         
         self.width_spinbox = QDoubleSpinBox()
         self.width_spinbox.setRange(*self.width_range)
@@ -95,15 +102,16 @@ class WindowLevelControls(QWidget):
         self.width_spinbox.setDecimals(1)
         self.width_spinbox.setSingleStep(1.0)  # Step size for up/down buttons
         self.width_spinbox.valueChanged.connect(self._on_width_changed)
-        width_layout.addWidget(self.width_spinbox)
+        width_row1.addWidget(self.width_spinbox)
+        width_row1.addStretch()  # Push label and spinbox to the left
+        width_layout.addLayout(width_row1)
         
+        # Row 2: Slider (full width, below)
         self.width_slider = QSlider(Qt.Orientation.Horizontal)
         self.width_slider.setRange(1, 1000)
         self.width_slider.setValue(100)
-        self.width_slider.setMinimumWidth(150)  # Ensure slider is visible
-        # Set size policy to prevent slider from expanding beyond available space
+        # Use Expanding size policy to fill available width
         self.width_slider.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        self.width_slider.setMaximumWidth(300)  # Maximum width constraint
         self.width_slider.valueChanged.connect(self._on_width_slider_changed)
         width_layout.addWidget(self.width_slider)
         
