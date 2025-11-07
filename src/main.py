@@ -537,7 +537,15 @@ class DICOMViewerApp(QObject):
                 self.current_series_identifier = series_identifier
             
             # Convert to image
-            image = self.dicom_processor.dataset_to_image(dataset)
+            # If same series and we have preserved window/level values, use them
+            if is_same_series and self.current_window_center is not None and self.current_window_width is not None:
+                image = self.dicom_processor.dataset_to_image(
+                    dataset,
+                    window_center=self.current_window_center,
+                    window_width=self.current_window_width
+                )
+            else:
+                image = self.dicom_processor.dataset_to_image(dataset)
             if image is None:
                 return
             
@@ -576,10 +584,11 @@ class DICOMViewerApp(QObject):
             
             # Update window/level controls
             if is_new_study_series and stored_window_center is not None and stored_window_width is not None:
-                # Use stored defaults for new series
+                # New series - use stored defaults
                 self.window_level_controls.set_window_level(stored_window_center, stored_window_width, block_signals=True)
                 self.current_window_center = stored_window_center
                 self.current_window_width = stored_window_width
+                self.window_level_user_modified = False  # Reset flag for new series
                 # Store defaults for this series
                 self.series_defaults[series_identifier] = {
                     'window_center': stored_window_center,
@@ -588,11 +597,13 @@ class DICOMViewerApp(QObject):
                     'h_scroll': stored_h_scroll,
                     'v_scroll': stored_v_scroll
                 }
-            elif self.window_level_user_modified and self.current_window_center is not None and self.current_window_width is not None:
-                # Use preserved window/level values (user modified)
+            elif is_same_series and self.current_window_center is not None and self.current_window_width is not None:
+                # Same series - preserve existing window/level values (whether user-modified or not)
+                # Update UI controls to reflect the preserved values
                 self.window_level_controls.set_window_level(self.current_window_center, self.current_window_width, block_signals=True)
+                # Do NOT reset window_level_user_modified flag - preserve it
             else:
-                # Use values from dataset or calculate defaults
+                # First time displaying or no existing values - use values from dataset or calculate defaults
                 wc, ww = self.dicom_processor.get_window_level_from_dataset(dataset)
                 if wc is not None and ww is not None:
                     self.window_level_controls.set_window_level(wc, ww, block_signals=True)
@@ -833,6 +844,10 @@ class DICOMViewerApp(QObject):
                     self.image_viewer.scene.removeItem(item)
         
         # Add ROIs for current slice to scene if not already there
+        # If no ROIs or no selected ROI, clear statistics
+        if not rois or not self.roi_manager.get_selected_roi():
+            self.roi_statistics_panel.clear_statistics()
+        
         for roi in rois:
             if roi.item.scene() != self.image_viewer.scene:
                 self.image_viewer.scene.addItem(roi.item)
@@ -1262,6 +1277,9 @@ class DICOMViewerApp(QObject):
             
             # Update ROI list panel
             self.roi_list_panel.update_roi_list(slice_index)
+            
+            # Clear ROI statistics when changing slices
+            self.roi_statistics_panel.clear_statistics()
             
             # Display ROIs for this slice
             self._display_rois_for_slice(slice_index)

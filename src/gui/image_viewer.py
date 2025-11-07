@@ -193,12 +193,12 @@ class ImageViewer(QGraphicsView):
         # Store current view state if preserving
         if preserve_view and self.image_item is not None:
             saved_zoom = self.current_zoom
-            saved_h_scroll = self.horizontalScrollBar().value()
-            saved_v_scroll = self.verticalScrollBar().value()
+            # Calculate viewport center in scene coordinates BEFORE changing anything
+            viewport_center_viewport = QPointF(self.viewport().width() / 2.0, self.viewport().height() / 2.0)
+            saved_scene_center = self.mapToScene(viewport_center_viewport.toPoint())
         else:
             saved_zoom = None
-            saved_h_scroll = None
-            saved_v_scroll = None
+            saved_scene_center = None
         
         # Convert PIL Image to QPixmap
         if image.mode == 'L':
@@ -245,13 +245,13 @@ class ImageViewer(QGraphicsView):
             self.scale(saved_zoom, saved_zoom)
             self.current_zoom = saved_zoom
             
-            # Update scrollbar ranges first, then restore positions
-            # Need to wait for scene to update, so use QTimer
-            QTimer.singleShot(10, lambda: (
-                self._update_scrollbar_ranges(),
-                self.horizontalScrollBar().setValue(saved_h_scroll),
-                self.verticalScrollBar().setValue(saved_v_scroll)
-            ))
+            # Update scrollbar ranges first (synchronously)
+            self._update_scrollbar_ranges()
+            
+            # Restore viewport center using centerOn() with saved scene coordinates
+            # This maintains the same visual position regardless of scene rect changes
+            if saved_scene_center is not None:
+                self.centerOn(saved_scene_center)
             
             self.last_transform = self.transform()
             self.zoom_changed.emit(self.current_zoom)
@@ -291,11 +291,36 @@ class ImageViewer(QGraphicsView):
         self._update_scrollbar_ranges(center_image=True)
     
     def zoom_in(self) -> None:
-        """Zoom in on the image."""
+        """Zoom in on the image, centered on viewport center."""
+        if self.image_item is None:
+            return
+        
+        # Get viewport center
+        viewport_center = QPointF(self.viewport().width() / 2.0, self.viewport().height() / 2.0)
+        
+        # Map viewport center to scene coordinates before zoom
+        scene_center = self.mapToScene(viewport_center.toPoint())
+        
+        # Apply zoom
         self.scale(self.zoom_factor, self.zoom_factor)
         self.current_zoom *= self.zoom_factor
         if self.current_zoom > self.max_zoom:
             self.current_zoom = self.max_zoom
+            # Recalculate if we hit max zoom
+            current_scale = self.transform().m11()
+            target_scale = self.max_zoom
+            scale_factor = target_scale / current_scale
+            self.scale(scale_factor, scale_factor)
+        
+        # Map viewport center to scene coordinates after zoom
+        new_scene_center = self.mapToScene(viewport_center.toPoint())
+        
+        # Calculate translation needed to keep the same point under viewport center
+        delta = scene_center - new_scene_center
+        
+        # Translate to maintain viewport center
+        self.translate(delta.x(), delta.y())
+        
         self.zoom_changed.emit(self.current_zoom)
         self._check_transform_changed()
         # Re-expand scene rect if ScrollHandDrag is active (viewport size in scene coords changed)
@@ -305,11 +330,36 @@ class ImageViewer(QGraphicsView):
         QTimer.singleShot(10, self._update_scrollbar_ranges)
     
     def zoom_out(self) -> None:
-        """Zoom out from the image."""
+        """Zoom out from the image, centered on viewport center."""
+        if self.image_item is None:
+            return
+        
+        # Get viewport center
+        viewport_center = QPointF(self.viewport().width() / 2.0, self.viewport().height() / 2.0)
+        
+        # Map viewport center to scene coordinates before zoom
+        scene_center = self.mapToScene(viewport_center.toPoint())
+        
+        # Apply zoom
         self.scale(1.0 / self.zoom_factor, 1.0 / self.zoom_factor)
         self.current_zoom /= self.zoom_factor
         if self.current_zoom < self.min_zoom:
             self.current_zoom = self.min_zoom
+            # Recalculate if we hit min zoom
+            current_scale = self.transform().m11()
+            target_scale = self.min_zoom
+            scale_factor = target_scale / current_scale
+            self.scale(scale_factor, scale_factor)
+        
+        # Map viewport center to scene coordinates after zoom
+        new_scene_center = self.mapToScene(viewport_center.toPoint())
+        
+        # Calculate translation needed to keep the same point under viewport center
+        delta = scene_center - new_scene_center
+        
+        # Translate to maintain viewport center
+        self.translate(delta.x(), delta.y())
+        
         self.zoom_changed.emit(self.current_zoom)
         self._check_transform_changed()
         # Re-expand scene rect if ScrollHandDrag is active (viewport size in scene coords changed)
