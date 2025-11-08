@@ -748,12 +748,20 @@ class ImageViewer(QGraphicsView):
                         
                         context_menu.addSeparator()
                         
-                        # Use Rescaled Values toggle
+                        # Use Raw Pixel Values action
+                        use_raw_action = context_menu.addAction("Use Raw Pixel Values")
+                        use_raw_action.setCheckable(True)
+                        use_raw_action.setChecked(not self.use_rescaled_values)  # Checked when using raw values
+                        use_raw_action.triggered.connect(
+                            lambda: self.context_menu_rescale_toggle_changed.emit(False)
+                        )
+                        
+                        # Use Rescaled Values action
                         use_rescaled_action = context_menu.addAction("Use Rescaled Values")
                         use_rescaled_action.setCheckable(True)
-                        use_rescaled_action.setChecked(self.use_rescaled_values)
+                        use_rescaled_action.setChecked(self.use_rescaled_values)  # Checked when using rescaled values
                         use_rescaled_action.triggered.connect(
-                            lambda checked: self.context_menu_rescale_toggle_changed.emit(checked)
+                            lambda: self.context_menu_rescale_toggle_changed.emit(True)
                         )
                         
                         context_menu.exec(event.globalPosition().toPoint())

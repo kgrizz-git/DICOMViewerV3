@@ -144,19 +144,78 @@ class DICOMProcessor:
         return normalized
     
     @staticmethod
-    def get_window_level_from_dataset(dataset: Dataset) -> Tuple[Optional[float], Optional[float]]:
+    def convert_window_level_rescaled_to_raw(center: float, width: float, 
+                                            slope: float, intercept: float) -> Tuple[float, float]:
+        """
+        Convert window/level values from rescaled to raw pixel values.
+        
+        Args:
+            center: Window center in rescaled units
+            width: Window width in rescaled units
+            slope: Rescale slope
+            intercept: Rescale intercept
+            
+        Returns:
+            Tuple of (raw_center, raw_width)
+        """
+        # Formula: raw = (rescaled - intercept) / slope
+        # For center: raw_center = (rescaled_center - intercept) / slope
+        # For width: raw_width = rescaled_width / slope (width scales proportionally)
+        if slope == 0.0:
+            # Edge case: slope is zero, cannot convert
+            return center, width
+        
+        raw_center = (center - intercept) / slope
+        raw_width = width / slope
+        
+        return raw_center, raw_width
+    
+    @staticmethod
+    def convert_window_level_raw_to_rescaled(center: float, width: float,
+                                             slope: float, intercept: float) -> Tuple[float, float]:
+        """
+        Convert window/level values from raw to rescaled pixel values.
+        
+        Args:
+            center: Window center in raw units
+            width: Window width in raw units
+            slope: Rescale slope
+            intercept: Rescale intercept
+            
+        Returns:
+            Tuple of (rescaled_center, rescaled_width)
+        """
+        # Formula: rescaled = raw * slope + intercept
+        # For center: rescaled_center = raw_center * slope + intercept
+        # For width: rescaled_width = raw_width * slope (width scales proportionally)
+        rescaled_center = center * slope + intercept
+        rescaled_width = width * slope
+        
+        return rescaled_center, rescaled_width
+    
+    @staticmethod
+    def get_window_level_from_dataset(dataset: Dataset, 
+                                     rescale_slope: Optional[float] = None,
+                                     rescale_intercept: Optional[float] = None) -> Tuple[Optional[float], Optional[float], bool]:
         """
         Get window center and width from DICOM dataset.
         
+        If rescale parameters are provided and window/level comes from DICOM metadata tags,
+        assume the values are in rescaled units.
+        
         Args:
             dataset: pydicom Dataset
+            rescale_slope: Optional rescale slope
+            rescale_intercept: Optional rescale intercept
             
         Returns:
-            Tuple of (window_center, window_width) or (None, None)
+            Tuple of (window_center, window_width, is_rescaled)
+            is_rescaled is True if rescale params exist and window/level came from DICOM tags (not calculated)
         """
         try:
             window_center = None
             window_width = None
+            from_dicom_tags = False  # Track if values came from DICOM tags
             
             # Try to get from WindowCenter tag
             if hasattr(dataset, 'WindowCenter'):
@@ -165,6 +224,7 @@ class DICOMProcessor:
                     window_center = float(wc[0])
                 else:
                     window_center = float(wc)
+                from_dicom_tags = True
             
             # Try to get from WindowWidth tag
             if hasattr(dataset, 'WindowWidth'):
@@ -173,6 +233,7 @@ class DICOMProcessor:
                     window_width = float(ww[0])
                 else:
                     window_width = float(ww)
+                from_dicom_tags = True
             
             # If not found, try to calculate from pixel data
             if window_center is None or window_width is None:
@@ -184,10 +245,19 @@ class DICOMProcessor:
                         window_center = (pixel_min + pixel_max) / 2.0
                     if window_width is None:
                         window_width = pixel_max - pixel_min
+                # Calculated values are not from DICOM tags, so not rescaled
+                from_dicom_tags = False
             
-            return window_center, window_width
+            # Determine if values are in rescaled units
+            # Only if values came from DICOM tags AND rescale parameters exist
+            is_rescaled = (from_dicom_tags and 
+                          rescale_slope is not None and 
+                          rescale_intercept is not None and
+                          rescale_slope != 0.0)
+            
+            return window_center, window_width, is_rescaled
         except Exception:
-            return None, None
+            return None, None, False
     
     @staticmethod
     def dataset_to_image(dataset: Dataset, window_center: Optional[float] = None,
@@ -210,7 +280,17 @@ class DICOMProcessor:
         
         # Get window/level from dataset if not provided
         if window_center is None or window_width is None:
-            ds_wc, ds_ww = DICOMProcessor.get_window_level_from_dataset(dataset)
+            # Get rescale parameters if apply_rescale is True
+            rescale_slope_for_wl = None
+            rescale_intercept_for_wl = None
+            if apply_rescale:
+                rescale_slope_for_wl, rescale_intercept_for_wl, _ = DICOMProcessor.get_rescale_parameters(dataset)
+            
+            ds_wc, ds_ww, _ = DICOMProcessor.get_window_level_from_dataset(
+                dataset,
+                rescale_slope=rescale_slope_for_wl,
+                rescale_intercept=rescale_intercept_for_wl
+            )
             if window_center is None:
                 window_center = ds_wc
             if window_width is None:

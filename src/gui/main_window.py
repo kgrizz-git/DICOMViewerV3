@@ -273,9 +273,9 @@ class MainWindow(QMainWindow):
         
         toolbar.addSeparator()
         
-        # Use Rescaled Values toggle button
+        # Use Rescaled Values toggle button (non-checkable, text alternates)
         self.use_rescaled_values_action = QAction("Use Rescaled Values", self)
-        self.use_rescaled_values_action.setCheckable(True)
+        self.use_rescaled_values_action.setCheckable(False)  # Not checkable, text shows current state
         self.use_rescaled_values_action.setToolTip("Toggle between rescaled and raw pixel values")
         self.use_rescaled_values_action.triggered.connect(self._on_rescale_toggle_changed)
         toolbar.addAction(self.use_rescaled_values_action)
@@ -402,7 +402,9 @@ class MainWindow(QMainWindow):
                          "- View DICOM images with zoom and pan\n"
                          "- Draw ROIs and measure distances\n"
                          "- Customizable metadata overlays\n"
-                         "- Export to multiple formats")
+                         "- Export to multiple formats\n\n"
+                         "Made by Kevin Grizzard.\n"
+                         "Available at https://github.com/kgrizz-git/DICOMViewerV2.")
     
     def _on_mouse_mode_changed(self, mode: str) -> None:
         """
@@ -493,18 +495,29 @@ class MainWindow(QMainWindow):
     
     def _on_rescale_toggle_changed(self) -> None:
         """Handle rescale toggle button click."""
-        # Emit signal with current checked state
-        self.rescale_toggle_changed.emit(self.use_rescaled_values_action.isChecked())
+        # Determine new state based on current text
+        # If text is "Use Raw Pixel Values", we're currently using rescaled, so toggle to raw (False)
+        # If text is "Use Rescaled Values", we're currently using raw, so toggle to rescaled (True)
+        current_text = self.use_rescaled_values_action.text()
+        new_state = (current_text == "Use Rescaled Values")  # True if switching to rescaled, False if switching to raw
+        # Emit signal with new state
+        self.rescale_toggle_changed.emit(new_state)
     
     def set_rescale_toggle_state(self, checked: bool) -> None:
         """
-        Set the rescale toggle button state.
+        Set the rescale toggle button text based on current state.
         
         Args:
-            checked: True to check the button, False to uncheck
+            checked: True if using rescaled values, False if using raw values
         """
         self.use_rescaled_values_action.blockSignals(True)
-        self.use_rescaled_values_action.setChecked(checked)
+        # Update button text based on current state
+        # When checked=True (using rescaled), show "Use Raw Pixel Values"
+        # When checked=False (using raw), show "Use Rescaled Values"
+        if checked:
+            self.use_rescaled_values_action.setText("Use Raw Pixel Values")
+        else:
+            self.use_rescaled_values_action.setText("Use Rescaled Values")
         self.use_rescaled_values_action.blockSignals(False)
     
     def _on_prev_series(self) -> None:
