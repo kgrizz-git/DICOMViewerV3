@@ -764,8 +764,7 @@ class ImageViewer(QGraphicsView):
                         
                         context_menu.addSeparator()
                         
-                        # Left Mouse Button submenu
-                        left_mouse_menu = context_menu.addMenu("Left Mouse Button")
+                        # Left Mouse Button actions (moved to first level, grouped with separators)
                         left_mouse_actions = {
                             "Select": "select",
                             "Ellipse ROI": "roi_ellipse",
@@ -776,7 +775,7 @@ class ImageViewer(QGraphicsView):
                             "Window/Level ROI": "auto_window_level"
                         }
                         for action_text, mode in left_mouse_actions.items():
-                            action = left_mouse_menu.addAction(action_text)
+                            action = context_menu.addAction(action_text)
                             action.setCheckable(True)
                             # Check the current mode
                             if self.mouse_mode == mode:
