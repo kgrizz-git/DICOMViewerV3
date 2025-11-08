@@ -13,6 +13,10 @@ Outputs:
     
 Requirements:
     - PySide6 for application framework
+    - pydicom for DICOM file handling
+    - PIL/Pillow for image processing
+    - numpy for array operations
+    - openpyxl for Excel export (tag export feature)
     - All other application modules
 """
 
@@ -196,6 +200,9 @@ class DICOMViewerApp(QObject):
         
         # Quick Start Guide
         self.main_window.quick_start_guide_requested.connect(self._open_quick_start_guide)
+        
+        # Tag Export
+        self.main_window.tag_export_requested.connect(self._open_tag_export)
         
         # ROI drawing signals
         self.image_viewer.roi_drawing_started.connect(self._on_roi_drawing_started)
@@ -582,8 +589,11 @@ class DICOMViewerApp(QObject):
             stored_v_scroll = None
             
             if is_new_study_series:
-                # Check if we have stored defaults for this series
-                if series_identifier in self.series_defaults:
+                # Check if we have stored defaults for this series WITH window/level values
+                # Only restore if window_center and window_width actually exist (not just use_rescaled_values)
+                if (series_identifier in self.series_defaults and 
+                    'window_center' in self.series_defaults[series_identifier] and
+                    self.series_defaults[series_identifier].get('window_center') is not None):
                     # Restore stored defaults
                     defaults = self.series_defaults[series_identifier]
                     stored_zoom = defaults.get('zoom')
@@ -704,14 +714,16 @@ class DICOMViewerApp(QObject):
                 self.current_window_center = stored_window_center
                 self.current_window_width = stored_window_width
                 self.window_level_user_modified = False  # Reset flag for new series
-                # Store defaults for this series
-                self.series_defaults[series_identifier] = {
+                # Store/update defaults for this series (preserve existing values)
+                if series_identifier not in self.series_defaults:
+                    self.series_defaults[series_identifier] = {}
+                self.series_defaults[series_identifier].update({
                     'window_center': stored_window_center,
                     'window_width': stored_window_width,
                     'zoom': stored_zoom,
                     'h_scroll': stored_h_scroll,
                     'v_scroll': stored_v_scroll
-                }
+                })
             elif is_same_series and self.current_window_center is not None and self.current_window_width is not None:
                 # Same series - preserve existing window/level values (whether user-modified or not)
                 # Update UI controls to reflect the preserved values
@@ -910,15 +922,15 @@ class DICOMViewerApp(QObject):
                     'use_rescaled_values': self.use_rescaled_values
                 }
             else:
-                # Entry already exists (use_rescaled_values was stored earlier),
-                # just update the other fields without overwriting use_rescaled_values
-                defaults = self.series_defaults[self.current_series_identifier]
-                defaults['window_center'] = self.current_window_center
-                defaults['window_width'] = self.current_window_width
-                defaults['zoom'] = self.image_viewer.current_zoom
-                defaults['h_scroll'] = self.image_viewer.horizontalScrollBar().value()
-                defaults['v_scroll'] = self.image_viewer.verticalScrollBar().value()
-                defaults['scene_center'] = scene_center  # Store scene center point in scene coordinates
+                # Entry already exists - update fields while preserving existing values
+                self.series_defaults[self.current_series_identifier].update({
+                    'window_center': self.current_window_center,
+                    'window_width': self.current_window_width,
+                    'zoom': self.image_viewer.current_zoom,
+                    'h_scroll': self.image_viewer.horizontalScrollBar().value(),
+                    'v_scroll': self.image_viewer.verticalScrollBar().value(),
+                    'scene_center': scene_center
+                })
                 # Don't overwrite use_rescaled_values - it was already set to the initial default
     
     def _reset_view(self) -> None:
@@ -1177,6 +1189,22 @@ class DICOMViewerApp(QObject):
         """Handle Quick Start Guide dialog request."""
         from gui.dialogs.quick_start_guide_dialog import QuickStartGuideDialog
         dialog = QuickStartGuideDialog(self.config_manager, self.main_window)
+        dialog.exec()
+    
+    def _open_tag_export(self) -> None:
+        """Handle Tag Export dialog request."""
+        # Check if any studies are loaded
+        if not self.current_studies:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(
+                self.main_window,
+                "No Data Loaded",
+                "Please load DICOM files before exporting tags."
+            )
+            return
+        
+        from gui.dialogs.tag_export_dialog import TagExportDialog
+        dialog = TagExportDialog(self.current_studies, self.main_window)
         dialog.exec()
     
     def _on_overlay_config_applied(self) -> None:

@@ -62,6 +62,7 @@ class MainWindow(QMainWindow):
     rescale_toggle_changed = Signal(bool)  # Emitted when rescale toggle changes (True = use rescaled values)
     clear_measurements_requested = Signal()  # Emitted when clear measurements is requested
     quick_start_guide_requested = Signal()  # Emitted when Quick Start Guide is requested
+    tag_export_requested = Signal()  # Emitted when tag export is requested
     
     def __init__(self, config_manager: Optional[ConfigManager] = None):
         """
@@ -169,6 +170,13 @@ class MainWindow(QMainWindow):
         overlay_config_action.setShortcut(QKeySequence("Ctrl+O"))
         overlay_config_action.triggered.connect(self.overlay_config_requested.emit)
         tools_menu.addAction(overlay_config_action)
+        
+        tools_menu.addSeparator()
+        
+        # Tag Export action
+        tag_export_action = QAction("Export &Tags to Excel...", self)
+        tag_export_action.triggered.connect(self.tag_export_requested.emit)
+        tools_menu.addAction(tag_export_action)
         
         # Help menu
         help_menu = menubar.addMenu("&Help")
