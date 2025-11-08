@@ -239,6 +239,7 @@ class DICOMViewerApp(QObject):
         
         # Series navigation
         self.image_viewer.series_navigation_requested.connect(self._on_series_navigation_requested)
+        self.main_window.series_navigation_requested.connect(self._on_series_navigation_requested)
         
         # Overlay font size and color changes
         self.main_window.overlay_font_size_changed.connect(self._on_overlay_font_size_changed)
@@ -461,10 +462,31 @@ class DICOMViewerApp(QObject):
         # Note: We keep series_defaults to preserve across file loads if desired
         # If you want to clear them, uncomment: self.series_defaults.clear()
         
-        # Get first study and series
+        # Get first study
         study_uid = list(self.current_studies.keys())[0]
-        series_uid = list(self.current_studies[study_uid].keys())[0]
-        datasets = self.current_studies[study_uid][series_uid]
+        
+        # Get all series for this study and sort by SeriesNumber
+        series_list = []
+        for series_uid, datasets in self.current_studies[study_uid].items():
+            if datasets:
+                # Extract SeriesNumber from first dataset
+                first_dataset = datasets[0]
+                series_number = getattr(first_dataset, 'SeriesNumber', None)
+                # Convert to int if possible, otherwise use 0 (or a large number to put at end)
+                try:
+                    series_num = int(series_number) if series_number is not None else 0
+                except (ValueError, TypeError):
+                    series_num = 0
+                series_list.append((series_num, series_uid, datasets))
+        
+        # Sort by SeriesNumber (ascending)
+        series_list.sort(key=lambda x: x[0])
+        
+        # Select series with lowest SeriesNumber (first in sorted list)
+        if not series_list:
+            return
+        
+        _, series_uid, datasets = series_list[0]
         
         if not datasets:
             return
@@ -661,9 +683,16 @@ class DICOMViewerApp(QObject):
             
             # Update overlay
             parser = DICOMParser(dataset)
+            # Get total slice count for current series
+            total_slices = 0
+            if self.current_studies and self.current_study_uid and self.current_series_uid:
+                if (self.current_study_uid in self.current_studies and 
+                    self.current_series_uid in self.current_studies[self.current_study_uid]):
+                    total_slices = len(self.current_studies[self.current_study_uid][self.current_series_uid])
             self.overlay_manager.create_overlay_items(
                 self.image_viewer.scene,
-                parser
+                parser,
+                total_slices=total_slices if total_slices > 0 else None
             )
             
             # Display ROIs for current slice
@@ -831,9 +860,12 @@ class DICOMViewerApp(QObject):
                         self.image_viewer.set_image(image, preserve_view=True)
                         # Recreate overlay
                         parser = DICOMParser(dataset)
+                        # Get total slice count
+                        total_slices = len(datasets) if datasets else 0
                         self.overlay_manager.create_overlay_items(
                             self.image_viewer.scene,
-                            parser
+                            parser,
+                            total_slices=total_slices if total_slices > 0 else None
                         )
     
     def _display_rois_for_slice(self, dataset) -> None:
@@ -931,9 +963,11 @@ class DICOMViewerApp(QObject):
             if self.current_slice_index < len(datasets):
                 dataset = datasets[self.current_slice_index]
                 parser = DICOMParser(dataset)
+                total_slices = len(datasets)
                 self.overlay_manager.create_overlay_items(
                     self.image_viewer.scene,
-                    parser
+                    parser,
+                    total_slices=total_slices if total_slices > 0 else None
                 )
     
     def _on_settings_applied(self) -> None:
@@ -950,9 +984,11 @@ class DICOMViewerApp(QObject):
             if self.current_slice_index < len(datasets):
                 dataset = datasets[self.current_slice_index]
                 parser = DICOMParser(dataset)
+                total_slices = len(datasets)
                 self.overlay_manager.create_overlay_items(
                     self.image_viewer.scene,
-                    parser
+                    parser,
+                    total_slices=total_slices if total_slices > 0 else None
                 )
     
     def _on_window_changed(self, center: float, width: float) -> None:
@@ -983,9 +1019,11 @@ class DICOMViewerApp(QObject):
                     self.image_viewer.set_image(image, preserve_view=True)
                     # Recreate overlay to ensure it stays on top
                     parser = DICOMParser(dataset)
+                    total_slices = len(datasets)
                     self.overlay_manager.create_overlay_items(
                         self.image_viewer.scene,
-                        parser
+                        parser,
+                        total_slices=total_slices if total_slices > 0 else None
                     )
     
     def _on_mouse_mode_changed(self, mode: str) -> None:
@@ -1307,33 +1345,51 @@ class DICOMViewerApp(QObject):
         
         # Get all series for current study
         study_series = self.current_studies[self.current_study_uid]
-        series_uids = list(study_series.keys())
         
         # Check if there are multiple series
-        if len(series_uids) <= 1:
+        if len(study_series) <= 1:
             return  # No navigation needed if only one series
         
-        # Find current series index
-        try:
-            current_index = series_uids.index(self.current_series_uid)
-        except ValueError:
+        # Build list of series with SeriesNumber for sorting
+        series_list = []
+        for series_uid, datasets in study_series.items():
+            if datasets:
+                # Extract SeriesNumber from first dataset
+                first_dataset = datasets[0]
+                series_number = getattr(first_dataset, 'SeriesNumber', None)
+                # Convert to int if possible, otherwise use 0
+                try:
+                    series_num = int(series_number) if series_number is not None else 0
+                except (ValueError, TypeError):
+                    series_num = 0
+                series_list.append((series_num, series_uid, datasets))
+        
+        # Sort by SeriesNumber (ascending)
+        series_list.sort(key=lambda x: x[0])
+        
+        # Find current series in sorted list
+        current_index = None
+        for idx, (_, series_uid, _) in enumerate(series_list):
+            if series_uid == self.current_series_uid:
+                current_index = idx
+                break
+        
+        if current_index is None:
             return  # Current series not found
         
         # Calculate new series index
         new_index = current_index + direction
         
         # Clamp to valid range
-        if new_index < 0 or new_index >= len(series_uids):
+        if new_index < 0 or new_index >= len(series_list):
             return  # Already at first or last series
         
-        # Get new series UID
-        new_series_uid = series_uids[new_index]
+        # Get new series UID and datasets
+        _, new_series_uid, datasets = series_list[new_index]
         
         # Switch to new series
         self.current_series_uid = new_series_uid
         
-        # Get first dataset of new series
-        datasets = study_series[new_series_uid]
         if not datasets:
             return
         
@@ -1365,9 +1421,11 @@ class DICOMViewerApp(QObject):
             if self.current_slice_index < len(datasets):
                 dataset = datasets[self.current_slice_index]
                 parser = DICOMParser(dataset)
+                total_slices = len(datasets)
                 self.overlay_manager.create_overlay_items(
                     self.image_viewer.scene,
-                    parser
+                    parser,
+                    total_slices=total_slices if total_slices > 0 else None
                 )
     
     def _on_overlay_font_color_changed(self, r: int, g: int, b: int) -> None:
@@ -1388,9 +1446,11 @@ class DICOMViewerApp(QObject):
             if self.current_slice_index < len(datasets):
                 dataset = datasets[self.current_slice_index]
                 parser = DICOMParser(dataset)
+                total_slices = len(datasets)
                 self.overlay_manager.create_overlay_items(
                     self.image_viewer.scene,
-                    parser
+                    parser,
+                    total_slices=total_slices if total_slices > 0 else None
                 )
     
     def _on_scene_selection_changed(self) -> None:

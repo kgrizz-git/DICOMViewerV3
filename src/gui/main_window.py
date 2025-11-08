@@ -57,6 +57,7 @@ class MainWindow(QMainWindow):
     overlay_font_color_changed = Signal(int, int, int)  # Emitted when overlay font color changes (r, g, b)
     reset_view_requested = Signal()  # Emitted when reset view is requested
     viewport_resized = Signal()  # Emitted when splitter moves and viewport size changes
+    series_navigation_requested = Signal(int)  # Emitted when series navigation is requested (-1 for prev, 1 for next)
     
     def __init__(self, config_manager: Optional[ConfigManager] = None):
         """
@@ -230,6 +231,19 @@ class MainWindow(QMainWindow):
         reset_view_action.setToolTip("Reset zoom, pan, window center and level to initial values")
         reset_view_action.triggered.connect(self.reset_view_requested.emit)
         toolbar.addAction(reset_view_action)
+        
+        toolbar.addSeparator()
+        
+        # Series navigation buttons
+        self.prev_series_action = QAction("Prev Series", self)
+        self.prev_series_action.setToolTip("Navigate to previous series (left arrow key)")
+        self.prev_series_action.triggered.connect(self._on_prev_series)
+        toolbar.addAction(self.prev_series_action)
+        
+        self.next_series_action = QAction("Next Series", self)
+        self.next_series_action.setToolTip("Navigate to next series (right arrow key)")
+        self.next_series_action.triggered.connect(self._on_next_series)
+        toolbar.addAction(self.next_series_action)
         
         toolbar.addSeparator()
         
@@ -466,6 +480,14 @@ class MainWindow(QMainWindow):
             # Save to config and emit signal
             self.config_manager.set_overlay_font_color(color.red(), color.green(), color.blue())
             self.overlay_font_color_changed.emit(color.red(), color.green(), color.blue())
+    
+    def _on_prev_series(self) -> None:
+        """Handle previous series button click."""
+        self.series_navigation_requested.emit(-1)
+    
+    def _on_next_series(self) -> None:
+        """Handle next series button click."""
+        self.series_navigation_requested.emit(1)
     
     def _update_recent_menu(self) -> None:
         """Update the Recent Files submenu with current recent files."""

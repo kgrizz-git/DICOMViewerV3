@@ -684,6 +684,15 @@ class ImageViewer(QGraphicsView):
                         
                         context_menu.addSeparator()
                         
+                        # Series navigation actions
+                        prev_series_action = context_menu.addAction("Prev Series")
+                        prev_series_action.triggered.connect(lambda: self.series_navigation_requested.emit(-1))
+                        
+                        next_series_action = context_menu.addAction("Next Series")
+                        next_series_action.triggered.connect(lambda: self.series_navigation_requested.emit(1))
+                        
+                        context_menu.addSeparator()
+                        
                         # Left Mouse Button submenu
                         left_mouse_menu = context_menu.addMenu("Left Mouse Button")
                         left_mouse_actions = {
