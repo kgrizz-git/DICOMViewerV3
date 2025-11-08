@@ -197,6 +197,7 @@ class DICOMViewerApp(QObject):
         
         # ROI click signal
         self.image_viewer.roi_clicked.connect(self._on_roi_clicked)
+        self.image_viewer.image_clicked_no_roi.connect(self._on_image_clicked_no_roi)
         
         # ROI delete signal (from right-click context menu)
         self.image_viewer.roi_delete_requested.connect(self._on_roi_delete_requested)
@@ -541,6 +542,18 @@ class DICOMViewerApp(QObject):
                 # Update UI toggle state
                 self.main_window.set_rescale_toggle_state(self.use_rescaled_values)
                 self.image_viewer.set_rescale_toggle_state(self.use_rescaled_values)
+                
+                # Store the default rescale state immediately to ensure it's the initial default,
+                # not a user-modified value (in case user toggles before _store_initial_view_state() is called)
+                if series_identifier and series_identifier not in self.series_defaults:
+                    self.series_defaults[series_identifier] = {
+                        'use_rescaled_values': self.use_rescaled_values
+                    }
+                elif series_identifier and series_identifier in self.series_defaults:
+                    # If series_defaults already exists, ensure use_rescaled_values is set to the default
+                    # (don't overwrite if it was already stored, but set it if missing)
+                    if 'use_rescaled_values' not in self.series_defaults[series_identifier]:
+                        self.series_defaults[series_identifier]['use_rescaled_values'] = self.use_rescaled_values
             
             # If new study/series, check for stored defaults or calculate new ones
             stored_window_center = None
@@ -834,14 +847,27 @@ class DICOMViewerApp(QObject):
             self.initial_window_width = self.current_window_width
         
         # Store per-series defaults if we have a current series identifier
-        if self.current_series_identifier and self.current_series_identifier not in self.series_defaults:
-            self.series_defaults[self.current_series_identifier] = {
-                'window_center': self.current_window_center,
-                'window_width': self.current_window_width,
-                'zoom': self.image_viewer.current_zoom,
-                'h_scroll': self.image_viewer.horizontalScrollBar().value(),
-                'v_scroll': self.image_viewer.verticalScrollBar().value()
-            }
+        if self.current_series_identifier:
+            if self.current_series_identifier not in self.series_defaults:
+                # Create new entry with all defaults
+                self.series_defaults[self.current_series_identifier] = {
+                    'window_center': self.current_window_center,
+                    'window_width': self.current_window_width,
+                    'zoom': self.image_viewer.current_zoom,
+                    'h_scroll': self.image_viewer.horizontalScrollBar().value(),
+                    'v_scroll': self.image_viewer.verticalScrollBar().value(),
+                    'use_rescaled_values': self.use_rescaled_values
+                }
+            else:
+                # Entry already exists (use_rescaled_values was stored earlier),
+                # just update the other fields without overwriting use_rescaled_values
+                defaults = self.series_defaults[self.current_series_identifier]
+                defaults['window_center'] = self.current_window_center
+                defaults['window_width'] = self.current_window_width
+                defaults['zoom'] = self.image_viewer.current_zoom
+                defaults['h_scroll'] = self.image_viewer.horizontalScrollBar().value()
+                defaults['v_scroll'] = self.image_viewer.verticalScrollBar().value()
+                # Don't overwrite use_rescaled_values - it was already set to the initial default
     
     def _reset_view(self) -> None:
         """
@@ -864,6 +890,7 @@ class DICOMViewerApp(QObject):
             reset_v_scroll = defaults.get('v_scroll')
             reset_window_center = defaults.get('window_center')
             reset_window_width = defaults.get('window_width')
+            reset_use_rescaled_values = defaults.get('use_rescaled_values')
         else:
             # Fall back to global initial values
             reset_zoom = self.initial_zoom
@@ -871,64 +898,98 @@ class DICOMViewerApp(QObject):
             reset_v_scroll = self.initial_v_scroll
             reset_window_center = self.initial_window_center
             reset_window_width = self.initial_window_width
+            reset_use_rescaled_values = None
+        
+        # Ensure we have a valid rescale state value - calculate default if missing
+        if reset_use_rescaled_values is None:
+            # Default to True if rescale parameters exist, False otherwise
+            reset_use_rescaled_values = (self.rescale_slope is not None and self.rescale_intercept is not None)
         
         if reset_zoom is None:
             # No reset values available
             return
         
-        # Reset zoom and pan
-        self.image_viewer.resetTransform()
-        self.image_viewer.scale(reset_zoom, reset_zoom)
-        self.image_viewer.current_zoom = reset_zoom
+        # Reset rescale state to default FIRST (before window/level to avoid incorrect conversion)
+        # Always restore rescale state, even if it's the same as current
+        # Restore rescale state directly without converting window/level values
+        # (the stored window/level values are already in the correct units for the restored state)
+        self.use_rescaled_values = reset_use_rescaled_values
+        # Update UI toggle states
+        self.main_window.set_rescale_toggle_state(reset_use_rescaled_values)
+        self.image_viewer.set_rescale_toggle_state(reset_use_rescaled_values)
         
-        # Restore scrollbar positions
-        from PySide6.QtCore import QTimer
-        if reset_h_scroll is not None and reset_v_scroll is not None:
-            QTimer.singleShot(10, lambda: (
-                self.image_viewer.horizontalScrollBar().setValue(reset_h_scroll),
-                self.image_viewer.verticalScrollBar().setValue(reset_v_scroll),
-                self.image_viewer._update_scrollbar_ranges()
-            ))
-        else:
-            QTimer.singleShot(10, lambda: self.image_viewer._update_scrollbar_ranges())
+        # Recalculate pixel value ranges for window/level controls
+        if self.current_dataset is not None:
+            pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(
+                self.current_dataset, apply_rescale=self.use_rescaled_values
+            )
+            if pixel_min is not None and pixel_max is not None:
+                center_range = (pixel_min, pixel_max)
+                width_range = (1.0, max(1.0, pixel_max - pixel_min))
+                self.window_level_controls.set_ranges(center_range, width_range)
+            
+            # Update window/level unit labels
+            unit = self.rescale_type if (self.use_rescaled_values and self.rescale_type) else None
+            self.window_level_controls.set_unit(unit)
         
-        self.image_viewer.last_transform = self.image_viewer.transform()
-        self.image_viewer.zoom_changed.emit(self.image_viewer.current_zoom)
-        
-        # Reset window/level to initial values
+        # Reset window/level to initial values (already in correct units for current rescale state)
         if reset_window_center is not None and reset_window_width is not None:
+            # Get unit for window/level display
+            unit = self.rescale_type if (self.use_rescaled_values and self.rescale_type) else None
             self.window_level_controls.set_window_level(
                 reset_window_center, 
                 reset_window_width, 
-                block_signals=True
+                block_signals=True,
+                unit=unit
             )
             self.current_window_center = reset_window_center
             self.current_window_width = reset_window_width
             self.window_level_user_modified = False
-            
-            # Re-display current slice with reset window/level
-            if self.current_studies and self.current_series_uid:
-                datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
-                if self.current_slice_index < len(datasets):
-                    dataset = datasets[self.current_slice_index]
-                    image = self.dicom_processor.dataset_to_image(
-                        dataset,
-                        window_center=reset_window_center,
-                        window_width=reset_window_width,
-                        apply_rescale=self.use_rescaled_values
+        
+        # Re-display current slice with reset window/level and rescale state
+        if self.current_studies and self.current_series_uid:
+            datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
+            if self.current_slice_index < len(datasets):
+                dataset = datasets[self.current_slice_index]
+                # Use current window/level values (which have been reset)
+                image = self.dicom_processor.dataset_to_image(
+                    dataset,
+                    window_center=self.current_window_center,
+                    window_width=self.current_window_width,
+                    apply_rescale=self.use_rescaled_values
+                )
+                if image:
+                    # Set image first (without preserving view to avoid wrong centering)
+                    self.image_viewer.set_image(image, preserve_view=False)
+                    
+                    # Now set up the view: zoom, transform, and scrollbar positions
+                    # Reset zoom and pan
+                    self.image_viewer.resetTransform()
+                    self.image_viewer.scale(reset_zoom, reset_zoom)
+                    self.image_viewer.current_zoom = reset_zoom
+                    
+                    # Update scrollbar ranges synchronously
+                    self.image_viewer._update_scrollbar_ranges()
+                    
+                    # Set scrollbar positions synchronously
+                    if reset_h_scroll is not None and reset_v_scroll is not None:
+                        self.image_viewer.horizontalScrollBar().setValue(reset_h_scroll)
+                        self.image_viewer.verticalScrollBar().setValue(reset_v_scroll)
+                    
+                    self.image_viewer.last_transform = self.image_viewer.transform()
+                    self.image_viewer.zoom_changed.emit(self.image_viewer.current_zoom)
+                    
+                    # Recreate overlay
+                    parser = DICOMParser(dataset)
+                    # Get total slice count
+                    total_slices = len(datasets) if datasets else 0
+                    self.overlay_manager.create_overlay_items(
+                        self.image_viewer.scene,
+                        parser,
+                        total_slices=total_slices if total_slices > 0 else None
                     )
-                    if image:
-                        # Preserve view when resetting window/level
-                        self.image_viewer.set_image(image, preserve_view=True)
-                        # Recreate overlay
-                        parser = DICOMParser(dataset)
-                        # Get total slice count
-                        total_slices = len(datasets) if datasets else 0
-                        self.overlay_manager.create_overlay_items(
-                            self.image_viewer.scene,
-                            parser,
-                            total_slices=total_slices if total_slices > 0 else None
-                        )
+                    # Re-display ROIs for current slice
+                    self._display_rois_for_slice(dataset)
     
     def _display_rois_for_slice(self, dataset) -> None:
         """
@@ -1241,6 +1302,18 @@ class DICOMViewerApp(QObject):
             self.roi_manager.select_roi(roi)
             self.roi_list_panel.select_roi_in_list(roi)
             self._update_roi_statistics(roi)
+    
+    def _on_image_clicked_no_roi(self) -> None:
+        """Handle image click when not on an ROI - deselect current ROI."""
+        # Deselect ROI
+        self.roi_manager.select_roi(None)
+        # Clear scene selection to prevent Qt's default mouse release behavior from re-selecting the ROI
+        if self.image_viewer.scene is not None:
+            self.image_viewer.scene.clearSelection()
+        # Clear ROI list selection
+        self.roi_list_panel.select_roi_in_list(None)
+        # Clear ROI statistics panel
+        self.roi_statistics_panel.clear_statistics()
     
     def _on_roi_selected(self, roi) -> None:
         """
