@@ -576,7 +576,11 @@ class DICOMViewerApp(QObject):
                             )
                             
                             # Check for window/level in DICOM metadata (use first dataset)
-                            wc, ww = self.dicom_processor.get_window_level_from_dataset(dataset)
+                            wc, ww, _ = self.dicom_processor.get_window_level_from_dataset(
+                                dataset,
+                                rescale_slope=self.rescale_slope,
+                                rescale_intercept=self.rescale_intercept
+                            )
                             
                             if wc is not None and ww is not None:
                                 # Use DICOM metadata window/level
@@ -687,8 +691,26 @@ class DICOMViewerApp(QObject):
                 # Do NOT reset window_level_user_modified flag - preserve it
             else:
                 # First time displaying or no existing values - use values from dataset or calculate defaults
-                wc, ww = self.dicom_processor.get_window_level_from_dataset(dataset)
+                wc, ww, is_rescaled = self.dicom_processor.get_window_level_from_dataset(
+                    dataset,
+                    rescale_slope=self.rescale_slope,
+                    rescale_intercept=self.rescale_intercept
+                )
                 if wc is not None and ww is not None:
+                    # If default window/level is in rescaled units but we're using raw values, convert
+                    if is_rescaled and not self.use_rescaled_values:
+                        if (self.rescale_slope is not None and self.rescale_intercept is not None and 
+                            self.rescale_slope != 0.0):
+                            wc, ww = self.dicom_processor.convert_window_level_rescaled_to_raw(
+                                wc, ww, self.rescale_slope, self.rescale_intercept
+                            )
+                    # If default window/level is in raw units but we're using rescaled values, convert
+                    elif not is_rescaled and self.use_rescaled_values:
+                        if (self.rescale_slope is not None and self.rescale_intercept is not None):
+                            wc, ww = self.dicom_processor.convert_window_level_raw_to_rescaled(
+                                wc, ww, self.rescale_slope, self.rescale_intercept
+                            )
+                    
                     self.window_level_controls.set_window_level(wc, ww, block_signals=True, unit=unit)
                     self.current_window_center = wc
                     self.current_window_width = ww
@@ -952,8 +974,14 @@ class DICOMViewerApp(QObject):
                         self.image_viewer.scene.removeItem(item)
         
         # Add ROIs for current slice to scene if not already there
+        # Force refresh to ensure visibility after image changes
         for roi in rois:
-            if roi.item.scene() != self.image_viewer.scene:
+            if roi.item.scene() == self.image_viewer.scene:
+                # Already in scene, but ensure it's visible and has correct Z-value
+                roi.item.setZValue(100)  # Above image but below overlay
+                roi.item.show()  # Ensure visible
+            else:
+                # Not in scene, add it
                 self.image_viewer.scene.addItem(roi.item)
                 # Ensure ROI is visible (set appropriate Z-value)
                 roi.item.setZValue(100)  # Above image but below overlay
@@ -1302,9 +1330,32 @@ class DICOMViewerApp(QObject):
         """
         Handle rescale toggle change from toolbar or context menu.
         
+        Converts current window/level values to preserve image appearance when toggling.
+        
         Args:
             checked: True to use rescaled values, False to use raw values
         """
+        # Get current window/level values before updating state
+        current_center = self.current_window_center
+        current_width = self.current_window_width
+        
+        # Convert window/level values if we have rescale parameters
+        if (current_center is not None and current_width is not None and
+            self.rescale_slope is not None and self.rescale_intercept is not None and
+            self.rescale_slope != 0.0):
+            
+            # Determine conversion direction
+            if self.use_rescaled_values and not checked:
+                # Toggling from rescaled to raw: convert rescaled -> raw
+                current_center, current_width = self.dicom_processor.convert_window_level_rescaled_to_raw(
+                    current_center, current_width, self.rescale_slope, self.rescale_intercept
+                )
+            elif not self.use_rescaled_values and checked:
+                # Toggling from raw to rescaled: convert raw -> rescaled
+                current_center, current_width = self.dicom_processor.convert_window_level_raw_to_rescaled(
+                    current_center, current_width, self.rescale_slope, self.rescale_intercept
+                )
+        
         # Update state
         self.use_rescaled_values = checked
         
@@ -1327,12 +1378,20 @@ class DICOMViewerApp(QObject):
             unit = self.rescale_type if (self.use_rescaled_values and self.rescale_type) else None
             self.window_level_controls.set_unit(unit)
             
+            # Update window/level controls with converted values
+            if current_center is not None and current_width is not None:
+                self.current_window_center = current_center
+                self.current_window_width = current_width
+                self.window_level_controls.set_window_level(
+                    current_center, current_width, block_signals=True, unit=unit
+                )
+            
             # Re-display current slice with new rescale setting
             if self.current_studies and self.current_series_uid:
                 datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
                 if self.current_slice_index < len(datasets):
                     dataset = datasets[self.current_slice_index]
-                    # Re-display with current window/level but new rescale setting
+                    # Re-display with converted window/level and new rescale setting
                     if self.current_window_center is not None and self.current_window_width is not None:
                         image = self.dicom_processor.dataset_to_image(
                             dataset,
@@ -1356,6 +1415,8 @@ class DICOMViewerApp(QObject):
                             parser,
                             total_slices=total_slices if total_slices > 0 else None
                         )
+                        # Re-display ROIs for current slice
+                        self._display_rois_for_slice(dataset)
             
             # Update ROI statistics if ROI is selected and belongs to current slice
             selected_roi = self.roi_manager.get_selected_roi()
@@ -1591,17 +1652,24 @@ class DICOMViewerApp(QObject):
     
     def _on_scene_selection_changed(self) -> None:
         """Handle scene selection change (e.g., when ROI is moved)."""
-        selected_items = self.image_viewer.scene.selectedItems()
-        if selected_items:
-            # Find ROI for selected item
-            for item in selected_items:
-                roi = self.roi_manager.find_roi_by_item(item)
-                if roi:
-                    # Update statistics when ROI is moved/selected
-                    self._update_roi_statistics(roi)
-                    # Update list panel selection
-                    self.roi_list_panel.select_roi_in_list(roi)
-                    break
+        try:
+            # Check if scene is still valid
+            if self.image_viewer.scene is None:
+                return
+            selected_items = self.image_viewer.scene.selectedItems()
+            if selected_items:
+                # Find ROI for selected item
+                for item in selected_items:
+                    roi = self.roi_manager.find_roi_by_item(item)
+                    if roi:
+                        # Update statistics when ROI is moved/selected
+                        self._update_roi_statistics(roi)
+                        # Update list panel selection
+                        self.roi_list_panel.select_roi_in_list(roi)
+                        break
+        except RuntimeError:
+            # Scene has been deleted or is invalid, ignore
+            return
     
     def _update_roi_statistics(self, roi) -> None:
         """
