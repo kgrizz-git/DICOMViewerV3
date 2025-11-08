@@ -294,20 +294,31 @@ class MeasurementItem(QGraphicsItemGroup):
         if spacing is not None:
             self.pixel_spacing = spacing
         
-        # Calculate pixel distance
-        dx = self.end_point.x() - self.start_point.x()
-        dy = self.end_point.y() - self.start_point.y()
-        self.distance_pixels = math.sqrt(dx * dx + dy * dy)
+        # Calculate pixel differences
+        dx = self.end_point.x() - self.start_point.x()  # X direction (columns)
+        dy = self.end_point.y() - self.start_point.y()  # Y direction (rows)
         
-        # Format distance
-        # Use average pixel spacing for diagonal measurements
+        # Calculate distance using correct formula:
+        # distance = sqrt( (dx * pixel_spacing_x)^2 + (dy * pixel_spacing_y)^2 )
         if spacing:
-            avg_spacing = (spacing[0] + spacing[1]) / 2.0
-            spacing_for_format = (avg_spacing, avg_spacing)
+            # pixel_spacing[1] = column spacing (X direction)
+            # pixel_spacing[0] = row spacing (Y direction)
+            dx_scaled = dx * spacing[1]  # X component in mm
+            dy_scaled = dy * spacing[0]  # Y component in mm
+            distance_mm = math.sqrt(dx_scaled * dx_scaled + dy_scaled * dy_scaled)
+            
+            # Store pixel distance for reference
+            self.distance_pixels = math.sqrt(dx * dx + dy * dy)
+            
+            # Format distance in mm
+            if distance_mm >= 10:
+                self.distance_formatted = f"{distance_mm:.1f} mm"
+            else:
+                self.distance_formatted = f"{distance_mm:.2f} mm"
         else:
-            spacing_for_format = None
-        
-        self.distance_formatted = format_distance(self.distance_pixels, spacing_for_format, 0)
+            # No pixel spacing - just use pixel distance
+            self.distance_pixels = math.sqrt(dx * dx + dy * dy)
+            self.distance_formatted = f"{self.distance_pixels:.1f} pixels"
         
         # Update end_relative from stored start_point and end_point (scene coordinates)
         # This ensures consistency when distance is recalculated
@@ -488,17 +499,27 @@ class MeasurementTool:
         self.current_line_item.setPen(pen)
         scene.addItem(self.current_line_item)
         
-        # Calculate distance
-        dx = pos.x() - self.start_point.x()
-        dy = pos.y() - self.start_point.y()
-        distance_pixels = math.sqrt(dx * dx + dy * dy)
+        # Calculate pixel differences
+        dx = pos.x() - self.start_point.x()  # X direction (columns)
+        dy = pos.y() - self.start_point.y()  # Y direction (rows)
         
-        # Format distance - use average pixel spacing for diagonal measurements
-        spacing_for_format = None
+        # Calculate distance using correct formula
         if self.pixel_spacing:
-            avg_spacing = (self.pixel_spacing[0] + self.pixel_spacing[1]) / 2.0
-            spacing_for_format = (avg_spacing, avg_spacing)
-        distance_formatted = format_distance(distance_pixels, spacing_for_format, 0)
+            # pixel_spacing[1] = column spacing (X direction)
+            # pixel_spacing[0] = row spacing (Y direction)
+            dx_scaled = dx * self.pixel_spacing[1]  # X component in mm
+            dy_scaled = dy * self.pixel_spacing[0]  # Y component in mm
+            distance_mm = math.sqrt(dx_scaled * dx_scaled + dy_scaled * dy_scaled)
+            
+            # Format distance in mm
+            if distance_mm >= 10:
+                distance_formatted = f"{distance_mm:.1f} mm"
+            else:
+                distance_formatted = f"{distance_mm:.2f} mm"
+        else:
+            # No pixel spacing - just use pixel distance
+            distance_pixels = math.sqrt(dx * dx + dy * dy)
+            distance_formatted = f"{distance_pixels:.1f} pixels"
         
         # Create text label
         # Text position in scene coordinates (midpoint of line)
