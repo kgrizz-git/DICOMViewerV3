@@ -130,11 +130,12 @@ class DICOMViewerApp(QObject):
         self.initial_zoom: Optional[float] = None
         self.initial_h_scroll: Optional[int] = None
         self.initial_v_scroll: Optional[int] = None
+        self.initial_scene_center: Optional[QPointF] = None  # Scene center point in scene coordinates
         self.initial_window_center: Optional[float] = None
         self.initial_window_width: Optional[float] = None
         
         # Series defaults storage: key is series identifier (StudyInstanceUID + SeriesInstanceUID)
-        # Value is dict with: window_center, window_width, zoom, h_scroll, v_scroll
+        # Value is dict with: window_center, window_width, zoom, h_scroll, v_scroll, scene_center
         self.series_defaults: Dict[str, Dict] = {}
         
         # Track current series identifier for comparison
@@ -148,6 +149,9 @@ class DICOMViewerApp(QObject):
         self.rescale_slope: Optional[float] = None
         self.rescale_intercept: Optional[float] = None
         self.rescale_type: Optional[str] = None
+        
+        # Viewport resize state - store scene center to preserve centered view
+        self.saved_scene_center: Optional[QPointF] = None
     
     def _setup_ui(self) -> None:
         """Set up the user interface layout."""
@@ -274,6 +278,7 @@ class DICOMViewerApp(QObject):
         self.image_viewer.clear_measurements_requested.connect(self._on_clear_measurements_requested)
         
         # Viewport resize (when splitter moves)
+        self.main_window.viewport_resizing.connect(self._on_viewport_resizing)
         self.main_window.viewport_resized.connect(self._on_viewport_resized)
         
         # Initialize pan mode to match toolbar state (Pan button is checked by default)
@@ -869,10 +874,18 @@ class DICOMViewerApp(QObject):
             self.initial_zoom = self.image_viewer.current_zoom
         
         # Store initial pan position (scrollbar values) - global fallback
+        # Keep for backward compatibility, but prefer scene center for reset
         if self.initial_h_scroll is None:
             self.initial_h_scroll = self.image_viewer.horizontalScrollBar().value()
         if self.initial_v_scroll is None:
             self.initial_v_scroll = self.image_viewer.verticalScrollBar().value()
+        
+        # Store initial scene center point in scene coordinates - preferred for reset
+        # This works correctly even when viewport size changes (e.g., splitter moved)
+        if self.initial_scene_center is None:
+            scene_center = self.image_viewer.get_viewport_center_scene()
+            if scene_center is not None:
+                self.initial_scene_center = scene_center
         
         # Store initial window/level (global fallback)
         if self.initial_window_center is None:
@@ -882,6 +895,9 @@ class DICOMViewerApp(QObject):
         
         # Store per-series defaults if we have a current series identifier
         if self.current_series_identifier:
+            # Get scene center point for this series
+            scene_center = self.image_viewer.get_viewport_center_scene()
+            
             if self.current_series_identifier not in self.series_defaults:
                 # Create new entry with all defaults
                 self.series_defaults[self.current_series_identifier] = {
@@ -890,6 +906,7 @@ class DICOMViewerApp(QObject):
                     'zoom': self.image_viewer.current_zoom,
                     'h_scroll': self.image_viewer.horizontalScrollBar().value(),
                     'v_scroll': self.image_viewer.verticalScrollBar().value(),
+                    'scene_center': scene_center,  # Store scene center point in scene coordinates
                     'use_rescaled_values': self.use_rescaled_values
                 }
             else:
@@ -901,6 +918,7 @@ class DICOMViewerApp(QObject):
                 defaults['zoom'] = self.image_viewer.current_zoom
                 defaults['h_scroll'] = self.image_viewer.horizontalScrollBar().value()
                 defaults['v_scroll'] = self.image_viewer.verticalScrollBar().value()
+                defaults['scene_center'] = scene_center  # Store scene center point in scene coordinates
                 # Don't overwrite use_rescaled_values - it was already set to the initial default
     
     def _reset_view(self) -> None:
@@ -922,6 +940,7 @@ class DICOMViewerApp(QObject):
             reset_zoom = defaults.get('zoom')
             reset_h_scroll = defaults.get('h_scroll')
             reset_v_scroll = defaults.get('v_scroll')
+            reset_scene_center = defaults.get('scene_center')  # Preferred: scene center point
             reset_window_center = defaults.get('window_center')
             reset_window_width = defaults.get('window_width')
             reset_use_rescaled_values = defaults.get('use_rescaled_values')
@@ -930,6 +949,7 @@ class DICOMViewerApp(QObject):
             reset_zoom = self.initial_zoom
             reset_h_scroll = self.initial_h_scroll
             reset_v_scroll = self.initial_v_scroll
+            reset_scene_center = self.initial_scene_center  # Preferred: scene center point
             reset_window_center = self.initial_window_center
             reset_window_width = self.initial_window_width
             reset_use_rescaled_values = None
@@ -996,24 +1016,28 @@ class DICOMViewerApp(QObject):
                     # Set image first (without preserving view to avoid wrong centering)
                     self.image_viewer.set_image(image, preserve_view=False)
                     
-                    # Now set up the view: zoom, transform, and scrollbar positions
-                    # If we have saved scrollbar positions, restore them; otherwise center
-                    if reset_h_scroll is not None and reset_v_scroll is not None:
-                        # Restore saved zoom and scrollbar positions
-                        self.image_viewer.resetTransform()
-                        self.image_viewer.scale(reset_zoom, reset_zoom)
-                        self.image_viewer.current_zoom = reset_zoom
-                        
-                        # Set scrollbar positions synchronously
+                    # Now set up the view: zoom, transform, and centering
+                    # Prefer scene center point (works correctly even if viewport size changed)
+                    # Fall back to scrollbar positions for backward compatibility
+                    self.image_viewer.resetTransform()
+                    self.image_viewer.scale(reset_zoom, reset_zoom)
+                    self.image_viewer.current_zoom = reset_zoom
+                    
+                    # Use scene center point if available (preferred method)
+                    if reset_scene_center is not None:
+                        # Center on the stored scene point - works correctly regardless of viewport size
+                        self.image_viewer.centerOn(reset_scene_center)
+                    elif reset_h_scroll is not None and reset_v_scroll is not None:
+                        # Fallback: restore scrollbar positions (for backward compatibility)
+                        # This may not work correctly if viewport size has changed
                         self.image_viewer.horizontalScrollBar().setValue(reset_h_scroll)
                         self.image_viewer.verticalScrollBar().setValue(reset_v_scroll)
-                        
-                        self.image_viewer.last_transform = self.image_viewer.transform()
-                        self.image_viewer.zoom_changed.emit(self.image_viewer.current_zoom)
                     else:
                         # No saved positions - use fit_to_view with centering
-                        # fit_to_view() already emits zoom_changed and updates last_transform
                         self.image_viewer.fit_to_view(center_image=True)
+                    
+                    self.image_viewer.last_transform = self.image_viewer.transform()
+                    self.image_viewer.zoom_changed.emit(self.image_viewer.current_zoom)
                     
                     # Recreate overlay
                     parser = DICOMParser(dataset)
@@ -1679,13 +1703,32 @@ class DICOMViewerApp(QObject):
         if self.current_dataset is not None:
             self.overlay_manager.update_overlay_positions(self.image_viewer.scene)
     
+    def _on_viewport_resizing(self) -> None:
+        """
+        Handle viewport resize start (when splitter starts moving).
+        
+        Captures the current viewport center in scene coordinates before the resize
+        completes, so we can restore it after resize to maintain the centered view.
+        """
+        # Capture current viewport center in scene coordinates before resize
+        if self.image_viewer.image_item is not None:
+            scene_center = self.image_viewer.get_viewport_center_scene()
+            if scene_center is not None:
+                self.saved_scene_center = scene_center
+    
     def _on_viewport_resized(self) -> None:
         """
         Handle viewport resize (when splitter moves).
         
         Updates overlay positions to keep text anchored to viewport edges
         when the left or right panels are resized.
+        Also restores the centered view if a scene center was captured.
         """
+        # Restore centered view if we captured a scene center point
+        if self.saved_scene_center is not None and self.image_viewer.image_item is not None:
+            self.image_viewer.centerOn(self.saved_scene_center)
+            self.saved_scene_center = None  # Clear after use
+        
         # Update overlay positions when viewport size changes
         if self.current_dataset is not None:
             self.overlay_manager.update_overlay_positions(self.image_viewer.scene)

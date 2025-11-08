@@ -922,6 +922,27 @@ class ImageViewer(QGraphicsView):
             # Use QTimer to batch rapid scrollbar changes
             QTimer.singleShot(10, lambda: self.transform_changed.emit())
     
+    def get_viewport_center_scene(self) -> Optional[QPointF]:
+        """
+        Get the current viewport center point in scene coordinates.
+        
+        Returns:
+            QPointF representing the viewport center in scene coordinates,
+            or None if viewport is not available
+        """
+        if self.viewport() is None:
+            return None
+        
+        # Calculate viewport center in viewport coordinates
+        viewport_center_viewport = QPointF(
+            self.viewport().width() / 2.0,
+            self.viewport().height() / 2.0
+        )
+        
+        # Convert to scene coordinates
+        scene_center = self.mapToScene(viewport_center_viewport.toPoint())
+        return scene_center
+    
     def resizeEvent(self, event) -> None:
         """
         Handle resize events.
