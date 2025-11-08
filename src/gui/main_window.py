@@ -59,6 +59,7 @@ class MainWindow(QMainWindow):
     viewport_resized = Signal()  # Emitted when splitter moves and viewport size changes
     series_navigation_requested = Signal(int)  # Emitted when series navigation is requested (-1 for prev, 1 for next)
     rescale_toggle_changed = Signal(bool)  # Emitted when rescale toggle changes (True = use rescaled values)
+    clear_measurements_requested = Signal()  # Emitted when clear measurements is requested
     
     def __init__(self, config_manager: Optional[ConfigManager] = None):
         """
@@ -217,13 +218,27 @@ class MainWindow(QMainWindow):
         )
         toolbar.addAction(self.mouse_mode_pan_action)
         
-        # Auto Window/Level ROI tool
-        self.mouse_mode_auto_window_level_action = QAction("Auto Window/Level", self)
+        self.mouse_mode_select_action = QAction("Select", self)
+        self.mouse_mode_select_action.setCheckable(True)
+        self.mouse_mode_select_action.triggered.connect(
+            lambda: self._on_mouse_mode_changed("select")
+        )
+        toolbar.addAction(self.mouse_mode_select_action)
+        
+        # Window/Level ROI tool
+        self.mouse_mode_auto_window_level_action = QAction("Window/Level ROI", self)
         self.mouse_mode_auto_window_level_action.setCheckable(True)
         self.mouse_mode_auto_window_level_action.triggered.connect(
             lambda: self._on_mouse_mode_changed("auto_window_level")
         )
         toolbar.addAction(self.mouse_mode_auto_window_level_action)
+        
+        toolbar.addSeparator()
+        
+        # Clear Measurements button
+        self.clear_measurements_action = QAction("Clear Measurements", self)
+        self.clear_measurements_action.triggered.connect(self.clear_measurements_requested.emit)
+        toolbar.addAction(self.clear_measurements_action)
         
         toolbar.addSeparator()
         
@@ -321,7 +336,7 @@ class MainWindow(QMainWindow):
         
         # Left panel (for metadata, series list, etc.)
         self.left_panel = QWidget()
-        self.left_panel.setMaximumWidth(300)
+        self.left_panel.setMaximumWidth(400)
         self.left_panel.setMinimumWidth(200)
         self.splitter.addWidget(self.left_panel)
         
@@ -331,14 +346,24 @@ class MainWindow(QMainWindow):
         
         # Right panel (for tools, histogram, etc.)
         self.right_panel = QWidget()
-        self.right_panel.setMaximumWidth(300)
+        self.right_panel.setMaximumWidth(400)
         self.right_panel.setMinimumWidth(200)
         self.splitter.addWidget(self.right_panel)
         
-        # Set splitter proportions
-        self.splitter.setSizes([200, 800, 200])
+        # Set splitter proportions - use saved positions or defaults
+        default_left_width = 250
+        default_right_width = 250
+        saved_sizes = self.config_manager.get("splitter_sizes", None)
+        if saved_sizes and isinstance(saved_sizes, list) and len(saved_sizes) == 3:
+            self.splitter.setSizes(saved_sizes)
+        else:
+            # Calculate center width based on window size (default 1200px wide)
+            window_width = self.config_manager.get("window_width", 1200)
+            center_width = window_width - default_left_width - default_right_width
+            self.splitter.setSizes([default_left_width, center_width, default_right_width])
         
         # Connect to splitter moved signal to update overlay positions when panels are resized
+        # Also save splitter positions when moved
         self.splitter.splitterMoved.connect(self._on_splitter_moved)
     
     def _apply_theme(self) -> None:
@@ -411,10 +436,11 @@ class MainWindow(QMainWindow):
         Handle mouse mode change to ensure exclusivity.
         
         Args:
-            mode: Mouse mode ("roi_ellipse", "roi_rectangle", "measure", "zoom", "pan", "auto_window_level")
+            mode: Mouse mode ("select", "roi_ellipse", "roi_rectangle", "measure", "zoom", "pan", "auto_window_level")
         """
         # Uncheck all actions first
         all_actions = [
+            self.mouse_mode_select_action,
             self.mouse_mode_ellipse_roi_action,
             self.mouse_mode_rectangle_roi_action,
             self.mouse_mode_measure_action,
@@ -433,7 +459,9 @@ class MainWindow(QMainWindow):
             action.setChecked(False)
         
         # Check the action corresponding to the selected mode
-        if mode == "roi_ellipse":
+        if mode == "select":
+            self.mouse_mode_select_action.setChecked(True)
+        elif mode == "roi_ellipse":
             self.mouse_mode_ellipse_roi_action.setChecked(True)
         elif mode == "roi_rectangle":
             self.mouse_mode_rectangle_roi_action.setChecked(True)
@@ -574,11 +602,17 @@ class MainWindow(QMainWindow):
         
         When the splitter moves, the viewport size changes, so we need to
         update overlay positions to keep them anchored to viewport edges.
+        Also save the splitter positions for persistence.
         
         Args:
             pos: New position of the splitter handle
             index: Index of the splitter handle that moved
         """
+        # Save splitter positions
+        sizes = self.splitter.sizes()
+        self.config_manager.set("splitter_sizes", sizes)
+        self.config_manager.save_config()
+        
         # Emit signal to notify that viewport size changed
         # Use QTimer to batch rapid splitter movements
         from PySide6.QtCore import QTimer

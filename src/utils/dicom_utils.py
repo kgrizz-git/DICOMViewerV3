@@ -27,9 +27,10 @@ import pydicom
 from pydicom.dataset import Dataset
 
 
-def get_pixel_spacing(dataset: Dataset) -> Optional[Tuple[float, float]]:
+def calculate_pixel_spacing_from_fov(dataset: Dataset) -> Optional[Tuple[float, float]]:
     """
-    Get pixel spacing from DICOM dataset.
+    Calculate pixel spacing from Field of View and matrix size.
+    Handles MR-specific logic with Percent Phase Field of View.
     
     Args:
         dataset: pydicom Dataset
@@ -38,12 +39,129 @@ def get_pixel_spacing(dataset: Dataset) -> Optional[Tuple[float, float]]:
         Tuple of (row_spacing, column_spacing) in mm, or None if not available
     """
     try:
+        # Get matrix size (Rows and Columns)
+        rows = None
+        columns = None
+        if hasattr(dataset, 'Rows'):
+            rows = int(dataset.Rows)
+        if hasattr(dataset, 'Columns'):
+            columns = int(dataset.Columns)
+        
+        if rows is None or columns is None or rows <= 0 or columns <= 0:
+            return None
+        
+        # Get modality to determine calculation method
+        modality = None
+        if hasattr(dataset, 'Modality'):
+            modality = str(dataset.Modality).upper()
+        
+        # For MR modality, use special logic
+        if modality == 'MR':
+            # Get Reconstruction Diameter (0018,1100)
+            recon_diameter = None
+            if hasattr(dataset, 'ReconstructionDiameter'):
+                recon_diameter = float(dataset.ReconstructionDiameter)
+            
+            if recon_diameter is None or recon_diameter <= 0:
+                return None
+            
+            # Get Percent Phase Field of View (0018,0094)
+            percent_phase_fov = None
+            if hasattr(dataset, 'PercentPhaseFieldOfView'):
+                percent_phase_fov = float(dataset.PercentPhaseFieldOfView)
+            
+            # Get In Plane Phase Encoding Direction (0018,1312)
+            phase_encoding_direction = None
+            if hasattr(dataset, 'InPlanePhaseEncodingDirection'):
+                phase_encoding_direction = str(dataset.InPlanePhaseEncodingDirection).upper()
+            
+            # Calculate FOV for each direction
+            if percent_phase_fov is not None and phase_encoding_direction is not None:
+                # Phase encoding direction FOV = Reconstruction Diameter * (Percent Phase FOV / 100)
+                phase_fov = recon_diameter * (percent_phase_fov / 100.0)
+                # Frequency encoding direction FOV = Reconstruction Diameter
+                freq_fov = recon_diameter
+                
+                if phase_encoding_direction == 'ROW':
+                    # Phase encoding is in row direction
+                    row_spacing = phase_fov / rows
+                    col_spacing = freq_fov / columns
+                elif phase_encoding_direction == 'COL':
+                    # Phase encoding is in column direction
+                    row_spacing = freq_fov / rows
+                    col_spacing = phase_fov / columns
+                else:
+                    # Unknown direction, use reconstruction diameter for both
+                    row_spacing = recon_diameter / rows
+                    col_spacing = recon_diameter / columns
+            else:
+                # Missing phase encoding info, use reconstruction diameter for both
+                row_spacing = recon_diameter / rows
+                col_spacing = recon_diameter / columns
+            
+            return (row_spacing, col_spacing)
+        
+        # For other modalities, try Field of View or Reconstruction Diameter
+        fov = None
+        if hasattr(dataset, 'FieldOfView'):
+            fov = float(dataset.FieldOfView)
+        elif hasattr(dataset, 'ReconstructionDiameter'):
+            fov = float(dataset.ReconstructionDiameter)
+        
+        if fov is not None and fov > 0:
+            # Use same FOV for both directions
+            row_spacing = fov / rows
+            col_spacing = fov / columns
+            return (row_spacing, col_spacing)
+    
+    except Exception:
+        pass
+    
+    return None
+
+
+def get_pixel_spacing(dataset: Dataset) -> Optional[Tuple[float, float]]:
+    """
+    Get pixel spacing from DICOM dataset.
+    Checks multiple sources in priority order:
+    1. Pixel Spacing (0028,0030) - primary
+    2. Imager Pixel Spacing (0018,1164) - fallback
+    3. Calculate from Field of View + Matrix Size - fallback
+    
+    Args:
+        dataset: pydicom Dataset
+        
+    Returns:
+        Tuple of (row_spacing, column_spacing) in mm, or None if not available
+    """
+    # Priority 1: Pixel Spacing (0028,0030)
+    try:
         if hasattr(dataset, 'PixelSpacing'):
             pixel_spacing = dataset.PixelSpacing
             if pixel_spacing and len(pixel_spacing) >= 2:
-                return (float(pixel_spacing[0]), float(pixel_spacing[1]))
+                row_spacing = float(pixel_spacing[0])
+                col_spacing = float(pixel_spacing[1])
+                if row_spacing > 0 and col_spacing > 0:
+                    return (row_spacing, col_spacing)
     except Exception:
         pass
+    
+    # Priority 2: Imager Pixel Spacing (0018,1164)
+    try:
+        if hasattr(dataset, 'ImagerPixelSpacing'):
+            imager_pixel_spacing = dataset.ImagerPixelSpacing
+            if imager_pixel_spacing and len(imager_pixel_spacing) >= 2:
+                row_spacing = float(imager_pixel_spacing[0])
+                col_spacing = float(imager_pixel_spacing[1])
+                if row_spacing > 0 and col_spacing > 0:
+                    return (row_spacing, col_spacing)
+    except Exception:
+        pass
+    
+    # Priority 3: Calculate from Field of View + Matrix Size
+    fov_spacing = calculate_pixel_spacing_from_fov(dataset)
+    if fov_spacing is not None:
+        return fov_spacing
     
     return None
 

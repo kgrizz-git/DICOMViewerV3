@@ -45,6 +45,7 @@ class ImageViewer(QGraphicsView):
     zoom_changed = Signal(float)  # Emitted when zoom level changes
     transform_changed = Signal()  # Emitted when view transform changes (zoom/pan)
     image_clicked = Signal(QPointF)  # Emitted when image is clicked
+    image_clicked_no_roi = Signal()  # Emitted when image is clicked but not on an ROI (for deselection)
     roi_drawing_started = Signal(QPointF)  # Emitted when ROI drawing starts
     roi_drawing_updated = Signal(QPointF)  # Emitted when ROI drawing updates
     roi_drawing_finished = Signal()  # Emitted when ROI drawing finishes
@@ -59,6 +60,11 @@ class ImageViewer(QGraphicsView):
     window_level_drag_changed = Signal(float, float)  # Emitted when window/level is adjusted via right mouse drag (center_delta, width_delta)
     right_mouse_press_for_drag = Signal()  # Emitted when right mouse is pressed (not on ROI) to request window/level values for drag
     series_navigation_requested = Signal(int)  # Emitted when series navigation is requested (-1 for left/previous, 1 for right/next)
+    measurement_started = Signal(QPointF)  # Emitted when measurement starts (start position)
+    measurement_updated = Signal(QPointF)  # Emitted when measurement is updated (current position)
+    measurement_finished = Signal()  # Emitted when measurement is finished
+    measurement_delete_requested = Signal(object)  # Emitted when measurement deletion is requested (MeasurementItem)
+    clear_measurements_requested = Signal()  # Emitted when clear measurements is requested
     
     def __init__(self, parent: Optional[QWidget] = None):
         """
@@ -92,6 +98,10 @@ class ImageViewer(QGraphicsView):
         # ROI drawing mode (derived from mouse_mode)
         self.roi_drawing_mode: Optional[str] = None  # "rectangle", "ellipse", or None
         self.roi_drawing_start: Optional[QPointF] = None
+        
+        # Measurement state
+        self.measuring = False
+        self.measurement_start_pos: Optional[QPointF] = None
         
         # Zoom mode state
         self.zoom_start_pos: Optional[QPointF] = None
@@ -317,6 +327,13 @@ class ImageViewer(QGraphicsView):
         if self.image_item is None:
             return
         
+        # Save current transformation anchor
+        old_anchor = self.transformationAnchor()
+        
+        # Set anchor to viewport center to ensure scale() zooms around viewport center
+        # This prevents conflicts with manual translation logic
+        self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
+        
         # Get viewport center
         viewport_center = QPointF(self.viewport().width() / 2.0, self.viewport().height() / 2.0)
         
@@ -343,6 +360,9 @@ class ImageViewer(QGraphicsView):
         # Translate to maintain viewport center
         self.translate(delta.x(), delta.y())
         
+        # Restore original transformation anchor
+        self.setTransformationAnchor(old_anchor)
+        
         self.zoom_changed.emit(self.current_zoom)
         self._check_transform_changed()
         # Re-expand scene rect if ScrollHandDrag is active (viewport size in scene coords changed)
@@ -355,6 +375,13 @@ class ImageViewer(QGraphicsView):
         """Zoom out from the image, centered on viewport center."""
         if self.image_item is None:
             return
+        
+        # Save current transformation anchor
+        old_anchor = self.transformationAnchor()
+        
+        # Set anchor to viewport center to ensure scale() zooms around viewport center
+        # This prevents conflicts with manual translation logic
+        self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
         
         # Get viewport center
         viewport_center = QPointF(self.viewport().width() / 2.0, self.viewport().height() / 2.0)
@@ -381,6 +408,9 @@ class ImageViewer(QGraphicsView):
         
         # Translate to maintain viewport center
         self.translate(delta.x(), delta.y())
+        
+        # Restore original transformation anchor
+        self.setTransformationAnchor(old_anchor)
         
         self.zoom_changed.emit(self.current_zoom)
         self._check_transform_changed()
@@ -428,7 +458,7 @@ class ImageViewer(QGraphicsView):
         """
         # Use scroll wheel mode to determine behavior
         if self.scroll_wheel_mode == "zoom":
-            # Zoom mode
+            # Perform zoom - zoom_in() and zoom_out() now handle the anchor internally
             if event.angleDelta().y() > 0:
                 self.zoom_in()
             else:
@@ -444,12 +474,17 @@ class ImageViewer(QGraphicsView):
         Set mouse interaction mode.
         
         Args:
-            mode: "roi_ellipse", "roi_rectangle", "measure", "zoom", "pan", or "auto_window_level"
+            mode: "select", "roi_ellipse", "roi_rectangle", "measure", "zoom", "pan", or "auto_window_level"
         """
         self.mouse_mode = mode
         
         # Update ROI drawing mode based on mouse mode
-        if mode == "roi_ellipse":
+        if mode == "select":
+            # Select mode - allow clicking on ROIs and measurements to select them
+            self.roi_drawing_mode = None
+            self.setDragMode(QGraphicsView.DragMode.NoDrag)
+            self.setCursor(Qt.CursorShape.ArrowCursor)
+        elif mode == "roi_ellipse":
             self.roi_drawing_mode = "ellipse"
             self.setDragMode(QGraphicsView.DragMode.NoDrag)
             self.setCursor(Qt.CursorShape.CrossCursor)
@@ -466,6 +501,9 @@ class ImageViewer(QGraphicsView):
             self.roi_drawing_mode = None
             self.setDragMode(QGraphicsView.DragMode.NoDrag)
             self.setCursor(Qt.CursorShape.CrossCursor)  # Could use different cursor
+            # Reset measurement state when switching to measure mode
+            self.measuring = False
+            self.measurement_start_pos = None
         elif mode == "zoom":
             self.roi_drawing_mode = None
             self.setDragMode(QGraphicsView.DragMode.NoDrag)
@@ -506,6 +544,12 @@ class ImageViewer(QGraphicsView):
             event: Mouse event
         """
         if event.button() == Qt.MouseButton.LeftButton:
+            # Handle select mode - allow default Qt selection behavior
+            if self.mouse_mode == "select":
+                # Let Qt handle selection of ROIs and measurements
+                super().mousePressEvent(event)
+                return
+            
             # If ScrollHandDrag is active (pan mode), let Qt handle it unless clicking on ROI
             if self.dragMode() == QGraphicsView.DragMode.ScrollHandDrag:
                 # Check if clicking on ROI item first
@@ -513,7 +557,10 @@ class ImageViewer(QGraphicsView):
                 item = self.scene.itemAt(scene_pos, self.transform())
                 
                 from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsEllipseItem
-                is_roi_item = isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem))
+                # Check if item is an ROI item (but not the image item)
+                is_roi_item = (item is not None and 
+                              item != self.image_item and
+                              isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem)))
                 
                 if is_roi_item:
                     # Clicking on ROI - disable ScrollHandDrag temporarily
@@ -521,7 +568,9 @@ class ImageViewer(QGraphicsView):
                     self.roi_clicked.emit(item)
                     return
                 else:
-                    # Not clicking on ROI - let ScrollHandDrag handle panning
+                    # Not clicking on ROI (clicking on image item, empty space, or other items) - emit signal for deselection
+                    # Emit before calling super() to ensure signal is processed
+                    self.image_clicked_no_roi.emit()
                     # This is critical: we must let Qt handle the event for ScrollHandDrag to work
                     super().mousePressEvent(event)
                     return
@@ -531,35 +580,88 @@ class ImageViewer(QGraphicsView):
             scene_pos = self.mapToScene(event.position().toPoint())
             item = self.scene.itemAt(scene_pos, self.transform())
             
-            # Check if it's a ROI item (QGraphicsRectItem or QGraphicsEllipseItem)
+            # Check if it's a ROI item (QGraphicsRectItem or QGraphicsEllipseItem) but not the image item
             from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsEllipseItem
-            is_roi_item = isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem))
+            is_roi_item = (item is not None and 
+                          item != self.image_item and
+                          isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem)))
             
             if is_roi_item:
                 # Clicking on existing ROI - emit signal for ROI click
                 self.roi_clicked.emit(item)
+            elif item is None or item == self.image_item:
+                # Clicking on empty space or image item - emit deselection signal
+                self.image_clicked_no_roi.emit()
+                # Continue with mode-specific handling
+                if self.mouse_mode == "zoom":
+                    # Zoom mode - start zoom operation
+                    self.zoom_start_pos = scene_pos
+                    self.zoom_start_zoom = self.current_zoom
+                elif self.mouse_mode == "measure":
+                    # Measurement mode - start or finish measurement
+                    if not self.measuring:
+                        # Start new measurement
+                        self.measuring = True
+                        self.measurement_start_pos = scene_pos
+                        self.measurement_started.emit(scene_pos)
+                    else:
+                        # Finish current measurement
+                        self.measuring = False
+                        self.measurement_start_pos = None
+                        self.measurement_finished.emit()
+                elif self.roi_drawing_mode:
+                    # Start ROI drawing
+                    self.roi_drawing_start = scene_pos
+                    self.roi_drawing_started.emit(scene_pos)
             elif self.mouse_mode == "zoom":
-                # Zoom mode - start zoom operation
+                # Zoom mode - start zoom operation (clicking on overlay or other items)
                 self.zoom_start_pos = scene_pos
                 self.zoom_start_zoom = self.current_zoom
+                # Emit signal for clicking on image (not ROI) to allow deselection
+                self.image_clicked_no_roi.emit()
+            elif self.mouse_mode == "measure":
+                # Measurement mode - start or finish measurement
+                if not self.measuring:
+                    # Start new measurement
+                    self.measuring = True
+                    self.measurement_start_pos = scene_pos
+                    self.measurement_started.emit(scene_pos)
+                else:
+                    # Finish current measurement
+                    self.measuring = False
+                    self.measurement_start_pos = None
+                    self.measurement_finished.emit()
             elif self.roi_drawing_mode:
                 # Start ROI drawing only if not clicking on existing ROI
                 self.roi_drawing_start = scene_pos
                 self.roi_drawing_started.emit(scene_pos)
+            else:
+                # Clicking on other items (overlay, etc.) but not on ROI - allow deselection
+                self.image_clicked_no_roi.emit()
         elif event.button() == Qt.MouseButton.RightButton:
             # Right click - prepare for potential drag or context menu
             scene_pos = self.mapToScene(event.position().toPoint())
             item = self.scene.itemAt(scene_pos, self.transform())
             
-            # Check if it's a ROI item
+            # Check if it's a ROI item or measurement item
             from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsEllipseItem
+            from tools.measurement_tool import MeasurementItem
             is_roi_item = isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem))
+            is_measurement_item = isinstance(item, MeasurementItem)
             
             if is_roi_item:
                 # Show context menu for ROI immediately
                 context_menu = QMenu(self)
                 delete_action = context_menu.addAction("Delete ROI")
                 delete_action.triggered.connect(lambda: self.roi_delete_requested.emit(item))
+                context_menu.exec(event.globalPosition().toPoint())
+                self.right_mouse_context_menu_shown = True
+                return
+            elif is_measurement_item:
+                # Show context menu for measurement immediately
+                context_menu = QMenu(self)
+                delete_action = context_menu.addAction("Delete measurement")
+                delete_action.triggered.connect(lambda: self.measurement_delete_requested.emit(item))
                 context_menu.exec(event.globalPosition().toPoint())
                 self.right_mouse_context_menu_shown = True
                 return
@@ -581,6 +683,11 @@ class ImageViewer(QGraphicsView):
         Args:
             event: Mouse event
         """
+        # In select mode, allow default Qt behavior (selection dragging, etc.)
+        if self.mouse_mode == "select":
+            super().mouseMoveEvent(event)
+            return
+        
         if self.mouse_mode == "zoom" and self.zoom_start_pos is not None and event.buttons() & Qt.MouseButton.LeftButton:
             # Zoom mode - adjust zoom based on vertical drag distance
             # Ensure ScrollHandDrag is disabled for zoom mode
@@ -611,6 +718,14 @@ class ImageViewer(QGraphicsView):
             # Note: ScrollHandDrag is disabled during zoom mode, but we check anyway for safety
             if self.dragMode() == QGraphicsView.DragMode.ScrollHandDrag:
                 self._expand_scene_rect_for_panning()
+        elif self.mouse_mode == "measure" and self.measuring and self.measurement_start_pos is not None:
+            # Measurement mode - update measurement while dragging
+            if self.dragMode() == QGraphicsView.DragMode.ScrollHandDrag:
+                self.setDragMode(QGraphicsView.DragMode.NoDrag)
+            
+            if event.buttons() & Qt.MouseButton.LeftButton:
+                scene_pos = self.mapToScene(event.position().toPoint())
+                self.measurement_updated.emit(scene_pos)
         elif self.roi_drawing_mode and self.roi_drawing_start is not None:
             # ROI drawing mode - ensure ScrollHandDrag is disabled
             if self.dragMode() == QGraphicsView.DragMode.ScrollHandDrag:
@@ -652,6 +767,11 @@ class ImageViewer(QGraphicsView):
         Args:
             event: Mouse event
         """
+        # In select mode, allow default Qt behavior
+        if self.mouse_mode == "select":
+            super().mouseReleaseEvent(event)
+            return
+        
         if event.button() == Qt.MouseButton.LeftButton:
             if self.mouse_mode == "zoom" and self.zoom_start_pos is not None:
                 # Finish zoom operation
@@ -660,6 +780,11 @@ class ImageViewer(QGraphicsView):
                 # Restore ScrollHandDrag if we're in pan mode
                 if self.mouse_mode == "pan":
                     self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+            elif self.mouse_mode == "measure" and self.measuring:
+                # Finish measurement (if not already finished by second click)
+                self.measuring = False
+                self.measurement_start_pos = None
+                self.measurement_finished.emit()
             elif self.roi_drawing_mode and self.roi_drawing_start is not None:
                 # Finish ROI drawing
                 self.roi_drawing_finished.emit()
@@ -685,15 +810,21 @@ class ImageViewer(QGraphicsView):
                     item = self.scene.itemAt(scene_pos, self.transform())
                     
                     from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsEllipseItem
+                    from tools.measurement_tool import MeasurementItem
                     is_roi_item = isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem))
+                    is_measurement_item = isinstance(item, MeasurementItem)
                     
-                    if not is_roi_item:
+                    if not is_roi_item and not is_measurement_item:
                         # Show context menu for image (not on ROI)
                         context_menu = QMenu(self)
                         
                         # Reset View action
                         reset_action = context_menu.addAction("Reset View")
                         reset_action.triggered.connect(self.reset_view_requested.emit)
+                        
+                        # Clear Measurements action
+                        clear_measurements_action = context_menu.addAction("Clear Measurements")
+                        clear_measurements_action.triggered.connect(self.clear_measurements_requested.emit)
                         
                         context_menu.addSeparator()
                         
@@ -709,12 +840,13 @@ class ImageViewer(QGraphicsView):
                         # Left Mouse Button submenu
                         left_mouse_menu = context_menu.addMenu("Left Mouse Button")
                         left_mouse_actions = {
+                            "Select": "select",
                             "Ellipse ROI": "roi_ellipse",
                             "Rectangle ROI": "roi_rectangle",
                             "Measure": "measure",
                             "Zoom": "zoom",
                             "Pan": "pan",
-                            "Auto Window/Level": "auto_window_level"
+                            "Window/Level ROI": "auto_window_level"
                         }
                         for action_text, mode in left_mouse_actions.items():
                             action = left_mouse_menu.addAction(action_text)

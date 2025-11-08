@@ -55,7 +55,7 @@ class ROIStatisticsPanel(QWidget):
         self.stats_table = QTableWidget()
         self.stats_table.setColumnCount(2)
         self.stats_table.setHorizontalHeaderLabels(["Statistic", "Value"])
-        self.stats_table.setRowCount(5)
+        self.stats_table.setRowCount(6)
         self.stats_table.setColumnWidth(0, 120)
         self.stats_table.setColumnWidth(1, 100)
         self.stats_table.verticalHeader().setVisible(False)
@@ -67,10 +67,20 @@ class ROIStatisticsPanel(QWidget):
         self.stats_table.setItem(2, 0, QTableWidgetItem("Min"))
         self.stats_table.setItem(3, 0, QTableWidgetItem("Max"))
         self.stats_table.setItem(4, 0, QTableWidgetItem("Count"))
+        self.stats_table.setItem(5, 0, QTableWidgetItem("Area"))
         
         # Initialize with empty values
-        for i in range(5):
+        for i in range(6):
             self.stats_table.setItem(i, 1, QTableWidgetItem(""))
+        
+        # Calculate minimum height to show all 6 rows without scrolling
+        # Header height + (row height * 6 rows) + some padding
+        header_height = self.stats_table.horizontalHeader().height()
+        row_height = self.stats_table.rowHeight(0) if self.stats_table.rowHeight(0) > 0 else 25  # Default row height
+        min_table_height = header_height + (row_height * 6) + 10  # 10px padding
+        
+        # Set minimum height for the table to show all rows
+        self.stats_table.setMinimumHeight(min_table_height)
         
         layout.addWidget(self.stats_table)
         layout.addStretch()
@@ -102,10 +112,25 @@ class ROIStatisticsPanel(QWidget):
         self.stats_table.setItem(2, 1, QTableWidgetItem(f"{statistics.get('min', 0):.2f}{unit_suffix}"))
         self.stats_table.setItem(3, 1, QTableWidgetItem(f"{statistics.get('max', 0):.2f}{unit_suffix}"))
         self.stats_table.setItem(4, 1, QTableWidgetItem(f"{statistics.get('count', 0)}"))
+        
+        # Format area with appropriate units
+        area_mm2 = statistics.get('area_mm2')
+        area_pixels = statistics.get('area_pixels', 0.0)
+        if area_mm2 is not None:
+            # Display in mm² or cm² (if >= 100 mm²)
+            if area_mm2 >= 100.0:
+                area_cm2 = area_mm2 / 100.0
+                area_text = f"{area_cm2:.2f} cm²"
+            else:
+                area_text = f"{area_mm2:.2f} mm²"
+        else:
+            # Display in pixels
+            area_text = f"{area_pixels:.1f} pixels"
+        self.stats_table.setItem(5, 1, QTableWidgetItem(area_text))
     
     def clear_statistics(self) -> None:
         """Clear displayed statistics."""
-        for i in range(5):
+        for i in range(6):
             self.stats_table.setItem(i, 1, QTableWidgetItem(""))
         self.current_statistics = None
         self.title_label.setText("ROI Statistics")
