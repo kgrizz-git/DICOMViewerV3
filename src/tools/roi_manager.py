@@ -174,7 +174,9 @@ class ROIManager:
         
         # Remove old item if exists
         if self.current_roi_item is not None:
-            scene.removeItem(self.current_roi_item.item)
+            # Only remove if item actually belongs to this scene
+            if self.current_roi_item.item.scene() == scene:
+                scene.removeItem(self.current_roi_item.item)
         
         # Create new item
         if self.current_shape_type == "rectangle":
@@ -276,7 +278,9 @@ class ROIManager:
         for roi_list in self.rois.values():
             if roi in roi_list:
                 roi_list.remove(roi)
-                scene.removeItem(roi.item)
+                # Only remove if item actually belongs to this scene
+                if roi.item.scene() == scene:
+                    scene.removeItem(roi.item)
                 
                 # Deselect if this was the selected ROI
                 if self.selected_roi == roi:
@@ -313,7 +317,9 @@ class ROIManager:
         key = (study_uid, series_uid, instance_identifier)
         if key in self.rois:
             for roi in self.rois[key]:
-                scene.removeItem(roi.item)
+                # Only remove if item actually belongs to this scene
+                if roi.item.scene() == scene:
+                    scene.removeItem(roi.item)
             del self.rois[key]
     
     def clear_all_rois(self, scene) -> None:
@@ -325,7 +331,9 @@ class ROIManager:
         """
         for slice_index, roi_list in self.rois.items():
             for roi in roi_list:
-                scene.removeItem(roi.item)
+                # Only remove if item actually belongs to this scene
+                if roi.item.scene() == scene:
+                    scene.removeItem(roi.item)
         self.rois.clear()
     
     def calculate_statistics(self, roi: ROIItem, pixel_array: np.ndarray, 
