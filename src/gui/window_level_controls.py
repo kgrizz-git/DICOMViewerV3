@@ -49,6 +49,7 @@ class WindowLevelControls(QWidget):
         self.window_width = 0.0
         self.center_range = (-10000.0, 10000.0)
         self.width_range = (1.0, 10000.0)
+        self.unit: Optional[str] = None  # Unit string (e.g., "HU") to display in labels
         
         self._create_ui()
     
@@ -62,9 +63,9 @@ class WindowLevelControls(QWidget):
         
         # Row 1: Label and Spinbox (horizontal)
         center_row1 = QHBoxLayout()
-        center_label = QLabel("Window Center:")
-        center_label.setMinimumWidth(100)
-        center_row1.addWidget(center_label)
+        self.center_label = QLabel("Window Center:")
+        self.center_label.setMinimumWidth(100)
+        center_row1.addWidget(self.center_label)
         
         self.center_spinbox = QDoubleSpinBox()
         self.center_spinbox.setRange(*self.center_range)
@@ -92,9 +93,9 @@ class WindowLevelControls(QWidget):
         
         # Row 1: Label and Spinbox (horizontal)
         width_row1 = QHBoxLayout()
-        width_label = QLabel("Window Width:")
-        width_label.setMinimumWidth(100)
-        width_row1.addWidget(width_label)
+        self.width_label = QLabel("Window Width:")
+        self.width_label.setMinimumWidth(100)
+        width_row1.addWidget(self.width_label)
         
         self.width_spinbox = QDoubleSpinBox()
         self.width_spinbox.setRange(*self.width_range)
@@ -140,7 +141,24 @@ class WindowLevelControls(QWidget):
         # We'll map the actual ranges to slider positions
         pass  # Implementation can be added if needed
     
-    def set_window_level(self, center: float, width: float, block_signals: bool = False) -> None:
+    def set_unit(self, unit: Optional[str]) -> None:
+        """
+        Set unit string to display in labels.
+        
+        Args:
+            unit: Unit string (e.g., "HU") or None to hide units
+        """
+        self.unit = unit
+        # Update labels
+        if unit:
+            self.center_label.setText(f"Window Center ({unit}):")
+            self.width_label.setText(f"Window Width ({unit}):")
+        else:
+            self.center_label.setText("Window Center:")
+            self.width_label.setText("Window Width:")
+    
+    def set_window_level(self, center: float, width: float, block_signals: bool = False,
+                        unit: Optional[str] = None) -> None:
         """
         Set window center and width values.
         
@@ -148,7 +166,11 @@ class WindowLevelControls(QWidget):
             center: Window center value
             width: Window width value
             block_signals: If True, don't emit window_changed signal
+            unit: Optional unit string to update labels (if provided, updates unit)
         """
+        # Update unit if provided
+        if unit is not None:
+            self.set_unit(unit)
         # Block signals to prevent recursive updates
         self.center_spinbox.blockSignals(True)
         self.width_spinbox.blockSignals(True)

@@ -55,6 +55,7 @@ class ImageViewer(QGraphicsView):
     reset_view_requested = Signal()  # Emitted when reset view is requested from context menu
     context_menu_mouse_mode_changed = Signal(str)  # Emitted when mouse mode is changed from context menu
     context_menu_scroll_wheel_mode_changed = Signal(str)  # Emitted when scroll wheel mode is changed from context menu
+    context_menu_rescale_toggle_changed = Signal(bool)  # Emitted when rescale toggle is changed from context menu
     window_level_drag_changed = Signal(float, float)  # Emitted when window/level is adjusted via right mouse drag (center_delta, width_delta)
     right_mouse_press_for_drag = Signal()  # Emitted when right mouse is pressed (not on ROI) to request window/level values for drag
     series_navigation_requested = Signal(int)  # Emitted when series navigation is requested (-1 for left/previous, 1 for right/next)
@@ -98,6 +99,9 @@ class ImageViewer(QGraphicsView):
         
         # Scroll wheel mode
         self.scroll_wheel_mode = "slice"  # "slice" or "zoom"
+        
+        # Rescale toggle state (for context menu)
+        self.use_rescaled_values = False
         
         # Track transform for change detection
         self.last_transform = QTransform()
@@ -405,6 +409,15 @@ class ImageViewer(QGraphicsView):
         """
         if mode in ["slice", "zoom"]:
             self.scroll_wheel_mode = mode
+    
+    def set_rescale_toggle_state(self, checked: bool) -> None:
+        """
+        Set the rescale toggle state (for context menu).
+        
+        Args:
+            checked: True to use rescaled values, False to use raw values
+        """
+        self.use_rescaled_values = checked
     
     def wheelEvent(self, event: QWheelEvent) -> None:
         """
@@ -731,6 +744,16 @@ class ImageViewer(QGraphicsView):
                             zoom_action.setChecked(True)
                         zoom_action.triggered.connect(
                             lambda: self.context_menu_scroll_wheel_mode_changed.emit("zoom")
+                        )
+                        
+                        context_menu.addSeparator()
+                        
+                        # Use Rescaled Values toggle
+                        use_rescaled_action = context_menu.addAction("Use Rescaled Values")
+                        use_rescaled_action.setCheckable(True)
+                        use_rescaled_action.setChecked(self.use_rescaled_values)
+                        use_rescaled_action.triggered.connect(
+                            lambda checked: self.context_menu_rescale_toggle_changed.emit(checked)
                         )
                         
                         context_menu.exec(event.globalPosition().toPoint())
