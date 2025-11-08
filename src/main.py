@@ -190,6 +190,9 @@ class DICOMViewerApp(QObject):
         # Overlay configuration
         self.main_window.overlay_config_requested.connect(self._open_overlay_config)
         
+        # Quick Start Guide
+        self.main_window.quick_start_guide_requested.connect(self._open_quick_start_guide)
+        
         # ROI drawing signals
         self.image_viewer.roi_drawing_started.connect(self._on_roi_drawing_started)
         self.image_viewer.roi_drawing_updated.connect(self._on_roi_drawing_updated)
@@ -1144,6 +1147,12 @@ class DICOMViewerApp(QObject):
         """Handle overlay configuration dialog request."""
         dialog = OverlayConfigDialog(self.config_manager, self.main_window)
         dialog.config_applied.connect(self._on_overlay_config_applied)
+        dialog.exec()
+    
+    def _open_quick_start_guide(self) -> None:
+        """Handle Quick Start Guide dialog request."""
+        from gui.dialogs.quick_start_guide_dialog import QuickStartGuideDialog
+        dialog = QuickStartGuideDialog(self.config_manager, self.main_window)
         dialog.exec()
     
     def _on_overlay_config_applied(self) -> None:

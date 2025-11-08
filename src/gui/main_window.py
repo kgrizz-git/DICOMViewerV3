@@ -60,6 +60,7 @@ class MainWindow(QMainWindow):
     series_navigation_requested = Signal(int)  # Emitted when series navigation is requested (-1 for prev, 1 for next)
     rescale_toggle_changed = Signal(bool)  # Emitted when rescale toggle changes (True = use rescaled values)
     clear_measurements_requested = Signal()  # Emitted when clear measurements is requested
+    quick_start_guide_requested = Signal()  # Emitted when Quick Start Guide is requested
     
     def __init__(self, config_manager: Optional[ConfigManager] = None):
         """
@@ -170,6 +171,11 @@ class MainWindow(QMainWindow):
         
         # Help menu
         help_menu = menubar.addMenu("&Help")
+        
+        quick_start_action = QAction("&Quick Start Guide", self)
+        quick_start_action.triggered.connect(self.quick_start_guide_requested.emit)
+        help_menu.addAction(quick_start_action)
+        help_menu.addSeparator()
         
         about_action = QAction("&About", self)
         about_action.triggered.connect(self._show_about)
