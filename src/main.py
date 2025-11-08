@@ -655,9 +655,7 @@ class DICOMViewerApp(QObject):
             
             # If new study/series, fit to view and center
             if is_new_study_series:
-                self.image_viewer.fit_to_view()
-                # Center image
-                self.image_viewer._update_scrollbar_ranges(center_image=True)
+                self.image_viewer.fit_to_view(center_image=True)
                 # Store zoom after fit_to_view
                 stored_zoom = self.image_viewer.current_zoom
                 stored_h_scroll = self.image_viewer.horizontalScrollBar().value()
@@ -996,21 +994,23 @@ class DICOMViewerApp(QObject):
                     self.image_viewer.set_image(image, preserve_view=False)
                     
                     # Now set up the view: zoom, transform, and scrollbar positions
-                    # Reset zoom and pan
-                    self.image_viewer.resetTransform()
-                    self.image_viewer.scale(reset_zoom, reset_zoom)
-                    self.image_viewer.current_zoom = reset_zoom
-                    
-                    # Update scrollbar ranges synchronously
-                    self.image_viewer._update_scrollbar_ranges()
-                    
-                    # Set scrollbar positions synchronously
+                    # If we have saved scrollbar positions, restore them; otherwise center
                     if reset_h_scroll is not None and reset_v_scroll is not None:
+                        # Restore saved zoom and scrollbar positions
+                        self.image_viewer.resetTransform()
+                        self.image_viewer.scale(reset_zoom, reset_zoom)
+                        self.image_viewer.current_zoom = reset_zoom
+                        
+                        # Set scrollbar positions synchronously
                         self.image_viewer.horizontalScrollBar().setValue(reset_h_scroll)
                         self.image_viewer.verticalScrollBar().setValue(reset_v_scroll)
-                    
-                    self.image_viewer.last_transform = self.image_viewer.transform()
-                    self.image_viewer.zoom_changed.emit(self.image_viewer.current_zoom)
+                        
+                        self.image_viewer.last_transform = self.image_viewer.transform()
+                        self.image_viewer.zoom_changed.emit(self.image_viewer.current_zoom)
+                    else:
+                        # No saved positions - use fit_to_view with centering
+                        # fit_to_view() already emits zoom_changed and updates last_transform
+                        self.image_viewer.fit_to_view(center_image=True)
                     
                     # Recreate overlay
                     parser = DICOMParser(dataset)
