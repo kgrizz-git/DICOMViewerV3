@@ -57,6 +57,7 @@ class MainWindow(QMainWindow):
     overlay_font_color_changed = Signal(int, int, int)  # Emitted when overlay font color changes (r, g, b)
     reset_view_requested = Signal()  # Emitted when reset view is requested
     viewport_resized = Signal()  # Emitted when splitter moves and viewport size changes
+    viewport_resizing = Signal()  # Emitted when splitter starts moving (before resize completes)
     series_navigation_requested = Signal(int)  # Emitted when series navigation is requested (-1 for prev, 1 for next)
     rescale_toggle_changed = Signal(bool)  # Emitted when rescale toggle changes (True = use rescaled values)
     clear_measurements_requested = Signal()  # Emitted when clear measurements is requested
@@ -614,6 +615,10 @@ class MainWindow(QMainWindow):
             pos: New position of the splitter handle
             index: Index of the splitter handle that moved
         """
+        # Emit signal to capture scene center before viewport resizes
+        # This allows preserving the centered view during resize
+        self.viewport_resizing.emit()
+        
         # Save splitter positions
         sizes = self.splitter.sizes()
         self.config_manager.set("splitter_sizes", sizes)
