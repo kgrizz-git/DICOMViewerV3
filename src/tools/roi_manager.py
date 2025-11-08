@@ -338,7 +338,8 @@ class ROIManager:
     
     def calculate_statistics(self, roi: ROIItem, pixel_array: np.ndarray, 
                             rescale_slope: Optional[float] = None,
-                            rescale_intercept: Optional[float] = None) -> Dict[str, float]:
+                            rescale_intercept: Optional[float] = None,
+                            pixel_spacing: Optional[Tuple[float, float]] = None) -> Dict[str, float]:
         """
         Calculate statistics for an ROI.
         
@@ -347,9 +348,10 @@ class ROIManager:
             pixel_array: Image pixel array
             rescale_slope: Optional rescale slope to apply to pixel values
             rescale_intercept: Optional rescale intercept to apply to pixel values
+            pixel_spacing: Optional pixel spacing tuple (row_spacing, col_spacing) in mm for area calculation
             
         Returns:
-            Dictionary with statistics (mean, std, min, max, etc.)
+            Dictionary with statistics (mean, std, min, max, count, area_pixels, area_mm2)
         """
         height, width = pixel_array.shape[:2]
         
@@ -369,11 +371,24 @@ class ROIManager:
                 "std": 0.0,
                 "min": 0.0,
                 "max": 0.0,
-                "count": 0
+                "count": 0,
+                "area_pixels": 0.0,
+                "area_mm2": None
             }
         
         # Get mask for ROI shape
         mask = roi.get_mask(width, height)
+        
+        # Calculate area in pixels
+        area_pixels = float(np.sum(mask))
+        
+        # Calculate area in mm² if pixel spacing is available
+        area_mm2 = None
+        if pixel_spacing is not None and len(pixel_spacing) >= 2:
+            row_spacing = pixel_spacing[0]  # mm per pixel in row direction
+            col_spacing = pixel_spacing[1]  # mm per pixel in column direction
+            # Area in mm² = area in pixels * (row_spacing * col_spacing)
+            area_mm2 = area_pixels * row_spacing * col_spacing
         
         # Get pixels within ROI
         roi_pixels = pixel_array[mask]
@@ -384,7 +399,9 @@ class ROIManager:
                 "std": 0.0,
                 "min": 0.0,
                 "max": 0.0,
-                "count": 0
+                "count": 0,
+                "area_pixels": area_pixels,
+                "area_mm2": area_mm2
             }
         
         # Apply rescale if parameters provided
@@ -396,6 +413,8 @@ class ROIManager:
             "std": float(np.std(roi_pixels)),
             "min": float(np.min(roi_pixels)),
             "max": float(np.max(roi_pixels)),
-            "count": int(len(roi_pixels))
+            "count": int(len(roi_pixels)),
+            "area_pixels": area_pixels,
+            "area_mm2": area_mm2
         }
 

@@ -195,12 +195,18 @@ class DICOMViewerApp(QObject):
         self.image_viewer.roi_drawing_updated.connect(self._on_roi_drawing_updated)
         self.image_viewer.roi_drawing_finished.connect(self._on_roi_drawing_finished)
         
+        # Measurement signals
+        self.image_viewer.measurement_started.connect(self._on_measurement_started)
+        self.image_viewer.measurement_updated.connect(self._on_measurement_updated)
+        self.image_viewer.measurement_finished.connect(self._on_measurement_finished)
+        
         # ROI click signal
         self.image_viewer.roi_clicked.connect(self._on_roi_clicked)
         self.image_viewer.image_clicked_no_roi.connect(self._on_image_clicked_no_roi)
         
         # ROI delete signal (from right-click context menu)
         self.image_viewer.roi_delete_requested.connect(self._on_roi_delete_requested)
+        self.image_viewer.measurement_delete_requested.connect(self._on_measurement_delete_requested)
         
         # ROI list panel signals
         self.roi_list_panel.roi_selected.connect(self._on_roi_selected)
@@ -260,6 +266,10 @@ class DICOMViewerApp(QObject):
         self.main_window.reset_view_requested.connect(self._reset_view)
         self.image_viewer.reset_view_requested.connect(self._reset_view)
         
+        # Clear measurements signals
+        self.main_window.clear_measurements_requested.connect(self._on_clear_measurements_requested)
+        self.image_viewer.clear_measurements_requested.connect(self._on_clear_measurements_requested)
+        
         # Viewport resize (when splitter moves)
         self.main_window.viewport_resized.connect(self._on_viewport_resized)
         
@@ -276,6 +286,7 @@ class DICOMViewerApp(QObject):
         self.roi_manager.clear_all_rois(self.image_viewer.scene)
         self.roi_list_panel.update_roi_list("", "", 0)  # Clear list
         self.roi_statistics_panel.clear_statistics()
+        self.measurement_tool.clear_measurements(self.image_viewer.scene)
         
         # Add first file to recent files (representing this file selection)
         if file_paths:
@@ -769,8 +780,30 @@ class DICOMViewerApp(QObject):
                 total_slices=total_slices if total_slices > 0 else None
             )
             
+            # Extract pixel spacing and set on measurement tool
+            from utils.dicom_utils import get_pixel_spacing
+            pixel_spacing = get_pixel_spacing(dataset)
+            self.measurement_tool.set_pixel_spacing(pixel_spacing)
+            
+            # Set current slice context for measurements
+            study_uid = getattr(dataset, 'StudyInstanceUID', '')
+            series_uid = getattr(dataset, 'SeriesInstanceUID', '')
+            instance_number = getattr(dataset, 'InstanceNumber', None)
+            if instance_number is None:
+                instance_identifier = self.current_slice_index
+            else:
+                instance_identifier = int(instance_number)
+            self.measurement_tool.set_current_slice(study_uid, series_uid, instance_identifier)
+            
+            # Clear measurements when switching to new series (not when switching slices)
+            if is_new_study_series:
+                self.measurement_tool.clear_measurements(self.image_viewer.scene)
+            
             # Display ROIs for current slice
             self._display_rois_for_slice(dataset)
+            
+            # Display measurements for current slice
+            self._display_measurements_for_slice(dataset)
         
         except Exception as e:
             self.main_window.update_status(f"Error displaying slice: {str(e)}")
@@ -1056,9 +1089,36 @@ class DICOMViewerApp(QObject):
         else:
             # No selected ROI for this slice - clear statistics
             self.roi_statistics_panel.clear_statistics()
+    
+    def _display_measurements_for_slice(self, dataset) -> None:
+        """
+        Display measurements for a slice.
         
-        # Update ROI list panel with composite key
-        self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
+        Ensures all measurements for the current slice are visible in the scene.
+        Removes measurements from other slices before displaying current slice measurements.
+        
+        Args:
+            dataset: pydicom Dataset for the current slice
+        """
+        # Extract DICOM identifiers
+        study_uid = getattr(dataset, 'StudyInstanceUID', '')
+        series_uid = getattr(dataset, 'SeriesInstanceUID', '')
+        # Try to get InstanceNumber from DICOM, fall back to slice_index
+        instance_number = getattr(dataset, 'InstanceNumber', None)
+        if instance_number is None:
+            instance_identifier = self.current_slice_index
+        else:
+            instance_identifier = int(instance_number)
+        
+        # Clear measurements from other slices first
+        self.measurement_tool.clear_measurements_from_other_slices(
+            study_uid, series_uid, instance_identifier, self.image_viewer.scene
+        )
+        
+        # Display measurements for this slice
+        self.measurement_tool.display_measurements_for_slice(
+            study_uid, series_uid, instance_identifier, self.image_viewer.scene
+        )
     
     def _open_settings(self) -> None:
         """Handle settings dialog request."""
@@ -1163,7 +1223,7 @@ class DICOMViewerApp(QObject):
         Handle mouse mode change from toolbar.
         
         Args:
-            mode: Mouse mode ("roi_ellipse", "roi_rectangle", "measure", "zoom", "pan")
+            mode: Mouse mode ("select", "roi_ellipse", "roi_rectangle", "measure", "zoom", "pan", "auto_window_level")
         """
         self.image_viewer.set_mouse_mode(mode)
     
@@ -1233,13 +1293,18 @@ class DICOMViewerApp(QObject):
                     # Get pixel array
                     pixel_array = self.dicom_processor.get_pixel_array(self.current_dataset)
                     if pixel_array is not None:
+                        # Extract pixel spacing for area calculation
+                        from utils.dicom_utils import get_pixel_spacing
+                        pixel_spacing = get_pixel_spacing(self.current_dataset)
+                        
                         # Calculate statistics with rescale parameters if using rescaled values
                         rescale_slope = self.rescale_slope if self.use_rescaled_values else None
                         rescale_intercept = self.rescale_intercept if self.use_rescaled_values else None
                         stats = self.roi_manager.calculate_statistics(
                             roi, pixel_array,
                             rescale_slope=rescale_slope,
-                            rescale_intercept=rescale_intercept
+                            rescale_intercept=rescale_intercept,
+                            pixel_spacing=pixel_spacing
                         )
                         if stats and "min" in stats and "max" in stats:
                             # Set window width = max - min
@@ -1314,6 +1379,75 @@ class DICOMViewerApp(QObject):
         self.roi_list_panel.select_roi_in_list(None)
         # Clear ROI statistics panel
         self.roi_statistics_panel.clear_statistics()
+    
+    def _on_measurement_started(self, pos: QPointF) -> None:
+        """
+        Handle measurement start.
+        
+        Args:
+            pos: Starting position
+        """
+        # Set current slice context before starting measurement
+        if self.current_dataset is not None:
+            study_uid = getattr(self.current_dataset, 'StudyInstanceUID', '')
+            series_uid = getattr(self.current_dataset, 'SeriesInstanceUID', '')
+            instance_number = getattr(self.current_dataset, 'InstanceNumber', None)
+            if instance_number is None:
+                instance_identifier = self.current_slice_index
+            else:
+                instance_identifier = int(instance_number)
+            self.measurement_tool.set_current_slice(study_uid, series_uid, instance_identifier)
+        
+        self.measurement_tool.start_measurement(pos)
+    
+    def _on_measurement_updated(self, pos: QPointF) -> None:
+        """
+        Handle measurement update.
+        
+        Args:
+            pos: Current position
+        """
+        if self.image_viewer.scene is not None:
+            self.measurement_tool.update_measurement(pos, self.image_viewer.scene)
+    
+    def _on_measurement_finished(self) -> None:
+        """Handle measurement finish."""
+        if self.image_viewer.scene is not None:
+            measurement = self.measurement_tool.finish_measurement(self.image_viewer.scene)
+            if measurement is not None:
+                # Measurement completed successfully
+                pass
+    
+    def _on_measurement_delete_requested(self, measurement_item) -> None:
+        """
+        Handle measurement deletion request from context menu.
+        
+        Args:
+            measurement_item: MeasurementItem to delete
+        """
+        if self.image_viewer.scene is not None:
+            self.measurement_tool.delete_measurement(measurement_item, self.image_viewer.scene)
+    
+    def _on_clear_measurements_requested(self) -> None:
+        """
+        Handle clear measurements request from toolbar or context menu.
+        
+        Clears all measurements on the current slice only.
+        """
+        if self.image_viewer.scene is not None and self.current_dataset is not None:
+            # Extract DICOM identifiers for current slice
+            study_uid = getattr(self.current_dataset, 'StudyInstanceUID', '')
+            series_uid = getattr(self.current_dataset, 'SeriesInstanceUID', '')
+            instance_number = getattr(self.current_dataset, 'InstanceNumber', None)
+            if instance_number is None:
+                instance_identifier = self.current_slice_index
+            else:
+                instance_identifier = int(instance_number)
+            
+            # Clear measurements for current slice
+            self.measurement_tool.clear_slice_measurements(
+                study_uid, series_uid, instance_identifier, self.image_viewer.scene
+            )
     
     def _on_roi_selected(self, roi) -> None:
         """
@@ -1774,13 +1908,18 @@ class DICOMViewerApp(QObject):
             
             pixel_array = self.dicom_processor.get_pixel_array(self.current_dataset)
             if pixel_array is not None:
+                # Extract pixel spacing for area calculation
+                from utils.dicom_utils import get_pixel_spacing
+                pixel_spacing = get_pixel_spacing(self.current_dataset)
+                
                 # Pass rescale parameters if using rescaled values
                 rescale_slope = self.rescale_slope if self.use_rescaled_values else None
                 rescale_intercept = self.rescale_intercept if self.use_rescaled_values else None
                 stats = self.roi_manager.calculate_statistics(
                     roi, pixel_array, 
                     rescale_slope=rescale_slope,
-                    rescale_intercept=rescale_intercept
+                    rescale_intercept=rescale_intercept,
+                    pixel_spacing=pixel_spacing
                 )
                 # Pass rescale_type for display
                 rescale_type = self.rescale_type if self.use_rescaled_values else None
@@ -1820,14 +1959,37 @@ class DICOMViewerApp(QObject):
         """
         from PySide6.QtGui import QKeyEvent
         if isinstance(event, QKeyEvent) and event.type() == QKeyEvent.Type.KeyPress:
-            # Delete key to delete selected ROI
+            # Delete key to delete selected ROI or measurement
             if event.key() == Qt.Key.Key_Delete or event.key() == Qt.Key.Key_Backspace:
+                # Check for selected ROI first (priority)
                 selected_roi = self.roi_manager.get_selected_roi()
                 if selected_roi:
                     self.roi_manager.delete_roi(selected_roi, self.image_viewer.scene)
-                    self.roi_list_panel.update_roi_list(self.current_slice_index)
+                    # Update ROI list panel - extract identifiers from current dataset
+                    if self.current_dataset is not None:
+                        study_uid = getattr(self.current_dataset, 'StudyInstanceUID', '')
+                        series_uid = getattr(self.current_dataset, 'SeriesInstanceUID', '')
+                        instance_number = getattr(self.current_dataset, 'InstanceNumber', None)
+                        if instance_number is None:
+                            instance_identifier = self.current_slice_index
+                        else:
+                            instance_identifier = int(instance_number)
+                        self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
                     self.roi_statistics_panel.clear_statistics()
                     return True
+                
+                # Check for selected measurement
+                if self.image_viewer.scene is not None:
+                    try:
+                        selected_items = self.image_viewer.scene.selectedItems()
+                        from tools.measurement_tool import MeasurementItem
+                        for item in selected_items:
+                            if isinstance(item, MeasurementItem):
+                                self.measurement_tool.delete_measurement(item, self.image_viewer.scene)
+                                return True
+                    except RuntimeError:
+                        # Scene may have been deleted, ignore
+                        pass
             # Arrow keys for slice navigation
             elif event.key() == Qt.Key.Key_Up:
                 # Up arrow: next slice
