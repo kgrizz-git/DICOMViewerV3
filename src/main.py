@@ -947,7 +947,9 @@ class DICOMViewerApp(QObject):
                         break
                 # Remove ROI if it's from a different slice
                 if not roi_belongs_to_current:
-                    self.image_viewer.scene.removeItem(item)
+                    # Only remove if item actually belongs to this scene
+                    if item.scene() == self.image_viewer.scene:
+                        self.image_viewer.scene.removeItem(item)
         
         # Add ROIs for current slice to scene if not already there
         for roi in rois:
@@ -1162,6 +1164,9 @@ class DICOMViewerApp(QObject):
                             # Delete the ROI (it was only used for calculation)
                             self.roi_manager.delete_roi(roi, self.image_viewer.scene)
                             
+                            # Clear statistics panel since ROI was deleted
+                            self.roi_statistics_panel.clear_statistics()
+                            
                             # Update ROI list panel
                             self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
                             
@@ -1178,6 +1183,8 @@ class DICOMViewerApp(QObject):
                 if roi_item is not None:
                     # roi_item is already the ROIItem we need
                     self.roi_manager.delete_roi(roi_item, self.image_viewer.scene)
+                    # Clear statistics panel since ROI was deleted
+                    self.roi_statistics_panel.clear_statistics()
                     self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
                 self.image_viewer.set_mouse_mode("pan")
                 self.main_window.mouse_mode_pan_action.setChecked(True)
@@ -1350,10 +1357,28 @@ class DICOMViewerApp(QObject):
                             total_slices=total_slices if total_slices > 0 else None
                         )
             
-            # Update ROI statistics if ROI is selected
+            # Update ROI statistics if ROI is selected and belongs to current slice
             selected_roi = self.roi_manager.get_selected_roi()
-            if selected_roi is not None:
-                self._update_roi_statistics(selected_roi)
+            if selected_roi is not None and self.current_dataset is not None:
+                # Verify the selected ROI belongs to the current slice
+                study_uid = getattr(self.current_dataset, 'StudyInstanceUID', '')
+                series_uid = getattr(self.current_dataset, 'SeriesInstanceUID', '')
+                instance_number = getattr(self.current_dataset, 'InstanceNumber', None)
+                if instance_number is None:
+                    instance_identifier = self.current_slice_index
+                else:
+                    instance_identifier = int(instance_number)
+                
+                # Check if selected ROI belongs to current slice
+                current_slice_rois = self.roi_manager.get_rois_for_slice(study_uid, series_uid, instance_identifier)
+                if selected_roi in current_slice_rois:
+                    self._update_roi_statistics(selected_roi)
+                else:
+                    # Selected ROI doesn't belong to current slice - clear statistics
+                    self.roi_statistics_panel.clear_statistics()
+            else:
+                # No selected ROI - clear statistics
+                self.roi_statistics_panel.clear_statistics()
     
     def _on_zoom_changed(self, zoom_level: float) -> None:
         """
