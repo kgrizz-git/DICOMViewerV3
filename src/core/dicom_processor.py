@@ -42,6 +42,53 @@ class DICOMProcessor:
     """
     
     @staticmethod
+    def get_rescale_parameters(dataset: Dataset) -> Tuple[Optional[float], Optional[float], Optional[str]]:
+        """
+        Extract rescale parameters from DICOM dataset.
+        
+        Args:
+            dataset: pydicom Dataset
+            
+        Returns:
+            Tuple of (rescale_slope, rescale_intercept, rescale_type) or (None, None, None) if not present
+        """
+        try:
+            # RescaleSlope (0028,1053)
+            rescale_slope = None
+            if hasattr(dataset, 'RescaleSlope'):
+                slope_value = dataset.RescaleSlope
+                if isinstance(slope_value, (list, tuple)):
+                    rescale_slope = float(slope_value[0])
+                else:
+                    rescale_slope = float(slope_value)
+            
+            # RescaleIntercept (0028,1502) - Note: tag is 0028,1502, not 0028,1052
+            rescale_intercept = None
+            if hasattr(dataset, 'RescaleIntercept'):
+                intercept_value = dataset.RescaleIntercept
+                if isinstance(intercept_value, (list, tuple)):
+                    rescale_intercept = float(intercept_value[0])
+                else:
+                    rescale_intercept = float(intercept_value)
+            
+            # RescaleType (0028,1054)
+            rescale_type = None
+            if hasattr(dataset, 'RescaleType'):
+                type_value = dataset.RescaleType
+                if isinstance(type_value, (list, tuple)):
+                    rescale_type = str(type_value[0]).strip()
+                else:
+                    rescale_type = str(type_value).strip()
+                # Return None if empty string
+                if not rescale_type:
+                    rescale_type = None
+            
+            return rescale_slope, rescale_intercept, rescale_type
+        except Exception as e:
+            print(f"Error extracting rescale parameters: {e}")
+            return None, None, None
+    
+    @staticmethod
     def get_pixel_array(dataset: Dataset) -> Optional[np.ndarray]:
         """
         Extract pixel array from DICOM dataset.
@@ -144,7 +191,7 @@ class DICOMProcessor:
     
     @staticmethod
     def dataset_to_image(dataset: Dataset, window_center: Optional[float] = None,
-                        window_width: Optional[float] = None) -> Optional[Image.Image]:
+                        window_width: Optional[float] = None, apply_rescale: bool = False) -> Optional[Image.Image]:
         """
         Convert DICOM dataset to PIL Image.
         
@@ -152,6 +199,7 @@ class DICOMProcessor:
             dataset: pydicom Dataset
             window_center: Optional window center (uses dataset default if None)
             window_width: Optional window width (uses dataset default if None)
+            apply_rescale: If True, apply rescale slope/intercept in window/level calculation
             
         Returns:
             PIL Image or None if conversion fails
@@ -168,9 +216,11 @@ class DICOMProcessor:
             if window_width is None:
                 window_width = ds_ww
         
-        # Get rescale parameters
-        rescale_slope = getattr(dataset, 'RescaleSlope', None)
-        rescale_intercept = getattr(dataset, 'RescaleIntercept', None)
+        # Get rescale parameters if apply_rescale is True
+        rescale_slope = None
+        rescale_intercept = None
+        if apply_rescale:
+            rescale_slope, rescale_intercept, _ = DICOMProcessor.get_rescale_parameters(dataset)
         
         # Apply window/level
         if window_center is not None and window_width is not None:
@@ -262,13 +312,14 @@ class DICOMProcessor:
         return mip
     
     @staticmethod
-    def get_pixel_value_range(dataset: Dataset) -> Tuple[Optional[float], Optional[float]]:
+    def get_pixel_value_range(dataset: Dataset, apply_rescale: bool = False) -> Tuple[Optional[float], Optional[float]]:
         """
         Get the minimum and maximum pixel values from a DICOM dataset.
-        Considers rescale slope and intercept if present.
+        Optionally applies rescale slope and intercept if present.
         
         Args:
             dataset: pydicom Dataset
+            apply_rescale: If True, apply rescale slope/intercept if present
             
         Returns:
             Tuple of (min_value, max_value) or (None, None) if extraction fails
@@ -278,13 +329,11 @@ class DICOMProcessor:
             if pixel_array is None:
                 return None, None
             
-            # Get rescale parameters
-            rescale_slope = getattr(dataset, 'RescaleSlope', None)
-            rescale_intercept = getattr(dataset, 'RescaleIntercept', None)
-            
-            # Apply rescale if present
-            if rescale_slope is not None and rescale_intercept is not None:
-                pixel_array = pixel_array.astype(np.float32) * float(rescale_slope) + float(rescale_intercept)
+            # Apply rescale if requested and parameters exist
+            if apply_rescale:
+                rescale_slope, rescale_intercept, _ = DICOMProcessor.get_rescale_parameters(dataset)
+                if rescale_slope is not None and rescale_intercept is not None:
+                    pixel_array = pixel_array.astype(np.float32) * float(rescale_slope) + float(rescale_intercept)
             
             pixel_min = float(np.min(pixel_array))
             pixel_max = float(np.max(pixel_array))
@@ -295,13 +344,14 @@ class DICOMProcessor:
             return None, None
     
     @staticmethod
-    def get_series_pixel_value_range(datasets: List[Dataset]) -> Tuple[Optional[float], Optional[float]]:
+    def get_series_pixel_value_range(datasets: List[Dataset], apply_rescale: bool = False) -> Tuple[Optional[float], Optional[float]]:
         """
         Get the minimum and maximum pixel values across an entire series.
-        Considers rescale slope and intercept if present.
+        Optionally applies rescale slope and intercept if present.
         
         Args:
             datasets: List of pydicom Dataset objects for the series
+            apply_rescale: If True, apply rescale slope/intercept if present
             
         Returns:
             Tuple of (min_value, max_value) across all slices, or (None, None) if extraction fails
@@ -318,13 +368,11 @@ class DICOMProcessor:
                 if pixel_array is None:
                     continue
                 
-                # Get rescale parameters
-                rescale_slope = getattr(dataset, 'RescaleSlope', None)
-                rescale_intercept = getattr(dataset, 'RescaleIntercept', None)
-                
-                # Apply rescale if present
-                if rescale_slope is not None and rescale_intercept is not None:
-                    pixel_array = pixel_array.astype(np.float32) * float(rescale_slope) + float(rescale_intercept)
+                # Apply rescale if requested and parameters exist
+                if apply_rescale:
+                    rescale_slope, rescale_intercept, _ = DICOMProcessor.get_rescale_parameters(dataset)
+                    if rescale_slope is not None and rescale_intercept is not None:
+                        pixel_array = pixel_array.astype(np.float32) * float(rescale_slope) + float(rescale_intercept)
                 
                 slice_min = float(np.min(pixel_array))
                 slice_max = float(np.max(pixel_array))

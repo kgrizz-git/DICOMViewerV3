@@ -328,13 +328,17 @@ class ROIManager:
                 scene.removeItem(roi.item)
         self.rois.clear()
     
-    def calculate_statistics(self, roi: ROIItem, pixel_array: np.ndarray) -> Dict[str, float]:
+    def calculate_statistics(self, roi: ROIItem, pixel_array: np.ndarray, 
+                            rescale_slope: Optional[float] = None,
+                            rescale_intercept: Optional[float] = None) -> Dict[str, float]:
         """
         Calculate statistics for an ROI.
         
         Args:
             roi: ROI item
             pixel_array: Image pixel array
+            rescale_slope: Optional rescale slope to apply to pixel values
+            rescale_intercept: Optional rescale intercept to apply to pixel values
             
         Returns:
             Dictionary with statistics (mean, std, min, max, etc.)
@@ -374,6 +378,10 @@ class ROIManager:
                 "max": 0.0,
                 "count": 0
             }
+        
+        # Apply rescale if parameters provided
+        if rescale_slope is not None and rescale_intercept is not None:
+            roi_pixels = roi_pixels.astype(np.float32) * float(rescale_slope) + float(rescale_intercept)
         
         return {
             "mean": float(np.mean(roi_pixels)),

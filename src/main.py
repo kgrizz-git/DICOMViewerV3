@@ -142,6 +142,12 @@ class DICOMViewerApp(QObject):
         
         # Tag viewer dialog (persistent)
         self.tag_viewer_dialog: Optional[TagViewerDialog] = None
+        
+        # Rescale state management
+        self.use_rescaled_values: bool = False  # Default to False, will be set based on dataset
+        self.rescale_slope: Optional[float] = None
+        self.rescale_intercept: Optional[float] = None
+        self.rescale_type: Optional[str] = None
     
     def _setup_ui(self) -> None:
         """Set up the user interface layout."""
@@ -222,6 +228,10 @@ class DICOMViewerApp(QObject):
         # Context menu changes (from image viewer)
         self.image_viewer.context_menu_mouse_mode_changed.connect(self._on_context_menu_mouse_mode_changed)
         self.image_viewer.context_menu_scroll_wheel_mode_changed.connect(self._on_context_menu_scroll_wheel_mode_changed)
+        self.image_viewer.context_menu_rescale_toggle_changed.connect(self._on_rescale_toggle_changed)
+        
+        # Rescale toggle from toolbar
+        self.main_window.rescale_toggle_changed.connect(self._on_rescale_toggle_changed)
         
         # Zoom changes - update overlay positions to keep text anchored
         self.image_viewer.zoom_changed.connect(self._on_zoom_changed)
@@ -513,6 +523,9 @@ class DICOMViewerApp(QObject):
             # Store current dataset
             self.current_dataset = dataset
             
+            # Extract and store rescale parameters from dataset
+            self.rescale_slope, self.rescale_intercept, self.rescale_type = self.dicom_processor.get_rescale_parameters(dataset)
+            
             # Get series UID from dataset to check if we're in the same series
             new_series_uid = getattr(dataset, 'SeriesInstanceUID', '')
             is_same_series = (new_series_uid == self.current_series_uid and self.current_series_uid != "")
@@ -520,6 +533,14 @@ class DICOMViewerApp(QObject):
             # Detect if this is a new study/series
             is_new_study_series = self._is_new_study_or_series(dataset)
             series_identifier = self._get_series_identifier(dataset)
+            
+            # Set default use_rescaled_values based on whether parameters exist
+            # Default to True if parameters exist, False otherwise
+            if is_new_study_series:
+                self.use_rescaled_values = (self.rescale_slope is not None and self.rescale_intercept is not None)
+                # Update UI toggle state
+                self.main_window.set_rescale_toggle_state(self.use_rescaled_values)
+                self.image_viewer.set_rescale_toggle_state(self.use_rescaled_values)
             
             # If new study/series, check for stored defaults or calculate new ones
             stored_window_center = None
@@ -550,7 +571,9 @@ class DICOMViewerApp(QObject):
                             series_datasets = self.current_studies[study_uid][new_series_uid]
                             
                             # Calculate pixel range for entire series
-                            series_pixel_min, series_pixel_max = self.dicom_processor.get_series_pixel_value_range(series_datasets)
+                            series_pixel_min, series_pixel_max = self.dicom_processor.get_series_pixel_value_range(
+                                series_datasets, apply_rescale=self.use_rescaled_values
+                            )
                             
                             # Check for window/level in DICOM metadata (use first dataset)
                             wc, ww = self.dicom_processor.get_window_level_from_dataset(dataset)
@@ -567,7 +590,9 @@ class DICOMViewerApp(QObject):
                                     stored_window_width = 1.0
                             else:
                                 # Fallback to single slice
-                                pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(dataset)
+                                pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(
+                                    dataset, apply_rescale=self.use_rescaled_values
+                                )
                                 if pixel_min is not None and pixel_max is not None:
                                     stored_window_center = (pixel_min + pixel_max) / 2.0
                                     stored_window_width = pixel_max - pixel_min
@@ -586,10 +611,14 @@ class DICOMViewerApp(QObject):
                 image = self.dicom_processor.dataset_to_image(
                     dataset,
                     window_center=self.current_window_center,
-                    window_width=self.current_window_width
+                    window_width=self.current_window_width,
+                    apply_rescale=self.use_rescaled_values
                 )
             else:
-                image = self.dicom_processor.dataset_to_image(dataset)
+                image = self.dicom_processor.dataset_to_image(
+                    dataset,
+                    apply_rescale=self.use_rescaled_values
+                )
             if image is None:
                 return
             
@@ -618,7 +647,9 @@ class DICOMViewerApp(QObject):
                 self.tag_viewer_dialog.set_dataset(dataset)
             
             # Calculate pixel value range for window/level controls
-            pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(dataset)
+            pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(
+                dataset, apply_rescale=self.use_rescaled_values
+            )
             if pixel_min is not None and pixel_max is not None:
                 # Set ranges based on actual pixel values (no margins)
                 center_range = (pixel_min, pixel_max)
@@ -626,10 +657,16 @@ class DICOMViewerApp(QObject):
                 width_range = (1.0, max(1.0, pixel_max - pixel_min))
                 self.window_level_controls.set_ranges(center_range, width_range)
             
+            # Update window/level controls unit label
+            unit = self.rescale_type if (self.use_rescaled_values and self.rescale_type) else None
+            self.window_level_controls.set_unit(unit)
+            
             # Update window/level controls
             if is_new_study_series and stored_window_center is not None and stored_window_width is not None:
                 # New series - use stored defaults
-                self.window_level_controls.set_window_level(stored_window_center, stored_window_width, block_signals=True)
+                self.window_level_controls.set_window_level(
+                    stored_window_center, stored_window_width, block_signals=True, unit=unit
+                )
                 self.current_window_center = stored_window_center
                 self.current_window_width = stored_window_width
                 self.window_level_user_modified = False  # Reset flag for new series
@@ -644,13 +681,15 @@ class DICOMViewerApp(QObject):
             elif is_same_series and self.current_window_center is not None and self.current_window_width is not None:
                 # Same series - preserve existing window/level values (whether user-modified or not)
                 # Update UI controls to reflect the preserved values
-                self.window_level_controls.set_window_level(self.current_window_center, self.current_window_width, block_signals=True)
+                self.window_level_controls.set_window_level(
+                    self.current_window_center, self.current_window_width, block_signals=True, unit=unit
+                )
                 # Do NOT reset window_level_user_modified flag - preserve it
             else:
                 # First time displaying or no existing values - use values from dataset or calculate defaults
                 wc, ww = self.dicom_processor.get_window_level_from_dataset(dataset)
                 if wc is not None and ww is not None:
-                    self.window_level_controls.set_window_level(wc, ww, block_signals=True)
+                    self.window_level_controls.set_window_level(wc, ww, block_signals=True, unit=unit)
                     self.current_window_center = wc
                     self.current_window_width = ww
                 elif pixel_min is not None and pixel_max is not None:
@@ -659,7 +698,7 @@ class DICOMViewerApp(QObject):
                     default_width = pixel_max - pixel_min
                     if default_width <= 0:
                         default_width = 1.0
-                    self.window_level_controls.set_window_level(default_center, default_width, block_signals=True)
+                    self.window_level_controls.set_window_level(default_center, default_width, block_signals=True, unit=unit)
                     self.current_window_center = default_center
                     self.current_window_width = default_width
                 
@@ -853,7 +892,8 @@ class DICOMViewerApp(QObject):
                     image = self.dicom_processor.dataset_to_image(
                         dataset,
                         window_center=reset_window_center,
-                        window_width=reset_window_width
+                        window_width=reset_window_width,
+                        apply_rescale=self.use_rescaled_values
                     )
                     if image:
                         # Preserve view when resetting window/level
@@ -1012,7 +1052,8 @@ class DICOMViewerApp(QObject):
                 image = self.dicom_processor.dataset_to_image(
                     dataset,
                     window_center=center,
-                    window_width=width
+                    window_width=width,
+                    apply_rescale=self.use_rescaled_values
                 )
                 if image:
                     # Preserve view when window/level changes (same slice)
@@ -1101,8 +1142,14 @@ class DICOMViewerApp(QObject):
                     # Get pixel array
                     pixel_array = self.dicom_processor.get_pixel_array(self.current_dataset)
                     if pixel_array is not None:
-                        # Calculate statistics
-                        stats = self.roi_manager.calculate_statistics(roi, pixel_array)
+                        # Calculate statistics with rescale parameters if using rescaled values
+                        rescale_slope = self.rescale_slope if self.use_rescaled_values else None
+                        rescale_intercept = self.rescale_intercept if self.use_rescaled_values else None
+                        stats = self.roi_manager.calculate_statistics(
+                            roi, pixel_array,
+                            rescale_slope=rescale_slope,
+                            rescale_intercept=rescale_intercept
+                        )
                         if stats and "min" in stats and "max" in stats:
                             # Set window width = max - min
                             window_width = stats["max"] - stats["min"]
@@ -1243,6 +1290,70 @@ class DICOMViewerApp(QObject):
         
         # Emit the main_window signal to trigger normal flow
         self.main_window.scroll_wheel_mode_changed.emit(mode)
+    
+    def _on_rescale_toggle_changed(self, checked: bool) -> None:
+        """
+        Handle rescale toggle change from toolbar or context menu.
+        
+        Args:
+            checked: True to use rescaled values, False to use raw values
+        """
+        # Update state
+        self.use_rescaled_values = checked
+        
+        # Update UI toggle states
+        self.main_window.set_rescale_toggle_state(checked)
+        self.image_viewer.set_rescale_toggle_state(checked)
+        
+        # Recalculate and update everything
+        if self.current_dataset is not None:
+            # Recalculate pixel value ranges
+            pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(
+                self.current_dataset, apply_rescale=self.use_rescaled_values
+            )
+            if pixel_min is not None and pixel_max is not None:
+                center_range = (pixel_min, pixel_max)
+                width_range = (1.0, max(1.0, pixel_max - pixel_min))
+                self.window_level_controls.set_ranges(center_range, width_range)
+            
+            # Update window/level unit labels
+            unit = self.rescale_type if (self.use_rescaled_values and self.rescale_type) else None
+            self.window_level_controls.set_unit(unit)
+            
+            # Re-display current slice with new rescale setting
+            if self.current_studies and self.current_series_uid:
+                datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
+                if self.current_slice_index < len(datasets):
+                    dataset = datasets[self.current_slice_index]
+                    # Re-display with current window/level but new rescale setting
+                    if self.current_window_center is not None and self.current_window_width is not None:
+                        image = self.dicom_processor.dataset_to_image(
+                            dataset,
+                            window_center=self.current_window_center,
+                            window_width=self.current_window_width,
+                            apply_rescale=self.use_rescaled_values
+                        )
+                    else:
+                        image = self.dicom_processor.dataset_to_image(
+                            dataset,
+                            apply_rescale=self.use_rescaled_values
+                        )
+                    if image:
+                        # Preserve view when toggling rescale
+                        self.image_viewer.set_image(image, preserve_view=True)
+                        # Recreate overlay
+                        parser = DICOMParser(dataset)
+                        total_slices = len(datasets)
+                        self.overlay_manager.create_overlay_items(
+                            self.image_viewer.scene,
+                            parser,
+                            total_slices=total_slices if total_slices > 0 else None
+                        )
+            
+            # Update ROI statistics if ROI is selected
+            selected_roi = self.roi_manager.get_selected_roi()
+            if selected_roi is not None:
+                self._update_roi_statistics(selected_roi)
     
     def _on_zoom_changed(self, zoom_level: float) -> None:
         """
@@ -1497,8 +1608,17 @@ class DICOMViewerApp(QObject):
             
             pixel_array = self.dicom_processor.get_pixel_array(self.current_dataset)
             if pixel_array is not None:
-                stats = self.roi_manager.calculate_statistics(roi, pixel_array)
-                self.roi_statistics_panel.update_statistics(stats, roi_identifier)
+                # Pass rescale parameters if using rescaled values
+                rescale_slope = self.rescale_slope if self.use_rescaled_values else None
+                rescale_intercept = self.rescale_intercept if self.use_rescaled_values else None
+                stats = self.roi_manager.calculate_statistics(
+                    roi, pixel_array, 
+                    rescale_slope=rescale_slope,
+                    rescale_intercept=rescale_intercept
+                )
+                # Pass rescale_type for display
+                rescale_type = self.rescale_type if self.use_rescaled_values else None
+                self.roi_statistics_panel.update_statistics(stats, roi_identifier, rescale_type=rescale_type)
         except Exception as e:
             print(f"Error calculating ROI statistics: {e}")
     

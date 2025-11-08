@@ -75,13 +75,15 @@ class ROIStatisticsPanel(QWidget):
         layout.addWidget(self.stats_table)
         layout.addStretch()
     
-    def update_statistics(self, statistics: Dict[str, float], roi_identifier: Optional[str] = None) -> None:
+    def update_statistics(self, statistics: Dict[str, float], roi_identifier: Optional[str] = None,
+                         rescale_type: Optional[str] = None) -> None:
         """
         Update displayed statistics.
         
         Args:
             statistics: Dictionary with statistics (mean, std, min, max, count)
             roi_identifier: Optional ROI identifier string (e.g., "ROI 1 (rectangle)")
+            rescale_type: Optional rescale type (e.g., "HU") to append to values
         """
         self.current_statistics = statistics
         
@@ -91,11 +93,14 @@ class ROIStatisticsPanel(QWidget):
         else:
             self.title_label.setText("ROI Statistics")
         
+        # Format values with units if rescale_type is provided
+        unit_suffix = f" {rescale_type}" if rescale_type else ""
+        
         # Update table
-        self.stats_table.setItem(0, 1, QTableWidgetItem(f"{statistics.get('mean', 0):.2f}"))
-        self.stats_table.setItem(1, 1, QTableWidgetItem(f"{statistics.get('std', 0):.2f}"))
-        self.stats_table.setItem(2, 1, QTableWidgetItem(f"{statistics.get('min', 0):.2f}"))
-        self.stats_table.setItem(3, 1, QTableWidgetItem(f"{statistics.get('max', 0):.2f}"))
+        self.stats_table.setItem(0, 1, QTableWidgetItem(f"{statistics.get('mean', 0):.2f}{unit_suffix}"))
+        self.stats_table.setItem(1, 1, QTableWidgetItem(f"{statistics.get('std', 0):.2f}{unit_suffix}"))
+        self.stats_table.setItem(2, 1, QTableWidgetItem(f"{statistics.get('min', 0):.2f}{unit_suffix}"))
+        self.stats_table.setItem(3, 1, QTableWidgetItem(f"{statistics.get('max', 0):.2f}{unit_suffix}"))
         self.stats_table.setItem(4, 1, QTableWidgetItem(f"{statistics.get('count', 0)}"))
     
     def clear_statistics(self) -> None:

@@ -58,6 +58,7 @@ class MainWindow(QMainWindow):
     reset_view_requested = Signal()  # Emitted when reset view is requested
     viewport_resized = Signal()  # Emitted when splitter moves and viewport size changes
     series_navigation_requested = Signal(int)  # Emitted when series navigation is requested (-1 for prev, 1 for next)
+    rescale_toggle_changed = Signal(bool)  # Emitted when rescale toggle changes (True = use rescaled values)
     
     def __init__(self, config_manager: Optional[ConfigManager] = None):
         """
@@ -270,6 +271,15 @@ class MainWindow(QMainWindow):
         font_color_action.triggered.connect(self._on_font_color_picker)
         toolbar.addAction(font_color_action)
         
+        toolbar.addSeparator()
+        
+        # Use Rescaled Values toggle button
+        self.use_rescaled_values_action = QAction("Use Rescaled Values", self)
+        self.use_rescaled_values_action.setCheckable(True)
+        self.use_rescaled_values_action.setToolTip("Toggle between rescaled and raw pixel values")
+        self.use_rescaled_values_action.triggered.connect(self._on_rescale_toggle_changed)
+        toolbar.addAction(self.use_rescaled_values_action)
+        
         # Add stretch to push scroll wheel mode toggle to the right
         toolbar.addSeparator()
         
@@ -480,6 +490,22 @@ class MainWindow(QMainWindow):
             # Save to config and emit signal
             self.config_manager.set_overlay_font_color(color.red(), color.green(), color.blue())
             self.overlay_font_color_changed.emit(color.red(), color.green(), color.blue())
+    
+    def _on_rescale_toggle_changed(self) -> None:
+        """Handle rescale toggle button click."""
+        # Emit signal with current checked state
+        self.rescale_toggle_changed.emit(self.use_rescaled_values_action.isChecked())
+    
+    def set_rescale_toggle_state(self, checked: bool) -> None:
+        """
+        Set the rescale toggle button state.
+        
+        Args:
+            checked: True to check the button, False to uncheck
+        """
+        self.use_rescaled_values_action.blockSignals(True)
+        self.use_rescaled_values_action.setChecked(checked)
+        self.use_rescaled_values_action.blockSignals(False)
     
     def _on_prev_series(self) -> None:
         """Handle previous series button click."""
