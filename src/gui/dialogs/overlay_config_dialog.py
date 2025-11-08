@@ -300,9 +300,14 @@ class OverlayConfigDialog(QDialog):
         self.modality_configs[self.current_modality] = config
     
     def _load_modality_config(self, modality: str) -> None:
-        """Load modality configuration from config manager."""
-        # Get tags from config manager
-        corner_tags = self.config_manager.get_overlay_tags(modality)
+        """Load modality configuration from memory (if available) or config manager."""
+        # Check memory first for in-memory changes
+        if modality in self.modality_configs:
+            # Use in-memory configuration
+            corner_tags = self.modality_configs[modality]
+        else:
+            # Fall back to config manager
+            corner_tags = self.config_manager.get_overlay_tags(modality)
         
         # Update UI
         for corner_name, corner_key in [
@@ -318,7 +323,15 @@ class OverlayConfigDialog(QDialog):
                     selected_list.addItem(tag)
     
     def _load_configurations(self) -> None:
-        """Load all configurations."""
+        """Load all configurations from config manager into memory."""
+        # Initialize modality_configs with all modalities from config_manager
+        # This ensures we have a baseline for all modalities, and any changes
+        # made by the user will be stored in memory and only applied on OK
+        modalities = ["default", "CT", "MR", "US", "CR", "DX", "NM", "PT", "RT"]
+        for modality in modalities:
+            self.modality_configs[modality] = self.config_manager.get_overlay_tags(modality)
+        
+        # Load current modality configuration into UI
         self._load_modality_config(self.current_modality)
     
     def _apply_configuration(self) -> None:

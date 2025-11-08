@@ -174,13 +174,14 @@ class OverlayManager:
             return "default"
         return str(modality).strip()
     
-    def _get_corner_text(self, parser: DICOMParser, tags: List[str]) -> str:
+    def _get_corner_text(self, parser: DICOMParser, tags: List[str], total_slices: Optional[int] = None) -> str:
         """
         Get overlay text for a corner from a list of tags.
         
         Args:
             parser: DICOMParser instance
             tags: List of tag keywords
+            total_slices: Total number of slices in the series (for formatting InstanceNumber)
             
         Returns:
             Formatted text string
@@ -194,7 +195,17 @@ class OverlayManager:
                     value_str = ", ".join(str(v) for v in value)
                 else:
                     value_str = str(value)
-                lines.append(f"{tag}: {value_str}")
+                
+                # Special formatting for InstanceNumber: show as "Slice X/Y" if total_slices is provided
+                if tag == "InstanceNumber" and total_slices is not None:
+                    try:
+                        instance_num = int(value_str)
+                        lines.append(f"Slice {instance_num}/{total_slices}")
+                    except (ValueError, TypeError):
+                        # If InstanceNumber is not a valid integer, show as-is
+                        lines.append(f"{tag}: {value_str}")
+                else:
+                    lines.append(f"{tag}: {value_str}")
         return "\n".join(lines)
     
     def _create_text_item(self, text: str, x: float, y: float, alignment: Qt.AlignmentFlag = Qt.AlignmentFlag.AlignLeft, text_width: Optional[float] = None) -> QGraphicsTextItem:
@@ -268,7 +279,7 @@ class OverlayManager:
         return text_item
     
     def create_overlay_items(self, scene, parser: DICOMParser, 
-                            position: tuple = (10, 10)) -> List[QGraphicsTextItem]:
+                            position: tuple = (10, 10), total_slices: Optional[int] = None) -> List[QGraphicsTextItem]:
         """
         Create overlay text items for a graphics scene (4 corners).
         
@@ -276,6 +287,7 @@ class OverlayManager:
             scene: QGraphicsScene to add items to
             parser: DICOMParser instance
             position: (x, y) position - ignored, using 4 corners instead
+            total_slices: Total number of slices in the series (for formatting InstanceNumber as "Slice X/Y")
             
         Returns:
             List of overlay text items
@@ -283,6 +295,9 @@ class OverlayManager:
         # Store current parser and scene for position updates
         self.current_parser = parser
         self.current_scene = scene
+        # Store total_slices for position updates
+        if total_slices is not None:
+            self.current_total_slices = total_slices
         
         # Clear existing items
         self.clear_overlay_items(scene)
@@ -386,7 +401,7 @@ class OverlayManager:
         for corner_key, x, y, alignment in corners:
             tags = corner_tags.get(corner_key, [])
             if tags:
-                text = self._get_corner_text(parser, tags)
+                text = self._get_corner_text(parser, tags, total_slices)
                 if text:
                     # For right-aligned corners, create separate text items for each line
                     # so each row can be individually right-aligned
@@ -529,5 +544,7 @@ class OverlayManager:
         
         # Clear and recreate with current view transform
         if self.current_parser is not None:
-            self.create_overlay_items(scene, self.current_parser)
+            # Preserve total_slices if available
+            total_slices = getattr(self, 'current_total_slices', None)
+            self.create_overlay_items(scene, self.current_parser, total_slices=total_slices)
 
