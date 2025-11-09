@@ -285,6 +285,41 @@ class ConfigManager:
             self.config["overlay_font_color_b"] = b
             self.save_config()
     
+    def get_tag_export_presets(self) -> Dict[str, List[str]]:
+        """
+        Get tag export presets.
+        
+        Returns:
+            Dictionary mapping preset names to lists of tag strings
+        """
+        return self.config.get("tag_export_presets", {})
+    
+    def save_tag_export_preset(self, preset_name: str, tag_list: List[str]) -> None:
+        """
+        Save a tag export preset.
+        
+        Args:
+            preset_name: Name of the preset
+            tag_list: List of tag strings to save
+        """
+        if "tag_export_presets" not in self.config:
+            self.config["tag_export_presets"] = {}
+        
+        self.config["tag_export_presets"][preset_name] = tag_list
+        self.save_config()
+    
+    def delete_tag_export_preset(self, preset_name: str) -> None:
+        """
+        Delete a tag export preset.
+        
+        Args:
+            preset_name: Name of the preset to delete
+        """
+        if "tag_export_presets" in self.config:
+            if preset_name in self.config["tag_export_presets"]:
+                del self.config["tag_export_presets"][preset_name]
+                self.save_config()
+    
     def get_overlay_tags(self, modality: str = "default") -> Dict[str, List[str]]:
         """
         Get overlay tags for a modality, organized by corner.

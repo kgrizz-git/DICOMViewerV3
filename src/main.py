@@ -1204,7 +1204,7 @@ class DICOMViewerApp(QObject):
             return
         
         from gui.dialogs.tag_export_dialog import TagExportDialog
-        dialog = TagExportDialog(self.current_studies, self.main_window)
+        dialog = TagExportDialog(self.current_studies, self.config_manager, self.main_window)
         dialog.exec()
     
     def _on_overlay_config_applied(self) -> None:

@@ -1,7 +1,7 @@
 """
 DICOM Tag Export Dialog
 
-This module provides a dialog for selecting and exporting DICOM tags to Excel.
+This module provides a dialog for selecting and exporting DICOM tags to Excel or CSV.
 Features multi-series selection and hierarchical tag selection with search.
 
 Inputs:
@@ -9,44 +9,48 @@ Inputs:
     - pydicom.Dataset objects
     
 Outputs:
-    - Excel file with exported tags
+    - Excel or CSV files with exported tags
     
 Requirements:
     - PySide6 for dialog components
     - openpyxl for Excel export
+    - csv module (standard library) for CSV export
     - DICOMParser for tag extraction
 """
 
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                                 QTreeWidget, QTreeWidgetItem, QLineEdit,
                                 QPushButton, QCheckBox, QGroupBox, QSplitter,
-                                QFileDialog, QMessageBox)
+                                QFileDialog, QMessageBox, QComboBox)
 from PySide6.QtCore import Qt, Signal
 from typing import Optional, Dict, Any, List
 import pydicom
 from pydicom.dataset import Dataset
 from pathlib import Path
+import csv
 
 from core.dicom_parser import DICOMParser
 
 
 class TagExportDialog(QDialog):
     """
-    Dialog for exporting DICOM tags to Excel with series and tag selection.
+    Dialog for exporting DICOM tags to Excel or CSV with series and tag selection.
     
     Features:
     - Multi-series selection grouped by study
     - Hierarchical tag selection (by group)
     - Search/filter tags
-    - Export to Excel (one tab per study, one row per tag)
+    - Export to Excel (one tab per study, one row per tag) or CSV (one file per study)
+    - Tag selection presets (save/load/delete)
     """
     
-    def __init__(self, studies: Dict[str, Dict[str, List[Dataset]]], parent=None):
+    def __init__(self, studies: Dict[str, Dict[str, List[Dataset]]], config_manager=None, parent=None):
         """
         Initialize the tag export dialog.
         
         Args:
             studies: Dictionary of studies {study_uid: {series_uid: [datasets]}}
+            config_manager: Optional ConfigManager instance for preset storage
             parent: Parent widget
         """
         super().__init__(parent)
@@ -56,12 +60,14 @@ class TagExportDialog(QDialog):
         self.resize(1000, 700)
         
         self.studies = studies
+        self.config_manager = config_manager
         self.selected_series: Dict[str, List[str]] = {}  # {study_uid: [series_uids]}
         self.selected_tags: List[str] = []  # List of selected tag strings
         
         self._create_ui()
         self._populate_series()
         self._populate_tags()
+        self._load_presets_list()
     
     def _create_ui(self) -> None:
         """Create the UI components."""
@@ -88,7 +94,7 @@ class TagExportDialog(QDialog):
         button_layout = QHBoxLayout()
         button_layout.addStretch()
         
-        export_button = QPushButton("Export to Excel...")
+        export_button = QPushButton("Export Tags...")
         export_button.clicked.connect(self._export_to_excel)
         button_layout.addWidget(export_button)
         
@@ -130,6 +136,31 @@ class TagExportDialog(QDialog):
         """Create the tag selection panel."""
         group = QGroupBox("Select Tags to Export")
         layout = QVBoxLayout()
+        
+        # Preset management section
+        if self.config_manager:
+            preset_layout = QHBoxLayout()
+            preset_label = QLabel("Preset:")
+            self.preset_combo = QComboBox()
+            self.preset_combo.setEditable(False)
+            self.preset_combo.currentTextChanged.connect(self._on_preset_selected)
+            preset_layout.addWidget(preset_label)
+            preset_layout.addWidget(self.preset_combo)
+            
+            save_preset_btn = QPushButton("Save As...")
+            save_preset_btn.clicked.connect(self._save_preset)
+            preset_layout.addWidget(save_preset_btn)
+            
+            load_preset_btn = QPushButton("Load")
+            load_preset_btn.clicked.connect(self._load_preset)
+            preset_layout.addWidget(load_preset_btn)
+            
+            delete_preset_btn = QPushButton("Delete")
+            delete_preset_btn.clicked.connect(self._delete_preset)
+            preset_layout.addWidget(delete_preset_btn)
+            
+            preset_layout.addStretch()
+            layout.addLayout(preset_layout)
         
         # Search box
         search_layout = QHBoxLayout()
@@ -402,12 +433,13 @@ class TagExportDialog(QDialog):
             group_item = root.child(i)
             for j in range(group_item.childCount()):
                 tag_item = group_item.child(j)
-                if tag_item.checkState(0) == Qt.CheckState.Checked and not tag_item.isHidden():
+                # Include all checked tags regardless of visibility (filter state)
+                if tag_item.checkState(0) == Qt.CheckState.Checked:
                     tag_str = tag_item.data(0, Qt.ItemDataRole.UserRole)
                     self.selected_tags.append(tag_str)
     
     def _export_to_excel(self) -> None:
-        """Export selected tags to Excel file."""
+        """Export selected tags to Excel or CSV file."""
         # Update selected tags and series to ensure they're current
         self._update_selected_tags()
         self._update_selected_series()
@@ -427,24 +459,39 @@ class TagExportDialog(QDialog):
         default_filename = self._generate_default_filename()
         
         # Show file save dialog
-        file_path, _ = QFileDialog.getSaveFileName(
+        file_path, selected_filter = QFileDialog.getSaveFileName(
             self,
             "Save DICOM Tag Export",
             default_filename,
-            "Excel Files (*.xlsx);;All Files (*)"
+            "Excel Files (*.xlsx);;CSV Files (*.csv);;All Files (*)"
         )
         
         if not file_path:
             return
         
-        # Ensure .xlsx extension
-        if not file_path.endswith('.xlsx'):
-            file_path += '.xlsx'
+        # Determine format and ensure correct extension
+        is_csv = selected_filter.startswith("CSV") or file_path.endswith('.csv')
+        if is_csv:
+            if not file_path.endswith('.csv'):
+                file_path += '.csv'
+        else:
+            if not file_path.endswith('.xlsx'):
+                file_path += '.xlsx'
         
         # Perform export
         try:
-            self._write_excel_file(file_path)
-            QMessageBox.information(self, "Export Complete",
+            if is_csv:
+                exported_files = self._write_csv_files(file_path)
+                if len(exported_files) > 1:
+                    file_list = "\n".join(str(f) for f in exported_files)
+                    QMessageBox.information(self, "Export Complete",
+                                          f"Tags exported successfully to {len(exported_files)} files:\n{file_list}")
+                else:
+                    QMessageBox.information(self, "Export Complete",
+                                          f"Tags exported successfully to:\n{exported_files[0]}")
+            else:
+                self._write_excel_file(file_path)
+                QMessageBox.information(self, "Export Complete",
                                   f"Tags exported successfully to:\n{file_path}")
             self.accept()
         except Exception as e:
@@ -461,6 +508,7 @@ class TagExportDialog(QDialog):
         modality = getattr(first_dataset, 'Modality', 'Unknown')
         accession = getattr(first_dataset, 'AccessionNumber', 'Unknown')
         
+        # Default to Excel format (user can change in file dialog)
         return f"{modality} DICOM Tag Export {accession}.xlsx"
     
     def _write_excel_file(self, file_path: str) -> None:
@@ -541,4 +589,226 @@ class TagExportDialog(QDialog):
         
         # Save file
         wb.save(file_path)
+    
+    def _write_csv_files(self, base_file_path: str) -> List[Path]:
+        """
+        Write selected tags to CSV files (one file per study).
+        
+        Returns:
+            List of created file paths
+        """
+        base_path = Path(base_file_path)
+        base_name = base_path.stem
+        base_dir = base_path.parent
+        exported_files = []
+        
+        # Create one CSV file per study
+        for study_uid, series_uids in self.selected_series.items():
+            # Get study info for filename
+            first_series_uid = series_uids[0]
+            first_dataset = self.studies[study_uid][first_series_uid][0]
+            study_desc = getattr(first_dataset, 'StudyDescription', 'Study')
+            # Sanitize filename
+            safe_study_desc = study_desc.replace('/', '-').replace('\\', '-').replace(':', '-')[:50]
+            
+            # Create filename: base_name_StudyDescription.csv
+            if len(self.selected_series) > 1:
+                csv_filename = f"{base_name}_{safe_study_desc}.csv"
+            else:
+                csv_filename = f"{base_name}.csv"
+            
+            csv_path = base_dir / csv_filename
+            
+            # Write CSV file
+            with open(csv_path, 'w', newline='', encoding='utf-8') as csvfile:
+                writer = csv.writer(csvfile)
+                
+                # Write header
+                writer.writerow(['Tag Number', 'Name', 'Value'])
+                
+                # Export each selected series
+                for series_uid in series_uids:
+                    datasets = self.studies[study_uid][series_uid]
+                    first_ds = datasets[0]
+                    
+                    # Write series header
+                    series_num = getattr(first_ds, 'SeriesNumber', '')
+                    series_desc = getattr(first_ds, 'SeriesDescription', 'Unknown')
+                    writer.writerow([f"Series {series_num}: {series_desc}", '', ''])
+                    
+                    # Parse tags from first dataset of series
+                    parser = DICOMParser(first_ds)
+                    all_tags = parser.get_all_tags(include_private=self.private_tags_checkbox.isChecked())
+                    
+                    # Export selected tags
+                    for tag_str in self.selected_tags:
+                        if tag_str in all_tags:
+                            tag_data = all_tags[tag_str]
+                            tag_num = tag_data.get('tag', tag_str)
+                            tag_name = tag_data.get('name', '')
+                            
+                            # Format value
+                            value = tag_data.get('value', '')
+                            if isinstance(value, list):
+                                value_str = ', '.join(str(v) for v in value)
+                            else:
+                                value_str = str(value)
+                            
+                            writer.writerow([tag_num, tag_name, value_str])
+                    
+                    # Add blank row between series
+                    writer.writerow([])
+            
+            exported_files.append(csv_path)
+        
+        return exported_files
+    
+    def _load_presets_list(self) -> None:
+        """Load list of presets into combo box."""
+        if not self.config_manager:
+            return
+        
+        self.preset_combo.clear()
+        presets = self.config_manager.get_tag_export_presets()
+        if presets:
+            self.preset_combo.addItems(sorted(presets.keys()))
+        self.preset_combo.addItem("(No preset)")
+        self.preset_combo.setCurrentIndex(self.preset_combo.count() - 1)
+    
+    def _on_preset_selected(self, preset_name: str) -> None:
+        """Handle preset selection (for future use, e.g., auto-load on selection)."""
+        pass
+    
+    def _save_preset(self) -> None:
+        """Save current tag selections as a preset."""
+        if not self.config_manager:
+            QMessageBox.warning(self, "No Config Manager",
+                              "Preset saving is not available.")
+            return
+        
+        # Update selected tags first
+        self._update_selected_tags()
+        
+        if not self.selected_tags:
+            QMessageBox.warning(self, "No Tags Selected",
+                              "Please select at least one tag to save as a preset.")
+            return
+        
+        # Get preset name from user
+        from PySide6.QtWidgets import QInputDialog
+        preset_name, ok = QInputDialog.getText(
+            self,
+            "Save Preset",
+            "Enter preset name:",
+            text=""
+        )
+        
+        if not ok or not preset_name.strip():
+            return
+        
+        preset_name = preset_name.strip()
+        
+        # Save preset
+        self.config_manager.save_tag_export_preset(preset_name, self.selected_tags)
+        self._load_presets_list()
+        
+        # Select the newly saved preset
+        index = self.preset_combo.findText(preset_name)
+        if index >= 0:
+            self.preset_combo.setCurrentIndex(index)
+        
+        QMessageBox.information(self, "Preset Saved",
+                               f"Preset '{preset_name}' saved successfully.")
+    
+    def _load_preset(self) -> None:
+        """Load a preset and apply tag selections."""
+        if not self.config_manager:
+            QMessageBox.warning(self, "No Config Manager",
+                              "Preset loading is not available.")
+            return
+        
+        preset_name = self.preset_combo.currentText()
+        if not preset_name or preset_name == "(No preset)":
+            QMessageBox.warning(self, "No Preset Selected",
+                              "Please select a preset to load.")
+            return
+        
+        # Get preset tags
+        presets = self.config_manager.get_tag_export_presets()
+        if preset_name not in presets:
+            QMessageBox.warning(self, "Preset Not Found",
+                              f"Preset '{preset_name}' not found.")
+            return
+        
+        preset_tags = presets[preset_name]
+        
+        # Apply preset to tag tree
+        self.tags_tree.blockSignals(True)
+        root = self.tags_tree.invisibleRootItem()
+        
+        # First, uncheck all tags
+        for i in range(root.childCount()):
+            group_item = root.child(i)
+            group_item.setCheckState(0, Qt.CheckState.Unchecked)
+            for j in range(group_item.childCount()):
+                tag_item = group_item.child(j)
+                tag_item.setCheckState(0, Qt.CheckState.Unchecked)
+        
+        # Then check tags that are in the preset
+        for i in range(root.childCount()):
+            group_item = root.child(i)
+            group_has_checked = False
+            for j in range(group_item.childCount()):
+                tag_item = group_item.child(j)
+                tag_str = tag_item.data(0, Qt.ItemDataRole.UserRole)
+                if tag_str in preset_tags:
+                    tag_item.setCheckState(0, Qt.CheckState.Checked)
+                    group_has_checked = True
+            
+            # Update group check state
+            if group_has_checked:
+                # Check if all tags in group are checked
+                all_checked = True
+                for j in range(group_item.childCount()):
+                    if group_item.child(j).checkState(0) != Qt.CheckState.Checked:
+                        all_checked = False
+                        break
+                if all_checked:
+                    group_item.setCheckState(0, Qt.CheckState.Checked)
+                else:
+                    group_item.setCheckState(0, Qt.CheckState.PartiallyChecked)
+        
+        self.tags_tree.blockSignals(False)
+        self._update_selected_tags()
+        
+        QMessageBox.information(self, "Preset Loaded",
+                               f"Preset '{preset_name}' loaded successfully.")
+    
+    def _delete_preset(self) -> None:
+        """Delete the selected preset."""
+        if not self.config_manager:
+            QMessageBox.warning(self, "No Config Manager",
+                              "Preset deletion is not available.")
+            return
+        
+        preset_name = self.preset_combo.currentText()
+        if not preset_name or preset_name == "(No preset)":
+            QMessageBox.warning(self, "No Preset Selected",
+                              "Please select a preset to delete.")
+            return
+        
+        # Confirm deletion
+        reply = QMessageBox.question(
+            self,
+            "Delete Preset",
+            f"Are you sure you want to delete preset '{preset_name}'?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            self.config_manager.delete_tag_export_preset(preset_name)
+            self._load_presets_list()
+            QMessageBox.information(self, "Preset Deleted",
+                                   f"Preset '{preset_name}' deleted successfully.")
 

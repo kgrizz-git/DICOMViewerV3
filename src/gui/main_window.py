@@ -174,7 +174,7 @@ class MainWindow(QMainWindow):
         tools_menu.addSeparator()
         
         # Tag Export action
-        tag_export_action = QAction("Export &Tags to Excel...", self)
+        tag_export_action = QAction("Export &Tags...", self)
         tag_export_action.triggered.connect(self.tag_export_requested.emit)
         tools_menu.addAction(tag_export_action)
         
