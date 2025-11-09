@@ -750,7 +750,7 @@ class ImageViewer(QGraphicsView):
                         context_menu = QMenu(self)
                         
                         # Reset View action
-                        reset_action = context_menu.addAction("Reset View")
+                        reset_action = context_menu.addAction("Reset View (V)")
                         reset_action.triggered.connect(self.reset_view_requested.emit)
                         
                         # Clear Measurements action
