@@ -63,6 +63,7 @@ class MainWindow(QMainWindow):
     clear_measurements_requested = Signal()  # Emitted when clear measurements is requested
     quick_start_guide_requested = Signal()  # Emitted when Quick Start Guide is requested
     tag_export_requested = Signal()  # Emitted when tag export is requested
+    series_navigator_visibility_changed = Signal(bool)  # Emitted when series navigator visibility changes
     
     def __init__(self, config_manager: Optional[ConfigManager] = None):
         """
@@ -265,6 +266,14 @@ class MainWindow(QMainWindow):
         
         toolbar.addSeparator()
         
+        # Series Navigator toggle button
+        self.series_navigator_action = QAction("Show Series Navigator", self)
+        self.series_navigator_action.setToolTip("Show/hide series navigator bar at bottom")
+        self.series_navigator_action.triggered.connect(self.toggle_series_navigator)
+        toolbar.addAction(self.series_navigator_action)
+        
+        toolbar.addSeparator()
+        
         # Series navigation buttons
         self.prev_series_action = QAction("Prev Series", self)
         self.prev_series_action.setToolTip("Navigate to previous series (left arrow key)")
@@ -344,6 +353,7 @@ class MainWindow(QMainWindow):
         # Main layout
         main_layout = QVBoxLayout(central_widget)
         main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
         
         # Splitter for resizable panels
         self.splitter = QSplitter(Qt.Horizontal)
@@ -380,6 +390,10 @@ class MainWindow(QMainWindow):
         # Connect to splitter moved signal to update overlay positions when panels are resized
         # Also save splitter positions when moved
         self.splitter.splitterMoved.connect(self._on_splitter_moved)
+        
+        # Series navigator (initially hidden, will be set by main.py)
+        self.series_navigator = None  # Will be set by set_series_navigator method
+        self.series_navigator_visible = False
     
     def _apply_theme(self) -> None:
         """Apply the current theme to the window."""
@@ -694,6 +708,51 @@ class MainWindow(QMainWindow):
             message: Status message to display
         """
         self.statusBar().showMessage(message)
+    
+    def set_series_navigator(self, navigator_widget: QWidget) -> None:
+        """
+        Set the series navigator widget.
+        
+        Args:
+            navigator_widget: SeriesNavigator widget instance
+        """
+        self.series_navigator = navigator_widget
+        # Get the main layout from central widget
+        central_widget = self.centralWidget()
+        if central_widget:
+            main_layout = central_widget.layout()
+            if main_layout:
+                # Add navigator to bottom of layout
+                main_layout.addWidget(navigator_widget)
+                # Initially hide it
+                navigator_widget.setVisible(False)
+                self.series_navigator_visible = False
+    
+    def toggle_series_navigator(self) -> None:
+        """Toggle series navigator visibility."""
+        if self.series_navigator is None:
+            return
+        
+        # Emit viewport_resizing before change to preserve centering
+        self.viewport_resizing.emit()
+        
+        # Toggle visibility
+        self.series_navigator_visible = not self.series_navigator_visible
+        self.series_navigator.setVisible(self.series_navigator_visible)
+        
+        # Update toolbar button text
+        if hasattr(self, 'series_navigator_action'):
+            if self.series_navigator_visible:
+                self.series_navigator_action.setText("Hide Series Navigator")
+            else:
+                self.series_navigator_action.setText("Show Series Navigator")
+        
+        # Emit signal
+        self.series_navigator_visibility_changed.emit(self.series_navigator_visible)
+        
+        # Emit viewport_resized after change to restore centering
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(10, lambda: self.viewport_resized.emit())
     
     def closeEvent(self, event) -> None:
         """

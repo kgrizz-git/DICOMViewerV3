@@ -60,6 +60,7 @@ class ImageViewer(QGraphicsView):
     window_level_drag_changed = Signal(float, float)  # Emitted when window/level is adjusted via right mouse drag (center_delta, width_delta)
     right_mouse_press_for_drag = Signal()  # Emitted when right mouse is pressed (not on ROI) to request window/level values for drag
     series_navigation_requested = Signal(int)  # Emitted when series navigation is requested (-1 for left/previous, 1 for right/next)
+    toggle_series_navigator_requested = Signal()  # Emitted when series navigator toggle is requested
     measurement_started = Signal(QPointF)  # Emitted when measurement starts (start position)
     measurement_updated = Signal(QPointF)  # Emitted when measurement is updated (current position)
     measurement_finished = Signal()  # Emitted when measurement is finished
@@ -769,6 +770,11 @@ class ImageViewer(QGraphicsView):
                         
                         next_series_action = context_menu.addAction("Next Series (→)")
                         next_series_action.triggered.connect(lambda: self.series_navigation_requested.emit(1))
+                        
+                        # Series Navigator toggle action
+                        # Note: Text will be updated dynamically by main window based on visibility
+                        toggle_navigator_action = context_menu.addAction("Toggle Series Navigator")
+                        toggle_navigator_action.triggered.connect(self.toggle_series_navigator_requested.emit)
                         
                         context_menu.addSeparator()
                         
