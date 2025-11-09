@@ -56,6 +56,17 @@ from tools.measurement_tool import MeasurementTool
 from tools.histogram_widget import HistogramWidget
 from gui.overlay_manager import OverlayManager
 
+# Import handler classes
+from core.view_state_manager import ViewStateManager
+from core.file_operations_handler import FileOperationsHandler
+from core.slice_display_manager import SliceDisplayManager
+from gui.roi_coordinator import ROICoordinator
+from gui.measurement_coordinator import MeasurementCoordinator
+from gui.overlay_coordinator import OverlayCoordinator
+from gui.dialog_coordinator import DialogCoordinator
+from gui.mouse_mode_handler import MouseModeHandler
+from gui.keyboard_event_handler import KeyboardEventHandler
+
 
 class DICOMViewerApp(QObject):
     """
@@ -116,9 +127,6 @@ class DICOMViewerApp(QObject):
         # Set up UI layout
         self._setup_ui()
         
-        # Connect signals
-        self._connect_signals()
-        
         # Current data
         self.current_datasets: list = []
         self.current_studies: dict = {}
@@ -127,37 +135,204 @@ class DICOMViewerApp(QObject):
         self.current_study_uid = ""
         self.current_dataset: Optional[Dataset] = None
         
-        # Window/level state - preserve between slices
-        self.current_window_center: Optional[float] = None
-        self.current_window_width: Optional[float] = None
-        self.window_level_user_modified = False  # Track if user has manually changed window/level
+        # Initialize handler classes
+        self._initialize_handlers()
         
-        # Initial view state for reset functionality
-        self.initial_zoom: Optional[float] = None
-        self.initial_h_scroll: Optional[int] = None
-        self.initial_v_scroll: Optional[int] = None
-        self.initial_scene_center: Optional[QPointF] = None  # Scene center point in scene coordinates
-        self.initial_window_center: Optional[float] = None
-        self.initial_window_width: Optional[float] = None
+        # Connect signals
+        self._connect_signals()
         
-        # Series defaults storage: key is series identifier (StudyInstanceUID + SeriesInstanceUID)
-        # Value is dict with: window_center, window_width, zoom, h_scroll, v_scroll, scene_center
-        self.series_defaults: Dict[str, Dict] = {}
+        # Initialize pan mode to match toolbar state (Pan button is checked by default)
+        self.image_viewer.set_mouse_mode("pan")
+    
+    def _initialize_handlers(self) -> None:
+        """Initialize all handler classes."""
+        # Initialize ViewStateManager
+        self.view_state_manager = ViewStateManager(
+            self.dicom_processor,
+            self.image_viewer,
+            self.window_level_controls,
+            self.main_window,
+            self.overlay_manager,
+            overlay_coordinator=None,  # Will be set after overlay coordinator is created
+            roi_coordinator=None  # Will be set after ROI coordinator is created
+        )
         
-        # Track current series identifier for comparison
-        self.current_series_identifier: Optional[str] = None
+        # Initialize FileOperationsHandler
+        self.file_operations_handler = FileOperationsHandler(
+            self.dicom_loader,
+            self.dicom_organizer,
+            self.file_dialog,
+            self.config_manager,
+            self.main_window,
+            clear_data_callback=self._clear_data,
+            load_first_slice_callback=self._handle_load_first_slice,
+            update_status_callback=self.main_window.update_status
+        )
         
-        # Tag viewer dialog (persistent)
-        self.tag_viewer_dialog: Optional[TagViewerDialog] = None
+        # Initialize SliceDisplayManager
+        self.slice_display_manager = SliceDisplayManager(
+            self.dicom_processor,
+            self.image_viewer,
+            self.metadata_panel,
+            self.slice_navigator,
+            self.window_level_controls,
+            self.roi_manager,
+            self.measurement_tool,
+            self.overlay_manager,
+            self.view_state_manager,
+            update_tag_viewer_callback=self._update_tag_viewer,
+            display_rois_callback=None,  # Will use default
+            display_measurements_callback=None  # Will use default
+        )
         
-        # Rescale state management
-        self.use_rescaled_values: bool = False  # Default to False, will be set based on dataset
-        self.rescale_slope: Optional[float] = None
-        self.rescale_intercept: Optional[float] = None
-        self.rescale_type: Optional[str] = None
+        # Initialize ROICoordinator
+        self.roi_coordinator = ROICoordinator(
+            self.roi_manager,
+            self.roi_list_panel,
+            self.roi_statistics_panel,
+            self.image_viewer,
+            self.dicom_processor,
+            self.window_level_controls,
+            self.main_window,
+            get_current_dataset=lambda: self.current_dataset,
+            get_current_slice_index=lambda: self.current_slice_index,
+            get_rescale_params=self._get_rescale_params,
+            set_mouse_mode_callback=self._set_mouse_mode_via_handler
+        )
         
-        # Viewport resize state - store scene center to preserve centered view
-        self.saved_scene_center: Optional[QPointF] = None
+        # Update view state manager with ROI coordinator
+        self.view_state_manager.roi_coordinator = lambda dataset: self.roi_coordinator.update_roi_statistics(
+            self.roi_manager.get_selected_roi()
+        ) if self.roi_manager.get_selected_roi() else None
+        
+        # Initialize MeasurementCoordinator
+        self.measurement_coordinator = MeasurementCoordinator(
+            self.measurement_tool,
+            self.image_viewer,
+            get_current_dataset=lambda: self.current_dataset,
+            get_current_slice_index=lambda: self.current_slice_index
+        )
+        
+        # Initialize OverlayCoordinator
+        self.overlay_coordinator = OverlayCoordinator(
+            self.overlay_manager,
+            self.image_viewer,
+            get_current_dataset=lambda: self.current_dataset,
+            get_current_studies=lambda: self.current_studies,
+            get_current_study_uid=lambda: self.current_study_uid,
+            get_current_series_uid=lambda: self.current_series_uid,
+            get_current_slice_index=lambda: self.current_slice_index,
+            hide_measurement_labels=self.measurement_coordinator.hide_measurement_labels,
+            hide_measurement_graphics=self.measurement_coordinator.hide_measurement_graphics,
+            hide_roi_graphics=self.roi_coordinator.hide_roi_graphics if hasattr(self.roi_coordinator, 'hide_roi_graphics') else None
+        )
+        
+        # Update view state manager with overlay coordinator
+        self.view_state_manager.overlay_coordinator = self.overlay_coordinator.handle_overlay_config_applied
+        
+        # Initialize DialogCoordinator
+        self.dialog_coordinator = DialogCoordinator(
+            self.config_manager,
+            self.main_window,
+            get_current_studies=lambda: self.current_studies,
+            settings_applied_callback=self._on_settings_applied,
+            overlay_config_applied_callback=self._on_overlay_config_applied
+        )
+        
+        # Initialize MouseModeHandler
+        self.mouse_mode_handler = MouseModeHandler(
+            self.image_viewer,
+            self.main_window,
+            self.slice_navigator,
+            self.config_manager
+        )
+        
+        # Initialize KeyboardEventHandler
+        self.keyboard_event_handler = KeyboardEventHandler(
+            self.roi_manager,
+            self.measurement_tool,
+            self.slice_navigator,
+            self.overlay_manager,
+            self.image_viewer,
+            set_mouse_mode=self.mouse_mode_handler.set_mouse_mode,
+            delete_all_rois_callback=self.roi_coordinator.delete_all_rois_current_slice,
+            clear_measurements_callback=self.measurement_coordinator.handle_clear_measurements,
+            toggle_overlay_callback=self.overlay_coordinator.handle_toggle_overlay,
+            get_selected_roi=lambda: self.roi_manager.get_selected_roi(),
+            delete_roi_callback=lambda roi: self.roi_coordinator.handle_roi_delete_requested(roi.item) if (hasattr(roi, 'item') and roi.item is not None) else (self.roi_manager.delete_roi(roi, self.image_viewer.scene) if roi else None),
+            delete_measurement_callback=self.measurement_coordinator.handle_measurement_delete_requested,
+            update_roi_list_callback=self._update_roi_list,
+            clear_roi_statistics_callback=self.roi_statistics_panel.clear_statistics
+        )
+    
+    def _clear_data(self) -> None:
+        """Clear all ROIs, measurements, and related data."""
+        self.roi_manager.clear_all_rois(self.image_viewer.scene)
+        self.roi_list_panel.update_roi_list("", "", 0)  # Clear list
+        self.roi_statistics_panel.clear_statistics()
+        self.measurement_tool.clear_measurements(self.image_viewer.scene)
+    
+    def _handle_load_first_slice(self, studies: dict) -> None:
+        """Handle loading first slice after file operations."""
+        first_slice_info = self.file_operations_handler.load_first_slice(studies)
+        if first_slice_info:
+            self.current_studies = studies
+            self.current_study_uid = first_slice_info['study_uid']
+            self.current_series_uid = first_slice_info['series_uid']
+            self.current_slice_index = first_slice_info['slice_index']
+            
+            # Reset view state
+            self.view_state_manager.reset_window_level_state()
+            self.view_state_manager.reset_series_tracking()
+            
+            # Set up slice navigator
+            self.slice_navigator.set_total_slices(first_slice_info['total_slices'])
+            self.slice_navigator.set_current_slice(0)
+            
+            # Display slice
+            self.slice_display_manager.display_slice(
+                first_slice_info['dataset'],
+                self.current_studies,
+                self.current_study_uid,
+                self.current_series_uid,
+                self.current_slice_index
+            )
+            
+            # Update current dataset reference
+            self.current_dataset = first_slice_info['dataset']
+            
+            # Store initial view state after a delay
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(100, self.view_state_manager.store_initial_view_state)
+    
+    def _get_rescale_params(self) -> tuple[Optional[float], Optional[float], Optional[str], bool]:
+        """Get rescale parameters for ROI operations."""
+        return (
+            self.view_state_manager.rescale_slope,
+            self.view_state_manager.rescale_intercept,
+            self.view_state_manager.rescale_type,
+            self.view_state_manager.use_rescaled_values
+        )
+    
+    def _set_mouse_mode_via_handler(self, mode: str) -> None:
+        """Set mouse mode via mouse mode handler."""
+        self.mouse_mode_handler.set_mouse_mode(mode)
+    
+    def _update_tag_viewer(self, dataset: Dataset) -> None:
+        """Update tag viewer with dataset."""
+        self.dialog_coordinator.update_tag_viewer(dataset)
+    
+    def _update_roi_list(self) -> None:
+        """Update ROI list panel."""
+        if self.current_dataset is not None:
+            study_uid = getattr(self.current_dataset, 'StudyInstanceUID', '')
+            series_uid = getattr(self.current_dataset, 'SeriesInstanceUID', '')
+            instance_number = getattr(self.current_dataset, 'InstanceNumber', None)
+            if instance_number is None:
+                instance_identifier = self.current_slice_index
+            else:
+                instance_identifier = int(instance_number)
+            self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
     
     def _setup_ui(self) -> None:
         """Set up the user interface layout."""
@@ -207,30 +382,30 @@ class DICOMViewerApp(QObject):
         self.main_window.tag_export_requested.connect(self._open_tag_export)
         
         # ROI drawing signals
-        self.image_viewer.roi_drawing_started.connect(self._on_roi_drawing_started)
-        self.image_viewer.roi_drawing_updated.connect(self._on_roi_drawing_updated)
-        self.image_viewer.roi_drawing_finished.connect(self._on_roi_drawing_finished)
+        self.image_viewer.roi_drawing_started.connect(self.roi_coordinator.handle_roi_drawing_started)
+        self.image_viewer.roi_drawing_updated.connect(self.roi_coordinator.handle_roi_drawing_updated)
+        self.image_viewer.roi_drawing_finished.connect(self.roi_coordinator.handle_roi_drawing_finished)
         
         # Measurement signals
-        self.image_viewer.measurement_started.connect(self._on_measurement_started)
-        self.image_viewer.measurement_updated.connect(self._on_measurement_updated)
-        self.image_viewer.measurement_finished.connect(self._on_measurement_finished)
+        self.image_viewer.measurement_started.connect(self.measurement_coordinator.handle_measurement_started)
+        self.image_viewer.measurement_updated.connect(self.measurement_coordinator.handle_measurement_updated)
+        self.image_viewer.measurement_finished.connect(self.measurement_coordinator.handle_measurement_finished)
         
         # ROI click signal
-        self.image_viewer.roi_clicked.connect(self._on_roi_clicked)
-        self.image_viewer.image_clicked_no_roi.connect(self._on_image_clicked_no_roi)
+        self.image_viewer.roi_clicked.connect(self.roi_coordinator.handle_roi_clicked)
+        self.image_viewer.image_clicked_no_roi.connect(self.roi_coordinator.handle_image_clicked_no_roi)
         
         # ROI delete signal (from right-click context menu)
-        self.image_viewer.roi_delete_requested.connect(self._on_roi_delete_requested)
-        self.image_viewer.measurement_delete_requested.connect(self._on_measurement_delete_requested)
+        self.image_viewer.roi_delete_requested.connect(self.roi_coordinator.handle_roi_delete_requested)
+        self.image_viewer.measurement_delete_requested.connect(self.measurement_coordinator.handle_measurement_delete_requested)
         
         # ROI list panel signals
-        self.roi_list_panel.roi_selected.connect(self._on_roi_selected)
-        self.roi_list_panel.roi_deleted.connect(self._on_roi_deleted)
-        self.roi_list_panel.delete_all_requested.connect(self._delete_all_rois_current_slice)
+        self.roi_list_panel.roi_selected.connect(self.roi_coordinator.handle_roi_selected)
+        self.roi_list_panel.roi_deleted.connect(self.roi_coordinator.handle_roi_deleted)
+        self.roi_list_panel.delete_all_requested.connect(self.roi_coordinator.delete_all_rois_current_slice)
         
         # Monitor ROI item changes for movement
-        self.image_viewer.scene.selectionChanged.connect(self._on_scene_selection_changed)
+        self.image_viewer.scene.selectionChanged.connect(self.roi_coordinator.handle_scene_selection_changed)
         
         # Scroll wheel for slice navigation
         self.image_viewer.wheel_event_for_slice.connect(
@@ -238,169 +413,75 @@ class DICOMViewerApp(QObject):
         )
         
         # Window/level
-        self.window_level_controls.window_changed.connect(self._on_window_changed)
+        self.window_level_controls.window_changed.connect(self.view_state_manager.handle_window_changed)
         
         # Slice navigation
-        self.slice_navigator.slice_changed.connect(self._on_slice_changed)
+        self.slice_navigator.slice_changed.connect(self.slice_display_manager.handle_slice_changed)
         
         # Mouse mode changes
-        self.main_window.mouse_mode_changed.connect(self._on_mouse_mode_changed)
+        self.main_window.mouse_mode_changed.connect(self.mouse_mode_handler.handle_mouse_mode_changed)
         
         # Scroll wheel mode changes
-        self.main_window.scroll_wheel_mode_changed.connect(self._on_scroll_wheel_mode_changed)
+        self.main_window.scroll_wheel_mode_changed.connect(self.mouse_mode_handler.handle_scroll_wheel_mode_changed)
         
         # Context menu changes (from image viewer)
-        self.image_viewer.context_menu_mouse_mode_changed.connect(self._on_context_menu_mouse_mode_changed)
-        self.image_viewer.context_menu_scroll_wheel_mode_changed.connect(self._on_context_menu_scroll_wheel_mode_changed)
-        self.image_viewer.context_menu_rescale_toggle_changed.connect(self._on_rescale_toggle_changed)
+        self.image_viewer.context_menu_mouse_mode_changed.connect(self.mouse_mode_handler.handle_context_menu_mouse_mode_changed)
+        self.image_viewer.context_menu_scroll_wheel_mode_changed.connect(self.mouse_mode_handler.handle_context_menu_scroll_wheel_mode_changed)
+        self.image_viewer.context_menu_rescale_toggle_changed.connect(self.view_state_manager.handle_rescale_toggle)
         
         # Rescale toggle from toolbar
-        self.main_window.rescale_toggle_changed.connect(self._on_rescale_toggle_changed)
+        self.main_window.rescale_toggle_changed.connect(self.view_state_manager.handle_rescale_toggle)
         
         # Zoom changes - update overlay positions to keep text anchored
-        self.image_viewer.zoom_changed.connect(self._on_zoom_changed)
+        self.image_viewer.zoom_changed.connect(self.view_state_manager.handle_zoom_changed)
         
         # Transform changes (zoom/pan) - update overlay positions to keep text anchored
         # This signal fires after transform is applied, ensuring accurate viewport-to-scene mapping
-        self.image_viewer.transform_changed.connect(self._on_transform_changed)
+        self.image_viewer.transform_changed.connect(self.view_state_manager.handle_transform_changed)
         
         # Arrow key navigation from image viewer
-        self.image_viewer.arrow_key_pressed.connect(self._on_arrow_key_pressed)
+        self.image_viewer.arrow_key_pressed.connect(self.slice_display_manager.handle_arrow_key_pressed)
         
         # Right mouse drag for window/level adjustment
-        self.image_viewer.right_mouse_press_for_drag.connect(self._on_right_mouse_press_for_drag)
-        self.image_viewer.window_level_drag_changed.connect(self._on_window_level_drag_changed)
+        self.image_viewer.right_mouse_press_for_drag.connect(self.view_state_manager.handle_right_mouse_press_for_drag)
+        self.image_viewer.window_level_drag_changed.connect(self.view_state_manager.handle_window_level_drag)
         
         # Series navigation
         self.image_viewer.series_navigation_requested.connect(self._on_series_navigation_requested)
         self.main_window.series_navigation_requested.connect(self._on_series_navigation_requested)
         
         # Overlay font size and color changes
-        self.main_window.overlay_font_size_changed.connect(self._on_overlay_font_size_changed)
-        self.main_window.overlay_font_color_changed.connect(self._on_overlay_font_color_changed)
+        self.main_window.overlay_font_size_changed.connect(self.overlay_coordinator.handle_overlay_font_size_changed)
+        self.main_window.overlay_font_color_changed.connect(self.overlay_coordinator.handle_overlay_font_color_changed)
         
         # Reset view request (from toolbar and context menu)
-        self.main_window.reset_view_requested.connect(self._reset_view)
-        self.image_viewer.reset_view_requested.connect(self._reset_view)
+        self.main_window.reset_view_requested.connect(self.view_state_manager.reset_view)
+        self.image_viewer.reset_view_requested.connect(self.view_state_manager.reset_view)
         
         # Clear measurements signals
-        self.main_window.clear_measurements_requested.connect(self._on_clear_measurements_requested)
-        self.image_viewer.clear_measurements_requested.connect(self._on_clear_measurements_requested)
+        self.main_window.clear_measurements_requested.connect(self.measurement_coordinator.handle_clear_measurements)
+        self.image_viewer.clear_measurements_requested.connect(self.measurement_coordinator.handle_clear_measurements)
         
         # Toggle overlay signal
-        self.image_viewer.toggle_overlay_requested.connect(self._on_toggle_overlay_requested)
+        self.image_viewer.toggle_overlay_requested.connect(self.overlay_coordinator.handle_toggle_overlay)
         
         # Viewport resize (when splitter moves)
-        self.main_window.viewport_resizing.connect(self._on_viewport_resizing)
-        self.main_window.viewport_resized.connect(self._on_viewport_resized)
-        
-        # Initialize pan mode to match toolbar state (Pan button is checked by default)
-        self.image_viewer.set_mouse_mode("pan")
+        self.main_window.viewport_resizing.connect(self.view_state_manager.handle_viewport_resizing)
+        self.main_window.viewport_resized.connect(self.view_state_manager.handle_viewport_resized)
     
     def _open_files(self) -> None:
         """Handle open files request."""
-        file_paths = self.file_dialog.open_files(self.main_window)
-        if not file_paths:
-            return
-        
-        # Clear all ROIs when opening new files
-        self.roi_manager.clear_all_rois(self.image_viewer.scene)
-        self.roi_list_panel.update_roi_list("", "", 0)  # Clear list
-        self.roi_statistics_panel.clear_statistics()
-        self.measurement_tool.clear_measurements(self.image_viewer.scene)
-        
-        # Add first file to recent files (representing this file selection)
-        if file_paths:
-            self.config_manager.add_recent_file(file_paths[0])
-            self.main_window.update_recent_menu()
-        
-        try:
-            # Load files
-            datasets = self.dicom_loader.load_files(file_paths)
-            
-            if not datasets:
-                self.file_dialog.show_error(
-                    self.main_window,
-                    "Error",
-                    "No DICOM files could be loaded."
-                )
-                return
-            
-            # Show warnings for failed files
-            failed = self.dicom_loader.get_failed_files()
-            if failed:
-                warning_msg = f"Warning: {len(failed)} file(s) could not be loaded:\n"
-                for path, error in failed[:5]:  # Show first 5
-                    warning_msg += f"\n{os.path.basename(path)}: {error}"
-                if len(failed) > 5:
-                    warning_msg += f"\n... and {len(failed) - 5} more"
-                
-                self.file_dialog.show_warning(self.main_window, "Loading Warnings", warning_msg)
-            
-            # Organize into studies/series
+        datasets, studies = self.file_operations_handler.open_files()
+        if datasets is not None and studies is not None:
             self.current_datasets = datasets
-            self.current_studies = self.dicom_organizer.organize(datasets, file_paths)
-            
-            # Display first slice
-            self._load_first_slice()
-            
-            self.main_window.update_status(f"Loaded {len(datasets)} DICOM file(s)")
-        
-        except Exception as e:
-            self.file_dialog.show_error(
-                self.main_window,
-                "Error",
-                f"Error loading files: {str(e)}"
-            )
+            self.current_studies = studies
     
     def _open_folder(self) -> None:
         """Handle open folder request."""
-        folder_path = self.file_dialog.open_folder(self.main_window)
-        if not folder_path:
-            return
-        
-        # Clear all ROIs when opening new folder
-        self.roi_manager.clear_all_rois(self.image_viewer.scene)
-        self.roi_list_panel.update_roi_list("", "", 0)  # Clear list
-        self.roi_statistics_panel.clear_statistics()
-        
-        # Add folder to recent files
-        self.config_manager.add_recent_file(folder_path)
-        self.main_window.update_recent_menu()
-        
-        try:
-            # Load folder (recursive)
-            datasets = self.dicom_loader.load_directory(folder_path, recursive=True)
-            
-            if not datasets:
-                self.file_dialog.show_error(
-                    self.main_window,
-                    "Error",
-                    "No DICOM files found in folder."
-                )
-                return
-            
-            # Show warnings
-            failed = self.dicom_loader.get_failed_files()
-            if failed:
-                warning_msg = f"Warning: {len(failed)} file(s) could not be loaded."
-                self.file_dialog.show_warning(self.main_window, "Loading Warnings", warning_msg)
-            
-            # Organize
+        datasets, studies = self.file_operations_handler.open_folder()
+        if datasets is not None and studies is not None:
             self.current_datasets = datasets
-            self.current_studies = self.dicom_organizer.organize(datasets)
-            
-            # Display first slice
-            self._load_first_slice()
-            
-            self.main_window.update_status(f"Loaded {len(datasets)} DICOM file(s) from folder")
-        
-        except Exception as e:
-            self.file_dialog.show_error(
-                self.main_window,
-                "Error",
-                f"Error loading folder: {str(e)}"
-            )
+            self.current_studies = studies
     
     def _open_recent_file(self, file_path: str) -> None:
         """
@@ -409,141 +490,51 @@ class DICOMViewerApp(QObject):
         Args:
             file_path: Path to file or folder to open
         """
-        import os.path
-        
-        # Clear all ROIs when opening new file/folder
-        self.roi_manager.clear_all_rois(self.image_viewer.scene)
-        self.roi_list_panel.update_roi_list("", "", 0)  # Clear list
-        self.roi_statistics_panel.clear_statistics()
-        
-        # Check if path exists
-        if not os.path.exists(file_path):
-            self.file_dialog.show_error(
-                self.main_window,
-                "Error",
-                f"File or folder not found:\n{file_path}"
-            )
-            # Remove from recent files if it doesn't exist
-            recent_files = self.config_manager.get_recent_files()
-            if file_path in recent_files:
-                recent_files.remove(file_path)
-                self.config_manager.config["recent_files"] = recent_files
-                self.config_manager.save_config()
-                self.main_window.update_recent_menu()
-            return
-        
-        # Determine if it's a file or folder
-        if os.path.isfile(file_path):
-            # Open as file
-            try:
-                datasets = self.dicom_loader.load_files([file_path])
-                
-                if not datasets:
-                    self.file_dialog.show_error(
-                        self.main_window,
-                        "Error",
-                        "No DICOM files could be loaded."
-                    )
-                    return
-                
-                # Organize into studies/series
-                self.current_datasets = datasets
-                self.current_studies = self.dicom_organizer.organize(datasets, [file_path])
-                
-                # Display first slice
-                self._load_first_slice()
-                
-                self.main_window.update_status(f"Loaded {len(datasets)} DICOM file(s)")
-                
-            except Exception as e:
-                self.file_dialog.show_error(
-                    self.main_window,
-                    "Error",
-                    f"Error loading file: {str(e)}"
-                )
-        else:
-            # Open as folder
-            try:
-                datasets = self.dicom_loader.load_directory(file_path, recursive=True)
-                
-                if not datasets:
-                    self.file_dialog.show_error(
-                        self.main_window,
-                        "Error",
-                        "No DICOM files found in folder."
-                    )
-                    return
-                
-                # Organize
-                self.current_datasets = datasets
-                self.current_studies = self.dicom_organizer.organize(datasets)
-                
-                # Display first slice
-                self._load_first_slice()
-                
-                self.main_window.update_status(f"Loaded {len(datasets)} DICOM file(s) from folder")
-                
-            except Exception as e:
-                self.file_dialog.show_error(
-                    self.main_window,
-                    "Error",
-                    f"Error loading folder: {str(e)}"
-                )
+        datasets, studies = self.file_operations_handler.open_recent_file(file_path)
+        if datasets is not None and studies is not None:
+            self.current_datasets = datasets
+            self.current_studies = studies
     
-    def _load_first_slice(self) -> None:
-        """Load and display the first slice."""
-        if not self.current_studies:
-            return
+    def _on_series_navigation_requested(self, direction: int) -> None:
+        """
+        Handle series navigation request from image viewer.
         
-        # Reset window/level state when loading new files
-        self.current_window_center = None
-        self.current_window_width = None
-        self.window_level_user_modified = False
-        
-        # Reset series tracking
-        self.current_series_identifier = None
-        # Note: We keep series_defaults to preserve across file loads if desired
-        # If you want to clear them, uncomment: self.series_defaults.clear()
-        
-        # Get first study
-        study_uid = list(self.current_studies.keys())[0]
-        
-        # Get all series for this study and sort by SeriesNumber
-        series_list = []
-        for series_uid, datasets in self.current_studies[study_uid].items():
-            if datasets:
-                # Extract SeriesNumber from first dataset
-                first_dataset = datasets[0]
-                series_number = getattr(first_dataset, 'SeriesNumber', None)
-                # Convert to int if possible, otherwise use 0 (or a large number to put at end)
-                try:
-                    series_num = int(series_number) if series_number is not None else 0
-                except (ValueError, TypeError):
-                    series_num = 0
-                series_list.append((series_num, series_uid, datasets))
-        
-        # Sort by SeriesNumber (ascending)
-        series_list.sort(key=lambda x: x[0])
-        
-        # Select series with lowest SeriesNumber (first in sorted list)
-        if not series_list:
-            return
-        
-        _, series_uid, datasets = series_list[0]
-        
-        if not datasets:
-            return
-        
-        self.current_study_uid = study_uid
-        self.current_series_uid = series_uid
-        self.current_slice_index = 0
-        
-        # Set up slice navigator
-        self.slice_navigator.set_total_slices(len(datasets))
-        self.slice_navigator.set_current_slice(0)
-        
-        # Display slice
-        self._display_slice(datasets[0])
+        Args:
+            direction: -1 for left/previous series, 1 for right/next series
+        """
+        new_series_uid, slice_index, dataset = self.slice_display_manager.handle_series_navigation(direction)
+        if new_series_uid is not None and dataset is not None:
+            self.current_series_uid = new_series_uid
+            self.current_slice_index = slice_index
+            
+            # Update slice display manager context
+            self.slice_display_manager.set_current_data_context(
+                self.current_studies,
+                self.current_study_uid,
+                self.current_series_uid,
+                self.current_slice_index
+            )
+            
+            # Display slice
+            self.slice_display_manager.display_slice(
+                dataset,
+                self.current_studies,
+                self.current_study_uid,
+                self.current_series_uid,
+                self.current_slice_index
+            )
+            
+            # Update current dataset reference
+            self.current_dataset = dataset
+            
+            # Update slice navigator
+            if self.current_studies and self.current_study_uid and self.current_series_uid:
+                datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
+                self.slice_navigator.set_total_slices(len(datasets))
+                self.slice_navigator.set_current_slice(slice_index)
+            
+            # Display ROIs for this slice
+            self.slice_display_manager.display_rois_for_slice(dataset)
     
     def _display_slice(self, dataset) -> None:
         """
@@ -553,680 +544,90 @@ class DICOMViewerApp(QObject):
             dataset: pydicom Dataset
         """
         try:
-            # Store current dataset
+            # Update current dataset reference
             self.current_dataset = dataset
             
-            # Extract and store rescale parameters from dataset
-            self.rescale_slope, self.rescale_intercept, self.rescale_type = self.dicom_processor.get_rescale_parameters(dataset)
-            
-            # Get series UID from dataset to check if we're in the same series
-            new_series_uid = getattr(dataset, 'SeriesInstanceUID', '')
-            is_same_series = (new_series_uid == self.current_series_uid and self.current_series_uid != "")
-            
-            # Detect if this is a new study/series
-            is_new_study_series = self._is_new_study_or_series(dataset)
-            series_identifier = self._get_series_identifier(dataset)
-            
-            # Set default use_rescaled_values based on whether parameters exist
-            # Default to True if parameters exist, False otherwise
-            if is_new_study_series:
-                self.use_rescaled_values = (self.rescale_slope is not None and self.rescale_intercept is not None)
-                # Update UI toggle state
-                self.main_window.set_rescale_toggle_state(self.use_rescaled_values)
-                self.image_viewer.set_rescale_toggle_state(self.use_rescaled_values)
-                
-                # Store the default rescale state immediately to ensure it's the initial default,
-                # not a user-modified value (in case user toggles before _store_initial_view_state() is called)
-                if series_identifier and series_identifier not in self.series_defaults:
-                    self.series_defaults[series_identifier] = {
-                        'use_rescaled_values': self.use_rescaled_values
-                    }
-                elif series_identifier and series_identifier in self.series_defaults:
-                    # If series_defaults already exists, ensure use_rescaled_values is set to the default
-                    # (don't overwrite if it was already stored, but set it if missing)
-                    if 'use_rescaled_values' not in self.series_defaults[series_identifier]:
-                        self.series_defaults[series_identifier]['use_rescaled_values'] = self.use_rescaled_values
-            
-            # If new study/series, check for stored defaults or calculate new ones
-            stored_window_center = None
-            stored_window_width = None
-            stored_zoom = None
-            stored_h_scroll = None
-            stored_v_scroll = None
-            
-            if is_new_study_series:
-                # Check if we have stored defaults for this series WITH window/level values
-                # Only restore if window_center and window_width actually exist (not just use_rescaled_values)
-                if (series_identifier in self.series_defaults and 
-                    'window_center' in self.series_defaults[series_identifier] and
-                    self.series_defaults[series_identifier].get('window_center') is not None):
-                    # Restore stored defaults
-                    defaults = self.series_defaults[series_identifier]
-                    stored_zoom = defaults.get('zoom')
-                    stored_h_scroll = defaults.get('h_scroll')
-                    stored_v_scroll = defaults.get('v_scroll')
-                    stored_window_center = defaults.get('window_center')
-                    stored_window_width = defaults.get('window_width')
-                    
-                    # Reset window/level state
-                    self.window_level_user_modified = False
-                else:
-                    # New series - need to calculate defaults
-                    # Get all datasets for this series to calculate pixel range
-                    study_uid = getattr(dataset, 'StudyInstanceUID', '')
-                    if study_uid and new_series_uid and self.current_studies:
-                        if study_uid in self.current_studies and new_series_uid in self.current_studies[study_uid]:
-                            series_datasets = self.current_studies[study_uid][new_series_uid]
-                            
-                            # Calculate pixel range for entire series
-                            series_pixel_min, series_pixel_max = self.dicom_processor.get_series_pixel_value_range(
-                                series_datasets, apply_rescale=self.use_rescaled_values
-                            )
-                            
-                            # Check for window/level in DICOM metadata (use first dataset)
-                            wc, ww, _ = self.dicom_processor.get_window_level_from_dataset(
-                                dataset,
-                                rescale_slope=self.rescale_slope,
-                                rescale_intercept=self.rescale_intercept
-                            )
-                            
-                            if wc is not None and ww is not None:
-                                # Use DICOM metadata window/level
-                                stored_window_center = wc
-                                stored_window_width = ww
-                            elif series_pixel_min is not None and series_pixel_max is not None:
-                                # Calculate from series pixel range
-                                stored_window_center = (series_pixel_min + series_pixel_max) / 2.0
-                                stored_window_width = series_pixel_max - series_pixel_min
-                                if stored_window_width <= 0:
-                                    stored_window_width = 1.0
-                            else:
-                                # Fallback to single slice
-                                pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(
-                                    dataset, apply_rescale=self.use_rescaled_values
-                                )
-                                if pixel_min is not None and pixel_max is not None:
-                                    stored_window_center = (pixel_min + pixel_max) / 2.0
-                                    stored_window_width = pixel_max - pixel_min
-                                    if stored_window_width <= 0:
-                                        stored_window_width = 1.0
-                            
-                            # Reset window/level state
-                            self.window_level_user_modified = False
-                
-                # Update current series identifier
-                self.current_series_identifier = series_identifier
-            
-            # Convert to image
-            # If same series and we have preserved window/level values, use them
-            if is_same_series and self.current_window_center is not None and self.current_window_width is not None:
-                image = self.dicom_processor.dataset_to_image(
-                    dataset,
-                    window_center=self.current_window_center,
-                    window_width=self.current_window_width,
-                    apply_rescale=self.use_rescaled_values
-                )
-            else:
-                image = self.dicom_processor.dataset_to_image(
-                    dataset,
-                    apply_rescale=self.use_rescaled_values
-                )
-            if image is None:
-                return
-            
-            # Set image in viewer - preserve zoom/pan if same series
-            self.image_viewer.set_image(image, preserve_view=is_same_series and not is_new_study_series)
-            
-            # If new study/series, fit to view and center
-            if is_new_study_series:
-                self.image_viewer.fit_to_view(center_image=True)
-                # Store zoom after fit_to_view
-                stored_zoom = self.image_viewer.current_zoom
-                stored_h_scroll = self.image_viewer.horizontalScrollBar().value()
-                stored_v_scroll = self.image_viewer.verticalScrollBar().value()
-            
-            # Update current series UID
-            if new_series_uid:
-                self.current_series_uid = new_series_uid
-            
-            # Update metadata panel
-            self.metadata_panel.set_dataset(dataset)
-            
-            # Update tag viewer if open
-            if self.tag_viewer_dialog is not None and self.tag_viewer_dialog.isVisible():
-                self.tag_viewer_dialog.set_dataset(dataset)
-            
-            # Calculate pixel value range for window/level controls
-            pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(
-                dataset, apply_rescale=self.use_rescaled_values
+            # Update slice display manager context
+            self.slice_display_manager.set_current_data_context(
+                self.current_studies,
+                self.current_study_uid,
+                self.current_series_uid,
+                self.current_slice_index
             )
-            if pixel_min is not None and pixel_max is not None:
-                # Set ranges based on actual pixel values (no margins)
-                center_range = (pixel_min, pixel_max)
-                # Width range from 1 to the pixel range (not 2x)
-                width_range = (1.0, max(1.0, pixel_max - pixel_min))
-                self.window_level_controls.set_ranges(center_range, width_range)
             
-            # Update window/level controls unit label
-            unit = self.rescale_type if (self.use_rescaled_values and self.rescale_type) else None
-            self.window_level_controls.set_unit(unit)
-            
-            # Update window/level controls
-            if is_new_study_series and stored_window_center is not None and stored_window_width is not None:
-                # New series - use stored defaults
-                self.window_level_controls.set_window_level(
-                    stored_window_center, stored_window_width, block_signals=True, unit=unit
-                )
-                self.current_window_center = stored_window_center
-                self.current_window_width = stored_window_width
-                self.window_level_user_modified = False  # Reset flag for new series
-                # Store/update defaults for this series (preserve existing values)
-                if series_identifier not in self.series_defaults:
-                    self.series_defaults[series_identifier] = {}
-                self.series_defaults[series_identifier].update({
-                    'window_center': stored_window_center,
-                    'window_width': stored_window_width,
-                    'zoom': stored_zoom,
-                    'h_scroll': stored_h_scroll,
-                    'v_scroll': stored_v_scroll
-                })
-            elif is_same_series and self.current_window_center is not None and self.current_window_width is not None:
-                # Same series - preserve existing window/level values (whether user-modified or not)
-                # Update UI controls to reflect the preserved values
-                self.window_level_controls.set_window_level(
-                    self.current_window_center, self.current_window_width, block_signals=True, unit=unit
-                )
-                # Do NOT reset window_level_user_modified flag - preserve it
-            else:
-                # First time displaying or no existing values - use values from dataset or calculate defaults
-                wc, ww, is_rescaled = self.dicom_processor.get_window_level_from_dataset(
-                    dataset,
-                    rescale_slope=self.rescale_slope,
-                    rescale_intercept=self.rescale_intercept
-                )
-                if wc is not None and ww is not None:
-                    # If default window/level is in rescaled units but we're using raw values, convert
-                    if is_rescaled and not self.use_rescaled_values:
-                        if (self.rescale_slope is not None and self.rescale_intercept is not None and 
-                            self.rescale_slope != 0.0):
-                            wc, ww = self.dicom_processor.convert_window_level_rescaled_to_raw(
-                                wc, ww, self.rescale_slope, self.rescale_intercept
-                            )
-                    # If default window/level is in raw units but we're using rescaled values, convert
-                    elif not is_rescaled and self.use_rescaled_values:
-                        if (self.rescale_slope is not None and self.rescale_intercept is not None):
-                            wc, ww = self.dicom_processor.convert_window_level_raw_to_rescaled(
-                                wc, ww, self.rescale_slope, self.rescale_intercept
-                            )
-                    
-                    self.window_level_controls.set_window_level(wc, ww, block_signals=True, unit=unit)
-                    self.current_window_center = wc
-                    self.current_window_width = ww
-                elif pixel_min is not None and pixel_max is not None:
-                    # Use default window/level based on pixel range
-                    default_center = (pixel_min + pixel_max) / 2.0
-                    default_width = pixel_max - pixel_min
-                    if default_width <= 0:
-                        default_width = 1.0
-                    self.window_level_controls.set_window_level(default_center, default_width, block_signals=True, unit=unit)
-                    self.current_window_center = default_center
-                    self.current_window_width = default_width
-                
-                # Store defaults if this is a new series
-                if is_new_study_series and stored_zoom is not None:
-                    self.series_defaults[series_identifier] = {
-                        'window_center': self.current_window_center,
-                        'window_width': self.current_window_width,
-                        'zoom': stored_zoom,
-                        'h_scroll': stored_h_scroll,
-                        'v_scroll': stored_v_scroll
-                    }
-                
-                self.window_level_user_modified = False  # Reset flag after setting from dataset
+            # Display slice using slice display manager
+            self.slice_display_manager.display_slice(
+                dataset,
+                self.current_studies,
+                self.current_study_uid,
+                self.current_series_uid,
+                self.current_slice_index
+            )
             
             # Store initial view state if this is the first image
-            if self.initial_zoom is None:
+            if self.view_state_manager.initial_zoom is None:
                 # Wait a bit for view to settle, then store initial state
                 from PySide6.QtCore import QTimer
-                QTimer.singleShot(100, self._store_initial_view_state)
-            
-            # Update overlay
-            parser = DICOMParser(dataset)
-            # Get total slice count for current series
-            total_slices = 0
-            if self.current_studies and self.current_study_uid and self.current_series_uid:
-                if (self.current_study_uid in self.current_studies and 
-                    self.current_series_uid in self.current_studies[self.current_study_uid]):
-                    total_slices = len(self.current_studies[self.current_study_uid][self.current_series_uid])
-            self.overlay_manager.create_overlay_items(
-                self.image_viewer.scene,
-                parser,
-                total_slices=total_slices if total_slices > 0 else None
-            )
-            
-            # Extract pixel spacing and set on measurement tool
-            from utils.dicom_utils import get_pixel_spacing
-            pixel_spacing = get_pixel_spacing(dataset)
-            self.measurement_tool.set_pixel_spacing(pixel_spacing)
-            
-            # Set current slice context for measurements
-            study_uid = getattr(dataset, 'StudyInstanceUID', '')
-            series_uid = getattr(dataset, 'SeriesInstanceUID', '')
-            instance_number = getattr(dataset, 'InstanceNumber', None)
-            if instance_number is None:
-                instance_identifier = self.current_slice_index
-            else:
-                instance_identifier = int(instance_number)
-            self.measurement_tool.set_current_slice(study_uid, series_uid, instance_identifier)
-            
-            # Clear measurements when switching to new series (not when switching slices)
-            if is_new_study_series:
-                self.measurement_tool.clear_measurements(self.image_viewer.scene)
-            
-            # Display ROIs for current slice
-            self._display_rois_for_slice(dataset)
-            
-            # Display measurements for current slice
-            self._display_measurements_for_slice(dataset)
-        
+                QTimer.singleShot(100, self.view_state_manager.store_initial_view_state)
         except Exception as e:
             self.main_window.update_status(f"Error displaying slice: {str(e)}")
-    
-    def _get_series_identifier(self, dataset: Dataset) -> str:
-        """
-        Get a unique identifier for a study/series combination.
-        Uses StudyInstanceUID and SeriesInstanceUID.
-        
-        Args:
-            dataset: pydicom Dataset
-            
-        Returns:
-            Series identifier string
-        """
-        study_uid = getattr(dataset, 'StudyInstanceUID', '')
-        series_uid = getattr(dataset, 'SeriesInstanceUID', '')
-        return f"{study_uid}_{series_uid}"
-    
-    def _is_new_study_or_series(self, dataset: Dataset) -> bool:
-        """
-        Detect if this is a new study or series by comparing DICOM tags.
-        
-        Compares:
-        - Study Date (0008,0020)
-        - Modality (0008,0060)
-        - Series Number (0020,0011)
-        - Series Description (0008,103E)
-        - Study Time (0008,0030)
-        - Series Time (0008,0031)
-        
-        Args:
-            dataset: pydicom Dataset
-            
-        Returns:
-            True if this is a new study/series, False otherwise
-        """
-        if self.current_series_identifier is None:
-            return True
-        
-        # Get current series identifier
-        new_series_identifier = self._get_series_identifier(dataset)
-        
-        # If series identifier changed, it's a new study/series
-        if new_series_identifier != self.current_series_identifier:
-            return True
-        
-        return False
-    
-    def _store_initial_view_state(self) -> None:
-        """
-        Store the initial view state (zoom, pan, window/level) for reset functionality.
-        Stores per-series defaults in addition to global initial values.
-        
-        Called after the first image is displayed and the view has settled.
-        """
-        if self.image_viewer.image_item is None:
-            return
-        
-        # Store initial zoom (global fallback)
-        if self.initial_zoom is None:
-            self.initial_zoom = self.image_viewer.current_zoom
-        
-        # Store initial pan position (scrollbar values) - global fallback
-        # Keep for backward compatibility, but prefer scene center for reset
-        if self.initial_h_scroll is None:
-            self.initial_h_scroll = self.image_viewer.horizontalScrollBar().value()
-        if self.initial_v_scroll is None:
-            self.initial_v_scroll = self.image_viewer.verticalScrollBar().value()
-        
-        # Store initial scene center point in scene coordinates - preferred for reset
-        # This works correctly even when viewport size changes (e.g., splitter moved)
-        if self.initial_scene_center is None:
-            scene_center = self.image_viewer.get_viewport_center_scene()
-            if scene_center is not None:
-                self.initial_scene_center = scene_center
-        
-        # Store initial window/level (global fallback)
-        if self.initial_window_center is None:
-            self.initial_window_center = self.current_window_center
-        if self.initial_window_width is None:
-            self.initial_window_width = self.current_window_width
-        
-        # Store per-series defaults if we have a current series identifier
-        if self.current_series_identifier:
-            # Get scene center point for this series
-            scene_center = self.image_viewer.get_viewport_center_scene()
-            
-            if self.current_series_identifier not in self.series_defaults:
-                # Create new entry with all defaults
-                self.series_defaults[self.current_series_identifier] = {
-                    'window_center': self.current_window_center,
-                    'window_width': self.current_window_width,
-                    'zoom': self.image_viewer.current_zoom,
-                    'h_scroll': self.image_viewer.horizontalScrollBar().value(),
-                    'v_scroll': self.image_viewer.verticalScrollBar().value(),
-                    'scene_center': scene_center,  # Store scene center point in scene coordinates
-                    'use_rescaled_values': self.use_rescaled_values
-                }
-            else:
-                # Entry already exists - update fields while preserving existing values
-                self.series_defaults[self.current_series_identifier].update({
-                    'window_center': self.current_window_center,
-                    'window_width': self.current_window_width,
-                    'zoom': self.image_viewer.current_zoom,
-                    'h_scroll': self.image_viewer.horizontalScrollBar().value(),
-                    'v_scroll': self.image_viewer.verticalScrollBar().value(),
-                    'scene_center': scene_center
-                })
-                # Don't overwrite use_rescaled_values - it was already set to the initial default
-    
-    def _reset_view(self) -> None:
-        """
-        Reset view to initial state (zoom, pan, window center/level).
-        
-        Uses series-specific defaults if available, otherwise falls back to global initial values.
-        """
-        if self.current_dataset is None:
-            # No current dataset
-            return
-        
-        # Get series identifier
-        series_identifier = self._get_series_identifier(self.current_dataset)
-        
-        # Try to get series-specific defaults
-        if series_identifier in self.series_defaults:
-            defaults = self.series_defaults[series_identifier]
-            reset_zoom = defaults.get('zoom')
-            reset_h_scroll = defaults.get('h_scroll')
-            reset_v_scroll = defaults.get('v_scroll')
-            reset_scene_center = defaults.get('scene_center')  # Preferred: scene center point
-            reset_window_center = defaults.get('window_center')
-            reset_window_width = defaults.get('window_width')
-            reset_use_rescaled_values = defaults.get('use_rescaled_values')
-        else:
-            # Fall back to global initial values
-            reset_zoom = self.initial_zoom
-            reset_h_scroll = self.initial_h_scroll
-            reset_v_scroll = self.initial_v_scroll
-            reset_scene_center = self.initial_scene_center  # Preferred: scene center point
-            reset_window_center = self.initial_window_center
-            reset_window_width = self.initial_window_width
-            reset_use_rescaled_values = None
-        
-        # Ensure we have a valid rescale state value - calculate default if missing
-        if reset_use_rescaled_values is None:
-            # Default to True if rescale parameters exist, False otherwise
-            reset_use_rescaled_values = (self.rescale_slope is not None and self.rescale_intercept is not None)
-        
-        if reset_zoom is None:
-            # No reset values available
-            return
-        
-        # Reset rescale state to default FIRST (before window/level to avoid incorrect conversion)
-        # Always restore rescale state, even if it's the same as current
-        # Restore rescale state directly without converting window/level values
-        # (the stored window/level values are already in the correct units for the restored state)
-        self.use_rescaled_values = reset_use_rescaled_values
-        # Update UI toggle states
-        self.main_window.set_rescale_toggle_state(reset_use_rescaled_values)
-        self.image_viewer.set_rescale_toggle_state(reset_use_rescaled_values)
-        
-        # Recalculate pixel value ranges for window/level controls
-        if self.current_dataset is not None:
-            pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(
-                self.current_dataset, apply_rescale=self.use_rescaled_values
-            )
-            if pixel_min is not None and pixel_max is not None:
-                center_range = (pixel_min, pixel_max)
-                width_range = (1.0, max(1.0, pixel_max - pixel_min))
-                self.window_level_controls.set_ranges(center_range, width_range)
-            
-            # Update window/level unit labels
-            unit = self.rescale_type if (self.use_rescaled_values and self.rescale_type) else None
-            self.window_level_controls.set_unit(unit)
-        
-        # Reset window/level to initial values (already in correct units for current rescale state)
-        if reset_window_center is not None and reset_window_width is not None:
-            # Get unit for window/level display
-            unit = self.rescale_type if (self.use_rescaled_values and self.rescale_type) else None
-            self.window_level_controls.set_window_level(
-                reset_window_center, 
-                reset_window_width, 
-                block_signals=True,
-                unit=unit
-            )
-            self.current_window_center = reset_window_center
-            self.current_window_width = reset_window_width
-            self.window_level_user_modified = False
-        
-        # Re-display current slice with reset window/level and rescale state
-        if self.current_studies and self.current_series_uid:
-            datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
-            if self.current_slice_index < len(datasets):
-                dataset = datasets[self.current_slice_index]
-                # Use current window/level values (which have been reset)
-                image = self.dicom_processor.dataset_to_image(
-                    dataset,
-                    window_center=self.current_window_center,
-                    window_width=self.current_window_width,
-                    apply_rescale=self.use_rescaled_values
-                )
-                if image:
-                    # Set image first (without preserving view to avoid wrong centering)
-                    self.image_viewer.set_image(image, preserve_view=False)
-                    
-                    # Now set up the view: zoom, transform, and centering
-                    # Prefer scene center point (works correctly even if viewport size changed)
-                    # Fall back to scrollbar positions for backward compatibility
-                    self.image_viewer.resetTransform()
-                    self.image_viewer.scale(reset_zoom, reset_zoom)
-                    self.image_viewer.current_zoom = reset_zoom
-                    
-                    # Use scene center point if available (preferred method)
-                    if reset_scene_center is not None:
-                        # Center on the stored scene point - works correctly regardless of viewport size
-                        self.image_viewer.centerOn(reset_scene_center)
-                    elif reset_h_scroll is not None and reset_v_scroll is not None:
-                        # Fallback: restore scrollbar positions (for backward compatibility)
-                        # This may not work correctly if viewport size has changed
-                        self.image_viewer.horizontalScrollBar().setValue(reset_h_scroll)
-                        self.image_viewer.verticalScrollBar().setValue(reset_v_scroll)
-                    else:
-                        # No saved positions - use fit_to_view with centering
-                        self.image_viewer.fit_to_view(center_image=True)
-                    
-                    self.image_viewer.last_transform = self.image_viewer.transform()
-                    self.image_viewer.zoom_changed.emit(self.image_viewer.current_zoom)
-                    
-                    # Recreate overlay
-                    parser = DICOMParser(dataset)
-                    # Get total slice count
-                    total_slices = len(datasets) if datasets else 0
-                    self.overlay_manager.create_overlay_items(
-                        self.image_viewer.scene,
-                        parser,
-                        total_slices=total_slices if total_slices > 0 else None
-                    )
-                    # Re-display ROIs for current slice
-                    self._display_rois_for_slice(dataset)
     
     def _display_rois_for_slice(self, dataset) -> None:
         """
         Display ROIs for a slice.
         
-        Ensures all ROIs for the current slice are visible in the scene.
-        
         Args:
             dataset: pydicom Dataset for the current slice
         """
-        # Extract DICOM identifiers
+        self.slice_display_manager.display_rois_for_slice(dataset)
+        # Check if there's a selected ROI for this slice and restore UI state
         study_uid = getattr(dataset, 'StudyInstanceUID', '')
         series_uid = getattr(dataset, 'SeriesInstanceUID', '')
-        # Try to get InstanceNumber from DICOM, fall back to slice_index
         instance_number = getattr(dataset, 'InstanceNumber', None)
         if instance_number is None:
             instance_identifier = self.current_slice_index
         else:
             instance_identifier = int(instance_number)
-        
-        # Get all ROIs for this slice using composite key
         rois = self.roi_manager.get_rois_for_slice(study_uid, series_uid, instance_identifier)
-        
-        # Remove ROIs from other slices from the scene
-        # (but keep them in the manager's storage)
-        current_scene_items = list(self.image_viewer.scene.items())
-        for item in current_scene_items:
-            # Check if this item is an ROI
-            roi = self.roi_manager.find_roi_by_item(item)
-            if roi is not None:
-                # Check if this ROI belongs to current slice
-                roi_belongs_to_current = False
-                for key, roi_list in self.roi_manager.rois.items():
-                    if roi in roi_list:
-                        # Check if this key matches current slice
-                        if key == (study_uid, series_uid, instance_identifier):
-                            roi_belongs_to_current = True
-                        break
-                # Remove ROI if it's from a different slice
-                if not roi_belongs_to_current:
-                    # Only remove if item actually belongs to this scene
-                    if item.scene() == self.image_viewer.scene:
-                        self.image_viewer.scene.removeItem(item)
-        
-        # Add ROIs for current slice to scene if not already there
-        # Force refresh to ensure visibility after image changes
-        for roi in rois:
-            if roi.item.scene() == self.image_viewer.scene:
-                # Already in scene, but ensure it's visible and has correct Z-value
-                roi.item.setZValue(100)  # Above image but below overlay
-                roi.item.show()  # Ensure visible
-            else:
-                # Not in scene, add it
-                self.image_viewer.scene.addItem(roi.item)
-                # Ensure ROI is visible (set appropriate Z-value)
-                roi.item.setZValue(100)  # Above image but below overlay
-        
-        # Check if there's a selected ROI for this slice and restore UI state
         selected_roi = self.roi_manager.get_selected_roi()
         if selected_roi is not None and selected_roi in rois:
-            # Selected ROI belongs to current slice - restore UI state
             self.roi_list_panel.select_roi_in_list(selected_roi)
-            self._update_roi_statistics(selected_roi)
+            self.roi_coordinator.update_roi_statistics(selected_roi)
         else:
-            # No selected ROI for this slice - clear statistics
             self.roi_statistics_panel.clear_statistics()
     
     def _display_measurements_for_slice(self, dataset) -> None:
         """
         Display measurements for a slice.
         
-        Ensures all measurements for the current slice are visible in the scene.
-        Removes measurements from other slices before displaying current slice measurements.
-        
         Args:
             dataset: pydicom Dataset for the current slice
         """
-        # Extract DICOM identifiers
-        study_uid = getattr(dataset, 'StudyInstanceUID', '')
-        series_uid = getattr(dataset, 'SeriesInstanceUID', '')
-        # Try to get InstanceNumber from DICOM, fall back to slice_index
-        instance_number = getattr(dataset, 'InstanceNumber', None)
-        if instance_number is None:
-            instance_identifier = self.current_slice_index
-        else:
-            instance_identifier = int(instance_number)
-        
-        # Clear measurements from other slices first
-        self.measurement_tool.clear_measurements_from_other_slices(
-            study_uid, series_uid, instance_identifier, self.image_viewer.scene
-        )
-        
-        # Display measurements for this slice
-        self.measurement_tool.display_measurements_for_slice(
-            study_uid, series_uid, instance_identifier, self.image_viewer.scene
-        )
+        self.slice_display_manager.display_measurements_for_slice(dataset)
     
     def _open_settings(self) -> None:
         """Handle settings dialog request."""
-        dialog = SettingsDialog(self.config_manager, self.main_window)
-        dialog.settings_applied.connect(self._on_settings_applied)
-        dialog.exec()
+        self.dialog_coordinator.open_settings()
     
     def _open_tag_viewer(self) -> None:
         """Handle tag viewer dialog request."""
-        if self.tag_viewer_dialog is None:
-            self.tag_viewer_dialog = TagViewerDialog(self.main_window)
-        
-        # Update with current dataset if available
-        if self.current_dataset is not None:
-            self.tag_viewer_dialog.set_dataset(self.current_dataset)
-        
-        # Show dialog (brings to front if already open)
-        self.tag_viewer_dialog.show()
-        self.tag_viewer_dialog.raise_()
-        self.tag_viewer_dialog.activateWindow()
+        self.dialog_coordinator.open_tag_viewer(self.current_dataset)
     
     def _open_overlay_config(self) -> None:
         """Handle overlay configuration dialog request."""
-        dialog = OverlayConfigDialog(self.config_manager, self.main_window)
-        dialog.config_applied.connect(self._on_overlay_config_applied)
-        dialog.exec()
+        self.dialog_coordinator.open_overlay_config()
     
     def _open_quick_start_guide(self) -> None:
         """Handle Quick Start Guide dialog request."""
-        from gui.dialogs.quick_start_guide_dialog import QuickStartGuideDialog
-        dialog = QuickStartGuideDialog(self.config_manager, self.main_window)
-        dialog.exec()
+        self.dialog_coordinator.open_quick_start_guide()
     
     def _open_tag_export(self) -> None:
         """Handle Tag Export dialog request."""
-        # Check if any studies are loaded
-        if not self.current_studies:
-            from PySide6.QtWidgets import QMessageBox
-            QMessageBox.warning(
-                self.main_window,
-                "No Data Loaded",
-                "Please load DICOM files before exporting tags."
-            )
-            return
-        
-        from gui.dialogs.tag_export_dialog import TagExportDialog
-        dialog = TagExportDialog(self.current_studies, self.config_manager, self.main_window)
-        dialog.exec()
+        self.dialog_coordinator.open_tag_export()
     
     def _on_overlay_config_applied(self) -> None:
         """Handle overlay configuration being applied."""
-        # Recreate overlay if we have a current dataset
-        if self.current_studies and self.current_series_uid:
-            datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
-            if self.current_slice_index < len(datasets):
-                dataset = datasets[self.current_slice_index]
-                parser = DICOMParser(dataset)
-                total_slices = len(datasets)
-                self.overlay_manager.create_overlay_items(
-                    self.image_viewer.scene,
-                    parser,
-                    total_slices=total_slices if total_slices > 0 else None
-                )
+        self.overlay_coordinator.handle_overlay_config_applied()
     
     def _on_settings_applied(self) -> None:
         """Handle settings being applied."""
@@ -1236,18 +637,8 @@ class DICOMViewerApp(QObject):
         self.overlay_manager.set_font_size(font_size)
         self.overlay_manager.set_font_color(*font_color)
         
-        # Recreate overlay if we have a current dataset
-        if self.current_studies and self.current_series_uid:
-            datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
-            if self.current_slice_index < len(datasets):
-                dataset = datasets[self.current_slice_index]
-                parser = DICOMParser(dataset)
-                total_slices = len(datasets)
-                self.overlay_manager.create_overlay_items(
-                    self.image_viewer.scene,
-                    parser,
-                    total_slices=total_slices if total_slices > 0 else None
-                )
+        # Recreate overlay
+        self.overlay_coordinator.handle_overlay_config_applied()
     
     def _on_window_changed(self, center: float, width: float) -> None:
         """
@@ -1257,58 +648,25 @@ class DICOMViewerApp(QObject):
             center: Window center
             width: Window width
         """
-        # Store current window/level values
-        self.current_window_center = center
-        self.current_window_width = width
-        self.window_level_user_modified = True  # Mark as user-modified
-        
-        # Re-display current slice with new window/level
-        if self.current_studies and self.current_series_uid:
-            datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
-            if self.current_slice_index < len(datasets):
-                dataset = datasets[self.current_slice_index]
-                image = self.dicom_processor.dataset_to_image(
-                    dataset,
-                    window_center=center,
-                    window_width=width,
-                    apply_rescale=self.use_rescaled_values
-                )
-                if image:
-                    # Preserve view when window/level changes (same slice)
-                    self.image_viewer.set_image(image, preserve_view=True)
-                    # Recreate overlay to ensure it stays on top
-                    parser = DICOMParser(dataset)
-                    total_slices = len(datasets)
-                    self.overlay_manager.create_overlay_items(
-                        self.image_viewer.scene,
-                        parser,
-                        total_slices=total_slices if total_slices > 0 else None
-                    )
+        self.view_state_manager.handle_window_changed(center, width)
     
     def _on_mouse_mode_changed(self, mode: str) -> None:
         """
         Handle mouse mode change from toolbar.
         
         Args:
-            mode: Mouse mode ("select", "roi_ellipse", "roi_rectangle", "measure", "zoom", "pan", "auto_window_level")
+            mode: Mouse mode
         """
-        self.image_viewer.set_mouse_mode(mode)
+        self.mouse_mode_handler.handle_mouse_mode_changed(mode)
     
     def _set_mouse_mode(self, mode: str) -> None:
         """
         Set mouse mode programmatically (e.g., from keyboard shortcuts).
         
-        Updates both the image viewer and the toolbar UI to ensure consistent state.
-        This method is used for programmatic mode changes (like keyboard shortcuts)
-        where we need to update both the viewer and toolbar without triggering signals.
-        
         Args:
-            mode: Mouse mode ("select", "roi_ellipse", "roi_rectangle", "measure", "zoom", "pan", "auto_window_level")
+            mode: Mouse mode
         """
-        # Update image viewer mouse mode
-        self.image_viewer.set_mouse_mode(mode)
-        # Update toolbar button states without emitting signals
-        self.main_window.set_mouse_mode_checked(mode)
+        self.mouse_mode_handler.set_mouse_mode(mode)
     
     def _set_roi_mode(self, mode: Optional[str]) -> None:
         """
@@ -1317,7 +675,7 @@ class DICOMViewerApp(QObject):
         Args:
             mode: "rectangle", "ellipse", or None
         """
-        self.image_viewer.set_roi_drawing_mode(mode)
+        self.mouse_mode_handler.set_roi_mode(mode)
     
     def _on_roi_drawing_started(self, pos: QPointF) -> None:
         """
@@ -1326,21 +684,7 @@ class DICOMViewerApp(QObject):
         Args:
             pos: Starting position
         """
-        if self.current_dataset is None:
-            return
-        
-        # Extract DICOM identifiers
-        study_uid = getattr(self.current_dataset, 'StudyInstanceUID', '')
-        series_uid = getattr(self.current_dataset, 'SeriesInstanceUID', '')
-        # Try to get InstanceNumber from DICOM, fall back to slice_index
-        instance_number = getattr(self.current_dataset, 'InstanceNumber', None)
-        if instance_number is None:
-            instance_identifier = self.current_slice_index
-        else:
-            instance_identifier = int(instance_number)
-        
-        self.roi_manager.set_current_slice(study_uid, series_uid, instance_identifier)
-        self.roi_manager.start_drawing(pos, self.image_viewer.roi_drawing_mode)
+        self.roi_coordinator.handle_roi_drawing_started(pos)
     
     def _on_roi_drawing_updated(self, pos: QPointF) -> None:
         """
@@ -1349,94 +693,11 @@ class DICOMViewerApp(QObject):
         Args:
             pos: Current position
         """
-        self.roi_manager.update_drawing(pos, self.image_viewer.scene)
+        self.roi_coordinator.handle_roi_drawing_updated(pos)
     
     def _on_roi_drawing_finished(self) -> None:
         """Handle ROI drawing finish."""
-        roi_item = self.roi_manager.finish_drawing()
-        
-        # Extract DICOM identifiers for updating ROI list
-        study_uid = ""
-        series_uid = ""
-        instance_identifier = self.current_slice_index
-        if self.current_dataset is not None:
-            study_uid = getattr(self.current_dataset, 'StudyInstanceUID', '')
-            series_uid = getattr(self.current_dataset, 'SeriesInstanceUID', '')
-            instance_number = getattr(self.current_dataset, 'InstanceNumber', None)
-            if instance_number is not None:
-                instance_identifier = int(instance_number)
-        
-        # Check if we're in auto_window_level mode
-        if self.image_viewer.mouse_mode == "auto_window_level" and roi_item is not None:
-            # Auto window/level mode - calculate window/level from ROI and delete ROI
-            try:
-                # roi_item is already the ROIItem we need (finish_drawing returns ROIItem directly)
-                roi = roi_item
-                if roi is not None and self.current_dataset is not None:
-                    # Get pixel array
-                    pixel_array = self.dicom_processor.get_pixel_array(self.current_dataset)
-                    if pixel_array is not None:
-                        # Extract pixel spacing for area calculation
-                        from utils.dicom_utils import get_pixel_spacing
-                        pixel_spacing = get_pixel_spacing(self.current_dataset)
-                        
-                        # Calculate statistics with rescale parameters if using rescaled values
-                        rescale_slope = self.rescale_slope if self.use_rescaled_values else None
-                        rescale_intercept = self.rescale_intercept if self.use_rescaled_values else None
-                        stats = self.roi_manager.calculate_statistics(
-                            roi, pixel_array,
-                            rescale_slope=rescale_slope,
-                            rescale_intercept=rescale_intercept,
-                            pixel_spacing=pixel_spacing
-                        )
-                        if stats and "min" in stats and "max" in stats:
-                            # Set window width = max - min
-                            window_width = stats["max"] - stats["min"]
-                            # Set window center = midpoint (halfway between min and max)
-                            window_center = (stats["min"] + stats["max"]) / 2.0
-                            
-                            # Update window/level controls
-                            self.window_level_controls.set_window_level(window_center, window_width)
-                            
-                            # Delete the ROI (it was only used for calculation)
-                            self.roi_manager.delete_roi(roi, self.image_viewer.scene)
-                            
-                            # Clear statistics panel since ROI was deleted
-                            self.roi_statistics_panel.clear_statistics()
-                            
-                            # Update ROI list panel
-                            self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
-                            
-                            # Switch back to pan mode
-                            self.image_viewer.set_mouse_mode("pan")
-                            # Update toolbar button state
-                            self.main_window.mouse_mode_pan_action.setChecked(True)
-                            self.main_window.mouse_mode_auto_window_level_action.setChecked(False)
-            except Exception as e:
-                print(f"Error in auto window/level: {e}")
-                import traceback
-                traceback.print_exc()
-                # If error occurs, still delete ROI and switch back to pan mode
-                if roi_item is not None:
-                    # roi_item is already the ROIItem we need
-                    self.roi_manager.delete_roi(roi_item, self.image_viewer.scene)
-                    # Clear statistics panel since ROI was deleted
-                    self.roi_statistics_panel.clear_statistics()
-                    self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
-                self.image_viewer.set_mouse_mode("pan")
-                self.main_window.mouse_mode_pan_action.setChecked(True)
-                self.main_window.mouse_mode_auto_window_level_action.setChecked(False)
-            return
-        
-        # Normal ROI drawing finish (not auto window/level)
-        # Update ROI list
-        self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
-        
-        # Auto-select the newly drawn ROI: highlight in list and show statistics
-        if roi_item is not None:
-            self.roi_list_panel.select_roi_in_list(roi_item)
-            if self.current_dataset is not None:
-                self._update_roi_statistics(roi_item)
+        self.roi_coordinator.handle_roi_drawing_finished()
     
     def _on_roi_clicked(self, item) -> None:
         """
@@ -1445,23 +706,11 @@ class DICOMViewerApp(QObject):
         Args:
             item: QGraphicsItem that was clicked
         """
-        roi = self.roi_manager.find_roi_by_item(item)
-        if roi:
-            self.roi_manager.select_roi(roi)
-            self.roi_list_panel.select_roi_in_list(roi)
-            self._update_roi_statistics(roi)
+        self.roi_coordinator.handle_roi_clicked(item)
     
     def _on_image_clicked_no_roi(self) -> None:
         """Handle image click when not on an ROI - deselect current ROI."""
-        # Deselect ROI
-        self.roi_manager.select_roi(None)
-        # Clear scene selection to prevent Qt's default mouse release behavior from re-selecting the ROI
-        if self.image_viewer.scene is not None:
-            self.image_viewer.scene.clearSelection()
-        # Clear ROI list selection
-        self.roi_list_panel.select_roi_in_list(None)
-        # Clear ROI statistics panel
-        self.roi_statistics_panel.clear_statistics()
+        self.roi_coordinator.handle_image_clicked_no_roi()
     
     def _on_measurement_started(self, pos: QPointF) -> None:
         """
@@ -1470,18 +719,7 @@ class DICOMViewerApp(QObject):
         Args:
             pos: Starting position
         """
-        # Set current slice context before starting measurement
-        if self.current_dataset is not None:
-            study_uid = getattr(self.current_dataset, 'StudyInstanceUID', '')
-            series_uid = getattr(self.current_dataset, 'SeriesInstanceUID', '')
-            instance_number = getattr(self.current_dataset, 'InstanceNumber', None)
-            if instance_number is None:
-                instance_identifier = self.current_slice_index
-            else:
-                instance_identifier = int(instance_number)
-            self.measurement_tool.set_current_slice(study_uid, series_uid, instance_identifier)
-        
-        self.measurement_tool.start_measurement(pos)
+        self.measurement_coordinator.handle_measurement_started(pos)
     
     def _on_measurement_updated(self, pos: QPointF) -> None:
         """
@@ -1490,16 +728,11 @@ class DICOMViewerApp(QObject):
         Args:
             pos: Current position
         """
-        if self.image_viewer.scene is not None:
-            self.measurement_tool.update_measurement(pos, self.image_viewer.scene)
+        self.measurement_coordinator.handle_measurement_updated(pos)
     
     def _on_measurement_finished(self) -> None:
         """Handle measurement finish."""
-        if self.image_viewer.scene is not None:
-            measurement = self.measurement_tool.finish_measurement(self.image_viewer.scene)
-            if measurement is not None:
-                # Measurement completed successfully
-                pass
+        self.measurement_coordinator.handle_measurement_finished()
     
     def _on_measurement_delete_requested(self, measurement_item) -> None:
         """
@@ -1508,69 +741,17 @@ class DICOMViewerApp(QObject):
         Args:
             measurement_item: MeasurementItem to delete
         """
-        if self.image_viewer.scene is not None:
-            self.measurement_tool.delete_measurement(measurement_item, self.image_viewer.scene)
+        self.measurement_coordinator.handle_measurement_delete_requested(measurement_item)
     
     def _on_clear_measurements_requested(self) -> None:
         """
         Handle clear measurements request from toolbar or context menu.
-        
-        Clears all measurements on the current slice only.
         """
-        if self.image_viewer.scene is not None and self.current_dataset is not None:
-            # Extract DICOM identifiers for current slice
-            study_uid = getattr(self.current_dataset, 'StudyInstanceUID', '')
-            series_uid = getattr(self.current_dataset, 'SeriesInstanceUID', '')
-            instance_number = getattr(self.current_dataset, 'InstanceNumber', None)
-            if instance_number is None:
-                instance_identifier = self.current_slice_index
-            else:
-                instance_identifier = int(instance_number)
-            
-            # Clear measurements for current slice
-            self.measurement_tool.clear_slice_measurements(
-                study_uid, series_uid, instance_identifier, self.image_viewer.scene
-            )
+        self.measurement_coordinator.handle_clear_measurements()
     
     def _on_toggle_overlay_requested(self) -> None:
         """Handle toggle overlay request from context menu."""
-        # Toggle overlay visibility (cycles through 3 states)
-        new_state = self.overlay_manager.toggle_overlay_visibility()
-        
-        # Update overlay display
-        if self.current_dataset is not None and self.image_viewer.scene is not None:
-            # Refresh overlay items
-            parser = DICOMParser(self.current_dataset)
-            # Get total slices from current series
-            if self.current_study_uid and self.current_series_uid:
-                datasets = self.current_studies.get(self.current_study_uid, {}).get(self.current_series_uid, [])
-                total_slices = len(datasets) if datasets else None
-            else:
-                total_slices = None
-            self.overlay_manager.create_overlay_items(
-                self.image_viewer.scene,
-                parser,
-                total_slices=total_slices
-            )
-            
-            # Handle measurement and ROI label visibility based on state
-            if new_state == 2:
-                # State 2: Hide all text including measurements and ROI labels
-                self._hide_measurement_labels(True)
-                self._hide_roi_labels(True)
-                # Also hide the graphics themselves (lines, shapes)
-                self._hide_measurement_graphics(True)
-                self._hide_roi_graphics(True)
-            else:
-                # State 0 or 1: Show measurements and ROI labels
-                self._hide_measurement_labels(False)
-                self._hide_roi_labels(False)
-                # Show the graphics
-                self._hide_measurement_graphics(False)
-                self._hide_roi_graphics(False)
-            
-            # Force scene update to refresh immediately
-            self.image_viewer.scene.update()
+        self.overlay_coordinator.handle_toggle_overlay()
     
     def _on_roi_selected(self, roi) -> None:
         """
@@ -1579,7 +760,7 @@ class DICOMViewerApp(QObject):
         Args:
             roi: Selected ROI item
         """
-        self._update_roi_statistics(roi)
+        self.roi_coordinator.handle_roi_selected(roi)
     
     def _on_roi_delete_requested(self, item) -> None:
         """
@@ -1588,21 +769,7 @@ class DICOMViewerApp(QObject):
         Args:
             item: QGraphicsItem to delete
         """
-        roi = self.roi_manager.find_roi_by_item(item)
-        if roi:
-            self.roi_manager.delete_roi(roi, self.image_viewer.scene)
-            # Update ROI list panel - extract identifiers from current dataset
-            if self.current_dataset is not None:
-                study_uid = getattr(self.current_dataset, 'StudyInstanceUID', '')
-                series_uid = getattr(self.current_dataset, 'SeriesInstanceUID', '')
-                instance_number = getattr(self.current_dataset, 'InstanceNumber', None)
-                if instance_number is None:
-                    instance_identifier = self.current_slice_index
-                else:
-                    instance_identifier = int(instance_number)
-                self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
-            if self.roi_manager.get_selected_roi() is None:
-                self.roi_statistics_panel.clear_statistics()
+        self.roi_coordinator.handle_roi_delete_requested(item)
     
     def _on_roi_deleted(self, roi) -> None:
         """
@@ -1611,42 +778,13 @@ class DICOMViewerApp(QObject):
         Args:
             roi: Deleted ROI item
         """
-        # Clear statistics if this was the selected ROI
-        if self.roi_manager.get_selected_roi() is None:
-            self.roi_statistics_panel.clear_statistics()
+        self.roi_coordinator.handle_roi_deleted(roi)
     
     def _delete_all_rois_current_slice(self) -> None:
         """
         Delete all ROIs on the current slice.
-        
-        Called by D key keyboard shortcut and Delete All button in ROI list panel.
         """
-        if self.current_dataset is None:
-            return
-        
-        # Get current slice identifiers
-        study_uid = self.current_study_uid
-        series_uid = self.current_series_uid
-        
-        if not study_uid or not series_uid:
-            return
-        
-        # Get current instance identifier (must match how ROIs are stored)
-        # Try to get InstanceNumber from DICOM, fall back to slice_index
-        instance_number = getattr(self.current_dataset, 'InstanceNumber', None)
-        if instance_number is None:
-            instance_identifier = self.current_slice_index
-        else:
-            instance_identifier = int(instance_number)
-        
-        # Clear all ROIs for this slice
-        self.roi_manager.clear_slice_rois(study_uid, series_uid, instance_identifier, self.image_viewer.scene)
-        
-        # Update ROI list panel
-        self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
-        
-        # Clear ROI statistics panel
-        self.roi_statistics_panel.clear_statistics()
+        self.roi_coordinator.delete_all_rois_current_slice()
     
     def _on_scroll_wheel_mode_changed(self, mode: str) -> None:
         """
@@ -1655,154 +793,51 @@ class DICOMViewerApp(QObject):
         Args:
             mode: "slice" or "zoom"
         """
-        self.config_manager.set_scroll_wheel_mode(mode)
-        self.image_viewer.set_scroll_wheel_mode(mode)
-        self.slice_navigator.set_scroll_wheel_mode(mode)
+        self.mouse_mode_handler.handle_scroll_wheel_mode_changed(mode)
     
     def _on_context_menu_mouse_mode_changed(self, mode: str) -> None:
         """
         Handle mouse mode change from context menu.
-        Updates toolbar to reflect the change.
         
         Args:
             mode: Mouse mode string
         """
-        # Call main_window's _on_mouse_mode_changed() directly to update toolbar buttons
-        # This method will update toolbar button states and then emit the signal
-        # which will trigger the normal flow (setting mouse mode in image_viewer)
-        self.main_window._on_mouse_mode_changed(mode)
+        self.mouse_mode_handler.handle_context_menu_mouse_mode_changed(mode)
     
     def _on_context_menu_scroll_wheel_mode_changed(self, mode: str) -> None:
         """
         Handle scroll wheel mode change from context menu.
-        Updates toolbar combo box to reflect the change.
         
         Args:
             mode: "slice" or "zoom"
         """
-        # Update toolbar combo box
-        if mode == "slice":
-            self.main_window.scroll_wheel_mode_combo.setCurrentText("Slice")
-        else:  # zoom
-            self.main_window.scroll_wheel_mode_combo.setCurrentText("Zoom")
-        
-        # Emit the main_window signal to trigger normal flow
-        self.main_window.scroll_wheel_mode_changed.emit(mode)
+        self.mouse_mode_handler.handle_context_menu_scroll_wheel_mode_changed(mode)
     
     def _on_rescale_toggle_changed(self, checked: bool) -> None:
         """
         Handle rescale toggle change from toolbar or context menu.
         
-        Converts current window/level values to preserve image appearance when toggling.
-        
         Args:
             checked: True to use rescaled values, False to use raw values
         """
-        # Get current window/level values before updating state
-        current_center = self.current_window_center
-        current_width = self.current_window_width
-        
-        # Convert window/level values if we have rescale parameters
-        if (current_center is not None and current_width is not None and
-            self.rescale_slope is not None and self.rescale_intercept is not None and
-            self.rescale_slope != 0.0):
-            
-            # Determine conversion direction
-            if self.use_rescaled_values and not checked:
-                # Toggling from rescaled to raw: convert rescaled -> raw
-                current_center, current_width = self.dicom_processor.convert_window_level_rescaled_to_raw(
-                    current_center, current_width, self.rescale_slope, self.rescale_intercept
-                )
-            elif not self.use_rescaled_values and checked:
-                # Toggling from raw to rescaled: convert raw -> rescaled
-                current_center, current_width = self.dicom_processor.convert_window_level_raw_to_rescaled(
-                    current_center, current_width, self.rescale_slope, self.rescale_intercept
-                )
-        
-        # Update state
-        self.use_rescaled_values = checked
-        
-        # Update UI toggle states
-        self.main_window.set_rescale_toggle_state(checked)
-        self.image_viewer.set_rescale_toggle_state(checked)
-        
-        # Recalculate and update everything
-        if self.current_dataset is not None:
-            # Recalculate pixel value ranges
-            pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(
-                self.current_dataset, apply_rescale=self.use_rescaled_values
-            )
-            if pixel_min is not None and pixel_max is not None:
-                center_range = (pixel_min, pixel_max)
-                width_range = (1.0, max(1.0, pixel_max - pixel_min))
-                self.window_level_controls.set_ranges(center_range, width_range)
-            
-            # Update window/level unit labels
-            unit = self.rescale_type if (self.use_rescaled_values and self.rescale_type) else None
-            self.window_level_controls.set_unit(unit)
-            
-            # Update window/level controls with converted values
-            if current_center is not None and current_width is not None:
-                self.current_window_center = current_center
-                self.current_window_width = current_width
-                self.window_level_controls.set_window_level(
-                    current_center, current_width, block_signals=True, unit=unit
-                )
-            
-            # Re-display current slice with new rescale setting
-            if self.current_studies and self.current_series_uid:
-                datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
-                if self.current_slice_index < len(datasets):
-                    dataset = datasets[self.current_slice_index]
-                    # Re-display with converted window/level and new rescale setting
-                    if self.current_window_center is not None and self.current_window_width is not None:
-                        image = self.dicom_processor.dataset_to_image(
-                            dataset,
-                            window_center=self.current_window_center,
-                            window_width=self.current_window_width,
-                            apply_rescale=self.use_rescaled_values
-                        )
-                    else:
-                        image = self.dicom_processor.dataset_to_image(
-                            dataset,
-                            apply_rescale=self.use_rescaled_values
-                        )
-                    if image:
-                        # Preserve view when toggling rescale
-                        self.image_viewer.set_image(image, preserve_view=True)
-                        # Recreate overlay
-                        parser = DICOMParser(dataset)
-                        total_slices = len(datasets)
-                        self.overlay_manager.create_overlay_items(
-                            self.image_viewer.scene,
-                            parser,
-                            total_slices=total_slices if total_slices > 0 else None
-                        )
-                        # Re-display ROIs for current slice
-                        self._display_rois_for_slice(dataset)
-            
-            # Update ROI statistics if ROI is selected and belongs to current slice
-            selected_roi = self.roi_manager.get_selected_roi()
-            if selected_roi is not None and self.current_dataset is not None:
-                # Verify the selected ROI belongs to the current slice
-                study_uid = getattr(self.current_dataset, 'StudyInstanceUID', '')
-                series_uid = getattr(self.current_dataset, 'SeriesInstanceUID', '')
-                instance_number = getattr(self.current_dataset, 'InstanceNumber', None)
-                if instance_number is None:
-                    instance_identifier = self.current_slice_index
-                else:
-                    instance_identifier = int(instance_number)
-                
-                # Check if selected ROI belongs to current slice
-                current_slice_rois = self.roi_manager.get_rois_for_slice(study_uid, series_uid, instance_identifier)
-                if selected_roi in current_slice_rois:
-                    self._update_roi_statistics(selected_roi)
-                else:
-                    # Selected ROI doesn't belong to current slice - clear statistics
-                    self.roi_statistics_panel.clear_statistics()
+        self.view_state_manager.handle_rescale_toggle(checked)
+        # Update ROI statistics if ROI is selected and belongs to current slice
+        selected_roi = self.roi_manager.get_selected_roi()
+        if selected_roi is not None and self.current_dataset is not None:
+            study_uid = getattr(self.current_dataset, 'StudyInstanceUID', '')
+            series_uid = getattr(self.current_dataset, 'SeriesInstanceUID', '')
+            instance_number = getattr(self.current_dataset, 'InstanceNumber', None)
+            if instance_number is None:
+                instance_identifier = self.current_slice_index
             else:
-                # No selected ROI - clear statistics
+                instance_identifier = int(instance_number)
+            current_slice_rois = self.roi_manager.get_rois_for_slice(study_uid, series_uid, instance_identifier)
+            if selected_roi in current_slice_rois:
+                self.roi_coordinator.update_roi_statistics(selected_roi)
+            else:
                 self.roi_statistics_panel.clear_statistics()
+        else:
+            self.roi_statistics_panel.clear_statistics()
     
     def _on_zoom_changed(self, zoom_level: float) -> None:
         """
@@ -1811,50 +846,25 @@ class DICOMViewerApp(QObject):
         Args:
             zoom_level: Current zoom level
         """
-        # Note: Overlay position updates are handled by _on_transform_changed
-        # which fires after the transform is fully applied
-        pass
+        self.view_state_manager.handle_zoom_changed(zoom_level)
     
     def _on_transform_changed(self) -> None:
         """
         Handle view transform change (zoom/pan).
-        
-        Updates overlay positions to keep text anchored to viewport edges.
-        This is called after the transform is fully applied.
         """
-        # Update overlay positions when transform changes
-        if self.current_dataset is not None:
-            self.overlay_manager.update_overlay_positions(self.image_viewer.scene)
+        self.view_state_manager.handle_transform_changed()
     
     def _on_viewport_resizing(self) -> None:
         """
         Handle viewport resize start (when splitter starts moving).
-        
-        Captures the current viewport center in scene coordinates before the resize
-        completes, so we can restore it after resize to maintain the centered view.
         """
-        # Capture current viewport center in scene coordinates before resize
-        if self.image_viewer.image_item is not None:
-            scene_center = self.image_viewer.get_viewport_center_scene()
-            if scene_center is not None:
-                self.saved_scene_center = scene_center
+        self.view_state_manager.handle_viewport_resizing()
     
     def _on_viewport_resized(self) -> None:
         """
         Handle viewport resize (when splitter moves).
-        
-        Updates overlay positions to keep text anchored to viewport edges
-        when the left or right panels are resized.
-        Also restores the centered view if a scene center was captured.
         """
-        # Restore centered view if we captured a scene center point
-        if self.saved_scene_center is not None and self.image_viewer.image_item is not None:
-            self.image_viewer.centerOn(self.saved_scene_center)
-            self.saved_scene_center = None  # Clear after use
-        
-        # Update overlay positions when viewport size changes
-        if self.current_dataset is not None:
-            self.overlay_manager.update_overlay_positions(self.image_viewer.scene)
+        self.view_state_manager.handle_viewport_resized()
     
     def _on_arrow_key_pressed(self, direction: int) -> None:
         """
@@ -1863,126 +873,23 @@ class DICOMViewerApp(QObject):
         Args:
             direction: 1 for up (next slice), -1 for down (previous slice)
         """
-        if direction == 1:
-            # Up arrow: next slice
-            self.slice_navigator.next_slice()
-        elif direction == -1:
-            # Down arrow: previous slice
-            self.slice_navigator.previous_slice()
+        self.slice_display_manager.handle_arrow_key_pressed(direction)
     
     def _on_right_mouse_press_for_drag(self) -> None:
         """
         Handle right mouse press for drag - provide window/level values to image viewer.
         """
-        # Get current window/level values and ranges
-        center, width = self.window_level_controls.get_window_level()
-        center_range = self.window_level_controls.center_range
-        width_range = self.window_level_controls.width_range
-        
-        # Set values in image viewer for drag tracking
-        self.image_viewer.set_window_level_for_drag(center, width, center_range, width_range)
+        self.view_state_manager.handle_right_mouse_press_for_drag()
     
     def _on_window_level_drag_changed(self, center_delta: float, width_delta: float) -> None:
         """
         Handle window/level drag adjustment from image viewer.
         
         Args:
-            center_delta: Change in window center (positive = up, negative = down)
-            width_delta: Change in window width (positive = right/wider, negative = left/narrower)
+            center_delta: Change in window center
+            width_delta: Change in window width
         """
-        # Get initial values from image_viewer (these are set when drag starts)
-        if (self.image_viewer.right_mouse_drag_start_center is None or 
-            self.image_viewer.right_mouse_drag_start_width is None):
-            return  # Drag not properly initialized
-        
-        # Apply deltas to initial values
-        new_center = self.image_viewer.right_mouse_drag_start_center + center_delta
-        new_width = self.image_viewer.right_mouse_drag_start_width + width_delta
-        
-        # Clamp to valid ranges
-        center_range = self.window_level_controls.center_range
-        width_range = self.window_level_controls.width_range
-        
-        new_center = max(center_range[0], min(center_range[1], new_center))
-        new_width = max(width_range[0], min(width_range[1], new_width))
-        
-        # Update window/level controls (block signals to prevent recursive updates during drag)
-        self.window_level_controls.set_window_level(new_center, new_width, block_signals=True)
-        
-        # Manually trigger window change to update image
-        self._on_window_changed(new_center, new_width)
-    
-    def _on_series_navigation_requested(self, direction: int) -> None:
-        """
-        Handle series navigation request from image viewer.
-        
-        Args:
-            direction: -1 for left/previous series, 1 for right/next series
-        """
-        if not self.current_studies or not self.current_study_uid:
-            return
-        
-        # Get all series for current study
-        study_series = self.current_studies[self.current_study_uid]
-        
-        # Check if there are multiple series
-        if len(study_series) <= 1:
-            return  # No navigation needed if only one series
-        
-        # Build list of series with SeriesNumber for sorting
-        series_list = []
-        for series_uid, datasets in study_series.items():
-            if datasets:
-                # Extract SeriesNumber from first dataset
-                first_dataset = datasets[0]
-                series_number = getattr(first_dataset, 'SeriesNumber', None)
-                # Convert to int if possible, otherwise use 0
-                try:
-                    series_num = int(series_number) if series_number is not None else 0
-                except (ValueError, TypeError):
-                    series_num = 0
-                series_list.append((series_num, series_uid, datasets))
-        
-        # Sort by SeriesNumber (ascending)
-        series_list.sort(key=lambda x: x[0])
-        
-        # Find current series in sorted list
-        current_index = None
-        for idx, (_, series_uid, _) in enumerate(series_list):
-            if series_uid == self.current_series_uid:
-                current_index = idx
-                break
-        
-        if current_index is None:
-            return  # Current series not found
-        
-        # Calculate new series index
-        new_index = current_index + direction
-        
-        # Clamp to valid range
-        if new_index < 0 or new_index >= len(series_list):
-            return  # Already at first or last series
-        
-        # Get new series UID and datasets
-        _, new_series_uid, datasets = series_list[new_index]
-        
-        # Switch to new series
-        self.current_series_uid = new_series_uid
-        
-        if not datasets:
-            return
-        
-        # Reset slice index to 0 and display first slice
-        self.current_slice_index = 0
-        dataset = datasets[0]
-        self._display_slice(dataset)
-        
-        # Update slice navigator with new series slice count
-        self.slice_navigator.set_total_slices(len(datasets))
-        self.slice_navigator.set_current_slice(0)
-        
-        # Display ROIs for this slice
-        self._display_rois_for_slice(dataset)
+        self.view_state_manager.handle_window_level_drag(center_delta, width_delta)
     
     def _on_overlay_font_size_changed(self, font_size: int) -> None:
         """
@@ -1991,21 +898,7 @@ class DICOMViewerApp(QObject):
         Args:
             font_size: New font size in points
         """
-        # Update overlay manager
-        self.overlay_manager.set_font_size(font_size)
-        
-        # Recreate overlay if we have a current dataset
-        if self.current_studies and self.current_series_uid:
-            datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
-            if self.current_slice_index < len(datasets):
-                dataset = datasets[self.current_slice_index]
-                parser = DICOMParser(dataset)
-                total_slices = len(datasets)
-                self.overlay_manager.create_overlay_items(
-                    self.image_viewer.scene,
-                    parser,
-                    total_slices=total_slices if total_slices > 0 else None
-                )
+        self.overlay_coordinator.handle_overlay_font_size_changed(font_size)
     
     def _on_overlay_font_color_changed(self, r: int, g: int, b: int) -> None:
         """
@@ -2016,42 +909,11 @@ class DICOMViewerApp(QObject):
             g: Green component (0-255)
             b: Blue component (0-255)
         """
-        # Update overlay manager
-        self.overlay_manager.set_font_color(r, g, b)
-        
-        # Recreate overlay if we have a current dataset
-        if self.current_studies and self.current_series_uid:
-            datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
-            if self.current_slice_index < len(datasets):
-                dataset = datasets[self.current_slice_index]
-                parser = DICOMParser(dataset)
-                total_slices = len(datasets)
-                self.overlay_manager.create_overlay_items(
-                    self.image_viewer.scene,
-                    parser,
-                    total_slices=total_slices if total_slices > 0 else None
-                )
+        self.overlay_coordinator.handle_overlay_font_color_changed(r, g, b)
     
     def _on_scene_selection_changed(self) -> None:
         """Handle scene selection change (e.g., when ROI is moved)."""
-        try:
-            # Check if scene is still valid
-            if self.image_viewer.scene is None:
-                return
-            selected_items = self.image_viewer.scene.selectedItems()
-            if selected_items:
-                # Find ROI for selected item
-                for item in selected_items:
-                    roi = self.roi_manager.find_roi_by_item(item)
-                    if roi:
-                        # Update statistics when ROI is moved/selected
-                        self._update_roi_statistics(roi)
-                        # Update list panel selection
-                        self.roi_list_panel.select_roi_in_list(roi)
-                        break
-        except RuntimeError:
-            # Scene has been deleted or is invalid, ignore
-            return
+        self.roi_coordinator.handle_scene_selection_changed()
     
     def _update_roi_statistics(self, roi) -> None:
         """
@@ -2060,47 +922,7 @@ class DICOMViewerApp(QObject):
         Args:
             roi: ROI item
         """
-        if roi is None or self.current_dataset is None:
-            return
-        
-        try:
-            # Extract DICOM identifiers
-            study_uid = getattr(self.current_dataset, 'StudyInstanceUID', '')
-            series_uid = getattr(self.current_dataset, 'SeriesInstanceUID', '')
-            instance_number = getattr(self.current_dataset, 'InstanceNumber', None)
-            if instance_number is None:
-                instance_identifier = self.current_slice_index
-            else:
-                instance_identifier = int(instance_number)
-            
-            # Get ROI identifier (e.g., "ROI 1 (rectangle)")
-            roi_identifier = None
-            rois = self.roi_manager.get_rois_for_slice(study_uid, series_uid, instance_identifier)
-            for i, r in enumerate(rois):
-                if r == roi:
-                    roi_identifier = f"ROI {i+1} ({roi.shape_type})"
-                    break
-            
-            pixel_array = self.dicom_processor.get_pixel_array(self.current_dataset)
-            if pixel_array is not None:
-                # Extract pixel spacing for area calculation
-                from utils.dicom_utils import get_pixel_spacing
-                pixel_spacing = get_pixel_spacing(self.current_dataset)
-                
-                # Pass rescale parameters if using rescaled values
-                rescale_slope = self.rescale_slope if self.use_rescaled_values else None
-                rescale_intercept = self.rescale_intercept if self.use_rescaled_values else None
-                stats = self.roi_manager.calculate_statistics(
-                    roi, pixel_array, 
-                    rescale_slope=rescale_slope,
-                    rescale_intercept=rescale_intercept,
-                    pixel_spacing=pixel_spacing
-                )
-                # Pass rescale_type for display
-                rescale_type = self.rescale_type if self.use_rescaled_values else None
-                self.roi_statistics_panel.update_statistics(stats, roi_identifier, rescale_type=rescale_type)
-        except Exception as e:
-            print(f"Error calculating ROI statistics: {e}")
+        self.roi_coordinator.update_roi_statistics(roi)
     
     def _on_slice_changed(self, slice_index: int) -> None:
         """
@@ -2109,17 +931,14 @@ class DICOMViewerApp(QObject):
         Args:
             slice_index: New slice index
         """
-        if not self.current_studies or not self.current_series_uid:
-            return
-        
-        datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
-        if 0 <= slice_index < len(datasets):
-            self.current_slice_index = slice_index
-            dataset = datasets[slice_index]
-            self._display_slice(dataset)
-            
-            # Display ROIs for this slice (will update ROI manager and list panel internally)
-            self._display_rois_for_slice(dataset)
+        self.slice_display_manager.handle_slice_changed(slice_index)
+        # Update current slice index
+        self.current_slice_index = slice_index
+        # Update current dataset reference
+        if self.current_studies and self.current_series_uid:
+            datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
+            if 0 <= slice_index < len(datasets):
+                self.current_dataset = datasets[slice_index]
     
     def _hide_measurement_labels(self, hide: bool) -> None:
         """
@@ -2128,28 +947,16 @@ class DICOMViewerApp(QObject):
         Args:
             hide: True to hide labels, False to show them
         """
-        if self.image_viewer.scene is None:
-            return
-        
-        from tools.measurement_tool import MeasurementItem
-        for item in self.image_viewer.scene.items():
-            if isinstance(item, MeasurementItem):
-                # Hide/show the text item within the measurement
-                if hasattr(item, 'text_item') and item.text_item is not None:
-                    item.text_item.setVisible(not hide)
+        self.measurement_coordinator.hide_measurement_labels(hide)
     
     def _hide_roi_labels(self, hide: bool) -> None:
         """
         Hide or show ROI labels.
         
-        Note: ROIs don't have labels by default, so this is a no-op for now.
-        This method exists for future extensibility if ROI labels are added.
-        
         Args:
             hide: True to hide labels, False to show them
         """
-        # ROIs don't have text labels, so nothing to hide
-        pass
+        self.overlay_coordinator.hide_roi_labels(hide)
     
     def _hide_measurement_graphics(self, hide: bool) -> None:
         """
@@ -2158,13 +965,7 @@ class DICOMViewerApp(QObject):
         Args:
             hide: True to hide graphics, False to show them
         """
-        if self.image_viewer.scene is None:
-            return
-        
-        from tools.measurement_tool import MeasurementItem
-        for item in self.image_viewer.scene.items():
-            if isinstance(item, MeasurementItem):
-                item.setVisible(not hide)
+        self.measurement_coordinator.hide_measurement_graphics(hide)
     
     def _hide_roi_graphics(self, hide: bool) -> None:
         """
@@ -2173,15 +974,7 @@ class DICOMViewerApp(QObject):
         Args:
             hide: True to hide graphics, False to show them
         """
-        if self.image_viewer.scene is None:
-            return
-        
-        from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsEllipseItem
-        for item in self.image_viewer.scene.items():
-            if isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem)):
-                # Don't hide the image item
-                if item != self.image_viewer.image_item:
-                    item.setVisible(not hide)
+        self.overlay_coordinator.hide_roi_graphics(hide)
     
     def eventFilter(self, obj, event) -> bool:
         """
@@ -2195,125 +988,8 @@ class DICOMViewerApp(QObject):
             True if event was handled, False otherwise
         """
         from PySide6.QtGui import QKeyEvent
-        if isinstance(event, QKeyEvent) and event.type() == QKeyEvent.Type.KeyPress:
-            # Delete key to delete selected ROI or measurement
-            if event.key() == Qt.Key.Key_Delete or event.key() == Qt.Key.Key_Backspace:
-                # Check for selected ROI first (priority)
-                selected_roi = self.roi_manager.get_selected_roi()
-                if selected_roi:
-                    self.roi_manager.delete_roi(selected_roi, self.image_viewer.scene)
-                    # Update ROI list panel - extract identifiers from current dataset
-                    if self.current_dataset is not None:
-                        study_uid = getattr(self.current_dataset, 'StudyInstanceUID', '')
-                        series_uid = getattr(self.current_dataset, 'SeriesInstanceUID', '')
-                        instance_number = getattr(self.current_dataset, 'InstanceNumber', None)
-                        if instance_number is None:
-                            instance_identifier = self.current_slice_index
-                        else:
-                            instance_identifier = int(instance_number)
-                        self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
-                    self.roi_statistics_panel.clear_statistics()
-                    return True
-                
-                # Check for selected measurement
-                if self.image_viewer.scene is not None:
-                    try:
-                        selected_items = self.image_viewer.scene.selectedItems()
-                        from tools.measurement_tool import MeasurementItem
-                        for item in selected_items:
-                            if isinstance(item, MeasurementItem):
-                                self.measurement_tool.delete_measurement(item, self.image_viewer.scene)
-                                return True
-                    except RuntimeError:
-                        # Scene may have been deleted, ignore
-                        pass
-            # Arrow keys for slice navigation
-            elif event.key() == Qt.Key.Key_Up:
-                # Up arrow: next slice
-                self.slice_navigator.next_slice()
-                return True
-            elif event.key() == Qt.Key.Key_Down:
-                # Down arrow: previous slice
-                self.slice_navigator.previous_slice()
-                return True
-            # Spacebar to toggle overlay visibility
-            elif event.key() == Qt.Key.Key_Space:
-                # Toggle overlay visibility (cycles through 3 states)
-                new_state = self.overlay_manager.toggle_overlay_visibility()
-                
-                # Update overlay display
-                if self.current_dataset is not None and self.image_viewer.scene is not None:
-                    # Refresh overlay items
-                    parser = DICOMParser(self.current_dataset)
-                    # Get total slices from current series
-                    if self.current_study_uid and self.current_series_uid:
-                        datasets = self.current_studies.get(self.current_study_uid, {}).get(self.current_series_uid, [])
-                        total_slices = len(datasets) if datasets else None
-                    else:
-                        total_slices = None
-                    self.overlay_manager.create_overlay_items(
-                        self.image_viewer.scene,
-                        parser,
-                        total_slices=total_slices
-                    )
-                    
-                    # Handle measurement and ROI label visibility based on state
-                    if new_state == 2:
-                        # State 2: Hide all text including measurements and ROI labels
-                        self._hide_measurement_labels(True)
-                        self._hide_roi_labels(True)
-                        # Also hide the graphics themselves (lines, shapes)
-                        self._hide_measurement_graphics(True)
-                        self._hide_roi_graphics(True)
-                    else:
-                        # State 0 or 1: Show measurements and ROI labels
-                        self._hide_measurement_labels(False)
-                        self._hide_roi_labels(False)
-                        # Show the graphics
-                        self._hide_measurement_graphics(False)
-                        self._hide_roi_graphics(False)
-                    
-                    # Force scene update to refresh immediately
-                    self.image_viewer.scene.update()
-                
-                return True
-            # P key for Pan mode
-            elif event.key() == Qt.Key.Key_P:
-                self._set_mouse_mode("pan")
-                return True
-            # Z key for Zoom mode
-            elif event.key() == Qt.Key.Key_Z:
-                self._set_mouse_mode("zoom")
-                return True
-            # M key for Measure mode
-            elif event.key() == Qt.Key.Key_M:
-                self._set_mouse_mode("measure")
-                return True
-            # S key for Select mode
-            elif event.key() == Qt.Key.Key_S:
-                self._set_mouse_mode("select")
-                return True
-            # W key for Window/Level ROI mode
-            elif event.key() == Qt.Key.Key_W:
-                self._set_mouse_mode("auto_window_level")
-                return True
-            # R key for Rectangle ROI mode
-            elif event.key() == Qt.Key.Key_R:
-                self._set_mouse_mode("roi_rectangle")
-                return True
-            # E key for Ellipse ROI mode
-            elif event.key() == Qt.Key.Key_E:
-                self._set_mouse_mode("roi_ellipse")
-                return True
-            # C key for Clear measurements
-            elif event.key() == Qt.Key.Key_C:
-                self._on_clear_measurements_requested()
-                return True
-            # D key for Delete All ROIs on current slice
-            elif event.key() == Qt.Key.Key_D:
-                self._delete_all_rois_current_slice()
-                return True
-        
+        if isinstance(event, QKeyEvent):
+            return self.keyboard_event_handler.handle_key_event(event)
         return super().eventFilter(obj, event)
     
     def run(self) -> int:
