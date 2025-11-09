@@ -50,6 +50,7 @@ class OverlayManager:
             config_manager: Optional ConfigManager instance for overlay tag configuration
         """
         self.mode = "minimal"  # minimal, detailed, hidden (kept for backward compatibility)
+        self.visibility_state = 0  # 0=show all, 1=hide corner text, 2=hide all text
         self.custom_fields: List[str] = []
         self.overlay_items: List[QGraphicsTextItem] = []
         self.font_size = font_size
@@ -93,6 +94,30 @@ class OverlayManager:
         """
         if mode in ["minimal", "detailed", "hidden"]:
             self.mode = mode
+    
+    def toggle_overlay_visibility(self) -> int:
+        """
+        Toggle overlay visibility state through 3 states.
+        
+        State 0: Show all overlays (default)
+        State 1: Hide corner text overlays only
+        State 2: Hide corner text + measurements/annotations
+        
+        Returns:
+            Current visibility state after toggle (0, 1, or 2)
+        """
+        self.visibility_state = (self.visibility_state + 1) % 3
+        return self.visibility_state
+    
+    def set_visibility_state(self, state: int) -> None:
+        """
+        Set the overlay visibility state.
+        
+        Args:
+            state: Visibility state (0=show all, 1=hide corner text, 2=hide all text)
+        """
+        if state in [0, 1, 2]:
+            self.visibility_state = state
     
     def set_custom_fields(self, fields: List[str]) -> None:
         """
@@ -301,6 +326,11 @@ class OverlayManager:
         
         # Clear existing items
         self.clear_overlay_items(scene)
+        
+        # Hide overlays based on visibility state
+        # State 1 and 2 hide corner text overlays
+        if self.visibility_state in [1, 2]:
+            return []
         
         if self.mode == "hidden":
             return []

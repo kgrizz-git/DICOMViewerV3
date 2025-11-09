@@ -238,13 +238,38 @@ class QuickStartGuideDialog(QDialog):
                 <li><strong>Zoom:</strong> Scroll wheel zooms in/out on the image</li>
             </ul>
             
+            <h2>Keyboard Shortcuts</h2>
+            <p>Quick access to modes and functions:</p>
+            <ul>
+                <li><strong><code>P</code>:</strong> Pan mode (move the image around)</li>
+                <li><strong><code>Z</code>:</strong> Zoom mode (click and drag vertically to zoom)</li>
+                <li><strong><code>R</code>:</strong> Rectangle ROI mode (draw rectangular regions of interest)</li>
+                <li><strong><code>E</code>:</strong> Ellipse ROI mode (draw elliptical regions of interest)</li>
+                <li><strong><code>M</code>:</strong> Measure mode (create distance measurements)</li>
+                <li><strong><code>S</code>:</strong> Select mode (select ROIs and measurements)</li>
+                <li><strong><code>W</code>:</strong> Window/Level ROI mode (auto-adjust from ROI)</li>
+                <li><strong><code>C</code>:</strong> Clear all measurements on current slice</li>
+                <li><strong><code>D</code>:</strong> Delete all ROIs on current slice</li>
+                <li><strong><code>Spacebar</code>:</strong> Toggle overlay visibility
+                    <ul>
+                        <li>First press: Hides corner text overlays</li>
+                        <li>Second press: Hides all text including measurements and annotations</li>
+                        <li>Third press: Shows everything again</li>
+                    </ul>
+                </li>
+                <li><strong><code>↑</code> / <code>↓</code>:</strong> Navigate slices (Up = next, Down = previous)</li>
+                <li><strong><code>←</code> / <code>→</code>:</strong> Navigate series (Left = previous, Right = next)</li>
+                <li><strong><code>Delete</code>:</strong> Delete selected ROI or measurement</li>
+            </ul>
+            
             <h2>Additional Tips</h2>
             <ul>
                 <li>All measurements and ROIs are preserved when navigating between slices in the same series</li>
                 <li>Use the context menu (right-click) for quick access to common functions</li>
                 <li>The status bar shows current slice information and other details</li>
-                <li>Overlay metadata can be customized via View → Overlay Configuration</li>
-                <li>Settings can be adjusted via View → Settings</li>
+                <li>Overlay metadata can be customized and toggled on/off via View → Overlay Configuration or with the <code>Spacebar</code> key</li>
+                <li>Export selected DICOM tags to Excel or CSV via Tools → Export Tags</li>
+                <li>Settings can be adjusted via Tools → Settings</li>
             </ul>
         </body>
         </html>

@@ -65,6 +65,7 @@ class ImageViewer(QGraphicsView):
     measurement_finished = Signal()  # Emitted when measurement is finished
     measurement_delete_requested = Signal(object)  # Emitted when measurement deletion is requested (MeasurementItem)
     clear_measurements_requested = Signal()  # Emitted when clear measurements is requested
+    toggle_overlay_requested = Signal()  # Emitted when toggle overlay is requested
     
     def __init__(self, parent: Optional[QWidget] = None):
         """
@@ -694,10 +695,13 @@ class ImageViewer(QGraphicsView):
         Args:
             event: Mouse event
         """
-        # In select mode, allow default Qt behavior
+        # In select mode, allow default Qt behavior for left button
         if self.mouse_mode == "select":
-            super().mouseReleaseEvent(event)
-            return
+            # Only use default behavior for left button
+            if event.button() == Qt.MouseButton.LeftButton:
+                super().mouseReleaseEvent(event)
+                return
+            # Fall through for right button to allow context menu
         
         if event.button() == Qt.MouseButton.LeftButton:
             if self.mouse_mode == "zoom" and self.zoom_start_pos is not None:
@@ -750,29 +754,33 @@ class ImageViewer(QGraphicsView):
                         reset_action.triggered.connect(self.reset_view_requested.emit)
                         
                         # Clear Measurements action
-                        clear_measurements_action = context_menu.addAction("Clear Measurements")
+                        clear_measurements_action = context_menu.addAction("Clear Measurements (C)")
                         clear_measurements_action.triggered.connect(self.clear_measurements_requested.emit)
+                        
+                        # Toggle Overlay action
+                        toggle_overlay_action = context_menu.addAction("Toggle Overlay (Spacebar)")
+                        toggle_overlay_action.triggered.connect(self.toggle_overlay_requested.emit)
                         
                         context_menu.addSeparator()
                         
                         # Series navigation actions
-                        prev_series_action = context_menu.addAction("Prev Series")
+                        prev_series_action = context_menu.addAction("Prev Series (←)")
                         prev_series_action.triggered.connect(lambda: self.series_navigation_requested.emit(-1))
                         
-                        next_series_action = context_menu.addAction("Next Series")
+                        next_series_action = context_menu.addAction("Next Series (→)")
                         next_series_action.triggered.connect(lambda: self.series_navigation_requested.emit(1))
                         
                         context_menu.addSeparator()
                         
                         # Left Mouse Button actions (moved to first level, grouped with separators)
                         left_mouse_actions = {
-                            "Select": "select",
-                            "Ellipse ROI": "roi_ellipse",
-                            "Rectangle ROI": "roi_rectangle",
-                            "Measure": "measure",
-                            "Zoom": "zoom",
-                            "Pan": "pan",
-                            "Window/Level ROI": "auto_window_level"
+                            "Select (S)": "select",
+                            "Ellipse ROI (E)": "roi_ellipse",
+                            "Rectangle ROI (R)": "roi_rectangle",
+                            "Measure (M)": "measure",
+                            "Zoom (Z)": "zoom",
+                            "Pan (P)": "pan",
+                            "Window/Level ROI (W)": "auto_window_level"
                         }
                         for action_text, mode in left_mouse_actions.items():
                             action = context_menu.addAction(action_text)

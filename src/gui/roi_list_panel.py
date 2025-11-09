@@ -38,6 +38,7 @@ class ROIListPanel(QWidget):
     # Signals
     roi_selected = Signal(object)  # Emitted when ROI is selected (ROIItem)
     roi_deleted = Signal(object)  # Emitted when ROI is deleted (ROIItem)
+    delete_all_requested = Signal()  # Emitted when Delete All button is clicked
     
     def __init__(self, parent=None):
         """
@@ -74,9 +75,13 @@ class ROIListPanel(QWidget):
         # Buttons
         button_layout = QHBoxLayout()
         
-        delete_button = QPushButton("Delete")
+        delete_button = QPushButton("Delete Selected")
         delete_button.clicked.connect(self._delete_selected_roi)
         button_layout.addWidget(delete_button)
+        
+        delete_all_button = QPushButton("Delete All")
+        delete_all_button.clicked.connect(self._delete_all_rois)
+        button_layout.addWidget(delete_all_button)
         
         button_layout.addStretch()
         layout.addLayout(button_layout)
@@ -155,6 +160,14 @@ class ROIListPanel(QWidget):
                     self.roi_deleted.emit(roi)
                     # Update list
                     self.update_roi_list(self.current_study_uid, self.current_series_uid, self.current_instance_identifier)
+    
+    def _delete_all_rois(self) -> None:
+        """
+        Delete all ROIs on current slice.
+        
+        Emits delete_all_requested signal to be handled by main application.
+        """
+        self.delete_all_requested.emit()
     
     def select_roi_in_list(self, roi: Optional[ROIItem]) -> None:
         """

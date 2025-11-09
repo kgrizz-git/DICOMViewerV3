@@ -25,8 +25,9 @@ This application provides comprehensive DICOM image viewing capabilities with ad
 
 ### Metadata and Overlays
 - Customizable DICOM metadata overlays on images
-- Switch between minimal, detailed, and hidden overlay modes
+- Toggle overlay visibility with configurable content (3 states: all visible, corner text hidden, all text hidden)
 - Display and edit all DICOM tags, including private tags
+- Export selected DICOM tags to Excel or CSV files
 
 ### Analysis Tools
 - Draw elliptical or rectangular regions of interest (ROIs)
@@ -44,6 +45,20 @@ This application provides comprehensive DICOM image viewing capabilities with ad
 ### Export
 - Export as JPEG, PNG, or DICOM
 - Export single slice, whole series, or whole study
+
+### Keyboard Shortcuts
+- **P**: Pan mode (move the image around)
+- **Z**: Zoom mode (click and drag vertically to zoom)
+- **R**: Rectangle ROI mode (draw rectangular regions of interest)
+- **E**: Ellipse ROI mode (draw elliptical regions of interest)
+- **M**: Measure mode (create distance measurements)
+- **S**: Select mode (select ROIs and measurements)
+- **W**: Window/Level ROI mode (auto-adjust from ROI)
+- **C**: Clear all measurements on current slice
+- **D**: Delete all ROIs on current slice
+- **Spacebar**: Toggle overlay visibility (cycles through 3 states)
+- **Arrow Keys**: Navigate slices (Up/Down) and series (Left/Right)
+- **Delete**: Delete selected ROI or measurement
 
 ## Project Structure
 

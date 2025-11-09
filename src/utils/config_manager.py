@@ -60,6 +60,7 @@ class ConfigManager:
             "last_path": "",
             "theme": "light",
         "overlay_mode": "minimal",  # minimal, detailed, hidden
+        "overlay_visibility_state": 0,  # 0=show all, 1=hide corner text, 2=hide all text
         "overlay_custom_fields": [],
         "overlay_font_size": 10,  # Default font size (10pt)
             "overlay_font_color_r": 255,  # Yellow default
@@ -197,6 +198,26 @@ class ConfigManager:
         """
         if mode in ["minimal", "detailed", "hidden"]:
             self.config["overlay_mode"] = mode
+            self.save_config()
+    
+    def get_overlay_visibility_state(self) -> int:
+        """
+        Get the overlay visibility state.
+        
+        Returns:
+            Visibility state (0=show all, 1=hide corner text, 2=hide all text)
+        """
+        return self.config.get("overlay_visibility_state", 0)
+    
+    def set_overlay_visibility_state(self, state: int) -> None:
+        """
+        Set the overlay visibility state.
+        
+        Args:
+            state: Visibility state (0=show all, 1=hide corner text, 2=hide all text)
+        """
+        if state in [0, 1, 2]:
+            self.config["overlay_visibility_state"] = state
             self.save_config()
     
     def get_overlay_custom_fields(self) -> list:
