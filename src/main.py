@@ -323,8 +323,15 @@ class DICOMViewerApp(QObject):
             )
             
             # Show navigator by default if it's hidden
-            if not self.main_window.series_navigator_visible:
+            navigator_was_hidden = not self.main_window.series_navigator_visible
+            if navigator_was_hidden:
                 self.main_window.toggle_series_navigator()
+            
+            # After navigator is shown (if it was hidden), fit image to viewport
+            # Use QTimer to ensure viewport has fully resized
+            if navigator_was_hidden:
+                from PySide6.QtCore import QTimer
+                QTimer.singleShot(50, lambda: self.image_viewer.fit_to_view(center_image=True))
     
     def _get_rescale_params(self) -> tuple[Optional[float], Optional[float], Optional[str], bool]:
         """Get rescale parameters for ROI operations."""

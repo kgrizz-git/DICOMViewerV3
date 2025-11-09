@@ -482,7 +482,8 @@ class MainWindow(QMainWindow):
                          "Planned Features (Not yet implemented):\n"
                          "- Histogram display\n"
                          "- Image export (JPEG/PNG/DICOM)\n"
-                         "- Intensity projections (AIP/MIP)\n\n"
+                         "- Intensity projections (AIP/MIP)\n"
+                         "- RT STRUCT overlays\n\n"
                          "Made by Kevin Grizzard.\n"
                          "Available at https://github.com/kgrizz-git/DICOMViewerV3.")
     
