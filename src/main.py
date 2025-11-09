@@ -105,6 +105,8 @@ class DICOMViewerApp(QObject):
             font_color=font_color,
             config_manager=self.config_manager
         )
+        # Overlay manager initializes to state 0 (all shown) by default
+        # Do not load state from config - always start with everything visible
         
         # Set scroll wheel mode
         scroll_mode = self.config_manager.get_scroll_wheel_mode()
@@ -225,6 +227,7 @@ class DICOMViewerApp(QObject):
         # ROI list panel signals
         self.roi_list_panel.roi_selected.connect(self._on_roi_selected)
         self.roi_list_panel.roi_deleted.connect(self._on_roi_deleted)
+        self.roi_list_panel.delete_all_requested.connect(self._delete_all_rois_current_slice)
         
         # Monitor ROI item changes for movement
         self.image_viewer.scene.selectionChanged.connect(self._on_scene_selection_changed)
@@ -283,6 +286,9 @@ class DICOMViewerApp(QObject):
         # Clear measurements signals
         self.main_window.clear_measurements_requested.connect(self._on_clear_measurements_requested)
         self.image_viewer.clear_measurements_requested.connect(self._on_clear_measurements_requested)
+        
+        # Toggle overlay signal
+        self.image_viewer.toggle_overlay_requested.connect(self._on_toggle_overlay_requested)
         
         # Viewport resize (when splitter moves)
         self.main_window.viewport_resizing.connect(self._on_viewport_resizing)
@@ -1288,6 +1294,22 @@ class DICOMViewerApp(QObject):
         """
         self.image_viewer.set_mouse_mode(mode)
     
+    def _set_mouse_mode(self, mode: str) -> None:
+        """
+        Set mouse mode programmatically (e.g., from keyboard shortcuts).
+        
+        Updates both the image viewer and the toolbar UI to ensure consistent state.
+        This method is used for programmatic mode changes (like keyboard shortcuts)
+        where we need to update both the viewer and toolbar without triggering signals.
+        
+        Args:
+            mode: Mouse mode ("select", "roi_ellipse", "roi_rectangle", "measure", "zoom", "pan", "auto_window_level")
+        """
+        # Update image viewer mouse mode
+        self.image_viewer.set_mouse_mode(mode)
+        # Update toolbar button states without emitting signals
+        self.main_window.set_mouse_mode_checked(mode)
+    
     def _set_roi_mode(self, mode: Optional[str]) -> None:
         """
         Set ROI drawing mode (legacy method for backward compatibility).
@@ -1510,6 +1532,46 @@ class DICOMViewerApp(QObject):
                 study_uid, series_uid, instance_identifier, self.image_viewer.scene
             )
     
+    def _on_toggle_overlay_requested(self) -> None:
+        """Handle toggle overlay request from context menu."""
+        # Toggle overlay visibility (cycles through 3 states)
+        new_state = self.overlay_manager.toggle_overlay_visibility()
+        
+        # Update overlay display
+        if self.current_dataset is not None and self.image_viewer.scene is not None:
+            # Refresh overlay items
+            parser = DICOMParser(self.current_dataset)
+            # Get total slices from current series
+            if self.current_study_uid and self.current_series_uid:
+                datasets = self.current_studies.get(self.current_study_uid, {}).get(self.current_series_uid, [])
+                total_slices = len(datasets) if datasets else None
+            else:
+                total_slices = None
+            self.overlay_manager.create_overlay_items(
+                self.image_viewer.scene,
+                parser,
+                total_slices=total_slices
+            )
+            
+            # Handle measurement and ROI label visibility based on state
+            if new_state == 2:
+                # State 2: Hide all text including measurements and ROI labels
+                self._hide_measurement_labels(True)
+                self._hide_roi_labels(True)
+                # Also hide the graphics themselves (lines, shapes)
+                self._hide_measurement_graphics(True)
+                self._hide_roi_graphics(True)
+            else:
+                # State 0 or 1: Show measurements and ROI labels
+                self._hide_measurement_labels(False)
+                self._hide_roi_labels(False)
+                # Show the graphics
+                self._hide_measurement_graphics(False)
+                self._hide_roi_graphics(False)
+            
+            # Force scene update to refresh immediately
+            self.image_viewer.scene.update()
+    
     def _on_roi_selected(self, roi) -> None:
         """
         Handle ROI selection from list.
@@ -1552,6 +1614,39 @@ class DICOMViewerApp(QObject):
         # Clear statistics if this was the selected ROI
         if self.roi_manager.get_selected_roi() is None:
             self.roi_statistics_panel.clear_statistics()
+    
+    def _delete_all_rois_current_slice(self) -> None:
+        """
+        Delete all ROIs on the current slice.
+        
+        Called by D key keyboard shortcut and Delete All button in ROI list panel.
+        """
+        if self.current_dataset is None:
+            return
+        
+        # Get current slice identifiers
+        study_uid = self.current_study_uid
+        series_uid = self.current_series_uid
+        
+        if not study_uid or not series_uid:
+            return
+        
+        # Get current instance identifier (must match how ROIs are stored)
+        # Try to get InstanceNumber from DICOM, fall back to slice_index
+        instance_number = getattr(self.current_dataset, 'InstanceNumber', None)
+        if instance_number is None:
+            instance_identifier = self.current_slice_index
+        else:
+            instance_identifier = int(instance_number)
+        
+        # Clear all ROIs for this slice
+        self.roi_manager.clear_slice_rois(study_uid, series_uid, instance_identifier, self.image_viewer.scene)
+        
+        # Update ROI list panel
+        self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
+        
+        # Clear ROI statistics panel
+        self.roi_statistics_panel.clear_statistics()
     
     def _on_scroll_wheel_mode_changed(self, mode: str) -> None:
         """
@@ -2026,6 +2121,68 @@ class DICOMViewerApp(QObject):
             # Display ROIs for this slice (will update ROI manager and list panel internally)
             self._display_rois_for_slice(dataset)
     
+    def _hide_measurement_labels(self, hide: bool) -> None:
+        """
+        Hide or show measurement labels.
+        
+        Args:
+            hide: True to hide labels, False to show them
+        """
+        if self.image_viewer.scene is None:
+            return
+        
+        from tools.measurement_tool import MeasurementItem
+        for item in self.image_viewer.scene.items():
+            if isinstance(item, MeasurementItem):
+                # Hide/show the text item within the measurement
+                if hasattr(item, 'text_item') and item.text_item is not None:
+                    item.text_item.setVisible(not hide)
+    
+    def _hide_roi_labels(self, hide: bool) -> None:
+        """
+        Hide or show ROI labels.
+        
+        Note: ROIs don't have labels by default, so this is a no-op for now.
+        This method exists for future extensibility if ROI labels are added.
+        
+        Args:
+            hide: True to hide labels, False to show them
+        """
+        # ROIs don't have text labels, so nothing to hide
+        pass
+    
+    def _hide_measurement_graphics(self, hide: bool) -> None:
+        """
+        Hide or show measurement graphics (lines and handles).
+        
+        Args:
+            hide: True to hide graphics, False to show them
+        """
+        if self.image_viewer.scene is None:
+            return
+        
+        from tools.measurement_tool import MeasurementItem
+        for item in self.image_viewer.scene.items():
+            if isinstance(item, MeasurementItem):
+                item.setVisible(not hide)
+    
+    def _hide_roi_graphics(self, hide: bool) -> None:
+        """
+        Hide or show ROI graphics (shapes).
+        
+        Args:
+            hide: True to hide graphics, False to show them
+        """
+        if self.image_viewer.scene is None:
+            return
+        
+        from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsEllipseItem
+        for item in self.image_viewer.scene.items():
+            if isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem)):
+                # Don't hide the image item
+                if item != self.image_viewer.image_item:
+                    item.setVisible(not hide)
+    
     def eventFilter(self, obj, event) -> bool:
         """
         Event filter for handling key events.
@@ -2078,6 +2235,83 @@ class DICOMViewerApp(QObject):
             elif event.key() == Qt.Key.Key_Down:
                 # Down arrow: previous slice
                 self.slice_navigator.previous_slice()
+                return True
+            # Spacebar to toggle overlay visibility
+            elif event.key() == Qt.Key.Key_Space:
+                # Toggle overlay visibility (cycles through 3 states)
+                new_state = self.overlay_manager.toggle_overlay_visibility()
+                
+                # Update overlay display
+                if self.current_dataset is not None and self.image_viewer.scene is not None:
+                    # Refresh overlay items
+                    parser = DICOMParser(self.current_dataset)
+                    # Get total slices from current series
+                    if self.current_study_uid and self.current_series_uid:
+                        datasets = self.current_studies.get(self.current_study_uid, {}).get(self.current_series_uid, [])
+                        total_slices = len(datasets) if datasets else None
+                    else:
+                        total_slices = None
+                    self.overlay_manager.create_overlay_items(
+                        self.image_viewer.scene,
+                        parser,
+                        total_slices=total_slices
+                    )
+                    
+                    # Handle measurement and ROI label visibility based on state
+                    if new_state == 2:
+                        # State 2: Hide all text including measurements and ROI labels
+                        self._hide_measurement_labels(True)
+                        self._hide_roi_labels(True)
+                        # Also hide the graphics themselves (lines, shapes)
+                        self._hide_measurement_graphics(True)
+                        self._hide_roi_graphics(True)
+                    else:
+                        # State 0 or 1: Show measurements and ROI labels
+                        self._hide_measurement_labels(False)
+                        self._hide_roi_labels(False)
+                        # Show the graphics
+                        self._hide_measurement_graphics(False)
+                        self._hide_roi_graphics(False)
+                    
+                    # Force scene update to refresh immediately
+                    self.image_viewer.scene.update()
+                
+                return True
+            # P key for Pan mode
+            elif event.key() == Qt.Key.Key_P:
+                self._set_mouse_mode("pan")
+                return True
+            # Z key for Zoom mode
+            elif event.key() == Qt.Key.Key_Z:
+                self._set_mouse_mode("zoom")
+                return True
+            # M key for Measure mode
+            elif event.key() == Qt.Key.Key_M:
+                self._set_mouse_mode("measure")
+                return True
+            # S key for Select mode
+            elif event.key() == Qt.Key.Key_S:
+                self._set_mouse_mode("select")
+                return True
+            # W key for Window/Level ROI mode
+            elif event.key() == Qt.Key.Key_W:
+                self._set_mouse_mode("auto_window_level")
+                return True
+            # R key for Rectangle ROI mode
+            elif event.key() == Qt.Key.Key_R:
+                self._set_mouse_mode("roi_rectangle")
+                return True
+            # E key for Ellipse ROI mode
+            elif event.key() == Qt.Key.Key_E:
+                self._set_mouse_mode("roi_ellipse")
+                return True
+            # C key for Clear measurements
+            elif event.key() == Qt.Key.Key_C:
+                self._on_clear_measurements_requested()
+                return True
+            # D key for Delete All ROIs on current slice
+            elif event.key() == Qt.Key.Key_D:
+                self._delete_all_rois_current_slice()
                 return True
         
         return super().eventFilter(obj, event)

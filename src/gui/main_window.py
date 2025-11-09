@@ -496,6 +496,55 @@ class MainWindow(QMainWindow):
         # Emit signal AFTER updating toolbar buttons
         self.mouse_mode_changed.emit(mode)
     
+    def set_mouse_mode_checked(self, mode: str) -> None:
+        """
+        Update toolbar buttons to reflect the current mouse mode without emitting signals.
+        
+        This method is used when the mouse mode is changed programmatically (e.g., via keyboard shortcut)
+        and we only need to update the toolbar UI without triggering signal emissions.
+        
+        Args:
+            mode: Mouse mode ("select", "roi_ellipse", "roi_rectangle", "measure", "zoom", "pan", "auto_window_level")
+        """
+        # All mouse mode actions
+        all_actions = [
+            self.mouse_mode_select_action,
+            self.mouse_mode_ellipse_roi_action,
+            self.mouse_mode_rectangle_roi_action,
+            self.mouse_mode_measure_action,
+            self.mouse_mode_zoom_action,
+            self.mouse_mode_pan_action,
+            self.mouse_mode_auto_window_level_action
+        ]
+        
+        # Block signals when updating toolbar buttons
+        for action in all_actions:
+            action.blockSignals(True)
+        
+        # Uncheck all actions
+        for action in all_actions:
+            action.setChecked(False)
+        
+        # Check the action corresponding to the selected mode
+        if mode == "select":
+            self.mouse_mode_select_action.setChecked(True)
+        elif mode == "roi_ellipse":
+            self.mouse_mode_ellipse_roi_action.setChecked(True)
+        elif mode == "roi_rectangle":
+            self.mouse_mode_rectangle_roi_action.setChecked(True)
+        elif mode == "measure":
+            self.mouse_mode_measure_action.setChecked(True)
+        elif mode == "zoom":
+            self.mouse_mode_zoom_action.setChecked(True)
+        elif mode == "pan":
+            self.mouse_mode_pan_action.setChecked(True)
+        elif mode == "auto_window_level":
+            self.mouse_mode_auto_window_level_action.setChecked(True)
+        
+        # Unblock signals after updating toolbar buttons
+        for action in all_actions:
+            action.blockSignals(False)
+    
     def _on_scroll_wheel_mode_combo_changed(self, text: str) -> None:
         """
         Handle scroll wheel mode combo box change.

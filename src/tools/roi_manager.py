@@ -317,8 +317,8 @@ class ROIManager:
         key = (study_uid, series_uid, instance_identifier)
         if key in self.rois:
             for roi in self.rois[key]:
-                # Only remove if item actually belongs to this scene
-                if roi.item.scene() == scene:
+                # Remove item from scene if it exists
+                if roi.item and scene:
                     scene.removeItem(roi.item)
             del self.rois[key]
     
