@@ -38,7 +38,7 @@ This application provides comprehensive DICOM image viewing capabilities with ad
 - Histogram display for whole slice or selected ROI (Not yet implemented)
 - Window width and level indication overlaid on histogram (Not yet implemented)
 - Combine slices into thicker slices (average or maximum intensity projections) (Not yet implemented)
-- Display annotations and RT STRUCT overlays
+- Display annotations and RT STRUCT overlays (Not yet implemented)
 
 ### Data Management
 - Clear ROIs from slice or whole dataset
