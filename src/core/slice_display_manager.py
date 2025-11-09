@@ -34,6 +34,8 @@ from gui.window_level_controls import WindowLevelControls
 from tools.roi_manager import ROIManager
 from tools.measurement_tool import MeasurementTool
 from gui.overlay_manager import OverlayManager
+from gui.roi_list_panel import ROIListPanel
+from gui.roi_statistics_panel import ROIStatisticsPanel
 from utils.dicom_utils import get_pixel_spacing
 
 
@@ -62,7 +64,9 @@ class SliceDisplayManager:
         view_state_manager,
         update_tag_viewer_callback: Optional[Callable] = None,
         display_rois_callback: Optional[Callable] = None,
-        display_measurements_callback: Optional[Callable] = None
+        display_measurements_callback: Optional[Callable] = None,
+        roi_list_panel: Optional[ROIListPanel] = None,
+        roi_statistics_panel: Optional[ROIStatisticsPanel] = None
     ):
         """
         Initialize the slice display manager.
@@ -80,6 +84,8 @@ class SliceDisplayManager:
             update_tag_viewer_callback: Optional callback to update tag viewer
             display_rois_callback: Optional callback to display ROIs
             display_measurements_callback: Optional callback to display measurements
+            roi_list_panel: Optional ROI list panel for updating ROI list
+            roi_statistics_panel: Optional ROI statistics panel for updating statistics
         """
         self.dicom_processor = dicom_processor
         self.image_viewer = image_viewer
@@ -93,6 +99,8 @@ class SliceDisplayManager:
         self.update_tag_viewer_callback = update_tag_viewer_callback
         self.display_rois_callback = display_rois_callback
         self.display_measurements_callback = display_measurements_callback
+        self.roi_list_panel = roi_list_panel
+        self.roi_statistics_panel = roi_statistics_panel
         
         # Current data context
         self.current_studies: dict = {}
@@ -357,14 +365,13 @@ class SliceDisplayManager:
             pixel_spacing = get_pixel_spacing(dataset)
             self.measurement_tool.set_pixel_spacing(pixel_spacing)
             
-            # Set current slice context for measurements
+            # Set current slice context for ROI manager and measurements
             study_uid = getattr(dataset, 'StudyInstanceUID', '')
             series_uid = getattr(dataset, 'SeriesInstanceUID', '')
-            instance_number = getattr(dataset, 'InstanceNumber', None)
-            if instance_number is None:
-                instance_identifier = current_slice_index
-            else:
-                instance_identifier = int(instance_number)
+            # Use current_slice_index as instance identifier (array position)
+            instance_identifier = current_slice_index
+            # Update ROI manager's current slice context
+            self.roi_manager.set_current_slice(study_uid, series_uid, instance_identifier)
             self.measurement_tool.set_current_slice(study_uid, series_uid, instance_identifier)
             
             # Clear measurements when switching to new series (not when switching slices)
@@ -399,15 +406,13 @@ class SliceDisplayManager:
         # Extract DICOM identifiers
         study_uid = getattr(dataset, 'StudyInstanceUID', '')
         series_uid = getattr(dataset, 'SeriesInstanceUID', '')
-        # Try to get InstanceNumber from DICOM, fall back to slice_index
-        instance_number = getattr(dataset, 'InstanceNumber', None)
-        if instance_number is None:
-            instance_identifier = self.current_slice_index
-        else:
-            instance_identifier = int(instance_number)
+        # Use current_slice_index as instance identifier (array position)
+        instance_identifier = self.current_slice_index
+        # print(f"[ROI DEBUG] display_rois_for_slice retrieving ROIs with instance_identifier={instance_identifier} (self.current_slice_index)")
         
         # Get all ROIs for this slice using composite key
         rois = self.roi_manager.get_rois_for_slice(study_uid, series_uid, instance_identifier)
+        # print(f"[ROI DEBUG] Found {len(rois)} ROIs for slice {instance_identifier}")
         
         # Remove ROIs from other slices from the scene
         # (but keep them in the manager's storage)
@@ -442,6 +447,28 @@ class SliceDisplayManager:
                 self.image_viewer.scene.addItem(roi.item)
                 # Ensure ROI is visible (set appropriate Z-value)
                 roi.item.setZValue(100)  # Above image but below overlay
+        
+        # Update ROI list panel to show only ROIs for current slice
+        if self.roi_list_panel is not None:
+            self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
+        
+        # Check selected ROI and update/clear statistics
+        selected_roi = self.roi_manager.get_selected_roi()
+        if selected_roi is not None and selected_roi in rois:
+            # Selected ROI belongs to current slice - keep it selected and update list selection
+            if self.roi_list_panel is not None:
+                self.roi_list_panel.select_roi_in_list(selected_roi)
+            # Statistics will be updated by ROI coordinator when ROI is clicked/selected
+        else:
+            # Clear selection if ROI doesn't belong to current slice
+            if selected_roi is not None:
+                self.roi_manager.select_roi(None)
+            # Clear list selection
+            if self.roi_list_panel is not None:
+                self.roi_list_panel.select_roi_in_list(None)
+            # Clear statistics panel
+            if self.roi_statistics_panel is not None:
+                self.roi_statistics_panel.clear_statistics()
     
     def display_measurements_for_slice(self, dataset: Dataset) -> None:
         """
@@ -456,12 +483,8 @@ class SliceDisplayManager:
         # Extract DICOM identifiers
         study_uid = getattr(dataset, 'StudyInstanceUID', '')
         series_uid = getattr(dataset, 'SeriesInstanceUID', '')
-        # Try to get InstanceNumber from DICOM, fall back to slice_index
-        instance_number = getattr(dataset, 'InstanceNumber', None)
-        if instance_number is None:
-            instance_identifier = self.current_slice_index
-        else:
-            instance_identifier = int(instance_number)
+        # Use current_slice_index as instance identifier (array position)
+        instance_identifier = self.current_slice_index
         
         # Clear measurements from other slices first
         self.measurement_tool.clear_measurements_from_other_slices(

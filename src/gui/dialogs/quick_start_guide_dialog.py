@@ -118,7 +118,7 @@ class QuickStartGuideDialog(QDialog):
             </style>
         </head>
         <body>
-            <h1>DICOM Viewer V2 - Quick Start Guide</h1>
+            <h1>DICOM Viewer V3 - Quick Start Guide</h1>
             
             <h2>Controls Overview</h2>
             <p>The application provides several ways to interact with DICOM images:</p>

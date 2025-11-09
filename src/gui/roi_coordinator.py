@@ -103,12 +103,8 @@ class ROICoordinator:
         # Extract DICOM identifiers
         study_uid = getattr(current_dataset, 'StudyInstanceUID', '')
         series_uid = getattr(current_dataset, 'SeriesInstanceUID', '')
-        # Try to get InstanceNumber from DICOM, fall back to slice_index
-        instance_number = getattr(current_dataset, 'InstanceNumber', None)
-        if instance_number is None:
-            instance_identifier = self.get_current_slice_index()
-        else:
-            instance_identifier = int(instance_number)
+        # Use current slice index as instance identifier (array position)
+        instance_identifier = self.get_current_slice_index()
         
         self.roi_manager.set_current_slice(study_uid, series_uid, instance_identifier)
         self.roi_manager.start_drawing(pos, self.image_viewer.roi_drawing_mode)
@@ -130,13 +126,11 @@ class ROICoordinator:
         current_dataset = self.get_current_dataset()
         study_uid = ""
         series_uid = ""
+        # Use current slice index as instance identifier (array position)
         instance_identifier = self.get_current_slice_index()
         if current_dataset is not None:
             study_uid = getattr(current_dataset, 'StudyInstanceUID', '')
             series_uid = getattr(current_dataset, 'SeriesInstanceUID', '')
-            instance_number = getattr(current_dataset, 'InstanceNumber', None)
-            if instance_number is not None:
-                instance_identifier = int(instance_number)
         
         # Check if we're in auto_window_level mode
         if self.image_viewer.mouse_mode == "auto_window_level" and roi_item is not None:
@@ -265,11 +259,8 @@ class ROICoordinator:
             if current_dataset is not None:
                 study_uid = getattr(current_dataset, 'StudyInstanceUID', '')
                 series_uid = getattr(current_dataset, 'SeriesInstanceUID', '')
-                instance_number = getattr(current_dataset, 'InstanceNumber', None)
-                if instance_number is None:
-                    instance_identifier = self.get_current_slice_index()
-                else:
-                    instance_identifier = int(instance_number)
+                # Use current slice index as instance identifier (array position)
+                instance_identifier = self.get_current_slice_index()
                 self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
             if self.roi_manager.get_selected_roi() is None:
                 self.roi_statistics_panel.clear_statistics()
@@ -302,13 +293,8 @@ class ROICoordinator:
         if not study_uid or not series_uid:
             return
         
-        # Get current instance identifier (must match how ROIs are stored)
-        # Try to get InstanceNumber from DICOM, fall back to slice_index
-        instance_number = getattr(current_dataset, 'InstanceNumber', None)
-        if instance_number is None:
-            instance_identifier = self.get_current_slice_index()
-        else:
-            instance_identifier = int(instance_number)
+        # Use current slice index as instance identifier (array position)
+        instance_identifier = self.get_current_slice_index()
         
         # Clear all ROIs for this slice
         self.roi_manager.clear_slice_rois(study_uid, series_uid, instance_identifier, self.image_viewer.scene)
@@ -337,11 +323,8 @@ class ROICoordinator:
             # Extract DICOM identifiers
             study_uid = getattr(current_dataset, 'StudyInstanceUID', '')
             series_uid = getattr(current_dataset, 'SeriesInstanceUID', '')
-            instance_number = getattr(current_dataset, 'InstanceNumber', None)
-            if instance_number is None:
-                instance_identifier = self.get_current_slice_index()
-            else:
-                instance_identifier = int(instance_number)
+            # Use current slice index as instance identifier (array position)
+            instance_identifier = self.get_current_slice_index()
             
             # Get ROI identifier (e.g., "ROI 1 (rectangle)")
             roi_identifier = None
