@@ -51,7 +51,8 @@ class ViewStateManager:
         main_window: MainWindow,
         overlay_manager,
         overlay_coordinator: Optional[Callable] = None,
-        roi_coordinator: Optional[Callable] = None
+        roi_coordinator: Optional[Callable] = None,
+        display_rois_for_slice: Optional[Callable] = None
     ):
         """
         Initialize the view state manager.
@@ -64,6 +65,7 @@ class ViewStateManager:
             overlay_manager: Overlay manager for overlay operations
             overlay_coordinator: Optional callback to recreate overlay
             roi_coordinator: Optional callback to redisplay ROIs
+            display_rois_for_slice: Optional callback to display ROIs for current slice
         """
         self.dicom_processor = dicom_processor
         self.image_viewer = image_viewer
@@ -72,6 +74,7 @@ class ViewStateManager:
         self.overlay_manager = overlay_manager
         self.overlay_coordinator = overlay_coordinator
         self.roi_coordinator = roi_coordinator
+        self.display_rois_for_slice = display_rois_for_slice
         
         # Window/level state - preserve between slices
         self.current_window_center: Optional[float] = None
@@ -313,25 +316,10 @@ class ViewStateManager:
                     # Set image first (without preserving view to avoid wrong centering)
                     self.image_viewer.set_image(image, preserve_view=False)
                     
-                    # Now set up the view: zoom, transform, and centering
-                    # Prefer scene center point (works correctly even if viewport size changed)
-                    # Fall back to scrollbar positions for backward compatibility
-                    self.image_viewer.resetTransform()
-                    self.image_viewer.scale(reset_zoom, reset_zoom)
-                    self.image_viewer.current_zoom = reset_zoom
-                    
-                    # Use scene center point if available (preferred method)
-                    if reset_scene_center is not None:
-                        # Center on the stored scene point - works correctly regardless of viewport size
-                        self.image_viewer.centerOn(reset_scene_center)
-                    elif reset_h_scroll is not None and reset_v_scroll is not None:
-                        # Fallback: restore scrollbar positions (for backward compatibility)
-                        # This may not work correctly if viewport size has changed
-                        self.image_viewer.horizontalScrollBar().setValue(reset_h_scroll)
-                        self.image_viewer.verticalScrollBar().setValue(reset_v_scroll)
-                    else:
-                        # No saved positions - use fit_to_view with centering
-                        self.image_viewer.fit_to_view(center_image=True)
+                    # Always fit to view and center based on current viewport size
+                    # This ensures the image is properly centered and fits regardless of
+                    # viewport size changes (e.g., navigator visibility, splitter positions)
+                    self.image_viewer.fit_to_view(center_image=True)
                     
                     self.image_viewer.last_transform = self.image_viewer.transform()
                     self.image_viewer.zoom_changed.emit(self.image_viewer.current_zoom)
@@ -347,6 +335,9 @@ class ViewStateManager:
                         total_slices=total_slices if total_slices > 0 else None
                     )
                     # Re-display ROIs for current slice
+                    if self.display_rois_for_slice:
+                        self.display_rois_for_slice(dataset)
+                    # Update ROI statistics if there's a selected ROI
                     if self.roi_coordinator:
                         self.roi_coordinator(dataset)
     

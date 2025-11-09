@@ -156,7 +156,8 @@ class DICOMViewerApp(QObject):
             self.main_window,
             self.overlay_manager,
             overlay_coordinator=None,  # Will be set after overlay coordinator is created
-            roi_coordinator=None  # Will be set after ROI coordinator is created
+            roi_coordinator=None,  # Will be set after ROI coordinator is created
+            display_rois_for_slice=None  # Will be set after slice display manager is created
         )
         
         # Initialize FileOperationsHandler
@@ -208,6 +209,9 @@ class DICOMViewerApp(QObject):
         self.view_state_manager.roi_coordinator = lambda dataset: self.roi_coordinator.update_roi_statistics(
             self.roi_manager.get_selected_roi()
         ) if self.roi_manager.get_selected_roi() else None
+        
+        # Update view state manager with display_rois_for_slice callback
+        self.view_state_manager.display_rois_for_slice = self._display_rois_for_slice
         
         # Initialize MeasurementCoordinator
         self.measurement_coordinator = MeasurementCoordinator(
@@ -317,6 +321,10 @@ class DICOMViewerApp(QObject):
                 self.current_study_uid,
                 self.current_series_uid
             )
+            
+            # Show navigator by default if it's hidden
+            if not self.main_window.series_navigator_visible:
+                self.main_window.toggle_series_navigator()
     
     def _get_rescale_params(self) -> tuple[Optional[float], Optional[float], Optional[str], bool]:
         """Get rescale parameters for ROI operations."""
