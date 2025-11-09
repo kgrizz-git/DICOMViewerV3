@@ -45,9 +45,9 @@ class ConfigManager:
         # Get application data directory
         if os.name == 'nt':  # Windows
             app_data = os.getenv('APPDATA', os.path.expanduser('~'))
-            self.config_dir = Path(app_data) / "DICOMViewerV2"
+            self.config_dir = Path(app_data) / "DICOMViewerV3"
         else:  # Mac/Linux
-            self.config_dir = Path.home() / ".config" / "DICOMViewerV2"
+            self.config_dir = Path.home() / ".config" / "DICOMViewerV3"
         
         # Create config directory if it doesn't exist
         self.config_dir.mkdir(parents=True, exist_ok=True)

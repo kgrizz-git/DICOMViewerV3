@@ -1,4 +1,4 @@
-# DICOM Viewer V2
+# DICOM Viewer V3
 
 A cross-platform DICOM viewer application for Windows, Mac, and Linux systems.
 
@@ -63,7 +63,7 @@ This application provides comprehensive DICOM image viewing capabilities with ad
 ## Project Structure
 
 ```
-DICOMViewerV2/
+DICOMViewerV3/
 ├── src/           # Source code
 ├── tests/         # Test files
 ├── docs/          # Documentation

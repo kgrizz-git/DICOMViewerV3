@@ -1,5 +1,5 @@
 """
-DICOM Viewer V2 - Main Application Entry Point
+DICOM Viewer V3 - Main Application Entry Point
 
 This module is the main entry point for the DICOM viewer application.
 It initializes the application, creates the main window, and sets up
@@ -82,7 +82,7 @@ class DICOMViewerApp(QObject):
         
         # Create Qt application first (before any widgets)
         self.app = QApplication(sys.argv)
-        self.app.setApplicationName("DICOM Viewer V2")
+        self.app.setApplicationName("DICOM Viewer V3")
         
         # Initialize managers
         self.config_manager = ConfigManager()
@@ -182,7 +182,9 @@ class DICOMViewerApp(QObject):
             self.view_state_manager,
             update_tag_viewer_callback=self._update_tag_viewer,
             display_rois_callback=None,  # Will use default
-            display_measurements_callback=None  # Will use default
+            display_measurements_callback=None,  # Will use default
+            roi_list_panel=self.roi_list_panel,
+            roi_statistics_panel=self.roi_statistics_panel
         )
         
         # Initialize ROICoordinator
@@ -327,11 +329,8 @@ class DICOMViewerApp(QObject):
         if self.current_dataset is not None:
             study_uid = getattr(self.current_dataset, 'StudyInstanceUID', '')
             series_uid = getattr(self.current_dataset, 'SeriesInstanceUID', '')
-            instance_number = getattr(self.current_dataset, 'InstanceNumber', None)
-            if instance_number is None:
-                instance_identifier = self.current_slice_index
-            else:
-                instance_identifier = int(instance_number)
+            # Use current slice index as instance identifier (array position)
+            instance_identifier = self.current_slice_index
             self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
     
     def _setup_ui(self) -> None:
@@ -416,7 +415,7 @@ class DICOMViewerApp(QObject):
         self.window_level_controls.window_changed.connect(self.view_state_manager.handle_window_changed)
         
         # Slice navigation
-        self.slice_navigator.slice_changed.connect(self.slice_display_manager.handle_slice_changed)
+        self.slice_navigator.slice_changed.connect(self._on_slice_changed)
         
         # Mouse mode changes
         self.main_window.mouse_mode_changed.connect(self.mouse_mode_handler.handle_mouse_mode_changed)
@@ -532,9 +531,9 @@ class DICOMViewerApp(QObject):
                 datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
                 self.slice_navigator.set_total_slices(len(datasets))
                 self.slice_navigator.set_current_slice(slice_index)
-            
-            # Display ROIs for this slice
-            self.slice_display_manager.display_rois_for_slice(dataset)
+        
+            # Display ROIs for this slice (now handled by display_slice, but kept for compatibility)
+            # self.slice_display_manager.display_rois_for_slice(dataset)
     
     def _display_slice(self, dataset) -> None:
         """
@@ -557,7 +556,7 @@ class DICOMViewerApp(QObject):
             
             # Display slice using slice display manager
             self.slice_display_manager.display_slice(
-                dataset,
+                                dataset,
                 self.current_studies,
                 self.current_study_uid,
                 self.current_series_uid,
@@ -583,11 +582,8 @@ class DICOMViewerApp(QObject):
         # Check if there's a selected ROI for this slice and restore UI state
         study_uid = getattr(dataset, 'StudyInstanceUID', '')
         series_uid = getattr(dataset, 'SeriesInstanceUID', '')
-        instance_number = getattr(dataset, 'InstanceNumber', None)
-        if instance_number is None:
-            instance_identifier = self.current_slice_index
-        else:
-            instance_identifier = int(instance_number)
+        # Use current slice index as instance identifier (array position)
+        instance_identifier = self.current_slice_index
         rois = self.roi_manager.get_rois_for_slice(study_uid, series_uid, instance_identifier)
         selected_roi = self.roi_manager.get_selected_roi()
         if selected_roi is not None and selected_roi in rois:
@@ -826,11 +822,8 @@ class DICOMViewerApp(QObject):
         if selected_roi is not None and self.current_dataset is not None:
             study_uid = getattr(self.current_dataset, 'StudyInstanceUID', '')
             series_uid = getattr(self.current_dataset, 'SeriesInstanceUID', '')
-            instance_number = getattr(self.current_dataset, 'InstanceNumber', None)
-            if instance_number is None:
-                instance_identifier = self.current_slice_index
-            else:
-                instance_identifier = int(instance_number)
+            # Use current slice index as instance identifier (array position)
+            instance_identifier = self.current_slice_index
             current_slice_rois = self.roi_manager.get_rois_for_slice(study_uid, series_uid, instance_identifier)
             if selected_roi in current_slice_rois:
                 self.roi_coordinator.update_roi_statistics(selected_roi)
@@ -931,14 +924,18 @@ class DICOMViewerApp(QObject):
         Args:
             slice_index: New slice index
         """
-        self.slice_display_manager.handle_slice_changed(slice_index)
-        # Update current slice index
+        # print(f"[ROI DEBUG] _on_slice_changed called with slice_index={slice_index}")
+        # print(f"[ROI DEBUG] BEFORE update: self.current_slice_index={self.current_slice_index}")
+        # Update current slice index FIRST before any operations that might use it
         self.current_slice_index = slice_index
         # Update current dataset reference
         if self.current_studies and self.current_series_uid:
             datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
             if 0 <= slice_index < len(datasets):
                 self.current_dataset = datasets[slice_index]
+        # print(f"[ROI DEBUG] AFTER update: self.current_slice_index={self.current_slice_index}")
+        # Now handle the slice change - at this point self.current_slice_index is correct
+        self.slice_display_manager.handle_slice_changed(slice_index)
     
     def _hide_measurement_labels(self, hide: bool) -> None:
         """

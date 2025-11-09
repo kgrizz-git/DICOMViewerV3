@@ -1,4 +1,4 @@
-# DICOM Viewer V2 Requirements
+# DICOM Viewer V3 Requirements
 # 
 # This file lists all Python package dependencies required for the DICOM viewer application.
 # 

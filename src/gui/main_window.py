@@ -76,7 +76,7 @@ class MainWindow(QMainWindow):
         self.config_manager = config_manager or ConfigManager()
         
         # Window properties
-        self.setWindowTitle("DICOM Viewer V2")
+        self.setWindowTitle("DICOM Viewer V3")
         self.setGeometry(100, 100, 
                         self.config_manager.get("window_width", 1200),
                         self.config_manager.get("window_height", 800))
@@ -435,8 +435,8 @@ class MainWindow(QMainWindow):
     
     def _show_about(self) -> None:
         """Show the about dialog."""
-        QMessageBox.about(self, "About DICOM Viewer V2",
-                         "DICOM Viewer V2\n\n"
+        QMessageBox.about(self, "About DICOM Viewer V3",
+                         "DICOM Viewer V3\n\n"
                          "A cross-platform DICOM viewer application.\n\n"
                          "Features:\n"
                          "- View DICOM images with zoom and pan\n"
@@ -444,7 +444,7 @@ class MainWindow(QMainWindow):
                          "- Customizable metadata overlays\n"
                          "- Export to multiple formats\n\n"
                          "Made by Kevin Grizzard.\n"
-                         "Available at https://github.com/kgrizz-git/DICOMViewerV2.")
+                         "Available at https://github.com/kgrizz-git/DICOMViewerV3.")
     
     def _on_mouse_mode_changed(self, mode: str) -> None:
         """

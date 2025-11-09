@@ -133,6 +133,7 @@ class ROIManager:
             series_uid: SeriesInstanceUID
             instance_identifier: InstanceNumber from DICOM or slice_index as fallback
         """
+        # print(f"[ROI DEBUG] set_current_slice called with instance_identifier={instance_identifier}")
         self.current_study_uid = study_uid
         self.current_series_uid = series_uid
         self.current_instance_identifier = instance_identifier
@@ -203,10 +204,13 @@ class ROIManager:
         
         # Add to current slice using composite key
         key = (self.current_study_uid, self.current_series_uid, self.current_instance_identifier)
+        # print(f"[ROI DEBUG] finish_drawing storing ROI with key={key}, instance_identifier={self.current_instance_identifier}")
         if key not in self.rois:
             self.rois[key] = []
         
         self.rois[key].append(self.current_roi_item)
+        # print(f"[ROI DEBUG] Total ROIs for key {key}: {len(self.rois[key])}")
+        # print(f"[ROI DEBUG] All keys in rois dict: {list(self.rois.keys())}")
         
         # Enable selectable/movable now that drawing is finished
         self.current_roi_item.item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)

@@ -65,11 +65,8 @@ class MeasurementCoordinator:
         if current_dataset is not None:
             study_uid = getattr(current_dataset, 'StudyInstanceUID', '')
             series_uid = getattr(current_dataset, 'SeriesInstanceUID', '')
-            instance_number = getattr(current_dataset, 'InstanceNumber', None)
-            if instance_number is None:
-                instance_identifier = self.get_current_slice_index()
-            else:
-                instance_identifier = int(instance_number)
+            # Use current slice index as instance identifier (array position)
+            instance_identifier = self.get_current_slice_index()
             self.measurement_tool.set_current_slice(study_uid, series_uid, instance_identifier)
         
         self.measurement_tool.start_measurement(pos)
@@ -114,11 +111,8 @@ class MeasurementCoordinator:
                 # Extract DICOM identifiers for current slice
                 study_uid = getattr(current_dataset, 'StudyInstanceUID', '')
                 series_uid = getattr(current_dataset, 'SeriesInstanceUID', '')
-                instance_number = getattr(current_dataset, 'InstanceNumber', None)
-                if instance_number is None:
-                    instance_identifier = self.get_current_slice_index()
-                else:
-                    instance_identifier = int(instance_number)
+                # Use current slice index as instance identifier (array position)
+                instance_identifier = self.get_current_slice_index()
                 
                 # Clear measurements for current slice
                 self.measurement_tool.clear_slice_measurements(
