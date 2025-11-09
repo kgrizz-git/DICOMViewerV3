@@ -46,6 +46,7 @@ from gui.window_level_controls import WindowLevelControls
 from gui.roi_statistics_panel import ROIStatisticsPanel
 from gui.roi_list_panel import ROIListPanel
 from gui.slice_navigator import SliceNavigator
+from gui.series_navigator import SeriesNavigator
 from core.dicom_loader import DICOMLoader
 from core.dicom_organizer import DICOMOrganizer
 from core.dicom_parser import DICOMParser
@@ -107,6 +108,7 @@ class DICOMViewerApp(QObject):
         self.roi_statistics_panel = ROIStatisticsPanel()
         self.roi_list_panel = ROIListPanel()
         self.roi_list_panel.set_roi_manager(self.roi_manager)
+        self.series_navigator = SeriesNavigator(self.dicom_processor)
         
         # Initialize overlay manager with config settings
         font_size = self.config_manager.get_overlay_font_size()
@@ -307,6 +309,13 @@ class DICOMViewerApp(QObject):
             # Store initial view state after a delay
             from PySide6.QtCore import QTimer
             QTimer.singleShot(100, self.view_state_manager.store_initial_view_state)
+            
+            # Update series navigator
+            self.series_navigator.update_series_list(
+                self.current_studies,
+                self.current_study_uid,
+                self.current_series_uid
+            )
     
     def _get_rescale_params(self) -> tuple[Optional[float], Optional[float], Optional[str], bool]:
         """Get rescale parameters for ROI operations."""
@@ -358,6 +367,9 @@ class DICOMViewerApp(QObject):
         right_layout.addWidget(self.window_level_controls)
         right_layout.addWidget(self.roi_list_panel)
         right_layout.addWidget(self.roi_statistics_panel)
+        
+        # Add series navigator to main window
+        self.main_window.set_series_navigator(self.series_navigator)
     
     def _connect_signals(self) -> None:
         """Connect signals between components."""
@@ -468,6 +480,10 @@ class DICOMViewerApp(QObject):
         # Viewport resize (when splitter moves)
         self.main_window.viewport_resizing.connect(self.view_state_manager.handle_viewport_resizing)
         self.main_window.viewport_resized.connect(self.view_state_manager.handle_viewport_resized)
+        
+        # Series navigator signals
+        self.series_navigator.series_selected.connect(self._on_series_navigator_selected)
+        self.image_viewer.toggle_series_navigator_requested.connect(self.main_window.toggle_series_navigator)
     
     def _open_files(self) -> None:
         """Handle open files request."""
@@ -532,9 +548,59 @@ class DICOMViewerApp(QObject):
                 datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
                 self.slice_navigator.set_total_slices(len(datasets))
                 self.slice_navigator.set_current_slice(slice_index)
+            
+            # Update series navigator highlighting
+            self.series_navigator.set_current_series(self.current_series_uid)
         
             # Display ROIs for this slice (now handled by display_slice, but kept for compatibility)
             # self.slice_display_manager.display_rois_for_slice(dataset)
+    
+    def _on_series_navigator_selected(self, series_uid: str) -> None:
+        """
+        Handle series selection from series navigator.
+        
+        Args:
+            series_uid: Selected series UID
+        """
+        if not self.current_studies or self.current_study_uid not in self.current_studies:
+            return
+        
+        study_series = self.current_studies[self.current_study_uid]
+        if series_uid not in study_series:
+            return
+        
+        datasets = study_series[series_uid]
+        if not datasets:
+            return
+        
+        # Navigate to first slice of selected series
+        self.current_series_uid = series_uid
+        self.current_slice_index = 0
+        self.current_dataset = datasets[0]
+        
+        # Update slice display manager context
+        self.slice_display_manager.set_current_data_context(
+            self.current_studies,
+            self.current_study_uid,
+            self.current_series_uid,
+            self.current_slice_index
+        )
+        
+        # Display slice
+        self.slice_display_manager.display_slice(
+            self.current_dataset,
+            self.current_studies,
+            self.current_study_uid,
+            self.current_series_uid,
+            self.current_slice_index
+        )
+        
+        # Update slice navigator
+        self.slice_navigator.set_total_slices(len(datasets))
+        self.slice_navigator.set_current_slice(0)
+        
+        # Update series navigator highlighting
+        self.series_navigator.set_current_series(self.current_series_uid)
     
     def _display_slice(self, dataset) -> None:
         """
