@@ -773,7 +773,7 @@ class ImageViewer(QGraphicsView):
                         
                         # Series Navigator toggle action
                         # Note: Text will be updated dynamically by main window based on visibility
-                        toggle_navigator_action = context_menu.addAction("Toggle Series Navigator")
+                        toggle_navigator_action = context_menu.addAction("Toggle Series Navigator (N)")
                         toggle_navigator_action.triggered.connect(self.toggle_series_navigator_requested.emit)
                         
                         context_menu.addSeparator()

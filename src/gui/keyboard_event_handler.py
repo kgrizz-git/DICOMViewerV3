@@ -32,7 +32,7 @@ class KeyboardEventHandler:
     - Handle Delete/Backspace (delete ROI/measurement)
     - Handle Arrow keys (slice navigation)
     - Handle Spacebar (toggle overlay)
-    - Handle mode switching keys (P, Z, M, S, W, R, E, C, D, V)
+    - Handle mode switching keys (P, Z, M, S, W, R, E, C, D, V, N)
     """
     
     def __init__(
@@ -51,7 +51,8 @@ class KeyboardEventHandler:
         delete_measurement_callback: Callable[[object], None],
         update_roi_list_callback: Optional[Callable[[], None]] = None,
         clear_roi_statistics_callback: Optional[Callable[[], None]] = None,
-        reset_view_callback: Optional[Callable[[], None]] = None
+        reset_view_callback: Optional[Callable[[], None]] = None,
+        toggle_series_navigator_callback: Optional[Callable[[], None]] = None
     ):
         """
         Initialize the keyboard event handler.
@@ -72,6 +73,7 @@ class KeyboardEventHandler:
             update_roi_list_callback: Optional callback to update ROI list
             clear_roi_statistics_callback: Optional callback to clear ROI statistics
             reset_view_callback: Optional callback to reset view
+            toggle_series_navigator_callback: Optional callback to toggle series navigator
         """
         self.roi_manager = roi_manager
         self.measurement_tool = measurement_tool
@@ -88,6 +90,7 @@ class KeyboardEventHandler:
         self.update_roi_list_callback = update_roi_list_callback
         self.clear_roi_statistics_callback = clear_roi_statistics_callback
         self.reset_view_callback = reset_view_callback
+        self.toggle_series_navigator_callback = toggle_series_navigator_callback
     
     def handle_key_event(self, event: QKeyEvent) -> bool:
         """
@@ -191,6 +194,12 @@ class KeyboardEventHandler:
         elif event.key() == Qt.Key.Key_V:
             if self.reset_view_callback:
                 self.reset_view_callback()
+            return True
+        
+        # N key for Toggle Series Navigator
+        elif event.key() == Qt.Key.Key_N:
+            if self.toggle_series_navigator_callback:
+                self.toggle_series_navigator_callback()
             return True
         
         return False
