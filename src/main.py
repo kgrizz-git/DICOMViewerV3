@@ -264,7 +264,8 @@ class DICOMViewerApp(QObject):
             delete_roi_callback=lambda roi: self.roi_coordinator.handle_roi_delete_requested(roi.item) if (hasattr(roi, 'item') and roi.item is not None) else (self.roi_manager.delete_roi(roi, self.image_viewer.scene) if roi else None),
             delete_measurement_callback=self.measurement_coordinator.handle_measurement_delete_requested,
             update_roi_list_callback=self._update_roi_list,
-            clear_roi_statistics_callback=self.roi_statistics_panel.clear_statistics
+            clear_roi_statistics_callback=self.roi_statistics_panel.clear_statistics,
+            reset_view_callback=self.view_state_manager.reset_view
         )
     
     def _clear_data(self) -> None:

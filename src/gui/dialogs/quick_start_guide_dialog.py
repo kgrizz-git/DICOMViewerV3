@@ -157,7 +157,7 @@ class QuickStartGuideDialog(QDialog):
                         <li>Scrollbars: Use horizontal/vertical scrollbars when image is larger than viewport</li>
                     </ul>
                 </li>
-                <li><strong>Reset View:</strong> Right-click context menu → "Reset View" to restore initial zoom and position</li>
+                <li><strong>Reset View:</strong> Press <code>V</code> key or right-click context menu → "Reset View (V)" to restore initial zoom and position</li>
             </ul>
             
             <h2>Measurements</h2>
@@ -250,6 +250,7 @@ class QuickStartGuideDialog(QDialog):
                 <li><strong><code>W</code>:</strong> Window/Level ROI mode (auto-adjust from ROI)</li>
                 <li><strong><code>C</code>:</strong> Clear all measurements on current slice</li>
                 <li><strong><code>D</code>:</strong> Delete all ROIs on current slice</li>
+                <li><strong><code>V</code>:</strong> Reset view (restore initial zoom, pan, and window/level)</li>
                 <li><strong><code>Spacebar</code>:</strong> Toggle overlay visibility
                     <ul>
                         <li>First press: Hides corner text overlays</li>

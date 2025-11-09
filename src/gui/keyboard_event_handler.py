@@ -32,7 +32,7 @@ class KeyboardEventHandler:
     - Handle Delete/Backspace (delete ROI/measurement)
     - Handle Arrow keys (slice navigation)
     - Handle Spacebar (toggle overlay)
-    - Handle mode switching keys (P, Z, M, S, W, R, E, C, D)
+    - Handle mode switching keys (P, Z, M, S, W, R, E, C, D, V)
     """
     
     def __init__(
@@ -50,7 +50,8 @@ class KeyboardEventHandler:
         delete_roi_callback: Callable[[object], None],
         delete_measurement_callback: Callable[[object], None],
         update_roi_list_callback: Optional[Callable[[], None]] = None,
-        clear_roi_statistics_callback: Optional[Callable[[], None]] = None
+        clear_roi_statistics_callback: Optional[Callable[[], None]] = None,
+        reset_view_callback: Optional[Callable[[], None]] = None
     ):
         """
         Initialize the keyboard event handler.
@@ -70,6 +71,7 @@ class KeyboardEventHandler:
             delete_measurement_callback: Callback to delete measurement
             update_roi_list_callback: Optional callback to update ROI list
             clear_roi_statistics_callback: Optional callback to clear ROI statistics
+            reset_view_callback: Optional callback to reset view
         """
         self.roi_manager = roi_manager
         self.measurement_tool = measurement_tool
@@ -85,6 +87,7 @@ class KeyboardEventHandler:
         self.delete_measurement_callback = delete_measurement_callback
         self.update_roi_list_callback = update_roi_list_callback
         self.clear_roi_statistics_callback = clear_roi_statistics_callback
+        self.reset_view_callback = reset_view_callback
     
     def handle_key_event(self, event: QKeyEvent) -> bool:
         """
@@ -182,6 +185,12 @@ class KeyboardEventHandler:
         # D key for Delete All ROIs on current slice
         elif event.key() == Qt.Key.Key_D:
             self.delete_all_rois_callback()
+            return True
+        
+        # V key for Reset View
+        elif event.key() == Qt.Key.Key_V:
+            if self.reset_view_callback:
+                self.reset_view_callback()
             return True
         
         return False
