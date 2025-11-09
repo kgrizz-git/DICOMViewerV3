@@ -251,6 +251,7 @@ class QuickStartGuideDialog(QDialog):
                 <li><strong><code>C</code>:</strong> Clear all measurements on current slice</li>
                 <li><strong><code>D</code>:</strong> Delete all ROIs on current slice</li>
                 <li><strong><code>V</code>:</strong> Reset view (restore initial zoom, pan, and window/level)</li>
+                <li><strong><code>N</code>:</strong> Toggle series navigator bar visibility</li>
                 <li><strong><code>Spacebar</code>:</strong> Toggle overlay visibility
                     <ul>
                         <li>First press: Hides corner text overlays</li>

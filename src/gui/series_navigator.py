@@ -27,6 +27,7 @@ from typing import Optional, Dict
 from pydicom.dataset import Dataset
 from core.dicom_processor import DICOMProcessor
 from PIL import Image
+import numpy as np
 
 
 class SeriesThumbnail(QFrame):
@@ -54,8 +55,8 @@ class SeriesThumbnail(QFrame):
         self.thumbnail_image = thumbnail_image
         self.is_current = False
         
-        # Set fixed size for thumbnails
-        self.setFixedSize(120, 120)
+        # Set fixed size for thumbnails (85% of 80x80 to fit smaller navigator height)
+        self.setFixedSize(68, 68)
         self.setFrameStyle(QFrame.Shape.Box)
         self.setLineWidth(2)
         self.setStyleSheet("QFrame { border: 2px solid gray; }")
@@ -90,31 +91,62 @@ class SeriesThumbnail(QFrame):
         
         # Draw thumbnail image if available
         if self.thumbnail_image is not None:
-            # Convert PIL Image to QPixmap
-            if self.thumbnail_image.mode == 'L':
-                qimage = QImage(self.thumbnail_image.tobytes(), 
-                              self.thumbnail_image.width, self.thumbnail_image.height,
-                              QImage.Format.Format_Grayscale8)
-            elif self.thumbnail_image.mode == 'RGB':
-                qimage = QImage(self.thumbnail_image.tobytes(), 
-                              self.thumbnail_image.width, self.thumbnail_image.height,
-                              QImage.Format.Format_RGB888)
-            else:
-                # Convert to RGB
-                rgb_image = self.thumbnail_image.convert('RGB')
-                qimage = QImage(rgb_image.tobytes(), 
-                              rgb_image.width, rgb_image.height,
-                              QImage.Format.Format_RGB888)
-            
-            pixmap = QPixmap.fromImage(qimage)
-            # Scale to fit thumbnail size (maintain aspect ratio)
-            scaled_pixmap = pixmap.scaled(self.width() - 4, self.height() - 4,
-                                         Qt.AspectRatioMode.KeepAspectRatio,
-                                         Qt.TransformationMode.SmoothTransformation)
-            # Center the image
-            x = (self.width() - scaled_pixmap.width()) // 2
-            y = (self.height() - scaled_pixmap.height()) // 2
-            painter.drawPixmap(x, y, scaled_pixmap)
+            try:
+                # Validate image dimensions
+                if self.thumbnail_image.width <= 0 or self.thumbnail_image.height <= 0:
+                    raise ValueError("Invalid image dimensions")
+                
+                # Convert PIL Image to QPixmap via numpy array (more reliable than tobytes)
+                # Convert PIL Image to numpy array first
+                img_array = np.array(self.thumbnail_image)
+                
+                # Ensure array is contiguous and in correct format
+                if not img_array.flags['C_CONTIGUOUS']:
+                    img_array = np.ascontiguousarray(img_array)
+                
+                # Convert to QImage based on image mode
+                if self.thumbnail_image.mode == 'L':
+                    # Grayscale: shape is (height, width)
+                    height, width = img_array.shape
+                    qimage = QImage(img_array.data, width, height, 
+                                  width, QImage.Format.Format_Grayscale8)
+                elif self.thumbnail_image.mode == 'RGB':
+                    # RGB: shape is (height, width, 3)
+                    height, width, channels = img_array.shape
+                    qimage = QImage(img_array.data, width, height, 
+                                  width * 3, QImage.Format.Format_RGB888)
+                else:
+                    # Convert to RGB first
+                    rgb_image = self.thumbnail_image.convert('RGB')
+                    img_array = np.array(rgb_image)
+                    if not img_array.flags['C_CONTIGUOUS']:
+                        img_array = np.ascontiguousarray(img_array)
+                    height, width, channels = img_array.shape
+                    qimage = QImage(img_array.data, width, height, 
+                                  width * 3, QImage.Format.Format_RGB888)
+                
+                # Validate QImage was created successfully
+                if qimage.isNull():
+                    raise ValueError("Failed to create QImage")
+                
+                pixmap = QPixmap.fromImage(qimage)
+                if pixmap.isNull():
+                    raise ValueError("Failed to create QPixmap")
+                
+                # Scale to fit thumbnail size (maintain aspect ratio)
+                scaled_pixmap = pixmap.scaled(self.width() - 4, self.height() - 4,
+                                             Qt.AspectRatioMode.KeepAspectRatio,
+                                             Qt.TransformationMode.SmoothTransformation)
+                # Center the image
+                x = (self.width() - scaled_pixmap.width()) // 2
+                y = (self.height() - scaled_pixmap.height()) // 2
+                painter.drawPixmap(x, y, scaled_pixmap)
+            except Exception as e:
+                # Draw placeholder if image conversion fails
+                print(f"Error painting thumbnail: {e}")
+                painter.fillRect(self.rect(), QColor(128, 128, 128))
+                painter.setPen(QColor(255, 255, 255))
+                painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "Error")
         else:
             # Draw placeholder if no image
             painter.fillRect(self.rect(), QColor(128, 128, 128))
@@ -194,8 +226,8 @@ class SeriesNavigator(QWidget):
         scroll_area.setWidget(self.thumbnail_container)
         layout.addWidget(scroll_area)
         
-        # Set fixed height for navigator
-        self.setFixedHeight(140)
+        # Set fixed height for navigator (85% of 93px)
+        self.setFixedHeight(79)
     
     def update_series_list(self, studies: Dict, current_study_uid: str, current_series_uid: str) -> None:
         """
@@ -274,7 +306,7 @@ class SeriesNavigator(QWidget):
                 return None
             
             # Resize to thumbnail size (maintain aspect ratio)
-            thumbnail_size = 100  # Target size for thumbnail
+            thumbnail_size = 57  # Target size for thumbnail (85% of 67px to fit smaller navigator height)
             image.thumbnail((thumbnail_size, thumbnail_size), Image.Resampling.LANCZOS)
             
             return image

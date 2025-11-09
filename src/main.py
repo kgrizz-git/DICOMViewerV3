@@ -267,7 +267,8 @@ class DICOMViewerApp(QObject):
             delete_measurement_callback=self.measurement_coordinator.handle_measurement_delete_requested,
             update_roi_list_callback=self._update_roi_list,
             clear_roi_statistics_callback=self.roi_statistics_panel.clear_statistics,
-            reset_view_callback=self.view_state_manager.reset_view
+            reset_view_callback=self.view_state_manager.reset_view,
+            toggle_series_navigator_callback=self.main_window.toggle_series_navigator
         )
     
     def _clear_data(self) -> None:
