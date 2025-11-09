@@ -20,8 +20,10 @@ This application provides comprehensive DICOM image viewing capabilities with ad
 - Resizable image display window
 - Window width and level adjustment (numerical input and mouse control)
 - Slice navigation with arrow keys or mouse wheel
+- Series navigation with thumbnail navigator
 - Switch mouse scroll wheel between zooming and slice navigation
 - Dark or light interface option
+- Reset view to fit viewport
 
 ### Metadata and Overlays
 - Customizable DICOM metadata overlays on images
@@ -31,20 +33,23 @@ This application provides comprehensive DICOM image viewing capabilities with ad
 
 ### Analysis Tools
 - Draw elliptical or rectangular regions of interest (ROIs)
-- Calculate statistics (mean, standard deviation) within ROIs
+- Calculate statistics (mean, standard deviation, min, max, area) within ROIs
 - Measure distances (pixels, mm, or cm based on DICOM metadata)
-- Histogram display for whole slice or selected ROI
-- Window width and level indication overlaid on histogram
-- Combine slices into thicker slices (average or maximum intensity projections)
+- Histogram display for whole slice or selected ROI (Not yet implemented)
+- Window width and level indication overlaid on histogram (Not yet implemented)
+- Combine slices into thicker slices (average or maximum intensity projections) (Not yet implemented)
 - Display annotations and RT STRUCT overlays
 
 ### Data Management
 - Clear ROIs from slice or whole dataset
+- Clear measurements
 - Undo/redo functionality for changes
+- ROI list panel with selection
 
 ### Export
-- Export as JPEG, PNG, or DICOM
-- Export single slice, whole series, or whole study
+- Export selected DICOM tags to Excel or CSV files
+- Export images as JPEG, PNG, or DICOM (Not yet implemented)
+- Export single slice, whole series, or whole study (Not yet implemented)
 
 ### Keyboard Shortcuts
 - **P**: Pan mode (move the image around)
@@ -56,6 +61,8 @@ This application provides comprehensive DICOM image viewing capabilities with ad
 - **W**: Window/Level ROI mode (auto-adjust from ROI)
 - **C**: Clear all measurements on current slice
 - **D**: Delete all ROIs on current slice
+- **V**: Reset view (restore initial zoom, pan, and window/level)
+- **N**: Toggle series navigator bar visibility
 - **Spacebar**: Toggle overlay visibility (cycles through 3 states)
 - **Arrow Keys**: Navigate slices (Up/Down) and series (Left/Right)
 - **Delete**: Delete selected ROI or measurement
