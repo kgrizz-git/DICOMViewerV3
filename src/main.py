@@ -654,8 +654,27 @@ class DICOMViewerApp(QObject):
                 # Wait a bit for view to settle, then store initial state
                 from PySide6.QtCore import QTimer
                 QTimer.singleShot(100, self.view_state_manager.store_initial_view_state)
+        except MemoryError as e:
+            error_msg = f"Memory error displaying slice: {str(e)}"
+            self.main_window.update_status(error_msg)
+            # Show error dialog for memory errors
+            from gui.dialogs.file_dialog import FileDialog
+            file_dialog = FileDialog()
+            file_dialog.show_error(
+                self.main_window,
+                "Memory Error",
+                f"{error_msg}\n\nTry closing other applications or use a system with more memory."
+            )
         except Exception as e:
-            self.main_window.update_status(f"Error displaying slice: {str(e)}")
+            error_type = type(e).__name__
+            error_msg = f"Error displaying slice: {str(e)}"
+            if error_type not in error_msg:
+                error_msg = f"{error_type}: {error_msg}"
+            self.main_window.update_status(error_msg)
+            # Log to console for debugging
+            import traceback
+            print(f"Error displaying slice: {error_msg}")
+            traceback.print_exc()
     
     def _display_rois_for_slice(self, dataset) -> None:
         """
@@ -1103,8 +1122,30 @@ class DICOMViewerApp(QObject):
         return self.app.exec()
 
 
+def exception_hook(exctype, value, tb):
+    """Global exception handler to catch unhandled exceptions."""
+    import traceback
+    error_msg = ''.join(traceback.format_exception(exctype, value, tb))
+    print(f"Unhandled exception:\n{error_msg}")
+    
+    # Try to show error dialog if QApplication exists
+    try:
+        from PySide6.QtWidgets import QApplication, QMessageBox
+        if QApplication.instance():
+            QMessageBox.critical(
+                None, 
+                "Fatal Error", 
+                f"An unexpected error occurred:\n\n{exctype.__name__}: {value}\n\nThe application may be unstable."
+            )
+    except:
+        pass  # If Qt is not available, just print
+
+
 def main():
     """Main entry point."""
+    # Install global exception hook
+    sys.excepthook = exception_hook
+    
     try:
         app = DICOMViewerApp()
         return app.run()

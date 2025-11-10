@@ -173,6 +173,9 @@ class ImageViewer(QGraphicsView):
             image: PIL Image to display
             preserve_view: If True, preserve current zoom and pan position
         """
+        print(f"[VIEWER] set_image called")
+        print(f"[VIEWER] Image size: {image.size}, mode: {image.mode}, preserve_view: {preserve_view}")
+        
         # Store current view state if preserving
         if preserve_view and self.image_item is not None:
             saved_zoom = self.current_zoom
@@ -184,21 +187,47 @@ class ImageViewer(QGraphicsView):
             saved_scene_center = None
         
         # Convert PIL Image to QPixmap
+        print(f"[VIEWER] Converting PIL Image to QImage...")
+        
+        # IMPORTANT: Keep a reference to the bytes buffer to prevent garbage collection
+        # before Qt finishes reading it. For large images, Python may GC the temporary
+        # bytes object returned by image.tobytes() before QImage/QPixmap finishes,
+        # causing a segfault.
+        image_bytes = image.tobytes()
+        
         if image.mode == 'L':
-            # Grayscale
-            qimage = QImage(image.tobytes(), image.width, image.height, 
+            # Grayscale - explicitly specify bytesPerLine (stride)
+            print(f"[VIEWER] Converting grayscale image...")
+            bytes_per_line = image.width * 1  # 1 byte per pixel for grayscale
+            print(f"[VIEWER] Image dimensions: {image.width}x{image.height}, bytes_per_line: {bytes_per_line}")
+            qimage = QImage(image_bytes, image.width, image.height, bytes_per_line,
                           QImage.Format.Format_Grayscale8)
         elif image.mode == 'RGB':
-            # RGB
-            qimage = QImage(image.tobytes(), image.width, image.height, 
+            # RGB - explicitly specify bytesPerLine (stride)
+            print(f"[VIEWER] Converting RGB image...")
+            bytes_per_line = image.width * 3  # 3 bytes per pixel for RGB
+            print(f"[VIEWER] Image dimensions: {image.width}x{image.height}, bytes_per_line: {bytes_per_line}")
+            qimage = QImage(image_bytes, image.width, image.height, bytes_per_line,
                           QImage.Format.Format_RGB888)
         else:
             # Convert to RGB
+            print(f"[VIEWER] Converting {image.mode} to RGB...")
             image = image.convert('RGB')
-            qimage = QImage(image.tobytes(), image.width, image.height, 
+            image_bytes = image.tobytes()
+            bytes_per_line = image.width * 3  # 3 bytes per pixel for RGB
+            print(f"[VIEWER] Image dimensions: {image.width}x{image.height}, bytes_per_line: {bytes_per_line}")
+            qimage = QImage(image_bytes, image.width, image.height, bytes_per_line,
                           QImage.Format.Format_RGB888)
         
+        # Make a deep copy of the QImage so Qt owns the data
+        # This prevents crashes if the Python bytes buffer is garbage collected
+        print(f"[VIEWER] Creating QImage copy...")
+        qimage = qimage.copy()
+        print(f"[VIEWER] QImage copy created successfully")
+        
+        print(f"[VIEWER] QImage created, converting to QPixmap...")
         pixmap = QPixmap.fromImage(qimage)
+        print(f"[VIEWER] QPixmap created: {pixmap.width()}x{pixmap.height()}")
         
         # Remove old image item only
         # Note: ROIs and overlays will be preserved and re-added by their managers
@@ -206,13 +235,18 @@ class ImageViewer(QGraphicsView):
             self.scene.removeItem(self.image_item)
         
         # Create new image item
+        print(f"[VIEWER] Creating QGraphicsPixmapItem...")
         self.image_item = QGraphicsPixmapItem(pixmap)
         # Set image item to lowest Z-value so other items appear on top
         self.image_item.setZValue(0)
+        print(f"[VIEWER] Adding item to scene...")
         self.scene.addItem(self.image_item)
+        print(f"[VIEWER] Item added to scene successfully")
         
         # Set scene rect to image dimensions to ensure proper overlay positioning
+        print(f"[VIEWER] Getting image bounding rect...")
         image_rect = self.image_item.boundingRect()
+        print(f"[VIEWER] Image rect: {image_rect}")
         
         # Calculate fixed scene rect size that accommodates:
         # - Image size with 5x multiplier for margin
