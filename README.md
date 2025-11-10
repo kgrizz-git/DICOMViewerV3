@@ -48,8 +48,13 @@ This application provides comprehensive DICOM image viewing capabilities with ad
 
 ### Export
 - Export selected DICOM tags to Excel or CSV files
-- Export images as JPEG, PNG, or DICOM (Not yet implemented)
-- Export single slice, whole series, or whole study (Not yet implemented)
+- Export images as JPEG, PNG, or DICOM with hierarchical selection
+  - Select studies, series, and individual slices/instances using checkboxes
+  - Export at displayed resolution (apply current zoom for high-resolution output)
+  - Include overlays, ROIs, and measurements in exported images
+  - Choose window/level settings (current viewer or dataset default)
+  - Organized folder structure: Patient ID / Study Date - Study Description / Series Number - Series Description
+  - Remembers last export directory between sessions
 
 ### Keyboard Shortcuts
 - **P**: Pan mode (move the image around)

@@ -273,6 +273,35 @@ class QuickStartGuideDialog(QDialog):
                 <li>Export selected DICOM tags to Excel or CSV via Tools → Export Tags</li>
                 <li>Settings can be adjusted via Tools → Settings</li>
             </ul>
+            
+            <h2>Exporting Images</h2>
+            <p>Export DICOM images to common formats:</p>
+            <ul>
+                <li>Access via <strong>File → Export</strong> menu</li>
+                <li><strong>Export Formats:</strong>
+                    <ul>
+                        <li><strong>PNG:</strong> High-quality image format with transparency support</li>
+                        <li><strong>JPEG:</strong> Compressed image format</li>
+                        <li><strong>DICOM:</strong> Original DICOM format (preserves all metadata)</li>
+                    </ul>
+                </li>
+                <li><strong>Selection:</strong> Use hierarchical checkboxes to select:
+                    <ul>
+                        <li>Entire studies</li>
+                        <li>Individual series within studies</li>
+                        <li>Specific slices/instances within series</li>
+                    </ul>
+                </li>
+                <li><strong>Options for PNG/JPEG:</strong>
+                    <ul>
+                        <li>Window/Level: Use current viewer settings or dataset default</li>
+                        <li>Include overlays and ROIs: Export with metadata text, ROIs, and measurements visible</li>
+                        <li>Export at displayed resolution: Apply current zoom level for high-resolution output</li>
+                    </ul>
+                </li>
+                <li>Exported files are organized in folders: <code>Patient ID / Study Date - Study Description / Series Number - Series Description</code></li>
+                <li>The application remembers your last export directory</li>
+            </ul>
         </body>
         </html>
         """
