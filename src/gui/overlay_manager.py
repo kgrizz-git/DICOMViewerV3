@@ -26,6 +26,7 @@ import pydicom
 from pydicom.dataset import Dataset
 
 from core.dicom_parser import DICOMParser
+from core.multiframe_handler import is_multiframe, get_frame_count
 
 
 class OverlayManager:
@@ -212,6 +213,23 @@ class OverlayManager:
             Formatted text string
         """
         lines = []
+        
+        # Check if this is a multi-frame dataset (FrameDatasetWrapper)
+        dataset = parser.dataset
+        frame_index = None
+        total_frames = None
+        is_multiframe_dataset = False
+        
+        if dataset is not None:
+            # Check if dataset is a FrameDatasetWrapper (has _frame_index attribute)
+            if hasattr(dataset, '_frame_index') and hasattr(dataset, '_original_dataset'):
+                is_multiframe_dataset = True
+                frame_index = dataset._frame_index  # 0-based
+                original_dataset = dataset._original_dataset
+                # Get total frames from original dataset
+                if is_multiframe(original_dataset):
+                    total_frames = get_frame_count(original_dataset)
+        
         for tag in tags:
             value = parser.get_tag_by_keyword(tag)
             if value is not None and value != "":
@@ -225,12 +243,28 @@ class OverlayManager:
                 if tag == "InstanceNumber" and total_slices is not None:
                     try:
                         instance_num = int(value_str)
-                        lines.append(f"Slice {instance_num}/{total_slices}")
+                        # For multi-frame datasets, also show frame information
+                        if is_multiframe_dataset and total_frames is not None:
+                            # Display as "Slice X/Y (Frame A/B)" where frame is 1-based
+                            frame_display = frame_index + 1  # Convert to 1-based for display
+                            lines.append(f"Slice {instance_num}/{total_slices} (Frame {frame_display}/{total_frames})")
+                        else:
+                            lines.append(f"Slice {instance_num}/{total_slices}")
                     except (ValueError, TypeError):
                         # If InstanceNumber is not a valid integer, show as-is
                         lines.append(f"{tag}: {value_str}")
                 else:
                     lines.append(f"{tag}: {value_str}")
+        
+        # If multi-frame and frame info not already shown with InstanceNumber, add it separately
+        if is_multiframe_dataset and total_frames is not None:
+            # Check if InstanceNumber was in the tags and formatted
+            instance_in_tags = "InstanceNumber" in tags
+            if not instance_in_tags or total_slices is None:
+                # Add frame information as a separate line
+                frame_display = frame_index + 1  # Convert to 1-based for display
+                lines.append(f"Frame: {frame_display}/{total_frames}")
+        
         return "\n".join(lines)
     
     def _create_text_item(self, text: str, x: float, y: float, alignment: Qt.AlignmentFlag = Qt.AlignmentFlag.AlignLeft, text_width: Optional[float] = None) -> QGraphicsTextItem:
