@@ -21,6 +21,7 @@ from gui.dialogs.settings_dialog import SettingsDialog
 from gui.dialogs.tag_viewer_dialog import TagViewerDialog
 from gui.dialogs.overlay_config_dialog import OverlayConfigDialog
 from gui.dialogs.tag_export_dialog import TagExportDialog
+from gui.dialogs.export_dialog import ExportDialog
 from gui.dialogs.quick_start_guide_dialog import QuickStartGuideDialog
 from gui.main_window import MainWindow
 from utils.config_manager import ConfigManager
@@ -37,6 +38,7 @@ class DialogCoordinator:
     - Open overlay config dialog
     - Open quick start guide dialog
     - Open tag export dialog
+    - Open export dialog
     - Handle settings applied
     """
     
@@ -118,6 +120,52 @@ class DialogCoordinator:
             return
         
         dialog = TagExportDialog(current_studies, self.config_manager, self.main_window)
+        dialog.exec()
+    
+    def open_export(
+        self,
+        current_window_center: Optional[float] = None,
+        current_window_width: Optional[float] = None,
+        current_zoom: Optional[float] = None,
+        use_rescaled_values: bool = False,
+        roi_manager=None,
+        overlay_manager=None,
+        measurement_tool=None
+    ) -> None:
+        """
+        Handle Export dialog request.
+        
+        Args:
+            current_window_center: Optional current window center from viewer
+            current_window_width: Optional current window width from viewer
+            current_zoom: Optional current zoom level from viewer
+            use_rescaled_values: Whether to use rescaled values (matches viewer setting)
+            roi_manager: Optional ROI manager for rendering ROIs
+            overlay_manager: Optional overlay manager for rendering overlays
+            measurement_tool: Optional measurement tool for rendering measurements
+        """
+        # Check if any studies are loaded
+        current_studies = self.get_current_studies()
+        if not current_studies:
+            QMessageBox.warning(
+                self.main_window,
+                "No Data Loaded",
+                "Please load DICOM files before exporting images."
+            )
+            return
+        
+        dialog = ExportDialog(
+            current_studies,
+            current_window_center=current_window_center,
+            current_window_width=current_window_width,
+            current_zoom=current_zoom,
+            use_rescaled_values=use_rescaled_values,
+            roi_manager=roi_manager,
+            overlay_manager=overlay_manager,
+            measurement_tool=measurement_tool,
+            config_manager=self.config_manager,
+            parent=self.main_window
+        )
         dialog.exec()
     
     def handle_settings_applied(self) -> None:

@@ -58,6 +58,7 @@ class ConfigManager:
         # Default configuration values
         self.default_config = {
             "last_path": "",
+            "last_export_path": "",  # Last directory used for exporting images
             "theme": "light",
         "overlay_mode": "minimal",  # minimal, detailed, hidden
         "overlay_visibility_state": 0,  # 0=show all, 1=hide corner text, 2=hide all text
@@ -158,6 +159,25 @@ class ConfigManager:
             path: Path to save
         """
         self.config["last_path"] = path
+        self.save_config()
+    
+    def get_last_export_path(self) -> str:
+        """
+        Get the last export directory path.
+        
+        Returns:
+            Path string, empty if not set
+        """
+        return self.config.get("last_export_path", "")
+    
+    def set_last_export_path(self, path: str) -> None:
+        """
+        Set the last export directory path.
+        
+        Args:
+            path: Path to save
+        """
+        self.config["last_export_path"] = path
         self.save_config()
     
     def get_theme(self) -> str:
