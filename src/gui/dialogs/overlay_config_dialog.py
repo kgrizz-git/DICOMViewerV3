@@ -105,7 +105,7 @@ class OverlayConfigDialog(QDialog):
         modality_layout = QHBoxLayout()
         modality_label = QLabel("Modality:")
         self.modality_combo = QComboBox()
-        self.modality_combo.addItems(["default", "CT", "MR", "US", "CR", "DX", "NM", "PT", "RT"])
+        self.modality_combo.addItems(["default", "CT", "MR", "US", "CR", "DX", "NM", "PT", "RT", "MG"])
         self.modality_combo.currentTextChanged.connect(self._on_modality_changed)
         modality_layout.addWidget(modality_label)
         modality_layout.addWidget(self.modality_combo)
