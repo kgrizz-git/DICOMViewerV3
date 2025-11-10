@@ -28,6 +28,7 @@ from typing import Optional, List, Tuple
 from PIL import Image
 import pydicom
 from pydicom.dataset import Dataset
+from core.multiframe_handler import get_frame_pixel_array, is_multiframe
 
 
 class DICOMProcessor:
@@ -93,15 +94,38 @@ class DICOMProcessor:
         """
         Extract pixel array from DICOM dataset.
         
+        For multi-frame datasets that have been wrapped (frame dataset wrappers),
+        this will return the specific frame's pixel array.
+        For original multi-frame datasets, this will return the full 3D array.
+        
         Args:
-            dataset: pydicom Dataset
+            dataset: pydicom Dataset (may be a frame wrapper for multi-frame files)
             
         Returns:
             NumPy array of pixel data, or None if extraction fails
         """
         try:
+            # Check if this is a frame wrapper from a multi-frame file
+            if hasattr(dataset, '_frame_index') and hasattr(dataset, '_original_dataset'):
+                # This is a frame wrapper - use the pixel_array property which returns the specific frame
+                pixel_array = dataset.pixel_array
+                return pixel_array
+            
+            # Regular dataset (single-frame or original multi-frame)
             pixel_array = dataset.pixel_array
+            
+            # If this is an original multi-frame dataset, return the full 3D array
+            # (The organizer should have split it into frame wrappers, but handle this case)
+            if is_multiframe(dataset) and len(pixel_array.shape) == 3:
+                # This is a multi-frame array - return as-is
+                # Caller should extract specific frame if needed
+                return pixel_array
+            
             return pixel_array
+            
+        except MemoryError as e:
+            print(f"Memory error extracting pixel array: {e}")
+            return None
         except Exception as e:
             print(f"Error extracting pixel array: {e}")
             return None
@@ -274,9 +298,13 @@ class DICOMProcessor:
         Returns:
             PIL Image or None if conversion fails
         """
+        print(f"[PROCESSOR] dataset_to_image called")
+        print(f"[PROCESSOR] Getting pixel array from dataset...")
         pixel_array = DICOMProcessor.get_pixel_array(dataset)
         if pixel_array is None:
+            print(f"[PROCESSOR] Pixel array is None, returning None")
             return None
+        print(f"[PROCESSOR] Pixel array shape: {pixel_array.shape}, dtype: {pixel_array.dtype}")
         
         # Get window/level from dataset if not provided
         if window_center is None or window_width is None:
@@ -303,12 +331,15 @@ class DICOMProcessor:
             rescale_slope, rescale_intercept, _ = DICOMProcessor.get_rescale_parameters(dataset)
         
         # Apply window/level
+        print(f"[PROCESSOR] Applying window/level...")
         if window_center is not None and window_width is not None:
+            print(f"[PROCESSOR] Window center: {window_center}, width: {window_width}")
             processed_array = DICOMProcessor.apply_window_level(
                 pixel_array, window_center, window_width,
                 rescale_slope, rescale_intercept
             )
         else:
+            print(f"[PROCESSOR] No window/level, normalizing...")
             # No windowing, just normalize
             processed_array = pixel_array.astype(np.float32)
             if processed_array.max() > processed_array.min():
@@ -316,21 +347,36 @@ class DICOMProcessor:
                                  (processed_array.max() - processed_array.min()) * 255.0)
             processed_array = processed_array.astype(np.uint8)
         
+        print(f"[PROCESSOR] After window/level - shape: {processed_array.shape}, dtype: {processed_array.dtype}")
+        
         # Handle 3D arrays (multi-frame)
+        # Note: If this is reached, it means we're working with an original multi-frame dataset
+        # that wasn't split by the organizer. Frame wrappers should already return 2D arrays.
         if len(processed_array.shape) == 3:
-            # Take first frame
+            print(f"[PROCESSOR] WARNING: Got 3D array, taking first frame")
+            # Take first frame (fallback - should not normally happen if organizer worked correctly)
             processed_array = processed_array[0]
         
         # Convert to PIL Image
+        print(f"[PROCESSOR] Converting to PIL Image...")
+        print(f"[PROCESSOR] Array shape: {processed_array.shape}, dtype: {processed_array.dtype}, min: {processed_array.min()}, max: {processed_array.max()}")
         try:
             if len(processed_array.shape) == 2:
                 # Grayscale
-                return Image.fromarray(processed_array, mode='L')
+                print(f"[PROCESSOR] Creating grayscale image...")
+                image = Image.fromarray(processed_array, mode='L')
+                print(f"[PROCESSOR] PIL Image created successfully: {image.size}")
+                return image
             else:
                 # RGB or other
-                return Image.fromarray(processed_array)
+                print(f"[PROCESSOR] Creating RGB/other image...")
+                image = Image.fromarray(processed_array)
+                print(f"[PROCESSOR] PIL Image created successfully: {image.size}")
+                return image
         except Exception as e:
-            print(f"Error converting to PIL Image: {e}")
+            print(f"[PROCESSOR] Error converting to PIL Image: {e}")
+            import traceback
+            traceback.print_exc()
             return None
     
     @staticmethod
@@ -419,8 +465,16 @@ class DICOMProcessor:
             pixel_max = float(np.max(pixel_array))
             
             return pixel_min, pixel_max
-        except Exception as e:
+        except MemoryError as e:
+            print(f"Memory error calculating pixel value range: {e}")
+            return None, None
+        except (ValueError, AttributeError, RuntimeError) as e:
+            # Pixel array access errors
             print(f"Error calculating pixel value range: {e}")
+            return None, None
+        except Exception as e:
+            error_type = type(e).__name__
+            print(f"Error calculating pixel value range ({error_type}): {e}")
             return None, None
     
     @staticmethod
@@ -442,28 +496,53 @@ class DICOMProcessor:
         try:
             series_min = None
             series_max = None
+            successful_datasets = 0
             
             for dataset in datasets:
-                pixel_array = DICOMProcessor.get_pixel_array(dataset)
-                if pixel_array is None:
+                try:
+                    pixel_array = DICOMProcessor.get_pixel_array(dataset)
+                    if pixel_array is None:
+                        continue
+                    
+                    # Apply rescale if requested and parameters exist
+                    if apply_rescale:
+                        rescale_slope, rescale_intercept, _ = DICOMProcessor.get_rescale_parameters(dataset)
+                        if rescale_slope is not None and rescale_intercept is not None:
+                            pixel_array = pixel_array.astype(np.float32) * float(rescale_slope) + float(rescale_intercept)
+                    
+                    slice_min = float(np.min(pixel_array))
+                    slice_max = float(np.max(pixel_array))
+                    
+                    if series_min is None or slice_min < series_min:
+                        series_min = slice_min
+                    if series_max is None or slice_max > series_max:
+                        series_max = slice_max
+                    
+                    successful_datasets += 1
+                    
+                except MemoryError as e:
+                    # Memory error for this dataset - log and continue with others
+                    print(f"Memory error processing dataset in series pixel range calculation: {e}")
                     continue
-                
-                # Apply rescale if requested and parameters exist
-                if apply_rescale:
-                    rescale_slope, rescale_intercept, _ = DICOMProcessor.get_rescale_parameters(dataset)
-                    if rescale_slope is not None and rescale_intercept is not None:
-                        pixel_array = pixel_array.astype(np.float32) * float(rescale_slope) + float(rescale_intercept)
-                
-                slice_min = float(np.min(pixel_array))
-                slice_max = float(np.max(pixel_array))
-                
-                if series_min is None or slice_min < series_min:
-                    series_min = slice_min
-                if series_max is None or slice_max > series_max:
-                    series_max = slice_max
+                except (ValueError, AttributeError, RuntimeError) as e:
+                    # Pixel array access errors - log and continue with others
+                    print(f"Error processing dataset in series pixel range calculation: {e}")
+                    continue
+                except Exception as e:
+                    # Other unexpected errors - log and continue
+                    error_type = type(e).__name__
+                    print(f"Unexpected error ({error_type}) processing dataset in series pixel range calculation: {e}")
+                    continue
             
-            return series_min, series_max
+            # Only return values if we successfully processed at least one dataset
+            if successful_datasets > 0:
+                return series_min, series_max
+            else:
+                print("Failed to process any datasets in series pixel range calculation")
+                return None, None
+                
         except Exception as e:
-            print(f"Error calculating series pixel value range: {e}")
+            error_type = type(e).__name__
+            print(f"Error calculating series pixel value range ({error_type}): {e}")
             return None, None
 

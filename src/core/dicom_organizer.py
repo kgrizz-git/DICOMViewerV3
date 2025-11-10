@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from collections import defaultdict
 import pydicom
 from pydicom.dataset import Dataset
+from core.multiframe_handler import is_multiframe, get_frame_count, create_frame_dataset
 
 
 class DICOMOrganizer:
@@ -67,7 +68,28 @@ class DICOMOrganizer:
                 continue
             
             file_path = file_paths[idx] if file_paths and idx < len(file_paths) else None
-            study_dict[study_uid][series_uid].append((dataset, file_path))
+            
+            # Check if this is a multi-frame file
+            if is_multiframe(dataset):
+                # Split multi-frame file into individual frames
+                num_frames = get_frame_count(dataset)
+                print(f"[ORGANIZE] Splitting multi-frame file into {num_frames} frames...")
+                
+                for frame_index in range(num_frames):
+                    print(f"[ORGANIZE] Creating wrapper for frame {frame_index + 1}/{num_frames}")
+                    # Create a frame-specific dataset wrapper
+                    frame_dataset = create_frame_dataset(dataset, frame_index)
+                    if frame_dataset is not None:
+                        # Store frame index in dataset for reference
+                        frame_dataset._frame_index = frame_index
+                        frame_dataset._original_dataset = dataset
+                        # Add frame to the series
+                        study_dict[study_uid][series_uid].append((frame_dataset, file_path))
+                
+                print(f"[ORGANIZE] Successfully split into {num_frames} frame wrappers")
+            else:
+                # Single-frame file - add as-is
+                study_dict[study_uid][series_uid].append((dataset, file_path))
         
         # Sort slices within each series and organize
         for study_uid, series_dict in study_dict.items():
@@ -83,7 +105,17 @@ class DICOMOrganizer:
                 # Store file paths if available
                 for idx, (ds, path) in enumerate(sorted_slices):
                     if path:
-                        instance_num = self._get_tag_value(ds, "InstanceNumber", idx)
+                        # For multi-frame files, use frame index as part of instance identifier
+                        if hasattr(ds, '_frame_index') and hasattr(ds, '_original_dataset'):
+                            # This is a frame from a multi-frame file
+                            # Use a combination of InstanceNumber and frame index
+                            base_instance = self._get_tag_value(ds._original_dataset, "InstanceNumber", 0)
+                            frame_index = ds._frame_index
+                            # Create a unique instance number: base * 10000 + frame_index
+                            # This ensures frames are properly ordered
+                            instance_num = int(base_instance) * 10000 + frame_index
+                        else:
+                            instance_num = self._get_tag_value(ds, "InstanceNumber", idx)
                         self.file_paths[(study_uid, series_uid, instance_num)] = path
         
         return self.studies
@@ -91,6 +123,7 @@ class DICOMOrganizer:
     def _sort_slices(self, slice_list: List[Tuple[Dataset, Optional[str]]]) -> List[Tuple[Dataset, Optional[str]]]:
         """
         Sort slices by InstanceNumber or SliceLocation.
+        For multi-frame files, frames are sorted by frame index within the same instance.
         
         Args:
             slice_list: List of (dataset, file_path) tuples
@@ -98,36 +131,61 @@ class DICOMOrganizer:
         Returns:
             Sorted list of (dataset, file_path) tuples
         """
-        def get_sort_key(item: Tuple[Dataset, Optional[str]]) -> float:
+        def get_sort_key(item: Tuple[Dataset, Optional[str]]) -> Tuple[float, float]:
             """Get sort key for a slice."""
             dataset, _ = item
             
-            # Try InstanceNumber first
-            instance_num = self._get_tag_value(dataset, "InstanceNumber")
-            if instance_num is not None:
-                try:
-                    return float(instance_num)
-                except (ValueError, TypeError):
-                    pass
+            # Primary sort key: InstanceNumber or equivalent
+            primary_key = float('inf')
             
-            # Try SliceLocation
-            slice_loc = self._get_tag_value(dataset, "SliceLocation")
-            if slice_loc is not None:
-                try:
-                    return float(slice_loc)
-                except (ValueError, TypeError):
-                    pass
-            
-            # Try ImagePositionPatient (Z coordinate)
-            img_pos = self._get_tag_value(dataset, "ImagePositionPatient")
-            if img_pos and len(img_pos) >= 3:
-                try:
-                    return float(img_pos[2])  # Z coordinate
-                except (ValueError, TypeError, IndexError):
-                    pass
-            
-            # Fallback: use index
-            return float('inf')
+            # Check if this is a frame from a multi-frame file
+            if hasattr(dataset, '_frame_index') and hasattr(dataset, '_original_dataset'):
+                # This is a frame from a multi-frame file
+                original_ds = dataset._original_dataset
+                frame_index = dataset._frame_index
+                
+                # Get base instance number from original dataset
+                instance_num = self._get_tag_value(original_ds, "InstanceNumber")
+                if instance_num is not None:
+                    try:
+                        primary_key = float(instance_num)
+                    except (ValueError, TypeError):
+                        pass
+                
+                # Secondary key: frame index (to sort frames within same instance)
+                secondary_key = float(frame_index)
+                return (primary_key, secondary_key)
+            else:
+                # Single-frame file
+                # Try InstanceNumber first
+                instance_num = self._get_tag_value(dataset, "InstanceNumber")
+                if instance_num is not None:
+                    try:
+                        primary_key = float(instance_num)
+                    except (ValueError, TypeError):
+                        pass
+                
+                # Try SliceLocation
+                if primary_key == float('inf'):
+                    slice_loc = self._get_tag_value(dataset, "SliceLocation")
+                    if slice_loc is not None:
+                        try:
+                            primary_key = float(slice_loc)
+                        except (ValueError, TypeError):
+                            pass
+                
+                # Try ImagePositionPatient (Z coordinate)
+                if primary_key == float('inf'):
+                    img_pos = self._get_tag_value(dataset, "ImagePositionPatient")
+                    if img_pos and len(img_pos) >= 3:
+                        try:
+                            primary_key = float(img_pos[2])  # Z coordinate
+                        except (ValueError, TypeError, IndexError):
+                            pass
+                
+                # Secondary key: 0 for single-frame files
+                secondary_key = 0.0
+                return (primary_key, secondary_key)
         
         return sorted(slice_list, key=get_sort_key)
     

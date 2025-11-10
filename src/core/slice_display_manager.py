@@ -189,9 +189,17 @@ class SliceDisplayManager:
                         if study_uid in current_studies and new_series_uid in current_studies[study_uid]:
                             series_datasets = current_studies[study_uid][new_series_uid]
                             # Calculate pixel range for entire series
-                            series_pixel_min, series_pixel_max = self.dicom_processor.get_series_pixel_value_range(
-                                series_datasets, apply_rescale=use_rescaled_values
-                            )
+                            # Wrap in try-except to handle any errors from pixel array access
+                            try:
+                                series_pixel_min, series_pixel_max = self.dicom_processor.get_series_pixel_value_range(
+                                    series_datasets, apply_rescale=use_rescaled_values
+                                )
+                            except Exception as e:
+                                # If series pixel range calculation fails, log and continue with single slice
+                                error_type = type(e).__name__
+                                print(f"Error calculating series pixel range ({error_type}): {e}")
+                                series_pixel_min = None
+                                series_pixel_max = None
                             # Check for window/level in DICOM metadata
                             wc, ww, is_rescaled = self.dicom_processor.get_window_level_from_dataset(
                                 dataset,
@@ -219,14 +227,20 @@ class SliceDisplayManager:
                                     stored_window_width = 1.0
                             else:
                                 # Fallback to single slice
-                                pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(
-                                    dataset, apply_rescale=use_rescaled_values
-                                )
-                                if pixel_min is not None and pixel_max is not None:
-                                    stored_window_center = (pixel_min + pixel_max) / 2.0
-                                    stored_window_width = pixel_max - pixel_min
-                                    if stored_window_width <= 0:
-                                        stored_window_width = 1.0
+                                try:
+                                    pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(
+                                        dataset, apply_rescale=use_rescaled_values
+                                    )
+                                    if pixel_min is not None and pixel_max is not None:
+                                        stored_window_center = (pixel_min + pixel_max) / 2.0
+                                        stored_window_width = pixel_max - pixel_min
+                                        if stored_window_width <= 0:
+                                            stored_window_width = 1.0
+                                except Exception as e:
+                                    # If single slice pixel range calculation fails, use defaults
+                                    error_type = type(e).__name__
+                                    print(f"Error calculating single slice pixel range ({error_type}): {e}")
+                                    # Will fall through to use window/level from DICOM tags or defaults
                             self.view_state_manager.window_level_user_modified = False
                 
                 # Set window/level values
@@ -248,23 +262,48 @@ class SliceDisplayManager:
             
             # Convert to image
             # If same series and we have preserved window/level values, use them
-            if is_same_series and window_center is not None and window_width is not None:
-                image = self.dicom_processor.dataset_to_image(
-                    dataset,
-                    window_center=window_center,
-                    window_width=window_width,
-                    apply_rescale=use_rescaled_values
-                )
-            else:
-                image = self.dicom_processor.dataset_to_image(
-                    dataset,
-                    apply_rescale=use_rescaled_values
-                )
-            if image is None:
-                return
+            print(f"[DISPLAY] About to convert dataset to image...")
+            print(f"[DISPLAY] Window center: {window_center}, Window width: {window_width}")
+            print(f"[DISPLAY] Use rescaled values: {use_rescaled_values}")
+            try:
+                if is_same_series and window_center is not None and window_width is not None:
+                    print(f"[DISPLAY] Converting with stored window/level...")
+                    image = self.dicom_processor.dataset_to_image(
+                        dataset,
+                        window_center=window_center,
+                        window_width=window_width,
+                        apply_rescale=use_rescaled_values
+                    )
+                else:
+                    print(f"[DISPLAY] Converting with auto window/level...")
+                    image = self.dicom_processor.dataset_to_image(
+                        dataset,
+                        apply_rescale=use_rescaled_values
+                    )
+                print(f"[DISPLAY] Image conversion complete: {image is not None}")
+                if image is None:
+                    # Image conversion failed - this is already handled by dataset_to_image returning None
+                    print(f"[DISPLAY] Image is None, returning")
+                    return
+            except (MemoryError, ValueError, AttributeError, RuntimeError) as e:
+                # Pixel array access errors during image conversion
+                error_type = type(e).__name__
+                error_msg = f"Error converting dataset to image ({error_type}): {str(e)}"
+                print(error_msg)
+                # Re-raise to be caught by outer exception handler
+                raise RuntimeError(error_msg) from e
+            except Exception as e:
+                # Other unexpected errors
+                error_type = type(e).__name__
+                error_msg = f"Unexpected error converting dataset to image ({error_type}): {str(e)}"
+                print(error_msg)
+                raise RuntimeError(error_msg) from e
             
             # Set image in viewer - preserve zoom/pan if same series
+            print(f"[DISPLAY] About to set image in viewer...")
+            print(f"[DISPLAY] Preserve view: {is_same_series and not is_new_study_series}")
             self.image_viewer.set_image(image, preserve_view=is_same_series and not is_new_study_series)
+            print(f"[DISPLAY] Image set in viewer successfully")
             
             # If new study/series, fit to view and center
             if is_new_study_series:
@@ -289,15 +328,21 @@ class SliceDisplayManager:
                 self.update_tag_viewer_callback(dataset)
             
             # Calculate pixel value range for window/level controls
-            pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(
-                dataset, apply_rescale=use_rescaled_values
-            )
-            if pixel_min is not None and pixel_max is not None:
-                # Set ranges based on actual pixel values (no margins)
-                center_range = (pixel_min, pixel_max)
-                # Width range from 1 to the pixel range (not 2x)
-                width_range = (1.0, max(1.0, pixel_max - pixel_min))
-                self.window_level_controls.set_ranges(center_range, width_range)
+            try:
+                pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(
+                    dataset, apply_rescale=use_rescaled_values
+                )
+                if pixel_min is not None and pixel_max is not None:
+                    # Set ranges based on actual pixel values (no margins)
+                    center_range = (pixel_min, pixel_max)
+                    # Width range from 1 to the pixel range (not 2x)
+                    width_range = (1.0, max(1.0, pixel_max - pixel_min))
+                    self.window_level_controls.set_ranges(center_range, width_range)
+            except Exception as e:
+                # If pixel value range calculation fails, use default ranges
+                error_type = type(e).__name__
+                print(f"Error calculating pixel value range for window/level controls ({error_type}): {e}")
+                # Continue without setting ranges - controls will use defaults
             
             # Update window/level controls unit label
             unit = rescale_type if (use_rescaled_values and rescale_type) else None
@@ -390,8 +435,18 @@ class SliceDisplayManager:
             else:
                 self.display_measurements_for_slice(dataset)
         
+        except MemoryError as e:
+            # Re-raise MemoryError with context for caller to handle
+            error_msg = f"Memory error displaying slice: {str(e)}"
+            print(error_msg)
+            raise MemoryError(error_msg) from e
         except Exception as e:
-            # Error handling will be done by caller
+            # Re-raise with context for caller to handle
+            error_type = type(e).__name__
+            error_msg = f"Error displaying slice: {str(e)}"
+            if error_type not in error_msg:
+                error_msg = f"{error_type}: {error_msg}"
+            print(error_msg)
             raise
     
     def display_rois_for_slice(self, dataset: Dataset) -> None:
