@@ -409,6 +409,9 @@ class DICOMViewerApp(QObject):
         # Tag Export
         self.main_window.tag_export_requested.connect(self._open_tag_export)
         
+        # Export
+        self.main_window.export_requested.connect(self._open_export)
+        
         # ROI drawing signals
         self.image_viewer.roi_drawing_started.connect(self.roi_coordinator.handle_roi_drawing_started)
         self.image_viewer.roi_drawing_updated.connect(self.roi_coordinator.handle_roi_drawing_updated)
@@ -703,6 +706,22 @@ class DICOMViewerApp(QObject):
     def _open_tag_export(self) -> None:
         """Handle Tag Export dialog request."""
         self.dialog_coordinator.open_tag_export()
+    
+    def _open_export(self) -> None:
+        """Handle Export dialog request."""
+        # Get current window/level values if available
+        window_center, window_width = self.window_level_controls.get_window_level()
+        # Get current rescale state to match viewer behavior
+        use_rescaled_values = self.view_state_manager.use_rescaled_values
+        self.dialog_coordinator.open_export(
+            current_window_center=window_center,
+            current_window_width=window_width,
+            current_zoom=self.image_viewer.current_zoom,
+            use_rescaled_values=use_rescaled_values,
+            roi_manager=self.roi_manager,
+            overlay_manager=self.overlay_manager,
+            measurement_tool=self.measurement_tool
+        )
     
     def _on_overlay_config_applied(self) -> None:
         """Handle overlay configuration being applied."""

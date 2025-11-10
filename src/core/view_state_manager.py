@@ -377,6 +377,9 @@ class ViewStateManager:
                         parser,
                         total_slices=total_slices if total_slices > 0 else None
                     )
+                    # Refresh ROIs to ensure they remain visible
+                    if self.display_rois_for_slice:
+                        self.display_rois_for_slice(dataset)
     
     def handle_rescale_toggle(self, checked: bool) -> None:
         """
