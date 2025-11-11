@@ -181,12 +181,6 @@ class MainWindow(QMainWindow):
         
         tools_menu.addSeparator()
         
-        # Tag Viewer action
-        tag_viewer_action = QAction("DICOM Tag &Viewer...", self)
-        tag_viewer_action.setShortcut(QKeySequence("Ctrl+T"))
-        tag_viewer_action.triggered.connect(self.tag_viewer_requested.emit)
-        tools_menu.addAction(tag_viewer_action)
-        
         # Overlay Configuration action
         overlay_config_action = QAction("Overlay &Configuration...", self)
         overlay_config_action.setShortcut(QKeySequence("Ctrl+O"))
@@ -195,8 +189,14 @@ class MainWindow(QMainWindow):
         
         tools_menu.addSeparator()
         
+        # Tag Viewer/Editor action
+        tag_viewer_action = QAction("View/Edit DICOM &Tags...", self)
+        tag_viewer_action.setShortcut(QKeySequence("Ctrl+T"))
+        tag_viewer_action.triggered.connect(self.tag_viewer_requested.emit)
+        tools_menu.addAction(tag_viewer_action)
+        
         # Tag Export action
-        tag_export_action = QAction("Export &Tags...", self)
+        tag_export_action = QAction("Export DICOM &Tags...", self)
         tag_export_action.triggered.connect(self.tag_export_requested.emit)
         tools_menu.addAction(tag_export_action)
         
