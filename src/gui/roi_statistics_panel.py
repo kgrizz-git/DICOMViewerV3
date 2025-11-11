@@ -15,7 +15,7 @@ Requirements:
 """
 
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QTableWidget,
-                                QTableWidgetItem, QGroupBox)
+                                QTableWidgetItem, QGroupBox, QHeaderView)
 from PySide6.QtCore import Qt
 from typing import Optional, Dict
 
@@ -56,10 +56,13 @@ class ROIStatisticsPanel(QWidget):
         self.stats_table.setColumnCount(2)
         self.stats_table.setHorizontalHeaderLabels(["Statistic", "Value"])
         self.stats_table.setRowCount(6)
-        self.stats_table.setColumnWidth(0, 120)
-        self.stats_table.setColumnWidth(1, 100)
         self.stats_table.verticalHeader().setVisible(False)
         self.stats_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        
+        # Set columns to stretch mode so they expand/contract with widget width
+        header = self.stats_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         
         # Set row labels
         self.stats_table.setItem(0, 0, QTableWidgetItem("Mean"))
