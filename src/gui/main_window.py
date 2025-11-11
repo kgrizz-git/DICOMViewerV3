@@ -20,7 +20,7 @@ Requirements:
 from PySide6.QtWidgets import (QMainWindow, QMenuBar, QToolBar, QStatusBar,
                                 QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
                                 QMessageBox, QComboBox, QLabel, QSizePolicy, QColorDialog,
-                                QApplication)
+                                QApplication, QDialog, QTextEdit, QPushButton, QDialogButtonBox)
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QAction, QIcon, QKeySequence, QColor
 from typing import Optional
@@ -1190,49 +1190,83 @@ class MainWindow(QMainWindow):
         self._apply_theme()
     
     def _show_about(self) -> None:
-        """Show the about dialog."""
-        QMessageBox.about(self, "About DICOM Viewer V3",
-                         "DICOM Viewer V3\n\n"
-                         "A cross-platform DICOM viewer application.\n\n"
-                         "Features:\n\n"
-                         "File Management:\n"
-                         "- Open DICOM files and folders\n"
-                         "- Recursive folder search\n"
-                         "- Multiple file selection\n"
-                         "- Recent files support\n\n"
-                         "Image Display:\n"
-                         "- Zoom and pan functionality\n"
-                         "- Window width and level adjustment\n"
-                         "- Slice navigation (arrow keys, mouse wheel)\n"
-                         "- Series navigation with thumbnail navigator\n"
-                         "- Dark and light themes\n"
-                         "- Reset view to fit viewport\n\n"
-                         "Analysis Tools:\n"
-                         "- Draw elliptical and rectangular ROIs\n"
-                         "- ROI statistics (mean, std dev, min, max, area)\n"
-                         "- Distance measurements (pixels, mm, cm)\n"
-                         "- Undo/redo functionality\n\n"
-                         "Metadata and Overlays:\n"
-                         "- Customizable DICOM metadata overlays\n"
-                         "- Toggle overlay visibility (3 states)\n"
-                         "- View and edit all DICOM tags\n"
-                         "- Export selected tags to Excel/CSV\n\n"
-                         "Data Management:\n"
-                         "- Clear ROIs from slice or dataset\n"
-                         "- Clear measurements\n"
-                         "- ROI list panel with selection\n\n"
-                         "Export:\n"
-                         "- Export images as PNG, JPEG, or DICOM\n"
-                         "- Hierarchical selection (studies, series, slices)\n"
-                         "- Include overlays, ROIs, and measurements\n"
-                         "- Export at displayed resolution option\n"
-                         "- Export selected DICOM tags to Excel/CSV\n\n"
-                         "Planned Features (Not yet implemented):\n"
-                         "- Histogram display\n"
-                         "- Intensity projections (AIP/MIP)\n"
-                         "- RT STRUCT overlays\n\n"
-                         "Made by Kevin Grizzard.\n"
-                         "Available at https://github.com/kgrizz-git/DICOMViewerV3.")
+        """Show the about dialog with scrollable content."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("About DICOM Viewer V3")
+        dialog.setMinimumSize(500, 400)
+        dialog.resize(600, 500)
+        
+        layout = QVBoxLayout(dialog)
+        
+        # Create scrollable text area
+        text_edit = QTextEdit()
+        text_edit.setReadOnly(True)
+        text_edit.setHtml(
+            "<h2>DICOM Viewer V3</h2>"
+            "<p><b>Made by Kevin Grizzard</b><br>"
+            "Available at <a href='https://github.com/kgrizz-git/DICOMViewerV3'>https://github.com/kgrizz-git/DICOMViewerV3</a></p>"
+            "<hr>"
+            "<p>A cross-platform DICOM viewer application.</p>"
+            "<h3>Features:</h3>"
+            "<h4>File Management:</h4>"
+            "<ul>"
+            "<li>Open DICOM files and folders</li>"
+            "<li>Recursive folder search</li>"
+            "<li>Multiple file selection</li>"
+            "<li>Recent files support</li>"
+            "</ul>"
+            "<h4>Image Display:</h4>"
+            "<ul>"
+            "<li>Zoom and pan functionality</li>"
+            "<li>Window width and level adjustment</li>"
+            "<li>Slice navigation (arrow keys, mouse wheel)</li>"
+            "<li>Series navigation with thumbnail navigator</li>"
+            "<li>Dark and light themes</li>"
+            "<li>Reset view to fit viewport</li>"
+            "</ul>"
+            "<h4>Analysis Tools:</h4>"
+            "<ul>"
+            "<li>Draw elliptical and rectangular ROIs</li>"
+            "<li>ROI statistics (mean, std dev, min, max, area)</li>"
+            "<li>Distance measurements (pixels, mm, cm)</li>"
+            "<li>Undo/redo functionality</li>"
+            "</ul>"
+            "<h4>Metadata and Overlays:</h4>"
+            "<ul>"
+            "<li>Customizable DICOM metadata overlays</li>"
+            "<li>Toggle overlay visibility (3 states)</li>"
+            "<li>View and edit all DICOM tags</li>"
+            "<li>Export selected tags to Excel/CSV</li>"
+            "</ul>"
+            "<h4>Data Management:</h4>"
+            "<ul>"
+            "<li>Clear ROIs from slice or dataset</li>"
+            "<li>Clear measurements</li>"
+            "<li>ROI list panel with selection</li>"
+            "</ul>"
+            "<h4>Export:</h4>"
+            "<ul>"
+            "<li>Export images as PNG, JPEG, or DICOM</li>"
+            "<li>Hierarchical selection (studies, series, slices)</li>"
+            "<li>Include overlays, ROIs, and measurements</li>"
+            "<li>Export at displayed resolution option</li>"
+            "<li>Export selected DICOM tags to Excel/CSV</li>"
+            "</ul>"
+            "<h4>Planned Features (Not yet implemented):</h4>"
+            "<ul>"
+            "<li>Histogram display</li>"
+            "<li>Intensity projections (AIP/MIP)</li>"
+            "<li>RT STRUCT overlays</li>"
+            "</ul>"
+        )
+        layout.addWidget(text_edit)
+        
+        # Add OK button
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
+        button_box.accepted.connect(dialog.accept)
+        layout.addWidget(button_box)
+        
+        dialog.exec()
     
     def _on_mouse_mode_changed(self, mode: str) -> None:
         """

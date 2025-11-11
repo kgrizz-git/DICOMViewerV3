@@ -59,7 +59,7 @@ class ConfigManager:
         self.default_config = {
             "last_path": "",
             "last_export_path": "",  # Last directory used for exporting images
-            "theme": "light",
+            "theme": "dark",
         "overlay_mode": "minimal",  # minimal, detailed, hidden
         "overlay_visibility_state": 0,  # 0=show all, 1=hide corner text, 2=hide all text
         "overlay_custom_fields": [],
