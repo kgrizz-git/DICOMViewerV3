@@ -19,13 +19,18 @@ Requirements:
 
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                                 QTreeWidget, QTreeWidgetItem, QLineEdit,
-                                QPushButton, QCheckBox, QGroupBox)
+                                QPushButton, QCheckBox, QGroupBox, QMessageBox,
+                                QMenu)
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QAction
 from typing import Optional, Dict, Any
 import pydicom
 from pydicom.dataset import Dataset
 
 from core.dicom_parser import DICOMParser
+from core.dicom_editor import DICOMEditor
+from core.tag_edit_history import TagEditHistoryManager, EditTagCommand
+from gui.dialogs.tag_edit_dialog import TagEditDialog
 
 
 class TagViewerDialog(QDialog):
@@ -56,8 +61,19 @@ class TagViewerDialog(QDialog):
         self.dataset: Optional[Dataset] = None
         self.show_private_tags = True
         self.all_tag_items: list = []  # Store all items for filtering
+        self.editor: Optional[DICOMEditor] = None
+        self.history_manager: Optional[TagEditHistoryManager] = None
         
         self._create_ui()
+    
+    def set_history_manager(self, history_manager: TagEditHistoryManager) -> None:
+        """
+        Set the tag edit history manager.
+        
+        Args:
+            history_manager: TagEditHistoryManager instance
+        """
+        self.history_manager = history_manager
     
     def _create_ui(self) -> None:
         """Create the UI components."""
@@ -95,10 +111,18 @@ class TagViewerDialog(QDialog):
         self.tree_widget.setColumnWidth(2, 50)
         self.tree_widget.setColumnWidth(3, 300)
         self.tree_widget.setAlternatingRowColors(True)
+        self.tree_widget.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.tree_widget.customContextMenuRequested.connect(self._show_context_menu)
+        self.tree_widget.itemDoubleClicked.connect(self._on_item_double_clicked)
         layout.addWidget(self.tree_widget)
         
         # Buttons
         button_layout = QHBoxLayout()
+        
+        edit_button = QPushButton("Edit Selected Tag")
+        edit_button.clicked.connect(self._edit_selected_tag)
+        button_layout.addWidget(edit_button)
+        
         button_layout.addStretch()
         
         close_button = QPushButton("Close")
@@ -116,6 +140,7 @@ class TagViewerDialog(QDialog):
         """
         self.dataset = dataset
         self.parser = DICOMParser(dataset)
+        self.editor = DICOMEditor(dataset)
         self._populate_tags()
     
     def _populate_tags(self, search_text: str = "") -> None:
@@ -214,4 +239,123 @@ class TagViewerDialog(QDialog):
         if self.parser is not None:
             search_text = self.search_edit.text()
             self._populate_tags(search_text)
+    
+    def _on_item_double_clicked(self, item: QTreeWidgetItem, column: int) -> None:
+        """
+        Handle double-click on tag item for editing.
+        
+        Args:
+            item: Tree widget item
+            column: Column clicked
+        """
+        if column != 3:  # Only edit value column
+            return
+        
+        # Skip group items
+        if item.parent() is None:
+            return
+        
+        self._edit_tag_item(item)
+    
+    def _edit_selected_tag(self) -> None:
+        """Edit the currently selected tag."""
+        current_item = self.tree_widget.currentItem()
+        if current_item is None:
+            QMessageBox.information(
+                self,
+                "No Selection",
+                "Please select a tag to edit."
+            )
+            return
+        
+        # Skip group items
+        if current_item.parent() is None:
+            QMessageBox.information(
+                self,
+                "Invalid Selection",
+                "Please select a tag item, not a group header."
+            )
+            return
+        
+        self._edit_tag_item(current_item)
+    
+    def _edit_tag_item(self, item: QTreeWidgetItem) -> None:
+        """
+        Edit a tag item.
+        
+        Args:
+            item: Tree widget item to edit
+        """
+        tag_data = item.data(0, Qt.ItemDataRole.UserRole + 1)
+        tag_str = item.data(0, Qt.ItemDataRole.UserRole)
+        if tag_data is None or tag_str is None:
+            return
+        
+        if self.dataset is None or self.editor is None:
+            return
+        
+        # Get tag information
+        tag_name = tag_data.get("name", tag_str)
+        vr = tag_data.get("VR", "")
+        current_value = tag_data.get("value", "")
+        
+        # Open edit dialog
+        dialog = TagEditDialog(
+            self,
+            tag_str=tag_str,
+            tag_name=tag_name,
+            vr=vr,
+            current_value=current_value
+        )
+        
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            new_value = dialog.get_value()
+            if new_value is not None:
+                # Get old value for undo/redo
+                old_value = current_value
+                
+                # Create edit command
+                if self.history_manager and self.dataset:
+                    command = EditTagCommand(
+                        self.dataset,
+                        tag_str,
+                        old_value,
+                        new_value,
+                        vr
+                    )
+                    # Execute command through history manager
+                    self.history_manager.execute_command(command)
+                else:
+                    # Fallback: update directly if no history manager
+                    success = self.editor.update_tag(tag_str, new_value, vr)
+                    if not success:
+                        QMessageBox.warning(
+                            self,
+                            "Edit Failed",
+                            f"Failed to update tag {tag_str}.\n"
+                            "The tag may be read-only or the value may be invalid."
+                        )
+                        return
+                
+                # Refresh the tree view
+                search_text = self.search_edit.text()
+                self._populate_tags(search_text)
+    
+    def _show_context_menu(self, position) -> None:
+        """
+        Show context menu for tag items.
+        
+        Args:
+            position: Position where context menu was requested
+        """
+        item = self.tree_widget.itemAt(position)
+        if item is None or item.parent() is None:
+            return  # Skip group items
+        
+        menu = QMenu(self)
+        edit_action = QAction("Edit Tag", self)
+        edit_action.triggered.connect(lambda: self._edit_tag_item(item))
+        menu.addAction(edit_action)
+        
+        menu.exec(self.tree_widget.mapToGlobal(position))
 
