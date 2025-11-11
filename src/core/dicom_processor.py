@@ -298,13 +298,13 @@ class DICOMProcessor:
         Returns:
             PIL Image or None if conversion fails
         """
-        print(f"[PROCESSOR] dataset_to_image called")
-        print(f"[PROCESSOR] Getting pixel array from dataset...")
+        # print(f"[PROCESSOR] dataset_to_image called")
+        # print(f"[PROCESSOR] Getting pixel array from dataset...")
         pixel_array = DICOMProcessor.get_pixel_array(dataset)
         if pixel_array is None:
-            print(f"[PROCESSOR] Pixel array is None, returning None")
+            # print(f"[PROCESSOR] Pixel array is None, returning None")
             return None
-        print(f"[PROCESSOR] Pixel array shape: {pixel_array.shape}, dtype: {pixel_array.dtype}")
+        # print(f"[PROCESSOR] Pixel array shape: {pixel_array.shape}, dtype: {pixel_array.dtype}")
         
         # Get window/level from dataset if not provided
         if window_center is None or window_width is None:
@@ -331,15 +331,15 @@ class DICOMProcessor:
             rescale_slope, rescale_intercept, _ = DICOMProcessor.get_rescale_parameters(dataset)
         
         # Apply window/level
-        print(f"[PROCESSOR] Applying window/level...")
+        # print(f"[PROCESSOR] Applying window/level...")
         if window_center is not None and window_width is not None:
-            print(f"[PROCESSOR] Window center: {window_center}, width: {window_width}")
+            # print(f"[PROCESSOR] Window center: {window_center}, width: {window_width}")
             processed_array = DICOMProcessor.apply_window_level(
                 pixel_array, window_center, window_width,
                 rescale_slope, rescale_intercept
             )
         else:
-            print(f"[PROCESSOR] No window/level, normalizing...")
+            # print(f"[PROCESSOR] No window/level, normalizing...")
             # No windowing, just normalize
             processed_array = pixel_array.astype(np.float32)
             if processed_array.max() > processed_array.min():
@@ -347,34 +347,34 @@ class DICOMProcessor:
                                  (processed_array.max() - processed_array.min()) * 255.0)
             processed_array = processed_array.astype(np.uint8)
         
-        print(f"[PROCESSOR] After window/level - shape: {processed_array.shape}, dtype: {processed_array.dtype}")
+        # print(f"[PROCESSOR] After window/level - shape: {processed_array.shape}, dtype: {processed_array.dtype}")
         
         # Handle 3D arrays (multi-frame)
         # Note: If this is reached, it means we're working with an original multi-frame dataset
         # that wasn't split by the organizer. Frame wrappers should already return 2D arrays.
         if len(processed_array.shape) == 3:
-            print(f"[PROCESSOR] WARNING: Got 3D array, taking first frame")
+            # print(f"[PROCESSOR] WARNING: Got 3D array, taking first frame")
             # Take first frame (fallback - should not normally happen if organizer worked correctly)
             processed_array = processed_array[0]
         
         # Convert to PIL Image
-        print(f"[PROCESSOR] Converting to PIL Image...")
-        print(f"[PROCESSOR] Array shape: {processed_array.shape}, dtype: {processed_array.dtype}, min: {processed_array.min()}, max: {processed_array.max()}")
+        # print(f"[PROCESSOR] Converting to PIL Image...")
+        # print(f"[PROCESSOR] Array shape: {processed_array.shape}, dtype: {processed_array.dtype}, min: {processed_array.min()}, max: {processed_array.max()}")
         try:
             if len(processed_array.shape) == 2:
                 # Grayscale
-                print(f"[PROCESSOR] Creating grayscale image...")
+                # print(f"[PROCESSOR] Creating grayscale image...")
                 image = Image.fromarray(processed_array, mode='L')
-                print(f"[PROCESSOR] PIL Image created successfully: {image.size}")
+                # print(f"[PROCESSOR] PIL Image created successfully: {image.size}")
                 return image
             else:
                 # RGB or other
-                print(f"[PROCESSOR] Creating RGB/other image...")
+                # print(f"[PROCESSOR] Creating RGB/other image...")
                 image = Image.fromarray(processed_array)
-                print(f"[PROCESSOR] PIL Image created successfully: {image.size}")
+                # print(f"[PROCESSOR] PIL Image created successfully: {image.size}")
                 return image
         except Exception as e:
-            print(f"[PROCESSOR] Error converting to PIL Image: {e}")
+            # print(f"[PROCESSOR] Error converting to PIL Image: {e}")
             import traceback
             traceback.print_exc()
             return None

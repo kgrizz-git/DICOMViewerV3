@@ -50,6 +50,7 @@ class MetadataPanel(QWidget):
             parent: Parent widget
         """
         super().__init__(parent)
+        self.setObjectName("metadata_panel")
         
         self.parser: Optional[DICOMParser] = None
         self.dataset: Optional[Dataset] = None

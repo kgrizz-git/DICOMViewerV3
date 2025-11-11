@@ -28,7 +28,7 @@ from pathlib import Path
 src_dir = Path(__file__).parent
 sys.path.insert(0, str(src_dir))
 
-from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtWidgets import QApplication, QMessageBox, QStyleFactory
 from PySide6.QtCore import Qt, QPointF, QObject
 from PySide6.QtGui import QKeyEvent
 from typing import Optional, Dict
@@ -84,6 +84,9 @@ class DICOMViewerApp(QObject):
         # Create Qt application first (before any widgets)
         self.app = QApplication(sys.argv)
         self.app.setApplicationName("DICOM Viewer V3")
+        
+        # Set Fusion style for consistent cross-platform appearance
+        self.app.setStyle(QStyleFactory.create("Fusion"))
         
         # Initialize managers
         self.config_manager = ConfigManager()

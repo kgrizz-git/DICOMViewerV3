@@ -262,12 +262,12 @@ class SliceDisplayManager:
             
             # Convert to image
             # If same series and we have preserved window/level values, use them
-            print(f"[DISPLAY] About to convert dataset to image...")
-            print(f"[DISPLAY] Window center: {window_center}, Window width: {window_width}")
-            print(f"[DISPLAY] Use rescaled values: {use_rescaled_values}")
+            # print(f"[DISPLAY] About to convert dataset to image...")
+            # print(f"[DISPLAY] Window center: {window_center}, Window width: {window_width}")
+            # print(f"[DISPLAY] Use rescaled values: {use_rescaled_values}")
             try:
                 if is_same_series and window_center is not None and window_width is not None:
-                    print(f"[DISPLAY] Converting with stored window/level...")
+                    # print(f"[DISPLAY] Converting with stored window/level...")
                     image = self.dicom_processor.dataset_to_image(
                         dataset,
                         window_center=window_center,
@@ -275,15 +275,15 @@ class SliceDisplayManager:
                         apply_rescale=use_rescaled_values
                     )
                 else:
-                    print(f"[DISPLAY] Converting with auto window/level...")
+                    # print(f"[DISPLAY] Converting with auto window/level...")
                     image = self.dicom_processor.dataset_to_image(
                         dataset,
                         apply_rescale=use_rescaled_values
                     )
-                print(f"[DISPLAY] Image conversion complete: {image is not None}")
+                # print(f"[DISPLAY] Image conversion complete: {image is not None}")
                 if image is None:
                     # Image conversion failed - this is already handled by dataset_to_image returning None
-                    print(f"[DISPLAY] Image is None, returning")
+                    # print(f"[DISPLAY] Image is None, returning")
                     return
             except (MemoryError, ValueError, AttributeError, RuntimeError) as e:
                 # Pixel array access errors during image conversion
@@ -300,10 +300,10 @@ class SliceDisplayManager:
                 raise RuntimeError(error_msg) from e
             
             # Set image in viewer - preserve zoom/pan if same series
-            print(f"[DISPLAY] About to set image in viewer...")
-            print(f"[DISPLAY] Preserve view: {is_same_series and not is_new_study_series}")
+            # print(f"[DISPLAY] About to set image in viewer...")
+            # print(f"[DISPLAY] Preserve view: {is_same_series and not is_new_study_series}")
             self.image_viewer.set_image(image, preserve_view=is_same_series and not is_new_study_series)
-            print(f"[DISPLAY] Image set in viewer successfully")
+            # print(f"[DISPLAY] Image set in viewer successfully")
             
             # If new study/series, fit to view and center
             if is_new_study_series:
