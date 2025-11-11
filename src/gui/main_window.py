@@ -19,12 +19,16 @@ Requirements:
 
 from PySide6.QtWidgets import (QMainWindow, QMenuBar, QToolBar, QStatusBar,
                                 QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
-                                QMessageBox, QComboBox, QLabel, QSizePolicy, QColorDialog)
+                                QMessageBox, QComboBox, QLabel, QSizePolicy, QColorDialog,
+                                QApplication)
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QAction, QIcon, QKeySequence, QColor
 from typing import Optional
+from pathlib import Path
 import sys
 import os
+import urllib.parse
+import re
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -361,16 +365,19 @@ class MainWindow(QMainWindow):
         
         # Left panel (for metadata, series list, etc.)
         self.left_panel = QWidget()
+        self.left_panel.setObjectName("left_panel")
         self.left_panel.setMaximumWidth(400)
         self.left_panel.setMinimumWidth(200)
         self.splitter.addWidget(self.left_panel)
         
         # Center panel (for image viewer)
         self.center_panel = QWidget()
+        self.center_panel.setObjectName("center_panel")
         self.splitter.addWidget(self.center_panel)
         
         # Right panel (for tools, histogram, etc.)
         self.right_panel = QWidget()
+        self.right_panel.setObjectName("right_panel")
         self.right_panel.setMaximumWidth(400)
         self.right_panel.setMinimumWidth(200)
         self.splitter.addWidget(self.right_panel)
@@ -396,35 +403,659 @@ class MainWindow(QMainWindow):
         self.series_navigator_visible = False
     
     def _apply_theme(self) -> None:
-        """Apply the current theme to the window."""
+        """Apply the current theme using pure stylesheet approach.
+        
+        Uses simplified, palette-like color scheme with consistent colors
+        across similar widgets to avoid QPalette/QStyleSheet conflicts.
+        """
         theme = self.config_manager.get_theme()
         
+        # Get path to checkmark images
+        # main_window.py is in src/gui/, so go up to project root, then to resources/images
+        project_root = Path(__file__).parent.parent.parent
+        images_dir = project_root / "resources" / "images"
+        
+        # Get raw absolute paths before URL encoding
+        white_checkmark_raw = (images_dir / "checkbox_checkmark_white.png").absolute()
+        black_checkmark_raw = (images_dir / "checkbox_checkmark_black.png").absolute()
+        
+        # Debug: Print raw paths
+        # print(f"[CHECKMARK DEBUG] White checkmark raw path: {white_checkmark_raw}")
+        # print(f"[CHECKMARK DEBUG] Black checkmark raw path: {black_checkmark_raw}")
+        
+        # Check if files exist
+        white_exists = white_checkmark_raw.exists()
+        black_exists = black_checkmark_raw.exists()
+        # print(f"[CHECKMARK DEBUG] White checkmark exists: {white_exists}")
+        # print(f"[CHECKMARK DEBUG] Black checkmark exists: {black_exists}")
+        
+        # if white_exists:
+        #     print(f"[CHECKMARK DEBUG] White checkmark file size: {white_checkmark_raw.stat().st_size} bytes")
+        # if black_exists:
+        #     print(f"[CHECKMARK DEBUG] Black checkmark file size: {black_checkmark_raw.stat().st_size} bytes")
+        
+        # Try relative paths from application working directory
+        # Use simple relative path without URL encoding
+        white_checkmark_path = "resources/images/checkbox_checkmark_white.png"
+        black_checkmark_path = "resources/images/checkbox_checkmark_black.png"
+        
+        # Debug: Print paths
+        # print(f"[CHECKMARK DEBUG] White checkmark path (relative): {white_checkmark_path}")
+        # print(f"[CHECKMARK DEBUG] Black checkmark path (relative): {black_checkmark_path}")
+        
+        # Debug: Print final URL format that will be in stylesheet
+        # white_url = f"url('{white_checkmark_path}')"
+        # black_url = f"url('{black_checkmark_path}')"
+        # print(f"[CHECKMARK DEBUG] White checkmark final URL: {white_url}")
+        # print(f"[CHECKMARK DEBUG] Black checkmark final URL: {black_url}")
+        
         if theme == "dark":
-            # Dark theme - apply light colors (stylesheets are reversed)
-            self.setStyleSheet("")
-        else:
-            # Light theme (default) - apply dark colors (stylesheets are reversed)
-            self.setStyleSheet("""
-                QMainWindow {
+            # Dark theme - simplified palette-like colors
+            stylesheet = """
+                /* Main window and panels - all same background */
+                QMainWindow, QWidget {{
                     background-color: #2b2b2b;
                     color: #ffffff;
-                }
-                QMenuBar {
-                    background-color: #3c3c3c;
+                }}
+                
+                /* Menu bar */
+                QMenuBar {{
+                    background-color: #2b2b2b;
                     color: #ffffff;
-                }
-                QMenuBar::item:selected {
-                    background-color: #505050;
-                }
-                QToolBar {
-                    background-color: #3c3c3c;
+                    border-bottom: 1px solid #555555;
+                }}
+                
+                QMenuBar::item {{
+                    background-color: transparent;
+                    padding: 4px 12px;
+                }}
+                
+                QMenuBar::item:selected {{
+                    background-color: #3a3a3a;
+                }}
+                
+                QMenuBar::item:pressed {{
+                    background-color: #4285da;
+                }}
+                
+                /* Menus */
+                QMenu {{
+                    background-color: #2b2b2b;
                     color: #ffffff;
-                }
-                QStatusBar {
-                    background-color: #3c3c3c;
+                    border: 1px solid #555555;
+                }}
+                
+                QMenu::item {{
+                    padding: 5px 25px 5px 25px;
+                }}
+                
+                QMenu::item:selected {{
+                    background-color: #4285da;
+                }}
+                
+                QMenu::separator {{
+                    height: 1px;
+                    background-color: #555555;
+                    margin: 5px 0px;
+                }}
+                
+                /* Commented out to allow native checkmark rendering
+                QMenu::indicator {{
+                    width: 16px;
+                    height: 16px;
+                    border: none;
+                }}
+                
+                QMenu::indicator:checked {{
+                    border: none;
+                }}
+                */
+                
+                /* Toolbar */
+                QToolBar {{
+                    background-color: #3a3a3a;
+                    border: 1px solid #555555;
+                    spacing: 3px;
+                    padding: 3px;
+                }}
+                
+                QToolBar::separator {{
+                    background-color: #555555;
+                    width: 1px;
+                    margin: 3px;
+                }}
+                
+                /* Buttons */
+                QPushButton {{
+                    background-color: #3a3a3a;
                     color: #ffffff;
-                }
-            """)
+                    border: 1px solid #555555;
+                    padding: 5px 15px;
+                    border-radius: 3px;
+                }}
+                
+                QPushButton:hover {{
+                    background-color: #454545;
+                }}
+                
+                QPushButton:pressed {{
+                    background-color: #4285da;
+                }}
+                
+                QPushButton:disabled {{
+                    background-color: #2b2b2b;
+                    color: #7f7f7f;
+                    border: 1px solid #3a3a3a;
+                }}
+                
+                /* Text inputs, lists, tables */
+                QTreeWidget, QTableWidget, QListWidget, QTextEdit, QPlainTextEdit {{
+                    background-color: #1e1e1e;
+                    color: #ffffff;
+                    border: 1px solid #555555;
+                    selection-background-color: #4285da;
+                    selection-color: #ffffff;
+                }}
+                
+                QTreeWidget::item:hover, QTableWidget::item:hover, QListWidget::item:hover {{
+                    background-color: #3a3a3a;
+                }}
+                
+                QTreeWidget::item:selected, QTableWidget::item:selected, QListWidget::item:selected {{
+                    background-color: #4285da;
+                }}
+                
+                /* Headers */
+                QHeaderView::section {{
+                    background-color: #3a3a3a;
+                    color: #ffffff;
+                    border: 1px solid #555555;
+                    padding: 4px;
+                }}
+                
+                /* Line edits, spin boxes */
+                QLineEdit, QSpinBox, QDoubleSpinBox {{
+                    background-color: #1e1e1e;
+                    color: #ffffff;
+                    border: 1px solid #555555;
+                    padding: 3px;
+                    border-radius: 3px;
+                }}
+                
+                QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus {{
+                    border: 1px solid #4285da;
+                }}
+                
+                QLineEdit:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled {{
+                    background-color: #2b2b2b;
+                    color: #7f7f7f;
+                }}
+                
+                /* Scrollbars */
+                QScrollBar:vertical {{
+                    background-color: #2b2b2b;
+                    width: 12px;
+                    border: none;
+                }}
+                
+                QScrollBar::handle:vertical {{
+                    background-color: #555555;
+                    min-height: 20px;
+                    border-radius: 6px;
+                }}
+                
+                QScrollBar::handle:vertical:hover {{
+                    background-color: #6a6a6a;
+                }}
+                
+                QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                    height: 0px;
+                }}
+                
+                QScrollBar:horizontal {{
+                    background-color: #2b2b2b;
+                    height: 12px;
+                    border: none;
+                }}
+                
+                QScrollBar::handle:horizontal {{
+                    background-color: #555555;
+                    min-width: 20px;
+                    border-radius: 6px;
+                }}
+                
+                QScrollBar::handle:horizontal:hover {{
+                    background-color: #6a6a6a;
+                }}
+                
+                QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
+                    width: 0px;
+                }}
+                
+                /* Checkboxes */
+                QCheckBox {{
+                    color: #ffffff;
+                    spacing: 5px;
+                }}
+                
+                QCheckBox:disabled {{
+                    color: #7f7f7f;
+                }}
+                
+                /* Commented out to allow native checkmark rendering
+                QCheckBox::indicator {{
+                    width: 16px;
+                    height: 16px;
+                    border: 1px solid #555555;
+                    border-radius: 3px;
+                }}
+                
+                QCheckBox::indicator:hover {{
+                    border: 1px solid #6a6a6a;
+                }}
+                
+                QCheckBox::indicator:checked {{
+                    border: 1px solid #555555;
+                }}
+                */
+                
+                /* Metadata panel checkbox with border and custom checkmark */
+                QWidget[objectName="metadata_panel"] QCheckBox::indicator {{
+                    width: 16px;
+                    height: 16px;
+                    border: 2px solid #6a6a6a;
+                    border-radius: 3px;
+                    background-color: #1e1e1e;
+                }}
+                
+                QWidget[objectName="metadata_panel"] QCheckBox::indicator:checked {{
+                    border: 2px solid #6a6a6a;
+                    background-color: #1e1e1e;
+                    image: url('{white_checkmark_path}');
+                }}
+                
+                /* Labels */
+                QLabel {{
+                    background-color: transparent;
+                    color: #ffffff;
+                }}
+                
+                QLabel:disabled {{
+                    color: #7f7f7f;
+                }}
+                
+                /* Status bar */
+                QStatusBar {{
+                    background-color: #2b2b2b;
+                    color: #ffffff;
+                    border-top: 1px solid #555555;
+                }}
+                
+                /* Splitter handles */
+                QSplitter::handle {{
+                    background-color: #555555;
+                }}
+                
+                QSplitter::handle:horizontal {{
+                    width: 2px;
+                }}
+                
+                QSplitter::handle:vertical {{
+                    height: 2px;
+                }}
+                
+                /* Combo boxes */
+                QComboBox {{
+                    background-color: #3a3a3a;
+                    color: #ffffff;
+                    border: 1px solid #555555;
+                    padding: 3px 10px;
+                    border-radius: 3px;
+                }}
+                
+                QComboBox:hover {{
+                    border: 1px solid #6a6a6a;
+                }}
+                
+                QComboBox::drop-down {{
+                    border: none;
+                }}
+                
+                QComboBox QAbstractItemView {{
+                    background-color: #2b2b2b;
+                    color: #ffffff;
+                    selection-background-color: #4285da;
+                    border: 1px solid #555555;
+                }}
+                
+                /* Tooltips */
+                QToolTip {{
+                    background-color: #3a3a3a;
+                    color: #ffffff;
+                    border: 1px solid #555555;
+                    padding: 3px;
+                }}
+            """.format(white_checkmark_path=white_checkmark_path, black_checkmark_path=black_checkmark_path)
+        else:
+            # Light theme - simplified palette-like colors
+            stylesheet = """
+                /* Main window and panels - all same background */
+                QMainWindow, QWidget {{
+                    background-color: #f0f0f0;
+                    color: #000000;
+                }}
+                
+                /* Menu bar */
+                QMenuBar {{
+                    background-color: #f0f0f0;
+                    color: #000000;
+                    border-bottom: 1px solid #c0c0c0;
+                }}
+                
+                QMenuBar::item {{
+                    background-color: transparent;
+                    padding: 4px 12px;
+                }}
+                
+                QMenuBar::item:selected {{
+                    background-color: #e0e0e0;
+                }}
+                
+                QMenuBar::item:pressed {{
+                    background-color: #4285da;
+                    color: #ffffff;
+                }}
+                
+                /* Menus */
+                QMenu {{
+                    background-color: #f0f0f0;
+                    color: #000000;
+                    border: 1px solid #c0c0c0;
+                }}
+                
+                QMenu::item {{
+                    padding: 5px 25px 5px 25px;
+                }}
+                
+                QMenu::item:selected {{
+                    background-color: #4285da;
+                    color: #ffffff;
+                }}
+                
+                QMenu::separator {{
+                    height: 1px;
+                    background-color: #c0c0c0;
+                    margin: 5px 0px;
+                }}
+                
+                /* Commented out to allow native checkmark rendering
+                QMenu::indicator {{
+                    width: 16px;
+                    height: 16px;
+                    border: none;
+                }}
+                
+                QMenu::indicator:checked {{
+                    border: none;
+                }}
+                */
+                
+                /* Toolbar */
+                QToolBar {{
+                    background-color: #e0e0e0;
+                    border: 1px solid #c0c0c0;
+                    spacing: 3px;
+                    padding: 3px;
+                }}
+                
+                QToolBar::separator {{
+                    background-color: #c0c0c0;
+                    width: 1px;
+                    margin: 3px;
+                }}
+                
+                /* Buttons */
+                QPushButton {{
+                    background-color: #e0e0e0;
+                    color: #000000;
+                    border: 1px solid #c0c0c0;
+                    padding: 5px 15px;
+                    border-radius: 3px;
+                }}
+                
+                QPushButton:hover {{
+                    background-color: #d0d0d0;
+                }}
+                
+                QPushButton:pressed {{
+                    background-color: #4285da;
+                    color: #ffffff;
+                }}
+                
+                QPushButton:disabled {{
+                    background-color: #f0f0f0;
+                    color: #a0a0a0;
+                    border: 1px solid #d0d0d0;
+                }}
+                
+                /* Text inputs, lists, tables */
+                QTreeWidget, QTableWidget, QListWidget, QTextEdit, QPlainTextEdit {{
+                    background-color: #ffffff;
+                    color: #000000;
+                    border: 1px solid #c0c0c0;
+                    selection-background-color: #4285da;
+                    selection-color: #ffffff;
+                }}
+                
+                QTreeWidget::item:hover, QTableWidget::item:hover, QListWidget::item:hover {{
+                    background-color: #e8e8e8;
+                }}
+                
+                QTreeWidget::item:selected, QTableWidget::item:selected, QListWidget::item:selected {{
+                    background-color: #4285da;
+                }}
+                
+                /* Headers */
+                QHeaderView::section {{
+                    background-color: #e0e0e0;
+                    color: #000000;
+                    border: 1px solid #c0c0c0;
+                    padding: 4px;
+                }}
+                
+                /* Line edits, spin boxes */
+                QLineEdit, QSpinBox, QDoubleSpinBox {{
+                    background-color: #ffffff;
+                    color: #000000;
+                    border: 1px solid #c0c0c0;
+                    padding: 3px;
+                    border-radius: 3px;
+                }}
+                
+                QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus {{
+                    border: 1px solid #4285da;
+                }}
+                
+                QLineEdit:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled {{
+                    background-color: #f0f0f0;
+                    color: #a0a0a0;
+                }}
+                
+                /* Scrollbars */
+                QScrollBar:vertical {{
+                    background-color: #f0f0f0;
+                    width: 12px;
+                    border: none;
+                }}
+                
+                QScrollBar::handle:vertical {{
+                    background-color: #c0c0c0;
+                    min-height: 20px;
+                    border-radius: 6px;
+                }}
+                
+                QScrollBar::handle:vertical:hover {{
+                    background-color: #a0a0a0;
+                }}
+                
+                QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                    height: 0px;
+                }}
+                
+                QScrollBar:horizontal {{
+                    background-color: #f0f0f0;
+                    height: 12px;
+                    border: none;
+                }}
+                
+                QScrollBar::handle:horizontal {{
+                    background-color: #c0c0c0;
+                    min-width: 20px;
+                    border-radius: 6px;
+                }}
+                
+                QScrollBar::handle:horizontal:hover {{
+                    background-color: #a0a0a0;
+                }}
+                
+                QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
+                    width: 0px;
+                }}
+                
+                /* Checkboxes */
+                QCheckBox {{
+                    color: #000000;
+                    spacing: 5px;
+                }}
+                
+                QCheckBox:disabled {{
+                    color: #a0a0a0;
+                }}
+                
+                /* Commented out to allow native checkmark rendering
+                QCheckBox::indicator {{
+                    width: 16px;
+                    height: 16px;
+                    border: 1px solid #c0c0c0;
+                    border-radius: 3px;
+                }}
+                
+                QCheckBox::indicator:hover {{
+                    border: 1px solid #a0a0a0;
+                }}
+                
+                QCheckBox::indicator:checked {{
+                    border: 1px solid #c0c0c0;
+                }}
+                */
+                
+                /* Metadata panel checkbox with border and custom checkmark */
+                QWidget[objectName="metadata_panel"] QCheckBox::indicator {{
+                    width: 16px;
+                    height: 16px;
+                    border: 2px solid #808080;
+                    border-radius: 3px;
+                    background-color: #ffffff;
+                }}
+                
+                QWidget[objectName="metadata_panel"] QCheckBox::indicator:checked {{
+                    border: 2px solid #808080;
+                    background-color: #ffffff;
+                    image: url('{black_checkmark_path}');
+                }}
+                
+                /* Labels */
+                QLabel {{
+                    background-color: transparent;
+                    color: #000000;
+                }}
+                
+                QLabel:disabled {{
+                    color: #a0a0a0;
+                }}
+                
+                /* Status bar */
+                QStatusBar {{
+                    background-color: #f0f0f0;
+                    color: #000000;
+                    border-top: 1px solid #c0c0c0;
+                }}
+                
+                /* Splitter handles */
+                QSplitter::handle {{
+                    background-color: #c0c0c0;
+                }}
+                
+                QSplitter::handle:horizontal {{
+                    width: 2px;
+                }}
+                
+                QSplitter::handle:vertical {{
+                    height: 2px;
+                }}
+                
+                /* Combo boxes */
+                QComboBox {{
+                    background-color: #e0e0e0;
+                    color: #000000;
+                    border: 1px solid #c0c0c0;
+                    padding: 3px 10px;
+                    border-radius: 3px;
+                }}
+                
+                QComboBox:hover {{
+                    border: 1px solid #a0a0a0;
+                }}
+                
+                QComboBox::drop-down {{
+                    border: none;
+                }}
+                
+                QComboBox QAbstractItemView {{
+                    background-color: #f0f0f0;
+                    color: #000000;
+                    selection-background-color: #4285da;
+                    selection-color: #ffffff;
+                    border: 1px solid #c0c0c0;
+                }}
+                
+                /* Tooltips */
+                QToolTip {{
+                    background-color: #ffffdc;
+                    color: #000000;
+                    border: 1px solid #c0c0c0;
+                    padding: 3px;
+                }}
+            """.format(white_checkmark_path=white_checkmark_path, black_checkmark_path=black_checkmark_path)
+        
+        # Debug: Extract and print the image URL lines from the stylesheet
+        # image_url_pattern = r"image:\s*url\([^)]+\)"
+        # image_urls = re.findall(image_url_pattern, stylesheet)
+        # print(f"[CHECKMARK DEBUG] Found {len(image_urls)} image URL(s) in stylesheet:")
+        # for i, url in enumerate(image_urls, 1):
+        #     print(f"[CHECKMARK DEBUG]   {i}. {url}")
+        
+        # Debug: Check if the specific checkbox indicator lines are present
+        # if 'QWidget[objectName="metadata_panel"] QCheckBox::indicator:checked' in stylesheet:
+        #     # Extract the relevant section
+        #     checkbox_section = re.search(
+        #         r'QWidget\[objectName="metadata_panel"\] QCheckBox::indicator:checked \{[^}]*image:[^}]*\}',
+        #         stylesheet,
+        #         re.DOTALL
+        #     )
+        #     if checkbox_section:
+        #         print(f"[CHECKMARK DEBUG] Checkbox indicator:checked section found:")
+        #         print(f"[CHECKMARK DEBUG]   {checkbox_section.group(0)[:200]}...")
+        #     else:
+        #         print(f"[CHECKMARK DEBUG] WARNING: Checkbox indicator:checked section not found in stylesheet!")
+        # else:
+        #     print(f"[CHECKMARK DEBUG] WARNING: Checkbox selector not found in stylesheet!")
+        
+        # Apply stylesheet to QApplication (no palette conflicts)
+        QApplication.instance().setStyleSheet(stylesheet)
+        
+        # Simple refresh - just process events once
+        QApplication.processEvents()
     
     def _set_theme(self, theme: str) -> None:
         """
