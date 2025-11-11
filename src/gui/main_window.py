@@ -531,6 +531,19 @@ class MainWindow(QMainWindow):
                     background-color: transparent;
                 }}
                 
+                /* Toolbar combobox - override transparent background */
+                QToolBar QComboBox {{
+                    background-color: #1b1b1b;
+                    color: #ffffff;
+                    border: 1px solid #555555;
+                    padding: 3px 10px;
+                    border-radius: 3px;
+                }}
+                
+                QToolBar QComboBox:hover {{
+                    border: 1px solid #6a6a6a;
+                }}
+                
                 /* Toolbar buttons */
                 QToolButton {{
                     background-color: #3a3a3a;
@@ -737,7 +750,7 @@ class MainWindow(QMainWindow):
                 
                 /* Combo boxes */
                 QComboBox {{
-                    background-color: #1e1e1e;
+                    background-color: #1b1b1b;
                     color: #ffffff;
                     border: 1px solid #555555;
                     padding: 3px 10px;
@@ -765,7 +778,7 @@ class MainWindow(QMainWindow):
                 /* Combo box item view */
                 /* Styles the dropdown list that opens when you click the combobox arrow */
                 QComboBox QAbstractItemView {{
-                    background-color: #2b2b2b;
+                    background-color: #1b1b1b;
                     color: #ffffff;
                     selection-background-color: #4285da;
                     border: 1px solid #555555;
@@ -860,6 +873,19 @@ class MainWindow(QMainWindow):
                 /* Toolbar widgets (spacer) - transparent to match toolbar */
                 QToolBar QWidget {{
                     background-color: transparent;
+                }}
+                
+                /* Toolbar combobox - override transparent background */
+                QToolBar QComboBox {{
+                    background-color: #ffffff;
+                    color: #000000;
+                    border: 1px solid #c0c0c0;
+                    padding: 3px 10px;
+                    border-radius: 3px;
+                }}
+                
+                QToolBar QComboBox:hover {{
+                    border: 1px solid #a0a0a0;
                 }}
                 
                 /* Toolbar buttons */
