@@ -1213,11 +1213,23 @@ class MainWindow(QMainWindow):
         dialog.setMinimumSize(500, 400)
         dialog.resize(600, 500)
         
+        # Apply theme-based styling to dialog
+        theme = self.config_manager.get_theme()
+        if theme == "dark":
+            # Set dark grey background for dark theme (matches left panel)
+            dialog.setStyleSheet("QDialog { background-color: #2b2b2b; }")
+        else:
+            # Light theme - use white
+            dialog.setStyleSheet("QDialog { background-color: #ffffff; }")
+        
         layout = QVBoxLayout(dialog)
         
         # Create scrollable text area
         text_edit = QTextEdit()
         text_edit.setReadOnly(True)
+        # Set QTextEdit background to match metadata panel in dark theme
+        if theme == "dark":
+            text_edit.setStyleSheet("QTextEdit { background-color: #1e1e1e; }")
         text_edit.setHtml(
             "<h2>DICOM Viewer V3</h2>"
             "<p><b>Made by Kevin Grizzard</b><br>"
