@@ -512,14 +512,18 @@ class ViewStateManager:
     
     def handle_viewport_resized(self) -> None:
         """
-        Handle viewport resize (when splitter moves).
+        Handle viewport resize (when splitter moves or series navigator visibility changes).
         
         Updates overlay positions to keep text anchored to viewport edges
         when the left or right panels are resized.
-        Also restores the centered view if a scene center was captured.
+        Also rescales the image to fill the viewport and restores the centered view
+        if a scene center was captured.
         """
-        # Restore centered view if we captured a scene center point
+        # Rescale image to fill viewport and restore center if we captured a scene center point
         if self.saved_scene_center is not None and self.image_viewer.image_item is not None:
+            # First, fit the image to the new viewport size (rescale to fill)
+            self.image_viewer.fit_to_view(center_image=False)
+            # Then restore the center point that was captured before the resize
             self.image_viewer.centerOn(self.saved_scene_center)
             self.saved_scene_center = None  # Clear after use
         
