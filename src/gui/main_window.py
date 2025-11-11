@@ -717,10 +717,22 @@ class MainWindow(QMainWindow):
                     border: 1px solid #6a6a6a;
                 }}
                 
+                /* QComboBox::drop-down - COMMENTED OUT to preserve native arrow */
+                /*
                 QComboBox::drop-down {{
-                    border: none;
+                    subcontrol-origin: padding;
+                    subcontrol-position: top right;
+                    width: 20px;
+                    border-left-width: 1px;
+                    border-left-color: #555555;
+                    border-left-style: solid;
+                    border-top-right-radius: 3px;
+                    border-bottom-right-radius: 3px;
                 }}
+                */
                 
+                /* Combo box item view */
+                /* Styles the dropdown list that opens when you click the combobox arrow */
                 QComboBox QAbstractItemView {{
                     background-color: #2b2b2b;
                     color: #ffffff;
@@ -1007,9 +1019,19 @@ class MainWindow(QMainWindow):
                     border: 1px solid #a0a0a0;
                 }}
                 
+                /* QComboBox::drop-down - COMMENTED OUT to preserve native arrow */
+                /*
                 QComboBox::drop-down {{
-                    border: none;
+                    subcontrol-origin: padding;
+                    subcontrol-position: top right;
+                    width: 20px;
+                    border-left-width: 1px;
+                    border-left-color: #c0c0c0;
+                    border-left-style: solid;
+                    border-top-right-radius: 3px;
+                    border-bottom-right-radius: 3px;
                 }}
+                */
                 
                 QComboBox QAbstractItemView {{
                     background-color: #f0f0f0;
