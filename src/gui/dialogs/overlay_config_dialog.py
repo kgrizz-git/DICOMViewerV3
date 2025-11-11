@@ -38,7 +38,7 @@ COMMON_TAGS = [
     # Series information
     "SeriesNumber", "SeriesDescription", "SeriesInstanceUID", "SeriesDate",
     # Equipment information
-    "Modality", "Manufacturer", "ManufacturerModelName",
+    "Modality", "Manufacturer", "ManufacturerModelName", "StationName", "DeviceSerialNumber", "ScanOptions", "PerformedStationName",
     # Image information
     "InstanceNumber", "SliceLocation", "SliceThickness", "SpacingBetweenSlices",
     # Window/Level
@@ -105,7 +105,9 @@ class OverlayConfigDialog(QDialog):
         modality_layout = QHBoxLayout()
         modality_label = QLabel("Modality:")
         self.modality_combo = QComboBox()
-        self.modality_combo.addItems(["default", "CT", "MR", "US", "CR", "DX", "NM", "PT", "RT", "MG"])
+        # Sort modalities alphabetically, but keep "default" first
+        modalities = ["default"] + sorted(["CT", "MR", "US", "CR", "DX", "NM", "PT", "RT", "MG"])
+        self.modality_combo.addItems(modalities)
         self.modality_combo.currentTextChanged.connect(self._on_modality_changed)
         modality_layout.addWidget(modality_label)
         modality_layout.addWidget(self.modality_combo)
