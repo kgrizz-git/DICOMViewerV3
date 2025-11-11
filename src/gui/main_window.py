@@ -335,6 +335,7 @@ class MainWindow(QMainWindow):
         
         # Scroll wheel mode toggle (right-aligned)
         self.scroll_wheel_mode_combo = QComboBox()
+        self.scroll_wheel_mode_combo.setObjectName("scroll_wheel_mode_combo")
         self.scroll_wheel_mode_combo.addItems(["Slice", "Zoom"])
         # Set current mode from config
         current_mode = self.config_manager.get_scroll_wheel_mode() if self.config_manager else "slice"
@@ -522,7 +523,37 @@ class MainWindow(QMainWindow):
                 QToolBar::separator {{
                     background-color: #555555;
                     width: 1px;
-                    margin: 3px;
+                    margin: 2px;
+                }}
+                
+                /* Toolbar widgets (spacer) - transparent to match toolbar */
+                QToolBar QWidget {{
+                    background-color: transparent;
+                }}
+                
+                /* Toolbar buttons */
+                QToolButton {{
+                    background-color: #3a3a3a;
+                    color: #ffffff;
+                    border: none;
+                    padding: 1px 4px;
+                }}
+                
+                QToolButton:hover {{
+                    background-color: #454545;
+                }}
+                
+                QToolButton:pressed {{
+                    background-color: #4285da;
+                }}
+                
+                QToolButton:checked {{
+                    background-color: #4285da;
+                }}
+                
+                QToolButton:disabled {{
+                    background-color: #2b2b2b;
+                    color: #7f7f7f;
                 }}
                 
                 /* Buttons */
@@ -530,7 +561,7 @@ class MainWindow(QMainWindow):
                     background-color: #3a3a3a;
                     color: #ffffff;
                     border: 1px solid #555555;
-                    padding: 5px 15px;
+                    padding: 3px 8px;
                     border-radius: 3px;
                 }}
                 
@@ -706,7 +737,7 @@ class MainWindow(QMainWindow):
                 
                 /* Combo boxes */
                 QComboBox {{
-                    background-color: #3a3a3a;
+                    background-color: #1e1e1e;
                     color: #ffffff;
                     border: 1px solid #555555;
                     padding: 3px 10px;
@@ -823,7 +854,39 @@ class MainWindow(QMainWindow):
                 QToolBar::separator {{
                     background-color: #c0c0c0;
                     width: 1px;
-                    margin: 3px;
+                    margin: 2px;
+                }}
+                
+                /* Toolbar widgets (spacer) - transparent to match toolbar */
+                QToolBar QWidget {{
+                    background-color: transparent;
+                }}
+                
+                /* Toolbar buttons */
+                QToolButton {{
+                    background-color: #e0e0e0;
+                    color: #000000;
+                    border: none;
+                    padding: 1px 4px;
+                }}
+                
+                QToolButton:hover {{
+                    background-color: #d0d0d0;
+                }}
+                
+                QToolButton:pressed {{
+                    background-color: #4285da;
+                    color: #ffffff;
+                }}
+                
+                QToolButton:checked {{
+                    background-color: #4285da;
+                    color: #ffffff;
+                }}
+                
+                QToolButton:disabled {{
+                    background-color: #f0f0f0;
+                    color: #a0a0a0;
                 }}
                 
                 /* Buttons */
@@ -831,7 +894,7 @@ class MainWindow(QMainWindow):
                     background-color: #e0e0e0;
                     color: #000000;
                     border: 1px solid #c0c0c0;
-                    padding: 5px 15px;
+                    padding: 3px 8px;
                     border-radius: 3px;
                 }}
                 
@@ -1008,7 +1071,7 @@ class MainWindow(QMainWindow):
                 
                 /* Combo boxes */
                 QComboBox {{
-                    background-color: #e0e0e0;
+                    background-color: #ffffff;
                     color: #000000;
                     border: 1px solid #c0c0c0;
                     padding: 3px 10px;
