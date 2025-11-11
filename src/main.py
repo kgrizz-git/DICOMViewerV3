@@ -51,6 +51,7 @@ from core.dicom_loader import DICOMLoader
 from core.dicom_organizer import DICOMOrganizer
 from core.dicom_parser import DICOMParser
 from core.dicom_processor import DICOMProcessor
+from core.tag_edit_history import TagEditHistoryManager
 from utils.config_manager import ConfigManager
 from tools.roi_manager import ROIManager
 from tools.measurement_tool import MeasurementTool
@@ -93,6 +94,7 @@ class DICOMViewerApp(QObject):
         self.dicom_loader = DICOMLoader()
         self.dicom_organizer = DICOMOrganizer()
         self.dicom_processor = DICOMProcessor()
+        self.tag_edit_history = TagEditHistoryManager(max_history=50)
         
         # Create main window
         self.main_window = MainWindow(self.config_manager)
@@ -104,6 +106,7 @@ class DICOMViewerApp(QObject):
         self.file_dialog = FileDialog(self.config_manager)
         self.image_viewer = ImageViewer()
         self.metadata_panel = MetadataPanel()
+        self.metadata_panel.set_history_manager(self.tag_edit_history)
         self.window_level_controls = WindowLevelControls()
         self.slice_navigator = SliceNavigator()
         self.roi_manager = ROIManager()
@@ -247,7 +250,8 @@ class DICOMViewerApp(QObject):
             self.main_window,
             get_current_studies=lambda: self.current_studies,
             settings_applied_callback=self._on_settings_applied,
-            overlay_config_applied_callback=self._on_overlay_config_applied
+            overlay_config_applied_callback=self._on_overlay_config_applied,
+            tag_edit_history=self.tag_edit_history
         )
         
         # Initialize MouseModeHandler
@@ -314,6 +318,11 @@ class DICOMViewerApp(QObject):
             # Update current dataset reference
             self.current_dataset = first_slice_info['dataset']
             
+            # Clear tag edit history for new dataset
+            if self.tag_edit_history:
+                self.tag_edit_history.clear_history(self.current_dataset)
+            self._update_undo_redo_state()
+            
             # Store initial view state after a delay
             from PySide6.QtCore import QTimer
             QTimer.singleShot(100, self.view_state_manager.store_initial_view_state)
@@ -352,6 +361,41 @@ class DICOMViewerApp(QObject):
     def _update_tag_viewer(self, dataset: Dataset) -> None:
         """Update tag viewer with dataset."""
         self.dialog_coordinator.update_tag_viewer(dataset)
+    
+    def _undo_tag_edit(self) -> None:
+        """Handle undo tag edit request."""
+        if self.current_dataset is not None and self.tag_edit_history:
+            success = self.tag_edit_history.undo(self.current_dataset)
+            if success:
+                # Refresh metadata panel and tag viewer
+                self.metadata_panel._populate_tags()
+                if self.dialog_coordinator.tag_viewer_dialog:
+                    search_text = self.dialog_coordinator.tag_viewer_dialog.search_edit.text()
+                    self.dialog_coordinator.tag_viewer_dialog._populate_tags(search_text)
+                # Update undo/redo state
+                self._update_undo_redo_state()
+    
+    def _redo_tag_edit(self) -> None:
+        """Handle redo tag edit request."""
+        if self.current_dataset is not None and self.tag_edit_history:
+            success = self.tag_edit_history.redo(self.current_dataset)
+            if success:
+                # Refresh metadata panel and tag viewer
+                self.metadata_panel._populate_tags()
+                if self.dialog_coordinator.tag_viewer_dialog:
+                    search_text = self.dialog_coordinator.tag_viewer_dialog.search_edit.text()
+                    self.dialog_coordinator.tag_viewer_dialog._populate_tags(search_text)
+                # Update undo/redo state
+                self._update_undo_redo_state()
+    
+    def _update_undo_redo_state(self) -> None:
+        """Update undo/redo menu item states."""
+        if self.current_dataset is not None and self.tag_edit_history:
+            can_undo = self.tag_edit_history.can_undo(self.current_dataset)
+            can_redo = self.tag_edit_history.can_redo(self.current_dataset)
+            self.main_window.update_undo_redo_state(can_undo, can_redo)
+        else:
+            self.main_window.update_undo_redo_state(False, False)
     
     def _update_roi_list(self) -> None:
         """Update ROI list panel."""
@@ -414,6 +458,10 @@ class DICOMViewerApp(QObject):
         
         # Export
         self.main_window.export_requested.connect(self._open_export)
+        
+        # Undo/Redo tag edits
+        self.main_window.undo_tag_edit_requested.connect(self._undo_tag_edit)
+        self.main_window.redo_tag_edit_requested.connect(self._redo_tag_edit)
         
         # ROI drawing signals
         self.image_viewer.roi_drawing_started.connect(self.roi_coordinator.handle_roi_drawing_started)
@@ -506,6 +554,9 @@ class DICOMViewerApp(QObject):
         # Series navigator signals
         self.series_navigator.series_selected.connect(self._on_series_navigator_selected)
         self.image_viewer.toggle_series_navigator_requested.connect(self.main_window.toggle_series_navigator)
+        
+        # Tag edit signals
+        self.metadata_panel.tag_edited.connect(lambda: self._update_undo_redo_state())
     
     def _open_files(self) -> None:
         """Handle open files request."""
@@ -564,6 +615,9 @@ class DICOMViewerApp(QObject):
             
             # Update current dataset reference
             self.current_dataset = dataset
+            
+            # Update undo/redo state when dataset changes
+            self._update_undo_redo_state()
             
             # Update slice navigator
             if self.current_studies and self.current_study_uid and self.current_series_uid:

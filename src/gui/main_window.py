@@ -68,6 +68,8 @@ class MainWindow(QMainWindow):
     quick_start_guide_requested = Signal()  # Emitted when Quick Start Guide is requested
     tag_export_requested = Signal()  # Emitted when tag export is requested
     series_navigator_visibility_changed = Signal(bool)  # Emitted when series navigator visibility changes
+    undo_tag_edit_requested = Signal()  # Emitted when undo tag edit is requested
+    redo_tag_edit_requested = Signal()  # Emitted when redo tag edit is requested
     
     def __init__(self, config_manager: Optional[ConfigManager] = None):
         """
@@ -119,6 +121,21 @@ class MainWindow(QMainWindow):
         # Recent Files submenu
         self.recent_menu = file_menu.addMenu("&Recent")
         self._update_recent_menu()
+        
+        file_menu.addSeparator()
+        
+        # Undo/Redo actions for tag edits
+        self.undo_tag_edit_action = QAction("&Undo Tag Edit", self)
+        self.undo_tag_edit_action.setShortcut(QKeySequence.Undo)
+        self.undo_tag_edit_action.setEnabled(False)
+        self.undo_tag_edit_action.triggered.connect(self.undo_tag_edit_requested.emit)
+        file_menu.addAction(self.undo_tag_edit_action)
+        
+        self.redo_tag_edit_action = QAction("&Redo Tag Edit", self)
+        self.redo_tag_edit_action.setShortcut(QKeySequence.Redo)
+        self.redo_tag_edit_action.setEnabled(False)
+        self.redo_tag_edit_action.triggered.connect(self.redo_tag_edit_requested.emit)
+        file_menu.addAction(self.redo_tag_edit_action)
         
         file_menu.addSeparator()
         
@@ -1516,6 +1533,17 @@ class MainWindow(QMainWindow):
             message: Status message to display
         """
         self.statusBar().showMessage(message)
+    
+    def update_undo_redo_state(self, can_undo: bool, can_redo: bool) -> None:
+        """
+        Update the enabled state of undo/redo menu items.
+        
+        Args:
+            can_undo: True if undo is possible
+            can_redo: True if redo is possible
+        """
+        self.undo_tag_edit_action.setEnabled(can_undo)
+        self.redo_tag_edit_action.setEnabled(can_redo)
     
     def set_series_navigator(self, navigator_widget: QWidget) -> None:
         """

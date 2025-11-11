@@ -19,13 +19,16 @@ Requirements:
 
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                                 QTreeWidget, QTreeWidgetItem, QLineEdit,
-                                QPushButton, QCheckBox, QSplitter)
+                                QPushButton, QCheckBox, QSplitter, QDialog)
 from PySide6.QtCore import Qt, Signal
 from typing import Optional, Dict, Any
 import pydicom
 from pydicom.dataset import Dataset
 
 from core.dicom_parser import DICOMParser
+from core.dicom_editor import DICOMEditor
+from core.tag_edit_history import TagEditHistoryManager, EditTagCommand
+from gui.dialogs.tag_edit_dialog import TagEditDialog
 
 
 class MetadataPanel(QWidget):
@@ -55,8 +58,19 @@ class MetadataPanel(QWidget):
         self.parser: Optional[DICOMParser] = None
         self.dataset: Optional[Dataset] = None
         self.show_private_tags = True
+        self.editor: Optional[DICOMEditor] = None
+        self.history_manager: Optional[TagEditHistoryManager] = None
         
         self._create_ui()
+    
+    def set_history_manager(self, history_manager: TagEditHistoryManager) -> None:
+        """
+        Set the tag edit history manager.
+        
+        Args:
+            history_manager: TagEditHistoryManager instance
+        """
+        self.history_manager = history_manager
     
     def _create_ui(self) -> None:
         """Create the UI components."""
@@ -97,6 +111,7 @@ class MetadataPanel(QWidget):
         """
         self.dataset = dataset
         self.parser = DICOMParser(dataset)
+        self.editor = DICOMEditor(dataset)
         self._populate_tags()
     
     def _populate_tags(self) -> None:
@@ -174,13 +189,64 @@ class MetadataPanel(QWidget):
         if column != 3:  # Only edit value column
             return
         
-        tag_data = item.data(0, Qt.ItemDataRole.UserRole + 1)
-        if tag_data is None:
+        # Skip group items
+        if item.parent() is None:
             return
         
-        # Create edit dialog or inline editor
-        # For now, we'll use a simple approach
-        # In a full implementation, this would open a proper edit dialog
-        # that handles different VR types appropriately
-        pass  # Placeholder for edit functionality
+        tag_data = item.data(0, Qt.ItemDataRole.UserRole + 1)
+        tag_str = item.data(0, Qt.ItemDataRole.UserRole)
+        if tag_data is None or tag_str is None:
+            return
+        
+        if self.dataset is None or self.editor is None:
+            return
+        
+        # Get tag information
+        tag_name = tag_data.get("name", tag_str)
+        vr = tag_data.get("VR", "")
+        current_value = tag_data.get("value", "")
+        
+        # Open edit dialog
+        dialog = TagEditDialog(
+            self,
+            tag_str=tag_str,
+            tag_name=tag_name,
+            vr=vr,
+            current_value=current_value
+        )
+        
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            new_value = dialog.get_value()
+            if new_value is not None:
+                # Get old value for undo/redo
+                old_value = current_value
+                
+                # Create edit command
+                if self.history_manager and self.dataset:
+                    command = EditTagCommand(
+                        self.dataset,
+                        tag_str,
+                        old_value,
+                        new_value,
+                        vr
+                    )
+                    # Execute command through history manager
+                    self.history_manager.execute_command(command)
+                else:
+                    # Fallback: update directly if no history manager
+                    success = self.editor.update_tag(tag_str, new_value, vr)
+                    if not success:
+                        from PySide6.QtWidgets import QMessageBox
+                        QMessageBox.warning(
+                            self,
+                            "Edit Failed",
+                            f"Failed to update tag {tag_str}.\n"
+                            "The tag may be read-only or the value may be invalid."
+                        )
+                        return
+                
+                # Emit signal
+                self.tag_edited.emit(tag_str, new_value)
+                # Refresh the tree view
+                self._populate_tags()
 

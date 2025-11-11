@@ -16,7 +16,7 @@ Requirements:
     - ConfigManager for configuration
 """
 
-from typing import Optional, Callable
+from typing import Optional, Callable, Any
 from gui.dialogs.settings_dialog import SettingsDialog
 from gui.dialogs.tag_viewer_dialog import TagViewerDialog
 from gui.dialogs.overlay_config_dialog import OverlayConfigDialog
@@ -48,7 +48,8 @@ class DialogCoordinator:
         main_window: MainWindow,
         get_current_studies: Callable[[], dict],
         settings_applied_callback: Optional[Callable[[], None]] = None,
-        overlay_config_applied_callback: Optional[Callable[[], None]] = None
+        overlay_config_applied_callback: Optional[Callable[[], None]] = None,
+        tag_edit_history: Optional[Any] = None
     ):
         """
         Initialize the dialog coordinator.
@@ -59,12 +60,14 @@ class DialogCoordinator:
             get_current_studies: Callback to get current studies
             settings_applied_callback: Optional callback when settings are applied
             overlay_config_applied_callback: Optional callback when overlay config is applied
+            tag_edit_history: Optional TagEditHistoryManager for tag editing undo/redo
         """
         self.config_manager = config_manager
         self.main_window = main_window
         self.get_current_studies = get_current_studies
         self.settings_applied_callback = settings_applied_callback
         self.overlay_config_applied_callback = overlay_config_applied_callback
+        self.tag_edit_history = tag_edit_history
         
         # Tag viewer dialog (persistent)
         self.tag_viewer_dialog: Optional[TagViewerDialog] = None
@@ -85,6 +88,9 @@ class DialogCoordinator:
         """
         if self.tag_viewer_dialog is None:
             self.tag_viewer_dialog = TagViewerDialog(self.main_window)
+            # Set history manager if available
+            if self.tag_edit_history is not None:
+                self.tag_viewer_dialog.set_history_manager(self.tag_edit_history)
         
         # Update with current dataset if available
         if current_dataset is not None:
