@@ -113,7 +113,7 @@ class QuickStartGuideDialog(QDialog):
             h2_color = "#e0e0e0"
             text_color = "#ffffff"
             strong_color = "#4a9eff"  # Light blue for better visibility on dark
-            code_bg = "#3c3c3c"  # Darker grey for code blocks
+            code_bg = "#1e1e1e"  # Match HTML content background for code blocks
             code_text = "#ffffff"
         else:
             # Light theme: dark text on light background
