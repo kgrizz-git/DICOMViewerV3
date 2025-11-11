@@ -170,24 +170,22 @@ class MainWindow(QMainWindow):
         self.dark_theme_action.triggered.connect(lambda: self._set_theme("dark"))
         theme_menu.addAction(self.dark_theme_action)
         
-        # Tools menu
-        tools_menu = menubar.addMenu("&Tools")
+        view_menu.addSeparator()
         
         # Settings action
         settings_action = QAction("&Settings...", self)
         settings_action.setShortcut(QKeySequence.Preferences)
         settings_action.triggered.connect(self.settings_requested.emit)
-        tools_menu.addAction(settings_action)
-        
-        tools_menu.addSeparator()
+        view_menu.addAction(settings_action)
         
         # Overlay Configuration action
         overlay_config_action = QAction("Overlay &Configuration...", self)
         overlay_config_action.setShortcut(QKeySequence("Ctrl+O"))
         overlay_config_action.triggered.connect(self.overlay_config_requested.emit)
-        tools_menu.addAction(overlay_config_action)
+        view_menu.addAction(overlay_config_action)
         
-        tools_menu.addSeparator()
+        # Tools menu
+        tools_menu = menubar.addMenu("&Tools")
         
         # Tag Viewer/Editor action
         tag_viewer_action = QAction("View/Edit DICOM &Tags...", self)
@@ -1230,64 +1228,80 @@ class MainWindow(QMainWindow):
         # Set QTextEdit background to match metadata panel in dark theme
         if theme == "dark":
             text_edit.setStyleSheet("QTextEdit { background-color: #1e1e1e; }")
-        text_edit.setHtml(
-            "<h2>DICOM Viewer V3</h2>"
-            "<p><b>Made by Kevin Grizzard</b><br>"
-            "Available at <a href='https://github.com/kgrizz-git/DICOMViewerV3'>https://github.com/kgrizz-git/DICOMViewerV3</a></p>"
-            "<hr>"
-            "<p>A cross-platform DICOM viewer application.</p>"
-            "<h3>Features:</h3>"
-            "<h4>File Management:</h4>"
-            "<ul>"
-            "<li>Open DICOM files and folders</li>"
-            "<li>Recursive folder search</li>"
-            "<li>Multiple file selection</li>"
-            "<li>Recent files support</li>"
-            "</ul>"
-            "<h4>Image Display:</h4>"
-            "<ul>"
-            "<li>Zoom and pan functionality</li>"
-            "<li>Window width and level adjustment</li>"
-            "<li>Slice navigation (arrow keys, mouse wheel)</li>"
-            "<li>Series navigation with thumbnail navigator</li>"
-            "<li>Dark and light themes</li>"
-            "<li>Reset view to fit viewport</li>"
-            "</ul>"
-            "<h4>Analysis Tools:</h4>"
-            "<ul>"
-            "<li>Draw elliptical and rectangular ROIs</li>"
-            "<li>ROI statistics (mean, std dev, min, max, area)</li>"
-            "<li>Distance measurements (pixels, mm, cm)</li>"
-            "<li>Undo/redo functionality</li>"
-            "</ul>"
-            "<h4>Metadata and Overlays:</h4>"
-            "<ul>"
-            "<li>Customizable DICOM metadata overlays</li>"
-            "<li>Toggle overlay visibility (3 states)</li>"
-            "<li>View and edit all DICOM tags</li>"
-            "<li>Export selected tags to Excel/CSV</li>"
-            "</ul>"
-            "<h4>Data Management:</h4>"
-            "<ul>"
-            "<li>Clear ROIs from slice or dataset</li>"
-            "<li>Clear measurements</li>"
-            "<li>ROI list panel with selection</li>"
-            "</ul>"
-            "<h4>Export:</h4>"
-            "<ul>"
-            "<li>Export images as PNG, JPEG, or DICOM</li>"
-            "<li>Hierarchical selection (studies, series, slices)</li>"
-            "<li>Include overlays, ROIs, and measurements</li>"
-            "<li>Export at displayed resolution option</li>"
-            "<li>Export selected DICOM tags to Excel/CSV</li>"
-            "</ul>"
-            "<h4>Planned Features (Not yet implemented):</h4>"
-            "<ul>"
-            "<li>Histogram display</li>"
-            "<li>Intensity projections (AIP/MIP)</li>"
-            "<li>RT STRUCT overlays</li>"
-            "</ul>"
-        )
+        
+        # Create HTML content with theme-based link styling
+        if theme == "dark":
+            link_color = "#4a9eff"  # Light blue for dark theme
+        else:
+            link_color = "#2980b9"  # Darker blue for light theme
+        
+        html_content = f"""<html>
+<head>
+    <style>
+        a {{ color: {link_color}; }}
+    </style>
+</head>
+<body>
+    <h2>DICOM Viewer V3</h2>
+    <p><b>Made by Kevin Grizzard</b><br>
+    Available at <a href='https://github.com/kgrizz-git/DICOMViewerV3'>https://github.com/kgrizz-git/DICOMViewerV3</a></p>
+    <hr>
+    <p>A cross-platform DICOM viewer application.</p>
+    <h3>Features:</h3>
+    <h4>File Management:</h4>
+    <ul>
+    <li>Open DICOM files and folders</li>
+    <li>Recursive folder search</li>
+    <li>Multiple file selection</li>
+    <li>Recent files support</li>
+    </ul>
+    <h4>Image Display:</h4>
+    <ul>
+    <li>Zoom and pan functionality</li>
+    <li>Window width and level adjustment</li>
+    <li>Slice navigation (arrow keys, mouse wheel)</li>
+    <li>Series navigation with thumbnail navigator</li>
+    <li>Dark and light themes</li>
+    <li>Reset view to fit viewport</li>
+    </ul>
+    <h4>Analysis Tools:</h4>
+    <ul>
+    <li>Draw elliptical and rectangular ROIs</li>
+    <li>ROI statistics (mean, std dev, min, max, area)</li>
+    <li>Distance measurements (pixels, mm, cm)</li>
+    <li>Undo/redo functionality</li>
+    </ul>
+    <h4>Metadata and Overlays:</h4>
+    <ul>
+    <li>Customizable DICOM metadata overlays</li>
+    <li>Toggle overlay visibility (3 states)</li>
+    <li>View and edit all DICOM tags</li>
+    <li>Export selected tags to Excel/CSV</li>
+    </ul>
+    <h4>Data Management:</h4>
+    <ul>
+    <li>Clear ROIs from slice or dataset</li>
+    <li>Clear measurements</li>
+    <li>ROI list panel with selection</li>
+    </ul>
+    <h4>Export:</h4>
+    <ul>
+    <li>Export images as PNG, JPEG, or DICOM</li>
+    <li>Hierarchical selection (studies, series, slices)</li>
+    <li>Include overlays, ROIs, and measurements</li>
+    <li>Export at displayed resolution option</li>
+    <li>Export selected DICOM tags to Excel/CSV</li>
+    </ul>
+    <h4>Planned Features (Not yet implemented):</h4>
+    <ul>
+    <li>Histogram display</li>
+    <li>Intensity projections (AIP/MIP)</li>
+    <li>RT STRUCT overlays</li>
+    </ul>
+</body>
+</html>"""
+        
+        text_edit.setHtml(html_content)
         layout.addWidget(text_edit)
         
         # Add OK button
