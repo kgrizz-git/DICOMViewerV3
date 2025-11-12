@@ -71,11 +71,11 @@ class ROIListPanel(QWidget):
         self.roi_list.itemSelectionChanged.connect(self._on_list_selection_changed)
         self.roi_list.itemDoubleClicked.connect(self._on_item_double_clicked)
         
-        # Calculate maximum height to show only 6 ROIs (2/3 of current 9)
+        # Calculate maximum height to show 4 ROIs (reduced to make room for zoom display)
         # Use typical row height for QListWidget (approximately 25px per row)
-        # Calculate height: (row height * 6 rows) + some padding
+        # Calculate height: (row height * 4 rows) + some padding
         row_height = 25  # Typical row height for QListWidget
-        max_list_height = (row_height * 6) + 10  # 10px padding
+        max_list_height = (row_height * 4) + 10  # 10px padding
         self.roi_list.setMaximumHeight(max_list_height)
         
         layout.addWidget(self.roi_list)

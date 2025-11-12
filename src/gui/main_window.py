@@ -71,11 +71,8 @@ class MainWindow(QMainWindow):
     series_navigator_visibility_changed = Signal(bool)  # Emitted when series navigator visibility changes
     undo_tag_edit_requested = Signal()  # Emitted when undo tag edit is requested
     redo_tag_edit_requested = Signal()  # Emitted when redo tag edit is requested
-    cine_play_requested = Signal()  # Emitted when cine play is requested
-    cine_pause_requested = Signal()  # Emitted when cine pause is requested
-    cine_stop_requested = Signal()  # Emitted when cine stop is requested
-    cine_speed_changed = Signal(float)  # Emitted when cine speed changes (speed multiplier)
-    cine_loop_toggled = Signal(bool)  # Emitted when cine loop is toggled
+    # Note: Cine control signals moved to CineControlsWidget
+    # Keeping these signals for backward compatibility but they're not used anymore
     
     def __init__(self, config_manager: Optional[ConfigManager] = None):
         """

@@ -488,6 +488,7 @@ class ConfigManager:
         """
         self.config["metadata_panel_column_widths"] = widths
         self.save_config()
+<<<<<<< HEAD
     
     def get_cine_default_speed(self) -> float:
         """
