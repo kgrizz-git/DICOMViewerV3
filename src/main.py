@@ -649,6 +649,7 @@ class DICOMViewerApp(QObject):
         self.cine_controls_widget.stop_requested.connect(self._on_cine_stop)
         self.cine_controls_widget.speed_changed.connect(self._on_cine_speed_changed)
         self.cine_controls_widget.loop_toggled.connect(self._on_cine_loop_toggled)
+        self.cine_controls_widget.frame_position_changed.connect(self._on_frame_slider_changed)
         
         # Cine control signals from context menu
         self.image_viewer.cine_play_requested.connect(self._on_cine_play)
@@ -1234,6 +1235,11 @@ class DICOMViewerApp(QObject):
         # print(f"[ROI DEBUG] AFTER update: self.current_slice_index={self.current_slice_index}")
         # Now handle the slice change - at this point self.current_slice_index is correct
         self.slice_display_manager.handle_slice_changed(slice_index)
+        
+        # Update frame slider position
+        total_slices = self.slice_navigator.total_slices
+        if total_slices > 0:
+            self.cine_controls_widget.update_frame_position(slice_index, total_slices)
     
     def _on_manual_slice_navigation(self, slice_index: int) -> None:
         """
@@ -1268,6 +1274,15 @@ class DICOMViewerApp(QObject):
         self.cine_controls_widget.set_controls_enabled(is_cine_capable)
         # Also enable/disable cine controls in context menu
         self.image_viewer.set_cine_controls_enabled(is_cine_capable)
+        
+        # Update frame slider with current frame and total frames
+        if is_cine_capable:
+            total_slices = self.slice_navigator.total_slices
+            current_slice = self.current_slice_index
+            self.cine_controls_widget.update_frame_position(current_slice, total_slices)
+        else:
+            # Reset slider when not cine-capable
+            self.cine_controls_widget.update_frame_position(0, 0)
         
         # If not cine-capable, stop any active playback
         if not is_cine_capable and self.cine_player.is_playback_active():
@@ -1347,6 +1362,22 @@ class DICOMViewerApp(QObject):
             True if loop is enabled, False otherwise
         """
         return self.cine_player.loop_enabled
+    
+    def _on_frame_slider_changed(self, frame_index: int) -> None:
+        """
+        Handle frame slider value change (user manually dragged slider).
+        
+        Args:
+            frame_index: Frame index to navigate to (0-based)
+        """
+        # Pause playback if currently playing (user is manually navigating)
+        if self.cine_player.is_playback_active():
+            self.cine_player.pause_playback()
+        
+        # Navigate to the selected frame
+        total_slices = self.slice_navigator.total_slices
+        if 0 <= frame_index < total_slices:
+            self.slice_navigator.set_current_slice(frame_index)
     
     def _hide_measurement_labels(self, hide: bool) -> None:
         """
