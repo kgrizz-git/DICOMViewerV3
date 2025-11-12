@@ -70,6 +70,10 @@ class OverlayManager:
             "lower_right": []
         }
         
+        # Cache maximum text widths for right-aligned corners (prevents jitter during cine playback)
+        # Stores max width in viewport pixels for each right-aligned corner
+        self.corner_max_width_map: Dict[str, float] = {}
+        
         # Default fields for minimal mode
         self.minimal_fields = [
             "PatientName",
@@ -509,6 +513,10 @@ class OverlayManager:
                         # Add some padding to max width for better appearance
                         max_text_width_viewport += 5
                         
+                        # Cache the max width for this corner to prevent jitter during cine playback
+                        # This ensures consistent positioning even when text content changes between slices
+                        self.corner_max_width_map[corner_key] = max_text_width_viewport
+                        
                         # Convert viewport pixel width to scene coordinates
                         # viewport_to_scene_scale is already calculated above for all corners
                         max_text_width_scene = max_text_width_viewport * viewport_to_scene_scale
@@ -601,6 +609,9 @@ class OverlayManager:
                 # Any other error, skip this item
                 pass
         self.overlay_items.clear()
+        
+        # Clear width cache when items are cleared
+        self.corner_max_width_map.clear()
     
     def update_overlay_positions(self, scene) -> None:
         """
@@ -672,14 +683,21 @@ class OverlayManager:
             
             if is_right_aligned:
                 # Right-aligned: multiple items (one per line)
-                # Calculate max text width for positioning
-                max_text_width_viewport = 0
-                for item in valid_items:
-                    if item is not None:
-                        item_width = item.boundingRect().width()
-                        max_text_width_viewport = max(max_text_width_viewport, item_width)
+                # Use cached max width to prevent jitter during cine playback
+                # The width is cached when items are created and only changes when items are recreated
+                max_text_width_viewport = self.corner_max_width_map.get(corner_key, 0)
                 
-                max_text_width_viewport += 5  # Add padding
+                # Fallback: if cache is missing (shouldn't happen), recalculate from items
+                if max_text_width_viewport == 0:
+                    for item in valid_items:
+                        if item is not None:
+                            item_width = item.boundingRect().width()
+                            max_text_width_viewport = max(max_text_width_viewport, item_width)
+                    max_text_width_viewport += 5  # Add padding
+                    # Cache it for future use
+                    if max_text_width_viewport > 0:
+                        self.corner_max_width_map[corner_key] = max_text_width_viewport
+                
                 max_text_width_scene = max_text_width_viewport * viewport_to_scene_scale
                 
                 # Calculate right edge position
