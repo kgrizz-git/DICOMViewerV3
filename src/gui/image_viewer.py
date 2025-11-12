@@ -136,6 +136,9 @@ class ImageViewer(QGraphicsView):
         self.last_horizontal_scroll = 0
         self.last_vertical_scroll = 0
         
+        # Debounced timer for panning updates (prevents jitter during rapid panning)
+        self._pan_update_timer: Optional[QTimer] = None
+        
         # Right mouse drag for window/level adjustment
         self.right_mouse_drag_start_pos: Optional[QPointF] = None
         self.right_mouse_drag_start_center: Optional[float] = None
@@ -277,22 +280,27 @@ class ImageViewer(QGraphicsView):
         viewport_at_min_zoom_width = viewport_width_pixels / self.min_zoom if self.min_zoom > 0 else viewport_width_pixels
         viewport_at_min_zoom_height = viewport_height_pixels / self.min_zoom if self.min_zoom > 0 else viewport_height_pixels
         
+        # Calculate viewport size in scene coordinates at zoom = 0.5
+        # At zoom = 0.5, each viewport pixel represents 2 scene coordinate units
+        viewport_at_zoom_0_5_width = viewport_width_pixels / 0.5
+        viewport_at_zoom_0_5_height = viewport_height_pixels / 0.5
+        
         # Compare both in scene coordinates (at zoom = 1.0 for the comparison)
         # If image is larger than viewport, use 2x image size
-        # Otherwise, use 1.0x viewport at min zoom
+        # Otherwise, use 3x image size + viewport at zoom 0.5
         if image_width > viewport_width_scene:
             scene_width = image_width * 2.0
             # print(f"[SCENE_RECT] Image width ({image_width:.2f}) > viewport width in scene coords ({viewport_width_scene:.2f}) - using 2x image size: {scene_width:.2f}")
         else:
-            scene_width = viewport_at_min_zoom_width * 1.0
-            # print(f"[SCENE_RECT] Image width ({image_width:.2f}) <= viewport width in scene coords ({viewport_width_scene:.2f}) - using 1.0x viewport at min zoom: {scene_width:.2f}")
+            scene_width = 3.0 * image_width + viewport_at_zoom_0_5_width
+            # print(f"[SCENE_RECT] Image width ({image_width:.2f}) <= viewport width in scene coords ({viewport_width_scene:.2f}) - using 3x image size + viewport at zoom 0.5: {scene_width:.2f}")
         
         if image_height > viewport_height_scene:
             scene_height = image_height * 2.0
             # print(f"[SCENE_RECT] Image height ({image_height:.2f}) > viewport height in scene coords ({viewport_height_scene:.2f}) - using 2x image size: {scene_height:.2f}")
         else:
-            scene_height = viewport_at_min_zoom_height * 1.0
-            # print(f"[SCENE_RECT] Image height ({image_height:.2f}) <= viewport height in scene coords ({viewport_height_scene:.2f}) - using 1.0x viewport at min zoom: {scene_height:.2f}")
+            scene_height = 3.0 * image_height + viewport_at_zoom_0_5_height
+            # print(f"[SCENE_RECT] Image height ({image_height:.2f}) <= viewport height in scene coords ({viewport_height_scene:.2f}) - using 3x image size + viewport at zoom 0.5: {scene_height:.2f}")
         
         # Calculate margins to center the image in the expanded scene rect
         margin_x = (scene_width - image_width) / 2.0
@@ -1045,6 +1053,10 @@ class ImageViewer(QGraphicsView):
         When panning via scrollbars, the view's transform doesn't change,
         but the viewport-to-scene mapping does change. We need to update
         overlay positions to keep them anchored to viewport edges.
+        
+        Updates overlay positions immediately for smooth panning, using
+        a debounced timer only to ensure final position is correct when
+        panning stops.
         """
         # Check if scrollbar values actually changed
         current_h = self.horizontalScrollBar().value()
@@ -1053,9 +1065,25 @@ class ImageViewer(QGraphicsView):
         if current_h != self.last_horizontal_scroll or current_v != self.last_vertical_scroll:
             self.last_horizontal_scroll = current_h
             self.last_vertical_scroll = current_v
-            # Emit transform_changed signal to update overlay positions
-            # Use QTimer to batch rapid scrollbar changes
-            QTimer.singleShot(10, lambda: self.transform_changed.emit())
+            
+            # Emit transform_changed immediately for smooth updates during panning
+            # This ensures overlay positions update in sync with viewport movement
+            self.transform_changed.emit()
+            
+            # Also set up a debounced timer for a final update when panning stops
+            # This ensures overlay positions are correct even if rapid panning
+            # causes some updates to be missed
+            if self._pan_update_timer is not None and self._pan_update_timer.isActive():
+                self._pan_update_timer.stop()
+            
+            if self._pan_update_timer is None:
+                self._pan_update_timer = QTimer()
+                self._pan_update_timer.setSingleShot(True)
+                self._pan_update_timer.timeout.connect(lambda: self.transform_changed.emit())
+            
+            # Start timer with short delay - this will fire if panning stops
+            # and ensures final position is correct
+            self._pan_update_timer.start(10)
     
     def get_viewport_center_scene(self) -> Optional[QPointF]:
         """

@@ -24,12 +24,28 @@ This application provides comprehensive DICOM image viewing capabilities with ad
 - Switch mouse scroll wheel between zooming and slice navigation
 - Dark or light interface option
 - Reset view to fit viewport
+- **Cine Playback** (for multi-frame DICOM series):
+  - Automatic frame-by-frame playback
+  - Play, pause, and stop controls
+  - Adjustable playback speed (0.25x, 0.5x, 1x, 2x, 4x)
+  - Loop playback option
+  - Frame slider for manual navigation
+  - Real-time FPS display
+  - Frame position indicator (current/total)
 
 ### Metadata and Overlays
 - Customizable DICOM metadata overlays on images
 - Toggle overlay visibility with configurable content (3 states: all visible, corner text hidden, all text hidden)
-- Display and edit all DICOM tags, including private tags
-- Export selected DICOM tags to Excel or CSV files
+- **DICOM Tag Editing:**
+  - View and edit all DICOM tags, including private tags
+  - Tree view for browsing tags
+  - Search functionality for finding specific tags
+  - Undo/redo support for tag edits
+  - Save changes to DICOM files
+- **DICOM Tag Export:**
+  - Export selected DICOM tags to Excel (.xlsx) or CSV files
+  - Choose which tags to export
+  - Export from multiple slices or entire series
 
 ### Analysis Tools
 - Draw elliptical or rectangular regions of interest (ROIs)
@@ -71,6 +87,8 @@ This application provides comprehensive DICOM image viewing capabilities with ad
 - **Spacebar**: Toggle overlay visibility (cycles through 3 states)
 - **Arrow Keys**: Navigate slices (Up/Down) and series (Left/Right)
 - **Delete**: Delete selected ROI or measurement
+- **Ctrl+T**: View/Edit DICOM Tags
+- **Shift+Ctrl+T**: Export DICOM Tags
 
 ## Project Structure
 
