@@ -188,7 +188,6 @@ class MainWindow(QMainWindow):
         
         # Settings action
         settings_action = QAction("&Settings...", self)
-        settings_action.setShortcut(QKeySequence.Preferences)
         settings_action.triggered.connect(self.settings_requested.emit)
         view_menu.addAction(settings_action)
         
@@ -209,6 +208,7 @@ class MainWindow(QMainWindow):
         
         # Tag Export action
         tag_export_action = QAction("Export DICOM &Tags...", self)
+        tag_export_action.setShortcut(QKeySequence("Shift+Ctrl+T"))
         tag_export_action.triggered.connect(self.tag_export_requested.emit)
         tools_menu.addAction(tag_export_action)
         
@@ -829,6 +829,19 @@ class MainWindow(QMainWindow):
                     border: 1px solid #555555;
                     padding: 3px;
                 }}
+                
+                /* Series Navigator */
+                QWidget[objectName="series_navigator"] {{
+                    background-color: #1b1b1b;
+                }}
+                
+                QScrollArea[objectName="series_navigator_scroll_area"] {{
+                    background-color: #1b1b1b;
+                }}
+                
+                QWidget[objectName="series_navigator_container"] {{
+                    background-color: #1b1b1b;
+                }}
             """.format(white_checkmark_path=white_checkmark_path, black_checkmark_path=black_checkmark_path)
         else:
             # Light theme - simplified palette-like colors
@@ -1185,6 +1198,19 @@ class MainWindow(QMainWindow):
                     color: #000000;
                     border: 1px solid #c0c0c0;
                     padding: 3px;
+                }}
+                
+                /* Series Navigator */
+                QWidget[objectName="series_navigator"] {{
+                    background-color: #d0d0d0;
+                }}
+                
+                QScrollArea[objectName="series_navigator_scroll_area"] {{
+                    background-color: #d0d0d0;
+                }}
+                
+                QWidget[objectName="series_navigator_container"] {{
+                    background-color: #d0d0d0;
                 }}
             """.format(white_checkmark_path=white_checkmark_path, black_checkmark_path=black_checkmark_path)
         

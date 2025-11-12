@@ -194,6 +194,7 @@ class SeriesNavigator(QWidget):
             parent: Parent widget
         """
         super().__init__(parent)
+        self.setObjectName("series_navigator")
         self.dicom_processor = dicom_processor
         self.current_study_uid = ""
         self.current_series_uid = ""
@@ -215,12 +216,11 @@ class SeriesNavigator(QWidget):
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll_area.setFrameShape(QFrame.Shape.NoFrame)
-        # Set dark background color
-        scroll_area.setStyleSheet("QScrollArea { background-color: #1b1b1b; }")
+        scroll_area.setObjectName("series_navigator_scroll_area")
         
         # Container widget for thumbnails
         self.thumbnail_container = QWidget()
-        self.thumbnail_container.setStyleSheet("QWidget { background-color: #1b1b1b; }")
+        self.thumbnail_container.setObjectName("series_navigator_container")
         self.thumbnail_layout = QHBoxLayout(self.thumbnail_container)
         self.thumbnail_layout.setContentsMargins(5, 5, 5, 5)
         self.thumbnail_layout.setSpacing(5)
@@ -231,8 +231,6 @@ class SeriesNavigator(QWidget):
         
         # Set fixed height for navigator (85% of 93px)
         self.setFixedHeight(79)
-        # Set dark background color for the main widget
-        self.setStyleSheet("QWidget { background-color: #1b1b1b; }")
     
     def update_series_list(self, studies: Dict, current_study_uid: str, current_series_uid: str) -> None:
         """

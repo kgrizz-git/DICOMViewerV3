@@ -16,7 +16,7 @@ Requirements:
 """
 
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-                                QPushButton, QComboBox, QGroupBox, QSizePolicy)
+                                QPushButton, QComboBox, QGroupBox, QSizePolicy, QSlider)
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QAction
 
@@ -32,6 +32,7 @@ class CineControlsWidget(QWidget):
     - Speed dropdown (0.25x, 0.5x, 1x, 2x, 4x)
     - Loop toggle button
     - FPS display label
+    - Frame slider showing current frame out of total
     """
     
     # Signals
@@ -40,6 +41,7 @@ class CineControlsWidget(QWidget):
     stop_requested = Signal()  # Emitted when stop is requested
     speed_changed = Signal(float)  # Emitted when speed changes (speed multiplier)
     loop_toggled = Signal(bool)  # Emitted when loop is toggled
+    frame_position_changed = Signal(int)  # Emitted when frame slider is moved (frame index)
     
     def __init__(self, parent=None):
         """
@@ -98,7 +100,7 @@ class CineControlsWidget(QWidget):
         
         group_layout.addLayout(buttons_layout)
         
-        # Speed and FPS row
+        # Speed, FPS, and Frame Slider row
         speed_fps_layout = QHBoxLayout()
         speed_fps_layout.setSpacing(5)
         
@@ -117,6 +119,25 @@ class CineControlsWidget(QWidget):
         self.fps_label = QLabel("FPS: --")
         self.fps_label.setToolTip("Current frame rate")
         speed_fps_layout.addWidget(self.fps_label)
+        
+        # Frame slider
+        frame_label = QLabel("Frame:")
+        speed_fps_layout.addWidget(frame_label)
+        
+        self.frame_slider = QSlider(Qt.Orientation.Horizontal)
+        self.frame_slider.setMinimum(0)
+        self.frame_slider.setMaximum(0)
+        self.frame_slider.setValue(0)
+        self.frame_slider.setToolTip("Current frame / Total frames")
+        self.frame_slider.setEnabled(False)
+        self.frame_slider.valueChanged.connect(self._on_frame_slider_changed)
+        speed_fps_layout.addWidget(self.frame_slider, 1)  # Give slider stretch factor to take available space
+        
+        # Frame position label (e.g., "1 / 10")
+        self.frame_position_label = QLabel("0 / 0")
+        self.frame_position_label.setToolTip("Current frame / Total frames")
+        self.frame_position_label.setMinimumWidth(50)
+        speed_fps_layout.addWidget(self.frame_position_label)
         
         speed_fps_layout.addStretch()
         group_layout.addLayout(speed_fps_layout)
@@ -149,6 +170,10 @@ class CineControlsWidget(QWidget):
         """Handle loop toggle."""
         self.loop_toggled.emit(checked)
     
+    def _on_frame_slider_changed(self, value: int) -> None:
+        """Handle frame slider value change."""
+        self.frame_position_changed.emit(value)
+    
     def set_controls_enabled(self, enabled: bool) -> None:
         """
         Enable or disable cine controls.
@@ -172,6 +197,7 @@ class CineControlsWidget(QWidget):
         self.stop_button.setEnabled(enabled)
         self.speed_combo.setEnabled(enabled)
         self.loop_button.setEnabled(enabled)
+        self.frame_slider.setEnabled(enabled)
     
     def update_playback_state(self, is_playing: bool) -> None:
         """
@@ -217,4 +243,27 @@ class CineControlsWidget(QWidget):
             enabled: True to enable looping, False to disable
         """
         self.loop_button.setChecked(enabled)
+    
+    def update_frame_position(self, current_frame: int, total_frames: int) -> None:
+        """
+        Update frame slider position and range.
+        
+        Args:
+            current_frame: Current frame index (0-based)
+            total_frames: Total number of frames
+        """
+        if total_frames <= 0:
+            self.frame_slider.setMaximum(0)
+            self.frame_slider.setValue(0)
+            self.frame_position_label.setText("0 / 0")
+            return
+        
+        # Block signals to prevent emitting when we programmatically update the slider
+        self.frame_slider.blockSignals(True)
+        self.frame_slider.setMaximum(max(0, total_frames - 1))
+        self.frame_slider.setValue(max(0, min(current_frame, total_frames - 1)))
+        self.frame_slider.blockSignals(False)
+        
+        # Update label (display 1-based frame numbers)
+        self.frame_position_label.setText(f"{current_frame + 1} / {total_frames}")
 
