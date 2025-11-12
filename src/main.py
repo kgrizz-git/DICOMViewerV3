@@ -827,7 +827,20 @@ class DICOMViewerApp(QObject):
     
     def _open_overlay_config(self) -> None:
         """Handle overlay configuration dialog request."""
-        self.dialog_coordinator.open_overlay_config()
+        # Extract modality from current dataset if available
+        current_modality = None
+        if self.current_dataset is not None:
+            modality = getattr(self.current_dataset, 'Modality', None)
+            if modality:
+                # Normalize modality (strip whitespace)
+                modality_str = str(modality).strip()
+                # Valid modalities list (must match overlay_config_dialog.py)
+                valid_modalities = ["default", "CT", "MR", "US", "CR", "DX", "NM", "PT", "RT", "MG"]
+                if modality_str in valid_modalities:
+                    current_modality = modality_str
+                # If modality is not in valid list, current_modality remains None (will default to "default")
+        
+        self.dialog_coordinator.open_overlay_config(current_modality=current_modality)
     
     def _open_quick_start_guide(self) -> None:
         """Handle Quick Start Guide dialog request."""

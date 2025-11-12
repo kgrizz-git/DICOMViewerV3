@@ -454,6 +454,20 @@ class ConfigManager:
         self.config["recent_files"] = recent_files
         self.save_config()
     
+    def remove_recent_file(self, file_path: str) -> None:
+        """
+        Remove a file or folder from recent files list.
+        
+        Args:
+            file_path: Path to file or folder to remove
+        """
+        recent_files = self.config.get("recent_files", [])
+        
+        if file_path in recent_files:
+            recent_files.remove(file_path)
+            self.config["recent_files"] = recent_files
+            self.save_config()
+    
     def get_metadata_panel_column_widths(self) -> List[int]:
         """
         Get saved column widths for metadata panel.

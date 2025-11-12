@@ -20,7 +20,7 @@ Requirements:
 from PySide6.QtWidgets import (QMainWindow, QMenuBar, QToolBar, QStatusBar,
                                 QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
                                 QMessageBox, QComboBox, QLabel, QSizePolicy, QColorDialog,
-                                QApplication, QDialog, QTextEdit, QPushButton, QDialogButtonBox)
+                                QApplication, QDialog, QTextEdit, QPushButton, QDialogButtonBox, QMenu)
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QAction, QIcon, QKeySequence, QColor
 from typing import Optional
@@ -121,6 +121,9 @@ class MainWindow(QMainWindow):
         
         # Recent Files submenu
         self.recent_menu = file_menu.addMenu("&Recent")
+        # Enable context menu for recent menu items
+        self.recent_menu.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.recent_menu.customContextMenuRequested.connect(self._on_recent_menu_context_menu)
         self._update_recent_menu()
         
         file_menu.addSeparator()
@@ -1527,6 +1530,41 @@ class MainWindow(QMainWindow):
                     lambda checked, path=file_path: self.open_recent_file_requested.emit(path)
                 )
                 self.recent_menu.addAction(recent_action)
+    
+    def _on_recent_menu_context_menu(self, position) -> None:
+        """
+        Handle context menu request for recent menu items.
+        
+        Args:
+            position: Position where context menu was requested
+        """
+        # Get the action at the mouse position
+        action = self.recent_menu.actionAt(position)
+        
+        # Only show context menu if it's a recent file action (has data)
+        if action is None or not action.data():
+            return
+        
+        # Create context menu
+        context_menu = QMenu(self)
+        remove_action = QAction("Remove", self)
+        remove_action.triggered.connect(
+            lambda: self._remove_recent_file(action.data())
+        )
+        context_menu.addAction(remove_action)
+        
+        # Show context menu at the cursor position
+        context_menu.exec(self.recent_menu.mapToGlobal(position))
+    
+    def _remove_recent_file(self, file_path: str) -> None:
+        """
+        Remove a file from recent files list.
+        
+        Args:
+            file_path: Path to file or folder to remove
+        """
+        self.config_manager.remove_recent_file(file_path)
+        self._update_recent_menu()
     
     def update_recent_menu(self) -> None:
         """
