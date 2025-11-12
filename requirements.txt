@@ -12,10 +12,10 @@
 # - matplotlib: Plotting library for histogram display
 # - openpyxl: Library for reading and writing Excel files (for tag export)
 
-PySide6>=6.5.0
+PySide6>=6.6.0
 pydicom>=2.4.0
 numpy>=1.24.0
 Pillow>=10.0.0
-matplotlib>=3.7.0
+matplotlib>=3.8.0
 openpyxl>=3.1.0
 
