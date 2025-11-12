@@ -20,7 +20,7 @@ Requirements:
 from PySide6.QtWidgets import (QMainWindow, QMenuBar, QToolBar, QStatusBar,
                                 QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
                                 QMessageBox, QComboBox, QLabel, QSizePolicy, QColorDialog,
-                                QApplication)
+                                QApplication, QDialog, QTextEdit, QPushButton, QDialogButtonBox, QMenu)
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QAction, QIcon, QKeySequence, QColor
 from typing import Optional
@@ -51,6 +51,7 @@ class MainWindow(QMainWindow):
     open_file_requested = Signal()
     open_folder_requested = Signal()
     open_recent_file_requested = Signal(str)  # Emitted when a recent file/folder is selected (path)
+    close_requested = Signal()  # Emitted when close is requested
     export_requested = Signal()
     settings_requested = Signal()
     tag_viewer_requested = Signal()
@@ -68,6 +69,13 @@ class MainWindow(QMainWindow):
     quick_start_guide_requested = Signal()  # Emitted when Quick Start Guide is requested
     tag_export_requested = Signal()  # Emitted when tag export is requested
     series_navigator_visibility_changed = Signal(bool)  # Emitted when series navigator visibility changes
+    undo_tag_edit_requested = Signal()  # Emitted when undo tag edit is requested
+    redo_tag_edit_requested = Signal()  # Emitted when redo tag edit is requested
+    cine_play_requested = Signal()  # Emitted when cine play is requested
+    cine_pause_requested = Signal()  # Emitted when cine pause is requested
+    cine_stop_requested = Signal()  # Emitted when cine stop is requested
+    cine_speed_changed = Signal(float)  # Emitted when cine speed changes (speed multiplier)
+    cine_loop_toggled = Signal(bool)  # Emitted when cine loop is toggled
     
     def __init__(self, config_manager: Optional[ConfigManager] = None):
         """
@@ -118,7 +126,25 @@ class MainWindow(QMainWindow):
         
         # Recent Files submenu
         self.recent_menu = file_menu.addMenu("&Recent")
+        # Enable context menu for recent menu items
+        self.recent_menu.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.recent_menu.customContextMenuRequested.connect(self._on_recent_menu_context_menu)
         self._update_recent_menu()
+        
+        file_menu.addSeparator()
+        
+        # Undo/Redo actions for tag edits
+        self.undo_tag_edit_action = QAction("&Undo Tag Edit", self)
+        self.undo_tag_edit_action.setShortcut(QKeySequence.Undo)
+        self.undo_tag_edit_action.setEnabled(False)
+        self.undo_tag_edit_action.triggered.connect(self.undo_tag_edit_requested.emit)
+        file_menu.addAction(self.undo_tag_edit_action)
+        
+        self.redo_tag_edit_action = QAction("&Redo Tag Edit", self)
+        self.redo_tag_edit_action.setShortcut(QKeySequence.Redo)
+        self.redo_tag_edit_action.setEnabled(False)
+        self.redo_tag_edit_action.triggered.connect(self.redo_tag_edit_requested.emit)
+        file_menu.addAction(self.redo_tag_edit_action)
         
         file_menu.addSeparator()
         
@@ -127,6 +153,14 @@ class MainWindow(QMainWindow):
         export_action.setShortcut(QKeySequence("Ctrl+E"))
         export_action.triggered.connect(self.export_requested.emit)
         file_menu.addAction(export_action)
+        
+        file_menu.addSeparator()
+        
+        # Close action
+        close_action = QAction("&Close", self)
+        close_action.setShortcut(QKeySequence("Ctrl+W"))
+        close_action.triggered.connect(self.close_requested.emit)
+        file_menu.addAction(close_action)
         
         file_menu.addSeparator()
         
@@ -153,33 +187,31 @@ class MainWindow(QMainWindow):
         self.dark_theme_action.triggered.connect(lambda: self._set_theme("dark"))
         theme_menu.addAction(self.dark_theme_action)
         
-        # Tools menu
-        tools_menu = menubar.addMenu("&Tools")
+        view_menu.addSeparator()
         
         # Settings action
         settings_action = QAction("&Settings...", self)
         settings_action.setShortcut(QKeySequence.Preferences)
         settings_action.triggered.connect(self.settings_requested.emit)
-        tools_menu.addAction(settings_action)
-        
-        tools_menu.addSeparator()
-        
-        # Tag Viewer action
-        tag_viewer_action = QAction("DICOM Tag &Viewer...", self)
-        tag_viewer_action.setShortcut(QKeySequence("Ctrl+T"))
-        tag_viewer_action.triggered.connect(self.tag_viewer_requested.emit)
-        tools_menu.addAction(tag_viewer_action)
+        view_menu.addAction(settings_action)
         
         # Overlay Configuration action
         overlay_config_action = QAction("Overlay &Configuration...", self)
         overlay_config_action.setShortcut(QKeySequence("Ctrl+O"))
         overlay_config_action.triggered.connect(self.overlay_config_requested.emit)
-        tools_menu.addAction(overlay_config_action)
+        view_menu.addAction(overlay_config_action)
         
-        tools_menu.addSeparator()
+        # Tools menu
+        tools_menu = menubar.addMenu("&Tools")
+        
+        # Tag Viewer/Editor action
+        tag_viewer_action = QAction("View/Edit DICOM &Tags...", self)
+        tag_viewer_action.setShortcut(QKeySequence("Ctrl+T"))
+        tag_viewer_action.triggered.connect(self.tag_viewer_requested.emit)
+        tools_menu.addAction(tag_viewer_action)
         
         # Tag Export action
-        tag_export_action = QAction("Export &Tags...", self)
+        tag_export_action = QAction("Export DICOM &Tags...", self)
         tag_export_action.triggered.connect(self.tag_export_requested.emit)
         tools_menu.addAction(tag_export_action)
         
@@ -288,6 +320,49 @@ class MainWindow(QMainWindow):
         self.next_series_action.setToolTip("Navigate to next series (right arrow key)")
         self.next_series_action.triggered.connect(self._on_next_series)
         toolbar.addAction(self.next_series_action)
+        
+        toolbar.addSeparator()
+        
+        # Cine playback controls
+        cine_label = QLabel("Cine:")
+        toolbar.addWidget(cine_label)
+        
+        # Play/Pause button (toggle)
+        self.cine_play_pause_action = QAction("▶ Play", self)
+        self.cine_play_pause_action.setToolTip("Play/Pause cine loop")
+        self.cine_play_pause_action.triggered.connect(self._on_cine_play_pause)
+        toolbar.addAction(self.cine_play_pause_action)
+        
+        # Stop button
+        self.cine_stop_action = QAction("⏹ Stop", self)
+        self.cine_stop_action.setToolTip("Stop cine playback")
+        self.cine_stop_action.triggered.connect(self._on_cine_stop)
+        toolbar.addAction(self.cine_stop_action)
+        
+        # Speed dropdown
+        speed_label = QLabel("Speed:")
+        toolbar.addWidget(speed_label)
+        self.cine_speed_combo = QComboBox()
+        self.cine_speed_combo.addItems(["0.25x", "0.5x", "1x", "2x", "4x"])
+        self.cine_speed_combo.setCurrentText("1x")
+        self.cine_speed_combo.setToolTip("Playback speed multiplier")
+        self.cine_speed_combo.currentTextChanged.connect(self._on_cine_speed_changed)
+        toolbar.addWidget(self.cine_speed_combo)
+        
+        # Loop toggle button
+        self.cine_loop_action = QAction("🔁 Loop", self)
+        self.cine_loop_action.setCheckable(True)
+        self.cine_loop_action.setToolTip("Enable/disable looping")
+        self.cine_loop_action.triggered.connect(self._on_cine_loop_toggled)
+        toolbar.addAction(self.cine_loop_action)
+        
+        # FPS display label
+        self.cine_fps_label = QLabel("FPS: --")
+        self.cine_fps_label.setToolTip("Current frame rate")
+        toolbar.addWidget(self.cine_fps_label)
+        
+        # Initially disable cine controls
+        self._set_cine_controls_enabled(False)
         
         toolbar.addSeparator()
         
@@ -1190,49 +1265,111 @@ class MainWindow(QMainWindow):
         self._apply_theme()
     
     def _show_about(self) -> None:
-        """Show the about dialog."""
-        QMessageBox.about(self, "About DICOM Viewer V3",
-                         "DICOM Viewer V3\n\n"
-                         "A cross-platform DICOM viewer application.\n\n"
-                         "Features:\n\n"
-                         "File Management:\n"
-                         "- Open DICOM files and folders\n"
-                         "- Recursive folder search\n"
-                         "- Multiple file selection\n"
-                         "- Recent files support\n\n"
-                         "Image Display:\n"
-                         "- Zoom and pan functionality\n"
-                         "- Window width and level adjustment\n"
-                         "- Slice navigation (arrow keys, mouse wheel)\n"
-                         "- Series navigation with thumbnail navigator\n"
-                         "- Dark and light themes\n"
-                         "- Reset view to fit viewport\n\n"
-                         "Analysis Tools:\n"
-                         "- Draw elliptical and rectangular ROIs\n"
-                         "- ROI statistics (mean, std dev, min, max, area)\n"
-                         "- Distance measurements (pixels, mm, cm)\n"
-                         "- Undo/redo functionality\n\n"
-                         "Metadata and Overlays:\n"
-                         "- Customizable DICOM metadata overlays\n"
-                         "- Toggle overlay visibility (3 states)\n"
-                         "- View and edit all DICOM tags\n"
-                         "- Export selected tags to Excel/CSV\n\n"
-                         "Data Management:\n"
-                         "- Clear ROIs from slice or dataset\n"
-                         "- Clear measurements\n"
-                         "- ROI list panel with selection\n\n"
-                         "Export:\n"
-                         "- Export images as PNG, JPEG, or DICOM\n"
-                         "- Hierarchical selection (studies, series, slices)\n"
-                         "- Include overlays, ROIs, and measurements\n"
-                         "- Export at displayed resolution option\n"
-                         "- Export selected DICOM tags to Excel/CSV\n\n"
-                         "Planned Features (Not yet implemented):\n"
-                         "- Histogram display\n"
-                         "- Intensity projections (AIP/MIP)\n"
-                         "- RT STRUCT overlays\n\n"
-                         "Made by Kevin Grizzard.\n"
-                         "Available at https://github.com/kgrizz-git/DICOMViewerV3.")
+        """Show the about dialog with scrollable content."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("About DICOM Viewer V3")
+        dialog.setMinimumSize(500, 400)
+        dialog.resize(600, 500)
+        
+        # Apply theme-based styling to dialog
+        theme = self.config_manager.get_theme()
+        if theme == "dark":
+            # Set dark grey background for dark theme (matches left panel)
+            dialog.setStyleSheet("QDialog { background-color: #2b2b2b; }")
+        else:
+            # Light theme - use white
+            dialog.setStyleSheet("QDialog { background-color: #ffffff; }")
+        
+        layout = QVBoxLayout(dialog)
+        
+        # Create scrollable text area
+        text_edit = QTextEdit()
+        text_edit.setReadOnly(True)
+        # Set QTextEdit background to match metadata panel in dark theme
+        if theme == "dark":
+            text_edit.setStyleSheet("QTextEdit { background-color: #1e1e1e; }")
+        
+        # Create HTML content with theme-based link styling
+        if theme == "dark":
+            link_color = "#4a9eff"  # Light blue for dark theme
+        else:
+            link_color = "#2980b9"  # Darker blue for light theme
+        
+        html_content = f"""<html>
+<head>
+    <style>
+        a {{ color: {link_color}; }}
+    </style>
+</head>
+<body>
+    <h2>DICOM Viewer V3</h2>
+    <p><b>Made by Kevin Grizzard</b><br>
+    Available at <a href='https://github.com/kgrizz-git/DICOMViewerV3'>https://github.com/kgrizz-git/DICOMViewerV3</a></p>
+    <hr>
+    <p>A cross-platform DICOM viewer application.</p>
+    <h3>Features:</h3>
+    <h4>File Management:</h4>
+    <ul>
+    <li>Open DICOM files and folders</li>
+    <li>Recursive folder search</li>
+    <li>Multiple file selection</li>
+    <li>Recent files support</li>
+    </ul>
+    <h4>Image Display:</h4>
+    <ul>
+    <li>Zoom and pan functionality</li>
+    <li>Window width and level adjustment</li>
+    <li>Slice navigation (arrow keys, mouse wheel)</li>
+    <li>Series navigation with thumbnail navigator</li>
+    <li>Dark and light themes</li>
+    <li>Reset view to fit viewport</li>
+    </ul>
+    <h4>Analysis Tools:</h4>
+    <ul>
+    <li>Draw elliptical and rectangular ROIs</li>
+    <li>ROI statistics (mean, std dev, min, max, area)</li>
+    <li>Distance measurements (pixels, mm, cm)</li>
+    <li>Undo/redo functionality</li>
+    </ul>
+    <h4>Metadata and Overlays:</h4>
+    <ul>
+    <li>Customizable DICOM metadata overlays</li>
+    <li>Toggle overlay visibility (3 states)</li>
+    <li>View and edit all DICOM tags</li>
+    <li>Export selected tags to Excel/CSV</li>
+    </ul>
+    <h4>Data Management:</h4>
+    <ul>
+    <li>Clear ROIs from slice or dataset</li>
+    <li>Clear measurements</li>
+    <li>ROI list panel with selection</li>
+    </ul>
+    <h4>Export:</h4>
+    <ul>
+    <li>Export images as PNG, JPEG, or DICOM</li>
+    <li>Hierarchical selection (studies, series, slices)</li>
+    <li>Include overlays, ROIs, and measurements</li>
+    <li>Export at displayed resolution option</li>
+    <li>Export selected DICOM tags to Excel/CSV</li>
+    </ul>
+    <h4>Planned Features (Not yet implemented):</h4>
+    <ul>
+    <li>Histogram display</li>
+    <li>Intensity projections (AIP/MIP)</li>
+    <li>RT STRUCT overlays</li>
+    </ul>
+</body>
+</html>"""
+        
+        text_edit.setHtml(html_content)
+        layout.addWidget(text_edit)
+        
+        # Add OK button
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
+        button_box.accepted.connect(dialog.accept)
+        layout.addWidget(button_box)
+        
+        dialog.exec()
     
     def _on_mouse_mode_changed(self, mode: str) -> None:
         """
@@ -1408,6 +1545,68 @@ class MainWindow(QMainWindow):
         """Handle next series button click."""
         self.series_navigation_requested.emit(1)
     
+    def _on_cine_play_pause(self) -> None:
+        """Handle cine play/pause button click."""
+        # Toggle between play and pause
+        if self.cine_play_pause_action.text() == "▶ Play" or self.cine_play_pause_action.text() == "▶":
+            self.cine_play_requested.emit()
+            self.cine_play_pause_action.setText("⏸ Pause")
+        else:
+            self.cine_pause_requested.emit()
+            self.cine_play_pause_action.setText("▶ Play")
+    
+    def _on_cine_stop(self) -> None:
+        """Handle cine stop button click."""
+        self.cine_stop_requested.emit()
+        self.cine_play_pause_action.setText("▶ Play")
+    
+    def _on_cine_speed_changed(self, speed_text: str) -> None:
+        """Handle cine speed dropdown change."""
+        # Extract multiplier from text (e.g., "2x" -> 2.0)
+        try:
+            multiplier_str = speed_text.replace("x", "")
+            multiplier = float(multiplier_str)
+            self.cine_speed_changed.emit(multiplier)
+        except (ValueError, AttributeError):
+            pass
+    
+    def _on_cine_loop_toggled(self, checked: bool) -> None:
+        """Handle cine loop toggle."""
+        self.cine_loop_toggled.emit(checked)
+    
+    def _set_cine_controls_enabled(self, enabled: bool) -> None:
+        """
+        Enable or disable cine controls.
+        
+        Args:
+            enabled: True to enable controls, False to disable
+        """
+        self.cine_play_pause_action.setEnabled(enabled)
+        self.cine_stop_action.setEnabled(enabled)
+        self.cine_speed_combo.setEnabled(enabled)
+        self.cine_loop_action.setEnabled(enabled)
+    
+    def update_cine_playback_state(self, is_playing: bool) -> None:
+        """
+        Update cine playback button state.
+        
+        Args:
+            is_playing: True if playing, False if paused/stopped
+        """
+        if is_playing:
+            self.cine_play_pause_action.setText("⏸ Pause")
+        else:
+            self.cine_play_pause_action.setText("▶ Play")
+    
+    def update_cine_fps_display(self, fps: float) -> None:
+        """
+        Update FPS display label.
+        
+        Args:
+            fps: Frame rate in FPS
+        """
+        self.cine_fps_label.setText(f"FPS: {fps:.1f}")
+    
     def _update_recent_menu(self) -> None:
         """Update the Recent Files submenu with current recent files."""
         # Clear existing actions
@@ -1441,6 +1640,41 @@ class MainWindow(QMainWindow):
                     lambda checked, path=file_path: self.open_recent_file_requested.emit(path)
                 )
                 self.recent_menu.addAction(recent_action)
+    
+    def _on_recent_menu_context_menu(self, position) -> None:
+        """
+        Handle context menu request for recent menu items.
+        
+        Args:
+            position: Position where context menu was requested
+        """
+        # Get the action at the mouse position
+        action = self.recent_menu.actionAt(position)
+        
+        # Only show context menu if it's a recent file action (has data)
+        if action is None or not action.data():
+            return
+        
+        # Create context menu
+        context_menu = QMenu(self)
+        remove_action = QAction("Remove", self)
+        remove_action.triggered.connect(
+            lambda: self._remove_recent_file(action.data())
+        )
+        context_menu.addAction(remove_action)
+        
+        # Show context menu at the cursor position
+        context_menu.exec(self.recent_menu.mapToGlobal(position))
+    
+    def _remove_recent_file(self, file_path: str) -> None:
+        """
+        Remove a file from recent files list.
+        
+        Args:
+            file_path: Path to file or folder to remove
+        """
+        self.config_manager.remove_recent_file(file_path)
+        self._update_recent_menu()
     
     def update_recent_menu(self) -> None:
         """
@@ -1482,6 +1716,17 @@ class MainWindow(QMainWindow):
             message: Status message to display
         """
         self.statusBar().showMessage(message)
+    
+    def update_undo_redo_state(self, can_undo: bool, can_redo: bool) -> None:
+        """
+        Update the enabled state of undo/redo menu items.
+        
+        Args:
+            can_undo: True if undo is possible
+            can_redo: True if redo is possible
+        """
+        self.undo_tag_edit_action.setEnabled(can_undo)
+        self.redo_tag_edit_action.setEnabled(can_redo)
     
     def set_series_navigator(self, navigator_widget: QWidget) -> None:
         """

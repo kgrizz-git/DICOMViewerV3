@@ -151,4 +151,29 @@ class SliceNavigator(QObject):
             self.next_slice()
         
         return True
+    
+    def advance_to_frame(self, index: int, loop: bool = False) -> None:
+        """
+        Advance to a specific frame index, with optional loop support.
+        
+        Args:
+            index: Frame index to advance to
+            loop: If True and index is out of bounds, wrap around. If False, clamp to valid range.
+        """
+        if self.total_slices == 0:
+            return
+        
+        if loop:
+            # Wrap around if out of bounds
+            if index < 0:
+                index = self.total_slices - 1
+            elif index >= self.total_slices:
+                index = 0
+        else:
+            # Clamp to valid range
+            index = max(0, min(index, self.total_slices - 1))
+        
+        if 0 <= index < self.total_slices:
+            self.current_slice_index = index
+            self.slice_changed.emit(self.current_slice_index)
 

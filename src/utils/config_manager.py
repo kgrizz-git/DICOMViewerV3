@@ -59,7 +59,7 @@ class ConfigManager:
         self.default_config = {
             "last_path": "",
             "last_export_path": "",  # Last directory used for exporting images
-            "theme": "light",
+            "theme": "dark",
         "overlay_mode": "minimal",  # minimal, detailed, hidden
         "overlay_visibility_state": 0,  # 0=show all, 1=hide corner text, 2=hide all text
         "overlay_custom_fields": [],
@@ -76,6 +76,9 @@ class ConfigManager:
             "window_level_default": None,
             "window_width_default": None,
             "recent_files": [],  # List of recently opened file/folder paths (max 10)
+            "metadata_panel_column_widths": [100, 200, 50, 200],  # Column widths for Tag, Name, VR, Value
+            "cine_default_speed": 1.0,  # Default cine playback speed multiplier
+            "cine_default_loop": False,  # Default cine loop setting
         }
         
         # Load configuration
@@ -451,5 +454,76 @@ class ConfigManager:
         recent_files = recent_files[:10]
         
         self.config["recent_files"] = recent_files
+        self.save_config()
+    
+    def remove_recent_file(self, file_path: str) -> None:
+        """
+        Remove a file or folder from recent files list.
+        
+        Args:
+            file_path: Path to file or folder to remove
+        """
+        recent_files = self.config.get("recent_files", [])
+        
+        if file_path in recent_files:
+            recent_files.remove(file_path)
+            self.config["recent_files"] = recent_files
+            self.save_config()
+    
+    def get_metadata_panel_column_widths(self) -> List[int]:
+        """
+        Get saved column widths for metadata panel.
+        
+        Returns:
+            List of column widths [Tag, Name, VR, Value]
+        """
+        return self.config.get("metadata_panel_column_widths", [100, 200, 50, 200])
+    
+    def set_metadata_panel_column_widths(self, widths: List[int]) -> None:
+        """
+        Save column widths for metadata panel.
+        
+        Args:
+            widths: List of column widths [Tag, Name, VR, Value]
+        """
+        self.config["metadata_panel_column_widths"] = widths
+        self.save_config()
+    
+    def get_cine_default_speed(self) -> float:
+        """
+        Get default cine playback speed multiplier.
+        
+        Returns:
+            Default speed multiplier (default: 1.0)
+        """
+        return self.config.get("cine_default_speed", 1.0)
+    
+    def set_cine_default_speed(self, speed: float) -> None:
+        """
+        Set default cine playback speed multiplier.
+        
+        Args:
+            speed: Speed multiplier (e.g., 0.25, 0.5, 1.0, 2.0, 4.0)
+        """
+        self.config["cine_default_speed"] = speed
+        self.save_config()
+    
+    def get_cine_default_loop(self) -> bool:
+        """
+        Get default cine loop setting.
+        
+        Returns:
+            Default loop setting (default: False)
+        """
+        return self.config.get("cine_default_loop", False)
+    
+    def set_cine_default_loop(self, loop: bool) -> None:
+        """
+        Set default cine loop setting.
+        
+        Args:
+            loop: True to enable looping by default, False to disable
+        """
+        self.config["cine_default_loop"] = loop
         self.save_config()
 

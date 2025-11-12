@@ -47,10 +47,13 @@ from gui.roi_statistics_panel import ROIStatisticsPanel
 from gui.roi_list_panel import ROIListPanel
 from gui.slice_navigator import SliceNavigator
 from gui.series_navigator import SeriesNavigator
+from gui.zoom_display_widget import ZoomDisplayWidget
+from gui.cine_player import CinePlayer
 from core.dicom_loader import DICOMLoader
 from core.dicom_organizer import DICOMOrganizer
 from core.dicom_parser import DICOMParser
 from core.dicom_processor import DICOMProcessor
+from core.tag_edit_history import TagEditHistoryManager
 from utils.config_manager import ConfigManager
 from tools.roi_manager import ROIManager
 from tools.measurement_tool import MeasurementTool
@@ -93,6 +96,7 @@ class DICOMViewerApp(QObject):
         self.dicom_loader = DICOMLoader()
         self.dicom_organizer = DICOMOrganizer()
         self.dicom_processor = DICOMProcessor()
+        self.tag_edit_history = TagEditHistoryManager(max_history=50)
         
         # Create main window
         self.main_window = MainWindow(self.config_manager)
@@ -102,9 +106,11 @@ class DICOMViewerApp(QObject):
         
         # Create components
         self.file_dialog = FileDialog(self.config_manager)
-        self.image_viewer = ImageViewer()
-        self.metadata_panel = MetadataPanel()
+        self.image_viewer = ImageViewer(config_manager=self.config_manager)
+        self.metadata_panel = MetadataPanel(config_manager=self.config_manager)
+        self.metadata_panel.set_history_manager(self.tag_edit_history)
         self.window_level_controls = WindowLevelControls()
+        self.zoom_display_widget = ZoomDisplayWidget()
         self.slice_navigator = SliceNavigator()
         self.roi_manager = ROIManager()
         self.measurement_tool = MeasurementTool()
@@ -216,6 +222,9 @@ class DICOMViewerApp(QObject):
         # Update view state manager with display_rois_for_slice callback
         self.view_state_manager.display_rois_for_slice = self._display_rois_for_slice
         
+        # Update view state manager with series_navigator reference
+        self.view_state_manager.set_series_navigator(self.series_navigator)
+        
         # Initialize MeasurementCoordinator
         self.measurement_coordinator = MeasurementCoordinator(
             self.measurement_tool,
@@ -247,7 +256,8 @@ class DICOMViewerApp(QObject):
             self.main_window,
             get_current_studies=lambda: self.current_studies,
             settings_applied_callback=self._on_settings_applied,
-            overlay_config_applied_callback=self._on_overlay_config_applied
+            overlay_config_applied_callback=self._on_overlay_config_applied,
+            tag_edit_history=self.tag_edit_history
         )
         
         # Initialize MouseModeHandler
@@ -257,6 +267,24 @@ class DICOMViewerApp(QObject):
             self.slice_navigator,
             self.config_manager
         )
+        
+        # Initialize CinePlayer
+        self.cine_player = CinePlayer(
+            slice_navigator=self.slice_navigator,
+            get_total_slices_callback=lambda: self.slice_navigator.total_slices,
+            get_current_slice_callback=lambda: self.slice_navigator.get_current_slice()
+        )
+        
+        # Set default cine settings from config
+        default_speed = self.config_manager.get_cine_default_speed()
+        default_loop = self.config_manager.get_cine_default_loop()
+        self.cine_player.set_speed(default_speed)
+        self.cine_player.set_loop(default_loop)
+        # Update UI to match defaults
+        speed_text = f"{default_speed}x"
+        if speed_text in ["0.25x", "0.5x", "1x", "2x", "4x"]:
+            self.main_window.cine_speed_combo.setCurrentText(speed_text)
+        self.main_window.cine_loop_action.setChecked(default_loop)
         
         # Initialize KeyboardEventHandler
         self.keyboard_event_handler = KeyboardEventHandler(
@@ -284,6 +312,49 @@ class DICOMViewerApp(QObject):
         self.roi_list_panel.update_roi_list("", "", 0)  # Clear list
         self.roi_statistics_panel.clear_statistics()
         self.measurement_tool.clear_measurements(self.image_viewer.scene)
+    
+    def _close_files(self) -> None:
+        """Close currently open files/folder and clear all data."""
+        # Clear all ROIs, measurements, and related data
+        self._clear_data()
+        
+        # Clear image viewer
+        self.image_viewer.scene.clear()
+        self.image_viewer.image_item = None
+        
+        # Clear overlay items list (items already cleared by scene.clear())
+        self.overlay_manager.overlay_items.clear()
+        
+        # Clear metadata panel
+        self.metadata_panel.set_dataset(None)
+        
+        # Reset view state
+        self.view_state_manager.reset_window_level_state()
+        self.view_state_manager.reset_series_tracking()
+        
+        # Clear current dataset references
+        self.current_dataset = None
+        self.current_studies = {}
+        self.current_study_uid = ""
+        self.current_series_uid = ""
+        self.current_slice_index = 0
+        
+        # Reset slice navigator
+        self.slice_navigator.set_total_slices(0)
+        self.slice_navigator.set_current_slice(0)
+        
+        # Clear series navigator
+        self.series_navigator.update_series_list({}, "", "")
+        
+        # Clear tag edit history
+        if self.tag_edit_history:
+            self.tag_edit_history.clear_history()
+        
+        # Reset undo/redo state
+        self._update_undo_redo_state()
+        
+        # Update status
+        self.main_window.update_status("Ready")
     
     def _handle_load_first_slice(self, studies: dict) -> None:
         """Handle loading first slice after file operations."""
@@ -313,6 +384,14 @@ class DICOMViewerApp(QObject):
             
             # Update current dataset reference
             self.current_dataset = first_slice_info['dataset']
+            
+            # Update cine player context and check if series is cine-capable
+            self._update_cine_player_context()
+            
+            # Clear tag edit history for new dataset
+            if self.tag_edit_history:
+                self.tag_edit_history.clear_history(self.current_dataset)
+            self._update_undo_redo_state()
             
             # Store initial view state after a delay
             from PySide6.QtCore import QTimer
@@ -353,6 +432,41 @@ class DICOMViewerApp(QObject):
         """Update tag viewer with dataset."""
         self.dialog_coordinator.update_tag_viewer(dataset)
     
+    def _undo_tag_edit(self) -> None:
+        """Handle undo tag edit request."""
+        if self.current_dataset is not None and self.tag_edit_history:
+            success = self.tag_edit_history.undo(self.current_dataset)
+            if success:
+                # Refresh metadata panel and tag viewer
+                self.metadata_panel._populate_tags()
+                if self.dialog_coordinator.tag_viewer_dialog:
+                    search_text = self.dialog_coordinator.tag_viewer_dialog.search_edit.text()
+                    self.dialog_coordinator.tag_viewer_dialog._populate_tags(search_text)
+                # Update undo/redo state
+                self._update_undo_redo_state()
+    
+    def _redo_tag_edit(self) -> None:
+        """Handle redo tag edit request."""
+        if self.current_dataset is not None and self.tag_edit_history:
+            success = self.tag_edit_history.redo(self.current_dataset)
+            if success:
+                # Refresh metadata panel and tag viewer
+                self.metadata_panel._populate_tags()
+                if self.dialog_coordinator.tag_viewer_dialog:
+                    search_text = self.dialog_coordinator.tag_viewer_dialog.search_edit.text()
+                    self.dialog_coordinator.tag_viewer_dialog._populate_tags(search_text)
+                # Update undo/redo state
+                self._update_undo_redo_state()
+    
+    def _update_undo_redo_state(self) -> None:
+        """Update undo/redo menu item states."""
+        if self.current_dataset is not None and self.tag_edit_history:
+            can_undo = self.tag_edit_history.can_undo(self.current_dataset)
+            can_redo = self.tag_edit_history.can_redo(self.current_dataset)
+            self.main_window.update_undo_redo_state(can_undo, can_redo)
+        else:
+            self.main_window.update_undo_redo_state(False, False)
+    
     def _update_roi_list(self) -> None:
         """Update ROI list panel."""
         if self.current_dataset is not None:
@@ -384,6 +498,7 @@ class DICOMViewerApp(QObject):
             from PySide6.QtWidgets import QVBoxLayout
             right_layout = QVBoxLayout(self.main_window.right_panel)
         right_layout.addWidget(self.window_level_controls)
+        right_layout.addWidget(self.zoom_display_widget)
         right_layout.addWidget(self.roi_list_panel)
         right_layout.addWidget(self.roi_statistics_panel)
         
@@ -396,6 +511,7 @@ class DICOMViewerApp(QObject):
         self.main_window.open_file_requested.connect(self._open_files)
         self.main_window.open_folder_requested.connect(self._open_folder)
         self.main_window.open_recent_file_requested.connect(self._open_recent_file)
+        self.main_window.close_requested.connect(self._close_files)
         
         # Settings
         self.main_window.settings_requested.connect(self._open_settings)
@@ -414,6 +530,10 @@ class DICOMViewerApp(QObject):
         
         # Export
         self.main_window.export_requested.connect(self._open_export)
+        
+        # Undo/Redo tag edits
+        self.main_window.undo_tag_edit_requested.connect(self._undo_tag_edit)
+        self.main_window.redo_tag_edit_requested.connect(self._redo_tag_edit)
         
         # ROI drawing signals
         self.image_viewer.roi_drawing_started.connect(self.roi_coordinator.handle_roi_drawing_started)
@@ -451,6 +571,8 @@ class DICOMViewerApp(QObject):
         
         # Slice navigation
         self.slice_navigator.slice_changed.connect(self._on_slice_changed)
+        # Pause cine playback if user manually navigates slices
+        self.slice_navigator.slice_changed.connect(self._on_manual_slice_navigation)
         
         # Mouse mode changes
         self.main_window.mouse_mode_changed.connect(self.mouse_mode_handler.handle_mouse_mode_changed)
@@ -468,6 +590,10 @@ class DICOMViewerApp(QObject):
         
         # Zoom changes - update overlay positions to keep text anchored
         self.image_viewer.zoom_changed.connect(self.view_state_manager.handle_zoom_changed)
+        # Update zoom display widget
+        self.image_viewer.zoom_changed.connect(self.zoom_display_widget.update_zoom)
+        # Zoom control from widget - update image viewer
+        self.zoom_display_widget.zoom_changed.connect(self.image_viewer.set_zoom)
         
         # Transform changes (zoom/pan) - update overlay positions to keep text anchored
         # This signal fires after transform is applied, ensuring accurate viewport-to-scene mapping
@@ -506,6 +632,20 @@ class DICOMViewerApp(QObject):
         # Series navigator signals
         self.series_navigator.series_selected.connect(self._on_series_navigator_selected)
         self.image_viewer.toggle_series_navigator_requested.connect(self.main_window.toggle_series_navigator)
+        
+        # Tag edit signals
+        self.metadata_panel.tag_edited.connect(lambda: self._update_undo_redo_state())
+        
+        # Cine player signals
+        self.cine_player.frame_advance_requested.connect(self._on_cine_frame_advance)
+        self.cine_player.playback_state_changed.connect(self._on_cine_playback_state_changed)
+        
+        # Cine control signals from main window
+        self.main_window.cine_play_requested.connect(self._on_cine_play)
+        self.main_window.cine_pause_requested.connect(self._on_cine_pause)
+        self.main_window.cine_stop_requested.connect(self._on_cine_stop)
+        self.main_window.cine_speed_changed.connect(self._on_cine_speed_changed)
+        self.main_window.cine_loop_toggled.connect(self._on_cine_loop_toggled)
     
     def _open_files(self) -> None:
         """Handle open files request."""
@@ -565,6 +705,9 @@ class DICOMViewerApp(QObject):
             # Update current dataset reference
             self.current_dataset = dataset
             
+            # Update undo/redo state when dataset changes
+            self._update_undo_redo_state()
+            
             # Update slice navigator
             if self.current_studies and self.current_study_uid and self.current_series_uid:
                 datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
@@ -573,6 +716,9 @@ class DICOMViewerApp(QObject):
             
             # Update series navigator highlighting
             self.series_navigator.set_current_series(self.current_series_uid)
+            
+            # Update cine player context and check if series is cine-capable
+            self._update_cine_player_context()
         
             # Display ROIs for this slice (now handled by display_slice, but kept for compatibility)
             # self.slice_display_manager.display_rois_for_slice(dataset)
@@ -623,6 +769,9 @@ class DICOMViewerApp(QObject):
         
         # Update series navigator highlighting
         self.series_navigator.set_current_series(self.current_series_uid)
+        
+        # Update cine player context and check if series is cine-capable
+        self._update_cine_player_context()
     
     def _display_slice(self, dataset) -> None:
         """
@@ -719,7 +868,20 @@ class DICOMViewerApp(QObject):
     
     def _open_overlay_config(self) -> None:
         """Handle overlay configuration dialog request."""
-        self.dialog_coordinator.open_overlay_config()
+        # Extract modality from current dataset if available
+        current_modality = None
+        if self.current_dataset is not None:
+            modality = getattr(self.current_dataset, 'Modality', None)
+            if modality:
+                # Normalize modality (strip whitespace)
+                modality_str = str(modality).strip()
+                # Valid modalities list (must match overlay_config_dialog.py)
+                valid_modalities = ["default", "CT", "MR", "US", "CR", "DX", "NM", "PT", "RT", "MG"]
+                if modality_str in valid_modalities:
+                    current_modality = modality_str
+                # If modality is not in valid list, current_modality remains None (will default to "default")
+        
+        self.dialog_coordinator.open_overlay_config(current_modality=current_modality)
     
     def _open_quick_start_guide(self) -> None:
         """Handle Quick Start Guide dialog request."""
@@ -1060,6 +1222,106 @@ class DICOMViewerApp(QObject):
         # print(f"[ROI DEBUG] AFTER update: self.current_slice_index={self.current_slice_index}")
         # Now handle the slice change - at this point self.current_slice_index is correct
         self.slice_display_manager.handle_slice_changed(slice_index)
+    
+    def _on_manual_slice_navigation(self, slice_index: int) -> None:
+        """
+        Handle manual slice navigation (pause cine if playing).
+        
+        Args:
+            slice_index: New slice index
+        """
+        # Pause cine playback if user manually navigates during playback
+        # Check if this navigation is from cine player using the flag
+        if self.cine_player.is_playback_active() and not self.cine_player.is_cine_advancing():
+            # This is manual navigation, pause playback
+            self.cine_player.pause_playback()
+    
+    def _update_cine_player_context(self) -> None:
+        """Update cine player context and enable/disable controls based on series capability."""
+        # Update cine player series context
+        self.cine_player.set_series_context(
+            self.current_studies,
+            self.current_study_uid,
+            self.current_series_uid
+        )
+        
+        # Check if current series is cine-capable
+        is_cine_capable = self.cine_player.is_cine_capable(
+            self.current_studies,
+            self.current_study_uid,
+            self.current_series_uid
+        )
+        
+        # Enable/disable cine controls
+        self.main_window._set_cine_controls_enabled(is_cine_capable)
+        
+        # If not cine-capable, stop any active playback
+        if not is_cine_capable and self.cine_player.is_playback_active():
+            self.cine_player.stop_playback()
+    
+    def _on_cine_frame_advance(self, frame_index: int) -> None:
+        """
+        Handle frame advancement request from cine player.
+        
+        Args:
+            frame_index: Frame index to advance to
+        """
+        # Use slice navigator's advance_to_frame with loop support
+        loop_enabled = self.cine_player.loop_enabled
+        self.slice_navigator.advance_to_frame(frame_index, loop=loop_enabled)
+        # Reset the cine advancing flag after frame advance
+        self.cine_player.reset_cine_advancing_flag()
+    
+    def _on_cine_playback_state_changed(self, is_playing: bool) -> None:
+        """
+        Handle cine playback state change.
+        
+        Args:
+            is_playing: True if playing, False if paused/stopped
+        """
+        self.main_window.update_cine_playback_state(is_playing)
+        # Update FPS display
+        fps = self.cine_player.get_effective_frame_rate()
+        self.main_window.update_cine_fps_display(fps)
+    
+    def _on_cine_play(self) -> None:
+        """Handle cine play request."""
+        if self.current_dataset is not None:
+            # Try to extract frame rate from current dataset
+            frame_rate = self.cine_player.get_frame_rate_from_dicom(self.current_dataset)
+            self.cine_player.start_playback(frame_rate=frame_rate, dataset=self.current_dataset)
+            # Update FPS display
+            fps = self.cine_player.get_effective_frame_rate()
+            self.main_window.update_cine_fps_display(fps)
+    
+    def _on_cine_pause(self) -> None:
+        """Handle cine pause request."""
+        self.cine_player.pause_playback()
+    
+    def _on_cine_stop(self) -> None:
+        """Handle cine stop request."""
+        self.cine_player.stop_playback()
+    
+    def _on_cine_speed_changed(self, speed_multiplier: float) -> None:
+        """
+        Handle cine speed change.
+        
+        Args:
+            speed_multiplier: Speed multiplier
+        """
+        self.cine_player.set_speed(speed_multiplier)
+        # Update FPS display
+        fps = self.cine_player.get_effective_frame_rate()
+        self.main_window.update_cine_fps_display(fps)
+    
+    def _on_cine_loop_toggled(self, enabled: bool) -> None:
+        """
+        Handle cine loop toggle.
+        
+        Args:
+            enabled: True to enable looping, False to disable
+        """
+        self.cine_player.set_loop(enabled)
     
     def _hide_measurement_labels(self, hide: bool) -> None:
         """

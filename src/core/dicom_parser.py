@@ -21,6 +21,7 @@ from typing import Dict, Any, Optional, List, Tuple
 import pydicom
 from pydicom.dataset import Dataset
 from pydicom.tag import Tag
+import numpy as np
 
 
 class DICOMParser:
@@ -257,4 +258,82 @@ class DICOMParser:
         """
         all_tags = self.get_all_tags(include_private=True)
         return {k: v for k, v in all_tags.items() if v.get("is_private", False)}
+
+
+def get_frame_rate_from_dicom(dataset: Dataset) -> Optional[float]:
+    """
+    Extract frame rate (FPS) from DICOM dataset.
+    
+    Checks multiple DICOM tags in priority order:
+    1. RecommendedDisplayFrameRate (0008,2144) - Direct FPS value
+    2. CineRate (0018,0040) - Cine rate in FPS
+    3. FrameTime (0018,1063) - Time per frame in ms, convert to FPS
+    4. FrameTimeVector (0018,1065) - Array of frame times, calculate average
+    
+    Args:
+        dataset: pydicom Dataset
+        
+    Returns:
+        Frame rate in FPS (frames per second), or None if no timing information found
+    """
+    try:
+        # 1. Check RecommendedDisplayFrameRate (0008,2144)
+        if hasattr(dataset, 'RecommendedDisplayFrameRate'):
+            rate = dataset.RecommendedDisplayFrameRate
+            if rate:
+                try:
+                    fps = float(rate)
+                    if fps > 0:
+                        return fps
+                except (ValueError, TypeError):
+                    pass
+        
+        # 2. Check CineRate (0018,0040)
+        if hasattr(dataset, 'CineRate'):
+            rate = dataset.CineRate
+            if rate:
+                try:
+                    fps = float(rate)
+                    if fps > 0:
+                        return fps
+                except (ValueError, TypeError):
+                    pass
+        
+        # 3. Check FrameTime (0018,1063) - time per frame in milliseconds
+        if hasattr(dataset, 'FrameTime'):
+            frame_time_ms = dataset.FrameTime
+            if frame_time_ms:
+                try:
+                    frame_time = float(frame_time_ms)
+                    if frame_time > 0:
+                        # Convert ms to FPS: 1000 ms / frame_time_ms = FPS
+                        fps = 1000.0 / frame_time
+                        if fps > 0:
+                            return fps
+                except (ValueError, TypeError):
+                    pass
+        
+        # 4. Check FrameTimeVector (0018,1065) - array of frame times
+        if hasattr(dataset, 'FrameTimeVector'):
+            frame_times = dataset.FrameTimeVector
+            if frame_times and len(frame_times) > 0:
+                try:
+                    # Convert to numpy array if not already
+                    if not isinstance(frame_times, np.ndarray):
+                        frame_times = np.array(frame_times)
+                    # Calculate average frame time in milliseconds
+                    avg_frame_time_ms = np.mean(frame_times)
+                    if avg_frame_time_ms > 0:
+                        # Convert to FPS
+                        fps = 1000.0 / avg_frame_time_ms
+                        if fps > 0:
+                            return fps
+                except (ValueError, TypeError, AttributeError):
+                    pass
+        
+        # No timing information found
+        return None
+        
+    except Exception:
+        return None
 
