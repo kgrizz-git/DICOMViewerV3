@@ -376,7 +376,7 @@ class SeriesNavigator(QWidget):
                 thumbnail_widget = self.thumbnails[series_uid]
                 thumbnail_widget.thumbnail_image = image
                 thumbnail_widget.update()  # Trigger repaint
-                print(f"[DEBUG-WL] Regenerated series navigator thumbnail for series {series_uid[:20]}...")
+                # print(f"[DEBUG-WL] Regenerated series navigator thumbnail for series {series_uid[:20]}...")
         except Exception as e:
             print(f"Error regenerating thumbnail: {e}")
     

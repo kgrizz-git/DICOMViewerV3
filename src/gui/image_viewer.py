@@ -26,7 +26,7 @@ from PySide6.QtGui import (QPixmap, QImage, QWheelEvent, QKeyEvent, QMouseEvent,
                           QPainter, QColor, QTransform)
 from PIL import Image
 import numpy as np
-from typing import Optional
+from typing import Optional, Callable
 
 
 class ImageViewer(QGraphicsView):
@@ -61,6 +61,10 @@ class ImageViewer(QGraphicsView):
     right_mouse_press_for_drag = Signal()  # Emitted when right mouse is pressed (not on ROI) to request window/level values for drag
     series_navigation_requested = Signal(int)  # Emitted when series navigation is requested (-1 for left/previous, 1 for right/next)
     toggle_series_navigator_requested = Signal()  # Emitted when series navigator toggle is requested
+    cine_play_requested = Signal()  # Emitted when cine play is requested from context menu
+    cine_pause_requested = Signal()  # Emitted when cine pause is requested from context menu
+    cine_stop_requested = Signal()  # Emitted when cine stop is requested from context menu
+    cine_loop_toggled = Signal(bool)  # Emitted when cine loop is toggled from context menu (True = enabled)
     measurement_started = Signal(QPointF)  # Emitted when measurement starts (start position)
     measurement_updated = Signal(QPointF)  # Emitted when measurement is updated (current position)
     measurement_finished = Signal()  # Emitted when measurement is finished
@@ -119,6 +123,9 @@ class ImageViewer(QGraphicsView):
         # Scroll wheel mode
         self.scroll_wheel_mode = "slice"  # "slice" or "zoom"
         
+        # Callback to get cine loop state (set from main.py)
+        self.get_cine_loop_state_callback: Optional[Callable[[], bool]] = None
+        
         # Rescale toggle state (for context menu)
         self.use_rescaled_values = False
         
@@ -134,6 +141,7 @@ class ImageViewer(QGraphicsView):
         self.right_mouse_drag_start_center: Optional[float] = None
         self.right_mouse_drag_start_width: Optional[float] = None
         self.right_mouse_context_menu_shown = False  # Track if context menu was shown
+        self.cine_controls_enabled = False  # Track if cine controls should be enabled in context menu
         
         # Sensitivity factors for window/level adjustment (pixels to units)
         # These will be set dynamically based on current ranges
@@ -274,17 +282,17 @@ class ImageViewer(QGraphicsView):
         # Otherwise, use 1.0x viewport at min zoom
         if image_width > viewport_width_scene:
             scene_width = image_width * 2.0
-            print(f"[SCENE_RECT] Image width ({image_width:.2f}) > viewport width in scene coords ({viewport_width_scene:.2f}) - using 2x image size: {scene_width:.2f}")
+            # print(f"[SCENE_RECT] Image width ({image_width:.2f}) > viewport width in scene coords ({viewport_width_scene:.2f}) - using 2x image size: {scene_width:.2f}")
         else:
             scene_width = viewport_at_min_zoom_width * 1.0
-            print(f"[SCENE_RECT] Image width ({image_width:.2f}) <= viewport width in scene coords ({viewport_width_scene:.2f}) - using 1.0x viewport at min zoom: {scene_width:.2f}")
+            # print(f"[SCENE_RECT] Image width ({image_width:.2f}) <= viewport width in scene coords ({viewport_width_scene:.2f}) - using 1.0x viewport at min zoom: {scene_width:.2f}")
         
         if image_height > viewport_height_scene:
             scene_height = image_height * 2.0
-            print(f"[SCENE_RECT] Image height ({image_height:.2f}) > viewport height in scene coords ({viewport_height_scene:.2f}) - using 2x image size: {scene_height:.2f}")
+            # print(f"[SCENE_RECT] Image height ({image_height:.2f}) > viewport height in scene coords ({viewport_height_scene:.2f}) - using 2x image size: {scene_height:.2f}")
         else:
             scene_height = viewport_at_min_zoom_height * 1.0
-            print(f"[SCENE_RECT] Image height ({image_height:.2f}) <= viewport height in scene coords ({viewport_height_scene:.2f}) - using 1.0x viewport at min zoom: {scene_height:.2f}")
+            # print(f"[SCENE_RECT] Image height ({image_height:.2f}) <= viewport height in scene coords ({viewport_height_scene:.2f}) - using 1.0x viewport at min zoom: {scene_height:.2f}")
         
         # Calculate margins to center the image in the expanded scene rect
         margin_x = (scene_width - image_width) / 2.0
@@ -463,6 +471,15 @@ class ImageViewer(QGraphicsView):
             checked: True to use rescaled values, False to use raw values
         """
         self.use_rescaled_values = checked
+    
+    def set_cine_controls_enabled(self, enabled: bool) -> None:
+        """
+        Set whether cine controls should be enabled in the context menu.
+        
+        Args:
+            enabled: True to enable cine controls in context menu, False to disable
+        """
+        self.cine_controls_enabled = enabled
     
     def wheelEvent(self, event: QWheelEvent) -> None:
         """
@@ -857,6 +874,30 @@ class ImageViewer(QGraphicsView):
                         toggle_navigator_action.triggered.connect(self.toggle_series_navigator_requested.emit)
                         
                         context_menu.addSeparator()
+                        
+                        # Cine playback actions (only if enabled)
+                        if self.cine_controls_enabled:
+                            cine_play_action = context_menu.addAction("▶ Play Cine")
+                            cine_play_action.triggered.connect(self.cine_play_requested.emit)
+                            
+                            cine_pause_action = context_menu.addAction("⏸ Pause Cine")
+                            cine_pause_action.triggered.connect(self.cine_pause_requested.emit)
+                            
+                            cine_stop_action = context_menu.addAction("⏹ Stop Cine")
+                            cine_stop_action.triggered.connect(self.cine_stop_requested.emit)
+                            
+                            # Loop Cine action
+                            cine_loop_action = context_menu.addAction("Loop Cine")
+                            cine_loop_action.setCheckable(True)
+                            # Get current loop state if callback is available
+                            if self.get_cine_loop_state_callback is not None:
+                                loop_enabled = self.get_cine_loop_state_callback()
+                                cine_loop_action.setChecked(loop_enabled)
+                            cine_loop_action.triggered.connect(
+                                lambda checked: self.cine_loop_toggled.emit(checked)
+                            )
+                            
+                            context_menu.addSeparator()
                         
                         # Left Mouse Button actions (moved to first level, grouped with separators)
                         left_mouse_actions = {
