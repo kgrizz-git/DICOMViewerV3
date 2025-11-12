@@ -38,7 +38,7 @@ COMMON_TAGS = [
     # Series information
     "SeriesNumber", "SeriesDescription", "SeriesInstanceUID", "SeriesDate",
     # Equipment information
-    "Modality", "Manufacturer", "ManufacturerModelName",
+    "Modality", "Manufacturer", "ManufacturerModelName", "StationName", "DeviceSerialNumber", "ScanOptions", "PerformedStationName",
     # Image information
     "InstanceNumber", "SliceLocation", "SliceThickness", "SpacingBetweenSlices",
     # Window/Level
@@ -73,13 +73,15 @@ class OverlayConfigDialog(QDialog):
     # Signal emitted when configuration is applied
     config_applied = Signal()
     
-    def __init__(self, config_manager: ConfigManager, parent: Optional[QWidget] = None):
+    def __init__(self, config_manager: ConfigManager, parent: Optional[QWidget] = None, initial_modality: Optional[str] = None):
         """
         Initialize the overlay configuration dialog.
         
         Args:
             config_manager: ConfigManager instance
             parent: Parent widget
+            initial_modality: Optional initial modality to select (e.g., "CT", "MR"). 
+                             If None or invalid, defaults to "default"
         """
         super().__init__(parent)
         
@@ -88,14 +90,24 @@ class OverlayConfigDialog(QDialog):
         self.setModal(True)
         self.resize(700, 600)
         
-        # Store current modality
-        self.current_modality = "default"
+        # Valid modalities list
+        valid_modalities = ["default", "CT", "MR", "US", "CR", "DX", "NM", "PT", "RT", "MG"]
+        
+        # Store current modality - use initial_modality if provided and valid, otherwise "default"
+        if initial_modality and initial_modality.strip() in valid_modalities:
+            self.current_modality = initial_modality.strip()
+        else:
+            self.current_modality = "default"
         
         # Store tag configurations per modality
         self.modality_configs: Dict[str, Dict[str, List[str]]] = {}
         
         self._create_ui()
         self._load_configurations()
+        
+        # Set the combo box to the initial modality after loading configurations
+        if self.modality_combo.findText(self.current_modality) >= 0:
+            self.modality_combo.setCurrentText(self.current_modality)
     
     def _create_ui(self) -> None:
         """Create the UI components."""
@@ -105,7 +117,9 @@ class OverlayConfigDialog(QDialog):
         modality_layout = QHBoxLayout()
         modality_label = QLabel("Modality:")
         self.modality_combo = QComboBox()
-        self.modality_combo.addItems(["default", "CT", "MR", "US", "CR", "DX", "NM", "PT", "RT", "MG"])
+        # Sort modalities alphabetically, but keep "default" first
+        modalities = ["default"] + sorted(["CT", "MR", "US", "CR", "DX", "NM", "PT", "RT", "MG"])
+        self.modality_combo.addItems(modalities)
         self.modality_combo.currentTextChanged.connect(self._on_modality_changed)
         modality_layout.addWidget(modality_label)
         modality_layout.addWidget(self.modality_combo)
@@ -215,12 +229,47 @@ class OverlayConfigDialog(QDialog):
         
         selected_layout.addWidget(selected_list)
         
+        # Button layout for Remove, Move Up, Move Down
+        button_layout = QHBoxLayout()
+        
         # Remove button
         remove_button = QPushButton("Remove")
         remove_button.clicked.connect(
             lambda: self._remove_selected_tags(corner_name)
         )
-        selected_layout.addWidget(remove_button)
+        button_layout.addWidget(remove_button)
+        
+        # Move Up button
+        move_up_button = QPushButton("Move Up")
+        move_up_button.clicked.connect(
+            lambda: self._move_tag_up(corner_name)
+        )
+        button_layout.addWidget(move_up_button)
+        
+        # Move Down button
+        move_down_button = QPushButton("Move Down")
+        move_down_button.clicked.connect(
+            lambda: self._move_tag_down(corner_name)
+        )
+        button_layout.addWidget(move_down_button)
+        
+        # Store button references by corner for enabling/disabling
+        if not hasattr(self, 'move_up_buttons'):
+            self.move_up_buttons = {}
+        if not hasattr(self, 'move_down_buttons'):
+            self.move_down_buttons = {}
+        self.move_up_buttons[corner_name] = move_up_button
+        self.move_down_buttons[corner_name] = move_down_button
+        
+        selected_layout.addLayout(button_layout)
+        
+        # Connect selection changed signal to update button states
+        selected_list.itemSelectionChanged.connect(
+            lambda: self._update_move_buttons_state(corner_name)
+        )
+        
+        # Initialize button states
+        self._update_move_buttons_state(corner_name)
         
         selected_group.setLayout(selected_layout)
         layout.addWidget(selected_group)
@@ -276,6 +325,120 @@ class OverlayConfigDialog(QDialog):
         for item in selected_list.selectedItems():
             selected_list.takeItem(selected_list.row(item))
     
+    def _move_tag_up(self, corner_name: str) -> None:
+        """Move selected tags up by one position in the corner's list."""
+        if corner_name not in self.selected_lists:
+            return
+        
+        selected_list = self.selected_lists[corner_name]
+        selected_items = selected_list.selectedItems()
+        
+        if not selected_items:
+            return
+        
+        # Get row indices of selected items, sorted from top to bottom
+        selected_rows = sorted([selected_list.row(item) for item in selected_items])
+        
+        # Check if any selected item is at the top (row 0)
+        if selected_rows[0] == 0:
+            return  # Can't move up if first item is selected
+        
+        # Store selected items to restore selection after move
+        selected_texts = [item.text() for item in selected_items]
+        
+        # Move items from bottom to top to avoid index shifting issues
+        # Process from bottom to top
+        for row in reversed(selected_rows):
+            if row > 0:  # Can move up
+                # Take the item from current position
+                item = selected_list.takeItem(row)
+                # Insert it one position up
+                selected_list.insertItem(row - 1, item)
+        
+        # Restore selection
+        for i in range(selected_list.count()):
+            item = selected_list.item(i)
+            if item.text() in selected_texts:
+                item.setSelected(True)
+        
+        # Update button states
+        self._update_move_buttons_state(corner_name)
+    
+    def _move_tag_down(self, corner_name: str) -> None:
+        """Move selected tags down by one position in the corner's list."""
+        if corner_name not in self.selected_lists:
+            return
+        
+        selected_list = self.selected_lists[corner_name]
+        selected_items = selected_list.selectedItems()
+        
+        if not selected_items:
+            return
+        
+        # Get row indices of selected items, sorted from top to bottom
+        selected_rows = sorted([selected_list.row(item) for item in selected_items])
+        last_row = selected_list.count() - 1
+        
+        # Check if any selected item is at the bottom
+        if selected_rows[-1] == last_row:
+            return  # Can't move down if last item is selected
+        
+        # Store selected items to restore selection after move
+        selected_texts = [item.text() for item in selected_items]
+        
+        # Move items from bottom to top to avoid index shifting issues
+        # Process from bottom to top
+        for row in reversed(selected_rows):
+            if row < last_row:  # Can move down
+                # Take the item from current position
+                item = selected_list.takeItem(row)
+                # Insert it one position down
+                selected_list.insertItem(row + 1, item)
+        
+        # Restore selection
+        for i in range(selected_list.count()):
+            item = selected_list.item(i)
+            if item.text() in selected_texts:
+                item.setSelected(True)
+        
+        # Update button states
+        self._update_move_buttons_state(corner_name)
+    
+    def _update_move_buttons_state(self, corner_name: str) -> None:
+        """Update enabled state of Move Up/Down buttons based on selection."""
+        if corner_name not in self.selected_lists:
+            return
+        
+        selected_list = self.selected_lists[corner_name]
+        selected_items = selected_list.selectedItems()
+        
+        # Get button references
+        move_up_button = self.move_up_buttons.get(corner_name)
+        move_down_button = self.move_down_buttons.get(corner_name)
+        
+        if not move_up_button or not move_down_button:
+            return
+        
+        if not selected_items:
+            # No selection - disable both buttons
+            move_up_button.setEnabled(False)
+            move_down_button.setEnabled(False)
+            return
+        
+        # Get row indices of selected items
+        selected_rows = [selected_list.row(item) for item in selected_items]
+        first_selected_row = min(selected_rows)
+        last_selected_row = max(selected_rows)
+        last_row = selected_list.count() - 1
+        
+        # Enable/disable Move Up button
+        # Disabled if first item (row 0) is selected
+        move_up_button.setEnabled(first_selected_row > 0)
+        
+        # Enable/disable Move Down button
+        # Disabled if last item is selected
+        move_down_button.setEnabled(last_selected_row < last_row)
+    
     def _on_modality_changed(self, modality: str) -> None:
         """Handle modality change."""
         # Save current configuration
@@ -321,6 +484,8 @@ class OverlayConfigDialog(QDialog):
                 selected_list.clear()
                 for tag in corner_tags.get(corner_key, []):
                     selected_list.addItem(tag)
+                # Update button states after loading
+                self._update_move_buttons_state(corner_name)
     
     def _load_configurations(self) -> None:
         """Load all configurations from config manager into memory."""

@@ -49,6 +49,7 @@ from gui.slice_navigator import SliceNavigator
 from gui.series_navigator import SeriesNavigator
 from gui.zoom_display_widget import ZoomDisplayWidget
 from gui.cine_player import CinePlayer
+from gui.cine_controls_widget import CineControlsWidget
 from core.dicom_loader import DICOMLoader
 from core.dicom_organizer import DICOMOrganizer
 from core.dicom_parser import DICOMParser
@@ -640,12 +641,17 @@ class DICOMViewerApp(QObject):
         self.cine_player.frame_advance_requested.connect(self._on_cine_frame_advance)
         self.cine_player.playback_state_changed.connect(self._on_cine_playback_state_changed)
         
-        # Cine control signals from main window
-        self.main_window.cine_play_requested.connect(self._on_cine_play)
-        self.main_window.cine_pause_requested.connect(self._on_cine_pause)
-        self.main_window.cine_stop_requested.connect(self._on_cine_stop)
-        self.main_window.cine_speed_changed.connect(self._on_cine_speed_changed)
-        self.main_window.cine_loop_toggled.connect(self._on_cine_loop_toggled)
+        # Cine control signals from cine controls widget
+        self.cine_controls_widget.play_requested.connect(self._on_cine_play)
+        self.cine_controls_widget.pause_requested.connect(self._on_cine_pause)
+        self.cine_controls_widget.stop_requested.connect(self._on_cine_stop)
+        self.cine_controls_widget.speed_changed.connect(self._on_cine_speed_changed)
+        self.cine_controls_widget.loop_toggled.connect(self._on_cine_loop_toggled)
+        
+        # Cine control signals from context menu
+        self.image_viewer.cine_play_requested.connect(self._on_cine_play)
+        self.image_viewer.cine_pause_requested.connect(self._on_cine_pause)
+        self.image_viewer.cine_stop_requested.connect(self._on_cine_stop)
     
     def _open_files(self) -> None:
         """Handle open files request."""

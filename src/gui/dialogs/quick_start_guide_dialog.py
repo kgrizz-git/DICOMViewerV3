@@ -38,6 +38,9 @@ class QuickStartGuideDialog(QDialog):
     - Mouse modes explanation
     """
     
+    # Class-level cache for HTML content by theme
+    _content_cache: dict = {}  # {theme: html_content}
+    
     def __init__(self, config_manager: ConfigManager, parent: Optional[QDialog] = None):
         """
         Initialize the Quick Start Guide dialog.
@@ -60,11 +63,23 @@ class QuickStartGuideDialog(QDialog):
         """Create the UI components."""
         layout = QVBoxLayout(self)
         
+        # Apply theme-based styling to dialog
+        theme = self.config_manager.get_theme()
+        if theme == "dark":
+            # Set dark grey background for dark theme
+            self.setStyleSheet("QDialog { background-color: #2b2b2b; }")
+        else:
+            # Light theme - use default or white
+            self.setStyleSheet("QDialog { background-color: #ffffff; }")
+        
         # Text edit for guide content
-        text_edit = QTextEdit()
-        text_edit.setReadOnly(True)
-        text_edit.setHtml(self._get_guide_content())
-        layout.addWidget(text_edit)
+        self.text_edit = QTextEdit()
+        self.text_edit.setReadOnly(True)
+        # Set QTextEdit background to match metadata panel in dark theme
+        if theme == "dark":
+            self.text_edit.setStyleSheet("QTextEdit { background-color: #1e1e1e; }")
+        self.text_edit.setHtml(self._get_guide_content())
+        layout.addWidget(self.text_edit)
         
         # Close button
         button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
@@ -76,6 +91,7 @@ class QuickStartGuideDialog(QDialog):
         Get the formatted HTML content for the guide.
         
         Colors adapt to the application theme for better contrast and consistency.
+        Content is cached per theme to improve load time.
         
         Returns:
             HTML formatted string with guide content
@@ -83,15 +99,21 @@ class QuickStartGuideDialog(QDialog):
         # Get current theme
         theme = self.config_manager.get_theme()
         
+        # Clear cache if colors have changed (for theme updates)
+        # Return cached content if available
+        if theme in QuickStartGuideDialog._content_cache:
+            return QuickStartGuideDialog._content_cache[theme]
+        
+        # Generate content for this theme
         # Define colors based on theme
         if theme == "dark":
-            # Dark theme: light text on dark background
-            bg_color = "#2b2b2b"
+            # Dark theme: light text on dark grey background (matches metadata panel)
+            bg_color = "#1e1e1e"
             h1_color = "#ffffff"
             h2_color = "#e0e0e0"
             text_color = "#ffffff"
             strong_color = "#4a9eff"  # Light blue for better visibility on dark
-            code_bg = "#3c3c3c"  # Darker grey for code blocks
+            code_bg = "#1e1e1e"  # Match HTML content background for code blocks
             code_text = "#ffffff"
         else:
             # Light theme: dark text on light background
@@ -103,7 +125,7 @@ class QuickStartGuideDialog(QDialog):
             code_bg = "#ecf0f1"  # Light grey for code blocks
             code_text = "#000000"
         
-        return f"""
+        content = f"""
         <html>
         <head>
             <style>
@@ -299,9 +321,13 @@ class QuickStartGuideDialog(QDialog):
                         <li>Export at displayed resolution: Apply current zoom level for high-resolution output</li>
                     </ul>
                 </li>
-                <li>Exported files are organized in folders: <code>Patient ID / Study Date - Study Description / Series Number - Series Description</code></li>
-                <li>The application remembers your last export directory</li>
-            </ul>
+            <li>Exported files are organized in folders: <code>Patient ID / Study Date - Study Description / Series Number - Series Description</code></li>
+            <li>The application remembers your last export directory</li>
+        </ul>
         </body>
         </html>
         """
+        
+        # Cache the content for this theme
+        QuickStartGuideDialog._content_cache[theme] = content
+        return content

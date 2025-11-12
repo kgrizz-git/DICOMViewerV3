@@ -152,11 +152,16 @@ class SliceDisplayManager:
             is_new_study_series = self.view_state_manager.is_new_study_or_series(dataset)
             series_identifier = self.view_state_manager.get_series_identifier(dataset)
             
+            # DEBUG: Track series detection
+            modality = getattr(dataset, 'Modality', 'Unknown')
+            print(f"[DEBUG-WL] display_slice: modality={modality}, is_new_study_series={is_new_study_series}, series_id={series_identifier[:20]}...")
+            
             # Set default use_rescaled_values based on whether parameters exist
             # Default to True if parameters exist, False otherwise
             if is_new_study_series:
                 use_rescaled = (rescale_slope is not None and rescale_intercept is not None)
                 self.view_state_manager.use_rescaled_values = use_rescaled
+                print(f"[DEBUG-WL] NEW SERIES: Setting use_rescaled_values={use_rescaled} (slope={rescale_slope}, intercept={rescale_intercept})")
                 # Update UI toggle state
                 from gui.main_window import MainWindow
                 if hasattr(self.view_state_manager, 'main_window'):
@@ -164,99 +169,131 @@ class SliceDisplayManager:
                 self.image_viewer.set_rescale_toggle_state(use_rescaled)
                 # Update current series identifier
                 self.view_state_manager.set_current_series_identifier(series_identifier)
+                # Clear window/level state for new study/series to prevent stale values from previous study
+                # This must be done before any recalculation to ensure we don't use old values
+                self.view_state_manager.current_window_center = None
+                self.view_state_manager.current_window_width = None
+                self.view_state_manager.window_level_user_modified = False
             
             # Get window/level values from view state manager
+            # For new series, these should be None (we just cleared them above)
             window_center = self.view_state_manager.current_window_center
             window_width = self.view_state_manager.current_window_width
-            use_rescaled_values = self.view_state_manager.use_rescaled_values
-            
-            # For new series, calculate or restore window/level defaults
+            # For new series, use the rescale state we just set; for same series, use existing state
             if is_new_study_series:
-                # Check if we have stored defaults for this series
+                use_rescaled_values = (rescale_slope is not None and rescale_intercept is not None)
+            else:
+                use_rescaled_values = self.view_state_manager.use_rescaled_values
+            
+            # For new series, always recalculate window/level defaults from the current dataset
+            # Never use stored defaults for new datasets - this ensures CT gets CT defaults, not MR defaults
+            if is_new_study_series:
+                # Ensure window/level values are None before recalculation
+                # This prevents using any stale values from previous datasets
+                window_center = None
+                window_width = None
                 stored_window_center = None
                 stored_window_width = None
-                if series_identifier in self.view_state_manager.series_defaults:
-                    defaults = self.view_state_manager.series_defaults[series_identifier]
-                    if 'window_center' in defaults and defaults.get('window_center') is not None:
-                        stored_window_center = defaults.get('window_center')
-                        stored_window_width = defaults.get('window_width')
+                
+                # Calculate window/level from series or dataset using the correct rescale state
+                # use_rescaled_values was set above based on current dataset's rescale parameters
+                study_uid = getattr(dataset, 'StudyInstanceUID', '')
+                if study_uid and new_series_uid and current_studies:
+                    if study_uid in current_studies and new_series_uid in current_studies[study_uid]:
+                        series_datasets = current_studies[study_uid][new_series_uid]
+                        # Calculate pixel range for entire series
+                        # Wrap in try-except to handle any errors from pixel array access
+                        try:
+                            series_pixel_min, series_pixel_max = self.dicom_processor.get_series_pixel_value_range(
+                                series_datasets, apply_rescale=use_rescaled_values
+                            )
+                            # Store series pixel range in ViewStateManager for window width slider maximum
+                            self.view_state_manager.set_series_pixel_range(series_pixel_min, series_pixel_max)
+                        except Exception as e:
+                            # If series pixel range calculation fails, log and continue with single slice
+                            error_type = type(e).__name__
+                            print(f"Error calculating series pixel range ({error_type}): {e}")
+                            series_pixel_min = None
+                            series_pixel_max = None
+                            # Clear stored series pixel range on error
+                            self.view_state_manager.clear_series_pixel_range()
+                        # Check for window/level in DICOM metadata
+                        wc, ww, is_rescaled = self.dicom_processor.get_window_level_from_dataset(
+                            dataset,
+                            rescale_slope=rescale_slope,
+                            rescale_intercept=rescale_intercept
+                        )
+                        print(f"[DEBUG-WL] From DICOM tags: wc={wc}, ww={ww}, is_rescaled={is_rescaled}, need_use_rescaled={use_rescaled_values}")
+                        if wc is not None and ww is not None:
+                            # Convert if needed
+                            if is_rescaled and not use_rescaled_values:
+                                if (rescale_slope is not None and rescale_intercept is not None and rescale_slope != 0.0):
+                                    orig_wc, orig_ww = wc, ww
+                                    wc, ww = self.dicom_processor.convert_window_level_rescaled_to_raw(
+                                        wc, ww, rescale_slope, rescale_intercept
+                                    )
+                                    print(f"[DEBUG-WL] Converted rescaled->raw: ({orig_wc}, {orig_ww}) -> ({wc}, {ww})")
+                            elif not is_rescaled and use_rescaled_values:
+                                if (rescale_slope is not None and rescale_intercept is not None):
+                                    orig_wc, orig_ww = wc, ww
+                                    wc, ww = self.dicom_processor.convert_window_level_raw_to_rescaled(
+                                        wc, ww, rescale_slope, rescale_intercept
+                                    )
+                                    print(f"[DEBUG-WL] Converted raw->rescaled: ({orig_wc}, {orig_ww}) -> ({wc}, {ww})")
+                            stored_window_center = wc
+                            stored_window_width = ww
+                            print(f"[DEBUG-WL] Using DICOM tag values: stored_wc={stored_window_center}, stored_ww={stored_window_width}")
+                        elif series_pixel_min is not None and series_pixel_max is not None:
+                            stored_window_center = (series_pixel_min + series_pixel_max) / 2.0
+                            stored_window_width = series_pixel_max - series_pixel_min
+                            if stored_window_width <= 0:
+                                stored_window_width = 1.0
+                            print(f"[DEBUG-WL] Calculated from series pixel range: stored_wc={stored_window_center}, stored_ww={stored_window_width}")
+                        else:
+                            # Fallback to single slice
+                            try:
+                                pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(
+                                    dataset, apply_rescale=use_rescaled_values
+                                )
+                                if pixel_min is not None and pixel_max is not None:
+                                    stored_window_center = (pixel_min + pixel_max) / 2.0
+                                    stored_window_width = pixel_max - pixel_min
+                                    if stored_window_width <= 0:
+                                        stored_window_width = 1.0
+                            except Exception as e:
+                                # If single slice pixel range calculation fails, use defaults
+                                error_type = type(e).__name__
+                                print(f"Error calculating single slice pixel range ({error_type}): {e}")
+                                # Will fall through to use window/level from DICOM tags or defaults
                         self.view_state_manager.window_level_user_modified = False
                 
-                if stored_window_center is None or stored_window_width is None:
-                    # Calculate window/level from series or dataset
-                    study_uid = getattr(dataset, 'StudyInstanceUID', '')
-                    if study_uid and new_series_uid and current_studies:
-                        if study_uid in current_studies and new_series_uid in current_studies[study_uid]:
-                            series_datasets = current_studies[study_uid][new_series_uid]
-                            # Calculate pixel range for entire series
-                            # Wrap in try-except to handle any errors from pixel array access
-                            try:
-                                series_pixel_min, series_pixel_max = self.dicom_processor.get_series_pixel_value_range(
-                                    series_datasets, apply_rescale=use_rescaled_values
-                                )
-                            except Exception as e:
-                                # If series pixel range calculation fails, log and continue with single slice
-                                error_type = type(e).__name__
-                                print(f"Error calculating series pixel range ({error_type}): {e}")
-                                series_pixel_min = None
-                                series_pixel_max = None
-                            # Check for window/level in DICOM metadata
-                            wc, ww, is_rescaled = self.dicom_processor.get_window_level_from_dataset(
-                                dataset,
-                                rescale_slope=rescale_slope,
-                                rescale_intercept=rescale_intercept
-                            )
-                            if wc is not None and ww is not None:
-                                # Convert if needed
-                                if is_rescaled and not use_rescaled_values:
-                                    if (rescale_slope is not None and rescale_intercept is not None and rescale_slope != 0.0):
-                                        wc, ww = self.dicom_processor.convert_window_level_rescaled_to_raw(
-                                            wc, ww, rescale_slope, rescale_intercept
-                                        )
-                                elif not is_rescaled and use_rescaled_values:
-                                    if (rescale_slope is not None and rescale_intercept is not None):
-                                        wc, ww = self.dicom_processor.convert_window_level_raw_to_rescaled(
-                                            wc, ww, rescale_slope, rescale_intercept
-                                        )
-                                stored_window_center = wc
-                                stored_window_width = ww
-                            elif series_pixel_min is not None and series_pixel_max is not None:
-                                stored_window_center = (series_pixel_min + series_pixel_max) / 2.0
-                                stored_window_width = series_pixel_max - series_pixel_min
-                                if stored_window_width <= 0:
-                                    stored_window_width = 1.0
-                            else:
-                                # Fallback to single slice
-                                try:
-                                    pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(
-                                        dataset, apply_rescale=use_rescaled_values
-                                    )
-                                    if pixel_min is not None and pixel_max is not None:
-                                        stored_window_center = (pixel_min + pixel_max) / 2.0
-                                        stored_window_width = pixel_max - pixel_min
-                                        if stored_window_width <= 0:
-                                            stored_window_width = 1.0
-                                except Exception as e:
-                                    # If single slice pixel range calculation fails, use defaults
-                                    error_type = type(e).__name__
-                                    print(f"Error calculating single slice pixel range ({error_type}): {e}")
-                                    # Will fall through to use window/level from DICOM tags or defaults
-                            self.view_state_manager.window_level_user_modified = False
-                
-                # Set window/level values
+                # Set window/level values - ensure we only use newly calculated values
+                # stored_window_center and stored_window_width are calculated above with correct rescale state
                 if stored_window_center is not None and stored_window_width is not None:
                     window_center = stored_window_center
                     window_width = stored_window_width
+                    print(f"[DEBUG-WL] Storing in view_state_manager: wc={window_center}, ww={window_width}, use_rescaled={use_rescaled_values}")
+                    # Store in view state manager - these are the correct defaults for this dataset
                     self.view_state_manager.current_window_center = window_center
                     self.view_state_manager.current_window_width = window_width
                     # Store defaults for this series (will be updated with zoom/pan after fit_to_view)
+                    # Store with the rescale state that was used to calculate them
+                    # Mark window/level as "initial defaults set" so store_initial_view_state doesn't overwrite
                     if series_identifier not in self.view_state_manager.series_defaults:
                         self.view_state_manager.series_defaults[series_identifier] = {}
                     self.view_state_manager.series_defaults[series_identifier].update({
                         'window_center': window_center,
                         'window_width': window_width,
-                        'use_rescaled_values': use_rescaled_values
+                        'use_rescaled_values': use_rescaled_values,  # Store the rescale state used for calculation
+                        'window_level_defaults_set': True  # Flag to prevent overwriting by store_initial_view_state
                     })
+                    print(f"[DEBUG-WL] Stored INITIAL defaults in series_defaults with flag")
+                else:
+                    # If calculation failed, ensure window/level remains None
+                    window_center = None
+                    window_width = None
+                    self.view_state_manager.current_window_center = None
+                    self.view_state_manager.current_window_width = None
             
             # For same series, preserve existing window/level values (already set above)
             
@@ -328,15 +365,25 @@ class SliceDisplayManager:
                 self.update_tag_viewer_callback(dataset)
             
             # Calculate pixel value range for window/level controls
+            pixel_min = None
+            pixel_max = None
             try:
                 pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(
                     dataset, apply_rescale=use_rescaled_values
                 )
                 if pixel_min is not None and pixel_max is not None:
-                    # Set ranges based on actual pixel values (no margins)
-                    center_range = (pixel_min, pixel_max)
-                    # Width range from 1 to the pixel range (not 2x)
-                    width_range = (1.0, max(1.0, pixel_max - pixel_min))
+                    # Get series pixel range for both center and width ranges
+                    series_pixel_min, series_pixel_max = self.view_state_manager.get_series_pixel_range()
+                    
+                    if series_pixel_min is not None and series_pixel_max is not None:
+                        # Use series range for both center and width ranges
+                        center_range = (series_pixel_min, series_pixel_max)
+                        width_range = (1.0, max(1.0, series_pixel_max - series_pixel_min))
+                    else:
+                        # Fallback to current slice range if series range not available
+                        center_range = (pixel_min, pixel_max)
+                        width_range = (1.0, max(1.0, pixel_max - pixel_min))
+                    
                     self.window_level_controls.set_ranges(center_range, width_range)
             except Exception as e:
                 # If pixel value range calculation fails, use default ranges
@@ -349,48 +396,78 @@ class SliceDisplayManager:
             self.window_level_controls.set_unit(unit)
             
             # Update window/level controls with current values
+            # Validate window/level values are within current dataset's pixel range
+            # This ensures correct values when switching between different modalities
+            # For new series, we've already calculated correct defaults above, so skip validation
+            if not is_new_study_series and window_center is not None and window_width is not None and pixel_min is not None and pixel_max is not None:
+                # Get current pixel range to validate window/level values
+                series_pixel_min, series_pixel_max = self.view_state_manager.get_series_pixel_range()
+                
+                # Use series range if available, otherwise use current slice range
+                if series_pixel_min is not None and series_pixel_max is not None:
+                    valid_min = series_pixel_min
+                    valid_max = series_pixel_max
+                else:
+                    valid_min = pixel_min
+                    valid_max = pixel_max
+                
+                # Check if window/level values are within valid range
+                # If not, recalculate defaults (this handles cases where values are from a different dataset)
+                if (window_center < valid_min or window_center > valid_max or 
+                    window_width < 1.0 or window_width > (valid_max - valid_min)):
+                    # Values are outside valid range - recalculate defaults for same series
+                    if valid_min is not None and valid_max is not None:
+                        window_center = (valid_min + valid_max) / 2.0
+                        window_width = valid_max - valid_min
+                        if window_width <= 0:
+                            window_width = 1.0
+                        self.view_state_manager.current_window_center = window_center
+                        self.view_state_manager.current_window_width = window_width
+            
             if is_new_study_series and window_center is not None and window_width is not None:
                 # New series - use calculated/stored defaults
                 self.window_level_controls.set_window_level(
                     window_center, window_width, block_signals=True, unit=unit
                 )
             elif is_same_series and window_center is not None and window_width is not None:
-                # Same series - preserve existing window/level values
+                # Same series - preserve existing window/level values (if valid)
                 self.window_level_controls.set_window_level(
                     window_center, window_width, block_signals=True, unit=unit
                 )
             else:
-                # First time or no existing values - try to get from dataset or use defaults
-                wc, ww, is_rescaled = self.dicom_processor.get_window_level_from_dataset(
-                    dataset,
-                    rescale_slope=rescale_slope,
-                    rescale_intercept=rescale_intercept
-                )
-                if wc is not None and ww is not None:
-                    # Convert if needed
-                    if is_rescaled and not use_rescaled_values:
-                        if (rescale_slope is not None and rescale_intercept is not None and rescale_slope != 0.0):
-                            wc, ww = self.dicom_processor.convert_window_level_rescaled_to_raw(
-                                wc, ww, rescale_slope, rescale_intercept
-                            )
-                    elif not is_rescaled and use_rescaled_values:
-                        if (rescale_slope is not None and rescale_intercept is not None):
-                            wc, ww = self.dicom_processor.convert_window_level_raw_to_rescaled(
-                                wc, ww, rescale_slope, rescale_intercept
-                            )
-                    self.window_level_controls.set_window_level(wc, ww, block_signals=True, unit=unit)
-                    self.view_state_manager.current_window_center = wc
-                    self.view_state_manager.current_window_width = ww
-                elif pixel_min is not None and pixel_max is not None:
-                    # Use default window/level based on pixel range
-                    default_center = (pixel_min + pixel_max) / 2.0
-                    default_width = pixel_max - pixel_min
-                    if default_width <= 0:
-                        default_width = 1.0
-                    self.window_level_controls.set_window_level(default_center, default_width, block_signals=True, unit=unit)
-                    self.view_state_manager.current_window_center = default_center
-                    self.view_state_manager.current_window_width = default_width
-                self.view_state_manager.window_level_user_modified = False
+                # Only recalculate if values are truly missing (not for same series with valid values)
+                if not is_same_series or (window_center is None or window_width is None):
+                    # First time or no existing values - try to get from dataset or use defaults
+                    wc, ww, is_rescaled = self.dicom_processor.get_window_level_from_dataset(
+                        dataset,
+                        rescale_slope=rescale_slope,
+                        rescale_intercept=rescale_intercept
+                    )
+                    if wc is not None and ww is not None:
+                        # Convert if needed
+                        if is_rescaled and not use_rescaled_values:
+                            if (rescale_slope is not None and rescale_intercept is not None and rescale_slope != 0.0):
+                                wc, ww = self.dicom_processor.convert_window_level_rescaled_to_raw(
+                                    wc, ww, rescale_slope, rescale_intercept
+                                )
+                        elif not is_rescaled and use_rescaled_values:
+                            if (rescale_slope is not None and rescale_intercept is not None):
+                                wc, ww = self.dicom_processor.convert_window_level_raw_to_rescaled(
+                                    wc, ww, rescale_slope, rescale_intercept
+                                )
+                        self.window_level_controls.set_window_level(wc, ww, block_signals=True, unit=unit)
+                        self.view_state_manager.current_window_center = wc
+                        self.view_state_manager.current_window_width = ww
+                    elif pixel_min is not None and pixel_max is not None:
+                        # Use default window/level based on pixel range
+                        default_center = (pixel_min + pixel_max) / 2.0
+                        default_width = pixel_max - pixel_min
+                        if default_width <= 0:
+                            default_width = 1.0
+                        self.window_level_controls.set_window_level(default_center, default_width, block_signals=True, unit=unit)
+                        self.view_state_manager.current_window_center = default_center
+                        self.view_state_manager.current_window_width = default_width
+                    self.view_state_manager.window_level_user_modified = False
             
             # Update overlay
             parser = DICOMParser(dataset)

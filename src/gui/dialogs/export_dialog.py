@@ -95,8 +95,8 @@ class ExportDialog(QDialog):
         
         self.export_format = "PNG"
         self.window_level_option = "current"  # "current" or "dataset"
-        self.include_overlays = False
-        self.export_at_display_resolution = False
+        self.include_overlays = True
+        self.export_at_display_resolution = True
         
         # Get last export path from config if available
         if config_manager:
@@ -168,13 +168,13 @@ class ExportDialog(QDialog):
         
         # Overlay/ROI option (only for PNG/JPG)
         self.overlay_checkbox = QCheckBox("Include overlays and ROIs (PNG/JPG only)")
-        self.overlay_checkbox.setChecked(False)
+        self.overlay_checkbox.setChecked(True)
         self.overlay_checkbox.toggled.connect(lambda checked: setattr(self, 'include_overlays', checked))
         layout.addWidget(self.overlay_checkbox)
         
         # Display resolution option (only for PNG/JPG)
         self.display_res_checkbox = QCheckBox("Export at displayed resolution (apply current zoom)")
-        self.display_res_checkbox.setChecked(False)
+        self.display_res_checkbox.setChecked(True)
         self.display_res_checkbox.stateChanged.connect(lambda: setattr(self, 'export_at_display_resolution', self.display_res_checkbox.isChecked()))
         layout.addWidget(self.display_res_checkbox)
         
