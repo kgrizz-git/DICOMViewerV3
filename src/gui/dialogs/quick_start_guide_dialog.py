@@ -164,6 +164,21 @@ class QuickStartGuideDialog(QDialog):
                 <li><strong>Context Menu:</strong> Right-click and select "Prev Series" or "Next Series"</li>
             </ul>
             
+            <h2>Cine Playback</h2>
+            <p>For multi-frame DICOM series, use the cine controls widget to play through frames automatically:</p>
+            <ul>
+                <li><strong>Play:</strong> Start automatic playback through all frames</li>
+                <li><strong>Pause:</strong> Pause playback at current frame</li>
+                <li><strong>Stop:</strong> Stop playback and return to first frame</li>
+                <li><strong>Loop:</strong> Toggle continuous looping (when enabled, playback restarts from first frame after reaching the end)</li>
+                <li><strong>Speed:</strong> Adjust playback speed (0.25x, 0.5x, 1x, 2x, 4x)</li>
+                <li><strong>Frame Slider:</strong> Drag to jump to a specific frame, or watch it move automatically during playback</li>
+                <li><strong>Frame Position:</strong> Shows current frame number and total frames (e.g., "5 / 20")</li>
+                <li><strong>FPS Display:</strong> Shows current frame rate during playback</li>
+                <li><strong>Context Menu:</strong> Right-click on image → "Loop Cine" to toggle loop mode</li>
+            </ul>
+            <p><strong>Note:</strong> Cine controls are only available for multi-frame DICOM series. Manual slice navigation pauses playback automatically.</p>
+            
             <h2>Zoom and Pan</h2>
             <ul>
                 <li><strong>Zoom:</strong> 
@@ -284,6 +299,8 @@ class QuickStartGuideDialog(QDialog):
                 <li><strong><code>↑</code> / <code>↓</code>:</strong> Navigate slices (Up = next, Down = previous)</li>
                 <li><strong><code>←</code> / <code>→</code>:</strong> Navigate series (Left = previous, Right = next)</li>
                 <li><strong><code>Delete</code>:</strong> Delete selected ROI or measurement</li>
+                <li><strong><code>Ctrl+T</code>:</strong> View/Edit DICOM Tags</li>
+                <li><strong><code>Shift+Ctrl+T</code>:</strong> Export DICOM Tags</li>
             </ul>
             
             <h2>Additional Tips</h2>
@@ -323,6 +340,28 @@ class QuickStartGuideDialog(QDialog):
                 </li>
             <li>Exported files are organized in folders: <code>Patient ID / Study Date - Study Description / Series Number - Series Description</code></li>
             <li>The application remembers your last export directory</li>
+        </ul>
+        
+        <h2>DICOM Tag Editing</h2>
+        <p>View and edit DICOM metadata tags, including private tags:</p>
+        <ul>
+            <li><strong>View/Edit Tags:</strong> Access via <strong>Tools → View/Edit DICOM Tags</strong> or press <code>Ctrl+T</code>
+                <ul>
+                    <li>Browse all DICOM tags in a tree view</li>
+                    <li>Edit individual tag values (double-click or use Edit button)</li>
+                    <li>View private tags and vendor-specific data</li>
+                    <li>Undo/redo changes using Edit menu</li>
+                    <li>Search for specific tags using the search box</li>
+                </ul>
+            </li>
+            <li><strong>Export Tags:</strong> Access via <strong>Tools → Export DICOM Tags</strong> or press <code>Shift+Ctrl+T</code>
+                <ul>
+                    <li>Export selected tags to Excel (.xlsx) or CSV format</li>
+                    <li>Choose which tags to export</li>
+                    <li>Export tags from multiple slices or entire series</li>
+                </ul>
+            </li>
+            <li><strong>Tag Changes:</strong> All tag edits are saved to the DICOM file when you save the dataset</li>
         </ul>
         </body>
         </html>

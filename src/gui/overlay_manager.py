@@ -62,6 +62,14 @@ class OverlayManager:
         self.current_parser: Optional[DICOMParser] = None
         self.current_scene = None
         
+        # Track which items belong to which corner for position updates
+        self.corner_item_map: Dict[str, List[QGraphicsTextItem]] = {
+            "upper_left": [],
+            "upper_right": [],
+            "lower_left": [],
+            "lower_right": []
+        }
+        
         # Default fields for minimal mode
         self.minimal_fields = [
             "PatientName",
@@ -358,8 +366,11 @@ class OverlayManager:
         if total_slices is not None:
             self.current_total_slices = total_slices
         
-        # Clear existing items
+        # Clear existing items and corner mapping
         self.clear_overlay_items(scene)
+        # Reset corner mapping
+        for corner_key in self.corner_item_map:
+            self.corner_item_map[corner_key].clear()
         
         # Hide overlays based on visibility state
         # State 1 and 2 hide corner text overlays
@@ -542,6 +553,8 @@ class OverlayManager:
                             
                             scene.addItem(text_item)
                             self.overlay_items.append(text_item)
+                            # Track this item for this corner
+                            self.corner_item_map[corner_key].append(text_item)
                     else:
                         # Left-aligned corners: create single multi-line text item
                         text_item = self._create_text_item(text, x, y, alignment)
@@ -562,6 +575,8 @@ class OverlayManager:
                         
                         scene.addItem(text_item)
                         self.overlay_items.append(text_item)
+                        # Track this item for this corner
+                        self.corner_item_map[corner_key].append(text_item)
         
         return self.overlay_items
     
@@ -591,7 +606,8 @@ class OverlayManager:
         """
         Update overlay item positions when view transform changes (zoom/pan).
         
-        This ensures text stays anchored to viewport edges when zooming.
+        This ensures text stays anchored to viewport edges when zooming/panning.
+        Updates existing items instead of recreating them to prevent jitter.
         
         Args:
             scene: QGraphicsScene containing overlay items
@@ -609,22 +625,91 @@ class OverlayManager:
         if scene_rect.width() <= 0 or scene_rect.height() <= 0:
             return
         
-        scene_width = scene_rect.width()
-        scene_height = scene_rect.height()
-        margin = 10
+        margin = 10  # Margin in viewport pixels
         
-        # Get viewport dimensions
+        # Calculate viewport-to-scene scale factor
+        view_scale = view.transform().m11()
+        if view_scale > 0:
+            viewport_to_scene_scale = 1.0 / view_scale
+        else:
+            viewport_to_scene_scale = 1.0
+        
+        # Convert margin from viewport pixels to scene coordinates
+        margin_scene = margin * viewport_to_scene_scale
+        
+        # Map viewport edges to scene coordinates
         viewport_width = view.viewport().width()
         viewport_height = view.viewport().height()
         
-        # Update positions for each overlay item
-        # We need to determine which corner each item belongs to
-        # For now, we'll recreate the overlay items with updated positions
-        # This is simpler than tracking which item belongs to which corner
+        top_left_scene = view.mapToScene(0, 0)
+        top_right_scene = view.mapToScene(viewport_width, 0)
+        bottom_left_scene = view.mapToScene(0, viewport_height)
+        bottom_right_scene = view.mapToScene(viewport_width, viewport_height)
         
-        # Clear and recreate with current view transform
-        if self.current_parser is not None:
-            # Preserve total_slices if available
-            total_slices = getattr(self, 'current_total_slices', None)
-            self.create_overlay_items(scene, self.current_parser, total_slices=total_slices)
+        # Define corner positions and alignments
+        corners = [
+            ("upper_left", top_left_scene.x() + margin_scene, top_left_scene.y() + margin_scene, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop),
+            ("upper_right", top_right_scene.x(), top_right_scene.y() + margin_scene, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop),
+            ("lower_left", bottom_left_scene.x() + margin_scene, bottom_left_scene.y() - margin_scene, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom),
+            ("lower_right", bottom_right_scene.x(), bottom_left_scene.y() - margin_scene, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom)
+        ]
+        
+        # Update positions for each corner's items
+        for corner_key, x, y, alignment in corners:
+            items = self.corner_item_map.get(corner_key, [])
+            if not items:
+                continue
+            
+            # Check if items are still valid (not deleted)
+            valid_items = [item for item in items if item is not None and item.scene() == scene]
+            if len(valid_items) != len(items):
+                # Some items were deleted, need to recreate
+                total_slices = getattr(self, 'current_total_slices', None)
+                self.create_overlay_items(scene, self.current_parser, total_slices=total_slices)
+                return
+            
+            is_right_aligned = bool(alignment & Qt.AlignmentFlag.AlignRight)
+            
+            if is_right_aligned:
+                # Right-aligned: multiple items (one per line)
+                # Calculate max text width for positioning
+                max_text_width_viewport = 0
+                for item in valid_items:
+                    if item is not None:
+                        item_width = item.boundingRect().width()
+                        max_text_width_viewport = max(max_text_width_viewport, item_width)
+                
+                max_text_width_viewport += 5  # Add padding
+                max_text_width_scene = max_text_width_viewport * viewport_to_scene_scale
+                
+                # Calculate right edge position
+                right_edge_x = x - margin_scene
+                left_edge_x = right_edge_x - max_text_width_scene
+                
+                # Get line height from first item
+                if valid_items:
+                    line_height_viewport = valid_items[0].boundingRect().height()
+                    line_height_scene = line_height_viewport * viewport_to_scene_scale
+                    line_spacing = line_height_scene * 0.9
+                    
+                    # Update positions for each line
+                    for line_idx, item in enumerate(valid_items):
+                        if item is not None:
+                            if alignment & Qt.AlignmentFlag.AlignBottom:
+                                text_y = y - (len(valid_items) - line_idx) * line_spacing
+                            else:
+                                text_y = y + line_idx * line_spacing
+                            item.setPos(left_edge_x, text_y)
+            else:
+                # Left-aligned: single item (may be multi-line)
+                if valid_items:
+                    item = valid_items[0]
+                    if item is not None:
+                        item.setPos(x, y)
+                        
+                        # Adjust y position for bottom alignment
+                        if alignment & Qt.AlignmentFlag.AlignBottom:
+                            text_height_viewport = item.boundingRect().height()
+                            text_height_scene = text_height_viewport * viewport_to_scene_scale
+                            item.setPos(item.pos().x(), y - text_height_scene)
 
