@@ -154,14 +154,14 @@ class SliceDisplayManager:
             
             # DEBUG: Track series detection
             modality = getattr(dataset, 'Modality', 'Unknown')
-            print(f"[DEBUG-WL] display_slice: modality={modality}, is_new_study_series={is_new_study_series}, series_id={series_identifier[:20]}...")
+            # print(f"[DEBUG-WL] display_slice: modality={modality}, is_new_study_series={is_new_study_series}, series_id={series_identifier[:20]}...")
             
             # Set default use_rescaled_values based on whether parameters exist
             # Default to True if parameters exist, False otherwise
             if is_new_study_series:
                 use_rescaled = (rescale_slope is not None and rescale_intercept is not None)
                 self.view_state_manager.use_rescaled_values = use_rescaled
-                print(f"[DEBUG-WL] NEW SERIES: Setting use_rescaled_values={use_rescaled} (slope={rescale_slope}, intercept={rescale_intercept})")
+                # print(f"[DEBUG-WL] NEW SERIES: Setting use_rescaled_values={use_rescaled} (slope={rescale_slope}, intercept={rescale_intercept})")
                 # Update UI toggle state
                 from gui.main_window import MainWindow
                 if hasattr(self.view_state_manager, 'main_window'):
@@ -223,7 +223,7 @@ class SliceDisplayManager:
                             rescale_slope=rescale_slope,
                             rescale_intercept=rescale_intercept
                         )
-                        print(f"[DEBUG-WL] From DICOM tags: wc={wc}, ww={ww}, is_rescaled={is_rescaled}, need_use_rescaled={use_rescaled_values}")
+                        # print(f"[DEBUG-WL] From DICOM tags: wc={wc}, ww={ww}, is_rescaled={is_rescaled}, need_use_rescaled={use_rescaled_values}")
                         if wc is not None and ww is not None:
                             # Convert if needed
                             if is_rescaled and not use_rescaled_values:
@@ -232,23 +232,23 @@ class SliceDisplayManager:
                                     wc, ww = self.dicom_processor.convert_window_level_rescaled_to_raw(
                                         wc, ww, rescale_slope, rescale_intercept
                                     )
-                                    print(f"[DEBUG-WL] Converted rescaled->raw: ({orig_wc}, {orig_ww}) -> ({wc}, {ww})")
+                                    # print(f"[DEBUG-WL] Converted rescaled->raw: ({orig_wc}, {orig_ww}) -> ({wc}, {ww})")
                             elif not is_rescaled and use_rescaled_values:
                                 if (rescale_slope is not None and rescale_intercept is not None):
                                     orig_wc, orig_ww = wc, ww
                                     wc, ww = self.dicom_processor.convert_window_level_raw_to_rescaled(
                                         wc, ww, rescale_slope, rescale_intercept
                                     )
-                                    print(f"[DEBUG-WL] Converted raw->rescaled: ({orig_wc}, {orig_ww}) -> ({wc}, {ww})")
+                                    # print(f"[DEBUG-WL] Converted raw->rescaled: ({orig_wc}, {orig_ww}) -> ({wc}, {ww})")
                             stored_window_center = wc
                             stored_window_width = ww
-                            print(f"[DEBUG-WL] Using DICOM tag values: stored_wc={stored_window_center}, stored_ww={stored_window_width}")
+                            # print(f"[DEBUG-WL] Using DICOM tag values: stored_wc={stored_window_center}, stored_ww={stored_window_width}")
                         elif series_pixel_min is not None and series_pixel_max is not None:
                             stored_window_center = (series_pixel_min + series_pixel_max) / 2.0
                             stored_window_width = series_pixel_max - series_pixel_min
                             if stored_window_width <= 0:
                                 stored_window_width = 1.0
-                            print(f"[DEBUG-WL] Calculated from series pixel range: stored_wc={stored_window_center}, stored_ww={stored_window_width}")
+                            # print(f"[DEBUG-WL] Calculated from series pixel range: stored_wc={stored_window_center}, stored_ww={stored_window_width}")
                         else:
                             # Fallback to single slice
                             try:
@@ -272,7 +272,7 @@ class SliceDisplayManager:
                 if stored_window_center is not None and stored_window_width is not None:
                     window_center = stored_window_center
                     window_width = stored_window_width
-                    print(f"[DEBUG-WL] Storing in view_state_manager: wc={window_center}, ww={window_width}, use_rescaled={use_rescaled_values}")
+                    # print(f"[DEBUG-WL] Storing in view_state_manager: wc={window_center}, ww={window_width}, use_rescaled={use_rescaled_values}")
                     # Store in view state manager - these are the correct defaults for this dataset
                     self.view_state_manager.current_window_center = window_center
                     self.view_state_manager.current_window_width = window_width
@@ -287,7 +287,7 @@ class SliceDisplayManager:
                         'use_rescaled_values': use_rescaled_values,  # Store the rescale state used for calculation
                         'window_level_defaults_set': True  # Flag to prevent overwriting by store_initial_view_state
                     })
-                    print(f"[DEBUG-WL] Stored INITIAL defaults in series_defaults with flag")
+                    # print(f"[DEBUG-WL] Stored INITIAL defaults in series_defaults with flag")
                 else:
                     # If calculation failed, ensure window/level remains None
                     window_center = None
@@ -326,14 +326,14 @@ class SliceDisplayManager:
                 # Pixel array access errors during image conversion
                 error_type = type(e).__name__
                 error_msg = f"Error converting dataset to image ({error_type}): {str(e)}"
-                print(error_msg)
+                # print(error_msg)
                 # Re-raise to be caught by outer exception handler
                 raise RuntimeError(error_msg) from e
             except Exception as e:
                 # Other unexpected errors
                 error_type = type(e).__name__
                 error_msg = f"Unexpected error converting dataset to image ({error_type}): {str(e)}"
-                print(error_msg)
+                # print(error_msg)
                 raise RuntimeError(error_msg) from e
             
             # Set image in viewer - preserve zoom/pan if same series

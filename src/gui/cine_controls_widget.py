@@ -26,7 +26,8 @@ class CineControlsWidget(QWidget):
     Widget for cine playback controls.
     
     Features:
-    - Play/Pause button
+    - Play button
+    - Pause button
     - Stop button
     - Speed dropdown (0.25x, 0.5x, 1x, 2x, 4x)
     - Loop toggle button
@@ -69,11 +70,17 @@ class CineControlsWidget(QWidget):
         buttons_layout = QHBoxLayout()
         buttons_layout.setSpacing(5)
         
-        # Play/Pause button
-        self.play_pause_button = QPushButton("▶ Play")
-        self.play_pause_button.setToolTip("Play/Pause cine loop")
-        self.play_pause_button.clicked.connect(self._on_play_pause_clicked)
-        buttons_layout.addWidget(self.play_pause_button)
+        # Play button
+        self.play_button = QPushButton("▶ Play")
+        self.play_button.setToolTip("Play cine loop")
+        self.play_button.clicked.connect(self._on_play_clicked)
+        buttons_layout.addWidget(self.play_button)
+        
+        # Pause button
+        self.pause_button = QPushButton("⏸ Pause")
+        self.pause_button.setToolTip("Pause cine playback")
+        self.pause_button.clicked.connect(self._on_pause_clicked)
+        buttons_layout.addWidget(self.pause_button)
         
         # Stop button
         self.stop_button = QPushButton("⏹ Stop")
@@ -81,60 +88,52 @@ class CineControlsWidget(QWidget):
         self.stop_button.clicked.connect(self._on_stop_clicked)
         buttons_layout.addWidget(self.stop_button)
         
-        buttons_layout.addStretch()
+        # Loop toggle button (moved next to stop button)
+        self.loop_button = QPushButton("🔁 Loop")
+        self.loop_button.setObjectName("cine_loop_button")
+        self.loop_button.setCheckable(True)
+        self.loop_button.setToolTip("Enable/disable looping")
+        self.loop_button.clicked.connect(self._on_loop_toggled)
+        buttons_layout.addWidget(self.loop_button)
+        
         group_layout.addLayout(buttons_layout)
         
-        # Speed and Loop row
-        speed_loop_layout = QHBoxLayout()
-        speed_loop_layout.setSpacing(5)
+        # Speed and FPS row
+        speed_fps_layout = QHBoxLayout()
+        speed_fps_layout.setSpacing(5)
         
         # Speed dropdown
         speed_label = QLabel("Speed:")
-        speed_loop_layout.addWidget(speed_label)
+        speed_fps_layout.addWidget(speed_label)
         
         self.speed_combo = QComboBox()
         self.speed_combo.addItems(["0.25x", "0.5x", "1x", "2x", "4x"])
         self.speed_combo.setCurrentText("1x")
         self.speed_combo.setToolTip("Playback speed multiplier")
         self.speed_combo.currentTextChanged.connect(self._on_speed_changed)
-        speed_loop_layout.addWidget(self.speed_combo)
+        speed_fps_layout.addWidget(self.speed_combo)
         
-        speed_loop_layout.addStretch()
-        
-        # Loop toggle button
-        self.loop_button = QPushButton("🔁 Loop")
-        self.loop_button.setCheckable(True)
-        self.loop_button.setToolTip("Enable/disable looping")
-        self.loop_button.clicked.connect(self._on_loop_toggled)
-        speed_loop_layout.addWidget(self.loop_button)
-        
-        group_layout.addLayout(speed_loop_layout)
-        
-        # FPS display
-        fps_layout = QHBoxLayout()
+        # FPS display (moved to same row as speed)
         self.fps_label = QLabel("FPS: --")
         self.fps_label.setToolTip("Current frame rate")
-        fps_layout.addWidget(self.fps_label)
-        fps_layout.addStretch()
-        group_layout.addLayout(fps_layout)
+        speed_fps_layout.addWidget(self.fps_label)
+        
+        speed_fps_layout.addStretch()
+        group_layout.addLayout(speed_fps_layout)
         
         layout.addWidget(group_box)
-        layout.addStretch()
     
-    def _on_play_pause_clicked(self) -> None:
-        """Handle play/pause button click."""
-        # Toggle between play and pause
-        if self.play_pause_button.text() == "▶ Play" or self.play_pause_button.text() == "▶":
-            self.play_requested.emit()
-            self.play_pause_button.setText("⏸ Pause")
-        else:
-            self.pause_requested.emit()
-            self.play_pause_button.setText("▶ Play")
+    def _on_play_clicked(self) -> None:
+        """Handle play button click."""
+        self.play_requested.emit()
+    
+    def _on_pause_clicked(self) -> None:
+        """Handle pause button click."""
+        self.pause_requested.emit()
     
     def _on_stop_clicked(self) -> None:
         """Handle stop button click."""
         self.stop_requested.emit()
-        self.play_pause_button.setText("▶ Play")
     
     def _on_speed_changed(self, speed_text: str) -> None:
         """Handle speed dropdown change."""
@@ -166,7 +165,10 @@ class CineControlsWidget(QWidget):
         Args:
             enabled: True to enable controls, False to disable
         """
-        self.play_pause_button.setEnabled(enabled)
+        self.play_button.setEnabled(enabled)
+        # Pause button should only be enabled if controls are enabled AND playback is active
+        # This will be managed by update_playback_state, so we disable it here
+        self.pause_button.setEnabled(False)
         self.stop_button.setEnabled(enabled)
         self.speed_combo.setEnabled(enabled)
         self.loop_button.setEnabled(enabled)
@@ -179,9 +181,13 @@ class CineControlsWidget(QWidget):
             is_playing: True if playing, False if paused/stopped
         """
         if is_playing:
-            self.play_pause_button.setText("⏸ Pause")
+            # When playing, disable play button and enable pause button
+            self.play_button.setEnabled(False)
+            self.pause_button.setEnabled(True)
         else:
-            self.play_pause_button.setText("▶ Play")
+            # When paused/stopped, enable play button and disable pause button
+            self.play_button.setEnabled(True)
+            self.pause_button.setEnabled(False)
     
     def update_fps_display(self, fps: float) -> None:
         """

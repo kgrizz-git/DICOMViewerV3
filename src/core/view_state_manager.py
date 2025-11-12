@@ -183,8 +183,8 @@ class ViewStateManager:
         if self.image_viewer.image_item is None:
             return
         
-        print(f"[DEBUG-WL] store_initial_view_state called: series_id={self.current_series_identifier[:20] if self.current_series_identifier else 'None'}...")
-        print(f"[DEBUG-WL] Current values: wc={self.current_window_center}, ww={self.current_window_width}, use_rescaled={self.use_rescaled_values}")
+        # print(f"[DEBUG-WL] store_initial_view_state called: series_id={self.current_series_identifier[:20] if self.current_series_identifier else 'None'}...")
+        # print(f"[DEBUG-WL] Current values: wc={self.current_window_center}, ww={self.current_window_width}, use_rescaled={self.use_rescaled_values}")
         
         # Store initial zoom (global fallback)
         if self.initial_zoom is None:
@@ -217,7 +217,7 @@ class ViewStateManager:
             
             if self.current_series_identifier not in self.series_defaults:
                 # Create new entry with all defaults
-                print(f"[DEBUG-WL] Creating NEW series_defaults entry")
+                # print(f"[DEBUG-WL] Creating NEW series_defaults entry")
                 self.series_defaults[self.current_series_identifier] = {
                     'window_center': self.current_window_center,
                     'window_width': self.current_window_width,
@@ -237,8 +237,8 @@ class ViewStateManager:
                     stored_wc = self.series_defaults[self.current_series_identifier]['window_center']
                     stored_ww = self.series_defaults[self.current_series_identifier]['window_width']
                     stored_rescaled = self.series_defaults[self.current_series_identifier]['use_rescaled_values']
-                    print(f"[DEBUG-WL] UPDATING existing series_defaults (preserving window/level)")
-                    print(f"[DEBUG-WL] Restoring current values from series_defaults: wc={stored_wc}, ww={stored_ww}")
+                    # print(f"[DEBUG-WL] UPDATING existing series_defaults (preserving window/level)")
+                    # print(f"[DEBUG-WL] Restoring current values from series_defaults: wc={stored_wc}, ww={stored_ww}")
                     
                     # Restore current values to correct defaults
                     self.current_window_center = stored_wc
@@ -249,7 +249,7 @@ class ViewStateManager:
                     self.window_level_controls.set_window_level(
                         stored_wc, stored_ww, block_signals=True, unit=unit
                     )
-                    print(f"[DEBUG-WL] Updated window/level controls with restored values")
+                    # print(f"[DEBUG-WL] Updated window/level controls with restored values")
                     
                     # Re-display the current image with the corrected window/level
                     # This fixes the initial display that was rendered with corrupted values
@@ -268,7 +268,7 @@ class ViewStateManager:
                                 )
                                 if image:
                                     self.image_viewer.set_image(image, preserve_view=True)
-                                    print(f"[DEBUG-WL] Re-displayed image with corrected window/level")
+                                    # print(f"[DEBUG-WL] Re-displayed image with corrected window/level")
                                     
                                     # Also regenerate series navigator thumbnail with corrected window/level
                                     if self.series_navigator and datasets:
@@ -293,7 +293,7 @@ class ViewStateManager:
                     self.series_defaults[self.current_series_identifier]['window_level_defaults_set'] = True
                 else:
                     # No defaults set yet, update all fields including window/level
-                    print(f"[DEBUG-WL] UPDATING existing series_defaults entry (all fields)")
+                    # print(f"[DEBUG-WL] UPDATING existing series_defaults entry (all fields)")
                     self.series_defaults[self.current_series_identifier].update({
                         'window_center': self.current_window_center,
                         'window_width': self.current_window_width,
@@ -303,7 +303,7 @@ class ViewStateManager:
                         'scene_center': scene_center,
                         'use_rescaled_values': self.use_rescaled_values  # Always update to match current state
                     })
-            print(f"[DEBUG-WL] Stored in series_defaults: wc={self.series_defaults[self.current_series_identifier]['window_center']}, ww={self.series_defaults[self.current_series_identifier]['window_width']}, use_rescaled={self.series_defaults[self.current_series_identifier]['use_rescaled_values']}")
+            # print(f"[DEBUG-WL] Stored in series_defaults: wc={self.series_defaults[self.current_series_identifier]['window_center']}, ww={self.series_defaults[self.current_series_identifier]['window_width']}, use_rescaled={self.series_defaults[self.current_series_identifier]['use_rescaled_values']}")
     
     def reset_view(self) -> None:
         """
@@ -316,15 +316,15 @@ class ViewStateManager:
             return
         
         modality = getattr(self.current_dataset, 'Modality', 'Unknown')
-        print(f"[DEBUG-WL] ===== reset_view called: modality={modality}, current_use_rescaled={self.use_rescaled_values} =====")
+        # print(f"[DEBUG-WL] ===== reset_view called: modality={modality}, current_use_rescaled={self.use_rescaled_values} =====")
         
         # Get series identifier
         series_identifier = self.get_series_identifier(self.current_dataset)
-        print(f"[DEBUG-WL] Series identifier: {series_identifier[:20]}...")
+        # print(f"[DEBUG-WL] Series identifier: {series_identifier[:20]}...")
         
         # Try to get series-specific defaults
         if series_identifier in self.series_defaults:
-            print(f"[DEBUG-WL] Found series_defaults for this series")
+            # print(f"[DEBUG-WL] Found series_defaults for this series")
             defaults = self.series_defaults[series_identifier]
             reset_zoom = defaults.get('zoom')
             reset_h_scroll = defaults.get('h_scroll')
@@ -333,10 +333,10 @@ class ViewStateManager:
             reset_window_center = defaults.get('window_center')
             reset_window_width = defaults.get('window_width')
             reset_use_rescaled_values = defaults.get('use_rescaled_values')
-            print(f"[DEBUG-WL] Retrieved from series_defaults: wc={reset_window_center}, ww={reset_window_width}, stored_use_rescaled={reset_use_rescaled_values}")
+            # print(f"[DEBUG-WL] Retrieved from series_defaults: wc={reset_window_center}, ww={reset_window_width}, stored_use_rescaled={reset_use_rescaled_values}")
         else:
             # Fall back to global initial values
-            print(f"[DEBUG-WL] No series_defaults found, using global initial values")
+            # print(f"[DEBUG-WL] No series_defaults found, using global initial values")
             reset_zoom = self.initial_zoom
             reset_h_scroll = self.initial_h_scroll
             reset_v_scroll = self.initial_v_scroll
@@ -344,14 +344,14 @@ class ViewStateManager:
             reset_window_center = self.initial_window_center
             reset_window_width = self.initial_window_width
             reset_use_rescaled_values = None
-            print(f"[DEBUG-WL] Global initial values: wc={reset_window_center}, ww={reset_window_width}")
+            # print(f"[DEBUG-WL] Global initial values: wc={reset_window_center}, ww={reset_window_width}")
         
         # If we have window/level values but they're in a different rescale state than current,
         # convert them to match the current rescale state
         if (reset_window_center is not None and reset_window_width is not None and 
             reset_use_rescaled_values is not None and 
             reset_use_rescaled_values != self.use_rescaled_values):
-            print(f"[DEBUG-WL] Rescale state mismatch! stored={reset_use_rescaled_values}, current={self.use_rescaled_values}")
+            # print(f"[DEBUG-WL] Rescale state mismatch! stored={reset_use_rescaled_values}, current={self.use_rescaled_values}")
             orig_wc, orig_ww = reset_window_center, reset_window_width
             # Stored values are in different units than current display mode - convert them
             if reset_use_rescaled_values and not self.use_rescaled_values:
@@ -361,16 +361,17 @@ class ViewStateManager:
                     reset_window_center, reset_window_width = self.dicom_processor.convert_window_level_rescaled_to_raw(
                         reset_window_center, reset_window_width, self.rescale_slope, self.rescale_intercept
                     )
-                    print(f"[DEBUG-WL] Converted rescaled->raw: ({orig_wc}, {orig_ww}) -> ({reset_window_center}, {reset_window_width})")
+                    # print(f"[DEBUG-WL] Converted rescaled->raw: ({orig_wc}, {orig_ww}) -> ({reset_window_center}, {reset_window_width})")
             elif not reset_use_rescaled_values and self.use_rescaled_values:
                 # Stored in raw, need rescaled
                 if self.rescale_slope is not None and self.rescale_intercept is not None:
                     reset_window_center, reset_window_width = self.dicom_processor.convert_window_level_raw_to_rescaled(
                         reset_window_center, reset_window_width, self.rescale_slope, self.rescale_intercept
                     )
-                    print(f"[DEBUG-WL] Converted raw->rescaled: ({orig_wc}, {orig_ww}) -> ({reset_window_center}, {reset_window_width})")
+                    # print(f"[DEBUG-WL] Converted raw->rescaled: ({orig_wc}, {orig_ww}) -> ({reset_window_center}, {reset_window_width})")
         else:
-            print(f"[DEBUG-WL] No conversion needed (rescale states match or values missing)")
+            # print(f"[DEBUG-WL] No conversion needed (rescale states match or values missing)")
+            pass
         
         # If window/level defaults are missing, recalculate them based on current dataset
         # Always use current rescale state when recalculating to ensure consistency
@@ -479,7 +480,7 @@ class ViewStateManager:
         
         # Reset window/level to initial values (already in correct units for current rescale state)
         if reset_window_center is not None and reset_window_width is not None:
-            print(f"[DEBUG-WL] Applying final values: wc={reset_window_center}, ww={reset_window_width}, use_rescaled={self.use_rescaled_values}")
+            # print(f"[DEBUG-WL] Applying final values: wc={reset_window_center}, ww={reset_window_width}, use_rescaled={self.use_rescaled_values}")
             # Get unit for window/level display
             unit = self.rescale_type if (self.use_rescaled_values and self.rescale_type) else None
             self.window_level_controls.set_window_level(

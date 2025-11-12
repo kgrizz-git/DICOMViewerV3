@@ -119,6 +119,7 @@ class DICOMViewerApp(QObject):
         self.roi_list_panel = ROIListPanel()
         self.roi_list_panel.set_roi_manager(self.roi_manager)
         self.series_navigator = SeriesNavigator(self.dicom_processor)
+        self.cine_controls_widget = CineControlsWidget()
         
         # Initialize overlay manager with config settings
         font_size = self.config_manager.get_overlay_font_size()
@@ -282,10 +283,8 @@ class DICOMViewerApp(QObject):
         self.cine_player.set_speed(default_speed)
         self.cine_player.set_loop(default_loop)
         # Update UI to match defaults
-        speed_text = f"{default_speed}x"
-        if speed_text in ["0.25x", "0.5x", "1x", "2x", "4x"]:
-            self.main_window.cine_speed_combo.setCurrentText(speed_text)
-        self.main_window.cine_loop_action.setChecked(default_loop)
+        self.cine_controls_widget.set_speed(default_speed)
+        self.cine_controls_widget.set_loop(default_loop)
         
         # Initialize KeyboardEventHandler
         self.keyboard_event_handler = KeyboardEventHandler(
@@ -486,12 +485,15 @@ class DICOMViewerApp(QObject):
             center_layout = QVBoxLayout(self.main_window.center_panel)
         center_layout.addWidget(self.image_viewer)
         
-        # Add metadata panel to left panel
+        # Add cine controls widget and metadata panel to left panel
         left_layout = self.main_window.left_panel.layout()
         if left_layout is None:
             from PySide6.QtWidgets import QVBoxLayout
             left_layout = QVBoxLayout(self.main_window.left_panel)
-        left_layout.addWidget(self.metadata_panel)
+        # Add cine controls widget first (above metadata panel) with stretch 0
+        left_layout.addWidget(self.cine_controls_widget, 0)
+        # Add metadata panel below cine controls with stretch 1 to make it ~1.5x its current height
+        left_layout.addWidget(self.metadata_panel, 1)
         
         # Add controls to right panel
         right_layout = self.main_window.right_panel.layout()
@@ -652,6 +654,10 @@ class DICOMViewerApp(QObject):
         self.image_viewer.cine_play_requested.connect(self._on_cine_play)
         self.image_viewer.cine_pause_requested.connect(self._on_cine_pause)
         self.image_viewer.cine_stop_requested.connect(self._on_cine_stop)
+        self.image_viewer.cine_loop_toggled.connect(self._on_cine_loop_toggled)
+        
+        # Set callback to get cine loop state for context menu
+        self.image_viewer.get_cine_loop_state_callback = self._get_cine_loop_state
     
     def _open_files(self) -> None:
         """Handle open files request."""
@@ -1259,7 +1265,9 @@ class DICOMViewerApp(QObject):
         )
         
         # Enable/disable cine controls
-        self.main_window._set_cine_controls_enabled(is_cine_capable)
+        self.cine_controls_widget.set_controls_enabled(is_cine_capable)
+        # Also enable/disable cine controls in context menu
+        self.image_viewer.set_cine_controls_enabled(is_cine_capable)
         
         # If not cine-capable, stop any active playback
         if not is_cine_capable and self.cine_player.is_playback_active():
@@ -1285,10 +1293,10 @@ class DICOMViewerApp(QObject):
         Args:
             is_playing: True if playing, False if paused/stopped
         """
-        self.main_window.update_cine_playback_state(is_playing)
+        self.cine_controls_widget.update_playback_state(is_playing)
         # Update FPS display
         fps = self.cine_player.get_effective_frame_rate()
-        self.main_window.update_cine_fps_display(fps)
+        self.cine_controls_widget.update_fps_display(fps)
     
     def _on_cine_play(self) -> None:
         """Handle cine play request."""
@@ -1298,7 +1306,7 @@ class DICOMViewerApp(QObject):
             self.cine_player.start_playback(frame_rate=frame_rate, dataset=self.current_dataset)
             # Update FPS display
             fps = self.cine_player.get_effective_frame_rate()
-            self.main_window.update_cine_fps_display(fps)
+            self.cine_controls_widget.update_fps_display(fps)
     
     def _on_cine_pause(self) -> None:
         """Handle cine pause request."""
@@ -1318,7 +1326,7 @@ class DICOMViewerApp(QObject):
         self.cine_player.set_speed(speed_multiplier)
         # Update FPS display
         fps = self.cine_player.get_effective_frame_rate()
-        self.main_window.update_cine_fps_display(fps)
+        self.cine_controls_widget.update_fps_display(fps)
     
     def _on_cine_loop_toggled(self, enabled: bool) -> None:
         """
@@ -1328,6 +1336,17 @@ class DICOMViewerApp(QObject):
             enabled: True to enable looping, False to disable
         """
         self.cine_player.set_loop(enabled)
+        # Update UI to reflect loop state
+        self.cine_controls_widget.set_loop(enabled)
+    
+    def _get_cine_loop_state(self) -> bool:
+        """
+        Get current cine loop state for context menu.
+        
+        Returns:
+            True if loop is enabled, False otherwise
+        """
+        return self.cine_player.loop_enabled
     
     def _hide_measurement_labels(self, hide: bool) -> None:
         """

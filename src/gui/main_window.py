@@ -320,49 +320,6 @@ class MainWindow(QMainWindow):
         
         toolbar.addSeparator()
         
-        # Cine playback controls
-        cine_label = QLabel("Cine:")
-        toolbar.addWidget(cine_label)
-        
-        # Play/Pause button (toggle)
-        self.cine_play_pause_action = QAction("▶ Play", self)
-        self.cine_play_pause_action.setToolTip("Play/Pause cine loop")
-        self.cine_play_pause_action.triggered.connect(self._on_cine_play_pause)
-        toolbar.addAction(self.cine_play_pause_action)
-        
-        # Stop button
-        self.cine_stop_action = QAction("⏹ Stop", self)
-        self.cine_stop_action.setToolTip("Stop cine playback")
-        self.cine_stop_action.triggered.connect(self._on_cine_stop)
-        toolbar.addAction(self.cine_stop_action)
-        
-        # Speed dropdown
-        speed_label = QLabel("Speed:")
-        toolbar.addWidget(speed_label)
-        self.cine_speed_combo = QComboBox()
-        self.cine_speed_combo.addItems(["0.25x", "0.5x", "1x", "2x", "4x"])
-        self.cine_speed_combo.setCurrentText("1x")
-        self.cine_speed_combo.setToolTip("Playback speed multiplier")
-        self.cine_speed_combo.currentTextChanged.connect(self._on_cine_speed_changed)
-        toolbar.addWidget(self.cine_speed_combo)
-        
-        # Loop toggle button
-        self.cine_loop_action = QAction("🔁 Loop", self)
-        self.cine_loop_action.setCheckable(True)
-        self.cine_loop_action.setToolTip("Enable/disable looping")
-        self.cine_loop_action.triggered.connect(self._on_cine_loop_toggled)
-        toolbar.addAction(self.cine_loop_action)
-        
-        # FPS display label
-        self.cine_fps_label = QLabel("FPS: --")
-        self.cine_fps_label.setToolTip("Current frame rate")
-        toolbar.addWidget(self.cine_fps_label)
-        
-        # Initially disable cine controls
-        self._set_cine_controls_enabled(False)
-        
-        toolbar.addSeparator()
-        
         # Overlay font size controls
         toolbar.addWidget(QLabel("Font Size:"))
         
@@ -662,6 +619,15 @@ class MainWindow(QMainWindow):
                     background-color: #2b2b2b;
                     color: #7f7f7f;
                     border: 1px solid #3a3a3a;
+                }}
+                
+                QPushButton:checked {{
+                    background-color: #4285da;
+                }}
+                
+                QPushButton[objectName="cine_loop_button"]:checked {{
+                    background-color: #4285da;
+                    border: 2px solid #5a9de5;
                 }}
                 
                 /* Text inputs, lists, tables */
@@ -1009,6 +975,17 @@ class MainWindow(QMainWindow):
                     background-color: #f0f0f0;
                     color: #a0a0a0;
                     border: 1px solid #d0d0d0;
+                }}
+                
+                QPushButton:checked {{
+                    background-color: #4285da;
+                    color: #ffffff;
+                }}
+                
+                QPushButton[objectName="cine_loop_button"]:checked {{
+                    background-color: #4285da;
+                    color: #ffffff;
+                    border: 2px solid #1a5da5;
                 }}
                 
                 /* Text inputs, lists, tables */
@@ -1541,68 +1518,6 @@ class MainWindow(QMainWindow):
     def _on_next_series(self) -> None:
         """Handle next series button click."""
         self.series_navigation_requested.emit(1)
-    
-    def _on_cine_play_pause(self) -> None:
-        """Handle cine play/pause button click."""
-        # Toggle between play and pause
-        if self.cine_play_pause_action.text() == "▶ Play" or self.cine_play_pause_action.text() == "▶":
-            self.cine_play_requested.emit()
-            self.cine_play_pause_action.setText("⏸ Pause")
-        else:
-            self.cine_pause_requested.emit()
-            self.cine_play_pause_action.setText("▶ Play")
-    
-    def _on_cine_stop(self) -> None:
-        """Handle cine stop button click."""
-        self.cine_stop_requested.emit()
-        self.cine_play_pause_action.setText("▶ Play")
-    
-    def _on_cine_speed_changed(self, speed_text: str) -> None:
-        """Handle cine speed dropdown change."""
-        # Extract multiplier from text (e.g., "2x" -> 2.0)
-        try:
-            multiplier_str = speed_text.replace("x", "")
-            multiplier = float(multiplier_str)
-            self.cine_speed_changed.emit(multiplier)
-        except (ValueError, AttributeError):
-            pass
-    
-    def _on_cine_loop_toggled(self, checked: bool) -> None:
-        """Handle cine loop toggle."""
-        self.cine_loop_toggled.emit(checked)
-    
-    def _set_cine_controls_enabled(self, enabled: bool) -> None:
-        """
-        Enable or disable cine controls.
-        
-        Args:
-            enabled: True to enable controls, False to disable
-        """
-        self.cine_play_pause_action.setEnabled(enabled)
-        self.cine_stop_action.setEnabled(enabled)
-        self.cine_speed_combo.setEnabled(enabled)
-        self.cine_loop_action.setEnabled(enabled)
-    
-    def update_cine_playback_state(self, is_playing: bool) -> None:
-        """
-        Update cine playback button state.
-        
-        Args:
-            is_playing: True if playing, False if paused/stopped
-        """
-        if is_playing:
-            self.cine_play_pause_action.setText("⏸ Pause")
-        else:
-            self.cine_play_pause_action.setText("▶ Play")
-    
-    def update_cine_fps_display(self, fps: float) -> None:
-        """
-        Update FPS display label.
-        
-        Args:
-            fps: Frame rate in FPS
-        """
-        self.cine_fps_label.setText(f"FPS: {fps:.1f}")
     
     def _update_recent_menu(self) -> None:
         """Update the Recent Files submenu with current recent files."""
