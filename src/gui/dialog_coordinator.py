@@ -101,9 +101,16 @@ class DialogCoordinator:
         self.tag_viewer_dialog.raise_()
         self.tag_viewer_dialog.activateWindow()
     
-    def open_overlay_config(self) -> None:
-        """Handle overlay configuration dialog request."""
-        dialog = OverlayConfigDialog(self.config_manager, self.main_window)
+    def open_overlay_config(self, current_modality: Optional[str] = None) -> None:
+        """
+        Handle overlay configuration dialog request.
+        
+        Args:
+            current_modality: Optional current modality from loaded DICOM image.
+                             If provided, the dialog will open to this modality.
+                             If None or invalid, defaults to "default"
+        """
+        dialog = OverlayConfigDialog(self.config_manager, self.main_window, initial_modality=current_modality)
         if self.overlay_config_applied_callback:
             dialog.config_applied.connect(self.overlay_config_applied_callback)
         dialog.exec()

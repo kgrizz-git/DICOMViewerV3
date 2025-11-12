@@ -73,13 +73,15 @@ class OverlayConfigDialog(QDialog):
     # Signal emitted when configuration is applied
     config_applied = Signal()
     
-    def __init__(self, config_manager: ConfigManager, parent: Optional[QWidget] = None):
+    def __init__(self, config_manager: ConfigManager, parent: Optional[QWidget] = None, initial_modality: Optional[str] = None):
         """
         Initialize the overlay configuration dialog.
         
         Args:
             config_manager: ConfigManager instance
             parent: Parent widget
+            initial_modality: Optional initial modality to select (e.g., "CT", "MR"). 
+                             If None or invalid, defaults to "default"
         """
         super().__init__(parent)
         
@@ -88,14 +90,24 @@ class OverlayConfigDialog(QDialog):
         self.setModal(True)
         self.resize(700, 600)
         
-        # Store current modality
-        self.current_modality = "default"
+        # Valid modalities list
+        valid_modalities = ["default", "CT", "MR", "US", "CR", "DX", "NM", "PT", "RT", "MG"]
+        
+        # Store current modality - use initial_modality if provided and valid, otherwise "default"
+        if initial_modality and initial_modality.strip() in valid_modalities:
+            self.current_modality = initial_modality.strip()
+        else:
+            self.current_modality = "default"
         
         # Store tag configurations per modality
         self.modality_configs: Dict[str, Dict[str, List[str]]] = {}
         
         self._create_ui()
         self._load_configurations()
+        
+        # Set the combo box to the initial modality after loading configurations
+        if self.modality_combo.findText(self.current_modality) >= 0:
+            self.modality_combo.setCurrentText(self.current_modality)
     
     def _create_ui(self) -> None:
         """Create the UI components."""
