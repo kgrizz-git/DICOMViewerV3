@@ -68,14 +68,16 @@ class ImageViewer(QGraphicsView):
     clear_measurements_requested = Signal()  # Emitted when clear measurements is requested
     toggle_overlay_requested = Signal()  # Emitted when toggle overlay is requested
     
-    def __init__(self, parent: Optional[QWidget] = None):
+    def __init__(self, parent: Optional[QWidget] = None, config_manager=None):
         """
         Initialize the image viewer.
         
         Args:
             parent: Parent widget
+            config_manager: Optional ConfigManager instance for overlay font settings
         """
         super().__init__(parent)
+        self.config_manager = config_manager
         
         # Set transformation anchor to viewport center for consistent zoom behavior
         # This anchor should remain constant - when set, scale() automatically centers zooming on viewport center
@@ -162,6 +164,7 @@ class ImageViewer(QGraphicsView):
         # Background - darker grey for better yellow text contrast
         darker_grey = QColor(64, 64, 64)
         self.setBackgroundBrush(darker_grey)
+        
     
     def set_image(self, image: Image.Image, preserve_view: bool = False) -> None:
         """
@@ -249,21 +252,39 @@ class ImageViewer(QGraphicsView):
         # print(f"[VIEWER] Image rect: {image_rect}")
         
         # Calculate fixed scene rect size that accommodates:
-        # - Image size with 5x multiplier for margin
-        # - Viewport size at minimum zoom with 2x multiplier for margin
+        # - If image is larger than viewport: 2x image size
+        # - If image is smaller than viewport: 1.0x viewport at min zoom
         # This ensures mapToScene() accuracy at all zoom levels without recalculation
-        image_width = image_rect.width()
-        image_height = image_rect.height()
+        image_width = image_rect.width()  # Scene coordinates
+        image_height = image_rect.height()  # Scene coordinates
         
-        # Calculate viewport size in scene coordinates at minimum zoom
-        viewport_width = self.viewport().width()
-        viewport_height = self.viewport().height()
-        viewport_at_min_zoom_width = viewport_width / self.min_zoom if self.min_zoom > 0 else viewport_width
-        viewport_at_min_zoom_height = viewport_height / self.min_zoom if self.min_zoom > 0 else viewport_height
+        # Calculate viewport size in scene coordinates at zoom = 1.0
+        # At zoom = 1.0, viewport pixels = scene coordinates
+        viewport_width_pixels = self.viewport().width()
+        viewport_height_pixels = self.viewport().height()
+        viewport_width_scene = viewport_width_pixels  # At zoom = 1.0, they're equal
+        viewport_height_scene = viewport_height_pixels  # At zoom = 1.0, they're equal
         
-        # Scene rect should be at least 5x image size, or 2x viewport at min zoom, whichever is larger
-        scene_width = max(image_width * 5.0, viewport_at_min_zoom_width * 2.0)
-        scene_height = max(image_height * 5.0, viewport_at_min_zoom_height * 2.0)
+        # Calculate viewport size in scene coordinates at minimum zoom (for else case)
+        viewport_at_min_zoom_width = viewport_width_pixels / self.min_zoom if self.min_zoom > 0 else viewport_width_pixels
+        viewport_at_min_zoom_height = viewport_height_pixels / self.min_zoom if self.min_zoom > 0 else viewport_height_pixels
+        
+        # Compare both in scene coordinates (at zoom = 1.0 for the comparison)
+        # If image is larger than viewport, use 2x image size
+        # Otherwise, use 1.0x viewport at min zoom
+        if image_width > viewport_width_scene:
+            scene_width = image_width * 2.0
+            print(f"[SCENE_RECT] Image width ({image_width:.2f}) > viewport width in scene coords ({viewport_width_scene:.2f}) - using 2x image size: {scene_width:.2f}")
+        else:
+            scene_width = viewport_at_min_zoom_width * 1.0
+            print(f"[SCENE_RECT] Image width ({image_width:.2f}) <= viewport width in scene coords ({viewport_width_scene:.2f}) - using 1.0x viewport at min zoom: {scene_width:.2f}")
+        
+        if image_height > viewport_height_scene:
+            scene_height = image_height * 2.0
+            print(f"[SCENE_RECT] Image height ({image_height:.2f}) > viewport height in scene coords ({viewport_height_scene:.2f}) - using 2x image size: {scene_height:.2f}")
+        else:
+            scene_height = viewport_at_min_zoom_height * 1.0
+            print(f"[SCENE_RECT] Image height ({image_height:.2f}) <= viewport height in scene coords ({viewport_height_scene:.2f}) - using 1.0x viewport at min zoom: {scene_height:.2f}")
         
         # Calculate margins to center the image in the expanded scene rect
         margin_x = (scene_width - image_width) / 2.0
@@ -299,6 +320,7 @@ class ImageViewer(QGraphicsView):
             # Don't center here - centering should only happen when initializing new series or resetting view
             self.current_zoom = 1.0
             self.fit_to_view(center_image=False)
+        
     
     def fit_to_view(self, center_image: bool = False) -> None:
         """
@@ -396,6 +418,30 @@ class ImageViewer(QGraphicsView):
         """Reset zoom to 1:1."""
         self.resetTransform()
         self.current_zoom = 1.0
+        self.zoom_changed.emit(self.current_zoom)
+        self._check_transform_changed()
+    
+    def set_zoom(self, zoom_value: float) -> None:
+        """
+        Set zoom to a specific value, centered on viewport center.
+        
+        Args:
+            zoom_value: Target zoom level
+        """
+        if self.image_item is None:
+            return
+        
+        # Clamp to valid range
+        zoom_value = max(self.min_zoom, min(self.max_zoom, zoom_value))
+        
+        # Calculate scale factor needed to reach target zoom
+        current_scale = self.transform().m11()
+        scale_factor = zoom_value / current_scale
+        
+        # Apply zoom - AnchorViewCenter ensures it's centered on viewport center
+        self.scale(scale_factor, scale_factor)
+        self.current_zoom = zoom_value
+        
         self.zoom_changed.emit(self.current_zoom)
         self._check_transform_changed()
     

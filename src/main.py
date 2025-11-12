@@ -47,6 +47,7 @@ from gui.roi_statistics_panel import ROIStatisticsPanel
 from gui.roi_list_panel import ROIListPanel
 from gui.slice_navigator import SliceNavigator
 from gui.series_navigator import SeriesNavigator
+from gui.zoom_display_widget import ZoomDisplayWidget
 from core.dicom_loader import DICOMLoader
 from core.dicom_organizer import DICOMOrganizer
 from core.dicom_parser import DICOMParser
@@ -104,10 +105,11 @@ class DICOMViewerApp(QObject):
         
         # Create components
         self.file_dialog = FileDialog(self.config_manager)
-        self.image_viewer = ImageViewer()
-        self.metadata_panel = MetadataPanel()
+        self.image_viewer = ImageViewer(config_manager=self.config_manager)
+        self.metadata_panel = MetadataPanel(config_manager=self.config_manager)
         self.metadata_panel.set_history_manager(self.tag_edit_history)
         self.window_level_controls = WindowLevelControls()
+        self.zoom_display_widget = ZoomDisplayWidget()
         self.slice_navigator = SliceNavigator()
         self.roi_manager = ROIManager()
         self.measurement_tool = MeasurementTool()
@@ -219,6 +221,9 @@ class DICOMViewerApp(QObject):
         # Update view state manager with display_rois_for_slice callback
         self.view_state_manager.display_rois_for_slice = self._display_rois_for_slice
         
+        # Update view state manager with series_navigator reference
+        self.view_state_manager.set_series_navigator(self.series_navigator)
+        
         # Initialize MeasurementCoordinator
         self.measurement_coordinator = MeasurementCoordinator(
             self.measurement_tool,
@@ -288,6 +293,49 @@ class DICOMViewerApp(QObject):
         self.roi_list_panel.update_roi_list("", "", 0)  # Clear list
         self.roi_statistics_panel.clear_statistics()
         self.measurement_tool.clear_measurements(self.image_viewer.scene)
+    
+    def _close_files(self) -> None:
+        """Close currently open files/folder and clear all data."""
+        # Clear all ROIs, measurements, and related data
+        self._clear_data()
+        
+        # Clear image viewer
+        self.image_viewer.scene.clear()
+        self.image_viewer.image_item = None
+        
+        # Clear overlay items list (items already cleared by scene.clear())
+        self.overlay_manager.overlay_items.clear()
+        
+        # Clear metadata panel
+        self.metadata_panel.set_dataset(None)
+        
+        # Reset view state
+        self.view_state_manager.reset_window_level_state()
+        self.view_state_manager.reset_series_tracking()
+        
+        # Clear current dataset references
+        self.current_dataset = None
+        self.current_studies = {}
+        self.current_study_uid = ""
+        self.current_series_uid = ""
+        self.current_slice_index = 0
+        
+        # Reset slice navigator
+        self.slice_navigator.set_total_slices(0)
+        self.slice_navigator.set_current_slice(0)
+        
+        # Clear series navigator
+        self.series_navigator.update_series_list({}, "", "")
+        
+        # Clear tag edit history
+        if self.tag_edit_history:
+            self.tag_edit_history.clear_history()
+        
+        # Reset undo/redo state
+        self._update_undo_redo_state()
+        
+        # Update status
+        self.main_window.update_status("Ready")
     
     def _handle_load_first_slice(self, studies: dict) -> None:
         """Handle loading first slice after file operations."""
@@ -428,6 +476,7 @@ class DICOMViewerApp(QObject):
             from PySide6.QtWidgets import QVBoxLayout
             right_layout = QVBoxLayout(self.main_window.right_panel)
         right_layout.addWidget(self.window_level_controls)
+        right_layout.addWidget(self.zoom_display_widget)
         right_layout.addWidget(self.roi_list_panel)
         right_layout.addWidget(self.roi_statistics_panel)
         
@@ -440,6 +489,7 @@ class DICOMViewerApp(QObject):
         self.main_window.open_file_requested.connect(self._open_files)
         self.main_window.open_folder_requested.connect(self._open_folder)
         self.main_window.open_recent_file_requested.connect(self._open_recent_file)
+        self.main_window.close_requested.connect(self._close_files)
         
         # Settings
         self.main_window.settings_requested.connect(self._open_settings)
@@ -516,6 +566,10 @@ class DICOMViewerApp(QObject):
         
         # Zoom changes - update overlay positions to keep text anchored
         self.image_viewer.zoom_changed.connect(self.view_state_manager.handle_zoom_changed)
+        # Update zoom display widget
+        self.image_viewer.zoom_changed.connect(self.zoom_display_widget.update_zoom)
+        # Zoom control from widget - update image viewer
+        self.zoom_display_widget.zoom_changed.connect(self.image_viewer.set_zoom)
         
         # Transform changes (zoom/pan) - update overlay positions to keep text anchored
         # This signal fires after transform is applied, ensuring accurate viewport-to-scene mapping

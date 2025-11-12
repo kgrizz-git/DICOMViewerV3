@@ -411,42 +411,12 @@ class OverlayManager:
                 scene_width = 800
                 scene_height = 600
         
-        margin = 10
-        
-        # Create overlay for each corner
-        corners = [
-            ("upper_left", margin, margin, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop),
-            ("upper_right", scene_width - margin, margin, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop),
-            ("lower_left", margin, scene_height - margin, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom),
-            ("lower_right", scene_width - margin, scene_height - margin, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom)
-        ]
+        margin = 10  # Margin in viewport pixels
         
         # Get view for coordinate conversion (needed for ItemIgnoresTransformations)
         view = scene.views()[0] if scene.views() else None
         
-        # For ItemIgnoresTransformations items, we need to position based on viewport edges
-        # mapped to scene coordinates, so text stays anchored to viewport when zooming
-        if view is not None:
-            viewport_width = view.viewport().width()
-            viewport_height = view.viewport().height()
-            
-            # Map viewport edges to scene coordinates
-            top_left_scene = view.mapToScene(0, 0)
-            top_right_scene = view.mapToScene(viewport_width, 0)
-            bottom_left_scene = view.mapToScene(0, viewport_height)
-            bottom_right_scene = view.mapToScene(viewport_width, viewport_height)
-            
-            # Update corner positions based on viewport-to-scene mapping
-            # For right-aligned corners, use the actual right edge (top_right_scene.x()) without subtracting margin
-            # This ensures text is flush with the viewport right edge, matching left-aligned text behavior
-            corners = [
-                ("upper_left", top_left_scene.x() + margin, top_left_scene.y() + margin, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop),
-                ("upper_right", top_right_scene.x(), top_right_scene.y() + margin, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop),
-                ("lower_left", bottom_left_scene.x() + margin, bottom_left_scene.y() - margin, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom),
-                ("lower_right", bottom_right_scene.x(), bottom_right_scene.y() - margin, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom)
-            ]
-        
-        # Calculate viewport-to-scene scale factor once for all corners
+        # Calculate viewport-to-scene scale factor first
         # This is needed for converting viewport pixel dimensions to scene coordinates
         # when using ItemIgnoresTransformations
         if view is not None:
@@ -461,6 +431,40 @@ class OverlayManager:
                 viewport_to_scene_scale = 1.0
         else:
             viewport_to_scene_scale = 1.0
+        
+        # Convert margin from viewport pixels to scene coordinates
+        margin_scene = margin * viewport_to_scene_scale
+        
+        # Create overlay for each corner (fallback for when view is None)
+        corners = [
+            ("upper_left", margin, margin, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop),
+            ("upper_right", scene_width - margin, margin, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop),
+            ("lower_left", margin, scene_height - margin, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom),
+            ("lower_right", scene_width - margin, scene_height - margin, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom)
+        ]
+        
+        # For ItemIgnoresTransformations items, we need to position based on viewport edges
+        # mapped to scene coordinates, so text stays anchored to viewport when zooming
+        if view is not None:
+            viewport_width = view.viewport().width()
+            viewport_height = view.viewport().height()
+            
+            # Map viewport edges to scene coordinates
+            top_left_scene = view.mapToScene(0, 0)
+            top_right_scene = view.mapToScene(viewport_width, 0)
+            bottom_left_scene = view.mapToScene(0, viewport_height)
+            bottom_right_scene = view.mapToScene(viewport_width, viewport_height)
+            
+            # Update corner positions based on viewport-to-scene mapping
+            # Use margin_scene (converted to scene coordinates) instead of margin
+            # For right-aligned corners, use the actual right edge (top_right_scene.x()) without subtracting margin
+            # This ensures text is flush with the viewport right edge, matching left-aligned text behavior
+            corners = [
+                ("upper_left", top_left_scene.x() + margin_scene, top_left_scene.y() + margin_scene, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop),
+                ("upper_right", top_right_scene.x(), top_right_scene.y() + margin_scene, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop),
+                ("lower_left", bottom_left_scene.x() + margin_scene, bottom_left_scene.y() - margin_scene, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom),
+                ("lower_right", bottom_right_scene.x(), bottom_left_scene.y() - margin_scene, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom)
+            ]
         
         for corner_key, x, y, alignment in corners:
             tags = corner_tags.get(corner_key, [])
@@ -498,10 +502,11 @@ class OverlayManager:
                         # viewport_to_scene_scale is already calculated above for all corners
                         max_text_width_scene = max_text_width_viewport * viewport_to_scene_scale
                         
-                        # Position: right edge should be at (x - margin) in scene coordinates
+                        # Position: right edge should be at (x - margin_scene) in scene coordinates
                         # where x is the viewport right edge in scene coords
-                        # So left edge is at (x - margin - max_text_width_scene)
-                        right_edge_x = x - margin  # x is viewport right edge in scene coords
+                        # So left edge is at (x - margin_scene - max_text_width_scene)
+                        # Use margin_scene (converted to scene coordinates) instead of margin
+                        right_edge_x = x - margin_scene  # x is viewport right edge in scene coords
                         left_edge_x = right_edge_x - max_text_width_scene
                         
                         line_height_viewport = None
@@ -567,8 +572,19 @@ class OverlayManager:
         Args:
             scene: QGraphicsScene to remove items from
         """
+        # Check if items are still valid before trying to remove them
+        # Items may have already been deleted by scene.clear() or other operations
         for item in self.overlay_items:
-            scene.removeItem(item)
+            try:
+                # Check if item is still valid and in the scene
+                if item is not None and item.scene() == scene:
+                    scene.removeItem(item)
+            except RuntimeError:
+                # Item's C++ object has already been deleted, skip it
+                pass
+            except Exception:
+                # Any other error, skip this item
+                pass
         self.overlay_items.clear()
     
     def update_overlay_positions(self, scene) -> None:

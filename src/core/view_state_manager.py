@@ -75,6 +75,7 @@ class ViewStateManager:
         self.overlay_coordinator = overlay_coordinator
         self.roi_coordinator = roi_coordinator
         self.display_rois_for_slice = display_rois_for_slice
+        self.series_navigator = None  # Will be set by set_series_navigator method
         
         # Window/level state - preserve between slices
         self.current_window_center: Optional[float] = None
@@ -113,6 +114,19 @@ class ViewStateManager:
         self.current_study_uid: str = ""
         self.current_series_uid: str = ""
         self.current_slice_index: int = 0
+        
+        # Series pixel range storage (for window width slider maximum)
+        self.series_pixel_min: Optional[float] = None
+        self.series_pixel_max: Optional[float] = None
+    
+    def set_series_navigator(self, series_navigator) -> None:
+        """
+        Set the series navigator reference.
+        
+        Args:
+            series_navigator: SeriesNavigator instance
+        """
+        self.series_navigator = series_navigator
     
     def get_series_identifier(self, dataset: Dataset) -> str:
         """
@@ -169,6 +183,9 @@ class ViewStateManager:
         if self.image_viewer.image_item is None:
             return
         
+        print(f"[DEBUG-WL] store_initial_view_state called: series_id={self.current_series_identifier[:20] if self.current_series_identifier else 'None'}...")
+        print(f"[DEBUG-WL] Current values: wc={self.current_window_center}, ww={self.current_window_width}, use_rescaled={self.use_rescaled_values}")
+        
         # Store initial zoom (global fallback)
         if self.initial_zoom is None:
             self.initial_zoom = self.image_viewer.current_zoom
@@ -200,6 +217,7 @@ class ViewStateManager:
             
             if self.current_series_identifier not in self.series_defaults:
                 # Create new entry with all defaults
+                print(f"[DEBUG-WL] Creating NEW series_defaults entry")
                 self.series_defaults[self.current_series_identifier] = {
                     'window_center': self.current_window_center,
                     'window_width': self.current_window_width,
@@ -210,16 +228,82 @@ class ViewStateManager:
                     'use_rescaled_values': self.use_rescaled_values
                 }
             else:
-                # Entry already exists - update fields while preserving existing values
-                self.series_defaults[self.current_series_identifier].update({
-                    'window_center': self.current_window_center,
-                    'window_width': self.current_window_width,
-                    'zoom': self.image_viewer.current_zoom,
-                    'h_scroll': self.image_viewer.horizontalScrollBar().value(),
-                    'v_scroll': self.image_viewer.verticalScrollBar().value(),
-                    'scene_center': scene_center
-                })
-                # Don't overwrite use_rescaled_values - it was already set to the initial default
+                # Entry already exists - check if window/level defaults were already set during display_slice
+                defaults_already_set = self.series_defaults[self.current_series_identifier].get('window_level_defaults_set', False)
+                
+                if defaults_already_set:
+                    # Window/level defaults were already set correctly during display_slice
+                    # Restore current values from series_defaults in case they were corrupted
+                    stored_wc = self.series_defaults[self.current_series_identifier]['window_center']
+                    stored_ww = self.series_defaults[self.current_series_identifier]['window_width']
+                    stored_rescaled = self.series_defaults[self.current_series_identifier]['use_rescaled_values']
+                    print(f"[DEBUG-WL] UPDATING existing series_defaults (preserving window/level)")
+                    print(f"[DEBUG-WL] Restoring current values from series_defaults: wc={stored_wc}, ww={stored_ww}")
+                    
+                    # Restore current values to correct defaults
+                    self.current_window_center = stored_wc
+                    self.current_window_width = stored_ww
+                    
+                    # Update the window/level controls to reflect the restored values
+                    unit = self.rescale_type if (stored_rescaled and self.rescale_type) else None
+                    self.window_level_controls.set_window_level(
+                        stored_wc, stored_ww, block_signals=True, unit=unit
+                    )
+                    print(f"[DEBUG-WL] Updated window/level controls with restored values")
+                    
+                    # Re-display the current image with the corrected window/level
+                    # This fixes the initial display that was rendered with corrupted values
+                    if (self.current_dataset is not None and self.current_studies and 
+                        self.current_study_uid and self.current_series_uid):
+                        if (self.current_study_uid in self.current_studies and 
+                            self.current_series_uid in self.current_studies[self.current_study_uid]):
+                            datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
+                            if self.current_slice_index < len(datasets):
+                                # Re-render image with correct window/level
+                                image = self.dicom_processor.dataset_to_image(
+                                    self.current_dataset,
+                                    window_center=stored_wc,
+                                    window_width=stored_ww,
+                                    apply_rescale=stored_rescaled
+                                )
+                                if image:
+                                    self.image_viewer.set_image(image, preserve_view=True)
+                                    print(f"[DEBUG-WL] Re-displayed image with corrected window/level")
+                                    
+                                    # Also regenerate series navigator thumbnail with corrected window/level
+                                    if self.series_navigator and datasets:
+                                        first_dataset = datasets[0]  # Use first slice of series for thumbnail
+                                        self.series_navigator.regenerate_series_thumbnail(
+                                            self.current_study_uid,
+                                            self.current_series_uid,
+                                            first_dataset,
+                                            stored_wc,
+                                            stored_ww,
+                                            stored_rescaled
+                                        )
+                    
+                    # Only update zoom/pan, preserve window/level values in series_defaults
+                    self.series_defaults[self.current_series_identifier].update({
+                        'zoom': self.image_viewer.current_zoom,
+                        'h_scroll': self.image_viewer.horizontalScrollBar().value(),
+                        'v_scroll': self.image_viewer.verticalScrollBar().value(),
+                        'scene_center': scene_center
+                    })
+                    # Keep the flag set
+                    self.series_defaults[self.current_series_identifier]['window_level_defaults_set'] = True
+                else:
+                    # No defaults set yet, update all fields including window/level
+                    print(f"[DEBUG-WL] UPDATING existing series_defaults entry (all fields)")
+                    self.series_defaults[self.current_series_identifier].update({
+                        'window_center': self.current_window_center,
+                        'window_width': self.current_window_width,
+                        'zoom': self.image_viewer.current_zoom,
+                        'h_scroll': self.image_viewer.horizontalScrollBar().value(),
+                        'v_scroll': self.image_viewer.verticalScrollBar().value(),
+                        'scene_center': scene_center,
+                        'use_rescaled_values': self.use_rescaled_values  # Always update to match current state
+                    })
+            print(f"[DEBUG-WL] Stored in series_defaults: wc={self.series_defaults[self.current_series_identifier]['window_center']}, ww={self.series_defaults[self.current_series_identifier]['window_width']}, use_rescaled={self.series_defaults[self.current_series_identifier]['use_rescaled_values']}")
     
     def reset_view(self) -> None:
         """
@@ -231,11 +315,16 @@ class ViewStateManager:
             # No current dataset
             return
         
+        modality = getattr(self.current_dataset, 'Modality', 'Unknown')
+        print(f"[DEBUG-WL] ===== reset_view called: modality={modality}, current_use_rescaled={self.use_rescaled_values} =====")
+        
         # Get series identifier
         series_identifier = self.get_series_identifier(self.current_dataset)
+        print(f"[DEBUG-WL] Series identifier: {series_identifier[:20]}...")
         
         # Try to get series-specific defaults
         if series_identifier in self.series_defaults:
+            print(f"[DEBUG-WL] Found series_defaults for this series")
             defaults = self.series_defaults[series_identifier]
             reset_zoom = defaults.get('zoom')
             reset_h_scroll = defaults.get('h_scroll')
@@ -244,8 +333,10 @@ class ViewStateManager:
             reset_window_center = defaults.get('window_center')
             reset_window_width = defaults.get('window_width')
             reset_use_rescaled_values = defaults.get('use_rescaled_values')
+            print(f"[DEBUG-WL] Retrieved from series_defaults: wc={reset_window_center}, ww={reset_window_width}, stored_use_rescaled={reset_use_rescaled_values}")
         else:
             # Fall back to global initial values
+            print(f"[DEBUG-WL] No series_defaults found, using global initial values")
             reset_zoom = self.initial_zoom
             reset_h_scroll = self.initial_h_scroll
             reset_v_scroll = self.initial_v_scroll
@@ -253,6 +344,96 @@ class ViewStateManager:
             reset_window_center = self.initial_window_center
             reset_window_width = self.initial_window_width
             reset_use_rescaled_values = None
+            print(f"[DEBUG-WL] Global initial values: wc={reset_window_center}, ww={reset_window_width}")
+        
+        # If we have window/level values but they're in a different rescale state than current,
+        # convert them to match the current rescale state
+        if (reset_window_center is not None and reset_window_width is not None and 
+            reset_use_rescaled_values is not None and 
+            reset_use_rescaled_values != self.use_rescaled_values):
+            print(f"[DEBUG-WL] Rescale state mismatch! stored={reset_use_rescaled_values}, current={self.use_rescaled_values}")
+            orig_wc, orig_ww = reset_window_center, reset_window_width
+            # Stored values are in different units than current display mode - convert them
+            if reset_use_rescaled_values and not self.use_rescaled_values:
+                # Stored in rescaled, need raw
+                if (self.rescale_slope is not None and self.rescale_intercept is not None and 
+                    self.rescale_slope != 0.0):
+                    reset_window_center, reset_window_width = self.dicom_processor.convert_window_level_rescaled_to_raw(
+                        reset_window_center, reset_window_width, self.rescale_slope, self.rescale_intercept
+                    )
+                    print(f"[DEBUG-WL] Converted rescaled->raw: ({orig_wc}, {orig_ww}) -> ({reset_window_center}, {reset_window_width})")
+            elif not reset_use_rescaled_values and self.use_rescaled_values:
+                # Stored in raw, need rescaled
+                if self.rescale_slope is not None and self.rescale_intercept is not None:
+                    reset_window_center, reset_window_width = self.dicom_processor.convert_window_level_raw_to_rescaled(
+                        reset_window_center, reset_window_width, self.rescale_slope, self.rescale_intercept
+                    )
+                    print(f"[DEBUG-WL] Converted raw->rescaled: ({orig_wc}, {orig_ww}) -> ({reset_window_center}, {reset_window_width})")
+        else:
+            print(f"[DEBUG-WL] No conversion needed (rescale states match or values missing)")
+        
+        # If window/level defaults are missing, recalculate them based on current dataset
+        # Always use current rescale state when recalculating to ensure consistency
+        if reset_window_center is None or reset_window_width is None:
+            # Recalculate window/level defaults from current dataset
+            if self.current_studies and self.current_study_uid and self.current_series_uid:
+                if (self.current_study_uid in self.current_studies and 
+                    self.current_series_uid in self.current_studies[self.current_study_uid]):
+                    series_datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
+                    if series_datasets and len(series_datasets) > 0:
+                        dataset = series_datasets[0]  # Use first dataset in series
+                        # Use current rescale state to ensure defaults match current display mode
+                        # This is important when toggling between raw and rescaled values
+                        use_rescaled = self.use_rescaled_values
+                        
+                        # Calculate series pixel range
+                        try:
+                            series_pixel_min, series_pixel_max = self.dicom_processor.get_series_pixel_value_range(
+                                series_datasets, apply_rescale=use_rescaled
+                            )
+                            self.set_series_pixel_range(series_pixel_min, series_pixel_max)
+                        except Exception:
+                            series_pixel_min = None
+                            series_pixel_max = None
+                        
+                        # Check for window/level in DICOM metadata
+                        wc, ww, is_rescaled = self.dicom_processor.get_window_level_from_dataset(
+                            dataset,
+                            rescale_slope=self.rescale_slope,
+                            rescale_intercept=self.rescale_intercept
+                        )
+                        if wc is not None and ww is not None:
+                            # Convert if needed
+                            if is_rescaled and not use_rescaled:
+                                if (self.rescale_slope is not None and self.rescale_intercept is not None and self.rescale_slope != 0.0):
+                                    wc, ww = self.dicom_processor.convert_window_level_rescaled_to_raw(
+                                        wc, ww, self.rescale_slope, self.rescale_intercept
+                                    )
+                            elif not is_rescaled and use_rescaled:
+                                if (self.rescale_slope is not None and self.rescale_intercept is not None):
+                                    wc, ww = self.dicom_processor.convert_window_level_raw_to_rescaled(
+                                        wc, ww, self.rescale_slope, self.rescale_intercept
+                                    )
+                            reset_window_center = wc
+                            reset_window_width = ww
+                        elif series_pixel_min is not None and series_pixel_max is not None:
+                            reset_window_center = (series_pixel_min + series_pixel_max) / 2.0
+                            reset_window_width = series_pixel_max - series_pixel_min
+                            if reset_window_width <= 0:
+                                reset_window_width = 1.0
+                        else:
+                            # Fallback to single slice
+                            try:
+                                pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(
+                                    dataset, apply_rescale=use_rescaled
+                                )
+                                if pixel_min is not None and pixel_max is not None:
+                                    reset_window_center = (pixel_min + pixel_max) / 2.0
+                                    reset_window_width = pixel_max - pixel_min
+                                    if reset_window_width <= 0:
+                                        reset_window_width = 1.0
+                            except Exception:
+                                pass  # Will use None values which will be handled below
         
         # Ensure we have a valid rescale state value - calculate default if missing
         if reset_use_rescaled_values is None:
@@ -278,8 +459,18 @@ class ViewStateManager:
                 self.current_dataset, apply_rescale=self.use_rescaled_values
             )
             if pixel_min is not None and pixel_max is not None:
-                center_range = (pixel_min, pixel_max)
-                width_range = (1.0, max(1.0, pixel_max - pixel_min))
+                # Get series pixel range for both center and width ranges
+                series_pixel_min, series_pixel_max = self.get_series_pixel_range()
+                
+                if series_pixel_min is not None and series_pixel_max is not None:
+                    # Use series range for both center and width ranges
+                    center_range = (series_pixel_min, series_pixel_max)
+                    width_range = (1.0, max(1.0, series_pixel_max - series_pixel_min))
+                else:
+                    # Fallback to current slice range if series range not available
+                    center_range = (pixel_min, pixel_max)
+                    width_range = (1.0, max(1.0, pixel_max - pixel_min))
+                
                 self.window_level_controls.set_ranges(center_range, width_range)
             
             # Update window/level unit labels
@@ -288,6 +479,7 @@ class ViewStateManager:
         
         # Reset window/level to initial values (already in correct units for current rescale state)
         if reset_window_center is not None and reset_window_width is not None:
+            print(f"[DEBUG-WL] Applying final values: wc={reset_window_center}, ww={reset_window_width}, use_rescaled={self.use_rescaled_values}")
             # Get unit for window/level display
             unit = self.rescale_type if (self.use_rescaled_values and self.rescale_type) else None
             self.window_level_controls.set_window_level(
@@ -425,8 +617,44 @@ class ViewStateManager:
                 self.current_dataset, apply_rescale=self.use_rescaled_values
             )
             if pixel_min is not None and pixel_max is not None:
-                center_range = (pixel_min, pixel_max)
-                width_range = (1.0, max(1.0, pixel_max - pixel_min))
+                # Recalculate series pixel range for both center and width ranges
+                # Get all datasets for current series
+                if self.current_studies and self.current_study_uid and self.current_series_uid:
+                    if (self.current_study_uid in self.current_studies and 
+                        self.current_series_uid in self.current_studies[self.current_study_uid]):
+                        series_datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
+                        try:
+                            series_pixel_min, series_pixel_max = self.dicom_processor.get_series_pixel_value_range(
+                                series_datasets, apply_rescale=self.use_rescaled_values
+                            )
+                            # Store the recalculated series pixel range
+                            self.set_series_pixel_range(series_pixel_min, series_pixel_max)
+                            
+                            # Use series range for both center and width ranges if available
+                            if series_pixel_min is not None and series_pixel_max is not None:
+                                center_range = (series_pixel_min, series_pixel_max)
+                                width_range = (1.0, max(1.0, series_pixel_max - series_pixel_min))
+                            else:
+                                # Fallback to current slice range
+                                center_range = (pixel_min, pixel_max)
+                                width_range = (1.0, max(1.0, pixel_max - pixel_min))
+                        except Exception as e:
+                            # If series pixel range calculation fails, use current slice range
+                            error_type = type(e).__name__
+                            print(f"Error recalculating series pixel range for rescale toggle ({error_type}): {e}")
+                            center_range = (pixel_min, pixel_max)
+                            width_range = (1.0, max(1.0, pixel_max - pixel_min))
+                            # Clear stored series pixel range on error
+                            self.clear_series_pixel_range()
+                    else:
+                        # Series not found, use current slice range
+                        center_range = (pixel_min, pixel_max)
+                        width_range = (1.0, max(1.0, pixel_max - pixel_min))
+                else:
+                    # No series data available, use current slice range
+                    center_range = (pixel_min, pixel_max)
+                    width_range = (1.0, max(1.0, pixel_max - pixel_min))
+                
                 self.window_level_controls.set_ranges(center_range, width_range)
             
             # Update window/level unit labels
@@ -479,12 +707,17 @@ class ViewStateManager:
         """
         Handle zoom level change.
         
+        Updates overlay positions immediately to keep text anchored to viewport edges
+        during zoom operations, eliminating jitter.
+        
         Args:
             zoom_level: Current zoom level
         """
-        # Note: Overlay position updates are handled by handle_transform_changed
-        # which fires after the transform is fully applied
-        pass
+        # Update overlay positions immediately when zoom changes
+        # This eliminates jitter by updating synchronously with zoom changes,
+        # rather than waiting for the delayed transform_changed signal
+        if self.current_dataset is not None:
+            self.overlay_manager.update_overlay_positions(self.image_viewer.scene)
     
     def handle_transform_changed(self) -> None:
         """
@@ -578,12 +811,18 @@ class ViewStateManager:
         self.current_window_center = None
         self.current_window_width = None
         self.window_level_user_modified = False
+        # Clear global initial values to prevent persistence from previous datasets
+        self.initial_window_center = None
+        self.initial_window_width = None
     
     def reset_series_tracking(self) -> None:
         """Reset series tracking when loading new files."""
         self.current_series_identifier = None
-        # Note: We keep series_defaults to preserve across file loads if desired
-        # If you want to clear them, uncomment: self.series_defaults.clear()
+        # Clear series pixel range when resetting series tracking
+        self.clear_series_pixel_range()
+        # Clear series defaults when loading new files so window/level resets to defaults
+        # even if the same series is loaded again
+        self.series_defaults.clear()
     
     def set_rescale_parameters(self, slope: Optional[float], intercept: Optional[float], rescale_type: Optional[str]) -> None:
         """
@@ -630,4 +869,29 @@ class ViewStateManager:
         self.current_study_uid = current_study_uid
         self.current_series_uid = current_series_uid
         self.current_slice_index = current_slice_index
+    
+    def set_series_pixel_range(self, pixel_min: Optional[float], pixel_max: Optional[float]) -> None:
+        """
+        Set the pixel value range for the current series.
+        
+        Args:
+            pixel_min: Minimum pixel value across the series
+            pixel_max: Maximum pixel value across the series
+        """
+        self.series_pixel_min = pixel_min
+        self.series_pixel_max = pixel_max
+    
+    def get_series_pixel_range(self) -> tuple[Optional[float], Optional[float]]:
+        """
+        Get the pixel value range for the current series.
+        
+        Returns:
+            Tuple of (pixel_min, pixel_max) or (None, None) if not set
+        """
+        return (self.series_pixel_min, self.series_pixel_max)
+    
+    def clear_series_pixel_range(self) -> None:
+        """Clear the stored series pixel range."""
+        self.series_pixel_min = None
+        self.series_pixel_max = None
 
