@@ -51,6 +51,7 @@ class MainWindow(QMainWindow):
     open_file_requested = Signal()
     open_folder_requested = Signal()
     open_recent_file_requested = Signal(str)  # Emitted when a recent file/folder is selected (path)
+    close_requested = Signal()  # Emitted when close is requested
     export_requested = Signal()
     settings_requested = Signal()
     tag_viewer_requested = Signal()
@@ -144,6 +145,14 @@ class MainWindow(QMainWindow):
         export_action.setShortcut(QKeySequence("Ctrl+E"))
         export_action.triggered.connect(self.export_requested.emit)
         file_menu.addAction(export_action)
+        
+        file_menu.addSeparator()
+        
+        # Close action
+        close_action = QAction("&Close", self)
+        close_action.setShortcut(QKeySequence("Ctrl+W"))
+        close_action.triggered.connect(self.close_requested.emit)
+        file_menu.addAction(close_action)
         
         file_menu.addSeparator()
         

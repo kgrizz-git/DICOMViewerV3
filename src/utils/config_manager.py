@@ -76,6 +76,7 @@ class ConfigManager:
             "window_level_default": None,
             "window_width_default": None,
             "recent_files": [],  # List of recently opened file/folder paths (max 10)
+            "metadata_panel_column_widths": [100, 200, 50, 200],  # Column widths for Tag, Name, VR, Value
         }
         
         # Load configuration
@@ -451,5 +452,24 @@ class ConfigManager:
         recent_files = recent_files[:10]
         
         self.config["recent_files"] = recent_files
+        self.save_config()
+    
+    def get_metadata_panel_column_widths(self) -> List[int]:
+        """
+        Get saved column widths for metadata panel.
+        
+        Returns:
+            List of column widths [Tag, Name, VR, Value]
+        """
+        return self.config.get("metadata_panel_column_widths", [100, 200, 50, 200])
+    
+    def set_metadata_panel_column_widths(self, widths: List[int]) -> None:
+        """
+        Save column widths for metadata panel.
+        
+        Args:
+            widths: List of column widths [Tag, Name, VR, Value]
+        """
+        self.config["metadata_panel_column_widths"] = widths
         self.save_config()
 

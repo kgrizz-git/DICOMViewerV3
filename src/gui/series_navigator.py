@@ -215,9 +215,12 @@ class SeriesNavigator(QWidget):
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        # Set dark background color
+        scroll_area.setStyleSheet("QScrollArea { background-color: #1b1b1b; }")
         
         # Container widget for thumbnails
         self.thumbnail_container = QWidget()
+        self.thumbnail_container.setStyleSheet("QWidget { background-color: #1b1b1b; }")
         self.thumbnail_layout = QHBoxLayout(self.thumbnail_container)
         self.thumbnail_layout.setContentsMargins(5, 5, 5, 5)
         self.thumbnail_layout.setSpacing(5)
@@ -228,6 +231,8 @@ class SeriesNavigator(QWidget):
         
         # Set fixed height for navigator (85% of 93px)
         self.setFixedHeight(79)
+        # Set dark background color for the main widget
+        self.setStyleSheet("QWidget { background-color: #1b1b1b; }")
     
     def update_series_list(self, studies: Dict, current_study_uid: str, current_series_uid: str) -> None:
         """
@@ -324,6 +329,56 @@ class SeriesNavigator(QWidget):
         self.current_series_uid = series_uid
         for uid, thumbnail in self.thumbnails.items():
             thumbnail.set_current(uid == series_uid)
+    
+    def regenerate_series_thumbnail(self, study_uid: str, series_uid: str, 
+                                    dataset: Dataset, window_center: float, 
+                                    window_width: float, apply_rescale: bool) -> None:
+        """
+        Regenerate thumbnail for a specific series with explicit window/level values.
+        
+        This is used to update thumbnails when window/level values are corrected
+        after initial generation.
+        
+        Args:
+            study_uid: Study instance UID
+            series_uid: Series instance UID
+            dataset: DICOM dataset (first slice of series)
+            window_center: Window center value
+            window_width: Window width value
+            apply_rescale: Whether to apply rescale to the thumbnail
+        """
+        # Invalidate cached thumbnail for this series
+        cache_key = (study_uid, series_uid)
+        if cache_key in self.thumbnail_cache:
+            del self.thumbnail_cache[cache_key]
+        
+        # Generate new thumbnail with explicit window/level
+        try:
+            # Convert dataset to image with explicit window/level
+            image = self.dicom_processor.dataset_to_image(
+                dataset, 
+                window_center=window_center,
+                window_width=window_width,
+                apply_rescale=apply_rescale
+            )
+            if image is None:
+                return
+            
+            # Resize to thumbnail size (maintain aspect ratio)
+            thumbnail_size = 57  # Target size for thumbnail
+            image.thumbnail((thumbnail_size, thumbnail_size), Image.Resampling.LANCZOS)
+            
+            # Cache the new thumbnail
+            self.thumbnail_cache[cache_key] = image
+            
+            # Update the thumbnail widget if it exists
+            if series_uid in self.thumbnails:
+                thumbnail_widget = self.thumbnails[series_uid]
+                thumbnail_widget.thumbnail_image = image
+                thumbnail_widget.update()  # Trigger repaint
+                print(f"[DEBUG-WL] Regenerated series navigator thumbnail for series {series_uid[:20]}...")
+        except Exception as e:
+            print(f"Error regenerating thumbnail: {e}")
     
     def clear(self) -> None:
         """Clear all thumbnails."""

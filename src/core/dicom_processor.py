@@ -306,15 +306,20 @@ class DICOMProcessor:
             return None
         # print(f"[PROCESSOR] Pixel array shape: {pixel_array.shape}, dtype: {pixel_array.dtype}")
         
+        # Track whether window/level values were extracted from dataset or explicitly provided
+        values_extracted_from_dataset = False
+        is_rescaled = False
+        
         # Get window/level from dataset if not provided
         if window_center is None or window_width is None:
-            # Get rescale parameters if apply_rescale is True
-            rescale_slope_for_wl = None
-            rescale_intercept_for_wl = None
-            if apply_rescale:
-                rescale_slope_for_wl, rescale_intercept_for_wl, _ = DICOMProcessor.get_rescale_parameters(dataset)
+            # Values are being extracted from the dataset
+            values_extracted_from_dataset = True
             
-            ds_wc, ds_ww, _ = DICOMProcessor.get_window_level_from_dataset(
+            # Get rescale parameters for determining if window/level is in rescaled units
+            # We need these even if apply_rescale is False, to check if window/level values are in rescaled units
+            rescale_slope_for_wl, rescale_intercept_for_wl, _ = DICOMProcessor.get_rescale_parameters(dataset)
+            
+            ds_wc, ds_ww, is_rescaled = DICOMProcessor.get_window_level_from_dataset(
                 dataset,
                 rescale_slope=rescale_slope_for_wl,
                 rescale_intercept=rescale_intercept_for_wl
@@ -324,11 +329,33 @@ class DICOMProcessor:
             if window_width is None:
                 window_width = ds_ww
         
-        # Get rescale parameters if apply_rescale is True
+        # Get rescale parameters if apply_rescale is True (needed for pixel processing)
         rescale_slope = None
         rescale_intercept = None
         if apply_rescale:
             rescale_slope, rescale_intercept, _ = DICOMProcessor.get_rescale_parameters(dataset)
+        
+        # Convert window/level values ONLY if they were extracted from the dataset
+        # Explicitly provided values are assumed to already be in the correct units for apply_rescale
+        if window_center is not None and window_width is not None and values_extracted_from_dataset:
+            # Get rescale parameters for conversion (if not already retrieved)
+            if rescale_slope is None or rescale_intercept is None:
+                rescale_slope, rescale_intercept, _ = DICOMProcessor.get_rescale_parameters(dataset)
+            
+            # Convert window/level values to match the apply_rescale setting
+            if rescale_slope is not None and rescale_intercept is not None and rescale_slope != 0.0:
+                if not apply_rescale and is_rescaled:
+                    # Window/level is in rescaled units (HU), but we're not applying rescale to pixels
+                    # Convert window/level from rescaled to raw pixel values
+                    window_center, window_width = DICOMProcessor.convert_window_level_rescaled_to_raw(
+                        window_center, window_width, rescale_slope, rescale_intercept
+                    )
+                elif apply_rescale and not is_rescaled:
+                    # Window/level is in raw units, but we're applying rescale to pixels
+                    # Convert window/level from raw to rescaled units
+                    window_center, window_width = DICOMProcessor.convert_window_level_raw_to_rescaled(
+                        window_center, window_width, rescale_slope, rescale_intercept
+                    )
         
         # Apply window/level
         # print(f"[PROCESSOR] Applying window/level...")
