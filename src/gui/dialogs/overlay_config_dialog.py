@@ -91,7 +91,7 @@ class OverlayConfigDialog(QDialog):
         self.resize(700, 600)
         
         # Valid modalities list
-        valid_modalities = ["default", "CT", "MR", "US", "CR", "DX", "NM", "PT", "RT", "MG"]
+        valid_modalities = ["default", "CT", "MR", "US", "CR", "DX", "RF", "XA", "NM", "PT", "RT", "MG"]
         
         # Store current modality - use initial_modality if provided and valid, otherwise "default"
         if initial_modality and initial_modality.strip() in valid_modalities:

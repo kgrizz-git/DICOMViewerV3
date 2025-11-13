@@ -531,6 +531,96 @@ class ExportManager:
         """Initialize the export manager."""
         pass
     
+    @staticmethod
+    def process_image_by_photometric_interpretation(image: Image.Image, dataset: Dataset) -> Image.Image:
+        """
+        Process image based on PhotometricInterpretation tag.
+        
+        Handles:
+        - MONOCHROME1: Invert image (pixel values increase with decreasing brightness)
+        - MONOCHROME2: No inversion needed (standard grayscale)
+        - RGB: No special handling needed (already RGB)
+        - YBR_FULL, YBR_FULL_422, YBR_ICT, YBR_RCT: Convert to RGB
+        - PALETTE COLOR: Handle palette lookup (basic support)
+        
+        Args:
+            image: PIL Image to process
+            dataset: DICOM dataset containing PhotometricInterpretation tag
+            
+        Returns:
+            Processed PIL Image ready for export
+        """
+        try:
+            # Get PhotometricInterpretation tag (default to MONOCHROME2)
+            photometric_interpretation = getattr(dataset, 'PhotometricInterpretation', 'MONOCHROME2')
+            
+            # Handle string or list/tuple values
+            if isinstance(photometric_interpretation, (list, tuple)):
+                photometric_interpretation = str(photometric_interpretation[0]).strip()
+            else:
+                photometric_interpretation = str(photometric_interpretation).strip()
+            
+            if not photometric_interpretation:
+                photometric_interpretation = 'MONOCHROME2'  # Default
+            
+            pi_upper = photometric_interpretation.upper()
+            
+            # Handle MONOCHROME1: Invert image
+            if pi_upper == 'MONOCHROME1':
+                img_array = np.array(image)
+                if len(img_array.shape) == 2:
+                    # Grayscale
+                    img_array = 255 - img_array
+                    image = Image.fromarray(img_array, mode='L')
+                elif len(img_array.shape) == 3:
+                    # Color (shouldn't happen for MONOCHROME1, but handle gracefully)
+                    img_array = 255 - img_array
+                    image = Image.fromarray(img_array, mode=image.mode)
+            
+            # Handle MONOCHROME2: No inversion needed (standard grayscale)
+            elif pi_upper == 'MONOCHROME2':
+                # No processing needed - MONOCHROME2 is the standard format
+                pass
+            
+            # Handle RGB: No conversion needed
+            elif pi_upper == 'RGB':
+                # Already RGB, no conversion needed
+                pass
+            
+            # Handle YBR formats: Convert to RGB
+            elif any(ybr_type in pi_upper for ybr_type in ['YBR_FULL', 'YBR_FULL_422', 'YBR_ICT', 'YBR_RCT']):
+                # Convert YBR to RGB
+                img_array = np.array(image)
+                if len(img_array.shape) == 3 and img_array.shape[2] == 3:
+                    # Convert YBR to RGB
+                    rgb_array = DICOMProcessor.convert_ybr_to_rgb(img_array)
+                    image = Image.fromarray(rgb_array, mode='RGB')
+                else:
+                    # Unexpected shape for YBR, log warning but continue
+                    print(f"[EXPORT] Warning: Unexpected image shape for YBR format: {img_array.shape}")
+            
+            # Handle PALETTE COLOR: Basic support (may need palette lookup table in future)
+            elif 'PALETTE' in pi_upper or 'COLOR' in pi_upper:
+                # For now, just ensure it's RGB mode
+                # Future enhancement: Apply palette lookup table if available
+                if image.mode != 'RGB':
+                    image = image.convert('RGB')
+            
+            # Unknown format: Try to ensure RGB mode for color images
+            else:
+                # For unknown formats, ensure RGB mode if it's a color image
+                if image.mode not in ['L', 'RGB']:
+                    image = image.convert('RGB')
+            
+            return image
+            
+        except Exception as e:
+            print(f"[EXPORT] Error processing image by PhotometricInterpretation: {e}")
+            import traceback
+            traceback.print_exc()
+            # Return original image on error
+            return image
+    
     def export_selected(
         self,
         selected_items: Dict[Tuple[str, str, int], Dataset],
@@ -766,13 +856,8 @@ class ExportManager:
                 if image is None:
                     return False
                 
-                # Handle PhotometricInterpretation (MONOCHROME1 needs inversion)
-                photometric_interpretation = getattr(dataset, 'PhotometricInterpretation', 'MONOCHROME2')
-                if photometric_interpretation == 'MONOCHROME1':
-                    # Invert the image (MONOCHROME1: pixel values increase with decreasing brightness)
-                    img_array = np.array(image)
-                    img_array = 255 - img_array
-                    image = Image.fromarray(img_array, mode=image.mode)
+                # Handle PhotometricInterpretation (MONOCHROME1 inversion, YBR conversion, etc.)
+                image = ExportManager.process_image_by_photometric_interpretation(image, dataset)
                 
                 # Apply display resolution scaling BEFORE rendering overlays
                 # This ensures font size is calculated based on magnified dimensions
