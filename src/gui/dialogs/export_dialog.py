@@ -582,18 +582,39 @@ class ExportManager:
                 # No processing needed - MONOCHROME2 is the standard format
                 pass
             
-            # Handle RGB: No conversion needed
+            # Handle RGB: Check for JPEGLS-RGB channel order issues
             elif pi_upper == 'RGB':
-                # Already RGB, no conversion needed
-                pass
+                # Already RGB, but check for JPEGLS-RGB channel order issues
+                img_array = np.array(image)
+                if len(img_array.shape) == 3 and img_array.shape[2] == 3:
+                    # Get transfer syntax for RGB/BGR detection
+                    transfer_syntax = None
+                    if hasattr(dataset, 'file_meta') and hasattr(dataset.file_meta, 'TransferSyntaxUID'):
+                        transfer_syntax = str(dataset.file_meta.TransferSyntaxUID)
+                    # Check and fix RGB/BGR channel order for JPEGLS-RGB
+                    rgb_array = DICOMProcessor.detect_and_fix_rgb_channel_order(
+                        img_array, 
+                        photometric_interpretation=photometric_interpretation,
+                        transfer_syntax=transfer_syntax,
+                        dataset=dataset
+                    )
+                    image = Image.fromarray(rgb_array, mode='RGB')
             
             # Handle YBR formats: Convert to RGB
             elif any(ybr_type in pi_upper for ybr_type in ['YBR_FULL', 'YBR_FULL_422', 'YBR_ICT', 'YBR_RCT']):
-                # Convert YBR to RGB
+                # Convert YBR to RGB (pass PhotometricInterpretation for correct coefficient selection)
                 img_array = np.array(image)
                 if len(img_array.shape) == 3 and img_array.shape[2] == 3:
+                    # Get transfer syntax for YBR conversion
+                    transfer_syntax = None
+                    if hasattr(dataset, 'file_meta') and hasattr(dataset.file_meta, 'TransferSyntaxUID'):
+                        transfer_syntax = str(dataset.file_meta.TransferSyntaxUID)
                     # Convert YBR to RGB
-                    rgb_array = DICOMProcessor.convert_ybr_to_rgb(img_array)
+                    rgb_array = DICOMProcessor.convert_ybr_to_rgb(
+                        img_array, 
+                        photometric_interpretation=photometric_interpretation,
+                        transfer_syntax=transfer_syntax
+                    )
                     image = Image.fromarray(rgb_array, mode='RGB')
                 else:
                     # Unexpected shape for YBR, log warning but continue

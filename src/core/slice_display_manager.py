@@ -48,7 +48,6 @@ class SliceDisplayManager:
     - Display ROIs for current slice
     - Display measurements for current slice
     - Handle slice navigation
-    - Handle series navigation
     """
     
     def __init__(
@@ -151,6 +150,24 @@ class SliceDisplayManager:
             # Detect if this is a new study/series
             is_new_study_series = self.view_state_manager.is_new_study_or_series(dataset)
             series_identifier = self.view_state_manager.get_series_identifier(dataset)
+            
+            # Check for JPEGLS transfer syntax and show warning only for new series
+            if is_new_study_series:
+                jpegls_syntaxes = [
+                    '1.2.840.10008.1.2.4.80',  # JPEG-LS Lossless
+                    '1.2.840.10008.1.2.4.81',  # JPEG-LS Lossy
+                ]
+                if hasattr(dataset, 'file_meta') and hasattr(dataset.file_meta, 'TransferSyntaxUID'):
+                    transfer_syntax = str(dataset.file_meta.TransferSyntaxUID)
+                    if transfer_syntax in jpegls_syntaxes:
+                        from PySide6.QtWidgets import QMessageBox
+                        QMessageBox.warning(
+                            self.image_viewer,
+                            "JPEG-LS Image Warning",
+                            "JPEG-LS transfer syntax detected.\n\n"
+                            "Pixel values may not be correct, especially for color images.\n"
+                            "This is a known issue with JPEG-LS compression."
+                        )
             
             # DEBUG: Track series detection
             modality = getattr(dataset, 'Modality', 'Unknown')

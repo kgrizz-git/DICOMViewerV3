@@ -29,7 +29,6 @@ from gui.dialogs.file_dialog import FileDialog
 from utils.config_manager import ConfigManager
 from gui.main_window import MainWindow
 
-
 class FileOperationsHandler:
     """
     Handles file operations including opening files, folders, and recent files.
@@ -206,7 +205,17 @@ class FileOperationsHandler:
                 )
                 return None, None
             
-            self.update_status_callback(f"Loaded {len(datasets)} DICOM file(s)")
+            # Check for compression errors and show guidance
+            failed = self.dicom_loader.get_failed_files()
+            compression_errors = [f for f in failed if "Compressed DICOM" in f[1] or "pylibjpeg" in f[1].lower()]
+            if compression_errors:
+                compression_count = len(compression_errors)
+                self.update_status_callback(
+                    f"Loaded {len(datasets)} DICOM file(s). "
+                    f"{compression_count} compressed file(s) require pylibjpeg: pip install pylibjpeg pyjpegls"
+                )
+            else:
+                self.update_status_callback(f"Loaded {len(datasets)} DICOM file(s)")
             
             return datasets, studies
         
@@ -447,7 +456,17 @@ class FileOperationsHandler:
                     )
                     return None, None
                 
-                self.update_status_callback(f"Loaded {len(datasets)} DICOM file(s)")
+                # Check for compression errors and show guidance
+                failed = self.dicom_loader.get_failed_files()
+                compression_errors = [f for f in failed if "Compressed DICOM" in f[1] or "pylibjpeg" in f[1].lower()]
+                if compression_errors:
+                    compression_count = len(compression_errors)
+                    self.update_status_callback(
+                        f"Loaded {len(datasets)} DICOM file(s). "
+                        f"{compression_count} compressed file(s) require pylibjpeg: pip install pylibjpeg pyjpegls"
+                    )
+                else:
+                    self.update_status_callback(f"Loaded {len(datasets)} DICOM file(s)")
                 
                 return datasets, studies
                 

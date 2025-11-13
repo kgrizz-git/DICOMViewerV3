@@ -149,9 +149,18 @@ class SeriesThumbnail(QFrame):
                 painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "Error")
         else:
             # Draw placeholder if no image
-            painter.fillRect(self.rect(), QColor(128, 128, 128))
-            painter.setPen(QColor(255, 255, 255))
-            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "No Image")
+            # Check if this might be a compression error by checking if thumbnail is compression error marker
+            if (self.thumbnail_image is not None and 
+                hasattr(self.thumbnail_image, 'size') and 
+                self.thumbnail_image.size == (57, 57)):
+                # Might be compression error thumbnail - use different color
+                painter.fillRect(self.rect(), QColor(200, 150, 150))  # Light red
+                painter.setPen(QColor(255, 255, 255))
+                painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "COMP")
+            else:
+                painter.fillRect(self.rect(), QColor(128, 128, 128))
+                painter.setPen(QColor(255, 255, 255))
+                painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "No Image")
         
         # Draw series number overlay (top-left corner)
         painter.setPen(QColor(255, 255, 0))  # Yellow text
@@ -303,6 +312,34 @@ class SeriesNavigator(QWidget):
             PIL Image thumbnail (resized) or None if generation fails
         """
         try:
+            # Check if this is a compressed file that can't be decoded
+            if hasattr(dataset, 'file_meta') and hasattr(dataset.file_meta, 'TransferSyntaxUID'):
+                transfer_syntax = str(dataset.file_meta.TransferSyntaxUID)
+                # Check for JPEG compression transfer syntaxes that require pylibjpeg
+                jpeg_transfer_syntaxes = [
+                    '1.2.840.10008.1.2.4.50',  # JPEG Baseline (Process 1)
+                    '1.2.840.10008.1.2.4.51',  # JPEG Extended (Process 2 & 4)
+                    '1.2.840.10008.1.2.4.57',  # JPEG Lossless, Non-Hierarchical (Process 14)
+                    '1.2.840.10008.1.2.4.70',  # JPEG Lossless, Non-Hierarchical (Process 14 [Selection Value 1])
+                    '1.2.840.10008.1.2.4.80',  # JPEG-LS Lossless Image Compression
+                    '1.2.840.10008.1.2.4.81',  # JPEG-LS Lossy (Near-Lossless) Image Compression
+                    '1.2.840.10008.1.2.4.90',  # JPEG 2000 Image Compression (Lossless Only)
+                    '1.2.840.10008.1.2.4.91',  # JPEG 2000 Image Compression
+                ]
+                if transfer_syntax in jpeg_transfer_syntaxes:
+                    # Try to check if pixel array can be accessed (this will fail if pylibjpeg not installed)
+                    try:
+                        # Just check if we can access pixel_array property (don't actually load it)
+                        _ = dataset.pixel_array
+                    except Exception as e:
+                        error_msg = str(e)
+                        if ("pylibjpeg" in error_msg.lower() or 
+                            "missing required dependencies" in error_msg.lower() or
+                            "unable to convert" in error_msg.lower()):
+                            # This is a compressed file that can't be decoded
+                            # Return a special marker image that will show compression error
+                            return self._create_compression_error_thumbnail()
+            
             # Convert dataset to image
             image = self.dicom_processor.dataset_to_image(dataset, apply_rescale=False)
             if image is None:
@@ -314,8 +351,44 @@ class SeriesNavigator(QWidget):
             
             return image
         except Exception as e:
+            error_msg = str(e)
+            # Check if this is a compression error
+            if ("pylibjpeg" in error_msg.lower() or 
+                "missing required dependencies" in error_msg.lower() or
+                "unable to convert" in error_msg.lower()):
+                return self._create_compression_error_thumbnail()
             print(f"Error generating thumbnail: {e}")
             return None
+    
+    def _create_compression_error_thumbnail(self) -> Image.Image:
+        """
+        Create a thumbnail placeholder indicating compression error.
+        
+        Returns:
+            PIL Image with compression error indicator
+        """
+        from PIL import ImageDraw, ImageFont
+        # Create a small image with error indicator
+        size = 57
+        img = Image.new('RGB', (size, size), color=(200, 150, 150))  # Light red background
+        draw = ImageDraw.Draw(img)
+        
+        # Try to use a font, fallback to default if not available
+        try:
+            font = ImageFont.truetype("arial.ttf", 8)
+        except:
+            font = ImageFont.load_default()
+        
+        # Draw "COMP" text to indicate compression error
+        text = "COMP"
+        bbox = draw.textbbox((0, 0), text, font=font)
+        text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
+        x = (size - text_width) // 2
+        y = (size - text_height) // 2
+        draw.text((x, y), text, fill=(255, 255, 255), font=font)
+        
+        return img
     
     def set_current_series(self, series_uid: str) -> None:
         """

@@ -46,6 +46,7 @@ class DICOMLoader:
         """Initialize the DICOM loader."""
         self.loaded_files: List[pydicom.Dataset] = []
         self.failed_files: List[Tuple[str, str]] = []  # (path, error_message)
+        self._compression_error_files: set = set()  # Track files that have shown compression errors
     
     def validate_dicom_file(self, file_path: str) -> tuple[bool, Optional[str]]:
         """
@@ -198,13 +199,24 @@ class DICOMLoader:
                     except Exception as e:
                         error_msg = str(e)
                         # Check if this is a compressed DICOM decoding error
-                        if "missing required dependencies" in error_msg.lower() or "decode" in error_msg.lower():
+                        is_compression_error = (
+                            "pylibjpeg-libjpeg" in error_msg.lower() or
+                            "missing required dependencies" in error_msg.lower() or
+                            "unable to convert" in error_msg.lower() or
+                            "decode" in error_msg.lower()
+                        )
+                        
+                        if is_compression_error:
                             error_detail = (
                                 f"Compressed DICOM pixel data cannot be decoded. "
                                 f"Install optional dependencies: pip install pylibjpeg pyjpegls"
                             )
-                            print(f"[LOADER] Warning: {error_detail}")
-                            print(f"[LOADER] Error details: {e}")
+                            # Only show error message once per file
+                            if file_path not in self._compression_error_files:
+                                self._compression_error_files.add(file_path)
+                                print(f"[LOADER] Compression Error: {file_path}")
+                                print(f"  {error_detail}")
+                                print(f"  Error: {error_msg[:200]}")
                             # Add to failed files with descriptive message
                             self.failed_files.append((file_path, error_detail))
                             return None
@@ -236,11 +248,24 @@ class DICOMLoader:
         except Exception as e:
             error_msg_str = str(e)
             # Check if this is a compressed DICOM decoding error
-            if "missing required dependencies" in error_msg_str.lower() or "decode" in error_msg_str.lower():
+            is_compression_error = (
+                "pylibjpeg-libjpeg" in error_msg_str.lower() or
+                "missing required dependencies" in error_msg_str.lower() or
+                "unable to convert" in error_msg_str.lower() or
+                "decode" in error_msg_str.lower()
+            )
+            
+            if is_compression_error:
                 error_msg = (
                     f"Compressed DICOM pixel data cannot be decoded. "
                     f"Install optional dependencies: pip install pylibjpeg pyjpegls"
                 )
+                # Only show error message once per file
+                if file_path not in self._compression_error_files:
+                    self._compression_error_files.add(file_path)
+                    print(f"[LOADER] Compression Error: {file_path}")
+                    print(f"  {error_msg}")
+                    print(f"  Error: {error_msg_str[:200]}")
             else:
                 error_msg = f"Error reading file: {error_msg_str}"
             # Include error type for debugging

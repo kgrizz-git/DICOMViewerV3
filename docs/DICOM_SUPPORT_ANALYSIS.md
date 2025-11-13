@@ -3,15 +3,16 @@
 ## Executive Summary
 
 This document analyzes the current state of DICOM support in the DICOM Viewer V3 application, focusing on:
-- **Color DICOM Support**: Improved support - Color detection implemented, RGB display works, but YBR conversion and color-aware window/level are not yet implemented
+- **Color DICOM Support**: ✅ Significantly improved - Color detection, YBR to RGB conversion, and color-aware window/level all implemented
 - **Enhanced DICOM Support**: ✅ Fully supported with Enhanced Multi-frame detection and handling
-- **Modality Support**: Full support for DX, RF, XA, and US modalities (RF and XA overlay configuration added in Priority 1 fixes)
+- **Modality Support**: ✅ Full support for DX, RF, XA, and US modalities (RF and XA overlay configuration added in Priority 1 fixes)
+- **Compressed DICOM Support**: ⚠️ Improved error handling - Graceful handling of compressed DICOM files with helpful error messages (optional dependencies available)
 
 ## 1. Color DICOM Support Analysis
 
-### Current Status: Improved Support (Color Detection Implemented)
+### Current Status: Significantly Improved Support (Priority 1 & 2 Implemented)
 
-The application has **improved support** for color DICOM images with color detection now implemented:
+The application has **significantly improved support** for color DICOM images with comprehensive color handling now implemented:
 
 #### ✅ What Works
 - **RGB Display**: The `ImageViewer` class can display RGB images correctly:
@@ -37,52 +38,18 @@ The application has **improved support** for color DICOM images with color detec
 
 #### ❌ Missing Features
 
-1. **No PhotometricInterpretation Handling**
-   - No explicit handling for RGB, YBR_FULL, YBR_FULL_422, or other color PhotometricInterpretation values
-   - Only handles MONOCHROME1 inversion in export (```769:775:src/gui/dialogs/export_dialog.py```)
-   - No YBR to RGB conversion
+1. **PhotometricInterpretation Handling** ✅ **IMPLEMENTED**
+   - ✅ YBR to RGB conversion implemented via `convert_ybr_to_rgb()` method
+   - ✅ Handles YBR_FULL, YBR_FULL_422, YBR_ICT, YBR_RCT formats
+   - ✅ Comprehensive PhotometricInterpretation handling in export (MONOCHROME1, MONOCHROME2, RGB, YBR formats)
+   - ✅ YBR images are automatically converted to RGB before processing
 
-2. **No Color-Aware Window/Level**
-   - Window/level processing assumes grayscale (single channel):
-     ```133:168:src/core/dicom_processor.py
-     @staticmethod
-     def apply_window_level(pixel_array: np.ndarray, window_center: float, 
-                           window_width: float, 
-                           rescale_slope: Optional[float] = None,
-                           rescale_intercept: Optional[float] = None) -> np.ndarray:
-         """
-         Apply window/level transformation to pixel array.
-         
-         Args:
-             pixel_array: Input pixel array
-             window_center: Window center value
-             window_width: Window width value
-             rescale_slope: Optional rescale slope from DICOM
-             rescale_intercept: Optional rescale intercept from DICOM
-             
-         Returns:
-             Windowed pixel array (0-255 uint8)
-         """
-         # Apply rescale if provided
-         if rescale_slope is not None and rescale_intercept is not None:
-             pixel_array = pixel_array * rescale_slope + rescale_intercept
-         
-         # Calculate window bounds
-         window_min = window_center - window_width / 2.0
-         window_max = window_center + window_width / 2.0
-         
-         # Clip values to window
-         windowed = np.clip(pixel_array, window_min, window_max)
-         
-         # Normalize to 0-255
-         if window_max > window_min:
-             normalized = ((windowed - window_min) / (window_max - window_min) * 255.0).astype(np.uint8)
-         else:
-             normalized = np.zeros_like(windowed, dtype=np.uint8)
-         
-         return normalized
-     ```
-   - This method will not work correctly for color images (3D arrays with shape `[height, width, channels]`)
+2. **Color-Aware Window/Level** ✅ **IMPLEMENTED**
+   - ✅ Luminance-based window/level implemented via `apply_color_window_level_luminance()` method
+   - ✅ Preserves color relationships while adjusting brightness/contrast
+   - ✅ Applied automatically when window/level values are available for color images
+   - ✅ Falls back to channel normalization when no window/level is available
+   - Grayscale window/level method (```268:303:src/core/dicom_processor.py```) remains for grayscale images
 
 3. **No SamplesPerPixel Detection** ✅ **IMPLEMENTED**
    - ✅ Color detection now implemented via `is_color_image()` method
@@ -91,13 +58,15 @@ The application has **improved support** for color DICOM images with color detec
    - ✅ Color images are now detected and processed correctly
 
 ### Impact
-- ✅ **Color image detection implemented** (Priority 1 Fix #2 - Completed)
-  - Color images are now detected early in processing
-  - Window/level is skipped for color images (prevents color distortion)
-  - Color images are normalized channel-by-channel to preserve color relationships
+- ✅ **Comprehensive color DICOM support implemented** (Priority 1 & 2 - Completed)
+  - Color images are detected early in processing
+  - YBR color space images are automatically converted to RGB
+  - Color-aware window/level preserves color relationships when window/level values are available
+  - Color images are normalized channel-by-channel when no window/level is available
+  - Export handles all PhotometricInterpretation formats correctly
 - ⚠️ **Remaining limitations:**
-  - YBR color space images still need conversion to RGB (not yet implemented)
-  - Color-aware window/level not yet implemented (color images skip window/level entirely)
+  - Palette color images have basic support (may need palette lookup table enhancement in future)
+  - Multi-frame color images currently display only first frame (frame navigation pending)
 
 ## 2. Enhanced DICOM Support
 
@@ -149,7 +118,47 @@ The application has **full support** for Enhanced Multi-frame DICOM files:
 ### Conclusion
 Enhanced Multi-frame DICOM support is **production-ready** and handles the complex structure of Enhanced DICOM files correctly.
 
-## 3. Modality Support Analysis
+## 3. Compressed DICOM Support
+
+### Status: ⚠️ Improved Error Handling
+
+The application has **improved error handling** for compressed DICOM files:
+
+#### ✅ What Works
+- **Error Detection**: Compressed DICOM decoding errors are detected and handled gracefully
+- **User-Friendly Messages**: Clear error messages guide users to install optional dependencies
+- **Graceful Degradation**: Application continues to work even when compressed files cannot be decoded
+- **Optional Dependencies Documented**: `requirements.txt` includes optional dependencies with installation instructions
+
+#### Implementation Details
+
+1. **Error Detection in `get_pixel_array()`**
+   - Detects "missing required dependencies" errors from pydicom
+   - Provides installation instructions: `pip install pylibjpeg pyjpegls`
+   - Returns None gracefully instead of crashing
+
+2. **Error Handling in `dicom_loader.py`**
+   - Catches compressed DICOM errors during Enhanced Multi-frame pre-loading
+   - Adds files to `failed_files` list with descriptive error messages
+   - Continues loading other files even if one fails
+
+3. **Optional Dependencies**
+   - `pylibjpeg`: For JPEG 2000 and other compressed formats
+   - `pyjpegls`: For JPEG-LS compression
+   - Documented in `requirements.txt` with installation instructions
+
+#### Limitations
+- Compressed DICOM files require optional dependencies to decode
+- GDCM support not included (requires additional system libraries)
+- Users must install optional dependencies manually if needed
+
+### Recommendation
+For users working with compressed DICOM files, install optional dependencies:
+```bash
+pip install pylibjpeg pyjpegls
+```
+
+## 4. Modality Support Analysis
 
 ### Current Status: Mixed Support
 
@@ -206,16 +215,25 @@ if modality_str in valid_modalities:
    - May benefit from enhanced cine playback features
    - May have specific window/level requirements
 
-## 4. Color-Aware Window/Level Recommendations
+## 5. Color-Aware Window/Level Implementation
 
-### Current Limitation
+### Status: ✅ Implemented
 
-The current `apply_window_level()` method assumes grayscale images and will not work correctly for color images. When applied to a 3D RGB array, it will:
-- Incorrectly clip and normalize the entire array
-- Potentially distort color relationships
-- May produce unexpected visual artifacts
+Color-aware window/level has been **fully implemented** using the luminance-based approach (Approach 1). The implementation:
+- ✅ Preserves color relationships while adjusting brightness/contrast
+- ✅ Handles edge cases (zero luminance, extreme values)
+- ✅ Applied automatically when window/level values are available for color images
+- ✅ Falls back to channel normalization when no window/level is available
 
-### Recommended Approaches
+### Implementation Details
+
+The `apply_color_window_level_luminance()` method implements Approach 1 (Luminance-Based) as recommended. It:
+- Converts RGB to luminance using ITU-R BT.601 coefficients (Y = 0.299*R + 0.587*G + 0.114*B)
+- Applies window/level to luminance component (same as grayscale method)
+- Scales all color channels proportionally to preserve color ratios
+- Handles zero-luminance pixels gracefully
+
+### Approaches Considered (Historical Reference)
 
 #### Approach 1: Luminance-Based Window/Level (Recommended)
 
@@ -427,52 +445,53 @@ def apply_ybr_window_level(pixel_array, window_center, window_width):
 - Additional computational overhead
 - Must detect PhotometricInterpretation first
 
-### Recommended Implementation Strategy
+### Implementation Strategy (✅ Implemented)
 
-For the DICOM Viewer V3, I recommend the following implementation approach:
+The following implementation approach has been **fully implemented**:
 
-1. **Detection Phase**
-   - Check `SamplesPerPixel` tag: if > 1, image is color
-   - Check `PhotometricInterpretation` tag:
-     - `RGB` → Use Approach 1 (Luminance-Based)
-     - `YBR_FULL` or `YBR_FULL_422` → Use Approach 4 (convert to RGB, then Approach 1)
-     - `MONOCHROME1` or `MONOCHROME2` → Use existing grayscale method
-     - Other → Fallback to Approach 2 (Per-Channel) or skip window/level
+1. ✅ **Detection Phase** - **IMPLEMENTED**
+   - Checks `SamplesPerPixel` tag: if > 1, image is color
+   - Checks `PhotometricInterpretation` tag:
+     - `RGB` → Uses Approach 1 (Luminance-Based)
+     - `YBR_FULL`, `YBR_FULL_422`, `YBR_ICT`, `YBR_RCT` → Converts to RGB, then uses Approach 1
+     - `MONOCHROME1` or `MONOCHROME2` → Uses existing grayscale method
+     - Other → Falls back to channel normalization
 
-2. **Implementation in `dataset_to_image()`**
-   - Modify `DICOMProcessor.dataset_to_image()` to detect color images
-   - Route to appropriate color-aware window/level function
-   - For grayscale, use existing `apply_window_level()` method
+2. ✅ **Implementation in `dataset_to_image()`** - **IMPLEMENTED**
+   - `DICOMProcessor.dataset_to_image()` detects color images
+   - Routes to appropriate color-aware window/level function when window/level values are available
+   - For grayscale, uses existing `apply_window_level()` method
+   - YBR images are automatically converted to RGB before processing
 
-3. **Window/Level Controls**
+3. **Window/Level Controls** (Future Enhancement - Priority 3)
    - Consider disabling or modifying window/level controls for color images
    - Many color DICOM images (especially US, XA, RF) may not have window/level tags
    - Provide option to skip window/level for color images
 
-4. **Fallback Behavior**
-   - If color detection fails or processing errors occur, fallback to:
-     - Skip window/level and display original colors
-     - Or convert to grayscale and apply window/level
+4. ✅ **Fallback Behavior** - **IMPLEMENTED**
+   - If color detection fails or processing errors occur, falls back to:
+     - Channel-by-channel normalization (preserves colors)
+     - Error handling prevents crashes
 
-### Code Integration Points
+### Code Integration Points (✅ Completed)
 
-The following files would need modification:
+The following files have been modified:
 
-1. **`src/core/dicom_processor.py`**
-   - Add `apply_color_window_level_luminance()` method
-   - Add `convert_ybr_to_rgb()` method
-   - Modify `dataset_to_image()` to detect color and route appropriately
-   - Modify `apply_window_level()` or create color-aware version
+1. ✅ **`src/core/dicom_processor.py`** - **COMPLETED**
+   - ✅ Added `apply_color_window_level_luminance()` method
+   - ✅ Added `convert_ybr_to_rgb()` method
+   - ✅ Modified `dataset_to_image()` to detect color and route appropriately
+   - ✅ Color-aware processing integrated
 
-2. **`src/core/dicom_parser.py`** (if exists)
-   - Add methods to detect color images
-   - Add PhotometricInterpretation and SamplesPerPixel getters
+2. ✅ **`src/core/dicom_parser.py`** - **COMPLETED**
+   - ✅ Color detection via `is_color_image()` method (in dicom_processor.py)
+   - ✅ PhotometricInterpretation and SamplesPerPixel checks implemented
 
-3. **`src/gui/window_level_controls.py`**
+3. **`src/gui/window_level_controls.py`** (Future Enhancement - Priority 3)
    - Consider disabling controls for color images
    - Or provide color-specific window/level options
 
-## 5. Implementation Recommendations
+## 6. Implementation Recommendations
 
 ### Priority 1: Critical Fixes ✅ **COMPLETED**
 
@@ -492,35 +511,57 @@ The following files would need modification:
      - Handles both single-frame color and multi-frame color images
    - **Impact**: Prevents incorrect processing of color images, preserves color relationships
 
-### Priority 2: Color Support Enhancements
+### Priority 2: Color Support Enhancements ✅ **COMPLETED**
 
-3. **Implement YBR to RGB Conversion**
+3. ✅ **Implement YBR to RGB Conversion** - **COMPLETED**
    - **File**: `src/core/dicom_processor.py`
-   - **Action**: Add `convert_ybr_to_rgb()` method
+   - **Status**: YBR conversion fully implemented
+   - **Implementation**:
+     - Added `convert_ybr_to_rgb()` static method supporting single-frame and multi-frame YBR images
+     - Handles YBR_FULL, YBR_FULL_422, YBR_ICT, YBR_RCT formats
+     - Integrated into `dataset_to_image()` to automatically convert YBR to RGB before processing
+     - Uses ITU-R BT.601 coefficients for conversion
    - **Impact**: Enables correct display of YBR-encoded color DICOM images
-   - **Effort**: Medium
 
-4. **Implement Color-Aware Window/Level**
+4. ✅ **Implement Color-Aware Window/Level** - **COMPLETED**
    - **File**: `src/core/dicom_processor.py`
-   - **Action**: Implement Approach 1 (Luminance-Based) for RGB images
-   - **Impact**: Enables proper window/level adjustment for color images
-   - **Effort**: Medium-High
+   - **Status**: Color-aware window/level fully implemented
+   - **Implementation**:
+     - Added `apply_color_window_level_luminance()` static method using luminance-based approach
+     - Applies window/level to luminance while preserving color ratios
+     - Handles edge cases (zero luminance, extreme values)
+     - Integrated into `dataset_to_image()` to use color-aware window/level when window/level values are available
+     - Falls back to channel normalization when no window/level is available
+   - **Impact**: Enables proper window/level adjustment for color images while preserving color fidelity
 
-5. **Handle PhotometricInterpretation in Export**
+5. ✅ **Handle PhotometricInterpretation in Export** - **COMPLETED**
    - **File**: `src/gui/dialogs/export_dialog.py`
-   - **Action**: Extend PhotometricInterpretation handling beyond MONOCHROME1
-   - **Impact**: Correct export of color images
-   - **Effort**: Low-Medium
+   - **Status**: Comprehensive PhotometricInterpretation handling implemented
+   - **Implementation**:
+     - Added `process_image_by_photometric_interpretation()` helper method
+     - Handles MONOCHROME1 (inversion), MONOCHROME2 (no inversion), RGB (no conversion), YBR formats (convert to RGB), and PALETTE COLOR (basic support)
+     - Updated `export_slice()` to use the new helper method
+   - **Impact**: Correct export of all color and grayscale DICOM image formats
+
+6. ✅ **Handle Compressed DICOM Pixel Data Decoding Errors** - **COMPLETED**
+   - **Files**: `src/core/dicom_processor.py`, `src/core/dicom_loader.py`, `requirements.txt`
+   - **Status**: Improved error handling implemented
+   - **Implementation**:
+     - Enhanced error detection in `get_pixel_array()` to identify compressed DICOM decoding errors
+     - Added error handling in `dicom_loader.py` for Enhanced Multi-frame files
+     - Updated general exception handlers with user-friendly error messages
+     - Added optional dependencies section to `requirements.txt` with installation instructions
+   - **Impact**: Graceful handling of compressed DICOM files with helpful error messages guiding users to install optional dependencies
 
 ### Priority 3: Enhanced Features
 
-6. **Color Image Detection in UI**
+7. **Color Image Detection in UI**
    - **Files**: `src/gui/window_level_controls.py`, `src/core/view_state_manager.py`
    - **Action**: Disable or modify window/level controls for color images
    - **Impact**: Better user experience, prevents confusion
    - **Effort**: Medium
 
-7. **Color Space Information Display**
+8. **Color Space Information Display**
    - **File**: `src/gui/metadata_panel.py`
    - **Action**: Display PhotometricInterpretation and SamplesPerPixel in metadata
    - **Impact**: Helps users understand image properties
@@ -545,27 +586,52 @@ The following files would need modification:
    - Test overlay configuration for RF and XA
    - Verify multi-frame support for RF/XA
 
-## 6. Conclusion
+## 7. Conclusion
 
 The DICOM Viewer V3 has:
 - ✅ **Strong support** for Enhanced Multi-frame DICOM
-- ✅ **Improved support** for color DICOM (color detection implemented, YBR conversion pending)
+- ✅ **Comprehensive support** for color DICOM (color detection, YBR conversion, and color-aware window/level all implemented)
 - ✅ **Full support** for RF and XA modalities (overlay configuration enabled)
+- ✅ **Improved error handling** for compressed DICOM files
 
-### Recent Improvements (Priority 1 Critical Fixes - Completed)
+### Recent Improvements (Priority 1 & 2 - Completed)
 
+#### Priority 1 Critical Fixes:
 1. ✅ **RF and XA Modality Support**: Added RF and XA to valid_modalities lists, enabling full overlay configuration support
 2. ✅ **Color Image Detection**: Implemented `is_color_image()` method and integrated color detection into `dataset_to_image()`
    - Color images are now detected and processed correctly
-   - Window/level is skipped for color images to prevent color distortion
    - Color images are normalized channel-by-channel to preserve color relationships
+
+#### Priority 2 Color Support Enhancements:
+3. ✅ **YBR to RGB Conversion**: Implemented `convert_ybr_to_rgb()` method
+   - Supports YBR_FULL, YBR_FULL_422, YBR_ICT, YBR_RCT formats
+   - Handles both single-frame and multi-frame YBR images
+   - Automatically converts YBR to RGB before processing
+
+4. ✅ **Color-Aware Window/Level**: Implemented `apply_color_window_level_luminance()` method
+   - Uses luminance-based approach to preserve color relationships
+   - Applied automatically when window/level values are available
+   - Handles edge cases gracefully
+
+5. ✅ **PhotometricInterpretation Export Handling**: Extended export functionality
+   - Handles MONOCHROME1, MONOCHROME2, RGB, YBR formats, and PALETTE COLOR
+   - Ensures correct export of all color and grayscale formats
+
+6. ✅ **Compressed DICOM Error Handling**: Improved error messages and handling
+   - Detects compressed DICOM decoding errors
+   - Provides helpful installation instructions for optional dependencies
+   - Gracefully handles errors without crashing
 
 ### Recommended next steps:
 1. ✅ ~~Add RF and XA to valid_modalities~~ (Completed)
 2. ✅ ~~Implement color image detection~~ (Completed)
-3. Implement YBR to RGB conversion (Priority 2)
-4. Implement color-aware window/level using luminance-based approach (Priority 2)
-5. Test thoroughly with color DICOM samples
+3. ✅ ~~Implement YBR to RGB conversion~~ (Completed)
+4. ✅ ~~Implement color-aware window/level~~ (Completed)
+5. ✅ ~~Extend PhotometricInterpretation handling in export~~ (Completed)
+6. ✅ ~~Improve compressed DICOM error handling~~ (Completed)
+7. Test thoroughly with color DICOM samples (Priority 3)
+8. Consider UI enhancements for color image detection (Priority 3)
+9. Consider palette color lookup table support (Future enhancement)
 
-These improvements significantly enhance the application's capability to handle the full spectrum of DICOM imaging modalities and formats.
+These improvements significantly enhance the application's capability to handle the full spectrum of DICOM imaging modalities and formats, with comprehensive support for color DICOM images.
 

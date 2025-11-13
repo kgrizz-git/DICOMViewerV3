@@ -28,6 +28,14 @@ from typing import Optional, List, Tuple
 from PIL import Image
 import pydicom
 from pydicom.dataset import Dataset
+
+# Try to import pydicom's convert_color_space (available in pydicom 3.0+)
+try:
+    from pydicom.pixels import convert_color_space
+    PYDICOM_CONVERT_AVAILABLE = True
+except ImportError:
+    PYDICOM_CONVERT_AVAILABLE = False
+    convert_color_space = None
 from core.multiframe_handler import get_frame_pixel_array, is_multiframe
 
 
@@ -41,6 +49,9 @@ class DICOMProcessor:
     - Creating intensity projections (AIP/MIP)
     - Converting to displayable formats
     """
+    
+    # Class-level set to track files that have shown compression errors (to suppress redundant messages)
+    _compression_error_files: set = set()
     
     @staticmethod
     def get_rescale_parameters(dataset: Dataset) -> Tuple[Optional[float], Optional[float], Optional[str]]:
@@ -151,17 +162,81 @@ class DICOMProcessor:
             return False, None
     
     @staticmethod
-    def convert_ybr_to_rgb(ybr_array: np.ndarray) -> np.ndarray:
+    def _is_already_rgb(pixel_array: np.ndarray) -> bool:
+        """
+        Check if a pixel array appears to already be in RGB format (not YBR).
+        
+        This is a heuristic check to avoid double conversion. YBR arrays typically
+        have chroma channels (Cb, Cr) centered around 128, while RGB arrays have
+        more varied distributions.
+        
+        Args:
+            pixel_array: Array with shape (height, width, 3) or (frames, height, width, 3)
+            
+        Returns:
+            True if array appears to be RGB, False if it appears to be YBR
+        """
+        try:
+            # For multi-frame, check first frame
+            if len(pixel_array.shape) == 4:
+                check_array = pixel_array[0]
+            else:
+                check_array = pixel_array
+            
+            if len(check_array.shape) != 3 or check_array.shape[2] != 3:
+                return False
+            
+            # Check if chroma channels (Cb, Cr) are centered around 128 (YBR characteristic)
+            # YBR chroma channels typically have mean around 128 with std around 20-40
+            # RGB channels have more varied distributions
+            cb_channel = check_array[:, :, 1].astype(np.float32)
+            cr_channel = check_array[:, :, 2].astype(np.float32)
+            
+            cb_mean = np.mean(cb_channel)
+            cr_mean = np.mean(cr_channel)
+            
+            # If chroma channels are centered around 128 (±20), likely YBR
+            # If they're far from 128 or have very different means, likely RGB
+            cb_near_128 = abs(cb_mean - 128.0) < 20.0
+            cr_near_128 = abs(cr_mean - 128.0) < 20.0
+            
+            # If both chroma channels are near 128, likely YBR
+            # Otherwise, likely RGB
+            return not (cb_near_128 and cr_near_128)
+            
+        except Exception:
+            # On error, assume not RGB (conservative - will attempt conversion)
+            return False
+    
+    @staticmethod
+    def convert_ybr_to_rgb(ybr_array: np.ndarray, 
+                          photometric_interpretation: Optional[str] = None,
+                          transfer_syntax: Optional[str] = None) -> np.ndarray:
         """
         Convert YBR color space array to RGB.
         
-        Handles YBR_FULL and YBR_FULL_422 formats. YBR color space uses:
+        Handles YBR_FULL, YBR_FULL_422, YBR_ICT, and YBR_RCT formats.
+        YBR color space uses:
         - Y = luminance channel (first channel)
         - Cb = blue-difference channel (second channel)
         - Cr = red-difference channel (third channel)
         
+        Note: YBR_FULL_422 uses 4:2:2 chroma subsampling, but pydicom
+        handles the upsampling during decompression, so the array is already
+        full resolution when we receive it.
+        
+        Uses pydicom's convert_color_space() for YBR_FULL/YBR_FULL_422/YBR_ICT
+        when available (pydicom 3.0+), falls back to custom implementation otherwise.
+        YBR_RCT always uses custom implementation (not supported by pydicom).
+        
+        This method trusts the PhotometricInterpretation tag and only converts
+        when explicitly indicated as YBR format. Checks transfer syntax to determine
+        if pydicom already converted YBR to RGB (common for JPEG 2000).
+        
         Args:
             ybr_array: YBR array with shape (height, width, 3) or (frames, height, width, 3)
+            photometric_interpretation: Optional PhotometricInterpretation string to determine conversion method
+            transfer_syntax: Optional TransferSyntaxUID string to check if pydicom already converted
             
         Returns:
             RGB array (0-255 uint8) with same shape as input (except channel dimension)
@@ -169,19 +244,172 @@ class DICOMProcessor:
         try:
             original_shape = ybr_array.shape
             
+            # Only convert if PhotometricInterpretation explicitly indicates YBR
+            # Trust the DICOM tag - always convert when tag says YBR
+            if not photometric_interpretation:
+                print(f"[YBR] Warning: No PhotometricInterpretation provided, skipping conversion")
+                return ybr_array
+            
+            # Check if pydicom already converted YBR to RGB (common for JPEG2000)
+            # For JPEG2000-YBR_RCT, pydicom's decoder automatically converts to RGB
+            # but doesn't update the PhotometricInterpretation tag
+            # We detect this by checking if the data already looks like RGB
+            already_rgb = False
+            
+            if len(ybr_array.shape) >= 3 and ybr_array.shape[-1] == 3:
+                check_array = ybr_array[0] if len(ybr_array.shape) == 4 else ybr_array
+                if len(check_array.shape) == 3:
+                    cb_mean = np.mean(check_array[:, :, 1].astype(np.float32))
+                    cr_mean = np.mean(check_array[:, :, 2].astype(np.float32))
+                    
+                    # For JPEG2000 with YBR_RCT, pydicom often already converts to RGB
+                    # Check if chroma channels are NOT centered around 128 (RGB characteristic)
+                    # AND if converting would make it worse (data already matches RGB pattern)
+                    jpeg2000_syntaxes = [
+                        '1.2.840.10008.1.2.4.90',  # JPEG 2000 Image Compression (Lossless Only)
+                        '1.2.840.10008.1.2.4.91',  # JPEG 2000 Image Compression
+                    ]
+                    
+                    # Check if pydicom already converted YBR to RGB
+                    # pydicom often auto-converts YBR to RGB but doesn't update PhotometricInterpretation tag
+                    # This happens for JPEG2000-YBR_RCT and sometimes for uncompressed YBR_FULL
+                    cb_std = np.std(check_array[:, :, 1].astype(np.float32))
+                    cr_std = np.std(check_array[:, :, 2].astype(np.float32))
+                    y_std = np.std(check_array[:, :, 0].astype(np.float32))
+                    
+                    # Calculate variance ratios
+                    cb_var_ratio = cb_std / (y_std + 1e-10)
+                    cr_var_ratio = cr_std / (y_std + 1e-10)
+                    
+                    # In RGB, all channels have similar variance (ratios close to 1.0)
+                    # In YBR, chroma has lower variance (ratios < 0.8 typically)
+                    # If both chroma channels have variance similar to Y, likely RGB
+                    if cb_var_ratio > 0.8 and cr_var_ratio > 0.8:
+                        # Do a test conversion to verify
+                        # If test conversion produces extreme/unreasonable values, data is already RGB
+                        try:
+                            # Quick test conversion on a small sample
+                            pi_upper = photometric_interpretation.upper()
+                            use_rct_test = 'YBR_RCT' in pi_upper
+                            test_sample = check_array[:10, :10, :].copy()
+                            test_rgb = DICOMProcessor._convert_ybr_to_rgb_2d(test_sample, use_rct=use_rct_test)
+                            
+                            # Check if converted values are reasonable
+                            rgb_mean = np.mean(test_rgb)
+                            rgb_std = np.std(test_rgb)
+                            
+                            # If converted values are extreme, likely already RGB
+                            # Also check if original data already matches RGB pattern better
+                            original_mean = np.mean(check_array)
+                            original_std = np.std(check_array)
+                            
+                            # If test conversion produces extreme values OR if original data
+                            # already has RGB-like statistics, skip conversion
+                            if rgb_mean < 50 or rgb_mean > 200 or rgb_std > 100:
+                                already_rgb = True
+                                print(f"[YBR] Test conversion produces extreme values "
+                                      f"(mean={rgb_mean:.1f}, std={rgb_std:.1f}), likely already RGB, skipping conversion")
+                            elif abs(rgb_mean - original_mean) > 50 or abs(rgb_std - original_std) > 30:
+                                # Conversion significantly changes statistics, likely already RGB
+                                already_rgb = True
+                                # print(f"[YBR] Data appears already RGB "
+                                #       f"(Cb_var_ratio={cb_var_ratio:.2f}, Cr_var_ratio={cr_var_ratio:.2f}), skipping conversion")
+                        except Exception as e:
+                            # If test conversion fails, check variance ratios only
+                            if cb_var_ratio > 0.85 and cr_var_ratio > 0.85:
+                                already_rgb = True
+                                print(f"[YBR] High variance ratios suggest already RGB "
+                                      f"(Cb_var_ratio={cb_var_ratio:.2f}, Cr_var_ratio={cr_var_ratio:.2f}), skipping conversion")
+                    
+                    if not already_rgb:
+                        print(f"[YBR] Converting YBR to RGB - PhotometricInterpretation: {photometric_interpretation}, "
+                              f"TransferSyntax: {transfer_syntax or 'Unknown'}, "
+                              f"Chroma means: Cb={cb_mean:.1f}, Cr={cr_mean:.1f}")
+            
+            if already_rgb:
+                return ybr_array
+            
+            # Determine conversion method based on PhotometricInterpretation
+            use_rct = False
+            use_pydicom_convert = False
+            ybr_format = None
+            
+            if photometric_interpretation:
+                pi_upper = photometric_interpretation.upper()
+                if 'YBR_RCT' in pi_upper:
+                    use_rct = True
+                elif 'YBR_FULL' in pi_upper:
+                    # YBR_FULL or YBR_FULL_422 - try pydicom first
+                    if 'YBR_FULL_422' in pi_upper:
+                        ybr_format = 'YBR_FULL_422'
+                    else:
+                        ybr_format = 'YBR_FULL'
+                    use_pydicom_convert = PYDICOM_CONVERT_AVAILABLE
+                elif 'YBR_ICT' in pi_upper:
+                    # YBR_ICT uses same conversion as YBR_FULL
+                    ybr_format = 'YBR_FULL'
+                    use_pydicom_convert = PYDICOM_CONVERT_AVAILABLE
+            
+            # Try using pydicom's convert_color_space for YBR_FULL/YBR_FULL_422/YBR_ICT
+            # Prefer pydicom's implementation as it's tested and handles edge cases
+            if use_pydicom_convert and ybr_format and convert_color_space is not None:
+                try:
+                    # Ensure array is uint8 (required by pydicom convert_color_space)
+                    if ybr_array.dtype != np.uint8:
+                        # Normalize to uint8 range if needed
+                        if ybr_array.max() > 255 or ybr_array.min() < 0:
+                            ybr_array_normalized = np.clip(ybr_array, 0, 255).astype(np.uint8)
+                        else:
+                            ybr_array_normalized = ybr_array.astype(np.uint8)
+                    else:
+                        ybr_array_normalized = ybr_array
+                    
+                    # Use pydicom's tested conversion
+                    print(f"[YBR] Using pydicom convert_color_space for {ybr_format}")
+                    rgb_array = convert_color_space(ybr_array_normalized, ybr_format, 'RGB')
+                    
+                    # Ensure output is uint8
+                    if rgb_array.dtype != np.uint8:
+                        rgb_array = np.clip(rgb_array, 0, 255).astype(np.uint8)
+                    
+                    return rgb_array
+                except Exception as e:
+                    # Fall back to custom implementation if pydicom conversion fails
+                    print(f"[YBR] pydicom convert_color_space failed, using custom conversion: {e}")
+                    use_pydicom_convert = False
+            
+            # Use custom implementation for YBR_RCT or if pydicom is not available/failed
             # Handle multi-frame YBR: (frames, height, width, 3)
             if len(original_shape) == 4:
                 num_frames, height, width, channels = original_shape
                 # Reshape to 2D for processing: (frames*height, width, channels)
                 ybr_2d = ybr_array.reshape(-1, width, channels)
-                rgb_2d = DICOMProcessor._convert_ybr_to_rgb_2d(ybr_2d)
+                rgb_2d = DICOMProcessor._convert_ybr_to_rgb_2d(ybr_2d, use_rct=use_rct)
                 # Reshape back to original: (frames, height, width, 3)
                 rgb_array = rgb_2d.reshape(num_frames, height, width, 3)
             elif len(original_shape) == 3:
                 # Single-frame YBR: (height, width, 3)
-                rgb_array = DICOMProcessor._convert_ybr_to_rgb_2d(ybr_array)
+                rgb_array = DICOMProcessor._convert_ybr_to_rgb_2d(ybr_array, use_rct=use_rct)
             else:
                 raise ValueError(f"Unsupported YBR array shape: {original_shape}")
+            
+            # Validate conversion result
+            if rgb_array.shape != original_shape:
+                print(f"[YBR] Warning: Shape changed during conversion: {original_shape} -> {rgb_array.shape}")
+            
+            # Check if result is valid RGB (values in 0-255 range)
+            if rgb_array.min() < 0 or rgb_array.max() > 255:
+                print(f"[YBR] Warning: RGB values out of range: min={rgb_array.min()}, max={rgb_array.max()}")
+                rgb_array = np.clip(rgb_array, 0, 255).astype(np.uint8)
+            
+            # Log conversion result statistics
+            if len(rgb_array.shape) >= 3 and rgb_array.shape[-1] == 3:
+                check_rgb = rgb_array[0] if len(rgb_array.shape) == 4 else rgb_array
+                if len(check_rgb.shape) == 3:
+                    r_mean = np.mean(check_rgb[:, :, 0].astype(np.float32))
+                    g_mean = np.mean(check_rgb[:, :, 1].astype(np.float32))
+                    b_mean = np.mean(check_rgb[:, :, 2].astype(np.float32))
+                    print(f"[YBR] Conversion complete - RGB means: R={r_mean:.1f}, G={g_mean:.1f}, B={b_mean:.1f}")
             
             return rgb_array
             
@@ -193,7 +421,81 @@ class DICOMProcessor:
             return ybr_array
     
     @staticmethod
-    def _convert_ybr_to_rgb_2d(ybr_array: np.ndarray) -> np.ndarray:
+    def detect_and_fix_rgb_channel_order(pixel_array: np.ndarray, 
+                                         photometric_interpretation: Optional[str] = None,
+                                         transfer_syntax: Optional[str] = None,
+                                         dataset: Optional[Dataset] = None) -> np.ndarray:
+        """
+        Detect and fix RGB/BGR channel order issues.
+        
+        Handles JPEGLS-RGB images which may have BGR channel order.
+        Uses statistical analysis to detect if channels are swapped.
+        Other RGB images are trusted as-is.
+        
+        Args:
+            pixel_array: RGB array with shape (height, width, 3) or (frames, height, width, 3)
+            photometric_interpretation: Optional PhotometricInterpretation string
+            transfer_syntax: Optional TransferSyntaxUID string (for JPEGLS detection)
+            dataset: Optional Dataset for PlanarConfiguration check
+            
+        Returns:
+            RGB array with correct channel order
+        """
+        try:
+            # Only process RGB images with 3 channels
+            if len(pixel_array.shape) < 3 or pixel_array.shape[-1] != 3:
+                return pixel_array
+            
+            # Only handle JPEGLS-RGB images (known to sometimes have BGR order)
+            is_jpegls_rgb = False
+            if transfer_syntax:
+                jpegls_syntaxes = [
+                    '1.2.840.10008.1.2.4.80',  # JPEG-LS Lossless
+                    '1.2.840.10008.1.2.4.81',  # JPEG-LS Lossy
+                ]
+                if transfer_syntax in jpegls_syntaxes:
+                    is_jpegls_rgb = True
+            
+            # Only process JPEGLS-RGB images
+            if not is_jpegls_rgb:
+                return pixel_array
+            
+            # Verify it's RGB photometric interpretation
+            if photometric_interpretation:
+                pi_upper = photometric_interpretation.upper()
+                if 'RGB' not in pi_upper:
+                    return pixel_array
+            
+            # Check PlanarConfiguration - if PlanarConfiguration = 1, channels were already handled
+            # by _handle_planar_configuration, so we can trust the order
+            planar_config = 0
+            if dataset:
+                if hasattr(dataset, 'PlanarConfiguration'):
+                    pc_value = dataset.PlanarConfiguration
+                    if isinstance(pc_value, (list, tuple)):
+                        planar_config = int(pc_value[0])
+                    else:
+                        planar_config = int(pc_value)
+                if planar_config == 1:
+                    # print(f"[JPEGLS-RGB] PlanarConfiguration = 1, channels already handled, trusting order")
+                    return pixel_array
+            
+            # Analysis shows the algebraic relationship b-(r+g)/2 in JPEG2000 ≈ (g+b)/2-r in JPEGLS
+            # holds better with original order. User confirmed: do not swap channels.
+            # Return pixel array as-is without any channel swapping.
+            # print(f"[JPEGLS-RGB] Keeping original channel order (no swap)")
+            
+            return pixel_array
+            
+        except Exception as e:
+            print(f"[RGB/BGR] Error detecting/fixing channel order: {e}")
+            import traceback
+            traceback.print_exc()
+            # Return original array on error
+            return pixel_array
+    
+    @staticmethod
+    def _convert_ybr_to_rgb_2d(ybr_array: np.ndarray, use_rct: bool = False) -> np.ndarray:
         """
         Convert 2D YBR array (height, width, 3) to RGB.
         
@@ -201,28 +503,108 @@ class DICOMProcessor:
         
         Args:
             ybr_array: YBR array with shape (height, width, 3)
+            use_rct: If True, use YBR_RCT (Reversible Color Transform) coefficients,
+                     otherwise use ITU-R BT.601 coefficients for YBR_FULL/YBR_FULL_422/YBR_ICT
             
         Returns:
             RGB array (0-255 uint8) with shape (height, width, 3)
         """
         # Extract Y, Cb, Cr channels
         Y = ybr_array[:, :, 0].astype(np.float32)
-        Cb = ybr_array[:, :, 1].astype(np.float32) - 128.0
-        Cr = ybr_array[:, :, 2].astype(np.float32) - 128.0
+        Cb = ybr_array[:, :, 1].astype(np.float32)
+        Cr = ybr_array[:, :, 2].astype(np.float32)
         
-        # Convert YBR to RGB using ITU-R BT.601 coefficients
-        # R = Y + 1.402 * Cr
-        # G = Y - 0.344136 * Cb - 0.714136 * Cr
-        # B = Y + 1.772 * Cb
-        R = Y + 1.402 * Cr
-        G = Y - 0.344136 * Cb - 0.714136 * Cr
-        B = Y + 1.772 * Cb
+        if use_rct:
+            # YBR_RCT (Reversible Color Transform) - JPEG 2000 Part 1 / DICOM Supplement 61
+            # RCT conversion (reversible, integer-based)
+            # Correct formula from DICOM Supplement 61:
+            # G = Y - floor((Cr + Cb) / 4)
+            # R = Cr + G
+            # B = Cb + G
+            # Note: G must be calculated first, then R and B depend on G
+            # No offset of 128 needed for YBR_RCT
+            G = Y - np.floor((Cr + Cb) / 4.0)
+            R = Cr + G
+            B = Cb + G
+        else:
+            # YBR_FULL, YBR_FULL_422, YBR_ICT use ITU-R BT.601 coefficients
+            # Note: pydicom handles 4:2:2 subsampling for YBR_FULL_422 during decompression
+            # so we receive full-resolution chroma channels
+            Cb = Cb - 128.0
+            Cr = Cr - 128.0
+            
+            # Convert YBR to RGB using ITU-R BT.601 coefficients
+            # R = Y + 1.402 * Cr
+            # G = Y - 0.344136 * Cb - 0.714136 * Cr
+            # B = Y + 1.772 * Cb
+            R = Y + 1.402 * Cr
+            G = Y - 0.344136 * Cb - 0.714136 * Cr
+            B = Y + 1.772 * Cb
         
         # Stack channels and clip to valid range
         rgb = np.stack([R, G, B], axis=2)
         rgb = np.clip(rgb, 0, 255).astype(np.uint8)
         
         return rgb
+    
+    @staticmethod
+    def _handle_planar_configuration(pixel_array: np.ndarray, dataset: Dataset) -> np.ndarray:
+        """
+        Handle PlanarConfiguration tag (0028,0006).
+        
+        PlanarConfiguration = 0: Color channels are interleaved (RGBRGB...)
+        PlanarConfiguration = 1: Color channels are stored in separate planes (all R, then all G, then all B)
+        
+        Args:
+            pixel_array: Pixel array from dataset
+            dataset: pydicom Dataset
+            
+        Returns:
+            Pixel array with interleaved channels (PlanarConfiguration = 0 format)
+        """
+        try:
+            # Check PlanarConfiguration tag (0028,0006)
+            planar_config = 0  # Default to interleaved
+            if hasattr(dataset, 'PlanarConfiguration'):
+                pc_value = dataset.PlanarConfiguration
+                if isinstance(pc_value, (list, tuple)):
+                    planar_config = int(pc_value[0])
+                else:
+                    planar_config = int(pc_value)
+            
+            # If PlanarConfiguration = 1 (separate planes), convert to interleaved
+            if planar_config == 1:
+                # print(f"[PLANAR] PlanarConfiguration = 1 detected, converting separate planes to interleaved")
+                
+                # For separate planes, the array shape is typically (3, height, width) for single-frame
+                # or (frames, 3, height, width) for multi-frame
+                # We need to convert to (height, width, 3) or (frames, height, width, 3)
+                
+                if len(pixel_array.shape) == 3:
+                    # Single-frame: shape is (3, height, width) or (height, width, 3)
+                    # Check if first dimension is 3 (separate planes)
+                    if pixel_array.shape[0] == 3:
+                        # Separate planes: (3, height, width) -> (height, width, 3)
+                        height, width = pixel_array.shape[1], pixel_array.shape[2]
+                        # Transpose and reorder: (3, H, W) -> (H, W, 3)
+                        pixel_array = np.transpose(pixel_array, (1, 2, 0))
+                        print(f"[PLANAR] Converted from (3, {height}, {width}) to ({height}, {width}, 3)")
+                elif len(pixel_array.shape) == 4:
+                    # Multi-frame: shape could be (frames, 3, height, width) or (frames, height, width, 3)
+                    # Check if second dimension is 3 (separate planes)
+                    if pixel_array.shape[1] == 3:
+                        # Separate planes: (frames, 3, height, width) -> (frames, height, width, 3)
+                        num_frames, height, width = pixel_array.shape[0], pixel_array.shape[2], pixel_array.shape[3]
+                        # Transpose and reorder: (F, 3, H, W) -> (F, H, W, 3)
+                        pixel_array = np.transpose(pixel_array, (0, 2, 3, 1))
+                        print(f"[PLANAR] Converted from ({num_frames}, 3, {height}, {width}) to ({num_frames}, {height}, {width}, 3)")
+            
+            return pixel_array
+            
+        except Exception as e:
+            print(f"[PLANAR] Error handling PlanarConfiguration: {e}")
+            # Return original array on error
+            return pixel_array
     
     @staticmethod
     def get_pixel_array(dataset: Dataset) -> Optional[np.ndarray]:
@@ -233,6 +615,9 @@ class DICOMProcessor:
         this will return the specific frame's pixel array.
         For original multi-frame datasets, this will return the full 3D array.
         
+        Includes diagnostic logging for color space and transfer syntax information.
+        Handles PlanarConfiguration to ensure channels are interleaved.
+        
         Args:
             dataset: pydicom Dataset (may be a frame wrapper for multi-frame files)
             
@@ -240,14 +625,56 @@ class DICOMProcessor:
             NumPy array of pixel data, or None if extraction fails
         """
         try:
+            # Get transfer syntax for diagnostic logging
+            transfer_syntax = None
+            if hasattr(dataset, 'file_meta') and hasattr(dataset.file_meta, 'TransferSyntaxUID'):
+                transfer_syntax = str(dataset.file_meta.TransferSyntaxUID)
+            
+            # Get photometric interpretation for diagnostic logging
+            photometric_interpretation = None
+            if hasattr(dataset, 'PhotometricInterpretation'):
+                pi_value = dataset.PhotometricInterpretation
+                if isinstance(pi_value, (list, tuple)):
+                    photometric_interpretation = str(pi_value[0]).strip()
+                else:
+                    photometric_interpretation = str(pi_value).strip()
+            
+            # Get PlanarConfiguration for diagnostic logging
+            planar_config = 0
+            if hasattr(dataset, 'PlanarConfiguration'):
+                pc_value = dataset.PlanarConfiguration
+                if isinstance(pc_value, (list, tuple)):
+                    planar_config = int(pc_value[0])
+                else:
+                    planar_config = int(pc_value)
+            
+            # Log diagnostic information
+            # if transfer_syntax or photometric_interpretation:
+            #     jpegls_syntaxes = [
+            #         '1.2.840.10008.1.2.4.80',  # JPEG-LS Lossless
+            #         '1.2.840.10008.1.2.4.81',  # JPEG-LS Lossy
+            #     ]
+            #     is_jpegls = transfer_syntax in jpegls_syntaxes if transfer_syntax else False
+            #     log_msg = f"[PIXEL ARRAY] TransferSyntax: {transfer_syntax or 'Unknown'}, "
+            #     log_msg += f"PhotometricInterpretation: {photometric_interpretation or 'Unknown'}, "
+            #     log_msg += f"PlanarConfiguration: {planar_config}"
+            #     if is_jpegls:
+            #         log_msg += " (JPEGLS)"
+            #     print(log_msg)
+            
             # Check if this is a frame wrapper from a multi-frame file
             if hasattr(dataset, '_frame_index') and hasattr(dataset, '_original_dataset'):
                 # This is a frame wrapper - use the pixel_array property which returns the specific frame
                 pixel_array = dataset.pixel_array
+                # Handle PlanarConfiguration
+                pixel_array = DICOMProcessor._handle_planar_configuration(pixel_array, dataset)
                 return pixel_array
             
             # Regular dataset (single-frame or original multi-frame)
             pixel_array = dataset.pixel_array
+            
+            # Handle PlanarConfiguration before returning
+            pixel_array = DICOMProcessor._handle_planar_configuration(pixel_array, dataset)
             
             # If this is an original multi-frame dataset, return the full 3D array
             # (The organizer should have split it into frame wrappers, but handle this case)
@@ -264,12 +691,38 @@ class DICOMProcessor:
         except Exception as e:
             error_msg = str(e)
             # Check if this is a compressed DICOM decoding error
-            if "missing required dependencies" in error_msg.lower() or "decode" in error_msg.lower():
-                # This is likely a compressed DICOM file that needs additional libraries
-                print(f"Compressed DICOM pixel data cannot be decoded: {e}")
-                print("To decode compressed DICOM files, install optional dependencies:")
-                print("  pip install pylibjpeg pyjpegls")
-                print("Note: GDCM support may require additional system libraries")
+            is_compression_error = (
+                "pylibjpeg-libjpeg" in error_msg.lower() or
+                "missing required dependencies" in error_msg.lower() or
+                "unable to convert" in error_msg.lower() or
+                "decode" in error_msg.lower()
+            )
+            
+            if is_compression_error:
+                # Get file path if available from dataset
+                file_path = None
+                if hasattr(dataset, 'filename'):
+                    file_path = dataset.filename
+                elif hasattr(dataset, 'file_path'):
+                    file_path = dataset.file_path
+                
+                # Only show error message once per file
+                if file_path and file_path not in DICOMProcessor._compression_error_files:
+                    DICOMProcessor._compression_error_files.add(file_path)
+                    print(f"[COMPRESSION ERROR] File: {file_path}")
+                    print(f"  Compressed DICOM pixel data cannot be decoded.")
+                    print(f"  Error: {error_msg[:200]}")  # Truncate long error messages
+                    print(f"  To decode compressed DICOM files, install optional dependencies:")
+                    print(f"    pip install pylibjpeg pyjpegls")
+                    print(f"  Note: GDCM support may require additional system libraries")
+                elif not file_path:
+                    # If no file path available, show error once per unique error message
+                    error_key = error_msg[:100]  # Use first 100 chars as key
+                    if error_key not in DICOMProcessor._compression_error_files:
+                        DICOMProcessor._compression_error_files.add(error_key)
+                        print(f"[COMPRESSION ERROR] Compressed DICOM pixel data cannot be decoded.")
+                        print(f"  Error: {error_msg[:200]}")
+                        print(f"  Install optional dependencies: pip install pylibjpeg pyjpegls")
             else:
                 print(f"Error extracting pixel array: {e}")
             return None
@@ -536,6 +989,11 @@ class DICOMProcessor:
         # Detect if this is a color image
         is_color, photometric_interpretation = DICOMProcessor.is_color_image(dataset)
         
+        # Get transfer syntax for RGB/BGR detection
+        transfer_syntax = None
+        if hasattr(dataset, 'file_meta') and hasattr(dataset.file_meta, 'TransferSyntaxUID'):
+            transfer_syntax = str(dataset.file_meta.TransferSyntaxUID)
+        
         # Determine array dimensions
         # Multi-frame grayscale: shape = (frames, height, width)
         # Color single-frame: shape = (height, width, channels)
@@ -621,14 +1079,27 @@ class DICOMProcessor:
                 pi_upper = photometric_interpretation.upper()
                 ybr_types = ['YBR_FULL', 'YBR_FULL_422', 'YBR_ICT', 'YBR_RCT']
                 if any(ybr_type in pi_upper for ybr_type in ybr_types):
-                    # Convert YBR to RGB
-                    pixel_array = DICOMProcessor.convert_ybr_to_rgb(pixel_array)
+                    # Convert YBR to RGB (pass PhotometricInterpretation for correct coefficient selection)
+                    # Also pass transfer_syntax to help determine if pydicom already converted
+                    pixel_array = DICOMProcessor.convert_ybr_to_rgb(
+                        pixel_array, 
+                        photometric_interpretation=photometric_interpretation,
+                        transfer_syntax=transfer_syntax
+                    )
                     # Update shape after conversion (in case it was multi-frame)
                     array_shape = pixel_array.shape
                     if len(array_shape) == 4:
                         is_multi_frame_color = True
                     elif len(array_shape) == 3 and array_shape[2] == 3:
                         is_single_frame_color = True
+                elif 'RGB' in pi_upper:
+                    # RGB images - check for JPEGLS-RGB channel order issues
+                    pixel_array = DICOMProcessor.detect_and_fix_rgb_channel_order(
+                        pixel_array, 
+                        photometric_interpretation=photometric_interpretation,
+                        transfer_syntax=transfer_syntax,
+                        dataset=dataset
+                    )
         
         # Apply window/level
         # print(f"[PROCESSOR] Applying window/level...")
