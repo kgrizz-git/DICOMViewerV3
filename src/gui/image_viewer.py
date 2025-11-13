@@ -26,7 +26,7 @@ from PySide6.QtGui import (QPixmap, QImage, QWheelEvent, QKeyEvent, QMouseEvent,
                           QPainter, QColor, QTransform)
 from PIL import Image
 import numpy as np
-from typing import Optional, Callable
+from typing import Optional, Callable, Any
 
 
 class ImageViewer(QGraphicsView):
@@ -71,6 +71,7 @@ class ImageViewer(QGraphicsView):
     measurement_delete_requested = Signal(object)  # Emitted when measurement deletion is requested (MeasurementItem)
     clear_measurements_requested = Signal()  # Emitted when clear measurements is requested
     toggle_overlay_requested = Signal()  # Emitted when toggle overlay is requested
+    pixel_info_changed = Signal(str, int, int, int)  # Emitted when pixel info changes (pixel_value_str, x, y, z)
     
     def __init__(self, parent: Optional[QWidget] = None, config_manager=None):
         """
@@ -98,6 +99,11 @@ class ImageViewer(QGraphicsView):
         
         # Image item
         self.image_item: Optional[QGraphicsPixmapItem] = None
+        
+        # Callbacks to get current dataset and slice index for pixel value display
+        self.get_current_dataset_callback: Optional[Callable[[], Any]] = None
+        self.get_current_slice_index_callback: Optional[Callable[[], int]] = None
+        self.get_use_rescaled_values_callback: Optional[Callable[[], bool]] = None
         
         # Zoom settings
         self.min_zoom = 0.1
@@ -792,6 +798,9 @@ class ImageViewer(QGraphicsView):
         # But we need to emit transform_changed signal when panning occurs
         # This is handled by connecting to scrollbar valueChanged signals
         
+        # Track cursor position and pixel values for status bar display
+        self._update_pixel_info(event)
+        
         super().mouseMoveEvent(event)
     
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
@@ -1105,6 +1114,210 @@ class ImageViewer(QGraphicsView):
         # Convert to scene coordinates
         scene_center = self.mapToScene(viewport_center_viewport.toPoint())
         return scene_center
+    
+    def set_pixel_info_callbacks(
+        self,
+        get_dataset: Callable[[], Any],
+        get_slice_index: Callable[[], int],
+        get_use_rescaled: Callable[[], bool]
+    ) -> None:
+        """
+        Set callbacks to get current dataset, slice index, and rescale setting for pixel value display.
+        
+        Args:
+            get_dataset: Callback to get current DICOM dataset
+            get_slice_index: Callback to get current slice index
+            get_use_rescaled: Callback to get whether to use rescaled values
+        """
+        self.get_current_dataset_callback = get_dataset
+        self.get_current_slice_index_callback = get_slice_index
+        self.get_use_rescaled_values_callback = get_use_rescaled
+    
+    def _update_pixel_info(self, event: QMouseEvent) -> None:
+        """
+        Update pixel information based on cursor position.
+        
+        Args:
+            event: Mouse event
+        """
+        if self.image_item is None:
+            self.pixel_info_changed.emit("", 0, 0, 0)
+            return
+        
+        # Convert viewport coordinates to scene coordinates
+        scene_pos = self.mapToScene(event.position().toPoint())
+        
+        # Get image item bounding rect
+        image_rect = self.image_item.boundingRect()
+        
+        # Check if cursor is over the image
+        if not image_rect.contains(scene_pos):
+            self.pixel_info_changed.emit("", 0, 0, 0)
+            return
+        
+        # Convert scene coordinates to image pixel coordinates
+        # Image item is positioned at (0, 0) in scene, so scene_pos is relative to image
+        x = int(scene_pos.x())
+        y = int(scene_pos.y())
+        
+        # Clamp to image bounds
+        x = max(0, min(x, int(image_rect.width()) - 1))
+        y = max(0, min(y, int(image_rect.height()) - 1))
+        
+        # Get z coordinate (slice index)
+        z = 0
+        if self.get_current_slice_index_callback:
+            z = self.get_current_slice_index_callback()
+        
+        # Get pixel value from dataset
+        pixel_value_str = ""
+        if self.get_current_dataset_callback:
+            dataset = self.get_current_dataset_callback()
+            if dataset is not None:
+                use_rescaled = False
+                if self.get_use_rescaled_values_callback:
+                    use_rescaled = self.get_use_rescaled_values_callback()
+                
+                pixel_value_str = self._get_pixel_value_at_coords(dataset, x, y, z, use_rescaled)
+        
+        # Emit signal with pixel info
+        self.pixel_info_changed.emit(pixel_value_str, x, y, z)
+    
+    def _get_pixel_value_at_coords(
+        self,
+        dataset,
+        x: int,
+        y: int,
+        z: int,
+        use_rescaled: bool
+    ) -> str:
+        """
+        Get pixel value at specified coordinates.
+        
+        Args:
+            dataset: DICOM dataset
+            x: X coordinate (column)
+            y: Y coordinate (row)
+            z: Z coordinate (slice index)
+            use_rescaled: Whether to use rescaled values
+            
+        Returns:
+            Formatted string with pixel value(s)
+        """
+        try:
+            from pydicom.dataset import Dataset
+            from core.dicom_processor import DICOMProcessor
+            
+            # Get pixel array
+            pixel_array = DICOMProcessor.get_pixel_array(dataset)
+            if pixel_array is None:
+                return ""
+            
+            # Determine if this is a color image by checking SamplesPerPixel
+            samples_per_pixel = 1
+            if hasattr(dataset, 'SamplesPerPixel'):
+                spp_value = dataset.SamplesPerPixel
+                if isinstance(spp_value, (list, tuple)):
+                    samples_per_pixel = int(spp_value[0])
+                else:
+                    samples_per_pixel = int(spp_value)
+            
+            is_color = samples_per_pixel > 1
+            
+            # Handle different array shapes
+            array_shape = pixel_array.shape
+            
+            if len(array_shape) == 4:
+                # Multi-frame color: shape is (frames, rows, columns, channels)
+                if z < 0 or z >= array_shape[0]:
+                    return ""
+                frame_array = pixel_array[z]
+            elif len(array_shape) == 3:
+                # Could be:
+                # - Single-frame color: (height, width, channels) where channels = 3
+                # - Multi-frame grayscale: (frames, height, width) where frames > 1
+                if is_color and array_shape[2] == samples_per_pixel:
+                    # Single-frame color: (height, width, channels)
+                    frame_array = pixel_array
+                elif not is_color and array_shape[0] > 1:
+                    # Multi-frame grayscale: (frames, height, width)
+                    if z < 0 or z >= array_shape[0]:
+                        return ""
+                    frame_array = pixel_array[z]
+                else:
+                    # Single-frame grayscale or ambiguous - check last dimension
+                    if array_shape[2] == 3:
+                        # Likely single-frame color
+                        frame_array = pixel_array
+                    else:
+                        # Single-frame grayscale (shouldn't happen with 3D, but handle it)
+                        frame_array = pixel_array
+            else:
+                # Single-frame grayscale: shape is (height, width)
+                frame_array = pixel_array
+            
+            # Check bounds and extract pixel value
+            if len(frame_array.shape) == 2:
+                # Grayscale
+                if y < 0 or y >= frame_array.shape[0] or x < 0 or x >= frame_array.shape[1]:
+                    return ""
+                pixel_value = float(frame_array[y, x])
+                
+                # Apply rescale if needed
+                if use_rescaled:
+                    slope = getattr(dataset, 'RescaleSlope', 1.0)
+                    intercept = getattr(dataset, 'RescaleIntercept', 0.0)
+                    if isinstance(slope, (list, tuple)):
+                        slope = float(slope[0])
+                    else:
+                        slope = float(slope)
+                    if isinstance(intercept, (list, tuple)):
+                        intercept = float(intercept[0])
+                    else:
+                        intercept = float(intercept)
+                    pixel_value = pixel_value * slope + intercept
+                
+                # Format pixel value
+                if pixel_value == int(pixel_value):
+                    return str(int(pixel_value))
+                else:
+                    return f"{pixel_value:.1f}"
+                    
+            elif len(frame_array.shape) == 3:
+                # Color (RGB)
+                if y < 0 or y >= frame_array.shape[0] or x < 0 or x >= frame_array.shape[1]:
+                    return ""
+                if frame_array.shape[2] < 3:
+                    return ""
+                
+                r = int(frame_array[y, x, 0])
+                g = int(frame_array[y, x, 1])
+                b = int(frame_array[y, x, 2])
+                
+                # Apply rescale if needed (to all channels)
+                if use_rescaled:
+                    slope = getattr(dataset, 'RescaleSlope', 1.0)
+                    intercept = getattr(dataset, 'RescaleIntercept', 0.0)
+                    if isinstance(slope, (list, tuple)):
+                        slope = float(slope[0])
+                    else:
+                        slope = float(slope)
+                    if isinstance(intercept, (list, tuple)):
+                        intercept = float(intercept[0])
+                    else:
+                        intercept = float(intercept)
+                    
+                    r = int(r * slope + intercept)
+                    g = int(g * slope + intercept)
+                    b = int(b * slope + intercept)
+                
+                return f"R={r}, G={g}, B={b}"
+            else:
+                return ""
+            
+        except Exception as e:
+            # Silently fail - don't spam console with errors
+            return ""
     
     def resizeEvent(self, event) -> None:
         """

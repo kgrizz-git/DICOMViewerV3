@@ -378,6 +378,11 @@ class MainWindow(QMainWindow):
     def _create_status_bar(self) -> None:
         """Create the status bar."""
         self.statusBar().showMessage("Ready")
+        
+        # Add permanent widget on the right side for pixel values and coordinates
+        self.pixel_info_label = QLabel("")
+        self.pixel_info_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.statusBar().addPermanentWidget(self.pixel_info_label)
     
     def _create_central_widget(self) -> None:
         """Create the central widget area."""

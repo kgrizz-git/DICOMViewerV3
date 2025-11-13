@@ -569,6 +569,16 @@ class DICOMViewerApp(QObject):
             lambda delta: self.slice_navigator.handle_wheel_event(delta)
         )
         
+        # Pixel info display in status bar
+        self.image_viewer.pixel_info_changed.connect(self._on_pixel_info_changed)
+        
+        # Set callbacks for pixel info
+        self.image_viewer.set_pixel_info_callbacks(
+            get_dataset=lambda: self.current_dataset,
+            get_slice_index=lambda: self.current_slice_index,
+            get_use_rescaled=lambda: self.view_state_manager.use_rescaled_values if self.view_state_manager else False
+        )
+        
         # Window/level
         self.window_level_controls.window_changed.connect(self.view_state_manager.handle_window_changed)
         
@@ -1157,6 +1167,24 @@ class DICOMViewerApp(QObject):
         Handle viewport resize (when splitter moves).
         """
         self.view_state_manager.handle_viewport_resized()
+    
+    def _on_pixel_info_changed(self, pixel_value_str: str, x: int, y: int, z: int) -> None:
+        """
+        Handle pixel info changed signal from image viewer.
+        
+        Args:
+            pixel_value_str: Formatted pixel value string
+            x: X coordinate
+            y: Y coordinate
+            z: Z coordinate (slice index)
+        """
+        if pixel_value_str:
+            info_text = f"Pixel: {pixel_value_str}  (x: {x}, y: {y}, z: {z})"
+        else:
+            info_text = f"(x: {x}, y: {y}, z: {z})" if (x > 0 or y > 0 or z > 0) else ""
+        
+        if hasattr(self.main_window, 'pixel_info_label'):
+            self.main_window.pixel_info_label.setText(info_text)
     
     def _on_arrow_key_pressed(self, direction: int) -> None:
         """
