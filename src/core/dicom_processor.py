@@ -90,6 +90,141 @@ class DICOMProcessor:
             return None, None, None
     
     @staticmethod
+    def is_color_image(dataset: Dataset) -> Tuple[bool, Optional[str]]:
+        """
+        Detect if a DICOM image is a color image.
+        
+        Checks SamplesPerPixel and PhotometricInterpretation tags to determine
+        if the image is color (RGB, YBR, etc.) or grayscale.
+        
+        Args:
+            dataset: pydicom Dataset
+            
+        Returns:
+            Tuple of (is_color: bool, photometric_interpretation: Optional[str])
+            - is_color: True if image is color, False if grayscale
+            - photometric_interpretation: PhotometricInterpretation value if present, None otherwise
+        """
+        try:
+            # Check SamplesPerPixel tag (0028,0002)
+            # SamplesPerPixel = 1 means grayscale, > 1 means color
+            samples_per_pixel = 1  # Default to grayscale
+            if hasattr(dataset, 'SamplesPerPixel'):
+                samples_value = dataset.SamplesPerPixel
+                if isinstance(samples_value, (list, tuple)):
+                    samples_per_pixel = int(samples_value[0])
+                else:
+                    samples_per_pixel = int(samples_value)
+            
+            # Check PhotometricInterpretation tag (0028,0004)
+            photometric_interpretation = None
+            if hasattr(dataset, 'PhotometricInterpretation'):
+                pi_value = dataset.PhotometricInterpretation
+                if isinstance(pi_value, (list, tuple)):
+                    photometric_interpretation = str(pi_value[0]).strip()
+                else:
+                    photometric_interpretation = str(pi_value).strip()
+                # Return None if empty string
+                if not photometric_interpretation:
+                    photometric_interpretation = None
+            
+            # Determine if color based on SamplesPerPixel
+            # Color images have SamplesPerPixel > 1
+            is_color = samples_per_pixel > 1
+            
+            # Also check PhotometricInterpretation for color types
+            if photometric_interpretation:
+                pi_upper = photometric_interpretation.upper()
+                # Common color PhotometricInterpretation values
+                color_types = ['RGB', 'YBR_FULL', 'YBR_FULL_422', 'YBR_ICT', 'YBR_RCT', 'PALETTE COLOR']
+                if any(color_type in pi_upper for color_type in color_types):
+                    is_color = True
+                # Grayscale types
+                elif pi_upper in ['MONOCHROME1', 'MONOCHROME2']:
+                    is_color = False
+            
+            return is_color, photometric_interpretation
+            
+        except Exception as e:
+            # On error, default to grayscale
+            print(f"Error detecting color image: {e}")
+            return False, None
+    
+    @staticmethod
+    def convert_ybr_to_rgb(ybr_array: np.ndarray) -> np.ndarray:
+        """
+        Convert YBR color space array to RGB.
+        
+        Handles YBR_FULL and YBR_FULL_422 formats. YBR color space uses:
+        - Y = luminance channel (first channel)
+        - Cb = blue-difference channel (second channel)
+        - Cr = red-difference channel (third channel)
+        
+        Args:
+            ybr_array: YBR array with shape (height, width, 3) or (frames, height, width, 3)
+            
+        Returns:
+            RGB array (0-255 uint8) with same shape as input (except channel dimension)
+        """
+        try:
+            original_shape = ybr_array.shape
+            
+            # Handle multi-frame YBR: (frames, height, width, 3)
+            if len(original_shape) == 4:
+                num_frames, height, width, channels = original_shape
+                # Reshape to 2D for processing: (frames*height, width, channels)
+                ybr_2d = ybr_array.reshape(-1, width, channels)
+                rgb_2d = DICOMProcessor._convert_ybr_to_rgb_2d(ybr_2d)
+                # Reshape back to original: (frames, height, width, 3)
+                rgb_array = rgb_2d.reshape(num_frames, height, width, 3)
+            elif len(original_shape) == 3:
+                # Single-frame YBR: (height, width, 3)
+                rgb_array = DICOMProcessor._convert_ybr_to_rgb_2d(ybr_array)
+            else:
+                raise ValueError(f"Unsupported YBR array shape: {original_shape}")
+            
+            return rgb_array
+            
+        except Exception as e:
+            print(f"Error converting YBR to RGB: {e}")
+            import traceback
+            traceback.print_exc()
+            # Return original array on error (may cause display issues but prevents crash)
+            return ybr_array
+    
+    @staticmethod
+    def _convert_ybr_to_rgb_2d(ybr_array: np.ndarray) -> np.ndarray:
+        """
+        Convert 2D YBR array (height, width, 3) to RGB.
+        
+        Internal helper method for the actual conversion.
+        
+        Args:
+            ybr_array: YBR array with shape (height, width, 3)
+            
+        Returns:
+            RGB array (0-255 uint8) with shape (height, width, 3)
+        """
+        # Extract Y, Cb, Cr channels
+        Y = ybr_array[:, :, 0].astype(np.float32)
+        Cb = ybr_array[:, :, 1].astype(np.float32) - 128.0
+        Cr = ybr_array[:, :, 2].astype(np.float32) - 128.0
+        
+        # Convert YBR to RGB using ITU-R BT.601 coefficients
+        # R = Y + 1.402 * Cr
+        # G = Y - 0.344136 * Cb - 0.714136 * Cr
+        # B = Y + 1.772 * Cb
+        R = Y + 1.402 * Cr
+        G = Y - 0.344136 * Cb - 0.714136 * Cr
+        B = Y + 1.772 * Cb
+        
+        # Stack channels and clip to valid range
+        rgb = np.stack([R, G, B], axis=2)
+        rgb = np.clip(rgb, 0, 255).astype(np.uint8)
+        
+        return rgb
+    
+    @staticmethod
     def get_pixel_array(dataset: Dataset) -> Optional[np.ndarray]:
         """
         Extract pixel array from DICOM dataset.
@@ -127,7 +262,16 @@ class DICOMProcessor:
             print(f"Memory error extracting pixel array: {e}")
             return None
         except Exception as e:
-            print(f"Error extracting pixel array: {e}")
+            error_msg = str(e)
+            # Check if this is a compressed DICOM decoding error
+            if "missing required dependencies" in error_msg.lower() or "decode" in error_msg.lower():
+                # This is likely a compressed DICOM file that needs additional libraries
+                print(f"Compressed DICOM pixel data cannot be decoded: {e}")
+                print("To decode compressed DICOM files, install optional dependencies:")
+                print("  pip install pylibjpeg pyjpegls")
+                print("Note: GDCM support may require additional system libraries")
+            else:
+                print(f"Error extracting pixel array: {e}")
             return None
     
     @staticmethod
@@ -166,6 +310,89 @@ class DICOMProcessor:
             normalized = np.zeros_like(windowed, dtype=np.uint8)
         
         return normalized
+    
+    @staticmethod
+    def apply_color_window_level_luminance(pixel_array: np.ndarray, window_center: float,
+                                          window_width: float,
+                                          rescale_slope: Optional[float] = None,
+                                          rescale_intercept: Optional[float] = None) -> np.ndarray:
+        """
+        Apply window/level to color images using luminance-based approach.
+        
+        Preserves color relationships while adjusting brightness/contrast by applying
+        window/level to the luminance (brightness) component and scaling all color
+        channels proportionally.
+        
+        Args:
+            pixel_array: RGB array with shape (height, width, 3)
+            window_center: Window center value
+            window_width: Window width value
+            rescale_slope: Optional rescale slope from DICOM
+            rescale_intercept: Optional rescale intercept from DICOM
+            
+        Returns:
+            Windowed RGB array (0-255 uint8)
+        """
+        try:
+            # Ensure we have a 3-channel RGB array
+            if len(pixel_array.shape) != 3 or pixel_array.shape[2] != 3:
+                raise ValueError(f"Expected RGB array with shape (height, width, 3), got {pixel_array.shape}")
+            
+            # Convert to float32 for calculations
+            rgb_float = pixel_array.astype(np.float32)
+            
+            # Apply rescale if provided
+            if rescale_slope is not None and rescale_intercept is not None:
+                rgb_float = rgb_float * rescale_slope + rescale_intercept
+            
+            # Convert RGB to luminance (Y in YCbCr or grayscale equivalent)
+            # Formula: Y = 0.299*R + 0.587*G + 0.114*B (ITU-R BT.601)
+            luminance = np.dot(rgb_float[..., :3], [0.299, 0.587, 0.114])
+            
+            # Apply window/level to luminance
+            window_min = window_center - window_width / 2.0
+            window_max = window_center + window_width / 2.0
+            windowed_luminance = np.clip(luminance, window_min, window_max)
+            
+            # Normalize luminance to 0-255
+            if window_max > window_min:
+                normalized_luminance = ((windowed_luminance - window_min) / 
+                                       (window_max - window_min) * 255.0)
+            else:
+                normalized_luminance = np.zeros_like(luminance)
+            
+            # Calculate scaling factor for each pixel
+            # Avoid division by zero by adding small epsilon
+            epsilon = 1e-10
+            scale = normalized_luminance / (luminance + epsilon)
+            
+            # Handle edge case: if luminance is zero or very small, preserve original colors
+            # but scale down brightness
+            zero_luminance_mask = luminance < epsilon
+            if np.any(zero_luminance_mask):
+                # For zero luminance pixels, scale based on max channel value
+                max_channel = np.max(rgb_float, axis=2)
+                scale[zero_luminance_mask] = normalized_luminance[zero_luminance_mask] / (max_channel[zero_luminance_mask] + epsilon)
+            
+            # Apply scaling to each color channel while preserving ratios
+            windowed_rgb = rgb_float * scale[..., np.newaxis]
+            
+            # Clip to valid range and convert to uint8
+            windowed_rgb = np.clip(windowed_rgb, 0, 255).astype(np.uint8)
+            
+            return windowed_rgb
+            
+        except Exception as e:
+            print(f"Error applying color window/level: {e}")
+            import traceback
+            traceback.print_exc()
+            # Fallback: return original array normalized
+            if pixel_array.max() > pixel_array.min():
+                normalized = ((pixel_array - pixel_array.min()) / 
+                             (pixel_array.max() - pixel_array.min()) * 255.0).astype(np.uint8)
+            else:
+                normalized = pixel_array.astype(np.uint8)
+            return normalized
     
     @staticmethod
     def convert_window_level_rescaled_to_raw(center: float, width: float, 
@@ -306,6 +533,37 @@ class DICOMProcessor:
             return None
         # print(f"[PROCESSOR] Pixel array shape: {pixel_array.shape}, dtype: {pixel_array.dtype}")
         
+        # Detect if this is a color image
+        is_color, photometric_interpretation = DICOMProcessor.is_color_image(dataset)
+        
+        # Determine array dimensions
+        # Multi-frame grayscale: shape = (frames, height, width)
+        # Color single-frame: shape = (height, width, channels)
+        # Multi-frame color: shape = (frames, height, width, channels)
+        array_shape = pixel_array.shape
+        is_multi_frame_color = False
+        is_single_frame_color = False
+        
+        if is_color:
+            if len(array_shape) == 4:
+                # Multi-frame color: (frames, height, width, channels)
+                is_multi_frame_color = True
+            elif len(array_shape) == 3:
+                # Could be single-frame color (height, width, channels) or multi-frame grayscale (frames, height, width)
+                # Check if last dimension matches SamplesPerPixel
+                samples_per_pixel = 1
+                if hasattr(dataset, 'SamplesPerPixel'):
+                    samples_value = dataset.SamplesPerPixel
+                    if isinstance(samples_value, (list, tuple)):
+                        samples_per_pixel = int(samples_value[0])
+                    else:
+                        samples_per_pixel = int(samples_value)
+                
+                if samples_per_pixel > 1 and array_shape[2] == samples_per_pixel:
+                    # Single-frame color: (height, width, channels)
+                    is_single_frame_color = True
+                # Otherwise assume multi-frame grayscale (will be handled by existing logic)
+        
         # Track whether window/level values were extracted from dataset or explicitly provided
         values_extracted_from_dataset = False
         is_rescaled = False
@@ -357,54 +615,120 @@ class DICOMProcessor:
                         window_center, window_width, rescale_slope, rescale_intercept
                     )
         
+        # Convert YBR to RGB for color images before processing
+        if is_color and (is_single_frame_color or is_multi_frame_color):
+            if photometric_interpretation:
+                pi_upper = photometric_interpretation.upper()
+                ybr_types = ['YBR_FULL', 'YBR_FULL_422', 'YBR_ICT', 'YBR_RCT']
+                if any(ybr_type in pi_upper for ybr_type in ybr_types):
+                    # Convert YBR to RGB
+                    pixel_array = DICOMProcessor.convert_ybr_to_rgb(pixel_array)
+                    # Update shape after conversion (in case it was multi-frame)
+                    array_shape = pixel_array.shape
+                    if len(array_shape) == 4:
+                        is_multi_frame_color = True
+                    elif len(array_shape) == 3 and array_shape[2] == 3:
+                        is_single_frame_color = True
+        
         # Apply window/level
         # print(f"[PROCESSOR] Applying window/level...")
-        if window_center is not None and window_width is not None:
-            # print(f"[PROCESSOR] Window center: {window_center}, width: {window_width}")
-            processed_array = DICOMProcessor.apply_window_level(
-                pixel_array, window_center, window_width,
-                rescale_slope, rescale_intercept
-            )
-        else:
-            # print(f"[PROCESSOR] No window/level, normalizing...")
-            # No windowing, just normalize
-            processed_array = pixel_array.astype(np.float32)
-            if processed_array.max() > processed_array.min():
-                processed_array = ((processed_array - processed_array.min()) / 
-                                 (processed_array.max() - processed_array.min()) * 255.0)
-            processed_array = processed_array.astype(np.uint8)
-        
-        # print(f"[PROCESSOR] After window/level - shape: {processed_array.shape}, dtype: {processed_array.dtype}")
-        
-        # Handle 3D arrays (multi-frame)
-        # Note: If this is reached, it means we're working with an original multi-frame dataset
-        # that wasn't split by the organizer. Frame wrappers should already return 2D arrays.
-        if len(processed_array.shape) == 3:
-            # print(f"[PROCESSOR] WARNING: Got 3D array, taking first frame")
-            # Take first frame (fallback - should not normally happen if organizer worked correctly)
-            processed_array = processed_array[0]
-        
-        # Convert to PIL Image
-        # print(f"[PROCESSOR] Converting to PIL Image...")
-        # print(f"[PROCESSOR] Array shape: {processed_array.shape}, dtype: {processed_array.dtype}, min: {processed_array.min()}, max: {processed_array.max()}")
-        try:
-            if len(processed_array.shape) == 2:
-                # Grayscale
-                # print(f"[PROCESSOR] Creating grayscale image...")
-                image = Image.fromarray(processed_array, mode='L')
-                # print(f"[PROCESSOR] PIL Image created successfully: {image.size}")
-                return image
+        if is_color and (is_single_frame_color or is_multi_frame_color):
+            # Handle multi-frame color: take first frame for now
+            if is_multi_frame_color:
+                pixel_array = pixel_array[0]  # Shape becomes (height, width, channels)
+            
+            # Color image processing
+            if window_center is not None and window_width is not None:
+                # Use color-aware window/level
+                # print(f"[PROCESSOR] Applying color-aware window/level...")
+                processed_array = DICOMProcessor.apply_color_window_level_luminance(
+                    pixel_array, window_center, window_width,
+                    rescale_slope, rescale_intercept
+                )
             else:
-                # RGB or other
-                # print(f"[PROCESSOR] Creating RGB/other image...")
-                image = Image.fromarray(processed_array)
-                # print(f"[PROCESSOR] PIL Image created successfully: {image.size}")
-                return image
-        except Exception as e:
-            # print(f"[PROCESSOR] Error converting to PIL Image: {e}")
-            import traceback
-            traceback.print_exc()
-            return None
+                # No window/level, normalize each channel independently
+                # print(f"[PROCESSOR] No window/level for color image, normalizing...")
+                processed_array = pixel_array.astype(np.float32)
+                if len(processed_array.shape) == 3:
+                    # Color image: normalize each channel
+                    for channel in range(processed_array.shape[2]):
+                        channel_data = processed_array[:, :, channel]
+                        if channel_data.max() > channel_data.min():
+                            processed_array[:, :, channel] = ((channel_data - channel_data.min()) / 
+                                                              (channel_data.max() - channel_data.min()) * 255.0)
+                        else:
+                            processed_array[:, :, channel] = np.zeros_like(channel_data)
+                    processed_array = np.clip(processed_array, 0, 255).astype(np.uint8)
+                else:
+                    # Fallback: normalize entire array
+                    if processed_array.max() > processed_array.min():
+                        processed_array = ((processed_array - processed_array.min()) / 
+                                         (processed_array.max() - processed_array.min()) * 255.0)
+                    processed_array = processed_array.astype(np.uint8)
+            
+            # Convert color image to PIL Image
+            try:
+                if len(processed_array.shape) == 3 and processed_array.shape[2] == 3:
+                    # RGB color image
+                    image = Image.fromarray(processed_array, mode='RGB')
+                    return image
+                else:
+                    # Fallback to grayscale
+                    image = Image.fromarray(processed_array, mode='L')
+                    return image
+            except Exception as e:
+                print(f"[PROCESSOR] Error converting color image to PIL Image: {e}")
+                import traceback
+                traceback.print_exc()
+                return None
+        else:
+            # Grayscale image processing (existing logic)
+            if window_center is not None and window_width is not None:
+                # print(f"[PROCESSOR] Window center: {window_center}, width: {window_width}")
+                processed_array = DICOMProcessor.apply_window_level(
+                    pixel_array, window_center, window_width,
+                    rescale_slope, rescale_intercept
+                )
+            else:
+                # print(f"[PROCESSOR] No window/level, normalizing...")
+                # No windowing, just normalize
+                processed_array = pixel_array.astype(np.float32)
+                if processed_array.max() > processed_array.min():
+                    processed_array = ((processed_array - processed_array.min()) / 
+                                     (processed_array.max() - processed_array.min()) * 255.0)
+                processed_array = processed_array.astype(np.uint8)
+            
+            # print(f"[PROCESSOR] After window/level - shape: {processed_array.shape}, dtype: {processed_array.dtype}")
+            
+            # Handle 3D arrays (multi-frame grayscale)
+            # Note: If this is reached, it means we're working with an original multi-frame dataset
+            # that wasn't split by the organizer. Frame wrappers should already return 2D arrays.
+            if len(processed_array.shape) == 3:
+                # print(f"[PROCESSOR] WARNING: Got 3D array, taking first frame")
+                # Take first frame (fallback - should not normally happen if organizer worked correctly)
+                processed_array = processed_array[0]
+            
+            # Convert grayscale image to PIL Image
+            # print(f"[PROCESSOR] Converting to PIL Image...")
+            # print(f"[PROCESSOR] Array shape: {processed_array.shape}, dtype: {processed_array.dtype}, min: {processed_array.min()}, max: {processed_array.max()}")
+            try:
+                if len(processed_array.shape) == 2:
+                    # Grayscale
+                    # print(f"[PROCESSOR] Creating grayscale image...")
+                    image = Image.fromarray(processed_array, mode='L')
+                    # print(f"[PROCESSOR] PIL Image created successfully: {image.size}")
+                    return image
+                else:
+                    # RGB or other (shouldn't happen for grayscale, but handle gracefully)
+                    # print(f"[PROCESSOR] Creating RGB/other image...")
+                    image = Image.fromarray(processed_array)
+                    # print(f"[PROCESSOR] PIL Image created successfully: {image.size}")
+                    return image
+            except Exception as e:
+                # print(f"[PROCESSOR] Error converting to PIL Image: {e}")
+                import traceback
+                traceback.print_exc()
+                return None
     
     @staticmethod
     def average_intensity_projection(slices: List[Dataset]) -> Optional[np.ndarray]:

@@ -889,7 +889,7 @@ class DICOMViewerApp(QObject):
                 # Normalize modality (strip whitespace)
                 modality_str = str(modality).strip()
                 # Valid modalities list (must match overlay_config_dialog.py)
-                valid_modalities = ["default", "CT", "MR", "US", "CR", "DX", "NM", "PT", "RT", "MG"]
+                valid_modalities = ["default", "CT", "MR", "US", "CR", "DX", "RF", "XA", "NM", "PT", "RT", "MG"]
                 if modality_str in valid_modalities:
                     current_modality = modality_str
                 # If modality is not in valid list, current_modality remains None (will default to "default")

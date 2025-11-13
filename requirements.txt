@@ -19,3 +19,10 @@ Pillow>=10.0.0
 matplotlib>=3.8.0
 openpyxl>=3.1.0
 
+# Optional dependencies for compressed DICOM support
+# These are recommended for decoding JPEG-compressed DICOM files (JPEG, JPEG-LS, JPEG 2000)
+# Install with: pip install pylibjpeg pyjpegls
+# Note: GDCM support may require additional system libraries and is not included here
+# pylibjpeg>=1.4.0  # For JPEG 2000 and other compressed formats
+# pyjpegls>=0.3.0  # For JPEG-LS compression
+

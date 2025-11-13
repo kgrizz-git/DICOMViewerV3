@@ -196,7 +196,20 @@ class DICOMLoader:
                         # Cache the pixel array in the dataset for later access
                         dataset._cached_pixel_array = pixel_array
                     except Exception as e:
-                        print(f"[LOADER] Warning: Failed to pre-load pixel array: {e}")
+                        error_msg = str(e)
+                        # Check if this is a compressed DICOM decoding error
+                        if "missing required dependencies" in error_msg.lower() or "decode" in error_msg.lower():
+                            error_detail = (
+                                f"Compressed DICOM pixel data cannot be decoded. "
+                                f"Install optional dependencies: pip install pylibjpeg pyjpegls"
+                            )
+                            print(f"[LOADER] Warning: {error_detail}")
+                            print(f"[LOADER] Error details: {e}")
+                            # Add to failed files with descriptive message
+                            self.failed_files.append((file_path, error_detail))
+                            return None
+                        else:
+                            print(f"[LOADER] Warning: Failed to pre-load pixel array: {e}")
                 
                 print(f"========================\n")
             else:
@@ -221,7 +234,15 @@ class DICOMLoader:
             self.failed_files.append((file_path, f"File system error: {str(e)}"))
             return None
         except Exception as e:
-            error_msg = f"Error reading file: {str(e)}"
+            error_msg_str = str(e)
+            # Check if this is a compressed DICOM decoding error
+            if "missing required dependencies" in error_msg_str.lower() or "decode" in error_msg_str.lower():
+                error_msg = (
+                    f"Compressed DICOM pixel data cannot be decoded. "
+                    f"Install optional dependencies: pip install pylibjpeg pyjpegls"
+                )
+            else:
+                error_msg = f"Error reading file: {error_msg_str}"
             # Include error type for debugging
             error_type = type(e).__name__
             if error_type not in error_msg:
