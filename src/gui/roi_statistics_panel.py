@@ -69,7 +69,7 @@ class ROIStatisticsPanel(QWidget):
         self.stats_table.setItem(1, 0, QTableWidgetItem("Std Dev"))
         self.stats_table.setItem(2, 0, QTableWidgetItem("Min"))
         self.stats_table.setItem(3, 0, QTableWidgetItem("Max"))
-        self.stats_table.setItem(4, 0, QTableWidgetItem("Count"))
+        self.stats_table.setItem(4, 0, QTableWidgetItem("Pixels"))
         self.stats_table.setItem(5, 0, QTableWidgetItem("Area"))
         
         # Initialize with empty values
