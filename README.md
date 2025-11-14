@@ -19,6 +19,11 @@ This application provides comprehensive DICOM image viewing capabilities with ad
 - Zoom and pan functionality
 - Resizable image display window
 - Window width and level adjustment (numerical input and mouse control)
+- **Window/Level Presets**: Multiple presets from DICOM tags (WindowWidth/WindowCenter arrays)
+  - Context menu to switch between presets
+  - Status bar shows current preset name
+  - First preset (W1, C1) loaded by default
+  - If no presets found, window center uses median value, width uses range (max-min)
 - Slice navigation with arrow keys or mouse wheel
 - Series navigation with thumbnail navigator
 - Switch mouse scroll wheel between zooming and slice navigation
@@ -39,9 +44,13 @@ This application provides comprehensive DICOM image viewing capabilities with ad
 - **DICOM Tag Editing:**
   - View and edit all DICOM tags, including private tags
   - Tree view for browsing tags
-  - Search functionality for finding specific tags
+  - **Tag filtering/search**: Search functionality for finding specific tags (case-insensitive, searches tag number, name, VR, and value)
   - Undo/redo support for tag edits
   - Save changes to DICOM files
+- **Annotations Support:**
+  - Display DICOM Presentation States
+  - Display Key Object Selection Documents
+  - Display embedded overlays and graphic annotations in image files
 - **DICOM Tag Export:**
   - Export selected DICOM tags to Excel (.xlsx) or CSV files
   - Choose which tags to export
@@ -54,13 +63,14 @@ This application provides comprehensive DICOM image viewing capabilities with ad
 - Histogram display for whole slice or selected ROI (Not yet implemented)
 - Window width and level indication overlaid on histogram (Not yet implemented)
 - Combine slices into thicker slices (average or maximum intensity projections) (Not yet implemented)
-- Display annotations and RT STRUCT overlays (Not yet implemented)
+- Display RT STRUCT overlays (Not yet implemented)
 
 ### Data Management
 - Clear ROIs from slice or whole dataset
 - Clear measurements
 - Undo/redo functionality for changes
 - ROI list panel with selection
+- Status bar updates during file loading showing number of studies, series, and files loaded
 
 ### Export
 - Export selected DICOM tags to Excel or CSV files

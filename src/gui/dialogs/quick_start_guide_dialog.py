@@ -233,6 +233,15 @@ class QuickStartGuideDialog(QDialog):
             </ul>
             
             <h2>Window/Level Adjustment</h2>
+            <h3>Window/Level Presets</h3>
+            <ul>
+                <li>DICOM files may contain multiple window/level presets (WindowWidth and WindowCenter arrays)</li>
+                <li>First preset (W1, C1) is loaded by default</li>
+                <li>Right-click on image → <strong>"Window/Level Presets"</strong> submenu to switch between presets</li>
+                <li>Status bar shows which preset is currently loaded (e.g., "Window/Level: Default" or "Window/Level: Preset 2")</li>
+                <li>If no presets are found in DICOM tags, window center uses median pixel value and width uses range (max-min)</li>
+            </ul>
+            
             <h3>Right Mouse Drag Method</h3>
             <ul>
                 <li>Right-click and hold on the image (not on ROI or measurement)</li>
@@ -307,10 +316,12 @@ class QuickStartGuideDialog(QDialog):
             <ul>
                 <li>All measurements and ROIs are preserved when navigating between slices in the same series</li>
                 <li>Use the context menu (right-click) for quick access to common functions</li>
-                <li>The status bar shows current slice information and other details</li>
+                <li>The status bar shows current slice information, window/level preset name, and loading progress</li>
+                <li>Status bar updates in real-time during file loading, showing number of studies, series, and files loaded</li>
                 <li>Overlay metadata can be customized and toggled on/off via View → Overlay Configuration or with the <code>Spacebar</code> key</li>
                 <li>Export selected DICOM tags to Excel or CSV via Tools → Export Tags</li>
                 <li>Settings can be adjusted via Tools → Settings</li>
+                <li><strong>Annotations:</strong> The viewer automatically displays DICOM annotations including Presentation States, Key Object Selection Documents, and embedded overlays/graphic annotations</li>
             </ul>
             
             <h2>Exporting Images</h2>
@@ -351,7 +362,8 @@ class QuickStartGuideDialog(QDialog):
                     <li>Edit individual tag values (double-click or use Edit button)</li>
                     <li>View private tags and vendor-specific data</li>
                     <li>Undo/redo changes using Edit menu</li>
-                    <li>Search for specific tags using the search box</li>
+                    <li><strong>Tag Filtering:</strong> Use the search box at the top to filter tags (case-insensitive search across tag number, name, VR, and value)</li>
+                    <li>Search results update automatically as you type</li>
                 </ul>
             </li>
             <li><strong>Export Tags:</strong> Access via <strong>Tools → Export DICOM Tags</strong> or press <code>Shift+Ctrl+T</code>

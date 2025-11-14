@@ -109,6 +109,11 @@ class DICOMViewerApp(QObject):
         # Create components
         self.file_dialog = FileDialog(self.config_manager)
         self.image_viewer = ImageViewer(config_manager=self.config_manager)
+        
+        # Set image viewer reference in main window for theme updates
+        self.main_window.image_viewer = self.image_viewer
+        # Apply theme again to set background color now that image_viewer is assigned
+        self.main_window._apply_theme()
         self.metadata_panel = MetadataPanel(config_manager=self.config_manager)
         self.metadata_panel.set_history_manager(self.tag_edit_history)
         self.window_level_controls = WindowLevelControls()
@@ -653,6 +658,8 @@ class DICOMViewerApp(QObject):
         self.image_viewer.zoom_changed.connect(self.view_state_manager.handle_zoom_changed)
         # Update zoom display widget
         self.image_viewer.zoom_changed.connect(self.zoom_display_widget.update_zoom)
+        # Update status bar widget with zoom and preset info
+        self.image_viewer.zoom_changed.connect(self._on_zoom_changed)
         # Zoom control from widget - update image viewer
         self.zoom_display_widget.zoom_changed.connect(self.image_viewer.set_zoom)
         
@@ -1209,6 +1216,8 @@ class DICOMViewerApp(QObject):
             zoom_level: Current zoom level
         """
         self.view_state_manager.handle_zoom_changed(zoom_level)
+        # Update status bar widget with zoom and preset info
+        self._update_zoom_preset_status_bar()
     
     def _on_transform_changed(self) -> None:
         """
@@ -1313,12 +1322,32 @@ class DICOMViewerApp(QObject):
                 # Set window/level
                 self.window_level_controls.set_window_level(wc, ww, block_signals=False)
                 
-                # Update status bar
+                # Update status bar widget
+                current_zoom = self.image_viewer.current_zoom
                 preset_display_name = preset_name if preset_name else "Default"
-                self.main_window.update_status(f"Window/Level: {preset_display_name} (W={ww:.1f}, C={wc:.1f})")
+                self.main_window.update_zoom_preset_status(current_zoom, preset_display_name)
                 
-                # Mark window/level as user-modified to preserve manual adjustments
-                self.view_state_manager.window_level_user_modified = True
+                # Reset user-modified flag since we're using a preset
+                self.view_state_manager.window_level_user_modified = False
+    
+    def _update_zoom_preset_status_bar(self) -> None:
+        """
+        Update the zoom and preset status bar widget.
+        Gets current zoom and preset info from view_state_manager.
+        """
+        current_zoom = self.image_viewer.current_zoom
+        preset_name = None
+        
+        # Check if presets exist and user hasn't manually modified window/level
+        if (self.view_state_manager.window_level_presets and 
+            not self.view_state_manager.window_level_user_modified):
+            # Get preset name from current preset index
+            preset_index = self.view_state_manager.current_preset_index
+            if 0 <= preset_index < len(self.view_state_manager.window_level_presets):
+                _, _, _, name = self.view_state_manager.window_level_presets[preset_index]
+                preset_name = name if name else "Default"
+        
+        self.main_window.update_zoom_preset_status(current_zoom, preset_name)
     
     def _on_overlay_font_size_changed(self, font_size: int) -> None:
         """
