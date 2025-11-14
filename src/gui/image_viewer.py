@@ -23,9 +23,10 @@ from PySide6.QtWidgets import (QGraphicsView, QGraphicsScene, QGraphicsPixmapIte
                                 QWidget, QVBoxLayout, QMenu)
 from PySide6.QtCore import Qt, QRectF, Signal, QPointF, QTimer
 from PySide6.QtGui import (QPixmap, QImage, QWheelEvent, QKeyEvent, QMouseEvent,
-                          QPainter, QColor, QTransform)
+                          QPainter, QColor, QTransform, QDragEnterEvent, QDropEvent)
 from PIL import Image
 import numpy as np
+import os
 from typing import Optional, Callable, Any
 
 
@@ -72,6 +73,7 @@ class ImageViewer(QGraphicsView):
     clear_measurements_requested = Signal()  # Emitted when clear measurements is requested
     toggle_overlay_requested = Signal()  # Emitted when toggle overlay is requested
     pixel_info_changed = Signal(str, int, int, int)  # Emitted when pixel info changes (pixel_value_str, x, y, z)
+    files_dropped = Signal(list)  # Emitted when files/folders are dropped (list of paths)
     
     def __init__(self, parent: Optional[QWidget] = None, config_manager=None):
         """
@@ -161,6 +163,11 @@ class ImageViewer(QGraphicsView):
         self.setDragMode(QGraphicsView.DragMode.NoDrag)
         # Transformation anchor is already set to AnchorViewCenter above for viewport-centered zoom
         # Resize anchor is already set to AnchorViewCenter above
+        
+        # Enable drag-and-drop on image viewer
+        self.setAcceptDrops(True)
+        # Also enable drag-and-drop on viewport (the actual widget that receives mouse events)
+        self.viewport().setAcceptDrops(True)
         self.setRenderHint(QPainter.RenderHint.Antialiasing)
         self.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         
@@ -1332,4 +1339,75 @@ class ImageViewer(QGraphicsView):
         QTimer.singleShot(10, lambda: self.transform_changed.emit())
         # Optionally auto-fit on resize
         # self.fit_to_view()
+    
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        """
+        Handle drag enter event - accept files and folders.
+        
+        Args:
+            event: QDragEnterEvent
+        """
+        if event.mimeData().hasUrls():
+            # Check if any of the URLs are files or directories
+            urls = event.mimeData().urls()
+            for url in urls:
+                path = url.toLocalFile()
+                if path and os.path.exists(path):
+                    # Accept if at least one valid file/folder exists
+                    event.acceptProposedAction()
+                    return
+        
+        event.ignore()
+    
+    def dragMoveEvent(self, event: QDragEnterEvent) -> None:
+        """
+        Handle drag move event - accept files and folders.
+        
+        Args:
+            event: QDragEnterEvent (dragMoveEvent uses same event type)
+        """
+        if event.mimeData().hasUrls():
+            # Check if any of the URLs are files or directories
+            urls = event.mimeData().urls()
+            for url in urls:
+                path = url.toLocalFile()
+                if path and os.path.exists(path):
+                    # Accept if at least one valid file/folder exists
+                    event.acceptProposedAction()
+                    return
+        
+        event.ignore()
+    
+    def dropEvent(self, event: QDropEvent) -> None:
+        """
+        Handle drop event - emit signal with dropped file/folder paths.
+        
+        Args:
+            event: QDropEvent
+        """
+        if not event.mimeData().hasUrls():
+            event.ignore()
+            return
+        
+        urls = event.mimeData().urls()
+        if not urls:
+            event.ignore()
+            return
+        
+        # Extract file paths
+        paths = []
+        
+        for url in urls:
+            path = url.toLocalFile()
+            if not path:
+                continue
+            
+            if os.path.isfile(path) or os.path.isdir(path):
+                paths.append(path)
+        
+        # Emit signal with paths if any valid paths found
+        if paths:
+            self.files_dropped.emit(paths)
+        
+        event.acceptProposedAction()
 

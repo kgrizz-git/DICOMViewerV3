@@ -514,6 +514,8 @@ class DICOMViewerApp(QObject):
         self.main_window.open_file_requested.connect(self._open_files)
         self.main_window.open_folder_requested.connect(self._open_folder)
         self.main_window.open_recent_file_requested.connect(self._open_recent_file)
+        self.main_window.open_files_from_paths_requested.connect(self._open_files_from_paths)
+        self.image_viewer.files_dropped.connect(self._open_files_from_paths)
         self.main_window.close_requested.connect(self._close_files)
         
         # Settings
@@ -692,6 +694,18 @@ class DICOMViewerApp(QObject):
             file_path: Path to file or folder to open
         """
         datasets, studies = self.file_operations_handler.open_recent_file(file_path)
+        if datasets is not None and studies is not None:
+            self.current_datasets = datasets
+            self.current_studies = studies
+    
+    def _open_files_from_paths(self, paths: list[str]) -> None:
+        """
+        Handle open files/folders from drag-and-drop.
+        
+        Args:
+            paths: List of file or folder paths to open
+        """
+        datasets, studies = self.file_operations_handler.open_paths(paths)
         if datasets is not None and studies is not None:
             self.current_datasets = datasets
             self.current_studies = studies

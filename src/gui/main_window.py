@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (QMainWindow, QMenuBar, QToolBar, QStatusBar,
                                 QMessageBox, QComboBox, QLabel, QSizePolicy, QColorDialog,
                                 QApplication, QDialog, QTextEdit, QPushButton, QDialogButtonBox, QMenu)
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QAction, QIcon, QKeySequence, QColor
+from PySide6.QtGui import QAction, QIcon, QKeySequence, QColor, QDragEnterEvent, QDropEvent
 from typing import Optional
 from pathlib import Path
 import sys
@@ -71,6 +71,7 @@ class MainWindow(QMainWindow):
     series_navigator_visibility_changed = Signal(bool)  # Emitted when series navigator visibility changes
     undo_tag_edit_requested = Signal()  # Emitted when undo tag edit is requested
     redo_tag_edit_requested = Signal()  # Emitted when redo tag edit is requested
+    open_files_from_paths_requested = Signal(list)  # Emitted when files/folders are dropped (list of paths)
     # Note: Cine control signals moved to CineControlsWidget
     # Keeping these signals for backward compatibility but they're not used anymore
     
@@ -96,6 +97,9 @@ class MainWindow(QMainWindow):
         self._create_toolbar()
         self._create_status_bar()
         self._create_central_widget()
+        
+        # Enable drag-and-drop on main window
+        self.setAcceptDrops(True)
         
         # Apply theme
         self._apply_theme()
@@ -1715,6 +1719,66 @@ class MainWindow(QMainWindow):
         # Emit viewport_resized after change to restore centering
         from PySide6.QtCore import QTimer
         QTimer.singleShot(10, lambda: self.viewport_resized.emit())
+    
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        """
+        Handle drag enter event - accept files and folders.
+        
+        Args:
+            event: QDragEnterEvent
+        """
+        if event.mimeData().hasUrls():
+            # Check if any of the URLs are files or directories
+            urls = event.mimeData().urls()
+            for url in urls:
+                path = url.toLocalFile()
+                if path and os.path.exists(path):
+                    # Accept if at least one valid file/folder exists
+                    event.acceptProposedAction()
+                    return
+        
+        event.ignore()
+    
+    def dropEvent(self, event: QDropEvent) -> None:
+        """
+        Handle drop event - load files or folders.
+        
+        Args:
+            event: QDropEvent
+        """
+        if not event.mimeData().hasUrls():
+            event.ignore()
+            return
+        
+        urls = event.mimeData().urls()
+        if not urls:
+            event.ignore()
+            return
+        
+        # Extract file paths
+        paths = []
+        folders = []
+        
+        for url in urls:
+            path = url.toLocalFile()
+            if not path:
+                continue
+            
+            if os.path.isfile(path):
+                paths.append(path)
+            elif os.path.isdir(path):
+                folders.append(path)
+        
+        # Process folders first (if any), otherwise process files
+        if folders:
+            # Use the first folder (prioritize folders over files)
+            # Emit signal with folder path
+            self.open_files_from_paths_requested.emit([folders[0]])
+        elif paths:
+            # Process all files together
+            self.open_files_from_paths_requested.emit(paths)
+        
+        event.acceptProposedAction()
     
     def closeEvent(self, event) -> None:
         """

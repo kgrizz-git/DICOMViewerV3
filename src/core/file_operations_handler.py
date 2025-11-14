@@ -571,6 +571,308 @@ class FileOperationsHandler:
                 )
                 return None, None
     
+    def open_paths(self, paths: list[str]) -> tuple[list, dict]:
+        """
+        Handle open files/folders from drag-and-drop or direct paths.
+        
+        Args:
+            paths: List of file or folder paths to open
+            
+        Returns:
+            Tuple of (datasets list, studies dict) or (None, None) if cancelled/error
+        """
+        if not paths:
+            return None, None
+        
+        # Separate files and folders
+        files = []
+        folders = []
+        
+        for path in paths:
+            if not os.path.exists(path):
+                continue
+            if os.path.isfile(path):
+                files.append(path)
+            elif os.path.isdir(path):
+                folders.append(path)
+        
+        # Priority: process folders first (if any), then files
+        if folders:
+            # Process first folder (prioritize folders)
+            folder_path = folders[0]
+            
+            # Clear all ROIs when opening new folder
+            self.clear_data_callback()
+            
+            # Add folder to recent files
+            self.config_manager.add_recent_file(folder_path)
+            self.main_window.update_recent_menu()
+            
+            try:
+                # Load folder (recursive)
+                datasets = self.dicom_loader.load_directory(folder_path, recursive=True)
+                
+                if not datasets:
+                    # Check if there were specific errors
+                    failed = self.dicom_loader.get_failed_files()
+                    if failed:
+                        error_msg = f"No DICOM files found in folder.\n\n{len(failed)} file(s) could not be loaded."
+                    else:
+                        error_msg = "No DICOM files found in folder."
+                    
+                    self.file_dialog.show_error(
+                        self.main_window,
+                        "Error",
+                        error_msg
+                    )
+                    return None, None
+                
+                # Show warnings
+                failed = self.dicom_loader.get_failed_files()
+                if failed:
+                    warning_msg = f"Warning: {len(failed)} file(s) could not be loaded."
+                    self.file_dialog.show_warning(self.main_window, "Loading Warnings", warning_msg)
+                
+                # Organize
+                try:
+                    studies = self.dicom_organizer.organize(datasets)
+                except MemoryError as e:
+                    self.file_dialog.show_error(
+                        self.main_window,
+                        "Memory Error",
+                        f"Out of memory while organizing DICOM files. "
+                        f"Try closing other applications or loading fewer files.\n\nError: {str(e)}"
+                    )
+                    return None, None
+                except Exception as e:
+                    self.file_dialog.show_error(
+                        self.main_window,
+                        "Error",
+                        f"Error organizing DICOM files: {str(e)}"
+                    )
+                    return None, None
+                
+                # Display first slice
+                try:
+                    self.load_first_slice_callback(studies)
+                except MemoryError as e:
+                    self.file_dialog.show_error(
+                        self.main_window,
+                        "Memory Error",
+                        f"Out of memory while displaying image. "
+                        f"Try closing other applications.\n\nError: {str(e)}"
+                    )
+                    return None, None
+                except Exception as e:
+                    self.file_dialog.show_error(
+                        self.main_window,
+                        "Error",
+                        f"Error displaying first slice: {str(e)}"
+                    )
+                    return None, None
+                
+                self.update_status_callback(f"Loaded {len(datasets)} DICOM file(s) from folder")
+                
+                return datasets, studies
+            
+            except SystemExit:
+                raise  # Don't catch system exit
+            except KeyboardInterrupt:
+                raise  # Don't catch Ctrl+C
+            except MemoryError as e:
+                self.file_dialog.show_error(
+                    self.main_window,
+                    "Memory Error",
+                    f"Out of memory while loading folder. "
+                    f"Try closing other applications or use a system with more memory.\n\nError: {str(e)}"
+                )
+                return None, None
+            except BaseException as e:
+                # Catch everything else including C extension errors that make it to Python
+                error_type = type(e).__name__
+                error_msg = f"A critical error occurred during folder loading.\n\n"
+                error_msg += f"Error: {error_type}: {str(e)}\n\n"
+                error_msg += f"This may be due to corrupted or unsupported DICOM files."
+                
+                print(f"Critical error in open_paths (folder): {error_type}: {e}")
+                import traceback
+                traceback.print_exc()
+                
+                self.file_dialog.show_error(
+                    self.main_window,
+                    "Critical Error",
+                    error_msg
+                )
+                return None, None
+        
+        elif files:
+            # Process all files together
+            # Clear all ROIs when opening new files
+            self.clear_data_callback()
+            
+            # Add first file to recent files (representing this file selection)
+            if files:
+                self.config_manager.add_recent_file(files[0])
+                self.main_window.update_recent_menu()
+            
+            try:
+                # Load files
+                datasets = self.dicom_loader.load_files(files)
+                
+                if not datasets:
+                    # Check if there were specific errors
+                    failed = self.dicom_loader.get_failed_files()
+                    if failed:
+                        error_msg = "No DICOM files could be loaded.\n\nErrors:\n"
+                        for path, error in failed[:5]:  # Show first 5
+                            error_msg += f"\n{os.path.basename(path)}: {error}"
+                        if len(failed) > 5:
+                            error_msg += f"\n... and {len(failed) - 5} more"
+                    else:
+                        error_msg = "No DICOM files could be loaded."
+                    
+                    self.file_dialog.show_error(
+                        self.main_window,
+                        "Error",
+                        error_msg
+                    )
+                    return None, None
+                
+                # Validate datasets before processing
+                # Filter out problematic multi-frame files that exceed safety thresholds
+                from core.multiframe_handler import is_multiframe, get_frame_count
+                validated_datasets = []
+                validated_paths = []
+                skipped_files = []
+                
+                for ds, path in zip(datasets, files):
+                    # Check for problematic multi-frame files
+                    if is_multiframe(ds):
+                        num_frames = get_frame_count(ds)
+                        # Safety threshold: Skip files with excessive frames (may indicate issues)
+                        if num_frames > 50:
+                            skipped_files.append((path, f"Multi-frame file with {num_frames} frames exceeds safety threshold (50)"))
+                            continue
+                    validated_datasets.append(ds)
+                    validated_paths.append(path)
+                
+                # Show warning about skipped files
+                if skipped_files:
+                    warning_msg = f"Warning: {len(skipped_files)} file(s) were skipped for safety:\n"
+                    for path, reason in skipped_files[:3]:
+                        warning_msg += f"\n{os.path.basename(path)}: {reason}"
+                    if len(skipped_files) > 3:
+                        warning_msg += f"\n... and {len(skipped_files) - 3} more"
+                    self.file_dialog.show_warning(self.main_window, "Files Skipped", warning_msg)
+                
+                # Update datasets and paths to validated ones
+                datasets = validated_datasets
+                files = validated_paths
+                
+                if not datasets:
+                    self.file_dialog.show_error(
+                        self.main_window,
+                        "No Valid Files",
+                        "All selected files were skipped due to safety checks. No files to display."
+                    )
+                    return None, None
+                
+                # Show warnings for failed files
+                failed = self.dicom_loader.get_failed_files()
+                if failed:
+                    warning_msg = f"Warning: {len(failed)} file(s) could not be loaded:\n"
+                    for path, error in failed[:5]:  # Show first 5
+                        warning_msg += f"\n{os.path.basename(path)}: {error}"
+                    if len(failed) > 5:
+                        warning_msg += f"\n... and {len(failed) - 5} more"
+                    
+                    self.file_dialog.show_warning(self.main_window, "Loading Warnings", warning_msg)
+                
+                # Organize into studies/series
+                try:
+                    studies = self.dicom_organizer.organize(datasets, files)
+                except MemoryError as e:
+                    self.file_dialog.show_error(
+                        self.main_window,
+                        "Memory Error",
+                        f"Out of memory while organizing DICOM files. "
+                        f"Try closing other applications or loading fewer files.\n\nError: {str(e)}"
+                    )
+                    return None, None
+                except Exception as e:
+                    self.file_dialog.show_error(
+                        self.main_window,
+                        "Error",
+                        f"Error organizing DICOM files: {str(e)}"
+                    )
+                    return None, None
+                
+                # Display first slice
+                try:
+                    self.load_first_slice_callback(studies)
+                except MemoryError as e:
+                    self.file_dialog.show_error(
+                        self.main_window,
+                        "Memory Error",
+                        f"Out of memory while displaying image. "
+                        f"Try closing other applications.\n\nError: {str(e)}"
+                    )
+                    return None, None
+                except Exception as e:
+                    self.file_dialog.show_error(
+                        self.main_window,
+                        "Error",
+                        f"Error displaying first slice: {str(e)}"
+                    )
+                    return None, None
+                
+                # Check for compression errors and show guidance
+                failed = self.dicom_loader.get_failed_files()
+                compression_errors = [f for f in failed if "Compressed DICOM" in f[1] or "pylibjpeg" in f[1].lower()]
+                if compression_errors:
+                    compression_count = len(compression_errors)
+                    self.update_status_callback(
+                        f"Loaded {len(datasets)} DICOM file(s). "
+                        f"{compression_count} compressed file(s) require pylibjpeg: pip install pylibjpeg pyjpegls"
+                    )
+                else:
+                    self.update_status_callback(f"Loaded {len(datasets)} DICOM file(s)")
+                
+                return datasets, studies
+            
+            except SystemExit:
+                raise  # Don't catch system exit
+            except KeyboardInterrupt:
+                raise  # Don't catch Ctrl+C
+            except MemoryError as e:
+                self.file_dialog.show_error(
+                    self.main_window,
+                    "Memory Error",
+                    f"Out of memory while loading files. "
+                    f"Try closing other applications or use a system with more memory.\n\nError: {str(e)}"
+                )
+                return None, None
+            except BaseException as e:
+                # Catch everything else including C extension errors that make it to Python
+                error_type = type(e).__name__
+                error_msg = f"A critical error occurred during file loading.\n\n"
+                error_msg += f"Error: {error_type}: {str(e)}\n\n"
+                error_msg += f"This may be due to corrupted or unsupported DICOM files."
+                
+                print(f"Critical error in open_paths (files): {error_type}: {e}")
+                import traceback
+                traceback.print_exc()
+                
+                self.file_dialog.show_error(
+                    self.main_window,
+                    "Critical Error",
+                    error_msg
+                )
+                return None, None
+        
+        # No valid files or folders
+        return None, None
+    
     def load_first_slice(self, studies: dict) -> dict:
         """
         Load and return information about the first slice.
