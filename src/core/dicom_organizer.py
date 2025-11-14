@@ -90,7 +90,7 @@ class DICOMOrganizer:
                         self.presentation_states[study_uid] = []
                     self.presentation_states[study_uid].append(dataset)
                     ps_count += 1
-                    print(f"[ANNOTATIONS] Detected Presentation State file (SOP Class: {sop_class_uid_str[:50]}...)")
+                    # print(f"[ANNOTATIONS] Detected Presentation State file (SOP Class: {sop_class_uid_str[:50]}...)")
                 # Skip adding to image series (they're metadata files)
                 continue
             
@@ -102,7 +102,7 @@ class DICOMOrganizer:
                         self.key_objects[study_uid] = []
                     self.key_objects[study_uid].append(dataset)
                     ko_count += 1
-                    print(f"[ANNOTATIONS] Detected Key Object file (SOP Class: {sop_class_uid_str[:50]}...)")
+                    # print(f"[ANNOTATIONS] Detected Key Object file (SOP Class: {sop_class_uid_str[:50]}...)")
                 # Skip adding to image series (they're metadata files)
                 continue
             
@@ -122,9 +122,10 @@ class DICOMOrganizer:
                 study_uid = self._get_tag_value(dataset, "StudyInstanceUID", "")
                 series_uid = self._get_tag_value(dataset, "SeriesInstanceUID", "")
                 if study_uid and series_uid:
-                    print(f"[ANNOTATIONS] Image file contains embedded annotations (Overlay: {has_overlay}, Graphics: {has_graphics})")
+                    # print(f"[ANNOTATIONS] Image file contains embedded annotations (Overlay: {has_overlay}, Graphics: {has_graphics})")
                     # Mark this image as having embedded annotations
                     # We'll process these when displaying the image
+                    pass
             
             # Get study and series UIDs for image files
             study_uid = self._get_tag_value(dataset, "StudyInstanceUID", "")
@@ -132,7 +133,7 @@ class DICOMOrganizer:
             
             if not study_uid or not series_uid:
                 # Skip files without proper UIDs
-                print(f"[ANNOTATIONS] Skipping file {idx}: missing StudyInstanceUID or SeriesInstanceUID (SOP Class: {sop_class_uid_str[:50]}...)")
+                # print(f"[ANNOTATIONS] Skipping file {idx}: missing StudyInstanceUID or SeriesInstanceUID (SOP Class: {sop_class_uid_str[:50]}...)")
                 continue
             
             file_path = file_paths[idx] if file_paths and idx < len(file_paths) else None
@@ -187,13 +188,13 @@ class DICOMOrganizer:
                         self.file_paths[(study_uid, series_uid, instance_num)] = path
         
         # Print summary of detected annotation files
-        print(f"[ANNOTATIONS] Organization complete: {ps_count} Presentation State(s), {ko_count} Key Object(s)")
-        if sop_class_counts:
-            print(f"[ANNOTATIONS] SOP Class UIDs encountered: {len(sop_class_counts)} unique types")
-            # Print top 10 most common SOP Class UIDs
-            sorted_sop = sorted(sop_class_counts.items(), key=lambda x: x[1], reverse=True)[:10]
-            for uid, count in sorted_sop:
-                print(f"  {uid[:60]}... : {count} file(s)")
+        # print(f"[ANNOTATIONS] Organization complete: {ps_count} Presentation State(s), {ko_count} Key Object(s)")
+        # if sop_class_counts:
+        #     print(f"[ANNOTATIONS] SOP Class UIDs encountered: {len(sop_class_counts)} unique types")
+        #     # Print top 10 most common SOP Class UIDs
+        #     sorted_sop = sorted(sop_class_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+        #     for uid, count in sorted_sop:
+        #         print(f"  {uid[:60]}... : {count} file(s)")
         
         return self.studies
     

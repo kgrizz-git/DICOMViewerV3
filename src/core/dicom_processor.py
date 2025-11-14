@@ -946,7 +946,8 @@ class DICOMProcessor:
                     pixel_min = float(np.min(pixel_array))
                     pixel_max = float(np.max(pixel_array))
                     if window_center is None:
-                        window_center = (pixel_min + pixel_max) / 2.0
+                        # Use median instead of midpoint
+                        window_center = float(np.median(pixel_array))
                     if window_width is None:
                         window_width = pixel_max - pixel_min
                 # Calculated values are not from DICOM tags, so not rescaled
@@ -962,6 +963,145 @@ class DICOMProcessor:
             return window_center, window_width, is_rescaled
         except Exception:
             return None, None, False
+    
+    @staticmethod
+    def get_window_level_presets_from_dataset(dataset: Dataset, 
+                                             rescale_slope: Optional[float] = None,
+                                             rescale_intercept: Optional[float] = None) -> List[Tuple[float, float, bool, Optional[str]]]:
+        """
+        Get all window center and width presets from DICOM dataset.
+        
+        WindowWidth and WindowCenter can be single values or arrays. This method
+        extracts all presets and returns them as a list.
+        
+        Supports multiple formats:
+        - Backslash-separated strings: "C1\\C2" and "W1\\W2"
+        - MultiValue objects from pydicom
+        - Lists/tuples: [W1, W2] and [C1, C2]
+        - Single values
+        
+        Args:
+            dataset: pydicom Dataset
+            rescale_slope: Optional rescale slope
+            rescale_intercept: Optional rescale intercept
+            
+        Returns:
+            List of tuples: (window_center, window_width, is_rescaled, preset_name)
+            preset_name is None for first preset, or "Preset 2", "Preset 3", etc. for subsequent ones
+            Returns empty list if no presets found
+        """
+        presets = []
+        
+        try:
+            window_centers = []
+            window_widths = []
+            from_dicom_tags = False
+            
+            # Helper function to parse a value (handles multiple formats)
+            def parse_window_value(value):
+                """Parse window value from various formats."""
+                if value is None:
+                    return []
+                
+                # Check for MultiValue type (pydicom)
+                try:
+                    from pydicom.multival import MultiValue
+                    if isinstance(value, MultiValue):
+                        return [float(x) for x in value]
+                except ImportError:
+                    pass
+                
+                # Check for list/tuple
+                if isinstance(value, (list, tuple)):
+                    return [float(x) for x in value]
+                
+                # Check for backslash-separated string
+                if isinstance(value, str):
+                    if '\\' in value:
+                        # Split on backslash and parse each value
+                        parts = [p.strip() for p in value.split('\\') if p.strip()]
+                        return [float(p) for p in parts]
+                    # Check for bracket format [W1, W2] - strip brackets and split on comma
+                    elif value.strip().startswith('[') and value.strip().endswith(']'):
+                        inner = value.strip()[1:-1]
+                        parts = [p.strip() for p in inner.split(',') if p.strip()]
+                        return [float(p) for p in parts]
+                    else:
+                        # Single string value
+                        return [float(value)]
+                
+                # Single numeric value
+                return [float(value)]
+            
+            # Get WindowCenter values
+            if hasattr(dataset, 'WindowCenter'):
+                wc_raw = dataset.WindowCenter
+                # print(f"[DEBUG-WL-PRESETS] WindowCenter found: type={type(wc_raw)}, value={wc_raw}")
+                window_centers = parse_window_value(wc_raw)
+                # print(f"[DEBUG-WL-PRESETS] WindowCenter parsed: {window_centers}")
+                from_dicom_tags = True
+            else:
+                # print(f"[DEBUG-WL-PRESETS] WindowCenter tag not found")
+                pass
+            
+            # Get WindowWidth values
+            if hasattr(dataset, 'WindowWidth'):
+                ww_raw = dataset.WindowWidth
+                # print(f"[DEBUG-WL-PRESETS] WindowWidth found: type={type(ww_raw)}, value={ww_raw}")
+                window_widths = parse_window_value(ww_raw)
+                # print(f"[DEBUG-WL-PRESETS] WindowWidth parsed: {window_widths}")
+                from_dicom_tags = True
+            else:
+                # print(f"[DEBUG-WL-PRESETS] WindowWidth tag not found")
+                pass
+            
+            # Create presets from pairs
+            # If one array is longer, use the last value for missing pairs
+            num_presets = max(len(window_centers), len(window_widths))
+            
+            # print(f"[DEBUG-WL-PRESETS] Found {len(window_centers)} center(s) and {len(window_widths)} width(s), creating {num_presets} preset(s)")
+            
+            if num_presets == 0:
+                # print(f"[DEBUG-WL-PRESETS] No presets to create, returning empty list")
+                return presets
+            
+            for i in range(num_presets):
+                # Get center value (use last value if index out of range)
+                if i < len(window_centers):
+                    wc = window_centers[i]
+                elif window_centers:
+                    wc = window_centers[-1]
+                else:
+                    continue  # Skip if no center values at all
+                
+                # Get width value (use last value if index out of range)
+                if i < len(window_widths):
+                    ww = window_widths[i]
+                elif window_widths:
+                    ww = window_widths[-1]
+                else:
+                    continue  # Skip if no width values at all
+                
+                # Determine preset name
+                preset_name = None if i == 0 else f"Preset {i + 1}"
+                
+                # Determine if values are in rescaled units
+                # Only if values came from DICOM tags AND rescale parameters exist
+                is_rescaled = (from_dicom_tags and 
+                              rescale_slope is not None and 
+                              rescale_intercept is not None and
+                              rescale_slope != 0.0)
+                
+                presets.append((wc, ww, is_rescaled, preset_name))
+                # print(f"[DEBUG-WL-PRESETS] Created preset {i}: center={wc}, width={ww}, is_rescaled={is_rescaled}, name={preset_name}")
+            
+            # print(f"[DEBUG-WL-PRESETS] Returning {len(presets)} preset(s)")
+            return presets
+        except Exception as e:
+            # print(f"[DEBUG-WL-PRESETS] Exception occurred: {type(e).__name__}: {e}")
+            # import traceback
+            # traceback.print_exc()
+            return []
     
     @staticmethod
     def dataset_to_image(dataset: Dataset, window_center: Optional[float] = None,
@@ -1367,4 +1507,75 @@ class DICOMProcessor:
             error_type = type(e).__name__
             print(f"Error calculating series pixel value range ({error_type}): {e}")
             return None, None
+    
+    @staticmethod
+    def get_series_pixel_median(datasets: List[Dataset], apply_rescale: bool = False) -> Optional[float]:
+        """
+        Get the median pixel value across an entire series.
+        Optionally applies rescale slope and intercept if present.
+        
+        Args:
+            datasets: List of pydicom Dataset objects for the series
+            apply_rescale: If True, apply rescale slope/intercept if present
+            
+        Returns:
+            Median pixel value across all slices, or None if extraction fails
+        """
+        if not datasets:
+            return None
+        
+        try:
+            all_pixel_values = []
+            successful_datasets = 0
+            
+            for dataset in datasets:
+                try:
+                    pixel_array = DICOMProcessor.get_pixel_array(dataset)
+                    if pixel_array is None:
+                        continue
+                    
+                    # Apply rescale if requested and parameters exist
+                    if apply_rescale:
+                        rescale_slope, rescale_intercept, _ = DICOMProcessor.get_rescale_parameters(dataset)
+                        if rescale_slope is not None and rescale_intercept is not None:
+                            pixel_array = pixel_array.astype(np.float32) * float(rescale_slope) + float(rescale_intercept)
+                    
+                    # Flatten array and add to collection
+                    # For very large series, we could sample, but for now collect all values
+                    flat_values = pixel_array.flatten()
+                    all_pixel_values.append(flat_values)
+                    
+                    successful_datasets += 1
+                    
+                except MemoryError as e:
+                    # Memory error for this dataset - log and continue with others
+                    print(f"Memory error processing dataset in series pixel median calculation: {e}")
+                    continue
+                except (ValueError, AttributeError, RuntimeError) as e:
+                    # Pixel array access errors - log and continue with others
+                    print(f"Error processing dataset in series pixel median calculation: {e}")
+                    continue
+                except Exception as e:
+                    # Other unexpected errors - log and continue
+                    error_type = type(e).__name__
+                    print(f"Unexpected error ({error_type}) processing dataset in series pixel median calculation: {e}")
+                    continue
+            
+            # Only calculate median if we successfully processed at least one dataset
+            if successful_datasets > 0 and all_pixel_values:
+                # Concatenate all pixel values from all slices
+                combined_values = np.concatenate(all_pixel_values)
+                median_value = float(np.median(combined_values))
+                return median_value
+            else:
+                print("Failed to process any datasets in series pixel median calculation")
+                return None
+                
+        except MemoryError as e:
+            print(f"Memory error calculating series pixel median: {e}")
+            return None
+        except Exception as e:
+            error_type = type(e).__name__
+            print(f"Error calculating series pixel median ({error_type}): {e}")
+            return None
 

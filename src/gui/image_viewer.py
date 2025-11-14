@@ -27,7 +27,7 @@ from PySide6.QtGui import (QPixmap, QImage, QWheelEvent, QKeyEvent, QMouseEvent,
 from PIL import Image
 import numpy as np
 import os
-from typing import Optional, Callable, Any
+from typing import Optional, Callable, Any, List, Tuple
 
 
 class ImageViewer(QGraphicsView):
@@ -62,6 +62,7 @@ class ImageViewer(QGraphicsView):
     right_mouse_press_for_drag = Signal()  # Emitted when right mouse is pressed (not on ROI) to request window/level values for drag
     series_navigation_requested = Signal(int)  # Emitted when series navigation is requested (-1 for left/previous, 1 for right/next)
     toggle_series_navigator_requested = Signal()  # Emitted when series navigator toggle is requested
+    window_level_preset_selected = Signal(int)  # Emitted when preset is selected (preset_index)
     cine_play_requested = Signal()  # Emitted when cine play is requested from context menu
     cine_pause_requested = Signal()  # Emitted when cine pause is requested from context menu
     cine_stop_requested = Signal()  # Emitted when cine stop is requested from context menu
@@ -153,6 +154,10 @@ class ImageViewer(QGraphicsView):
         self.right_mouse_drag_start_width: Optional[float] = None
         self.right_mouse_context_menu_shown = False  # Track if context menu was shown
         self.cine_controls_enabled = False  # Track if cine controls should be enabled in context menu
+        
+        # Callbacks for window/level presets (set from main.py)
+        self.get_window_level_presets_callback: Optional[Callable[[], List[Tuple[float, float, bool, Optional[str]]]]] = None
+        self.get_current_preset_index_callback: Optional[Callable[[], int]] = None
         
         # Sensitivity factors for window/level adjustment (pixels to units)
         # These will be set dynamically based on current ranges
@@ -898,6 +903,32 @@ class ImageViewer(QGraphicsView):
                         toggle_navigator_action.triggered.connect(self.toggle_series_navigator_requested.emit)
                         
                         context_menu.addSeparator()
+                        
+                        # Window/Level Presets submenu (if presets available)
+                        if hasattr(self, 'get_window_level_presets_callback') and self.get_window_level_presets_callback:
+                            presets = self.get_window_level_presets_callback()
+                            # print(f"[DEBUG-WL-PRESETS] ImageViewer context menu: callback exists, got {len(presets) if presets else 0} preset(s)")
+                            if presets and len(presets) >= 1:  # Show menu even with single preset
+                                preset_menu = context_menu.addMenu("Window/Level Presets")
+                                current_index = 0
+                                if hasattr(self, 'get_current_preset_index_callback') and self.get_current_preset_index_callback:
+                                    current_index = self.get_current_preset_index_callback()
+                                    # print(f"[DEBUG-WL-PRESETS] ImageViewer context menu: current preset index = {current_index}")
+                                
+                                for idx, (wc, ww, is_rescaled, name) in enumerate(presets):
+                                    preset_name = name if name else "Default"
+                                    action_text = f"{preset_name} (W={ww:.1f}, C={wc:.1f})"
+                                    action = preset_menu.addAction(action_text)
+                                    action.setCheckable(True)
+                                    if idx == current_index:
+                                        action.setChecked(True)
+                                    action.triggered.connect(lambda checked, i=idx: self.window_level_preset_selected.emit(i))
+                                
+                                context_menu.addSeparator()
+                            # else:
+                            #     print(f"[DEBUG-WL-PRESETS] ImageViewer context menu: No presets to show (presets={presets}, len={len(presets) if presets else 0})")
+                        # else:
+                        #     print(f"[DEBUG-WL-PRESETS] ImageViewer context menu: Callback missing or not set (hasattr={hasattr(self, 'get_window_level_presets_callback')}, callback={getattr(self, 'get_window_level_presets_callback', None)})")
                         
                         # Cine playback actions (only if enabled)
                         if self.cine_controls_enabled:

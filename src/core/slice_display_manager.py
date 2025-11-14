@@ -24,6 +24,7 @@ Requirements:
 """
 
 from typing import Optional, Callable
+import numpy as np
 from pydicom.dataset import Dataset
 from core.dicom_processor import DICOMProcessor
 from core.dicom_parser import DICOMParser
@@ -242,12 +243,36 @@ class SliceDisplayManager:
                             series_pixel_max = None
                             # Clear stored series pixel range on error
                             self.view_state_manager.clear_series_pixel_range()
-                        # Check for window/level in DICOM metadata
-                        wc, ww, is_rescaled = self.dicom_processor.get_window_level_from_dataset(
+                        # Check for window/level presets in DICOM metadata
+                        presets = self.dicom_processor.get_window_level_presets_from_dataset(
                             dataset,
                             rescale_slope=rescale_slope,
                             rescale_intercept=rescale_intercept
                         )
+                        
+                        # print(f"[DEBUG-WL-PRESETS] SliceDisplayManager: Extracted {len(presets)} preset(s)")
+                        # if presets:
+                        #     for idx, (wc, ww, is_rescaled, name) in enumerate(presets):
+                        #         print(f"[DEBUG-WL-PRESETS]   Preset {idx}: center={wc}, width={ww}, is_rescaled={is_rescaled}, name={name}")
+                        
+                        # Store presets in view state manager
+                        self.view_state_manager.window_level_presets = presets
+                        self.view_state_manager.current_preset_index = 0  # Use first preset by default
+                        # print(f"[DEBUG-WL-PRESETS] SliceDisplayManager: Stored {len(presets)} preset(s) in view_state_manager")
+                        
+                        # Get window/level from first preset if available, otherwise use single value method
+                        if presets:
+                            # Use first preset (index 0)
+                            wc, ww, is_rescaled, _ = presets[0]
+                            # print(f"[DEBUG-WL-PRESETS] SliceDisplayManager: Using first preset: center={wc}, width={ww}")
+                        else:
+                            # Fall back to single value extraction
+                            wc, ww, is_rescaled = self.dicom_processor.get_window_level_from_dataset(
+                                dataset,
+                                rescale_slope=rescale_slope,
+                                rescale_intercept=rescale_intercept
+                            )
+                            # print(f"[DEBUG-WL-PRESETS] SliceDisplayManager: No presets found, using single value extraction: center={wc}, width={ww}")
                         # print(f"[DEBUG-WL] From DICOM tags: wc={wc}, ww={ww}, is_rescaled={is_rescaled}, need_use_rescaled={use_rescaled_values}")
                         if wc is not None and ww is not None:
                             # Convert if needed
@@ -269,7 +294,18 @@ class SliceDisplayManager:
                             stored_window_width = ww
                             # print(f"[DEBUG-WL] Using DICOM tag values: stored_wc={stored_window_center}, stored_ww={stored_window_width}")
                         elif series_pixel_min is not None and series_pixel_max is not None:
-                            stored_window_center = (series_pixel_min + series_pixel_max) / 2.0
+                            # Calculate median from series for window center
+                            # Get series datasets for median calculation (already have series_datasets from above)
+                            if series_datasets:
+                                stored_window_center = self.dicom_processor.get_series_pixel_median(
+                                    series_datasets, apply_rescale=use_rescaled_values
+                                )
+                                # If median calculation failed, fall back to midpoint
+                                if stored_window_center is None:
+                                    stored_window_center = (series_pixel_min + series_pixel_max) / 2.0
+                            else:
+                                stored_window_center = (series_pixel_min + series_pixel_max) / 2.0
+                            
                             stored_window_width = series_pixel_max - series_pixel_min
                             if stored_window_width <= 0:
                                 stored_window_width = 1.0
@@ -281,7 +317,18 @@ class SliceDisplayManager:
                                     dataset, apply_rescale=use_rescaled_values
                                 )
                                 if pixel_min is not None and pixel_max is not None:
-                                    stored_window_center = (pixel_min + pixel_max) / 2.0
+                                    # Calculate median from single slice pixel array
+                                    pixel_array = self.dicom_processor.get_pixel_array(dataset)
+                                    if pixel_array is not None:
+                                        # Apply rescale if needed
+                                        if use_rescaled_values:
+                                            rescale_slope, rescale_intercept, _ = self.dicom_processor.get_rescale_parameters(dataset)
+                                            if rescale_slope is not None and rescale_intercept is not None:
+                                                pixel_array = pixel_array.astype(np.float32) * float(rescale_slope) + float(rescale_intercept)
+                                        stored_window_center = float(np.median(pixel_array))
+                                    else:
+                                        # Fall back to midpoint if pixel array unavailable
+                                        stored_window_center = (pixel_min + pixel_max) / 2.0
                                     stored_window_width = pixel_max - pixel_min
                                     if stored_window_width <= 0:
                                         stored_window_width = 1.0
@@ -301,6 +348,19 @@ class SliceDisplayManager:
                     # Store in view state manager - these are the correct defaults for this dataset
                     self.view_state_manager.current_window_center = window_center
                     self.view_state_manager.current_window_width = window_width
+                    
+                    # Update status bar if presets were found
+                    if self.view_state_manager.window_level_presets:
+                        preset_name = "Default" if self.view_state_manager.current_preset_index == 0 else (
+                            self.view_state_manager.window_level_presets[self.view_state_manager.current_preset_index][3] or "Default"
+                        )
+                        status_msg = f"Window/Level: {preset_name} (W={window_width:.1f}, C={window_center:.1f})"
+                        self.view_state_manager.main_window.update_status(status_msg)
+                        # print(f"[DEBUG-WL-PRESETS] SliceDisplayManager: Updated status bar: {status_msg}")
+                    elif window_center is not None and window_width is not None:
+                        # No presets found, using calculated values
+                        self.view_state_manager.main_window.update_status("Window/Level: Auto (calculated from pixel range)")
+                    
                     # Store defaults for this series (will be updated with zoom/pan after fit_to_view)
                     # Store with the rescale state that was used to calculate them
                     # Mark window/level as "initial defaults set" so store_initial_view_state doesn't overwrite
@@ -550,10 +610,10 @@ class SliceDisplayManager:
                     )
                     
                     # DEBUG: Print what we found
-                    print(f"[ANNOTATIONS] Found {len(annotations)} annotation(s) for image {str(image_uid)[:30]}...")
-                    if annotations:
-                        for i, ann in enumerate(annotations):
-                            print(f"  Annotation {i}: type={ann.get('type')}, coords={ann.get('coordinates')}, text={ann.get('text', '')[:50]}, units={ann.get('units', 'N/A')}")
+                    # print(f"[ANNOTATIONS] Found {len(annotations)} annotation(s) for image {str(image_uid)[:30]}...")
+                    # if annotations:
+                    #     for i, ann in enumerate(annotations):
+                    #         print(f"  Annotation {i}: type={ann.get('type')}, coords={ann.get('coordinates')}, text={ann.get('text', '')[:50]}, units={ann.get('units', 'N/A')}")
                     
                     if annotations:
                         # Get image dimensions for coordinate scaling
@@ -565,7 +625,7 @@ class SliceDisplayManager:
                             image_width = float(dataset.Columns)
                             image_height = float(dataset.Rows)
                         
-                        print(f"[ANNOTATIONS] Creating items with image size: {image_width}x{image_height}")
+                        # print(f"[ANNOTATIONS] Creating items with image size: {image_width}x{image_height}")
                         
                         # Create annotation graphics items
                         items = self.annotation_manager.create_presentation_state_items(
@@ -574,12 +634,13 @@ class SliceDisplayManager:
                             image_width,
                             image_height
                         )
-                        print(f"[ANNOTATIONS] Created {len(items)} graphics item(s)")
+                        # print(f"[ANNOTATIONS] Created {len(items)} graphics item(s)")
                 except Exception as e:
                     # Don't fail slice display if annotation display fails
                     import traceback
-                    print(f"[ANNOTATIONS] Error displaying annotations: {e}")
-                    traceback.print_exc()
+                    # print(f"[ANNOTATIONS] Error displaying annotations: {e}")
+                    # traceback.print_exc()
+                    pass
         
         except MemoryError as e:
             # Re-raise MemoryError with context for caller to handle
