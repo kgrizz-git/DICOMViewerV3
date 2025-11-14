@@ -209,22 +209,22 @@ class AnnotationManager:
         try:
             # Get SOP Instance UID for this image
             if not hasattr(dataset, 'SOPInstanceUID'):
-                print(f"[ANNOTATIONS] Image has no SOPInstanceUID, skipping annotation lookup")
+                # print(f"[ANNOTATIONS] Image has no SOPInstanceUID, skipping annotation lookup")
                 return annotations
             
             image_uid = str(dataset.SOPInstanceUID)
             series_uid = getattr(dataset, 'SeriesInstanceUID', '')
-            print(f"[ANNOTATIONS] Looking for annotations for image UID: {image_uid[:30]}..., series: {series_uid[:30]}...")
+            # print(f"[ANNOTATIONS] Looking for annotations for image UID: {image_uid[:30]}..., series: {series_uid[:30]}...")
             
             # Check for embedded annotations in the image file itself
             embedded_annotations = self._get_embedded_annotations(dataset)
             if embedded_annotations:
-                print(f"[ANNOTATIONS] Found {len(embedded_annotations)} embedded annotation(s) in image file")
+                # print(f"[ANNOTATIONS] Found {len(embedded_annotations)} embedded annotation(s) in image file")
                 annotations.extend(embedded_annotations)
             
             # Check Presentation States for this study
             if study_uid in self.presentation_states:
-                print(f"[ANNOTATIONS] Checking {len(self.presentation_states[study_uid])} Presentation State(s) for study {study_uid[:20]}...")
+                # print(f"[ANNOTATIONS] Checking {len(self.presentation_states[study_uid])} Presentation State(s) for study {study_uid[:20]}...")
                 for idx, ps_dataset in enumerate(self.presentation_states[study_uid]):
                     parsed_ps = self.presentation_state_handler.parse_presentation_state(ps_dataset)
                     
@@ -235,26 +235,28 @@ class AnnotationManager:
                     # Check if this Presentation State references our image (image-level or series-level)
                     matches = False
                     if image_uid in image_uids:
-                        print(f"[ANNOTATIONS] Presentation State {idx} matches image UID (image-level reference)")
+                        # print(f"[ANNOTATIONS] Presentation State {idx} matches image UID (image-level reference)")
                         matches = True
                     elif series_uid in series_uids:
-                        print(f"[ANNOTATIONS] Presentation State {idx} matches series UID (series-level reference)")
+                        # print(f"[ANNOTATIONS] Presentation State {idx} matches series UID (series-level reference)")
                         matches = True
                     
                     if matches:
-                        print(f"[ANNOTATIONS] Presentation State {idx} matches, adding {len(parsed_ps['annotations'])} annotation(s)")
+                        # print(f"[ANNOTATIONS] Presentation State {idx} matches, adding {len(parsed_ps['annotations'])} annotation(s)")
                         # Add annotations from this Presentation State
                         for ann in parsed_ps['annotations']:
                             ann['source'] = 'presentation_state'
                             annotations.append(ann)
                     else:
-                        print(f"[ANNOTATIONS] Presentation State {idx} references {len(image_uids)} image(s) and {len(series_uids)} series, but not this one")
+                        # print(f"[ANNOTATIONS] Presentation State {idx} references {len(image_uids)} image(s) and {len(series_uids)} series, but not this one")
+                        pass
             else:
-                print(f"[ANNOTATIONS] No Presentation States found for study {study_uid[:20]}...")
+                # print(f"[ANNOTATIONS] No Presentation States found for study {study_uid[:20]}...")
+                pass
             
             # Check Key Objects for this study
             if study_uid in self.key_objects:
-                print(f"[ANNOTATIONS] Checking {len(self.key_objects[study_uid])} Key Object(s) for study {study_uid[:20]}...")
+                # print(f"[ANNOTATIONS] Checking {len(self.key_objects[study_uid])} Key Object(s) for study {study_uid[:20]}...")
                 for idx, ko_dataset in enumerate(self.key_objects[study_uid]):
                     parsed_ko = self.key_object_handler.parse_key_object(ko_dataset)
                     
@@ -263,7 +265,7 @@ class AnnotationManager:
                     # Future: could also check for series-level references
                     ref_images = parsed_ko.get('referenced_images', [])
                     if image_uid in ref_images:
-                        print(f"[ANNOTATIONS] Key Object {idx} matches image UID, adding {len(parsed_ko['annotations'])} annotation(s)")
+                        # print(f"[ANNOTATIONS] Key Object {idx} matches image UID, adding {len(parsed_ko['annotations'])} annotation(s)")
                         # Convert Key Object annotations to graphic format
                         for ann in parsed_ko['annotations']:
                             # Convert text annotations to graphic format
@@ -279,12 +281,14 @@ class AnnotationManager:
                             }
                             annotations.append(graphic_ann)
                     else:
-                        print(f"[ANNOTATIONS] Key Object {idx} references {len(ref_images)} image(s), but not this one")
+                        # print(f"[ANNOTATIONS] Key Object {idx} references {len(ref_images)} image(s), but not this one")
+                        pass
             else:
-                print(f"[ANNOTATIONS] No Key Objects found for study {study_uid[:20]}...")
+                # print(f"[ANNOTATIONS] No Key Objects found for study {study_uid[:20]}...")
+                pass
         except Exception as e:
             import traceback
-            print(f"[ANNOTATIONS] Error getting annotations for image: {e}")
+            # print(f"[ANNOTATIONS] Error getting annotations for image: {e}")
             traceback.print_exc()
         
         return annotations
@@ -315,7 +319,7 @@ class AnnotationManager:
                 # Transform coordinates based on units
                 transformed_coords = self._transform_coordinates(coords, units, image_width, image_height)
                 if not transformed_coords:
-                    print(f"[ANNOTATIONS] Skipping annotation with no valid coordinates after transformation")
+                    # print(f"[ANNOTATIONS] Skipping annotation with no valid coordinates after transformation")
                     continue
                 
                 # Convert color tuple to QColor
@@ -346,7 +350,8 @@ class AnnotationManager:
                                 items.append(text_item)
                                 self.annotations.append(text_item)
                             else:
-                                print(f"[ANNOTATIONS] Text annotation out of bounds: ({x}, {y})")
+                                # print(f"[ANNOTATIONS] Text annotation out of bounds: ({x}, {y})")
+                                pass
                 
                 elif ann_type == 'POLYLINE':
                     # Create polyline (path)
@@ -368,7 +373,8 @@ class AnnotationManager:
                             items.append(path_item)
                             self.annotations.append(path_item)
                         else:
-                            print(f"[ANNOTATIONS] Polyline annotation out of bounds: ({first_x}, {first_y})")
+                            # print(f"[ANNOTATIONS] Polyline annotation out of bounds: ({first_x}, {first_y})")
+                            pass
                 
                 elif ann_type == 'CIRCLE':
                     # Create circle
@@ -395,7 +401,8 @@ class AnnotationManager:
                             items.append(ellipse_item)
                             self.annotations.append(ellipse_item)
                         else:
-                            print(f"[ANNOTATIONS] Circle annotation out of bounds: center=({center[0]}, {center[1]})")
+                            # print(f"[ANNOTATIONS] Circle annotation out of bounds: center=({center[0]}, {center[1]})")
+                            pass
                 
                 elif ann_type == 'ELLIPSE':
                     # Create ellipse (simplified - using bounding box)
@@ -421,7 +428,8 @@ class AnnotationManager:
                             items.append(ellipse_item)
                             self.annotations.append(ellipse_item)
                         else:
-                            print(f"[ANNOTATIONS] Ellipse annotation out of bounds: ({min_x}, {min_y}) to ({max_x}, {max_y})")
+                            # print(f"[ANNOTATIONS] Ellipse annotation out of bounds: ({min_x}, {min_y}) to ({max_x}, {max_y})")
+                            pass
                 
                 elif ann_type == 'POINT':
                     # Create point (small circle)
@@ -443,7 +451,8 @@ class AnnotationManager:
                             items.append(ellipse_item)
                             self.annotations.append(ellipse_item)
                         else:
-                            print(f"[ANNOTATIONS] Point annotation out of bounds: ({x}, {y})")
+                            # print(f"[ANNOTATIONS] Point annotation out of bounds: ({x}, {y})")
+                            pass
                 
                 elif ann_type == 'OVERLAY':
                     # Render overlay graphics from bitmap
@@ -461,13 +470,13 @@ class AnnotationManager:
                             overlay_origin_x, overlay_origin_y, qcolor
                         )
                         if bitmap_item:
-                            print(f"[ANNOTATIONS] Created overlay bitmap item")
+                            # print(f"[ANNOTATIONS] Created overlay bitmap item")
                             scene.addItem(bitmap_item)
                             items.append(bitmap_item)
                             self.annotations.append(bitmap_item)
                         else:
                             # Fallback to path rendering if bitmap fails
-                            print(f"[ANNOTATIONS] Bitmap rendering failed, falling back to paths")
+                            # print(f"[ANNOTATIONS] Bitmap rendering failed, falling back to paths")
                             self._render_overlay_paths(
                                 overlay_paths, coords, overlay_paths, pen, qcolor, scene, items
                             )
@@ -478,10 +487,11 @@ class AnnotationManager:
                         )
                     
                     if overlay_rows > 0 and overlay_cols > 0:
-                        print(f"[ANNOTATIONS] Created overlay graphics: {len(overlay_paths)} path(s), size: {overlay_cols}x{overlay_rows}, origin: ({overlay_origin_x}, {overlay_origin_y})")
+                        # print(f"[ANNOTATIONS] Created overlay graphics: {len(overlay_paths)} path(s), size: {overlay_cols}x{overlay_rows}, origin: ({overlay_origin_x}, {overlay_origin_y})")
+                        pass
         except Exception as e:
             import traceback
-            print(f"[ANNOTATIONS] Error creating presentation state items: {e}")
+            # print(f"[ANNOTATIONS] Error creating presentation state items: {e}")
             traceback.print_exc()
         
         return items
@@ -522,10 +532,10 @@ class AnnotationManager:
                 transformed = [(float(c[0]), float(c[1])) for c in coords if len(c) >= 2]
             else:
                 # Unknown units - default to pixel
-                print(f"[ANNOTATIONS] Unknown coordinate units '{units}', treating as PIXEL")
+                # print(f"[ANNOTATIONS] Unknown coordinate units '{units}', treating as PIXEL")
                 transformed = [(float(c[0]), float(c[1])) for c in coords if len(c) >= 2]
         except Exception as e:
-            print(f"[ANNOTATIONS] Error transforming coordinates: {e}")
+            # print(f"[ANNOTATIONS] Error transforming coordinates: {e}")
             return []
         
         return transformed
@@ -549,7 +559,7 @@ class AnnotationManager:
         try:
             # Check for GraphicAnnotationSequence in image file
             if hasattr(dataset, 'GraphicAnnotationSequence'):
-                print(f"[ANNOTATIONS] Found GraphicAnnotationSequence in image file")
+                # print(f"[ANNOTATIONS] Found GraphicAnnotationSequence in image file")
                 graphic_seq = dataset.GraphicAnnotationSequence
                 # Use the presentation state handler to parse it
                 parsed_annotations = self.presentation_state_handler.parse_graphic_annotations(graphic_seq)
@@ -563,7 +573,7 @@ class AnnotationManager:
                 annotations.extend(overlay_annotations)
         except Exception as e:
             import traceback
-            print(f"[ANNOTATIONS] Error extracting embedded annotations: {e}")
+            # print(f"[ANNOTATIONS] Error extracting embedded annotations: {e}")
             traceback.print_exc()
         
         return annotations
@@ -645,9 +655,9 @@ class AnnotationManager:
                     origin_x = float(origin_col - 1)  # Column = x (horizontal)
                     origin_y = float(origin_row - 1)  # Row = y (vertical)
                     
-                    print(f"[ANNOTATIONS] Found overlay group {overlay_group:04X}: {cols_val}x{rows_val}, type={overlay_type_val}")
-                    print(f"[ANNOTATIONS] OverlayOrigin (DICOM 1-based): row={origin_row}, col={origin_col}")
-                    print(f"[ANNOTATIONS] OverlayOrigin (Qt 0-based): x={origin_x}, y={origin_y}")
+                    # print(f"[ANNOTATIONS] Found overlay group {overlay_group:04X}: {cols_val}x{rows_val}, type={overlay_type_val}")
+                    # print(f"[ANNOTATIONS] OverlayOrigin (DICOM 1-based): row={origin_row}, col={origin_col}")
+                    # print(f"[ANNOTATIONS] OverlayOrigin (Qt 0-based): x={origin_x}, y={origin_y}")
                     
                     # Extract overlay bitmap data
                     overlay_data_value = overlay_data.value if hasattr(overlay_data, 'value') else overlay_data
@@ -675,7 +685,7 @@ class AnnotationManager:
                     overlays.append(overlay_ann)
         except Exception as e:
             import traceback
-            print(f"[ANNOTATIONS] Error parsing overlay data: {e}")
+            # print(f"[ANNOTATIONS] Error parsing overlay data: {e}")
             traceback.print_exc()
         
         return overlays
@@ -719,7 +729,7 @@ class AnnotationManager:
                 try:
                     overlay_bytes = bytes(overlay_data)
                 except Exception as e:
-                    print(f"[ANNOTATIONS] Could not convert overlay data to bytes: {e}, type: {type(overlay_data)}")
+                    # print(f"[ANNOTATIONS] Could not convert overlay data to bytes: {e}, type: {type(overlay_data)}")
                     return {'coordinates': [], 'paths': []}
             
             if overlay_bytes:
@@ -730,7 +740,7 @@ class AnnotationManager:
                 
                 # Ensure we have enough bytes
                 if len(overlay_bytes) < num_bytes:
-                    print(f"[ANNOTATIONS] Overlay data too short: got {len(overlay_bytes)} bytes, expected at least {num_bytes}")
+                    # print(f"[ANNOTATIONS] Overlay data too short: got {len(overlay_bytes)} bytes, expected at least {num_bytes}")
                     # Try to use what we have
                     num_bytes = len(overlay_bytes)
                     num_bits = num_bytes * 8
@@ -746,7 +756,7 @@ class AnnotationManager:
                 if len(bit_array) >= num_bits:
                     bitmap = bit_array[:num_bits].reshape((rows, cols))
                 else:
-                    print(f"[ANNOTATIONS] Bit array too short: got {len(bit_array)} bits, expected {num_bits}")
+                    # print(f"[ANNOTATIONS] Bit array too short: got {len(bit_array)} bits, expected {num_bits}")
                     return {'coordinates': [], 'paths': []}
             else:
                 # If we didn't get bytes, try other formats
@@ -756,7 +766,7 @@ class AnnotationManager:
                     if bitmap.size == cols * rows:
                         bitmap = bitmap.reshape((rows, cols))
                     else:
-                        print(f"[ANNOTATIONS] Overlay data size mismatch: expected {cols*rows}, got {bitmap.size}")
+                        # print(f"[ANNOTATIONS] Overlay data size mismatch: expected {cols*rows}, got {bitmap.size}")
                         return {'coordinates': [], 'paths': []}
                 else:
                     # Try to convert to numpy array
@@ -765,10 +775,10 @@ class AnnotationManager:
                         if bitmap.size == cols * rows:
                             bitmap = bitmap.reshape((rows, cols))
                         else:
-                            print(f"[ANNOTATIONS] Overlay data size mismatch: expected {cols*rows}, got {bitmap.size}")
+                            # print(f"[ANNOTATIONS] Overlay data size mismatch: expected {cols*rows}, got {bitmap.size}")
                             return {'coordinates': [], 'paths': []}
                     except Exception as e:
-                        print(f"[ANNOTATIONS] Could not convert overlay data to array: {e}, type: {type(overlay_data)}")
+                        # print(f"[ANNOTATIONS] Could not convert overlay data to array: {e}, type: {type(overlay_data)}")
                         return {'coordinates': [], 'paths': []}
             
             # Bitmap positions are correct - no flip needed
@@ -779,28 +789,28 @@ class AnnotationManager:
             set_pixels = np.argwhere(bitmap > 0)
             
             if len(set_pixels) == 0:
-                print(f"[ANNOTATIONS] No set pixels found in overlay bitmap")
+                # print(f"[ANNOTATIONS] No set pixels found in overlay bitmap")
                 return {'coordinates': [], 'paths': []}
             
-            print(f"[ANNOTATIONS] Found {len(set_pixels)} set pixels in overlay bitmap")
+            # print(f"[ANNOTATIONS] Found {len(set_pixels)} set pixels in overlay bitmap")
             
             # Convert pixel coordinates to image coordinates
             # Overlay bitmap coordinates: (row, col) where row=y-axis, col=x-axis
             # DICOM: row increases downward (top to bottom), col increases rightward (left to right)
             # Qt: y increases downward, x increases rightward
             # Bitmap positions are correct - no flip needed, character reversal fixed by bit order
-            print(f"[ANNOTATIONS] Converting {len(set_pixels)} pixels to image coordinates")
-            print(f"[ANNOTATIONS] Origin offset: x={origin_x}, y={origin_y}")
-            print(f"[ANNOTATIONS] Bitmap dimensions: cols={cols}, rows={rows}")
-            print(f"[ANNOTATIONS] Using LSB-first bit order (bitorder='little') per DICOM standard Part 5, Chapter 8")
+            # print(f"[ANNOTATIONS] Converting {len(set_pixels)} pixels to image coordinates")
+            # print(f"[ANNOTATIONS] Origin offset: x={origin_x}, y={origin_y}")
+            # print(f"[ANNOTATIONS] Bitmap dimensions: cols={cols}, rows={rows}")
+            # print(f"[ANNOTATIONS] Using LSB-first bit order (bitorder='little') per DICOM standard Part 5, Chapter 8")
             
             # Sample first few pixels for debugging
-            sample_pixels = min(5, len(set_pixels))
-            for i, pixel in enumerate(set_pixels[:sample_pixels]):
-                row, col = pixel[0], pixel[1]
-                x = float(col) + origin_x
-                y = float(row) + origin_y
-                print(f"[ANNOTATIONS] Sample pixel {i}: bitmap(row={row}, col={col}) -> image(x={x:.1f}, y={y:.1f})")
+            # sample_pixels = min(5, len(set_pixels))
+            # for i, pixel in enumerate(set_pixels[:sample_pixels]):
+            #     row, col = pixel[0], pixel[1]
+            #     x = float(col) + origin_x
+            #     y = float(row) + origin_y
+            #     print(f"[ANNOTATIONS] Sample pixel {i}: bitmap(row={row}, col={col}) -> image(x={x:.1f}, y={y:.1f})")
             
             for pixel in set_pixels:
                 row, col = pixel[0], pixel[1]
@@ -822,7 +832,7 @@ class AnnotationManager:
                         cv2.CHAIN_APPROX_SIMPLE
                     )
                     
-                    print(f"[ANNOTATIONS] Found {len(contours)} contour(s) using OpenCV")
+                    # print(f"[ANNOTATIONS] Found {len(contours)} contour(s) using OpenCV")
                     
                     # Convert contours to paths
                     # OpenCV contours return points as (x, y) = (column, row) in bitmap space
@@ -845,21 +855,21 @@ class AnnotationManager:
                                 path_coords.append((x, y))
                                 
                                 # Debug: show first point of first contour
-                                if idx == 0 and point_idx == 0:
-                                    print(f"[ANNOTATIONS] First contour point: OpenCV(col={col}, row={row}) -> image(x={x:.1f}, y={y:.1f})")
-                                    print(f"[ANNOTATIONS] Using LSB-first bit order per DICOM standard Part 5, Chapter 8")
+                                # if idx == 0 and point_idx == 0:
+                                #     print(f"[ANNOTATIONS] First contour point: OpenCV(col={col}, row={row}) -> image(x={x:.1f}, y={y:.1f})")
+                                #     print(f"[ANNOTATIONS] Using LSB-first bit order per DICOM standard Part 5, Chapter 8")
                             
                             if len(path_coords) >= 2:
                                 paths.append(path_coords)
-                                if idx == 0:
-                                    print(f"[ANNOTATIONS] First contour has {len(path_coords)} points")
+                                # if idx == 0:
+                                #     print(f"[ANNOTATIONS] First contour has {len(path_coords)} points")
                 except ImportError:
                     # OpenCV not available, use scipy connected components
                     from scipy import ndimage
                     # Label connected components
                     labeled, num_features = ndimage.label(bitmap > 0)
                     
-                    print(f"[ANNOTATIONS] Found {num_features} connected component(s) using scipy")
+                    # print(f"[ANNOTATIONS] Found {num_features} connected component(s) using scipy")
                     
                     # Extract paths for each component
                     for label_id in range(1, num_features + 1):
@@ -889,23 +899,24 @@ class AnnotationManager:
                             path_coords.append((x, y))
                             
                             # Debug: show first point of first component
-                            if label_id == 1 and pixel_idx == 0:
-                                print(f"[ANNOTATIONS] First scipy component point: bitmap(row={row}, col={col}) -> image(x={x:.1f}, y={y:.1f})")
-                                print(f"[ANNOTATIONS] Using LSB-first bit order per DICOM standard Part 5, Chapter 8")
+                            # if label_id == 1 and pixel_idx == 0:
+                            #     print(f"[ANNOTATIONS] First scipy component point: bitmap(row={row}, col={col}) -> image(x={x:.1f}, y={y:.1f})")
+                            #     print(f"[ANNOTATIONS] Using LSB-first bit order per DICOM standard Part 5, Chapter 8")
                         
                         if len(path_coords) >= 2:
                             paths.append(path_coords)
             except ImportError:
                 # Neither OpenCV nor scipy available, skip path extraction
-                print(f"[ANNOTATIONS] OpenCV and scipy not available, skipping path extraction")
+                # print(f"[ANNOTATIONS] OpenCV and scipy not available, skipping path extraction")
+                pass
             except Exception as e:
                 import traceback
-                print(f"[ANNOTATIONS] Error extracting paths: {e}")
+                # print(f"[ANNOTATIONS] Error extracting paths: {e}")
                 traceback.print_exc()
         
         except ImportError:
             # numpy not available, use simple approach
-            print(f"[ANNOTATIONS] numpy not available, using simple pixel extraction")
+            # print(f"[ANNOTATIONS] numpy not available, using simple pixel extraction")
             # Fallback: just extract individual pixels
             if isinstance(overlay_data, bytes):
                 # Simple byte-by-byte extraction
@@ -927,7 +938,7 @@ class AnnotationManager:
                                 byte_idx += 1
         except Exception as e:
             import traceback
-            print(f"[ANNOTATIONS] Error converting overlay bitmap: {e}")
+            # print(f"[ANNOTATIONS] Error converting overlay bitmap: {e}")
             traceback.print_exc()
         
         return {'coordinates': coordinates, 'paths': paths}
@@ -995,15 +1006,15 @@ class AnnotationManager:
                 return None
             
             # Debug: Show bitmap info
-            print(f"[ANNOTATIONS] Bitmap shape: {bitmap.shape} (rows={rows}, cols={cols})")
-            print(f"[ANNOTATIONS] Bitmap origin: ({origin_x}, {origin_y})")
-            print(f"[ANNOTATIONS] Using LSB-first bit order (bitorder='little') per DICOM standard Part 5, Chapter 8")
+            # print(f"[ANNOTATIONS] Bitmap shape: {bitmap.shape} (rows={rows}, cols={cols})")
+            # print(f"[ANNOTATIONS] Bitmap origin: ({origin_x}, {origin_y})")
+            # print(f"[ANNOTATIONS] Using LSB-first bit order (bitorder='little') per DICOM standard Part 5, Chapter 8")
             # Show sample of first few pixels
-            if bitmap.size > 0:
-                sample_size = min(10, cols)
-                print(f"[ANNOTATIONS] First row sample (first {sample_size} pixels): {bitmap[0, :sample_size].tolist()}")
-                if rows > 1:
-                    print(f"[ANNOTATIONS] Last row sample (first {sample_size} pixels): {bitmap[-1, :sample_size].tolist()}")
+            # if bitmap.size > 0:
+            #     sample_size = min(10, cols)
+            #     print(f"[ANNOTATIONS] First row sample (first {sample_size} pixels): {bitmap[0, :sample_size].tolist()}")
+            #     if rows > 1:
+            #         print(f"[ANNOTATIONS] Last row sample (first {sample_size} pixels): {bitmap[-1, :sample_size].tolist()}")
             
             # Bitmap positions are correct - no flip needed
             # DICOM overlay data: bits packed LSB-first within each byte, bytes stored sequentially
@@ -1036,16 +1047,16 @@ class AnnotationManager:
             pixmap_item.setZValue(200)
             pixmap_item.setVisible(True)
             
-            print(f"[ANNOTATIONS] Created overlay bitmap: {width}x{height} at ({origin_x}, {origin_y})")
+            # print(f"[ANNOTATIONS] Created overlay bitmap: {width}x{height} at ({origin_x}, {origin_y})")
             
             return pixmap_item
             
         except ImportError:
-            print(f"[ANNOTATIONS] numpy or Qt not available for bitmap rendering")
+            # print(f"[ANNOTATIONS] numpy or Qt not available for bitmap rendering")
             return None
         except Exception as e:
             import traceback
-            print(f"[ANNOTATIONS] Error creating overlay bitmap: {e}")
+            # print(f"[ANNOTATIONS] Error creating overlay bitmap: {e}")
             traceback.print_exc()
             return None
     
@@ -1082,7 +1093,7 @@ class AnnotationManager:
                     if width >= 2 or height >= 2:
                         filtered_paths.append(path_coords)
             
-            print(f"[ANNOTATIONS] Rendering {len(filtered_paths)} filtered overlay path(s) (filtered from {len(overlay_paths)})")
+            # print(f"[ANNOTATIONS] Rendering {len(filtered_paths)} filtered overlay path(s) (filtered from {len(overlay_paths)})")
             
             for path_coords in filtered_paths:
                 if len(path_coords) >= 2:
@@ -1114,7 +1125,7 @@ class AnnotationManager:
         
         # Render individual points only if no paths
         if coords and len(coords) > 0 and not overlay_paths:
-            print(f"[ANNOTATIONS] Rendering {len(coords)} overlay point(s)")
+            # print(f"[ANNOTATIONS] Rendering {len(coords)} overlay point(s)")
             for coord in coords:
                 x, y = coord[0], coord[1]
                 # Create slightly larger circles for better visibility
