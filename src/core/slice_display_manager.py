@@ -258,10 +258,10 @@ class SliceDisplayManager:
                         # Store presets in view state manager BEFORE setting window/level
                         # This ensures that handle_window_changed can match values to presets
                         # Rescale parameters were already set at line 153, so they're available for comparison
-                        print(f"[DEBUG-PRESET-MATCH] Storing {len(presets)} preset(s) in view_state_manager")
-                        print(f"[DEBUG-PRESET-MATCH] Current rescale state: use_rescaled={use_rescaled_values}, slope={rescale_slope}, intercept={rescale_intercept}")
-                        for idx, (wc, ww, is_rescaled, name) in enumerate(presets):
-                            print(f"[DEBUG-PRESET-MATCH]   Preset {idx}: wc={wc:.2f}, ww={ww:.2f}, is_rescaled={is_rescaled}, name={name}")
+                        # print(f"[DEBUG-PRESET-MATCH] Storing {len(presets)} preset(s) in view_state_manager")
+                        # print(f"[DEBUG-PRESET-MATCH] Current rescale state: use_rescaled={use_rescaled_values}, slope={rescale_slope}, intercept={rescale_intercept}")
+                        # for idx, (wc, ww, is_rescaled, name) in enumerate(presets):
+                        #     print(f"[DEBUG-PRESET-MATCH]   Preset {idx}: wc={wc:.2f}, ww={ww:.2f}, is_rescaled={is_rescaled}, name={name}")
                         self.view_state_manager.window_level_presets = presets
                         self.view_state_manager.current_preset_index = 0  # Use first preset by default
                         # Reset user-modified flag since we're loading presets
@@ -363,7 +363,7 @@ class SliceDisplayManager:
                         preset_name = "Default" if self.view_state_manager.current_preset_index == 0 else (
                             self.view_state_manager.window_level_presets[self.view_state_manager.current_preset_index][3] or "Default"
                         )
-                        print(f"[DEBUG-PRESET-MATCH] Updating status bar with preset: {preset_name} (index={self.view_state_manager.current_preset_index})")
+                        # print(f"[DEBUG-PRESET-MATCH] Updating status bar with preset: {preset_name} (index={self.view_state_manager.current_preset_index})")
                         self.view_state_manager.main_window.update_zoom_preset_status(current_zoom, preset_name)
                     elif window_center is not None and window_width is not None:
                         # No presets found, using calculated values
@@ -520,7 +520,7 @@ class SliceDisplayManager:
             
             if is_new_study_series and window_center is not None and window_width is not None:
                 # New series - use calculated/stored defaults
-                print(f"[DEBUG-PRESET-MATCH] Setting window/level for new series: wc={window_center:.2f}, ww={window_width:.2f}, block_signals=True")
+                # print(f"[DEBUG-PRESET-MATCH] Setting window/level for new series: wc={window_center:.2f}, ww={window_width:.2f}, block_signals=True")
                 self.window_level_controls.set_window_level(
                     window_center, window_width, block_signals=True, unit=unit
                 )
