@@ -20,7 +20,7 @@ Requirements:
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                                 QTreeWidget, QTreeWidgetItem, QLineEdit,
                                 QPushButton, QCheckBox, QSplitter, QDialog)
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QTimer
 from typing import Optional, Dict, Any, List
 import pydicom
 from pydicom.dataset import Dataset
@@ -64,7 +64,19 @@ class MetadataPanel(QWidget):
         self.history_manager: Optional[TagEditHistoryManager] = None
         self.config_manager: Optional[ConfigManager] = config_manager
         
+        # Caching for performance
+        self._cached_tags: Optional[Dict[str, Any]] = None
+        self._cached_search_text: str = ""
+        self._cached_include_private: bool = True
+        
+        # Search debouncing timer
+        self._search_timer = QTimer()
+        self._search_timer.setSingleShot(True)
+        
         self._create_ui()
+        
+        # Connect timer after UI is created
+        self._search_timer.timeout.connect(lambda: self._populate_tags(self.search_edit.text()))
     
     def set_history_manager(self, history_manager: TagEditHistoryManager) -> None:
         """
@@ -94,6 +106,12 @@ class MetadataPanel(QWidget):
         header_layout.addWidget(self.private_tags_checkbox)
         
         layout.addLayout(header_layout)
+        
+        # Search input field
+        self.search_edit = QLineEdit()
+        self.search_edit.setPlaceholderText("Filter tags...")
+        self.search_edit.textChanged.connect(self._on_search_changed)
+        layout.addWidget(self.search_edit)
         
         # Tree widget for tags
         self.tree_widget = QTreeWidget()
@@ -137,58 +155,122 @@ class MetadataPanel(QWidget):
         self.dataset = dataset
         self.parser = DICOMParser(dataset)
         self.editor = DICOMEditor(dataset)
+        # Clear cache when dataset changes
+        self._cached_tags = None
+        self._cached_search_text = ""
         self._populate_tags()
     
-    def _populate_tags(self) -> None:
-        """Populate the tree widget with DICOM tags."""
+    def _populate_tags(self, search_text: str = "") -> None:
+        """
+        Populate the tree widget with DICOM tags.
+        
+        Args:
+            search_text: Optional search text to filter tags
+        """
         if self.parser is None:
             return
         
-        self.tree_widget.clear()
+        # Check if tags need to be reloaded (dataset changed or private tags setting changed)
+        need_reload = (self._cached_tags is None or 
+                      self.show_private_tags != self._cached_include_private)
         
-        # Get all tags
-        tags = self.parser.get_all_tags(include_private=self.show_private_tags)
+        if need_reload:
+            # Reload tags from parser (will use parser's cache)
+            tags = self.parser.get_all_tags(include_private=self.show_private_tags)
+            self._cached_tags = tags
+            self._cached_include_private = self.show_private_tags
+        else:
+            # Use cached tags
+            tags = self._cached_tags
         
-        # Sort tags by tag number
-        sorted_tags = sorted(tags.items(), key=lambda x: x[0])
-        
-        # Group by tag group (first 4 hex digits)
-        groups: Dict[str, list] = {}
-        for tag_str, tag_data in sorted_tags:
-            group = tag_str[:5]  # e.g., "(0008," for group 0008
-            if group not in groups:
-                groups[group] = []
-            groups[group].append((tag_str, tag_data))
-        
-        # Create tree items
-        for group, tag_list in sorted(groups.items()):
-            group_item = QTreeWidgetItem(self.tree_widget)
-            group_item.setText(0, f"Group {group}")
-            group_item.setExpanded(True)
-            
-            for tag_str, tag_data in tag_list:
-                tag_item = QTreeWidgetItem(group_item)
-                tag_item.setText(0, tag_data.get("tag", tag_str))
-                tag_item.setText(1, tag_data.get("name", ""))
-                tag_item.setText(2, tag_data.get("VR", ""))
+        # Filter by search text if provided
+        if search_text:
+            search_lower = search_text.lower()
+            filtered_tags = {}
+            for tag_str, tag_data in tags.items():
+                # Search in tag number, name, VR, and value
+                tag_match = tag_str.lower() if tag_str else ""
+                name_match = tag_data.get("name", "").lower() if tag_data.get("name") else ""
+                vr_match = tag_data.get("VR", "").lower() if tag_data.get("VR") else ""
                 
-                # Format value
+                # Format value for searching
                 value = tag_data.get("value", "")
                 if isinstance(value, list):
                     value_str = ", ".join(str(v) for v in value)
                 else:
                     value_str = str(value)
+                value_match = value_str.lower()
                 
-                # Truncate long values
-                if len(value_str) > 50:
-                    value_str = value_str[:47] + "..."
+                # Check if search text matches any field
+                if (search_lower in tag_match or 
+                    search_lower in name_match or 
+                    search_lower in vr_match or 
+                    search_lower in value_match):
+                    filtered_tags[tag_str] = tag_data
+            tags = filtered_tags
+        
+        # Update cached search text
+        self._cached_search_text = search_text
+        
+        # Disable widget updates during population to prevent expensive repaints
+        self.tree_widget.setUpdatesEnabled(False)
+        try:
+            self.tree_widget.clear()
+            
+            # Sort tags by tag number
+            sorted_tags = sorted(tags.items(), key=lambda x: x[0])
+            
+            # Group by tag group (first 4 hex digits)
+            groups: Dict[str, list] = {}
+            for tag_str, tag_data in sorted_tags:
+                group = tag_str[:5]  # e.g., "(0008," for group 0008
+                if group not in groups:
+                    groups[group] = []
+                groups[group].append((tag_str, tag_data))
+            
+            # Create tree items
+            for group, tag_list in sorted(groups.items()):
+                group_item = QTreeWidgetItem(self.tree_widget)
+                group_item.setText(0, f"Group {group}")
+                group_item.setExpanded(True)
                 
-                tag_item.setText(3, value_str)
-                tag_item.setData(0, Qt.ItemDataRole.UserRole, tag_str)
-                tag_item.setData(0, Qt.ItemDataRole.UserRole + 1, tag_data)
+                for tag_str, tag_data in tag_list:
+                    tag_item = QTreeWidgetItem(group_item)
+                    tag_item.setText(0, tag_data.get("tag", tag_str))
+                    tag_item.setText(1, tag_data.get("name", ""))
+                    tag_item.setText(2, tag_data.get("VR", ""))
+                    
+                    # Format value
+                    value = tag_data.get("value", "")
+                    if isinstance(value, list):
+                        value_str = ", ".join(str(v) for v in value)
+                    else:
+                        value_str = str(value)
+                    
+                    # Truncate long values
+                    if len(value_str) > 50:
+                        value_str = value_str[:47] + "..."
+                    
+                    tag_item.setText(3, value_str)
+                    tag_item.setData(0, Qt.ItemDataRole.UserRole, tag_str)
+                    tag_item.setData(0, Qt.ItemDataRole.UserRole + 1, tag_data)
+        finally:
+            # Always re-enable updates, even if an error occurred
+            self.tree_widget.setUpdatesEnabled(True)
         
         # Note: Column widths are preserved from saved configuration
         # Removed resizeColumnToContents calls to maintain user's preferred column widths
+    
+    def _on_search_changed(self, text: str) -> None:
+        """
+        Handle search text change with debouncing.
+        
+        Args:
+            text: Search text
+        """
+        # Stop timer if running and restart with delay
+        self._search_timer.stop()
+        self._search_timer.start(300)  # 300ms delay after user stops typing
     
     def _on_private_tags_toggled(self, checked: bool) -> None:
         """
@@ -198,8 +280,11 @@ class MetadataPanel(QWidget):
             checked: Checkbox state
         """
         self.show_private_tags = checked
+        # Clear cache when private tags setting changes
+        self._cached_tags = None
         if self.parser is not None:
-            self._populate_tags()
+            search_text = self.search_edit.text()
+            self._populate_tags(search_text)
     
     def _on_column_resized(self, logical_index: int, old_size: int, new_size: int) -> None:
         """
@@ -290,6 +375,9 @@ class MetadataPanel(QWidget):
                 
                 # Emit signal
                 self.tag_edited.emit(tag_str, new_value)
-                # Refresh the tree view
-                self._populate_tags()
+                # Refresh the tree view (preserve search text)
+                search_text = self.search_edit.text()
+                # Clear cache since tag was edited
+                self._cached_tags = None
+                self._populate_tags(search_text)
 

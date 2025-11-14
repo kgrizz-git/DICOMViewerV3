@@ -24,8 +24,9 @@ Requirements:
 
 import os
 import warnings
+import time
 from pathlib import Path
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Callable
 import pydicom
 from pydicom.errors import InvalidDicomError
 from core.multiframe_handler import is_multiframe, get_frame_count
@@ -275,7 +276,8 @@ class DICOMLoader:
             self.failed_files.append((file_path, error_msg))
             return None
     
-    def load_files(self, file_paths: List[str], defer_size: Optional[int] = None) -> List[pydicom.Dataset]:
+    def load_files(self, file_paths: List[str], defer_size: Optional[int] = None, 
+                   progress_callback: Optional[Callable[[int, int, str], None]] = None) -> List[pydicom.Dataset]:
         """
         Load multiple DICOM files.
         
@@ -283,6 +285,8 @@ class DICOMLoader:
             file_paths: List of file paths to load
             defer_size: Optional size threshold (in bytes) for deferring pixel data loading.
                        If file size exceeds this, pixel data will be loaded on-demand.
+            progress_callback: Optional callback function called during loading.
+                              Signature: (current: int, total: int, filename: str) -> None
             
         Returns:
             List of successfully loaded DICOM datasets
@@ -290,7 +294,17 @@ class DICOMLoader:
         self.loaded_files = []
         self.failed_files = []
         
-        for file_path in file_paths:
+        total_files = len(file_paths)
+        last_update_time = time.time()
+        update_interval = 0.1  # Update every 100ms
+        
+        for idx, file_path in enumerate(file_paths):
+            # Call progress callback with throttling (every 10 files or 100ms)
+            if progress_callback and (idx % 10 == 0 or time.time() - last_update_time >= update_interval):
+                filename = os.path.basename(file_path)
+                progress_callback(idx + 1, total_files, filename)
+                last_update_time = time.time()
+            
             try:
                 dataset = self.load_file(file_path, defer_size=defer_size)
                 if dataset is not None:
@@ -303,9 +317,14 @@ class DICOMLoader:
                     error_msg = f"{error_type}: {error_msg}"
                 self.failed_files.append((file_path, error_msg))
         
+        # Final progress update
+        if progress_callback and total_files > 0:
+            progress_callback(total_files, total_files, "")
+        
         return self.loaded_files
     
-    def load_directory(self, directory_path: str, recursive: bool = True, defer_size: Optional[int] = None) -> List[pydicom.Dataset]:
+    def load_directory(self, directory_path: str, recursive: bool = True, defer_size: Optional[int] = None,
+                      progress_callback: Optional[Callable[[int, int, str], None]] = None) -> List[pydicom.Dataset]:
         """
         Load all DICOM files from a directory.
         
@@ -314,6 +333,8 @@ class DICOMLoader:
             recursive: If True, search subdirectories recursively
             defer_size: Optional size threshold (in bytes) for deferring pixel data loading.
                        If file size exceeds this, pixel data will be loaded on-demand.
+            progress_callback: Optional callback function called during loading.
+                              Signature: (current: int, total: int, filename: str) -> None
             
         Returns:
             List of successfully loaded DICOM datasets
@@ -333,8 +354,18 @@ class DICOMLoader:
         else:
             file_paths = [str(p) for p in dir_path.iterdir() if p.is_file()]
         
+        total_files = len(file_paths)
+        last_update_time = time.time()
+        update_interval = 0.1  # Update every 100ms
+        
         # Attempt to load each file as DICOM (regardless of extension)
-        for file_path in file_paths:
+        for idx, file_path in enumerate(file_paths):
+            # Call progress callback with throttling (every 10 files or 100ms)
+            if progress_callback and (idx % 10 == 0 or time.time() - last_update_time >= update_interval):
+                filename = os.path.basename(file_path)
+                progress_callback(idx + 1, total_files, filename)
+                last_update_time = time.time()
+            
             try:
                 dataset = self.load_file(file_path, defer_size=defer_size)
                 if dataset is not None:
@@ -346,6 +377,10 @@ class DICOMLoader:
                 if error_type not in error_msg:
                     error_msg = f"{error_type}: {error_msg}"
                 self.failed_files.append((file_path, error_msg))
+        
+        # Final progress update
+        if progress_callback and total_files > 0:
+            progress_callback(total_files, total_files, "")
         
         return self.loaded_files
     
