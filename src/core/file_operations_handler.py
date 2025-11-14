@@ -23,6 +23,7 @@ Requirements:
 
 import os
 from typing import Callable, Optional
+from PySide6.QtWidgets import QApplication
 from core.dicom_loader import DICOMLoader
 from core.dicom_organizer import DICOMOrganizer
 from gui.dialogs.file_dialog import FileDialog
@@ -75,6 +76,43 @@ class FileOperationsHandler:
         self.load_first_slice_callback = load_first_slice_callback
         self.update_status_callback = update_status_callback
     
+    def _format_source_name(self, file_paths: list[str]) -> str:
+        """
+        Format source name for status display.
+        
+        Args:
+            file_paths: List of file paths
+            
+        Returns:
+            Formatted source name string
+        """
+        if len(file_paths) == 1:
+            return os.path.basename(file_paths[0])
+        elif len(file_paths) > 1:
+            return os.path.basename(file_paths[0]) + "..."
+        return ""
+    
+    def _format_final_status(self, studies: dict, num_files: int, source_name: str) -> str:
+        """
+        Format final status message with studies/series/file counts.
+        
+        Args:
+            studies: Dictionary of organized studies/series
+            num_files: Number of files loaded
+            source_name: Name of source (folder or file)
+            
+        Returns:
+            Formatted status message
+        """
+        num_studies = len(studies)
+        num_series = sum(len(series_dict) for series_dict in studies.values())
+        
+        study_text = f"{num_studies} study" + ("ies" if num_studies != 1 else "")
+        series_text = f"{num_series} series"
+        file_text = f"{num_files} file" + ("s" if num_files != 1 else "")
+        
+        return f"{study_text}, {series_text}, {file_text} loaded from {source_name}"
+    
     def open_files(self) -> tuple[list, dict]:
         """
         Handle open files request.
@@ -94,9 +132,24 @@ class FileOperationsHandler:
             self.config_manager.add_recent_file(file_paths[0])
             self.main_window.update_recent_menu()
         
+        # Format source name for status display
+        source_name = self._format_source_name(file_paths)
+        
         try:
+            # Update status: start loading
+            self.update_status_callback(f"Loading files from {source_name}...")
+            QApplication.processEvents()
+            
+            # Create progress callback
+            def progress_callback(current: int, total: int, filename: str) -> None:
+                if filename:
+                    self.update_status_callback(f"Loading file {current}/{total}: {filename}...")
+                else:
+                    self.update_status_callback(f"Loaded {total} file(s). Organizing into studies/series...")
+                QApplication.processEvents()
+            
             # Load files
-            datasets = self.dicom_loader.load_files(file_paths)
+            datasets = self.dicom_loader.load_files(file_paths, progress_callback=progress_callback)
             
             if not datasets:
                 # Check if there were specific errors
@@ -205,17 +258,18 @@ class FileOperationsHandler:
                 )
                 return None, None
             
-            # Check for compression errors and show guidance
+            # Format and display final status
+            final_status = self._format_final_status(studies, len(datasets), source_name)
+            
+            # Check for compression errors and append guidance if needed
             failed = self.dicom_loader.get_failed_files()
             compression_errors = [f for f in failed if "Compressed DICOM" in f[1] or "pylibjpeg" in f[1].lower()]
             if compression_errors:
                 compression_count = len(compression_errors)
-                self.update_status_callback(
-                    f"Loaded {len(datasets)} DICOM file(s). "
-                    f"{compression_count} compressed file(s) require pylibjpeg: pip install pylibjpeg pyjpegls"
-                )
-            else:
-                self.update_status_callback(f"Loaded {len(datasets)} DICOM file(s)")
+                final_status += f". {compression_count} compressed file(s) require pylibjpeg: pip install pylibjpeg pyjpegls"
+            
+            self.update_status_callback(final_status)
+            QApplication.processEvents()
             
             return datasets, studies
         
@@ -267,9 +321,24 @@ class FileOperationsHandler:
         self.config_manager.add_recent_file(folder_path)
         self.main_window.update_recent_menu()
         
+        # Format source name for status display
+        source_name = os.path.basename(folder_path)
+        
         try:
+            # Update status: start loading
+            self.update_status_callback(f"Loading files from {source_name}...")
+            QApplication.processEvents()
+            
+            # Create progress callback
+            def progress_callback(current: int, total: int, filename: str) -> None:
+                if filename:
+                    self.update_status_callback(f"Loading file {current}/{total}: {filename}...")
+                else:
+                    self.update_status_callback(f"Loaded {total} file(s). Organizing into studies/series...")
+                QApplication.processEvents()
+            
             # Load folder (recursive)
-            datasets = self.dicom_loader.load_directory(folder_path, recursive=True)
+            datasets = self.dicom_loader.load_directory(folder_path, recursive=True, progress_callback=progress_callback)
             
             if not datasets:
                 # Check if there were specific errors
@@ -330,7 +399,10 @@ class FileOperationsHandler:
                 )
                 return None, None
             
-            self.update_status_callback(f"Loaded {len(datasets)} DICOM file(s) from folder")
+            # Format and display final status
+            final_status = self._format_final_status(studies, len(datasets), source_name)
+            self.update_status_callback(final_status)
+            QApplication.processEvents()
             
             return datasets, studies
         
@@ -396,8 +468,21 @@ class FileOperationsHandler:
         # Determine if it's a file or folder
         if os.path.isfile(file_path):
             # Open as file
+            source_name = os.path.basename(file_path)
             try:
-                datasets = self.dicom_loader.load_files([file_path])
+                # Update status: start loading
+                self.update_status_callback(f"Loading files from {source_name}...")
+                QApplication.processEvents()
+                
+                # Create progress callback
+                def progress_callback(current: int, total: int, filename: str) -> None:
+                    if filename:
+                        self.update_status_callback(f"Loading file {current}/{total}: {filename}...")
+                    else:
+                        self.update_status_callback(f"Loaded {total} file(s). Organizing into studies/series...")
+                    QApplication.processEvents()
+                
+                datasets = self.dicom_loader.load_files([file_path], progress_callback=progress_callback)
                 
                 if not datasets:
                     # Check if there were specific errors
@@ -452,21 +537,22 @@ class FileOperationsHandler:
                     self.file_dialog.show_error(
                         self.main_window,
                         "Error",
-                        f"Error displaying first slice: {str(e)}"
-                    )
+                    f"Error displaying first slice: {str(e)}"
+                )
                     return None, None
                 
-                # Check for compression errors and show guidance
+                # Format and display final status
+                final_status = self._format_final_status(studies, len(datasets), source_name)
+                
+                # Check for compression errors and append guidance if needed
                 failed = self.dicom_loader.get_failed_files()
                 compression_errors = [f for f in failed if "Compressed DICOM" in f[1] or "pylibjpeg" in f[1].lower()]
                 if compression_errors:
                     compression_count = len(compression_errors)
-                    self.update_status_callback(
-                        f"Loaded {len(datasets)} DICOM file(s). "
-                        f"{compression_count} compressed file(s) require pylibjpeg: pip install pylibjpeg pyjpegls"
-                    )
-                else:
-                    self.update_status_callback(f"Loaded {len(datasets)} DICOM file(s)")
+                    final_status += f". {compression_count} compressed file(s) require pylibjpeg: pip install pylibjpeg pyjpegls"
+                
+                self.update_status_callback(final_status)
+                QApplication.processEvents()
                 
                 return datasets, studies
                 
@@ -491,8 +577,21 @@ class FileOperationsHandler:
                 return None, None
         else:
             # Open as folder
+            source_name = os.path.basename(file_path)
             try:
-                datasets = self.dicom_loader.load_directory(file_path, recursive=True)
+                # Update status: start loading
+                self.update_status_callback(f"Loading files from {source_name}...")
+                QApplication.processEvents()
+                
+                # Create progress callback
+                def progress_callback(current: int, total: int, filename: str) -> None:
+                    if filename:
+                        self.update_status_callback(f"Loading file {current}/{total}: {filename}...")
+                    else:
+                        self.update_status_callback(f"Loaded {total} file(s). Organizing into studies/series...")
+                    QApplication.processEvents()
+                
+                datasets = self.dicom_loader.load_directory(file_path, recursive=True, progress_callback=progress_callback)
                 
                 if not datasets:
                     # Check if there were specific errors
@@ -543,11 +642,14 @@ class FileOperationsHandler:
                     self.file_dialog.show_error(
                         self.main_window,
                         "Error",
-                        f"Error displaying first slice: {str(e)}"
-                    )
+                    f"Error displaying first slice: {str(e)}"
+                )
                     return None, None
                 
-                self.update_status_callback(f"Loaded {len(datasets)} DICOM file(s) from folder")
+                # Format and display final status
+                final_status = self._format_final_status(studies, len(datasets), source_name)
+                self.update_status_callback(final_status)
+                QApplication.processEvents()
                 
                 return datasets, studies
                 
@@ -608,9 +710,24 @@ class FileOperationsHandler:
             self.config_manager.add_recent_file(folder_path)
             self.main_window.update_recent_menu()
             
+            # Format source name for status display
+            source_name = os.path.basename(folder_path)
+            
             try:
+                # Update status: start loading
+                self.update_status_callback(f"Loading files from {source_name}...")
+                QApplication.processEvents()
+                
+                # Create progress callback
+                def progress_callback(current: int, total: int, filename: str) -> None:
+                    if filename:
+                        self.update_status_callback(f"Loading file {current}/{total}: {filename}...")
+                    else:
+                        self.update_status_callback(f"Loaded {total} file(s). Organizing into studies/series...")
+                    QApplication.processEvents()
+                
                 # Load folder (recursive)
-                datasets = self.dicom_loader.load_directory(folder_path, recursive=True)
+                datasets = self.dicom_loader.load_directory(folder_path, recursive=True, progress_callback=progress_callback)
                 
                 if not datasets:
                     # Check if there were specific errors
@@ -671,7 +788,10 @@ class FileOperationsHandler:
                     )
                     return None, None
                 
-                self.update_status_callback(f"Loaded {len(datasets)} DICOM file(s) from folder")
+                # Format and display final status
+                final_status = self._format_final_status(studies, len(datasets), source_name)
+                self.update_status_callback(final_status)
+                QApplication.processEvents()
                 
                 return datasets, studies
             
@@ -715,9 +835,24 @@ class FileOperationsHandler:
                 self.config_manager.add_recent_file(files[0])
                 self.main_window.update_recent_menu()
             
+            # Format source name for status display
+            source_name = self._format_source_name(files)
+            
             try:
+                # Update status: start loading
+                self.update_status_callback(f"Loading files from {source_name}...")
+                QApplication.processEvents()
+                
+                # Create progress callback
+                def progress_callback(current: int, total: int, filename: str) -> None:
+                    if filename:
+                        self.update_status_callback(f"Loading file {current}/{total}: {filename}...")
+                    else:
+                        self.update_status_callback(f"Loaded {total} file(s). Organizing into studies/series...")
+                    QApplication.processEvents()
+                
                 # Load files
-                datasets = self.dicom_loader.load_files(files)
+                datasets = self.dicom_loader.load_files(files, progress_callback=progress_callback)
                 
                 if not datasets:
                     # Check if there were specific errors
@@ -826,17 +961,18 @@ class FileOperationsHandler:
                     )
                     return None, None
                 
-                # Check for compression errors and show guidance
+                # Format and display final status
+                final_status = self._format_final_status(studies, len(datasets), source_name)
+                
+                # Check for compression errors and append guidance if needed
                 failed = self.dicom_loader.get_failed_files()
                 compression_errors = [f for f in failed if "Compressed DICOM" in f[1] or "pylibjpeg" in f[1].lower()]
                 if compression_errors:
                     compression_count = len(compression_errors)
-                    self.update_status_callback(
-                        f"Loaded {len(datasets)} DICOM file(s). "
-                        f"{compression_count} compressed file(s) require pylibjpeg: pip install pylibjpeg pyjpegls"
-                    )
-                else:
-                    self.update_status_callback(f"Loaded {len(datasets)} DICOM file(s)")
+                    final_status += f". {compression_count} compressed file(s) require pylibjpeg: pip install pylibjpeg pyjpegls"
+                
+                self.update_status_callback(final_status)
+                QApplication.processEvents()
                 
                 return datasets, studies
             
