@@ -56,17 +56,18 @@ class PresentationStateHandler:
         
         # Get referenced images
         result['referenced_images'] = self.get_referenced_images(dataset)
-        print(f"[ANNOTATIONS] Parsed Presentation State: {len(result['referenced_images']['image_uids'])} referenced image(s), {len(result['referenced_images']['series_uids'])} referenced series")
+        # print(f"[ANNOTATIONS] Parsed Presentation State: {len(result['referenced_images']['image_uids'])} referenced image(s), {len(result['referenced_images']['series_uids'])} referenced series")
         
         # Parse graphic annotations
         if hasattr(dataset, 'GraphicAnnotationSequence'):
             result['annotations'] = self.parse_graphic_annotations(dataset.GraphicAnnotationSequence)
-            print(f"[ANNOTATIONS] Parsed {len(result['annotations'])} annotation(s) from Presentation State")
+            # print(f"[ANNOTATIONS] Parsed {len(result['annotations'])} annotation(s) from Presentation State")
             if result['annotations']:
                 types = [ann.get('type', 'UNKNOWN') for ann in result['annotations']]
-                print(f"[ANNOTATIONS] Annotation types: {', '.join(set(types))}")
+                # print(f"[ANNOTATIONS] Annotation types: {', '.join(set(types))}")
         else:
-            print(f"[ANNOTATIONS] No GraphicAnnotationSequence found in Presentation State")
+            # print(f"[ANNOTATIONS] No GraphicAnnotationSequence found in Presentation State")
+            pass
         
         # Parse display settings
         result['display_settings'] = self.parse_display_settings(dataset)
@@ -106,9 +107,10 @@ class PresentationStateHandler:
                         series_uid = str(ref_item.SeriesInstanceUID)
                         if series_uid not in result['series_uids']:
                             result['series_uids'].append(series_uid)
-                            print(f"[ANNOTATIONS] Presentation State references series: {series_uid[:30]}...")
+                            # print(f"[ANNOTATIONS] Presentation State references series: {series_uid[:30]}...")
         except Exception as e:
-            print(f"[ANNOTATIONS] Error extracting referenced images: {e}")
+            # print(f"[ANNOTATIONS] Error extracting referenced images: {e}")
+            pass
         
         return result
     
@@ -141,7 +143,7 @@ class PresentationStateHandler:
                 annotation_units = 'PIXEL'  # Default
                 if hasattr(annotation_item, 'GraphicAnnotationUnits'):
                     annotation_units = str(annotation_item.GraphicAnnotationUnits)
-                    print(f"[ANNOTATIONS] GraphicAnnotationUnits: {annotation_units}")
+                    # print(f"[ANNOTATIONS] GraphicAnnotationUnits: {annotation_units}")
                 
                 # Get graphic objects
                 if hasattr(annotation_item, 'GraphicObjectSequence'):

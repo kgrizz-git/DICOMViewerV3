@@ -24,7 +24,8 @@ Requirements:
 
 from PySide6.QtCore import QPointF
 from pydicom.dataset import Dataset
-from typing import Optional, Dict, Callable
+from typing import Optional, Dict, Callable, List, Tuple
+import numpy as np
 from core.dicom_processor import DICOMProcessor
 from gui.image_viewer import ImageViewer
 from gui.window_level_controls import WindowLevelControls
@@ -81,6 +82,10 @@ class ViewStateManager:
         self.current_window_center: Optional[float] = None
         self.current_window_width: Optional[float] = None
         self.window_level_user_modified = False  # Track if user has manually changed window/level
+        
+        # Window/level presets from DICOM tags
+        self.window_level_presets: List[Tuple[float, float, bool, Optional[str]]] = []
+        self.current_preset_index: int = 0  # 0 = default/first preset
         
         # Initial view state for reset functionality
         self.initial_zoom: Optional[float] = None
@@ -418,7 +423,16 @@ class ViewStateManager:
                             reset_window_center = wc
                             reset_window_width = ww
                         elif series_pixel_min is not None and series_pixel_max is not None:
-                            reset_window_center = (series_pixel_min + series_pixel_max) / 2.0
+                            # Calculate median from series for window center
+                            if series_datasets:
+                                reset_window_center = self.dicom_processor.get_series_pixel_median(
+                                    series_datasets, apply_rescale=use_rescaled
+                                )
+                                # If median calculation failed, fall back to midpoint
+                                if reset_window_center is None:
+                                    reset_window_center = (series_pixel_min + series_pixel_max) / 2.0
+                            else:
+                                reset_window_center = (series_pixel_min + series_pixel_max) / 2.0
                             reset_window_width = series_pixel_max - series_pixel_min
                             if reset_window_width <= 0:
                                 reset_window_width = 1.0
@@ -429,7 +443,18 @@ class ViewStateManager:
                                     dataset, apply_rescale=use_rescaled
                                 )
                                 if pixel_min is not None and pixel_max is not None:
-                                    reset_window_center = (pixel_min + pixel_max) / 2.0
+                                    # Calculate median from single slice pixel array
+                                    pixel_array = self.dicom_processor.get_pixel_array(dataset)
+                                    if pixel_array is not None:
+                                        # Apply rescale if needed
+                                        if use_rescaled:
+                                            rescale_slope, rescale_intercept, _ = self.dicom_processor.get_rescale_parameters(dataset)
+                                            if rescale_slope is not None and rescale_intercept is not None:
+                                                pixel_array = pixel_array.astype(np.float32) * float(rescale_slope) + float(rescale_intercept)
+                                        reset_window_center = float(np.median(pixel_array))
+                                    else:
+                                        # Fall back to midpoint if pixel array unavailable
+                                        reset_window_center = (pixel_min + pixel_max) / 2.0
                                     reset_window_width = pixel_max - pixel_min
                                     if reset_window_width <= 0:
                                         reset_window_width = 1.0
@@ -812,9 +837,15 @@ class ViewStateManager:
         self.current_window_center = None
         self.current_window_width = None
         self.window_level_user_modified = False
+        self.clear_window_level_presets()
         # Clear global initial values to prevent persistence from previous datasets
         self.initial_window_center = None
         self.initial_window_width = None
+    
+    def clear_window_level_presets(self) -> None:
+        """Clear window/level presets when changing series."""
+        self.window_level_presets = []
+        self.current_preset_index = 0
     
     def reset_series_tracking(self) -> None:
         """Reset series tracking when loading new files."""

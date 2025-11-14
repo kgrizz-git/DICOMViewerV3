@@ -379,19 +379,19 @@ class DICOMViewerApp(QObject):
                 key_objects = self.dicom_organizer.get_key_objects(study_uid)
                 
                 if presentation_states:
-                    print(f"[ANNOTATIONS] Found {len(presentation_states)} Presentation State(s) for study {study_uid[:20]}...")
+                    # print(f"[ANNOTATIONS] Found {len(presentation_states)} Presentation State(s) for study {study_uid[:20]}...")
                     all_presentation_states[study_uid] = presentation_states
                 if key_objects:
-                    print(f"[ANNOTATIONS] Found {len(key_objects)} Key Object(s) for study {study_uid[:20]}...")
+                    # print(f"[ANNOTATIONS] Found {len(key_objects)} Key Object(s) for study {study_uid[:20]}...")
                     all_key_objects[study_uid] = key_objects
             
             # Load into annotation manager
             if all_presentation_states:
                 self.annotation_manager.load_presentation_states(all_presentation_states)
-                print(f"[ANNOTATIONS] Loaded Presentation States for {len(all_presentation_states)} studies")
+                # print(f"[ANNOTATIONS] Loaded Presentation States for {len(all_presentation_states)} studies")
             if all_key_objects:
                 self.annotation_manager.load_key_objects(all_key_objects)
-                print(f"[ANNOTATIONS] Loaded Key Objects for {len(all_key_objects)} studies")
+                # print(f"[ANNOTATIONS] Loaded Key Objects for {len(all_key_objects)} studies")
             
             # Reset view state
             self.view_state_manager.reset_window_level_state()
@@ -609,8 +609,26 @@ class DICOMViewerApp(QObject):
             get_use_rescaled=lambda: self.view_state_manager.use_rescaled_values if self.view_state_manager else False
         )
         
+        # Set callbacks for window/level presets
+        def get_presets_callback():
+            presets = self.view_state_manager.window_level_presets if self.view_state_manager else []
+            # print(f"[DEBUG-WL-PRESETS] Main: get_presets_callback called, returning {len(presets)} preset(s)")
+            return presets
+        
+        def get_current_index_callback():
+            index = self.view_state_manager.current_preset_index if self.view_state_manager else 0
+            # print(f"[DEBUG-WL-PRESETS] Main: get_current_index_callback called, returning index={index}")
+            return index
+        
+        self.image_viewer.get_window_level_presets_callback = get_presets_callback
+        self.image_viewer.get_current_preset_index_callback = get_current_index_callback
+        # print(f"[DEBUG-WL-PRESETS] Main: Callbacks set for window/level presets")
+        
         # Window/level
         self.window_level_controls.window_changed.connect(self.view_state_manager.handle_window_changed)
+        
+        # Window/Level preset selection
+        self.image_viewer.window_level_preset_selected.connect(self._on_window_level_preset_selected)
         
         # Slice navigation
         self.slice_navigator.slice_changed.connect(self._on_slice_changed)
@@ -1252,6 +1270,55 @@ class DICOMViewerApp(QObject):
             width_delta: Change in window width
         """
         self.view_state_manager.handle_window_level_drag(center_delta, width_delta)
+    
+    def _on_window_level_preset_selected(self, preset_index: int) -> None:
+        """
+        Handle window/level preset selection from context menu.
+        
+        Args:
+            preset_index: Index of the selected preset
+        """
+        # print(f"[DEBUG-WL-PRESETS] Main: Preset selected: index={preset_index}")
+        if self.view_state_manager and self.view_state_manager.window_level_presets:
+            # print(f"[DEBUG-WL-PRESETS] Main: Found {len(self.view_state_manager.window_level_presets)} preset(s) in view_state_manager")
+            if 0 <= preset_index < len(self.view_state_manager.window_level_presets):
+                wc, ww, is_rescaled, preset_name = self.view_state_manager.window_level_presets[preset_index]
+                # print(f"[DEBUG-WL-PRESETS] Main: Selected preset {preset_index}: center={wc}, width={ww}, is_rescaled={is_rescaled}, name={preset_name}")
+                
+                # Get current rescale state
+                use_rescaled_values = self.view_state_manager.use_rescaled_values
+                rescale_slope = self.view_state_manager.rescale_slope
+                rescale_intercept = self.view_state_manager.rescale_intercept
+                
+                # Convert if needed based on current rescale state
+                if is_rescaled and not use_rescaled_values:
+                    if (rescale_slope is not None and rescale_intercept is not None and rescale_slope != 0.0):
+                        orig_wc, orig_ww = wc, ww
+                        wc, ww = self.dicom_processor.convert_window_level_rescaled_to_raw(
+                            wc, ww, rescale_slope, rescale_intercept
+                        )
+                        # print(f"[DEBUG-WL-PRESETS] Main: Converted rescaled->raw: ({orig_wc}, {orig_ww}) -> ({wc}, {ww})")
+                elif not is_rescaled and use_rescaled_values:
+                    if (rescale_slope is not None and rescale_intercept is not None):
+                        orig_wc, orig_ww = wc, ww
+                        wc, ww = self.dicom_processor.convert_window_level_raw_to_rescaled(
+                            wc, ww, rescale_slope, rescale_intercept
+                        )
+                        # print(f"[DEBUG-WL-PRESETS] Main: Converted raw->rescaled: ({orig_wc}, {orig_ww}) -> ({wc}, {ww})")
+                
+                # Update preset index
+                self.view_state_manager.current_preset_index = preset_index
+                # print(f"[DEBUG-WL-PRESETS] Main: Updated current_preset_index to {preset_index}")
+                
+                # Set window/level
+                self.window_level_controls.set_window_level(wc, ww, block_signals=False)
+                
+                # Update status bar
+                preset_display_name = preset_name if preset_name else "Default"
+                self.main_window.update_status(f"Window/Level: {preset_display_name} (W={ww:.1f}, C={wc:.1f})")
+                
+                # Mark window/level as user-modified to preserve manual adjustments
+                self.view_state_manager.window_level_user_modified = True
     
     def _on_overlay_font_size_changed(self, font_size: int) -> None:
         """
