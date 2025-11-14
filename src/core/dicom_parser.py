@@ -57,7 +57,7 @@ class DICOMParser:
     
     def get_all_tags(self, include_private: bool = True) -> Dict[str, Any]:
         """
-        Get all tags from the dataset.
+        Get all tags from the dataset with caching.
         
         Args:
             include_private: If True, include private tags
@@ -67,6 +67,11 @@ class DICOMParser:
         """
         if self.dataset is None:
             return {}
+        
+        # Check cache first
+        cache_key = f"{id(self.dataset)}_{include_private}"
+        if cache_key in self._tag_cache:
+            return self._tag_cache[cache_key]
         
         tags = {}
         
@@ -106,6 +111,8 @@ class DICOMParser:
                     "name": tag_str,
                 }
         
+        # Cache the result
+        self._tag_cache[cache_key] = tags
         return tags
     
     def get_tag_value(self, tag: Tuple[int, int], default: Any = None) -> Any:

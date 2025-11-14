@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                                 QTreeWidget, QTreeWidgetItem, QLineEdit,
                                 QPushButton, QCheckBox, QGroupBox, QMessageBox,
                                 QMenu)
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QAction
 from typing import Optional, Dict, Any
 import pydicom
@@ -64,7 +64,19 @@ class TagViewerDialog(QDialog):
         self.editor: Optional[DICOMEditor] = None
         self.history_manager: Optional[TagEditHistoryManager] = None
         
+        # Caching for performance
+        self._cached_tags: Optional[Dict[str, Any]] = None
+        self._cached_search_text: str = ""
+        self._cached_include_private: bool = True
+        
+        # Search debouncing timer
+        self._search_timer = QTimer()
+        self._search_timer.setSingleShot(True)
+        
         self._create_ui()
+        
+        # Connect timer after UI is created
+        self._search_timer.timeout.connect(lambda: self._populate_tags(self.search_edit.text()))
     
     def set_history_manager(self, history_manager: TagEditHistoryManager) -> None:
         """
@@ -141,6 +153,9 @@ class TagViewerDialog(QDialog):
         self.dataset = dataset
         self.parser = DICOMParser(dataset)
         self.editor = DICOMEditor(dataset)
+        # Clear cache when dataset changes
+        self._cached_tags = None
+        self._cached_search_text = ""
         self._populate_tags()
     
     def _populate_tags(self, search_text: str = "") -> None:
@@ -153,11 +168,18 @@ class TagViewerDialog(QDialog):
         if self.parser is None:
             return
         
-        self.tree_widget.clear()
-        self.all_tag_items = []
+        # Check if tags need to be reloaded (dataset changed or private tags setting changed)
+        need_reload = (self._cached_tags is None or 
+                      self.show_private_tags != self._cached_include_private)
         
-        # Get all tags
-        tags = self.parser.get_all_tags(include_private=self.show_private_tags)
+        if need_reload:
+            # Reload tags from parser (will use parser's cache)
+            tags = self.parser.get_all_tags(include_private=self.show_private_tags)
+            self._cached_tags = tags
+            self._cached_include_private = self.show_private_tags
+        else:
+            # Use cached tags
+            tags = self._cached_tags
         
         # Filter by search text if provided
         if search_text:
@@ -177,56 +199,73 @@ class TagViewerDialog(QDialog):
                     filtered_tags[tag_str] = tag_data
             tags = filtered_tags
         
-        # Sort tags by tag number
-        sorted_tags = sorted(tags.items(), key=lambda x: x[0])
+        # Update cached search text
+        self._cached_search_text = search_text
         
-        # Group by tag group (first 4 hex digits)
-        groups: Dict[str, list] = {}
-        for tag_str, tag_data in sorted_tags:
-            group = tag_str[:5]  # e.g., "(0008," for group 0008
-            if group not in groups:
-                groups[group] = []
-            groups[group].append((tag_str, tag_data))
-        
-        # Create tree items
-        for group, tag_list in sorted(groups.items()):
-            group_item = QTreeWidgetItem(self.tree_widget)
-            group_item.setText(0, f"Group {group}")
-            group_item.setExpanded(True)
+        # Disable widget updates during population to prevent expensive repaints
+        self.tree_widget.setUpdatesEnabled(False)
+        try:
+            # Clear tree widget
+            self.tree_widget.clear()
+            self.all_tag_items = []
             
-            for tag_str, tag_data in tag_list:
-                tag_item = QTreeWidgetItem(group_item)
-                tag_item.setText(0, tag_data.get("tag", tag_str))
-                tag_item.setText(1, tag_data.get("name", ""))
-                tag_item.setText(2, tag_data.get("VR", ""))
+            # Sort tags by tag number
+            sorted_tags = sorted(tags.items(), key=lambda x: x[0])
+            
+            # Group by tag group (first 4 hex digits)
+            groups: Dict[str, list] = {}
+            for tag_str, tag_data in sorted_tags:
+                group = tag_str[:5]  # e.g., "(0008," for group 0008
+                if group not in groups:
+                    groups[group] = []
+                groups[group].append((tag_str, tag_data))
+            
+            # Create tree items
+            for group, tag_list in sorted(groups.items()):
+                group_item = QTreeWidgetItem(self.tree_widget)
+                group_item.setText(0, f"Group {group}")
+                group_item.setExpanded(True)
                 
-                # Format value
-                value = tag_data.get("value", "")
-                if isinstance(value, list):
-                    value_str = ", ".join(str(v) for v in value)
-                else:
-                    value_str = str(value)
-                
-                # Don't truncate in separate window - show full value
-                tag_item.setText(3, value_str)
-                tag_item.setData(0, Qt.ItemDataRole.UserRole, tag_str)
-                tag_item.setData(0, Qt.ItemDataRole.UserRole + 1, tag_data)
-                
-                self.all_tag_items.append(tag_item)
-        
-        # Resize columns
-        self.tree_widget.resizeColumnToContents(0)
-        self.tree_widget.resizeColumnToContents(1)
-        self.tree_widget.resizeColumnToContents(2)
+                for tag_str, tag_data in tag_list:
+                    tag_item = QTreeWidgetItem(group_item)
+                    tag_item.setText(0, tag_data.get("tag", tag_str))
+                    tag_item.setText(1, tag_data.get("name", ""))
+                    tag_item.setText(2, tag_data.get("VR", ""))
+                    
+                    # Format value
+                    value = tag_data.get("value", "")
+                    if isinstance(value, list):
+                        value_str = ", ".join(str(v) for v in value)
+                    else:
+                        value_str = str(value)
+                    
+                    # Don't truncate in separate window - show full value
+                    tag_item.setText(3, value_str)
+                    tag_item.setData(0, Qt.ItemDataRole.UserRole, tag_str)
+                    tag_item.setData(0, Qt.ItemDataRole.UserRole + 1, tag_data)
+                    
+                    self.all_tag_items.append(tag_item)
+            
+            # Resize columns only on initial load (no search text)
+            # Skip expensive column resizing during filtering/searching
+            if not search_text:
+                self.tree_widget.resizeColumnToContents(0)
+                self.tree_widget.resizeColumnToContents(1)
+                self.tree_widget.resizeColumnToContents(2)
+        finally:
+            # Always re-enable updates, even if an error occurred
+            self.tree_widget.setUpdatesEnabled(True)
     
     def _on_search_changed(self, text: str) -> None:
         """
-        Handle search text change.
+        Handle search text change with debouncing.
         
         Args:
             text: Search text
         """
-        self._populate_tags(text)
+        # Stop timer if running and restart with delay
+        self._search_timer.stop()
+        self._search_timer.start(300)  # 300ms delay after user stops typing
     
     def _on_private_tags_toggled(self, checked: bool) -> None:
         """
@@ -236,6 +275,8 @@ class TagViewerDialog(QDialog):
             checked: Checkbox state
         """
         self.show_private_tags = checked
+        # Clear cache when private tags setting changes
+        self._cached_tags = None
         if self.parser is not None:
             search_text = self.search_edit.text()
             self._populate_tags(search_text)
