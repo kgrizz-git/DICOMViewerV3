@@ -38,6 +38,9 @@ class DICOMOrganizer:
         """Initialize the organizer."""
         self.studies: Dict[str, Dict[str, List[Dataset]]] = {}
         self.file_paths: Dict[Tuple[str, str, int], str] = {}  # (study_uid, series_uid, instance_num) -> path
+        # Storage for Presentation State and Key Object files
+        self.presentation_states: Dict[str, List[Dataset]] = {}  # Keyed by StudyInstanceUID
+        self.key_objects: Dict[str, List[Dataset]] = {}  # Keyed by StudyInstanceUID
     
     def organize(self, datasets: List[Dataset], file_paths: Optional[List[str]] = None) -> Dict[str, Dict[str, List[Dataset]]]:
         """
@@ -52,19 +55,84 @@ class DICOMOrganizer:
         """
         self.studies = {}
         self.file_paths = {}
+        self.presentation_states = {}
+        self.key_objects = {}
         
         # Group by StudyInstanceUID and SeriesInstanceUID
         study_dict: Dict[str, Dict[str, List[Tuple[Dataset, Optional[str]]]]] = defaultdict(
             lambda: defaultdict(list)
         )
         
+        # SOP Class UIDs for Presentation States and Key Objects
+        GRAYSCALE_PRESENTATION_STATE_UID = '1.2.840.10008.5.1.4.1.1.11.1'
+        COLOR_PRESENTATION_STATE_UID = '1.2.840.10008.5.1.4.1.1.11.2'
+        KEY_OBJECT_SELECTION_UID = '1.2.840.10008.5.1.4.1.1.88.59'
+        
+        # Track SOP Class UIDs encountered
+        sop_class_counts = {}
+        ps_count = 0
+        ko_count = 0
+        
         for idx, dataset in enumerate(datasets):
-            # Get study and series UIDs
+            # Check SOP Class UID to identify file type
+            sop_class_uid = self._get_tag_value(dataset, "SOPClassUID", "")
+            sop_class_uid_str = str(sop_class_uid)
+            
+            # Track SOP Class UIDs for debugging
+            if sop_class_uid_str:
+                sop_class_counts[sop_class_uid_str] = sop_class_counts.get(sop_class_uid_str, 0) + 1
+            
+            # Handle Presentation State files - use exact match
+            if sop_class_uid_str == GRAYSCALE_PRESENTATION_STATE_UID or sop_class_uid_str == COLOR_PRESENTATION_STATE_UID:
+                study_uid = self._get_tag_value(dataset, "StudyInstanceUID", "")
+                if study_uid:
+                    if study_uid not in self.presentation_states:
+                        self.presentation_states[study_uid] = []
+                    self.presentation_states[study_uid].append(dataset)
+                    ps_count += 1
+                    print(f"[ANNOTATIONS] Detected Presentation State file (SOP Class: {sop_class_uid_str[:50]}...)")
+                # Skip adding to image series (they're metadata files)
+                continue
+            
+            # Handle Key Object Selection Document files - use exact match
+            if sop_class_uid_str == KEY_OBJECT_SELECTION_UID:
+                study_uid = self._get_tag_value(dataset, "StudyInstanceUID", "")
+                if study_uid:
+                    if study_uid not in self.key_objects:
+                        self.key_objects[study_uid] = []
+                    self.key_objects[study_uid].append(dataset)
+                    ko_count += 1
+                    print(f"[ANNOTATIONS] Detected Key Object file (SOP Class: {sop_class_uid_str[:50]}...)")
+                # Skip adding to image series (they're metadata files)
+                continue
+            
+            # Check for embedded annotations in image files
+            has_overlay = False
+            has_graphics = False
+            for tag in dataset.keys():
+                tag_str = str(tag)
+                # Check for OverlayData tags (0x60xx, 0x3000)
+                if tag_str.startswith('(0x60') and '0x3000' in tag_str:
+                    has_overlay = True
+                # Check for GraphicAnnotationSequence
+                if 'GraphicAnnotationSequence' in tag_str or hasattr(dataset, 'GraphicAnnotationSequence'):
+                    has_graphics = True
+            
+            if has_overlay or has_graphics:
+                study_uid = self._get_tag_value(dataset, "StudyInstanceUID", "")
+                series_uid = self._get_tag_value(dataset, "SeriesInstanceUID", "")
+                if study_uid and series_uid:
+                    print(f"[ANNOTATIONS] Image file contains embedded annotations (Overlay: {has_overlay}, Graphics: {has_graphics})")
+                    # Mark this image as having embedded annotations
+                    # We'll process these when displaying the image
+            
+            # Get study and series UIDs for image files
             study_uid = self._get_tag_value(dataset, "StudyInstanceUID", "")
             series_uid = self._get_tag_value(dataset, "SeriesInstanceUID", "")
             
             if not study_uid or not series_uid:
                 # Skip files without proper UIDs
+                print(f"[ANNOTATIONS] Skipping file {idx}: missing StudyInstanceUID or SeriesInstanceUID (SOP Class: {sop_class_uid_str[:50]}...)")
                 continue
             
             file_path = file_paths[idx] if file_paths and idx < len(file_paths) else None
@@ -117,6 +185,15 @@ class DICOMOrganizer:
                         else:
                             instance_num = self._get_tag_value(ds, "InstanceNumber", idx)
                         self.file_paths[(study_uid, series_uid, instance_num)] = path
+        
+        # Print summary of detected annotation files
+        print(f"[ANNOTATIONS] Organization complete: {ps_count} Presentation State(s), {ko_count} Key Object(s)")
+        if sop_class_counts:
+            print(f"[ANNOTATIONS] SOP Class UIDs encountered: {len(sop_class_counts)} unique types")
+            # Print top 10 most common SOP Class UIDs
+            sorted_sop = sorted(sop_class_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+            for uid, count in sorted_sop:
+                print(f"  {uid[:60]}... : {count} file(s)")
         
         return self.studies
     
@@ -268,4 +345,28 @@ class DICOMOrganizer:
             File path or None
         """
         return self.file_paths.get((study_uid, series_uid, instance_number))
+    
+    def get_presentation_states(self, study_uid: str) -> List[Dataset]:
+        """
+        Get Presentation State files for a study.
+        
+        Args:
+            study_uid: Study Instance UID
+            
+        Returns:
+            List of Presentation State datasets
+        """
+        return self.presentation_states.get(study_uid, [])
+    
+    def get_key_objects(self, study_uid: str) -> List[Dataset]:
+        """
+        Get Key Object Selection Document files for a study.
+        
+        Args:
+            study_uid: Study Instance UID
+            
+        Returns:
+            List of Key Object datasets
+        """
+        return self.key_objects.get(study_uid, [])
 

@@ -27,12 +27,14 @@ from typing import Optional, Callable
 from pydicom.dataset import Dataset
 from core.dicom_processor import DICOMProcessor
 from core.dicom_parser import DICOMParser
+from core.dicom_organizer import DICOMOrganizer
 from gui.image_viewer import ImageViewer
 from gui.metadata_panel import MetadataPanel
 from gui.slice_navigator import SliceNavigator
 from gui.window_level_controls import WindowLevelControls
 from tools.roi_manager import ROIManager
 from tools.measurement_tool import MeasurementTool
+from tools.annotation_manager import AnnotationManager
 from gui.overlay_manager import OverlayManager
 from gui.roi_list_panel import ROIListPanel
 from gui.roi_statistics_panel import ROIStatisticsPanel
@@ -65,7 +67,9 @@ class SliceDisplayManager:
         display_rois_callback: Optional[Callable] = None,
         display_measurements_callback: Optional[Callable] = None,
         roi_list_panel: Optional[ROIListPanel] = None,
-        roi_statistics_panel: Optional[ROIStatisticsPanel] = None
+        roi_statistics_panel: Optional[ROIStatisticsPanel] = None,
+        annotation_manager: Optional[AnnotationManager] = None,
+        dicom_organizer: Optional[DICOMOrganizer] = None
     ):
         """
         Initialize the slice display manager.
@@ -85,6 +89,8 @@ class SliceDisplayManager:
             display_measurements_callback: Optional callback to display measurements
             roi_list_panel: Optional ROI list panel for updating ROI list
             roi_statistics_panel: Optional ROI statistics panel for updating statistics
+            annotation_manager: Optional annotation manager for Presentation State and Key Object annotations
+            dicom_organizer: Optional DICOM organizer for accessing Presentation States and Key Objects
         """
         self.dicom_processor = dicom_processor
         self.image_viewer = image_viewer
@@ -100,6 +106,8 @@ class SliceDisplayManager:
         self.display_measurements_callback = display_measurements_callback
         self.roi_list_panel = roi_list_panel
         self.roi_statistics_panel = roi_statistics_panel
+        self.annotation_manager = annotation_manager
+        self.dicom_organizer = dicom_organizer
         
         # Current data context
         self.current_studies: dict = {}
@@ -528,6 +536,50 @@ class SliceDisplayManager:
                 self.display_measurements_callback(dataset)
             else:
                 self.display_measurements_for_slice(dataset)
+            
+            # Display Presentation State and Key Object annotations
+            if self.annotation_manager and self.dicom_organizer:
+                try:
+                    # Clear existing annotations first
+                    self.annotation_manager.clear_annotations(self.image_viewer.scene)
+                    
+                    # Get annotations for this image
+                    image_uid = getattr(dataset, 'SOPInstanceUID', 'unknown')
+                    annotations = self.annotation_manager.get_annotations_for_image(
+                        dataset, current_study_uid
+                    )
+                    
+                    # DEBUG: Print what we found
+                    print(f"[ANNOTATIONS] Found {len(annotations)} annotation(s) for image {str(image_uid)[:30]}...")
+                    if annotations:
+                        for i, ann in enumerate(annotations):
+                            print(f"  Annotation {i}: type={ann.get('type')}, coords={ann.get('coordinates')}, text={ann.get('text', '')[:50]}, units={ann.get('units', 'N/A')}")
+                    
+                    if annotations:
+                        # Get image dimensions for coordinate scaling
+                        # Try to get actual image dimensions from dataset
+                        image_width = 512  # Default
+                        image_height = 512  # Default
+                        
+                        if hasattr(dataset, 'Columns') and hasattr(dataset, 'Rows'):
+                            image_width = float(dataset.Columns)
+                            image_height = float(dataset.Rows)
+                        
+                        print(f"[ANNOTATIONS] Creating items with image size: {image_width}x{image_height}")
+                        
+                        # Create annotation graphics items
+                        items = self.annotation_manager.create_presentation_state_items(
+                            self.image_viewer.scene,
+                            annotations,
+                            image_width,
+                            image_height
+                        )
+                        print(f"[ANNOTATIONS] Created {len(items)} graphics item(s)")
+                except Exception as e:
+                    # Don't fail slice display if annotation display fails
+                    import traceback
+                    print(f"[ANNOTATIONS] Error displaying annotations: {e}")
+                    traceback.print_exc()
         
         except MemoryError as e:
             # Re-raise MemoryError with context for caller to handle

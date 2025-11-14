@@ -58,6 +58,7 @@ from core.tag_edit_history import TagEditHistoryManager
 from utils.config_manager import ConfigManager
 from tools.roi_manager import ROIManager
 from tools.measurement_tool import MeasurementTool
+from tools.annotation_manager import AnnotationManager
 from tools.histogram_widget import HistogramWidget
 from gui.overlay_manager import OverlayManager
 
@@ -115,6 +116,7 @@ class DICOMViewerApp(QObject):
         self.slice_navigator = SliceNavigator()
         self.roi_manager = ROIManager()
         self.measurement_tool = MeasurementTool()
+        self.annotation_manager = AnnotationManager()
         self.roi_statistics_panel = ROIStatisticsPanel()
         self.roi_list_panel = ROIListPanel()
         self.roi_list_panel.set_roi_manager(self.roi_manager)
@@ -198,7 +200,9 @@ class DICOMViewerApp(QObject):
             display_rois_callback=None,  # Will use default
             display_measurements_callback=None,  # Will use default
             roi_list_panel=self.roi_list_panel,
-            roi_statistics_panel=self.roi_statistics_panel
+            roi_statistics_panel=self.roi_statistics_panel,
+            annotation_manager=self.annotation_manager,
+            dicom_organizer=self.dicom_organizer
         )
         
         # Initialize ROICoordinator
@@ -364,6 +368,30 @@ class DICOMViewerApp(QObject):
             self.current_study_uid = first_slice_info['study_uid']
             self.current_series_uid = first_slice_info['series_uid']
             self.current_slice_index = first_slice_info['slice_index']
+            
+            # Load Presentation States and Key Objects into annotation manager
+            # Collect all presentation states and key objects from all studies
+            all_presentation_states = {}
+            all_key_objects = {}
+            
+            for study_uid in studies.keys():
+                presentation_states = self.dicom_organizer.get_presentation_states(study_uid)
+                key_objects = self.dicom_organizer.get_key_objects(study_uid)
+                
+                if presentation_states:
+                    print(f"[ANNOTATIONS] Found {len(presentation_states)} Presentation State(s) for study {study_uid[:20]}...")
+                    all_presentation_states[study_uid] = presentation_states
+                if key_objects:
+                    print(f"[ANNOTATIONS] Found {len(key_objects)} Key Object(s) for study {study_uid[:20]}...")
+                    all_key_objects[study_uid] = key_objects
+            
+            # Load into annotation manager
+            if all_presentation_states:
+                self.annotation_manager.load_presentation_states(all_presentation_states)
+                print(f"[ANNOTATIONS] Loaded Presentation States for {len(all_presentation_states)} studies")
+            if all_key_objects:
+                self.annotation_manager.load_key_objects(all_key_objects)
+                print(f"[ANNOTATIONS] Loaded Key Objects for {len(all_key_objects)} studies")
             
             # Reset view state
             self.view_state_manager.reset_window_level_state()
