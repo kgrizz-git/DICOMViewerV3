@@ -111,7 +111,7 @@ class ImageViewer(QGraphicsView):
         # Zoom settings
         self.min_zoom = 0.1
         self.max_zoom = 10.0
-        self.zoom_factor = 1.1  # Reduced from 1.15 for less sensitive scroll wheel zoom
+        self.zoom_factor = 1.08  # Reduced from 1.1 for less sensitive scroll wheel zoom
         self.current_zoom = 1.0
         
         # Mouse interaction mode
@@ -193,7 +193,15 @@ class ImageViewer(QGraphicsView):
         # Background - darker grey for better yellow text contrast
         darker_grey = QColor(64, 64, 64)
         self.setBackgroundBrush(darker_grey)
+    
+    def set_background_color(self, color: QColor) -> None:
+        """
+        Set the background color of the image viewer.
         
+        Args:
+            color: QColor for the background
+        """
+        self.setBackgroundBrush(color)
     
     def set_image(self, image: Image.Image, preserve_view: bool = False) -> None:
         """
@@ -755,7 +763,7 @@ class ImageViewer(QGraphicsView):
             delta_y = current_pos.y() - start_pos.y()
             
             # Convert to zoom factor (negative delta = zoom in, positive = zoom out)
-            zoom_delta = -delta_y / 300.0  # Reduced sensitivity (was 100.0)
+            zoom_delta = -delta_y / 350.0  # Reduced sensitivity (was 300.0)
             new_zoom = self.zoom_start_zoom * (1.0 + zoom_delta)
             
             # Clamp zoom

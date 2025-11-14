@@ -255,9 +255,17 @@ class SliceDisplayManager:
                         #     for idx, (wc, ww, is_rescaled, name) in enumerate(presets):
                         #         print(f"[DEBUG-WL-PRESETS]   Preset {idx}: center={wc}, width={ww}, is_rescaled={is_rescaled}, name={name}")
                         
-                        # Store presets in view state manager
+                        # Store presets in view state manager BEFORE setting window/level
+                        # This ensures that handle_window_changed can match values to presets
+                        # Rescale parameters were already set at line 153, so they're available for comparison
+                        print(f"[DEBUG-PRESET-MATCH] Storing {len(presets)} preset(s) in view_state_manager")
+                        print(f"[DEBUG-PRESET-MATCH] Current rescale state: use_rescaled={use_rescaled_values}, slope={rescale_slope}, intercept={rescale_intercept}")
+                        for idx, (wc, ww, is_rescaled, name) in enumerate(presets):
+                            print(f"[DEBUG-PRESET-MATCH]   Preset {idx}: wc={wc:.2f}, ww={ww:.2f}, is_rescaled={is_rescaled}, name={name}")
                         self.view_state_manager.window_level_presets = presets
                         self.view_state_manager.current_preset_index = 0  # Use first preset by default
+                        # Reset user-modified flag since we're loading presets
+                        self.view_state_manager.window_level_user_modified = False
                         # print(f"[DEBUG-WL-PRESETS] SliceDisplayManager: Stored {len(presets)} preset(s) in view_state_manager")
                         
                         # Get window/level from first preset if available, otherwise use single value method
@@ -349,17 +357,18 @@ class SliceDisplayManager:
                     self.view_state_manager.current_window_center = window_center
                     self.view_state_manager.current_window_width = window_width
                     
-                    # Update status bar if presets were found
+                    # Update status bar widget with zoom and preset info
+                    current_zoom = self.image_viewer.current_zoom
                     if self.view_state_manager.window_level_presets:
                         preset_name = "Default" if self.view_state_manager.current_preset_index == 0 else (
                             self.view_state_manager.window_level_presets[self.view_state_manager.current_preset_index][3] or "Default"
                         )
-                        status_msg = f"Window/Level: {preset_name} (W={window_width:.1f}, C={window_center:.1f})"
-                        self.view_state_manager.main_window.update_status(status_msg)
-                        # print(f"[DEBUG-WL-PRESETS] SliceDisplayManager: Updated status bar: {status_msg}")
+                        print(f"[DEBUG-PRESET-MATCH] Updating status bar with preset: {preset_name} (index={self.view_state_manager.current_preset_index})")
+                        self.view_state_manager.main_window.update_zoom_preset_status(current_zoom, preset_name)
                     elif window_center is not None and window_width is not None:
                         # No presets found, using calculated values
-                        self.view_state_manager.main_window.update_status("Window/Level: Auto (calculated from pixel range)")
+                        print(f"[DEBUG-PRESET-MATCH] Updating status bar with Auto-Calculated (no presets found)")
+                        self.view_state_manager.main_window.update_zoom_preset_status(current_zoom, None)
                     
                     # Store defaults for this series (will be updated with zoom/pan after fit_to_view)
                     # Store with the rescale state that was used to calculate them
@@ -511,11 +520,13 @@ class SliceDisplayManager:
             
             if is_new_study_series and window_center is not None and window_width is not None:
                 # New series - use calculated/stored defaults
+                print(f"[DEBUG-PRESET-MATCH] Setting window/level for new series: wc={window_center:.2f}, ww={window_width:.2f}, block_signals=True")
                 self.window_level_controls.set_window_level(
                     window_center, window_width, block_signals=True, unit=unit
                 )
             elif is_same_series and window_center is not None and window_width is not None:
                 # Same series - preserve existing window/level values (if valid)
+                print(f"[DEBUG-PRESET-MATCH] Setting window/level for same series: wc={window_center:.2f}, ww={window_width:.2f}, block_signals=True")
                 self.window_level_controls.set_window_level(
                     window_center, window_width, block_signals=True, unit=unit
                 )
@@ -540,6 +551,7 @@ class SliceDisplayManager:
                                 wc, ww = self.dicom_processor.convert_window_level_raw_to_rescaled(
                                     wc, ww, rescale_slope, rescale_intercept
                                 )
+                        print(f"[DEBUG-PRESET-MATCH] Setting window/level from dataset: wc={wc:.2f}, ww={ww:.2f}, block_signals=True")
                         self.window_level_controls.set_window_level(wc, ww, block_signals=True, unit=unit)
                         self.view_state_manager.current_window_center = wc
                         self.view_state_manager.current_window_width = ww
@@ -549,6 +561,7 @@ class SliceDisplayManager:
                         default_width = pixel_max - pixel_min
                         if default_width <= 0:
                             default_width = 1.0
+                        print(f"[DEBUG-PRESET-MATCH] Setting window/level from pixel range: wc={default_center:.2f}, ww={default_width:.2f}, block_signals=True")
                         self.window_level_controls.set_window_level(default_center, default_width, block_signals=True, unit=unit)
                         self.view_state_manager.current_window_center = default_center
                         self.view_state_manager.current_window_width = default_width

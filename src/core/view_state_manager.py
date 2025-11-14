@@ -567,10 +567,110 @@ class ViewStateManager:
             center: Window center
             width: Window width
         """
-        # Store current window/level values
-        self.current_window_center = center
-        self.current_window_width = width
-        self.window_level_user_modified = True  # Mark as user-modified
+        # DEBUG: Print received values and current state
+        print(f"[DEBUG-PRESET-MATCH] handle_window_changed called: center={center:.2f}, width={width:.2f}")
+        print(f"[DEBUG-PRESET-MATCH] Rescale state: use_rescaled={self.use_rescaled_values}, slope={self.rescale_slope}, intercept={self.rescale_intercept}")
+        print(f"[DEBUG-PRESET-MATCH] Available presets: {len(self.window_level_presets) if self.window_level_presets else 0}")
+        print(f"[DEBUG-PRESET-MATCH] Stored values: center={self.current_window_center}, width={self.current_window_width}")
+        
+        # Check if received values match stored values (to detect stale values from previous series)
+        # Use small tolerance for comparison
+        match_tolerance = 0.1
+        values_match_stored = (
+            self.current_window_center is not None and 
+            self.current_window_width is not None and
+            abs(self.current_window_center - center) < match_tolerance and
+            abs(self.current_window_width - width) < match_tolerance
+        )
+        
+        # If presets exist and received values don't match stored values, use stored values for preset matching
+        # This handles the case where stale values from previous series are received
+        match_center = center
+        match_width = width
+        if self.window_level_presets and not values_match_stored and self.current_window_center is not None and self.current_window_width is not None:
+            print(f"[DEBUG-PRESET-MATCH] Received values don't match stored values - using stored values for preset matching")
+            print(f"[DEBUG-PRESET-MATCH]   Received: center={center:.2f}, width={width:.2f}")
+            print(f"[DEBUG-PRESET-MATCH]   Stored: center={self.current_window_center:.2f}, width={self.current_window_width:.2f}")
+            match_center = self.current_window_center
+            match_width = self.current_window_width
+        else:
+            # Store current window/level values (only if they match stored or no stored values exist)
+            self.current_window_center = center
+            self.current_window_width = width
+        
+        # Check if the new values match any existing preset
+        preset_name = None
+        matched_preset = False
+        
+        # Skip preset matching if no presets are loaded yet
+        if not self.window_level_presets:
+            # No presets available, mark as user-modified
+            print(f"[DEBUG-PRESET-MATCH] No presets available, marking as user-modified")
+            self.window_level_user_modified = True
+        else:
+            # Use relative tolerance for better matching with larger values
+            # Use 0.1% relative tolerance, with minimum absolute tolerance of 0.1
+            center_tolerance = max(0.1, abs(match_center) * 0.001)
+            width_tolerance = max(0.1, abs(match_width) * 0.001)
+            print(f"[DEBUG-PRESET-MATCH] Using values for matching: center={match_center:.2f}, width={match_width:.2f}")
+            print(f"[DEBUG-PRESET-MATCH] Tolerances: center_tol={center_tolerance:.4f}, width_tol={width_tolerance:.4f}")
+            
+            for idx, (preset_wc, preset_ww, preset_is_rescaled, preset_name_val) in enumerate(self.window_level_presets):
+                print(f"[DEBUG-PRESET-MATCH] Checking preset {idx}: original wc={preset_wc:.2f}, ww={preset_ww:.2f}, is_rescaled={preset_is_rescaled}, name={preset_name_val}")
+                
+                # Convert preset values to match current rescale state before comparing
+                compare_wc = preset_wc
+                compare_ww = preset_ww
+                
+                # Convert if needed based on current rescale state
+                # Only convert if rescale parameters are available
+                if preset_is_rescaled and not self.use_rescaled_values:
+                    # Preset is rescaled, but we're using raw - convert preset to raw
+                    if (self.rescale_slope is not None and self.rescale_intercept is not None and 
+                        self.rescale_slope != 0.0):
+                        compare_wc, compare_ww = self.dicom_processor.convert_window_level_rescaled_to_raw(
+                            preset_wc, preset_ww, self.rescale_slope, self.rescale_intercept
+                        )
+                        print(f"[DEBUG-PRESET-MATCH] Converted rescaled->raw: ({preset_wc:.2f}, {preset_ww:.2f}) -> ({compare_wc:.2f}, {compare_ww:.2f})")
+                elif not preset_is_rescaled and self.use_rescaled_values:
+                    # Preset is raw, but we're using rescaled - convert preset to rescaled
+                    if (self.rescale_slope is not None and self.rescale_intercept is not None):
+                        compare_wc, compare_ww = self.dicom_processor.convert_window_level_raw_to_rescaled(
+                            preset_wc, preset_ww, self.rescale_slope, self.rescale_intercept
+                        )
+                        print(f"[DEBUG-PRESET-MATCH] Converted raw->rescaled: ({preset_wc:.2f}, {preset_ww:.2f}) -> ({compare_wc:.2f}, {compare_ww:.2f})")
+                else:
+                    print(f"[DEBUG-PRESET-MATCH] No conversion needed: preset_is_rescaled={preset_is_rescaled}, use_rescaled={self.use_rescaled_values}")
+                
+                # Compare converted preset values with match values using relative tolerance
+                center_diff = abs(compare_wc - match_center)
+                width_diff = abs(compare_ww - match_width)
+                center_match = center_diff < center_tolerance
+                width_match = width_diff < width_tolerance
+                
+                print(f"[DEBUG-PRESET-MATCH] Comparison: compare_wc={compare_wc:.2f} vs match_center={match_center:.2f} (diff={center_diff:.4f}, tol={center_tolerance:.4f}, match={center_match})")
+                print(f"[DEBUG-PRESET-MATCH] Comparison: compare_ww={compare_ww:.2f} vs match_width={match_width:.2f} (diff={width_diff:.4f}, tol={width_tolerance:.4f}, match={width_match})")
+                
+                if center_match and width_match:
+                    # Found a match - this is a preset, not a user modification
+                    print(f"[DEBUG-PRESET-MATCH] MATCH FOUND! Preset {idx} matches: {preset_name_val if preset_name_val else 'Default'}")
+                    self.current_preset_index = idx
+                    self.window_level_user_modified = False
+                    preset_name = preset_name_val if preset_name_val else "Default"
+                    matched_preset = True
+                    break
+                else:
+                    print(f"[DEBUG-PRESET-MATCH] No match for preset {idx}")
+        
+        # If no preset match found, mark as user-modified
+        if not matched_preset:
+            print(f"[DEBUG-PRESET-MATCH] No preset match found, marking as user-modified")
+            self.window_level_user_modified = True
+        
+        # Update status bar widget
+        print(f"[DEBUG-PRESET-MATCH] Final result: preset_name={preset_name}, user_modified={self.window_level_user_modified}")
+        current_zoom = self.image_viewer.current_zoom
+        self.main_window.update_zoom_preset_status(current_zoom, preset_name)
         
         # Re-display current slice with new window/level
         if self.current_studies and self.current_series_uid:

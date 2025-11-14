@@ -23,7 +23,10 @@ from PySide6.QtWidgets import (QMainWindow, QMenuBar, QToolBar, QStatusBar,
                                 QApplication, QDialog, QTextEdit, QPushButton, QDialogButtonBox, QMenu)
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QAction, QIcon, QKeySequence, QColor, QDragEnterEvent, QDropEvent
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from gui.image_viewer import ImageViewer
 from pathlib import Path
 import sys
 import os
@@ -85,6 +88,9 @@ class MainWindow(QMainWindow):
         super().__init__()
         
         self.config_manager = config_manager or ConfigManager()
+        
+        # Reference to image viewer (set by main.py after creation)
+        self.image_viewer: Optional['ImageViewer'] = None
         
         # Window properties
         self.setWindowTitle("DICOM Viewer V3")
@@ -381,12 +387,21 @@ class MainWindow(QMainWindow):
     
     def _create_status_bar(self) -> None:
         """Create the status bar."""
-        self.statusBar().showMessage("Ready")
+        # Create three permanent widgets with equal stretch factors (1:1:1) for fixed 1/3 widths
+        # Left widget: File/study information
+        self.file_study_label = QLabel("Ready")
+        self.file_study_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.statusBar().addPermanentWidget(self.file_study_label, stretch=1)
         
-        # Add permanent widget on the right side for pixel values and coordinates
+        # Center widget: Zoom and window/level preset info
+        self.zoom_preset_label = QLabel("")
+        self.zoom_preset_label.setAlignment(Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter)
+        self.statusBar().addPermanentWidget(self.zoom_preset_label, stretch=1)
+        
+        # Right widget: Pixel values and coordinates
         self.pixel_info_label = QLabel("")
         self.pixel_info_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        self.statusBar().addPermanentWidget(self.pixel_info_label)
+        self.statusBar().addPermanentWidget(self.pixel_info_label, stretch=1)
     
     def _create_central_widget(self) -> None:
         """Create the central widget area."""
@@ -587,7 +602,7 @@ class MainWindow(QMainWindow):
                     background-color: #3a3a3a;
                     color: #ffffff;
                     border: none;
-                    padding: 1px 4px;
+                    padding: 0px 2px;
                 }}
                 
                 QToolButton:hover {{
@@ -852,6 +867,11 @@ class MainWindow(QMainWindow):
                     background-color: #1b1b1b;
                 }}
             """.format(white_checkmark_path=white_checkmark_path, black_checkmark_path=black_checkmark_path)
+            
+            # Update image viewer background color for dark theme
+            if self.image_viewer is not None:
+                from PySide6.QtGui import QColor
+                self.image_viewer.set_background_color(QColor(27, 27, 27))  # #1b1b1b
         else:
             # Light theme - simplified palette-like colors
             stylesheet = """
@@ -953,7 +973,7 @@ class MainWindow(QMainWindow):
                     background-color: #e0e0e0;
                     color: #000000;
                     border: none;
-                    padding: 1px 4px;
+                    padding: 0px 2px;
                 }}
                 
                 QToolButton:hover {{
@@ -1222,6 +1242,11 @@ class MainWindow(QMainWindow):
                     background-color: #d0d0d0;
                 }}
             """.format(white_checkmark_path=white_checkmark_path, black_checkmark_path=black_checkmark_path)
+            
+            # Update image viewer background color for light theme
+            if self.image_viewer is not None:
+                from PySide6.QtGui import QColor
+                self.image_viewer.set_background_color(QColor(64, 64, 64))  # #404040
         
         # Debug: Extract and print the image URL lines from the stylesheet
         # image_url_pattern = r"image:\s*url\([^)]+\)"
@@ -1328,6 +1353,7 @@ class MainWindow(QMainWindow):
     <ul>
     <li>Zoom and pan functionality</li>
     <li>Window width and level adjustment</li>
+    <li>Window/Level presets: Multiple presets from DICOM tags with context menu switching</li>
     <li>Slice navigation (arrow keys, mouse wheel)</li>
     <li>Series navigation with thumbnail navigator</li>
     <li>Dark and light themes</li>
@@ -1345,7 +1371,9 @@ class MainWindow(QMainWindow):
     <li>Customizable DICOM metadata overlays</li>
     <li>Toggle overlay visibility (3 states)</li>
     <li>View and edit all DICOM tags</li>
+    <li>Tag filtering/search functionality</li>
     <li>Export selected tags to Excel/CSV</li>
+    <li>Annotations support: Presentation States, Key Objects, embedded overlays</li>
     </ul>
     <h4>Data Management:</h4>
     <ul>
@@ -1662,7 +1690,21 @@ class MainWindow(QMainWindow):
         Args:
             message: Status message to display
         """
-        self.statusBar().showMessage(message)
+        self.file_study_label.setText(message)
+    
+    def update_zoom_preset_status(self, zoom: float, preset_name: Optional[str] = None) -> None:
+        """
+        Update the zoom and window/level preset status in the center of the status bar.
+        
+        Args:
+            zoom: Current zoom level
+            preset_name: Name of the window/level preset, or None if using auto-calculated values
+        """
+        if preset_name is not None:
+            status_text = f"Zoom = {zoom:.1f}, Window/Level Preset = {preset_name}"
+        else:
+            status_text = f"Zoom = {zoom:.1f}, Window/Level Preset = Auto-Calculated"
+        self.zoom_preset_label.setText(status_text)
     
     def update_undo_redo_state(self, can_undo: bool, can_redo: bool) -> None:
         """
