@@ -59,6 +59,7 @@ class MainWindow(QMainWindow):
     settings_requested = Signal()
     tag_viewer_requested = Signal()
     overlay_config_requested = Signal()
+    annotation_options_requested = Signal()  # Emitted when annotation options dialog is requested
     mouse_mode_changed = Signal(str)  # Emitted when mouse mode changes ("roi_ellipse", "roi_rectangle", "measure", "zoom", "pan", "auto_window_level")
     scroll_wheel_mode_changed = Signal(str)  # Emitted when scroll wheel mode changes ("slice" or "zoom")
     overlay_font_size_changed = Signal(int)  # Emitted when overlay font size changes
@@ -206,6 +207,11 @@ class MainWindow(QMainWindow):
         overlay_config_action.setShortcut(QKeySequence("Ctrl+O"))
         overlay_config_action.triggered.connect(self.overlay_config_requested.emit)
         view_menu.addAction(overlay_config_action)
+        
+        # Annotation Options action
+        annotation_options_action = QAction("Annotation &Options...", self)
+        annotation_options_action.triggered.connect(self.annotation_options_requested.emit)
+        view_menu.addAction(annotation_options_action)
         
         # Tools menu
         tools_menu = menubar.addMenu("&Tools")

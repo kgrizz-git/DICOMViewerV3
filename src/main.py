@@ -40,6 +40,7 @@ from gui.dialogs.file_dialog import FileDialog
 from gui.dialogs.settings_dialog import SettingsDialog
 from gui.dialogs.tag_viewer_dialog import TagViewerDialog
 from gui.dialogs.overlay_config_dialog import OverlayConfigDialog
+from gui.dialogs.annotation_options_dialog import AnnotationOptionsDialog
 from gui.image_viewer import ImageViewer
 from gui.metadata_panel import MetadataPanel
 from gui.window_level_controls import WindowLevelControls
@@ -119,8 +120,8 @@ class DICOMViewerApp(QObject):
         self.window_level_controls = WindowLevelControls()
         self.zoom_display_widget = ZoomDisplayWidget()
         self.slice_navigator = SliceNavigator()
-        self.roi_manager = ROIManager()
-        self.measurement_tool = MeasurementTool()
+        self.roi_manager = ROIManager(config_manager=self.config_manager)
+        self.measurement_tool = MeasurementTool(config_manager=self.config_manager)
         self.annotation_manager = AnnotationManager()
         self.roi_statistics_panel = ROIStatisticsPanel()
         self.roi_list_panel = ROIListPanel()
@@ -206,6 +207,7 @@ class DICOMViewerApp(QObject):
             display_measurements_callback=None,  # Will use default
             roi_list_panel=self.roi_list_panel,
             roi_statistics_panel=self.roi_statistics_panel,
+            update_roi_statistics_overlays_callback=None,  # Will be set after ROI coordinator is created
             annotation_manager=self.annotation_manager,
             dicom_organizer=self.dicom_organizer
         )
@@ -236,6 +238,9 @@ class DICOMViewerApp(QObject):
         # Update view state manager with series_navigator reference
         self.view_state_manager.set_series_navigator(self.series_navigator)
         
+        # Update slice display manager with ROI coordinator callback
+        self.slice_display_manager.update_roi_statistics_overlays_callback = self.roi_coordinator.update_roi_statistics_overlays
+        
         # Initialize MeasurementCoordinator
         self.measurement_coordinator = MeasurementCoordinator(
             self.measurement_tool,
@@ -255,7 +260,8 @@ class DICOMViewerApp(QObject):
             get_current_slice_index=lambda: self.current_slice_index,
             hide_measurement_labels=self.measurement_coordinator.hide_measurement_labels,
             hide_measurement_graphics=self.measurement_coordinator.hide_measurement_graphics,
-            hide_roi_graphics=self.roi_coordinator.hide_roi_graphics if hasattr(self.roi_coordinator, 'hide_roi_graphics') else None
+            hide_roi_graphics=self.roi_coordinator.hide_roi_graphics if hasattr(self.roi_coordinator, 'hide_roi_graphics') else None,
+            hide_roi_statistics_overlays=self.roi_coordinator.hide_roi_statistics_overlays
         )
         
         # Update view state manager with overlay coordinator
@@ -270,6 +276,8 @@ class DICOMViewerApp(QObject):
             overlay_config_applied_callback=self._on_overlay_config_applied,
             tag_edit_history=self.tag_edit_history
         )
+        # Set annotation options callback
+        self.dialog_coordinator.annotation_options_applied_callback = self._on_annotation_options_applied
         
         # Initialize MouseModeHandler
         self.mouse_mode_handler = MouseModeHandler(
@@ -560,6 +568,10 @@ class DICOMViewerApp(QObject):
         # Overlay configuration
         self.main_window.overlay_config_requested.connect(self._open_overlay_config)
         
+        # Annotation options
+        self.main_window.annotation_options_requested.connect(self._open_annotation_options)
+        self.image_viewer.annotation_options_requested.connect(self._open_annotation_options)
+        
         # Quick Start Guide
         self.main_window.quick_start_guide_requested.connect(self._open_quick_start_guide)
         
@@ -591,10 +603,32 @@ class DICOMViewerApp(QObject):
         self.image_viewer.roi_delete_requested.connect(self.roi_coordinator.handle_roi_delete_requested)
         self.image_viewer.measurement_delete_requested.connect(self.measurement_coordinator.handle_measurement_delete_requested)
         
+        # ROI statistics overlay signals
+        self.image_viewer.roi_statistics_overlay_toggle_requested.connect(self.roi_coordinator.handle_roi_statistics_overlay_toggle)
+        self.image_viewer.roi_statistics_selection_changed.connect(self.roi_coordinator.handle_roi_statistics_selection)
+        
+        # Set callback for getting ROI from item (for context menu)
+        self.image_viewer.get_roi_from_item_callback = self.roi_manager.find_roi_by_item
+        
         # ROI list panel signals
         self.roi_list_panel.roi_selected.connect(self.roi_coordinator.handle_roi_selected)
         self.roi_list_panel.roi_deleted.connect(self.roi_coordinator.handle_roi_deleted)
         self.roi_list_panel.delete_all_requested.connect(self.roi_coordinator.delete_all_rois_current_slice)
+        
+        # Set ROI list panel context menu callbacks
+        self.roi_list_panel.roi_delete_callback = lambda roi: self.roi_coordinator.handle_roi_delete_requested(roi.item) if roi.item else None
+        self.roi_list_panel.roi_statistics_overlay_toggle_callback = self.roi_coordinator.handle_roi_statistics_overlay_toggle
+        
+        def handle_statistic_toggle(roi, stat_name: str, checked: bool) -> None:
+            """Handle statistic toggle from ROI list panel."""
+            if checked:
+                roi.visible_statistics.add(stat_name)
+            else:
+                roi.visible_statistics.discard(stat_name)
+            self.roi_coordinator.handle_roi_statistics_selection(roi, roi.visible_statistics)
+        
+        self.roi_list_panel.roi_statistics_selection_callback = handle_statistic_toggle
+        self.roi_list_panel.annotation_options_callback = self._open_annotation_options
         
         # Monitor ROI item changes for movement
         self.image_viewer.scene.selectionChanged.connect(self.roi_coordinator.handle_scene_selection_changed)
@@ -973,6 +1007,10 @@ class DICOMViewerApp(QObject):
         
         self.dialog_coordinator.open_overlay_config(current_modality=current_modality)
     
+    def _open_annotation_options(self) -> None:
+        """Handle annotation options dialog request."""
+        self.dialog_coordinator.open_annotation_options()
+    
     def _open_quick_start_guide(self) -> None:
         """Handle Quick Start Guide dialog request."""
         self.dialog_coordinator.open_quick_start_guide()
@@ -1000,6 +1038,19 @@ class DICOMViewerApp(QObject):
     def _on_overlay_config_applied(self) -> None:
         """Handle overlay configuration being applied."""
         self.overlay_coordinator.handle_overlay_config_applied()
+    
+    def _on_annotation_options_applied(self) -> None:
+        """Handle annotation options applied - refresh all annotations."""
+        # Update ROI statistics overlays
+        if self.current_dataset is not None:
+            self.roi_coordinator.update_roi_statistics_overlays()
+        
+        # Update ROI line styles (will be done when ROIs are redrawn)
+        # Update measurement styles (will be done when measurements are redrawn)
+        # For now, we'll need to refresh the display
+        if self.current_dataset is not None:
+            self.slice_display_manager.display_rois_for_slice(self.current_dataset)
+            self.slice_display_manager.display_measurements_for_slice(self.current_dataset)
     
     def _on_settings_applied(self) -> None:
         """Handle settings being applied."""

@@ -54,6 +54,8 @@ class ImageViewer(QGraphicsView):
     arrow_key_pressed = Signal(int)  # Emitted when arrow key is pressed (1 = up, -1 = down)
     roi_clicked = Signal(object)  # Emitted when ROI is clicked (ROIItem)
     roi_delete_requested = Signal(object)  # Emitted when ROI deletion is requested (QGraphicsItem)
+    roi_statistics_overlay_toggle_requested = Signal(object, bool)  # Emitted when ROI statistics overlay toggle is requested (ROIItem, visible)
+    roi_statistics_selection_changed = Signal(object, set)  # Emitted when ROI statistics selection changes (ROIItem, statistics_set)
     reset_view_requested = Signal()  # Emitted when reset view is requested from context menu
     context_menu_mouse_mode_changed = Signal(str)  # Emitted when mouse mode is changed from context menu
     context_menu_scroll_wheel_mode_changed = Signal(str)  # Emitted when scroll wheel mode is changed from context menu
@@ -73,6 +75,7 @@ class ImageViewer(QGraphicsView):
     measurement_delete_requested = Signal(object)  # Emitted when measurement deletion is requested (MeasurementItem)
     clear_measurements_requested = Signal()  # Emitted when clear measurements is requested
     toggle_overlay_requested = Signal()  # Emitted when toggle overlay is requested
+    annotation_options_requested = Signal()  # Emitted when annotation options dialog is requested
     pixel_info_changed = Signal(str, int, int, int)  # Emitted when pixel info changes (pixel_value_str, x, y, z)
     files_dropped = Signal(list)  # Emitted when files/folders are dropped (list of paths)
     
@@ -158,6 +161,9 @@ class ImageViewer(QGraphicsView):
         # Callbacks for window/level presets (set from main.py)
         self.get_window_level_presets_callback: Optional[Callable[[], List[Tuple[float, float, bool, Optional[str]]]]] = None
         self.get_current_preset_index_callback: Optional[Callable[[], int]] = None
+        
+        # Callback to get ROI from item (set from main.py)
+        self.get_roi_from_item_callback: Optional[Callable[[object], Optional[object]]] = None
         
         # Sensitivity factors for window/level adjustment (pixels to units)
         # These will be set dynamically based on current ranges
@@ -714,8 +720,67 @@ class ImageViewer(QGraphicsView):
             if is_roi_item:
                 # Show context menu for ROI immediately
                 context_menu = QMenu(self)
+                
+                # Delete action
                 delete_action = context_menu.addAction("Delete ROI")
                 delete_action.triggered.connect(lambda: self.roi_delete_requested.emit(item))
+                
+                context_menu.addSeparator()
+                
+                # Statistics Overlay submenu
+                stats_submenu = context_menu.addMenu("Statistics Overlay")
+                
+                # Get ROI from item using callback
+                roi = None
+                if self.get_roi_from_item_callback:
+                    roi = self.get_roi_from_item_callback(item)
+                
+                if roi is not None:
+                    # Toggle overlay visibility
+                    toggle_action = stats_submenu.addAction("Show Statistics Overlay")
+                    toggle_action.setCheckable(True)
+                    toggle_action.setChecked(roi.statistics_overlay_visible)
+                    toggle_action.triggered.connect(lambda checked: self.roi_statistics_overlay_toggle_requested.emit(roi, checked))
+                    
+                    stats_submenu.addSeparator()
+                    
+                    # Statistics checkboxes
+                    mean_action = stats_submenu.addAction("Show Mean")
+                    mean_action.setCheckable(True)
+                    mean_action.setChecked("mean" in roi.visible_statistics)
+                    mean_action.triggered.connect(lambda checked: self._toggle_statistic(roi, "mean", checked))
+                    
+                    std_action = stats_submenu.addAction("Show Std Dev")
+                    std_action.setCheckable(True)
+                    std_action.setChecked("std" in roi.visible_statistics)
+                    std_action.triggered.connect(lambda checked: self._toggle_statistic(roi, "std", checked))
+                    
+                    min_action = stats_submenu.addAction("Show Min")
+                    min_action.setCheckable(True)
+                    min_action.setChecked("min" in roi.visible_statistics)
+                    min_action.triggered.connect(lambda checked: self._toggle_statistic(roi, "min", checked))
+                    
+                    max_action = stats_submenu.addAction("Show Max")
+                    max_action.setCheckable(True)
+                    max_action.setChecked("max" in roi.visible_statistics)
+                    max_action.triggered.connect(lambda checked: self._toggle_statistic(roi, "max", checked))
+                    
+                    count_action = stats_submenu.addAction("Show Count")
+                    count_action.setCheckable(True)
+                    count_action.setChecked("count" in roi.visible_statistics)
+                    count_action.triggered.connect(lambda checked: self._toggle_statistic(roi, "count", checked))
+                    
+                    area_action = stats_submenu.addAction("Show Area")
+                    area_action.setCheckable(True)
+                    area_action.setChecked("area" in roi.visible_statistics)
+                    area_action.triggered.connect(lambda checked: self._toggle_statistic(roi, "area", checked))
+                
+                context_menu.addSeparator()
+                
+                # Annotation Options action
+                annotation_options_action = context_menu.addAction("Annotation Options...")
+                annotation_options_action.triggered.connect(self.annotation_options_requested.emit)
+                
                 context_menu.exec(event.globalPosition().toPoint())
                 self.right_mouse_context_menu_shown = True
                 return
@@ -724,6 +789,13 @@ class ImageViewer(QGraphicsView):
                 context_menu = QMenu(self)
                 delete_action = context_menu.addAction("Delete measurement")
                 delete_action.triggered.connect(lambda: self.measurement_delete_requested.emit(item))
+                
+                context_menu.addSeparator()
+                
+                # Annotation Options action
+                annotation_options_action = context_menu.addAction("Annotation Options...")
+                annotation_options_action.triggered.connect(self.annotation_options_requested.emit)
+                
                 context_menu.exec(event.globalPosition().toPoint())
                 self.right_mouse_context_menu_shown = True
                 return
@@ -737,6 +809,23 @@ class ImageViewer(QGraphicsView):
                 return
         
         super().mousePressEvent(event)
+    
+    def _toggle_statistic(self, roi, stat_name: str, checked: bool) -> None:
+        """
+        Toggle a statistic in the ROI's visible_statistics set.
+        
+        Args:
+            roi: ROI item
+            stat_name: Name of statistic ("mean", "std", "min", "max", "count", "area")
+            checked: True to include statistic, False to exclude
+        """
+        if checked:
+            roi.visible_statistics.add(stat_name)
+        else:
+            roi.visible_statistics.discard(stat_name)
+        
+        # Emit signal to update overlay
+        self.roi_statistics_selection_changed.emit(roi, roi.visible_statistics)
     
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
         """
@@ -909,6 +998,12 @@ class ImageViewer(QGraphicsView):
                         # Note: Text will be updated dynamically by main window based on visibility
                         toggle_navigator_action = context_menu.addAction("Toggle Series Navigator (N)")
                         toggle_navigator_action.triggered.connect(self.toggle_series_navigator_requested.emit)
+                        
+                        context_menu.addSeparator()
+                        
+                        # Annotation Options action
+                        annotation_options_action = context_menu.addAction("Annotation Options...")
+                        annotation_options_action.triggered.connect(self.annotation_options_requested.emit)
                         
                         context_menu.addSeparator()
                         

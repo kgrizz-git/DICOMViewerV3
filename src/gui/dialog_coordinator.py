@@ -20,6 +20,7 @@ from typing import Optional, Callable, Any
 from gui.dialogs.settings_dialog import SettingsDialog
 from gui.dialogs.tag_viewer_dialog import TagViewerDialog
 from gui.dialogs.overlay_config_dialog import OverlayConfigDialog
+from gui.dialogs.annotation_options_dialog import AnnotationOptionsDialog
 from gui.dialogs.tag_export_dialog import TagExportDialog
 from gui.dialogs.export_dialog import ExportDialog
 from gui.dialogs.quick_start_guide_dialog import QuickStartGuideDialog
@@ -67,6 +68,7 @@ class DialogCoordinator:
         self.get_current_studies = get_current_studies
         self.settings_applied_callback = settings_applied_callback
         self.overlay_config_applied_callback = overlay_config_applied_callback
+        self.annotation_options_applied_callback = None  # Will be set from main.py
         self.tag_edit_history = tag_edit_history
         
         # Tag viewer dialog (persistent)
@@ -113,6 +115,13 @@ class DialogCoordinator:
         dialog = OverlayConfigDialog(self.config_manager, self.main_window, initial_modality=current_modality)
         if self.overlay_config_applied_callback:
             dialog.config_applied.connect(self.overlay_config_applied_callback)
+        dialog.exec()
+    
+    def open_annotation_options(self) -> None:
+        """Handle annotation options dialog request."""
+        dialog = AnnotationOptionsDialog(self.config_manager, self.main_window)
+        if self.annotation_options_applied_callback:
+            dialog.settings_applied.connect(self.annotation_options_applied_callback)
         dialog.exec()
     
     def open_quick_start_guide(self) -> None:

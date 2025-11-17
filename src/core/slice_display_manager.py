@@ -69,6 +69,7 @@ class SliceDisplayManager:
         display_measurements_callback: Optional[Callable] = None,
         roi_list_panel: Optional[ROIListPanel] = None,
         roi_statistics_panel: Optional[ROIStatisticsPanel] = None,
+        update_roi_statistics_overlays_callback: Optional[Callable] = None,
         annotation_manager: Optional[AnnotationManager] = None,
         dicom_organizer: Optional[DICOMOrganizer] = None
     ):
@@ -107,6 +108,7 @@ class SliceDisplayManager:
         self.display_measurements_callback = display_measurements_callback
         self.roi_list_panel = roi_list_panel
         self.roi_statistics_panel = roi_statistics_panel
+        self.update_roi_statistics_overlays_callback = update_roi_statistics_overlays_callback
         self.annotation_manager = annotation_manager
         self.dicom_organizer = dicom_organizer
         
@@ -706,6 +708,11 @@ class SliceDisplayManager:
                         break
                 # Remove ROI if it's from a different slice
                 if not roi_belongs_to_current:
+                    # Remove statistics overlay if present
+                    if roi.statistics_overlay_item is not None:
+                        if roi.statistics_overlay_item.scene() == self.image_viewer.scene:
+                            self.image_viewer.scene.removeItem(roi.statistics_overlay_item)
+                        roi.statistics_overlay_item = None
                     # Only remove if item actually belongs to this scene
                     if item.scene() == self.image_viewer.scene:
                         self.image_viewer.scene.removeItem(item)
@@ -726,6 +733,10 @@ class SliceDisplayManager:
         # Update ROI list panel to show only ROIs for current slice
         if self.roi_list_panel is not None:
             self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
+        
+        # Update ROI statistics overlays
+        if self.update_roi_statistics_overlays_callback is not None:
+            self.update_roi_statistics_overlays_callback()
         
         # Check selected ROI and update/clear statistics
         selected_roi = self.roi_manager.get_selected_roi()
