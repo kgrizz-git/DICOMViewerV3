@@ -90,17 +90,17 @@ def get_frame_pixel_array(dataset: Dataset, frame_index: int) -> Optional[np.nda
     Returns:
         NumPy array for the specified frame, or None if extraction fails
     """
-    print(f"[FRAME] Extracting frame {frame_index}...")
+    # print(f"[FRAME] Extracting frame {frame_index}...")
     
     try:
         # Check if this is a multi-frame dataset before accessing pixel array
         if is_multiframe(dataset):
             num_frames = get_frame_count(dataset)
-            print(f"[FRAME] Multi-frame dataset, frames: {num_frames}")
+            # print(f"[FRAME] Multi-frame dataset, frames: {num_frames}")
             
             # Validate frame index
             if frame_index < 0 or frame_index >= num_frames:
-                print(f"[FRAME] Invalid frame index {frame_index} (valid range: 0-{num_frames-1})")
+                # print(f"[FRAME] Invalid frame index {frame_index} (valid range: 0-{num_frames-1})")
                 return None
         
         # Get the full pixel array
@@ -108,30 +108,30 @@ def get_frame_pixel_array(dataset: Dataset, frame_index: int) -> Optional[np.nda
         # This avoids the issue where accessing pixel_array later returns 2D instead of 3D
         if hasattr(dataset, '_cached_pixel_array'):
             pixel_array = dataset._cached_pixel_array
-            print(f"[FRAME] Using cached pixel array, shape: {pixel_array.shape}, dtype: {pixel_array.dtype}")
+            # print(f"[FRAME] Using cached pixel array, shape: {pixel_array.shape}, dtype: {pixel_array.dtype}")
         else:
             # This may raise various exceptions from pydicom's pixel data processing
             # NOTE: For multi-frame, this loads ALL frames into memory
             pixel_array = dataset.pixel_array
-            print(f"[FRAME] Pixel array loaded, shape: {pixel_array.shape}, dtype: {pixel_array.dtype}")
+            # print(f"[FRAME] Pixel array loaded, shape: {pixel_array.shape}, dtype: {pixel_array.dtype}")
         
         if pixel_array is None:
-            print(f"[FRAME] Pixel array is None")
+            # print(f"[FRAME] Pixel array is None")
             return None
         
         # Check for Enhanced Multi-frame issue
         if is_multiframe(dataset) and len(pixel_array.shape) == 2:
-            print(f"[FRAME] ⚠️  WARNING: Got 2D array for multi-frame file!")
-            print(f"[FRAME] This indicates the dataset is not fully loaded or is partially loaded.")
-            print(f"[FRAME] Has PerFrameFunctionalGroupsSequence: {hasattr(dataset, 'PerFrameFunctionalGroupsSequence')}")
-            print(f"[FRAME] Has PixelData attribute: {hasattr(dataset, 'PixelData')}")
-            print(f"[FRAME] Dataset type: {type(dataset)}")
+            # print(f"[FRAME] ⚠️  WARNING: Got 2D array for multi-frame file!")
+            # print(f"[FRAME] This indicates the dataset is not fully loaded or is partially loaded.")
+            # print(f"[FRAME] Has PerFrameFunctionalGroupsSequence: {hasattr(dataset, 'PerFrameFunctionalGroupsSequence')}")
+            # print(f"[FRAME] Has PixelData attribute: {hasattr(dataset, 'PixelData')}")
+            # print(f"[FRAME] Dataset type: {type(dataset)}")
             # For Enhanced Multi-frame that loaded as 2D, return the single frame for frame_index 0
             if frame_index == 0:
-                print(f"[FRAME] Returning 2D array as frame 0 (fallback)")
+                # print(f"[FRAME] Returning 2D array as frame 0 (fallback)")
                 return pixel_array
             else:
-                print(f"[FRAME] Cannot extract frame {frame_index} from 2D array")
+                # print(f"[FRAME] Cannot extract frame {frame_index} from 2D array")
                 return None
         
         # Check if this is a multi-frame dataset
@@ -141,19 +141,19 @@ def get_frame_pixel_array(dataset: Dataset, frame_index: int) -> Optional[np.nda
                 # Shape is (frames, rows, columns)
                 try:
                     frame = pixel_array[frame_index]
-                    print(f"[FRAME] Extracted frame {frame_index}, shape: {frame.shape}")
+                    # print(f"[FRAME] Extracted frame {frame_index}, shape: {frame.shape}")
                     return frame
                 except (IndexError, ValueError) as e:
-                    print(f"[FRAME] Error extracting frame {frame_index} from pixel array: {e}")
+                    # print(f"[FRAME] Error extracting frame {frame_index} from pixel array: {e}")
                     return None
             elif len(pixel_array.shape) == 2:
                 # Single frame, but NumberOfFrames tag says otherwise
                 # Return the single frame if frame_index is 0
                 if frame_index == 0:
-                    print(f"[FRAME] Returning single 2D array for frame 0")
+                    # print(f"[FRAME] Returning single 2D array for frame 0")
                     return pixel_array
                 else:
-                    print(f"[FRAME] 2D array but frame_index={frame_index} (not 0)")
+                    # print(f"[FRAME] 2D array but frame_index={frame_index} (not 0)")
                     return None
             else:
                 # Unexpected shape
@@ -161,7 +161,7 @@ def get_frame_pixel_array(dataset: Dataset, frame_index: int) -> Optional[np.nda
                 return None
         else:
             # Single-frame dataset
-            print(f"[FRAME] Single-frame dataset, returning full array")
+            # print(f"[FRAME] Single-frame dataset, returning full array")
             if frame_index == 0:
                 return pixel_array
             return None
