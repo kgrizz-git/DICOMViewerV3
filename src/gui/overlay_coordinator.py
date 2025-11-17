@@ -47,7 +47,8 @@ class OverlayCoordinator:
         get_current_slice_index: Callable[[], int],
         hide_measurement_labels: Optional[Callable[[bool], None]] = None,
         hide_measurement_graphics: Optional[Callable[[bool], None]] = None,
-        hide_roi_graphics: Optional[Callable[[bool], None]] = None
+        hide_roi_graphics: Optional[Callable[[bool], None]] = None,
+        hide_roi_statistics_overlays: Optional[Callable[[bool], None]] = None
     ):
         """
         Initialize the overlay coordinator.
@@ -74,6 +75,7 @@ class OverlayCoordinator:
         self.hide_measurement_labels = hide_measurement_labels
         self.hide_measurement_graphics = hide_measurement_graphics
         self.hide_roi_graphics = hide_roi_graphics
+        self.hide_roi_statistics_overlays = hide_roi_statistics_overlays
     
     def handle_overlay_config_applied(self) -> None:
         """Handle overlay configuration being applied."""
@@ -188,6 +190,8 @@ class OverlayCoordinator:
                     self.hide_measurement_graphics(True)
                 if self.hide_roi_graphics:
                     self.hide_roi_graphics(True)
+                if self.hide_roi_statistics_overlays:
+                    self.hide_roi_statistics_overlays(True)
             else:
                 # State 0 or 1: Show measurements and ROI labels
                 if self.hide_measurement_labels:
@@ -196,6 +200,8 @@ class OverlayCoordinator:
                     self.hide_measurement_graphics(False)
                 if self.hide_roi_graphics:
                     self.hide_roi_graphics(False)
+                if self.hide_roi_statistics_overlays:
+                    self.hide_roi_statistics_overlays(False)
             
             # Force scene update to refresh immediately
             self.image_viewer.scene.update()

@@ -142,10 +142,10 @@ class DICOMOrganizer:
             if is_multiframe(dataset):
                 # Split multi-frame file into individual frames
                 num_frames = get_frame_count(dataset)
-                print(f"[ORGANIZE] Splitting multi-frame file into {num_frames} frames...")
+                # print(f"[ORGANIZE] Splitting multi-frame file into {num_frames} frames...")
                 
                 for frame_index in range(num_frames):
-                    print(f"[ORGANIZE] Creating wrapper for frame {frame_index + 1}/{num_frames}")
+                    # print(f"[ORGANIZE] Creating wrapper for frame {frame_index + 1}/{num_frames}")
                     # Create a frame-specific dataset wrapper
                     frame_dataset = create_frame_dataset(dataset, frame_index)
                     if frame_dataset is not None:
@@ -155,7 +155,7 @@ class DICOMOrganizer:
                         # Add frame to the series
                         study_dict[study_uid][series_uid].append((frame_dataset, file_path))
                 
-                print(f"[ORGANIZE] Successfully split into {num_frames} frame wrappers")
+                # print(f"[ORGANIZE] Successfully split into {num_frames} frame wrappers")
             else:
                 # Single-frame file - add as-is
                 study_dict[study_uid][series_uid].append((dataset, file_path))

@@ -20,11 +20,62 @@ Requirements:
 from PySide6.QtWidgets import QGraphicsLineItem, QGraphicsTextItem, QGraphicsItemGroup, QGraphicsItem, QGraphicsEllipseItem
 from PySide6.QtCore import Qt, QPointF, QLineF, QRectF
 from PySide6.QtGui import QPen, QColor, QFont, QBrush, QPainter, QPainterPath
-from typing import List, Optional, Tuple, Dict
+from typing import List, Optional, Tuple, Dict, Callable
 import numpy as np
 import math
 
 from utils.dicom_utils import format_distance, get_pixel_spacing
+
+
+class DraggableMeasurementText(QGraphicsTextItem):
+    """
+    Custom QGraphicsTextItem for measurement text overlays that tracks position changes.
+    """
+    
+    def __init__(self, measurement: Optional['MeasurementItem'], offset_update_callback: Callable[[QPointF], None]):
+        """
+        Initialize draggable measurement text.
+        
+        Args:
+            measurement: MeasurementItem this text belongs to (can be None initially)
+            offset_update_callback: Callback to update offset when text is moved
+        """
+        super().__init__()
+        self.measurement = measurement
+        self.offset_update_callback = offset_update_callback
+        self._updating_position = False  # Flag to prevent recursive updates
+        # Make text item selectable so it can be moved independently
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
+    
+    def itemChange(self, change: QGraphicsItem.GraphicsItemChange, value) -> object:
+        """
+        Handle item changes, particularly position changes.
+        
+        Args:
+            change: Type of change
+            value: New value
+            
+        Returns:
+            Modified value
+        """
+        if change == QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged and not self._updating_position:
+            # Text was moved by user - calculate new offset relative to measurement midpoint
+            if self.parentItem() is not None and self.measurement is not None:
+                # Position is relative to parent (MeasurementItem group)
+                text_pos = self.pos()
+                # Calculate midpoint of measurement line relative to group
+                mid_point_relative = QPointF(
+                    self.measurement.end_relative.x() / 2.0,
+                    self.measurement.end_relative.y() / 2.0
+                )
+                # Calculate offset from midpoint
+                offset = text_pos - mid_point_relative
+                
+                # Update stored offset
+                if self.offset_update_callback:
+                    self.offset_update_callback(offset)
+        
+        return super().itemChange(change, value)
 
 
 class MeasurementHandle(QGraphicsEllipseItem):
@@ -115,6 +166,7 @@ class MeasurementItem(QGraphicsItemGroup):
         self.pixel_spacing = pixel_spacing
         self.distance_pixels = 0.0
         self.distance_formatted = ""
+        self.text_offset = QPointF(0, 0)  # Offset from midpoint for text position
         
         # Calculate end_relative BEFORE positioning the group
         # This is the offset from start_point to end_point in scene coordinates
@@ -334,8 +386,19 @@ class MeasurementItem(QGraphicsItemGroup):
             self.end_relative.x() / 2.0,
             self.end_relative.y() / 2.0
         )
-        self.text_item.setPos(mid_point_relative)
+        # Use stored offset
+        text_pos = mid_point_relative + self.text_offset
+        
+        # Set updating flag if it's a draggable text item
+        if isinstance(self.text_item, DraggableMeasurementText):
+            self.text_item._updating_position = True
+        
+        self.text_item.setPos(text_pos)
         self.text_item.setPlainText(self.distance_formatted)
+        
+        # Clear updating flag
+        if isinstance(self.text_item, DraggableMeasurementText):
+            self.text_item._updating_position = False
         
         # Update endpoint handles
         handle_size = 6.0
@@ -385,7 +448,18 @@ class MeasurementItem(QGraphicsItemGroup):
                 self.end_relative.x() / 2.0,
                 self.end_relative.y() / 2.0
             )
-            self.text_item.setPos(mid_point_relative)
+            # Use stored offset
+            text_pos = mid_point_relative + self.text_offset
+            
+            # Set updating flag if it's a draggable text item
+            if isinstance(self.text_item, DraggableMeasurementText):
+                self.text_item._updating_position = True
+            
+            self.text_item.setPos(text_pos)
+            
+            # Clear updating flag
+            if isinstance(self.text_item, DraggableMeasurementText):
+                self.text_item._updating_position = False
             
             # Update endpoint handles
             handle_size = 6.0
@@ -412,8 +486,13 @@ class MeasurementTool:
     - Display measurement labels
     """
     
-    def __init__(self):
-        """Initialize the measurement tool."""
+    def __init__(self, config_manager=None):
+        """
+        Initialize the measurement tool.
+        
+        Args:
+            config_manager: Optional ConfigManager for annotation settings
+        """
         # Key format: (StudyInstanceUID, SeriesInstanceUID, instance_identifier)
         # instance_identifier can be InstanceNumber from DICOM or slice_index as fallback
         self.measurements: Dict[Tuple[str, str, int], List[MeasurementItem]] = {}
@@ -426,6 +505,7 @@ class MeasurementTool:
         self.current_line_item: Optional[QGraphicsLineItem] = None
         self.current_text_item: Optional[QGraphicsTextItem] = None
         self.pixel_spacing: Optional[Tuple[float, float]] = None
+        self.config_manager = config_manager
     
     def set_current_slice(self, study_uid: str, series_uid: str, instance_identifier: int) -> None:
         """
@@ -495,7 +575,16 @@ class MeasurementTool:
         self.current_line_item = QGraphicsLineItem(line)
         # Position line item at start_point in scene coordinates
         self.current_line_item.setPos(self.start_point)
-        pen = QPen(QColor(0, 255, 0), 2)  # Green, 2px
+        
+        # Get pen settings from config
+        pen_width = 2  # Default
+        pen_color = (0, 255, 0)  # Default green
+        if self.config_manager:
+            pen_width = self.config_manager.get_measurement_line_thickness()
+            pen_color = self.config_manager.get_measurement_line_color()
+        
+        pen = QPen(QColor(*pen_color), pen_width)
+        pen.setCosmetic(True)  # Makes pen width viewport-relative (independent of zoom)
         self.current_line_item.setPen(pen)
         scene.addItem(self.current_line_item)
         
@@ -527,12 +616,23 @@ class MeasurementTool:
             (self.start_point.x() + pos.x()) / 2.0,
             (self.start_point.y() + pos.y()) / 2.0
         )
+        
+        # Get font settings from config
+        font_size = 10  # Default
+        font_color = (0, 255, 0)  # Default green
+        if self.config_manager:
+            font_size = self.config_manager.get_measurement_font_size()
+            font_color = self.config_manager.get_measurement_font_color()
+        
+        # Create temporary text item (not draggable during drawing)
         self.current_text_item = QGraphicsTextItem(distance_formatted)
-        self.current_text_item.setDefaultTextColor(QColor(0, 255, 0))  # Green text
-        font = QFont("Arial", 10)
+        self.current_text_item.setDefaultTextColor(QColor(*font_color))
+        font = QFont("Arial", font_size)
         font.setBold(True)
         self.current_text_item.setFont(font)
         self.current_text_item.setPos(mid_point)
+        # Set flag to ignore parent transformations (keeps font size consistent)
+        self.current_text_item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations, True)
         scene.addItem(self.current_text_item)
     
     def finish_measurement(self, scene) -> Optional[MeasurementItem]:
@@ -568,14 +668,61 @@ class MeasurementTool:
         if self.current_text_item.scene() is not None:
             self.current_text_item.scene().removeItem(self.current_text_item)
         
+        # Calculate distance first to get formatted text
+        dx = end_point.x() - start_point.x()
+        dy = end_point.y() - start_point.y()
+        if self.pixel_spacing:
+            dx_scaled = dx * self.pixel_spacing[1]
+            dy_scaled = dy * self.pixel_spacing[0]
+            distance_mm = math.sqrt(dx_scaled * dx_scaled + dy_scaled * dy_scaled)
+            if distance_mm >= 10:
+                distance_formatted = f"{distance_mm:.1f} mm"
+            else:
+                distance_formatted = f"{distance_mm:.2f} mm"
+        else:
+            distance_pixels = math.sqrt(dx * dx + dy * dy)
+            distance_formatted = f"{distance_pixels:.1f} pixels"
+        
+        # Create draggable text item
+        # Get font settings from config
+        font_size = 10  # Default
+        font_color = (0, 255, 0)  # Default green
+        if self.config_manager:
+            font_size = self.config_manager.get_measurement_font_size()
+            font_color = self.config_manager.get_measurement_font_color()
+        
+        # Create a temporary measurement to get callback reference
+        # We'll update the reference after creating the actual measurement
+        temp_measurement_ref = {'measurement': None}
+        
+        def update_text_offset(offset: QPointF) -> None:
+            """Update stored text offset when text is moved."""
+            if temp_measurement_ref['measurement']:
+                temp_measurement_ref['measurement'].text_offset = offset
+        
+        draggable_text = DraggableMeasurementText(None, update_text_offset)  # Will set measurement after creation
+        draggable_text.setDefaultTextColor(QColor(*font_color))
+        font = QFont("Arial", font_size)
+        font.setBold(True)
+        draggable_text.setFont(font)
+        draggable_text.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations, True)
+        draggable_text.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
+        draggable_text.setFlag(QGraphicsItem.GraphicsItemFlag.ItemSendsGeometryChanges, True)
+        draggable_text.setPlainText(distance_formatted)
+        
+        # Create measurement with draggable text
         measurement = MeasurementItem(
             start_point,
             end_point,
             self.current_line_item,
-            self.current_text_item,
+            draggable_text,
             pixel_spacing=self.pixel_spacing
         )
-        # Distance already calculated in __init__, but ensure it's updated
+        # Update draggable text's measurement reference
+        draggable_text.measurement = measurement
+        temp_measurement_ref['measurement'] = measurement
+        
+        # Distance already calculated, but ensure it's updated
         measurement.update_distance()
         
         # Add the group (not individual items) to the scene

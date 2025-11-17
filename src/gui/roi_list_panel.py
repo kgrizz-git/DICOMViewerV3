@@ -17,9 +17,10 @@ Requirements:
 """
 
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-                                QListWidget, QListWidgetItem, QPushButton)
-from PySide6.QtCore import Qt, Signal
-from typing import Optional, List
+                                QListWidget, QListWidgetItem, QPushButton, QMenu)
+from PySide6.QtCore import Qt, Signal, QPoint
+from PySide6.QtGui import QContextMenuEvent
+from typing import Optional, List, Callable
 
 from tools.roi_manager import ROIManager, ROIItem
 
@@ -53,6 +54,12 @@ class ROIListPanel(QWidget):
         self.current_study_uid = ""
         self.current_series_uid = ""
         self.current_instance_identifier = 0
+        
+        # Callbacks for context menu actions
+        self.roi_delete_callback: Optional[Callable[[ROIItem], None]] = None
+        self.roi_statistics_overlay_toggle_callback: Optional[Callable[[ROIItem, bool], None]] = None
+        self.roi_statistics_selection_callback: Optional[Callable[[ROIItem, str, bool], None]] = None
+        self.annotation_options_callback: Optional[Callable[[], None]] = None
         
         self._create_ui()
     
@@ -195,4 +202,102 @@ class ROIListPanel(QWidget):
             if item_roi == roi:
                 self.roi_list.setCurrentItem(item)
                 break
+    
+    def contextMenuEvent(self, event: QContextMenuEvent) -> None:
+        """Handle right-click context menu on list items."""
+        # Get item at click position
+        item = self.roi_list.itemAt(self.roi_list.mapFromGlobal(event.globalPos()))
+        if item is None:
+            return
+        
+        roi = item.data(Qt.ItemDataRole.UserRole)
+        if roi is None:
+            return
+        
+        # Create context menu
+        context_menu = QMenu(self)
+        
+        # Delete action
+        delete_action = context_menu.addAction("Delete ROI")
+        delete_action.triggered.connect(lambda: self._handle_delete_roi(roi))
+        
+        context_menu.addSeparator()
+        
+        # Statistics Overlay submenu
+        stats_submenu = context_menu.addMenu("Statistics Overlay")
+        
+        # Toggle overlay visibility
+        toggle_action = stats_submenu.addAction("Show Statistics Overlay")
+        toggle_action.setCheckable(True)
+        toggle_action.setChecked(roi.statistics_overlay_visible)
+        toggle_action.triggered.connect(lambda checked: self._handle_statistics_overlay_toggle(roi, checked))
+        
+        stats_submenu.addSeparator()
+        
+        # Statistics checkboxes
+        mean_action = stats_submenu.addAction("Show Mean")
+        mean_action.setCheckable(True)
+        mean_action.setChecked("mean" in roi.visible_statistics)
+        mean_action.triggered.connect(lambda checked: self._handle_statistic_toggle(roi, "mean", checked))
+        
+        std_action = stats_submenu.addAction("Show Std Dev")
+        std_action.setCheckable(True)
+        std_action.setChecked("std" in roi.visible_statistics)
+        std_action.triggered.connect(lambda checked: self._handle_statistic_toggle(roi, "std", checked))
+        
+        min_action = stats_submenu.addAction("Show Min")
+        min_action.setCheckable(True)
+        min_action.setChecked("min" in roi.visible_statistics)
+        min_action.triggered.connect(lambda checked: self._handle_statistic_toggle(roi, "min", checked))
+        
+        max_action = stats_submenu.addAction("Show Max")
+        max_action.setCheckable(True)
+        max_action.setChecked("max" in roi.visible_statistics)
+        max_action.triggered.connect(lambda checked: self._handle_statistic_toggle(roi, "max", checked))
+        
+        count_action = stats_submenu.addAction("Show Count")
+        count_action.setCheckable(True)
+        count_action.setChecked("count" in roi.visible_statistics)
+        count_action.triggered.connect(lambda checked: self._handle_statistic_toggle(roi, "count", checked))
+        
+        area_action = stats_submenu.addAction("Show Area")
+        area_action.setCheckable(True)
+        area_action.setChecked("area" in roi.visible_statistics)
+        area_action.triggered.connect(lambda checked: self._handle_statistic_toggle(roi, "area", checked))
+        
+        context_menu.addSeparator()
+        
+        # Annotation Options action
+        annotation_options_action = context_menu.addAction("Annotation Options...")
+        annotation_options_action.triggered.connect(self._handle_annotation_options)
+        
+        # Show context menu
+        context_menu.exec(event.globalPos())
+    
+    def _handle_delete_roi(self, roi: ROIItem) -> None:
+        """Handle ROI delete from context menu."""
+        if self.roi_delete_callback:
+            self.roi_delete_callback(roi)
+        else:
+            # Fallback to default behavior
+            scene = roi.item.scene()
+            if scene and self.roi_manager:
+                self.roi_manager.delete_roi(roi, scene)
+                self.roi_deleted.emit(roi)
+                self.update_roi_list(self.current_study_uid, self.current_series_uid, self.current_instance_identifier)
+    
+    def _handle_statistics_overlay_toggle(self, roi: ROIItem, visible: bool) -> None:
+        """Handle statistics overlay toggle from context menu."""
+        if self.roi_statistics_overlay_toggle_callback:
+            self.roi_statistics_overlay_toggle_callback(roi, visible)
+    
+    def _handle_statistic_toggle(self, roi: ROIItem, stat_name: str, checked: bool) -> None:
+        """Handle individual statistic toggle from context menu."""
+        if self.roi_statistics_selection_callback:
+            self.roi_statistics_selection_callback(roi, stat_name, checked)
+    
+    def _handle_annotation_options(self) -> None:
+        """Handle annotation options request from context menu."""
+        if self.annotation_options_callback:
+            self.annotation_options_callback()
 

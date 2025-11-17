@@ -206,6 +206,9 @@ class ROICoordinator:
         
         # Auto-select the newly drawn ROI: highlight in list and show statistics
         if roi_item is not None:
+            # Set up movement callback for the newly created ROI
+            roi_item.on_moved_callback = lambda r=roi_item: self._on_roi_moved(r)
+            
             self.roi_list_panel.select_roi_in_list(roi_item)
             if current_dataset is not None:
                 self.update_roi_statistics(roi_item)
@@ -254,6 +257,8 @@ class ROICoordinator:
         roi = self.roi_manager.find_roi_by_item(item)
         if roi:
             self.roi_manager.delete_roi(roi, self.image_viewer.scene)
+            # Explicitly handle deletion to ensure overlay is removed
+            self.handle_roi_deleted(roi)
             # Update ROI list panel - extract identifiers from current dataset
             current_dataset = self.get_current_dataset()
             if current_dataset is not None:
@@ -272,6 +277,31 @@ class ROICoordinator:
         Args:
             roi: Deleted ROI item
         """
+        print(f"[DEBUG-ROI] handle_roi_deleted called for ROI {id(roi)}")
+        # Explicitly remove statistics overlay from scene
+        if self.image_viewer.scene is not None:
+            # Check if ROI still has overlay before trying to remove
+            if hasattr(roi, 'statistics_overlay_item') and roi.statistics_overlay_item is not None:
+                print(f"[DEBUG-ROI] Removing overlay from deleted ROI")
+                self.roi_manager.remove_statistics_overlay(roi, self.image_viewer.scene)
+        
+        # Mark overlay visibility false to prevent recreation via stale callbacks
+        if hasattr(roi, "statistics_overlay_visible"):
+            roi.statistics_overlay_visible = False
+        if hasattr(roi, "statistics"):
+            roi.statistics = None
+        
+        # Update ROI statistics overlays to refresh display only if other ROIs remain
+        current_dataset = self.get_current_dataset()
+        if current_dataset is not None:
+            study_uid = getattr(current_dataset, 'StudyInstanceUID', '')
+            series_uid = getattr(current_dataset, 'SeriesInstanceUID', '')
+            instance_identifier = self.get_current_slice_index()
+            remaining_rois = self.roi_manager.get_rois_for_slice(study_uid, series_uid, instance_identifier)
+            if remaining_rois:
+                print(f"[DEBUG-ROI] Rebuilding overlays for {len(remaining_rois)} remaining ROIs")
+                self.update_roi_statistics_overlays()
+        
         # Clear statistics if this was the selected ROI
         if self.roi_manager.get_selected_roi() is None:
             self.roi_statistics_panel.clear_statistics()
@@ -352,6 +382,15 @@ class ROICoordinator:
                 # Pass rescale_type for display
                 display_rescale_type = rescale_type if use_rescaled else None
                 self.roi_statistics_panel.update_statistics(stats, roi_identifier, rescale_type=display_rescale_type)
+                
+                # Update statistics overlay on image
+                if self.image_viewer.scene is not None and roi.statistics_overlay_visible:
+                    # Font size and color will be retrieved from config in create_statistics_overlay
+                    self.roi_manager.update_statistics_overlay(
+                        roi, stats, self.image_viewer.scene,
+                        font_size=None, font_color=None,  # None = use config values
+                        rescale_type=display_rescale_type
+                    )
         except Exception as e:
             print(f"Error calculating ROI statistics: {e}")
     
@@ -372,6 +411,18 @@ class ROICoordinator:
                         # Update list panel selection
                         self.roi_list_panel.select_roi_in_list(roi)
                         break
+            else:
+                # No selection - update overlay positions for all ROIs that might have moved
+                # This handles the case where ROI is moved but then deselected
+                current_dataset = self.get_current_dataset()
+                if current_dataset is not None:
+                    study_uid = getattr(current_dataset, 'StudyInstanceUID', '')
+                    series_uid = getattr(current_dataset, 'SeriesInstanceUID', '')
+                    instance_identifier = self.get_current_slice_index()
+                    rois = self.roi_manager.get_rois_for_slice(study_uid, series_uid, instance_identifier)
+                    for roi in rois:
+                        if roi.statistics_overlay_item is not None and roi.statistics_overlay_visible:
+                            self.roi_manager.update_statistics_overlay_position(roi, self.image_viewer.scene)
         except RuntimeError:
             # Scene has been deleted or is invalid, ignore
             return
@@ -392,4 +443,144 @@ class ROICoordinator:
                 # Don't hide the image item
                 if item != self.image_viewer.image_item:
                     item.setVisible(not hide)
+    
+    def update_roi_statistics_overlays(self) -> None:
+        """
+        Create/update statistics overlays for all ROIs on current slice.
+        """
+        if self.image_viewer.scene is None:
+            return
+        
+        current_dataset = self.get_current_dataset()
+        if current_dataset is None:
+            return
+        
+        # Extract DICOM identifiers
+        study_uid = getattr(current_dataset, 'StudyInstanceUID', '')
+        series_uid = getattr(current_dataset, 'SeriesInstanceUID', '')
+        instance_identifier = self.get_current_slice_index()
+        
+        # Get all ROIs for current slice
+        rois = self.roi_manager.get_rois_for_slice(study_uid, series_uid, instance_identifier)
+        
+        # Get pixel array
+        pixel_array = self.dicom_processor.get_pixel_array(current_dataset)
+        if pixel_array is None:
+            return
+        
+        # Extract pixel spacing and rescale parameters
+        pixel_spacing = get_pixel_spacing(current_dataset)
+        rescale_slope, rescale_intercept, rescale_type, use_rescaled = self.get_rescale_params()
+        display_rescale_type = rescale_type if use_rescaled else None
+        
+        # Remove all statistics overlays from scene before creating new ones
+        # This ensures orphaned overlays from previous slices are removed
+        self.roi_manager.remove_all_statistics_overlays_from_scene(self.image_viewer.scene)
+        
+        # Font size and color will be retrieved from config in create_statistics_overlay
+        
+        # Create/update overlays for each ROI
+        for roi in rois:
+            # Set up movement callback for ROI if not already set
+            if roi.on_moved_callback is None:
+                roi.on_moved_callback = lambda r=roi: self._on_roi_moved(r)
+            
+            # Always recalculate statistics to ensure overlays reflect latest ROI position
+            stats = self.roi_manager.calculate_statistics(
+                roi,
+                pixel_array,
+                rescale_slope=rescale_slope if use_rescaled else None,
+                rescale_intercept=rescale_intercept if use_rescaled else None,
+                pixel_spacing=pixel_spacing
+            )
+            
+            if stats and roi.statistics_overlay_visible:
+                self.roi_manager.create_statistics_overlay(
+                    roi,
+                    stats,
+                    self.image_viewer.scene,
+                    font_size=None,
+                    font_color=None,  # None = use config values
+                    rescale_type=display_rescale_type
+                )
+    
+    def handle_roi_statistics_overlay_toggle(self, roi, visible: bool) -> None:
+        """
+        Toggle statistics overlay visibility for a specific ROI.
+        
+        Args:
+            roi: ROI item
+            visible: True to show overlay, False to hide
+        """
+        roi.statistics_overlay_visible = visible
+        
+        if self.image_viewer.scene is None:
+            return
+        
+        if visible:
+            # Recalculate statistics and recreate overlay so it reflects latest ROI position
+            self.update_roi_statistics(roi)
+        else:
+            # Hide overlay
+            self.roi_manager.remove_statistics_overlay(roi, self.image_viewer.scene)
+    
+    def handle_roi_statistics_selection(self, roi, statistics_to_show: set) -> None:
+        """
+        Change which statistics are displayed for an ROI.
+        
+        Args:
+            roi: ROI item
+            statistics_to_show: Set of statistic names to show (e.g., {"mean", "std", "min"})
+        """
+        roi.visible_statistics = statistics_to_show
+        
+        # Update overlay if it exists and is visible
+        if roi.statistics_overlay_visible:
+            self.update_roi_statistics(roi)
+    
+    def hide_roi_statistics_overlays(self, hide: bool) -> None:
+        """
+        Hide or show all ROI statistics overlays.
+        
+        Args:
+            hide: True to hide overlays, False to show them
+        """
+        if self.image_viewer.scene is None:
+            return
+        
+        self.roi_manager.hide_all_statistics_overlays(self.image_viewer.scene, hide)
+    
+    def _on_roi_moved(self, roi) -> None:
+        """
+        Handle ROI movement - recalculate statistics and update overlays.
+        
+        Args:
+            roi: ROI item that was moved
+        """
+        print(f"[DEBUG-ROI] _on_roi_moved called for ROI {id(roi)}")
+        try:
+            # Check if ROI is still valid
+            if roi is None or not hasattr(roi, 'item') or roi.item is None:
+                print(f"[DEBUG-ROI] ROI is invalid, skipping movement handling")
+                return
+            
+            # Recalculate statistics for the moved ROI
+            print(f"[DEBUG-ROI] Recalculating statistics for moved ROI")
+            self.update_roi_statistics(roi)
+            
+            # Update overlay position
+            if hasattr(roi, 'statistics_overlay_item') and roi.statistics_overlay_item is not None:
+                if hasattr(roi, 'statistics_overlay_visible') and roi.statistics_overlay_visible:
+                    if self.image_viewer.scene is not None:
+                        print(f"[DEBUG-ROI] Updating overlay position for moved ROI")
+                        self.roi_manager.update_statistics_overlay_position(roi, self.image_viewer.scene)
+            
+            # Update ROI statistics panel if this ROI is selected
+            if self.roi_manager.get_selected_roi() == roi:
+                # Statistics panel will be updated by update_roi_statistics
+                print(f"[DEBUG-ROI] ROI is selected, statistics panel updated")
+        except Exception as e:
+            print(f"[DEBUG-ROI] Error in _on_roi_moved: {e}")
+            import traceback
+            traceback.print_exc()
 
