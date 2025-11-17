@@ -367,7 +367,7 @@ class SliceDisplayManager:
                         self.view_state_manager.main_window.update_zoom_preset_status(current_zoom, preset_name)
                     elif window_center is not None and window_width is not None:
                         # No presets found, using calculated values
-                        print(f"[DEBUG-PRESET-MATCH] Updating status bar with Auto-Calculated (no presets found)")
+                        # print(f"[DEBUG-PRESET-MATCH] Updating status bar with Auto-Calculated (no presets found)")
                         self.view_state_manager.main_window.update_zoom_preset_status(current_zoom, None)
                     
                     # Store defaults for this series (will be updated with zoom/pan after fit_to_view)
@@ -526,7 +526,7 @@ class SliceDisplayManager:
                 )
             elif is_same_series and window_center is not None and window_width is not None:
                 # Same series - preserve existing window/level values (if valid)
-                print(f"[DEBUG-PRESET-MATCH] Setting window/level for same series: wc={window_center:.2f}, ww={window_width:.2f}, block_signals=True")
+                # print(f"[DEBUG-PRESET-MATCH] Setting window/level for same series: wc={window_center:.2f}, ww={window_width:.2f}, block_signals=True")
                 self.window_level_controls.set_window_level(
                     window_center, window_width, block_signals=True, unit=unit
                 )
@@ -551,7 +551,7 @@ class SliceDisplayManager:
                                 wc, ww = self.dicom_processor.convert_window_level_raw_to_rescaled(
                                     wc, ww, rescale_slope, rescale_intercept
                                 )
-                        print(f"[DEBUG-PRESET-MATCH] Setting window/level from dataset: wc={wc:.2f}, ww={ww:.2f}, block_signals=True")
+                        # print(f"[DEBUG-PRESET-MATCH] Setting window/level from dataset: wc={wc:.2f}, ww={ww:.2f}, block_signals=True")
                         self.window_level_controls.set_window_level(wc, ww, block_signals=True, unit=unit)
                         self.view_state_manager.current_window_center = wc
                         self.view_state_manager.current_window_width = ww
@@ -561,7 +561,7 @@ class SliceDisplayManager:
                         default_width = pixel_max - pixel_min
                         if default_width <= 0:
                             default_width = 1.0
-                        print(f"[DEBUG-PRESET-MATCH] Setting window/level from pixel range: wc={default_center:.2f}, ww={default_width:.2f}, block_signals=True")
+                        # print(f"[DEBUG-PRESET-MATCH] Setting window/level from pixel range: wc={default_center:.2f}, ww={default_width:.2f}, block_signals=True")
                         self.window_level_controls.set_window_level(default_center, default_width, block_signals=True, unit=unit)
                         self.view_state_manager.current_window_center = default_center
                         self.view_state_manager.current_window_width = default_width

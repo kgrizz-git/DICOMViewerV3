@@ -171,31 +171,13 @@ class FileOperationsHandler:
                 return None, None
             
             # Validate datasets before processing
-            # Filter out problematic multi-frame files that exceed safety thresholds
-            from core.multiframe_handler import is_multiframe, get_frame_count
+            # Multi-frame detection kept for potential future use, but no filtering
             validated_datasets = []
             validated_paths = []
-            skipped_files = []
             
             for ds, path in zip(datasets, file_paths):
-                # Check for problematic multi-frame files
-                if is_multiframe(ds):
-                    num_frames = get_frame_count(ds)
-                    # Safety threshold: Skip files with excessive frames (may indicate issues)
-                    if num_frames > 50:
-                        skipped_files.append((path, f"Multi-frame file with {num_frames} frames exceeds safety threshold (50)"))
-                        continue
                 validated_datasets.append(ds)
                 validated_paths.append(path)
-            
-            # Show warning about skipped files
-            if skipped_files:
-                warning_msg = f"Warning: {len(skipped_files)} file(s) were skipped for safety:\n"
-                for path, reason in skipped_files[:3]:
-                    warning_msg += f"\n{os.path.basename(path)}: {reason}"
-                if len(skipped_files) > 3:
-                    warning_msg += f"\n... and {len(skipped_files) - 3} more"
-                self.file_dialog.show_warning(self.main_window, "Files Skipped", warning_msg)
             
             # Update datasets and paths to validated ones
             datasets = validated_datasets
@@ -874,31 +856,13 @@ class FileOperationsHandler:
                     return None, None
                 
                 # Validate datasets before processing
-                # Filter out problematic multi-frame files that exceed safety thresholds
-                from core.multiframe_handler import is_multiframe, get_frame_count
+                # Multi-frame detection kept for potential future use, but no filtering
                 validated_datasets = []
                 validated_paths = []
-                skipped_files = []
                 
                 for ds, path in zip(datasets, files):
-                    # Check for problematic multi-frame files
-                    if is_multiframe(ds):
-                        num_frames = get_frame_count(ds)
-                        # Safety threshold: Skip files with excessive frames (may indicate issues)
-                        if num_frames > 50:
-                            skipped_files.append((path, f"Multi-frame file with {num_frames} frames exceeds safety threshold (50)"))
-                            continue
                     validated_datasets.append(ds)
                     validated_paths.append(path)
-                
-                # Show warning about skipped files
-                if skipped_files:
-                    warning_msg = f"Warning: {len(skipped_files)} file(s) were skipped for safety:\n"
-                    for path, reason in skipped_files[:3]:
-                        warning_msg += f"\n{os.path.basename(path)}: {reason}"
-                    if len(skipped_files) > 3:
-                        warning_msg += f"\n... and {len(skipped_files) - 3} more"
-                    self.file_dialog.show_warning(self.main_window, "Files Skipped", warning_msg)
                 
                 # Update datasets and paths to validated ones
                 datasets = validated_datasets
