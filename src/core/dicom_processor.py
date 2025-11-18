@@ -676,12 +676,15 @@ class DICOMProcessor:
             # Handle PlanarConfiguration before returning
             pixel_array = DICOMProcessor._handle_planar_configuration(pixel_array, dataset)
             
-            # If this is an original multi-frame dataset, return the full 3D array
+            # If this is an original multi-frame dataset, return the full array
             # (The organizer should have split it into frame wrappers, but handle this case)
-            if is_multiframe(dataset) and len(pixel_array.shape) == 3:
-                # This is a multi-frame array - return as-is
-                # Caller should extract specific frame if needed
-                return pixel_array
+            # Multi-frame grayscale: shape (frames, rows, cols)
+            # Multi-frame RGB: shape (frames, rows, cols, channels)
+            if is_multiframe(dataset):
+                if len(pixel_array.shape) == 3 or len(pixel_array.shape) == 4:
+                    # This is a multi-frame array - return as-is
+                    # Caller should extract specific frame if needed
+                    return pixel_array
             
             return pixel_array
             
@@ -946,8 +949,15 @@ class DICOMProcessor:
                     pixel_min = float(np.min(pixel_array))
                     pixel_max = float(np.max(pixel_array))
                     if window_center is None:
-                        # Use median instead of midpoint
-                        window_center = float(np.median(pixel_array))
+                        # Calculate both median (excluding zeros) and midpoint, use the greater value
+                        midpoint = (pixel_min + pixel_max) / 2.0
+                        non_zero_values = pixel_array[pixel_array != 0]
+                        if len(non_zero_values) > 0:
+                            median = float(np.median(non_zero_values))
+                            window_center = max(median, midpoint)
+                        else:
+                            # Fallback to midpoint if all values are zero
+                            window_center = midpoint
                     if window_width is None:
                         window_width = pixel_max - pixel_min
                 # Calculated values are not from DICOM tags, so not rescaled
@@ -1124,7 +1134,8 @@ class DICOMProcessor:
         if pixel_array is None:
             # print(f"[PROCESSOR] Pixel array is None, returning None")
             return None
-        # print(f"[PROCESSOR] Pixel array shape: {pixel_array.shape}, dtype: {pixel_array.dtype}")
+        print(f"[PROCESSOR] Pixel array shape: {pixel_array.shape}, dtype: {pixel_array.dtype}")
+        print(f"[PROCESSOR] Pixel array min: {pixel_array.min()}, max: {pixel_array.max()}, mean: {pixel_array.mean():.2f}")
         
         # Detect if this is a color image
         is_color, photometric_interpretation = DICOMProcessor.is_color_image(dataset)
@@ -1565,8 +1576,14 @@ class DICOMProcessor:
             if successful_datasets > 0 and all_pixel_values:
                 # Concatenate all pixel values from all slices
                 combined_values = np.concatenate(all_pixel_values)
-                median_value = float(np.median(combined_values))
-                return median_value
+                # Exclude zero values from median calculation
+                non_zero_values = combined_values[combined_values != 0]
+                if len(non_zero_values) > 0:
+                    median_value = float(np.median(non_zero_values))
+                    return median_value
+                else:
+                    # Fallback: if all values are zero, return None
+                    return None
             else:
                 print("Failed to process any datasets in series pixel median calculation")
                 return None

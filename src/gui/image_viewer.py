@@ -106,6 +106,13 @@ class ImageViewer(QGraphicsView):
         # Image item
         self.image_item: Optional[QGraphicsPixmapItem] = None
         
+        # Image inversion state
+        self.image_inverted: bool = False
+        self.original_image: Optional[Image.Image] = None  # Store original image for inversion
+        
+        # Callback to notify when inversion state changes (for persistence per series)
+        self.inversion_state_changed_callback: Optional[Callable[[bool], None]] = None
+        
         # Callbacks to get current dataset and slice index for pixel value display
         self.get_current_dataset_callback: Optional[Callable[[], Any]] = None
         self.get_current_slice_index_callback: Optional[Callable[[], int]] = None
@@ -210,7 +217,66 @@ class ImageViewer(QGraphicsView):
         """
         self.setBackgroundBrush(color)
     
-    def set_image(self, image: Image.Image, preserve_view: bool = False) -> None:
+    def _apply_inversion(self, image: Image.Image) -> Image.Image:
+        """
+        Apply inversion to a PIL Image.
+        
+        Args:
+            image: PIL Image to invert
+            
+        Returns:
+            Inverted PIL Image
+        """
+        try:
+            img_array = np.array(image)
+            if image.mode == 'L':
+                # Grayscale: invert each pixel value
+                img_array = 255 - img_array
+                return Image.fromarray(img_array, mode='L')
+            elif image.mode == 'RGB':
+                # RGB: invert each channel
+                img_array = 255 - img_array
+                return Image.fromarray(img_array, mode='RGB')
+            else:
+                # Convert to RGB first, then invert
+                rgb_image = image.convert('RGB')
+                img_array = np.array(rgb_image)
+                img_array = 255 - img_array
+                return Image.fromarray(img_array, mode='RGB')
+        except Exception as e:
+            print(f"Error inverting image: {e}")
+            return image  # Return original on error
+    
+    def invert_image(self) -> None:
+        """
+        Toggle image inversion state and update display.
+        """
+        if self.original_image is None:
+            # If no original image stored, we can't invert
+            # This should not happen in normal operation as set_image stores the original
+            return
+        
+        # Toggle inversion state FIRST
+        self.image_inverted = not self.image_inverted
+        
+        # Notify callback of state change (for persistence per series)
+        # This must happen BEFORE calling set_image to ensure state is stored
+        if self.inversion_state_changed_callback:
+            self.inversion_state_changed_callback(self.image_inverted)
+        
+        # Apply inversion to the original image and update display
+        # Pass the new inversion state explicitly to ensure synchronization
+        if self.image_inverted:
+            display_image = self._apply_inversion(self.original_image)
+        else:
+            display_image = self.original_image
+        
+        # Update the pixmap without changing zoom/pan
+        # Pass apply_inversion explicitly to ensure state synchronization
+        preserve_view = True
+        self.set_image(display_image, preserve_view=preserve_view, apply_inversion=self.image_inverted)
+    
+    def set_image(self, image: Image.Image, preserve_view: bool = False, apply_inversion: Optional[bool] = None) -> None:
         """
         Set the image to display.
         
@@ -219,9 +285,72 @@ class ImageViewer(QGraphicsView):
         Args:
             image: PIL Image to display
             preserve_view: If True, preserve current zoom and pan position
+            apply_inversion: Optional bool to override inversion state. If None, uses self.image_inverted
         """
-        # print(f"[VIEWER] set_image called")
-        # print(f"[VIEWER] Image size: {image.size}, mode: {image.mode}, preserve_view: {preserve_view}")
+        print(f"[VIEWER] set_image called")
+        print(f"[VIEWER] Image size: {image.size}, mode: {image.mode}, preserve_view: {preserve_view}")
+        print(f"[VIEWER] Image id: {id(image)}")
+        print(f"[VIEWER] Apply inversion: {apply_inversion}")
+        print(f"[VIEWER] Current image_inverted: {self.image_inverted}")
+        print(f"[VIEWER] Current original_image id: {id(self.original_image) if self.original_image else 'None'}")
+        
+        # Store original image for inversion
+        # When preserve_view=False: new slice, always store new original_image
+        # When preserve_view=True and apply_inversion is not None: same slice, inversion toggle, preserve original_image
+        # When preserve_view=True and apply_inversion is None: new slice (scrolling), store new original_image
+        if not preserve_view:
+            # New slice - always store new original image (non-inverted)
+            print(f"[VIEWER] Storing new original_image (preserve_view=False)")
+            print(f"[VIEWER] Before: original_image id = {id(self.original_image) if self.original_image else 'None'}")
+            print(f"[VIEWER] Image to copy id = {id(image)}")
+            self.original_image = image.copy()
+            print(f"[VIEWER] After: original_image id = {id(self.original_image)}")
+            
+            # Update inversion state FIRST before determining if we need to invert
+            # If apply_inversion is provided, use it (stored state for this series)
+            # If apply_inversion is None, reset to False (no stored state for this series)
+            if apply_inversion is not None:
+                self.image_inverted = apply_inversion
+            else:
+                # No stored inversion state for this series - reset to False
+                self.image_inverted = False
+            
+            # Determine if we need to invert the image for display
+            # Use apply_inversion if provided, otherwise use current self.image_inverted state
+            should_invert = apply_inversion if apply_inversion is not None else self.image_inverted
+            
+            # Apply inversion if needed
+            if should_invert:
+                image = self._apply_inversion(image)
+        elif preserve_view:
+            print(f"[VIEWER] preserve_view=True branch")
+            print(f"[VIEWER] apply_inversion = {apply_inversion}")
+            # Same series - might be same slice (inversion toggle) or new slice (scrolling)
+            if apply_inversion is not None:
+                # Same slice - inversion toggle, preserve existing original_image
+                # Update inversion state to match apply_inversion
+                self.image_inverted = apply_inversion
+                # Apply inversion to the stored original image based on the state
+                if self.original_image is not None:
+                    if self.image_inverted:
+                        image = self._apply_inversion(self.original_image)
+                    else:
+                        image = self.original_image
+            else:
+                # New slice (scrolling within same series) - store new original_image
+                print(f"[VIEWER] Storing new original_image (scrolling within same series)")
+                print(f"[VIEWER] Before: original_image id = {id(self.original_image) if self.original_image else 'None'}")
+                print(f"[VIEWER] Image to copy id = {id(image)}")
+                self.original_image = image.copy()
+                print(f"[VIEWER] After: original_image id = {id(self.original_image)}")
+                # Don't reset inversion state - preserve it for the series
+                # Apply inversion if the series is currently inverted
+                if self.image_inverted:
+                    print(f"[VIEWER] Applying inversion to new slice (series is inverted)")
+                    image = self._apply_inversion(image)
+                # If image_inverted is False, image is already non-inverted (from dataset), use as-is
+        # If preserve_view is True and apply_inversion is None,
+        # the image passed in is already in the correct state (inverted or not), so don't apply inversion again
         
         # Store current view state if preserving
         if preserve_view and self.image_item is not None:
@@ -274,11 +403,14 @@ class ImageViewer(QGraphicsView):
         
         # print(f"[VIEWER] QImage created, converting to QPixmap...")
         pixmap = QPixmap.fromImage(qimage)
-        # print(f"[VIEWER] QPixmap created: {pixmap.width()}x{pixmap.height()}")
+        print(f"[VIEWER] QPixmap created: {pixmap.width()}x{pixmap.height()}, isNull: {pixmap.isNull()}")
+        print(f"[VIEWER] Pixmap cache key: {pixmap.cacheKey() if hasattr(pixmap, 'cacheKey') else 'N/A'}")
         
         # Remove old image item only
         # Note: ROIs and overlays will be preserved and re-added by their managers
         if self.image_item is not None:
+            old_pixmap = self.image_item.pixmap()
+            print(f"[VIEWER] Removing old image item, pixmap cache key: {old_pixmap.cacheKey() if old_pixmap and hasattr(old_pixmap, 'cacheKey') else 'None'}")
             self.scene.removeItem(self.image_item)
         
         # Create new image item
@@ -286,9 +418,16 @@ class ImageViewer(QGraphicsView):
         self.image_item = QGraphicsPixmapItem(pixmap)
         # Set image item to lowest Z-value so other items appear on top
         self.image_item.setZValue(0)
+        print(f"[VIEWER] New image item created, pixmap cache key: {self.image_item.pixmap().cacheKey() if self.image_item.pixmap() and hasattr(self.image_item.pixmap(), 'cacheKey') else 'None'}")
         # print(f"[VIEWER] Adding item to scene...")
         self.scene.addItem(self.image_item)
-        # print(f"[VIEWER] Item added to scene successfully")
+        print(f"[VIEWER] Item added to scene successfully")
+        
+        # Force scene and viewport update to ensure display refreshes
+        print(f"[VIEWER] Forcing scene and viewport update...")
+        self.scene.invalidate(self.scene.sceneRect())
+        self.viewport().update()
+        print(f"[VIEWER] Scene and viewport updated")
         
         # Set scene rect to image dimensions to ensure proper overlay positioning
         # print(f"[VIEWER] Getting image bounding rect...")
@@ -1011,6 +1150,14 @@ class ImageViewer(QGraphicsView):
                         # Note: Text will be updated dynamically by main window based on visibility
                         toggle_navigator_action = context_menu.addAction("Toggle Series Navigator (N)")
                         toggle_navigator_action.triggered.connect(self.toggle_series_navigator_requested.emit)
+                        
+                        context_menu.addSeparator()
+                        
+                        # Invert Image action
+                        invert_action = context_menu.addAction("Invert Image (I)")
+                        invert_action.setCheckable(True)
+                        invert_action.setChecked(self.image_inverted)
+                        invert_action.triggered.connect(self.invert_image)
                         
                         context_menu.addSeparator()
                         

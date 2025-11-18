@@ -306,15 +306,19 @@ class SliceDisplayManager:
                         elif series_pixel_min is not None and series_pixel_max is not None:
                             # Calculate median from series for window center
                             # Get series datasets for median calculation (already have series_datasets from above)
+                            midpoint = (series_pixel_min + series_pixel_max) / 2.0
                             if series_datasets:
-                                stored_window_center = self.dicom_processor.get_series_pixel_median(
+                                median = self.dicom_processor.get_series_pixel_median(
                                     series_datasets, apply_rescale=use_rescaled_values
                                 )
-                                # If median calculation failed, fall back to midpoint
-                                if stored_window_center is None:
-                                    stored_window_center = (series_pixel_min + series_pixel_max) / 2.0
+                                # If median calculation failed, use midpoint
+                                if median is None:
+                                    stored_window_center = midpoint
+                                else:
+                                    # Use the greater of median or midpoint
+                                    stored_window_center = max(median, midpoint)
                             else:
-                                stored_window_center = (series_pixel_min + series_pixel_max) / 2.0
+                                stored_window_center = midpoint
                             
                             stored_window_width = series_pixel_max - series_pixel_min
                             if stored_window_width <= 0:
@@ -335,7 +339,15 @@ class SliceDisplayManager:
                                             rescale_slope, rescale_intercept, _ = self.dicom_processor.get_rescale_parameters(dataset)
                                             if rescale_slope is not None and rescale_intercept is not None:
                                                 pixel_array = pixel_array.astype(np.float32) * float(rescale_slope) + float(rescale_intercept)
-                                        stored_window_center = float(np.median(pixel_array))
+                                        # Calculate both median (excluding zeros) and midpoint, use the greater value
+                                        midpoint = (pixel_min + pixel_max) / 2.0
+                                        non_zero_values = pixel_array[pixel_array != 0]
+                                        if len(non_zero_values) > 0:
+                                            median = float(np.median(non_zero_values))
+                                            stored_window_center = max(median, midpoint)
+                                        else:
+                                            # Fallback to midpoint if all values are zero
+                                            stored_window_center = midpoint
                                     else:
                                         # Fall back to midpoint if pixel array unavailable
                                         stored_window_center = (pixel_min + pixel_max) / 2.0
@@ -381,6 +393,7 @@ class SliceDisplayManager:
                         'window_center': window_center,
                         'window_width': window_width,
                         'use_rescaled_values': use_rescaled_values,  # Store the rescale state used for calculation
+                        'image_inverted': self.image_viewer.image_inverted,  # Store current inversion state
                         'window_level_defaults_set': True  # Flag to prevent overwriting by store_initial_view_state
                     })
                     # print(f"[DEBUG-WL] Stored INITIAL defaults in series_defaults with flag")
@@ -432,11 +445,29 @@ class SliceDisplayManager:
                 # print(error_msg)
                 raise RuntimeError(error_msg) from e
             
+            # Restore inversion state for this series if it exists
+            # Only pass apply_inversion when preserve_view=False (new slice)
+            # When preserve_view=True (scrolling), pass None so set_image() knows it's a new slice
+            apply_inversion = None
+            preserve_view = is_same_series and not is_new_study_series
+            if not preserve_view:
+                # New slice - apply stored inversion state if it exists
+                if series_identifier and series_identifier in self.view_state_manager.series_defaults:
+                    # Series has stored state - get inversion value
+                    series_inverted = self.view_state_manager.get_series_inversion_state(series_identifier)
+                    # Pass inversion state for new slice
+                    apply_inversion = series_inverted
+            # When preserve_view=True (scrolling), apply_inversion stays None
+            # This allows set_image() to detect it's a new slice and store new original_image
+            
             # Set image in viewer - preserve zoom/pan if same series
-            # print(f"[DISPLAY] About to set image in viewer...")
-            # print(f"[DISPLAY] Preserve view: {is_same_series and not is_new_study_series}")
-            self.image_viewer.set_image(image, preserve_view=is_same_series and not is_new_study_series)
-            # print(f"[DISPLAY] Image set in viewer successfully")
+            print(f"[DISPLAY] About to set image in viewer...")
+            print(f"[DISPLAY] Slice index: {current_slice_index}, Preserve view: {preserve_view}")
+            print(f"[DISPLAY] Image size: {image.size if image else 'None'}, mode: {image.mode if image else 'None'}")
+            print(f"[DISPLAY] Image id: {id(image) if image else 'None'}")
+            print(f"[DISPLAY] Apply inversion: {apply_inversion}")
+            self.image_viewer.set_image(image, preserve_view=preserve_view, apply_inversion=apply_inversion)
+            print(f"[DISPLAY] Image set in viewer successfully")
             
             # If new study/series, fit to view and center
             if is_new_study_series:
@@ -789,6 +820,7 @@ class SliceDisplayManager:
         Args:
             slice_index: New slice index
         """
+        print(f"[SLICE] handle_slice_changed called with slice_index: {slice_index}")
         if not self.current_studies or not self.current_series_uid:
             return
         
@@ -796,6 +828,8 @@ class SliceDisplayManager:
         if 0 <= slice_index < len(datasets):
             self.current_slice_index = slice_index
             dataset = datasets[slice_index]
+            print(f"[SLICE] Dataset SOPInstanceUID: {getattr(dataset, 'SOPInstanceUID', 'N/A')}")
+            print(f"[SLICE] Dataset InstanceNumber: {getattr(dataset, 'InstanceNumber', 'N/A')}")
             self.display_slice(
                 dataset,
                 self.current_studies,

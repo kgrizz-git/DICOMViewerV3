@@ -52,7 +52,8 @@ class KeyboardEventHandler:
         update_roi_list_callback: Optional[Callable[[], None]] = None,
         clear_roi_statistics_callback: Optional[Callable[[], None]] = None,
         reset_view_callback: Optional[Callable[[], None]] = None,
-        toggle_series_navigator_callback: Optional[Callable[[], None]] = None
+        toggle_series_navigator_callback: Optional[Callable[[], None]] = None,
+        invert_image_callback: Optional[Callable[[], None]] = None
     ):
         """
         Initialize the keyboard event handler.
@@ -91,6 +92,7 @@ class KeyboardEventHandler:
         self.clear_roi_statistics_callback = clear_roi_statistics_callback
         self.reset_view_callback = reset_view_callback
         self.toggle_series_navigator_callback = toggle_series_navigator_callback
+        self.invert_image_callback = invert_image_callback
     
     def handle_key_event(self, event: QKeyEvent) -> bool:
         """
@@ -200,6 +202,12 @@ class KeyboardEventHandler:
         elif event.key() == Qt.Key.Key_N:
             if self.toggle_series_navigator_callback:
                 self.toggle_series_navigator_callback()
+            return True
+        
+        # I key for Invert Image
+        elif event.key() == Qt.Key.Key_I:
+            if self.invert_image_callback:
+                self.invert_image_callback()
             return True
         
         return False

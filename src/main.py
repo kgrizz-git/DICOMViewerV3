@@ -238,6 +238,16 @@ class DICOMViewerApp(QObject):
         # Update view state manager with series_navigator reference
         self.view_state_manager.set_series_navigator(self.series_navigator)
         
+        # Connect image viewer inversion callback to view state manager
+        def on_inversion_state_changed(inverted: bool) -> None:
+            """Handle inversion state change - store in ViewStateManager."""
+            if self.view_state_manager.current_series_identifier:
+                self.view_state_manager.set_series_inversion_state(
+                    self.view_state_manager.current_series_identifier,
+                    inverted
+                )
+        self.image_viewer.inversion_state_changed_callback = on_inversion_state_changed
+        
         # Update slice display manager with ROI coordinator callback
         self.slice_display_manager.update_roi_statistics_overlays_callback = self.roi_coordinator.update_roi_statistics_overlays
         
@@ -320,7 +330,8 @@ class DICOMViewerApp(QObject):
             update_roi_list_callback=self._update_roi_list,
             clear_roi_statistics_callback=self.roi_statistics_panel.clear_statistics,
             reset_view_callback=self.view_state_manager.reset_view,
-            toggle_series_navigator_callback=self.main_window.toggle_series_navigator
+            toggle_series_navigator_callback=self.main_window.toggle_series_navigator,
+            invert_image_callback=self.image_viewer.invert_image
         )
     
     def _clear_data(self) -> None:

@@ -44,12 +44,13 @@ class ROIGraphicsEllipseItem(QGraphicsEllipseItem):
         # For rectangles/ellipses, when ItemIsMovable is set, Qt moves them by changing position
         # ItemPositionHasChanged fires after the position has changed
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged:
-            print("[DEBUG-ROI] ROIGraphicsEllipseItem position changed")
+            # print("[DEBUG-ROI] ROIGraphicsEllipseItem position changed")
             if self.on_moved_callback:
                 try:
                     self.on_moved_callback()
                 except Exception as e:
-                    print(f"[DEBUG-ROI] Error in ROI movement callback: {e}")
+                    # print(f"[DEBUG-ROI] Error in ROI movement callback: {e}")
+                    pass
         return super().itemChange(change, value)
     
     def mouseMoveEvent(self, event: QGraphicsSceneMouseEvent) -> None:
