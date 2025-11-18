@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import List, Tuple, Optional, Callable
 import pydicom
 from pydicom.errors import InvalidDicomError
+from PySide6.QtWidgets import QApplication
 from core.multiframe_handler import is_multiframe, get_frame_count
 
 
@@ -114,7 +115,8 @@ class DICOMLoader:
         except Exception as e:
             return False, f"Validation failed: {str(e)}"
     
-    def load_file(self, file_path: str, defer_size: Optional[int] = None) -> Optional[pydicom.Dataset]:
+    def load_file(self, file_path: str, defer_size: Optional[int] = None, 
+                  progress_callback: Optional[Callable[[str, Optional[int], Optional[int]], None]] = None) -> Optional[pydicom.Dataset]:
         """
         Load a single DICOM file.
         
@@ -123,11 +125,21 @@ class DICOMLoader:
             defer_size: Optional size threshold (in bytes) for deferring pixel data loading.
                        If file size exceeds this, pixel data will be loaded on-demand.
                        Default None means load all data immediately.
+            progress_callback: Optional callback function for progress updates.
+                              Signature: (message: str, current_frames: Optional[int], total_frames: Optional[int]) -> None
             
         Returns:
             pydicom.Dataset if successful, None otherwise
         """
         try:
+            filename = os.path.basename(file_path)
+            
+            # Notify start of loading
+            if progress_callback:
+                progress_callback(f"Loading {filename}...", None, None)
+                # Process events to allow timer to start and UI to update
+                QApplication.processEvents()
+            
             # Validate file before attempting to load pixel data
             is_valid, error_msg = self.validate_dicom_file(file_path)
             if not is_valid:
@@ -139,6 +151,9 @@ class DICOMLoader:
             # The warnings don't cause errors, but we suppress them to reduce noise
             with warnings.catch_warnings():
                 warnings.filterwarnings('ignore', message='.*excess padding.*', category=UserWarning)
+                
+                # Process events before blocking read operation to allow timer to fire
+                QApplication.processEvents()
                 
                 # Check file size if defer_size is specified
                 if defer_size is not None:
@@ -192,11 +207,19 @@ class DICOMLoader:
                 # correctly if accessed later after the dataset has been manipulated
                 if hasattr(dataset, 'PerFrameFunctionalGroupsSequence'):
                     print(f"[LOADER] Enhanced Multi-frame detected, pre-loading pixel array...")
+                    # Notify about frame loading
+                    if progress_callback:
+                        progress_callback(f"Loading {num_frames} frames from {filename}...", None, num_frames)
+                        # Process events before blocking operation to allow timer to fire
+                        QApplication.processEvents()
                     try:
                         pixel_array = dataset.pixel_array
                         print(f"[LOADER] Pixel array pre-loaded, shape: {pixel_array.shape}, dtype: {pixel_array.dtype}")
                         # Cache the pixel array in the dataset for later access
                         dataset._cached_pixel_array = pixel_array
+                        # Notify completion
+                        if progress_callback:
+                            progress_callback(f"Loaded {num_frames} frames from {filename}", num_frames, num_frames)
                     except Exception as e:
                         error_msg = str(e)
                         # Check if this is a compressed DICOM decoding error
@@ -296,17 +319,25 @@ class DICOMLoader:
         
         total_files = len(file_paths)
         last_update_time = time.time()
-        update_interval = 0.1  # Update every 100ms
+        update_interval = 0.05  # Update every 50ms
         
         for idx, file_path in enumerate(file_paths):
-            # Call progress callback with throttling (every 10 files or 100ms)
-            if progress_callback and (idx % 10 == 0 or time.time() - last_update_time >= update_interval):
+            # Call progress callback with throttling (every 5 files or 50ms)
+            if progress_callback and (idx % 5 == 0 or time.time() - last_update_time >= update_interval):
                 filename = os.path.basename(file_path)
                 progress_callback(idx + 1, total_files, filename)
                 last_update_time = time.time()
             
             try:
-                dataset = self.load_file(file_path, defer_size=defer_size)
+                # For single file loading, pass a progress callback that formats messages
+                file_progress_callback = None
+                if total_files == 1 and progress_callback:
+                    def single_file_progress(message: str, current_frames: Optional[int], total_frames: Optional[int]) -> None:
+                        # Format message for single file case - pass message as filename parameter
+                        progress_callback(1, 1, message)
+                    file_progress_callback = single_file_progress
+                
+                dataset = self.load_file(file_path, defer_size=defer_size, progress_callback=file_progress_callback)
                 if dataset is not None:
                     self.loaded_files.append(dataset)
             except Exception as e:
@@ -356,12 +387,12 @@ class DICOMLoader:
         
         total_files = len(file_paths)
         last_update_time = time.time()
-        update_interval = 0.1  # Update every 100ms
+        update_interval = 0.05  # Update every 50ms
         
         # Attempt to load each file as DICOM (regardless of extension)
         for idx, file_path in enumerate(file_paths):
-            # Call progress callback with throttling (every 10 files or 100ms)
-            if progress_callback and (idx % 10 == 0 or time.time() - last_update_time >= update_interval):
+            # Call progress callback with throttling (every 5 files or 50ms)
+            if progress_callback and (idx % 5 == 0 or time.time() - last_update_time >= update_interval):
                 filename = os.path.basename(file_path)
                 progress_callback(idx + 1, total_files, filename)
                 last_update_time = time.time()

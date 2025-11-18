@@ -937,6 +937,13 @@ class DICOMViewerApp(QObject):
         self.current_slice_index = 0
         self.current_dataset = datasets[0]
         
+        # Reset projection state when switching series
+        self.slice_display_manager.reset_projection_state()
+        # Update widget to match reset state
+        self.intensity_projection_controls_widget.set_enabled(False)
+        self.intensity_projection_controls_widget.set_projection_type("aip")
+        self.intensity_projection_controls_widget.set_slice_count(4)
+        
         # Update slice display manager context
         self.slice_display_manager.set_current_data_context(
             self.current_studies,
