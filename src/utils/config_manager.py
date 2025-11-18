@@ -78,7 +78,7 @@ class ConfigManager:
             "recent_files": [],  # List of recently opened file/folder paths (max 10)
             "metadata_panel_column_widths": [100, 200, 50, 200],  # Column widths for Tag, Name, VR, Value
             "cine_default_speed": 1.0,  # Default cine playback speed multiplier
-            "cine_default_loop": False,  # Default cine loop setting
+            "cine_default_loop": True,  # Default cine loop setting
             # Annotation options
             "roi_font_size": 14,  # ROI statistics overlay font size
             "roi_font_color_r": 255,  # ROI statistics overlay font color (yellow default)
@@ -96,6 +96,8 @@ class ConfigManager:
             "measurement_line_color_r": 0,  # Measurement line color (green default)
             "measurement_line_color_g": 255,
             "measurement_line_color_b": 0,
+            # ROI statistics visibility defaults
+            "roi_default_visible_statistics": ["mean", "std", "min", "max", "count", "area"],  # Default visible statistics for new ROIs
         }
         
         # Load configuration
@@ -530,9 +532,9 @@ class ConfigManager:
         Get default cine loop setting.
         
         Returns:
-            Default loop setting (default: False)
+            Default loop setting (default: True)
         """
-        return self.config.get("cine_default_loop", False)
+        return self.config.get("cine_default_loop", True)
     
     def set_cine_default_loop(self, loop: bool) -> None:
         """
@@ -645,4 +647,17 @@ class ConfigManager:
             self.config["measurement_line_color_g"] = g
             self.config["measurement_line_color_b"] = b
             self.save_config()
+    
+    def get_roi_default_visible_statistics(self) -> List[str]:
+        """Get default visible statistics for new ROIs."""
+        stats = self.config.get("roi_default_visible_statistics", ["mean", "std", "min", "max", "count", "area"])
+        # Ensure it's a list
+        if isinstance(stats, list):
+            return stats
+        return ["mean", "std", "min", "max", "count", "area"]
+    
+    def set_roi_default_visible_statistics(self, statistics: List[str]) -> None:
+        """Set default visible statistics for new ROIs."""
+        self.config["roi_default_visible_statistics"] = statistics
+        self.save_config()
 

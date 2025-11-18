@@ -312,6 +312,16 @@ class QuickStartGuideDialog(QDialog):
                 <li><strong><code>Shift+Ctrl+T</code>:</strong> Export DICOM Tags</li>
             </ul>
             
+            <h2>Customization</h2>
+            <h3>ROI and Measurement Appearance</h3>
+            <p>Customize the appearance of ROIs and measurements via <strong>View → Annotation Options</strong>:</p>
+            <ul>
+                <li><strong>ROI Settings:</strong> Adjust font size, font color, line thickness, and line color for ROI statistics overlays</li>
+                <li><strong>Measurement Settings:</strong> Adjust font size, font color, line thickness, and line color for measurement lines and text</li>
+                <li>Changes apply immediately to all existing and new ROIs/measurements</li>
+                <li>Your preferences are saved and remembered between sessions</li>
+            </ul>
+            
             <h2>Additional Tips</h2>
             <ul>
                 <li>All measurements and ROIs are preserved when navigating between slices in the same series</li>

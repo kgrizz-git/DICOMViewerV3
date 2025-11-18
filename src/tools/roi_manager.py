@@ -202,7 +202,8 @@ class ROIItem:
     """
     
     def __init__(self, shape_type: str, item: QGraphicsEllipseItem | QGraphicsRectItem,
-                 pen_width: int = 2, pen_color: Tuple[int, int, int] = (255, 0, 0)):
+                 pen_width: int = 2, pen_color: Tuple[int, int, int] = (255, 0, 0),
+                 default_visible_statistics: Optional[Set[str]] = None):
         """
         Initialize ROI item.
         
@@ -211,6 +212,7 @@ class ROIItem:
             item: Graphics item (should be ROIGraphicsEllipseItem or ROIGraphicsRectItem)
             pen_width: Pen width in viewport pixels (default: 2)
             pen_color: Pen color as (r, g, b) tuple (default: red)
+            default_visible_statistics: Optional set of statistics to show by default
         """
         self.shape_type = shape_type
         self.item = item
@@ -233,7 +235,10 @@ class ROIItem:
         
         # Statistics overlay properties
         self.statistics_overlay_visible = True  # Default: show overlay
-        self.visible_statistics: Set[str] = {"mean", "std", "min", "max", "count", "area"}  # Default: show all
+        if default_visible_statistics is not None:
+            self.visible_statistics: Set[str] = default_visible_statistics.copy()
+        else:
+            self.visible_statistics: Set[str] = {"mean", "std", "min", "max", "count", "area"}  # Default: show all
         self.statistics_overlay_item: Optional[QGraphicsTextItem] = None
         self.statistics: Optional[Dict[str, float]] = None
         self.statistics_overlay_offset: Tuple[float, float] = (5.0, 5.0)  # Offset from ROI bounds (viewport pixels)
@@ -410,7 +415,14 @@ class ROIManager:
             pen_width = self.config_manager.get_roi_line_thickness()
             pen_color = self.config_manager.get_roi_line_color()
         
-        self.current_roi_item = ROIItem(self.current_shape_type, item, pen_width=pen_width, pen_color=pen_color)
+        # Get default visible statistics from config if available
+        default_stats = None
+        if self.config_manager:
+            default_stats_list = self.config_manager.get_roi_default_visible_statistics()
+            default_stats = set(default_stats_list)
+        
+        self.current_roi_item = ROIItem(self.current_shape_type, item, pen_width=pen_width, pen_color=pen_color,
+                                        default_visible_statistics=default_stats)
         # Don't make drawing ROI selectable/movable yet (will be enabled when finished)
         self.current_roi_item.item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, False)
         self.current_roi_item.item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, False)
@@ -718,13 +730,13 @@ class ROIManager:
         if "mean" in roi.visible_statistics and "mean" in statistics:
             lines.append(f"Mean: {statistics['mean']:.2f}{unit_suffix}")
         if "std" in roi.visible_statistics and "std" in statistics:
-            lines.append(f"Std: {statistics['std']:.2f}{unit_suffix}")
+            lines.append(f"Std Dev: {statistics['std']:.2f}{unit_suffix}")
         if "min" in roi.visible_statistics and "min" in statistics:
             lines.append(f"Min: {statistics['min']:.2f}{unit_suffix}")
         if "max" in roi.visible_statistics and "max" in statistics:
             lines.append(f"Max: {statistics['max']:.2f}{unit_suffix}")
         if "count" in roi.visible_statistics and "count" in statistics:
-            lines.append(f"Count: {statistics['count']}")
+            lines.append(f"Pixels: {statistics['count']}")
         if "area" in roi.visible_statistics:
             area_mm2 = statistics.get('area_mm2')
             if area_mm2 is not None:

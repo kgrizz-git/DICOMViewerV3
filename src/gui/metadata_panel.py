@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                                 QTreeWidget, QTreeWidgetItem, QLineEdit,
                                 QPushButton, QCheckBox, QSplitter, QDialog)
 from PySide6.QtCore import Qt, Signal, QTimer
+from PySide6.QtGui import QFont
 from typing import Optional, Dict, Any, List
 import pydicom
 from pydicom.dataset import Dataset
@@ -116,6 +117,10 @@ class MetadataPanel(QWidget):
         # Tree widget for tags
         self.tree_widget = QTreeWidget()
         self.tree_widget.setHeaderLabels(["Tag", "Name", "VR", "Value"])
+        # Set indentation for children (group headings will be indented)
+        # Top-level items (tags) will be at 0 indentation (fully left-aligned)
+        self.tree_widget.setIndentation(15)  # Indent group headings by 15px
+        self.tree_widget.setRootIsDecorated(False)  # Hide root expand/collapse indicator
         
         # Restore saved column widths or use defaults
         if self.config_manager is not None:
@@ -229,16 +234,31 @@ class MetadataPanel(QWidget):
                 groups[group].append((tag_str, tag_data))
             
             # Create tree items
+            # Group headings will be children of invisible root (indented)
+            # Tags will be top-level items (fully left-aligned with "Tag" header)
+            root_item = self.tree_widget.invisibleRootItem()
+            
+            # Create bold font for group headings
+            bold_font = QFont()
+            bold_font.setBold(True)
+            
             for group, tag_list in sorted(groups.items()):
-                group_item = QTreeWidgetItem(self.tree_widget)
+                # Group header as child of root (will be indented by tree widget indentation)
+                group_item = QTreeWidgetItem(root_item)
                 group_item.setText(0, f"Group {group}")
-                group_item.setExpanded(True)
+                group_item.setFlags(Qt.ItemFlag.NoItemFlags)  # Make group header non-selectable
+                group_item.setChildIndicatorPolicy(QTreeWidgetItem.ChildIndicatorPolicy.DontShowIndicator)
+                group_item.setFont(0, bold_font)  # Make group heading bold
                 
                 for tag_str, tag_data in tag_list:
-                    tag_item = QTreeWidgetItem(group_item)
+                    # Tags as top-level items (not children) - fully left-aligned with "Tag" header
+                    tag_item = QTreeWidgetItem(self.tree_widget)
                     tag_item.setText(0, tag_data.get("tag", tag_str))
                     tag_item.setText(1, tag_data.get("name", ""))
                     tag_item.setText(2, tag_data.get("VR", ""))
+                    
+                    # Set left alignment for tag column
+                    tag_item.setTextAlignment(0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
                     
                     # Format value
                     value = tag_data.get("value", "")
@@ -317,8 +337,8 @@ class MetadataPanel(QWidget):
         if column != 3:  # Only edit value column
             return
         
-        # Skip group items
-        if item.parent() is None:
+        # Skip group items (check if first column starts with "Group")
+        if item.text(0).startswith("Group "):
             return
         
         tag_data = item.data(0, Qt.ItemDataRole.UserRole + 1)

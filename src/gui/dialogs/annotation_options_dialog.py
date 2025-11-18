@@ -17,7 +17,7 @@ Requirements:
 
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                                 QPushButton, QSpinBox, QColorDialog, QGroupBox,
-                                QFormLayout, QDialogButtonBox)
+                                QFormLayout, QDialogButtonBox, QCheckBox)
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from typing import Optional
@@ -128,6 +128,28 @@ class AnnotationOptionsDialog(QDialog):
         roi_group.setLayout(roi_layout)
         layout.addWidget(roi_group)
         
+        # ROI Statistics Visibility Group
+        stats_group = QGroupBox("ROI Statistics Visibility")
+        stats_layout = QVBoxLayout()
+        
+        # Statistics checkboxes
+        self.mean_checkbox = QCheckBox("Show Mean")
+        self.std_checkbox = QCheckBox("Show Std Dev")
+        self.min_checkbox = QCheckBox("Show Min")
+        self.max_checkbox = QCheckBox("Show Max")
+        self.pixels_checkbox = QCheckBox("Show Pixels")
+        self.area_checkbox = QCheckBox("Show Area")
+        
+        stats_layout.addWidget(self.mean_checkbox)
+        stats_layout.addWidget(self.std_checkbox)
+        stats_layout.addWidget(self.min_checkbox)
+        stats_layout.addWidget(self.max_checkbox)
+        stats_layout.addWidget(self.pixels_checkbox)
+        stats_layout.addWidget(self.area_checkbox)
+        
+        stats_group.setLayout(stats_layout)
+        layout.addWidget(stats_group)
+        
         # Measurement Settings Group
         measurement_group = QGroupBox("Measurement Settings")
         measurement_layout = QFormLayout()
@@ -222,6 +244,15 @@ class AnnotationOptionsDialog(QDialog):
         measurement_line_color = self.config_manager.get_measurement_line_color()
         self._update_color_display("measurement_line", *measurement_line_color)
         self.measurement_line_color = measurement_line_color
+        
+        # ROI statistics visibility settings
+        default_stats = self.config_manager.get_roi_default_visible_statistics()
+        self.mean_checkbox.setChecked("mean" in default_stats)
+        self.std_checkbox.setChecked("std" in default_stats)
+        self.min_checkbox.setChecked("min" in default_stats)
+        self.max_checkbox.setChecked("max" in default_stats)
+        self.pixels_checkbox.setChecked("count" in default_stats)
+        self.area_checkbox.setChecked("area" in default_stats)
     
     def _update_color_display(self, color_type: str, r: int, g: int, b: int) -> None:
         """
@@ -299,6 +330,22 @@ class AnnotationOptionsDialog(QDialog):
         self.config_manager.set_measurement_font_color(*self.measurement_font_color)
         self.config_manager.set_measurement_line_thickness(self.measurement_line_thickness_spinbox.value())
         self.config_manager.set_measurement_line_color(*self.measurement_line_color)
+        
+        # Save ROI statistics visibility settings
+        selected_stats = []
+        if self.mean_checkbox.isChecked():
+            selected_stats.append("mean")
+        if self.std_checkbox.isChecked():
+            selected_stats.append("std")
+        if self.min_checkbox.isChecked():
+            selected_stats.append("min")
+        if self.max_checkbox.isChecked():
+            selected_stats.append("max")
+        if self.pixels_checkbox.isChecked():
+            selected_stats.append("count")
+        if self.area_checkbox.isChecked():
+            selected_stats.append("area")
+        self.config_manager.set_roi_default_visible_statistics(selected_stats)
         
         # Emit signal to notify that settings were applied
         self.settings_applied.emit()

@@ -660,7 +660,7 @@ class SliceDisplayManager:
         except MemoryError as e:
             # Re-raise MemoryError with context for caller to handle
             error_msg = f"Memory error displaying slice: {str(e)}"
-            print(error_msg)
+            # print(error_msg)
             raise MemoryError(error_msg) from e
         except Exception as e:
             # Re-raise with context for caller to handle
@@ -668,7 +668,7 @@ class SliceDisplayManager:
             error_msg = f"Error displaying slice: {str(e)}"
             if error_type not in error_msg:
                 error_msg = f"{error_type}: {error_msg}"
-            print(error_msg)
+            # print(error_msg)
             raise
     
     def display_rois_for_slice(self, dataset: Dataset) -> None:

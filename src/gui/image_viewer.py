@@ -164,6 +164,7 @@ class ImageViewer(QGraphicsView):
         
         # Callback to get ROI from item (set from main.py)
         self.get_roi_from_item_callback: Optional[Callable[[object], Optional[object]]] = None
+        self.delete_all_rois_callback: Optional[Callable[[], None]] = None
         
         # Sensitivity factors for window/level adjustment (pixels to units)
         # These will be set dynamically based on current ranges
@@ -725,6 +726,11 @@ class ImageViewer(QGraphicsView):
                 delete_action = context_menu.addAction("Delete ROI")
                 delete_action.triggered.connect(lambda: self.roi_delete_requested.emit(item))
                 
+                # Delete all ROIs action
+                delete_all_action = context_menu.addAction("Delete all ROIs (D)")
+                if self.delete_all_rois_callback:
+                    delete_all_action.triggered.connect(self.delete_all_rois_callback)
+                
                 context_menu.addSeparator()
                 
                 # Statistics Overlay submenu
@@ -765,7 +771,7 @@ class ImageViewer(QGraphicsView):
                     max_action.setChecked("max" in roi.visible_statistics)
                     max_action.triggered.connect(lambda checked: self._toggle_statistic(roi, "max", checked))
                     
-                    count_action = stats_submenu.addAction("Show Count")
+                    count_action = stats_submenu.addAction("Show Pixels")
                     count_action.setCheckable(True)
                     count_action.setChecked("count" in roi.visible_statistics)
                     count_action.triggered.connect(lambda checked: self._toggle_statistic(roi, "count", checked))
@@ -977,13 +983,20 @@ class ImageViewer(QGraphicsView):
                         reset_action = context_menu.addAction("Reset View (V)")
                         reset_action.triggered.connect(self.reset_view_requested.emit)
                         
-                        # Clear Measurements action
-                        clear_measurements_action = context_menu.addAction("Clear Measurements (C)")
-                        clear_measurements_action.triggered.connect(self.clear_measurements_requested.emit)
-                        
                         # Toggle Overlay action
                         toggle_overlay_action = context_menu.addAction("Toggle Overlay (Spacebar)")
                         toggle_overlay_action.triggered.connect(self.toggle_overlay_requested.emit)
+                        
+                        context_menu.addSeparator()
+                        
+                        # Delete all ROIs action
+                        delete_all_action = context_menu.addAction("Delete all ROIs (D)")
+                        if self.delete_all_rois_callback:
+                            delete_all_action.triggered.connect(self.delete_all_rois_callback)
+                        
+                        # Clear Measurements action
+                        clear_measurements_action = context_menu.addAction("Clear Measurements (C)")
+                        clear_measurements_action.triggered.connect(self.clear_measurements_requested.emit)
                         
                         context_menu.addSeparator()
                         
