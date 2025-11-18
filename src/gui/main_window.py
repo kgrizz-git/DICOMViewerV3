@@ -57,6 +57,7 @@ class MainWindow(QMainWindow):
     close_requested = Signal()  # Emitted when close is requested
     export_requested = Signal()
     settings_requested = Signal()
+    overlay_settings_requested = Signal()  # Emitted when overlay settings dialog is requested
     tag_viewer_requested = Signal()
     overlay_config_requested = Signal()
     annotation_options_requested = Signal()  # Emitted when annotation options dialog is requested
@@ -212,6 +213,11 @@ class MainWindow(QMainWindow):
         annotation_options_action = QAction("Annotation &Options...", self)
         annotation_options_action.triggered.connect(self.annotation_options_requested.emit)
         view_menu.addAction(annotation_options_action)
+        
+        # Overlay Settings action
+        overlay_settings_action = QAction("Overlay &Settings...", self)
+        overlay_settings_action.triggered.connect(self.overlay_settings_requested.emit)
+        view_menu.addAction(overlay_settings_action)
         
         # Tools menu
         tools_menu = menubar.addMenu("&Tools")

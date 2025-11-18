@@ -57,6 +57,7 @@ class ROIListPanel(QWidget):
         
         # Callbacks for context menu actions
         self.roi_delete_callback: Optional[Callable[[ROIItem], None]] = None
+        self.delete_all_rois_callback: Optional[Callable[[], None]] = None
         self.roi_statistics_overlay_toggle_callback: Optional[Callable[[ROIItem, bool], None]] = None
         self.roi_statistics_selection_callback: Optional[Callable[[ROIItem, str, bool], None]] = None
         self.annotation_options_callback: Optional[Callable[[], None]] = None
@@ -221,6 +222,11 @@ class ROIListPanel(QWidget):
         delete_action = context_menu.addAction("Delete ROI")
         delete_action.triggered.connect(lambda: self._handle_delete_roi(roi))
         
+        # Delete all ROIs action
+        delete_all_action = context_menu.addAction("Delete all ROIs (D)")
+        if self.delete_all_rois_callback:
+            delete_all_action.triggered.connect(self.delete_all_rois_callback)
+        
         context_menu.addSeparator()
         
         # Statistics Overlay submenu
@@ -255,7 +261,7 @@ class ROIListPanel(QWidget):
         max_action.setChecked("max" in roi.visible_statistics)
         max_action.triggered.connect(lambda checked: self._handle_statistic_toggle(roi, "max", checked))
         
-        count_action = stats_submenu.addAction("Show Count")
+        count_action = stats_submenu.addAction("Show Pixels")
         count_action.setCheckable(True)
         count_action.setChecked("count" in roi.visible_statistics)
         count_action.triggered.connect(lambda checked: self._handle_statistic_toggle(roi, "count", checked))

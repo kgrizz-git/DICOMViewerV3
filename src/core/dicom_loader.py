@@ -165,7 +165,7 @@ class DICOMLoader:
                 print(f"Frames: {num_frames}")
                 print(f"Dimensions: {getattr(dataset, 'Rows', 'N/A')} x {getattr(dataset, 'Columns', 'N/A')}")
                 print(f"Bits Allocated: {getattr(dataset, 'BitsAllocated', 'N/A')}")
-                print(f"Modality: {getattr(dataset, 'Modality', 'N/A')}")
+                # print(f"Modality: {getattr(dataset, 'Modality', 'N/A')}")
                 
                 # Get transfer syntax safely
                 transfer_syntax = 'N/A'

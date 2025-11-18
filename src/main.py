@@ -561,6 +561,7 @@ class DICOMViewerApp(QObject):
         
         # Settings
         self.main_window.settings_requested.connect(self._open_settings)
+        self.main_window.overlay_settings_requested.connect(self._open_overlay_settings)
         
         # Tag viewer
         self.main_window.tag_viewer_requested.connect(self._open_tag_viewer)
@@ -609,6 +610,7 @@ class DICOMViewerApp(QObject):
         
         # Set callback for getting ROI from item (for context menu)
         self.image_viewer.get_roi_from_item_callback = self.roi_manager.find_roi_by_item
+        self.image_viewer.delete_all_rois_callback = self.roi_coordinator.delete_all_rois_current_slice
         
         # ROI list panel signals
         self.roi_list_panel.roi_selected.connect(self.roi_coordinator.handle_roi_selected)
@@ -617,6 +619,7 @@ class DICOMViewerApp(QObject):
         
         # Set ROI list panel context menu callbacks
         self.roi_list_panel.roi_delete_callback = lambda roi: self.roi_coordinator.handle_roi_delete_requested(roi.item) if roi.item else None
+        self.roi_list_panel.delete_all_rois_callback = self.roi_coordinator.delete_all_rois_current_slice
         self.roi_list_panel.roi_statistics_overlay_toggle_callback = self.roi_coordinator.handle_roi_statistics_overlay_toggle
         
         def handle_statistic_toggle(roi, stat_name: str, checked: bool) -> None:
@@ -986,6 +989,10 @@ class DICOMViewerApp(QObject):
         """Handle settings dialog request."""
         self.dialog_coordinator.open_settings()
     
+    def _open_overlay_settings(self) -> None:
+        """Handle Overlay Settings dialog request."""
+        self.dialog_coordinator.open_overlay_settings()
+    
     def _open_tag_viewer(self) -> None:
         """Handle tag viewer dialog request."""
         self.dialog_coordinator.open_tag_viewer(self.current_dataset)
@@ -1041,6 +1048,15 @@ class DICOMViewerApp(QObject):
     
     def _on_annotation_options_applied(self) -> None:
         """Handle annotation options applied - refresh all annotations."""
+        # Update default visible statistics for all existing ROIs
+        default_stats_list = self.config_manager.get_roi_default_visible_statistics()
+        default_stats_set = set(default_stats_list)
+        
+        # Update all ROIs to use new default statistics
+        for key, roi_list in self.roi_manager.rois.items():
+            for roi in roi_list:
+                roi.visible_statistics = default_stats_set.copy()
+        
         # Update ROI statistics overlays
         if self.current_dataset is not None:
             self.roi_coordinator.update_roi_statistics_overlays()
@@ -1570,6 +1586,8 @@ class DICOMViewerApp(QObject):
         self.cine_player.set_loop(enabled)
         # Update UI to reflect loop state
         self.cine_controls_widget.set_loop(enabled)
+        # Save loop state to config so it persists between sessions
+        self.config_manager.set_cine_default_loop(enabled)
     
     def _get_cine_loop_state(self) -> bool:
         """

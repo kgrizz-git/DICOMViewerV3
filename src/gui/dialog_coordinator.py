@@ -18,6 +18,7 @@ Requirements:
 
 from typing import Optional, Callable, Any
 from gui.dialogs.settings_dialog import SettingsDialog
+from gui.dialogs.overlay_settings_dialog import OverlaySettingsDialog
 from gui.dialogs.tag_viewer_dialog import TagViewerDialog
 from gui.dialogs.overlay_config_dialog import OverlayConfigDialog
 from gui.dialogs.annotation_options_dialog import AnnotationOptionsDialog
@@ -77,6 +78,13 @@ class DialogCoordinator:
     def open_settings(self) -> None:
         """Handle settings dialog request."""
         dialog = SettingsDialog(self.config_manager, self.main_window)
+        if self.settings_applied_callback:
+            dialog.settings_applied.connect(self.settings_applied_callback)
+        dialog.exec()
+    
+    def open_overlay_settings(self) -> None:
+        """Handle overlay settings dialog request."""
+        dialog = OverlaySettingsDialog(self.config_manager, self.main_window)
         if self.settings_applied_callback:
             dialog.settings_applied.connect(self.settings_applied_callback)
         dialog.exec()
