@@ -75,7 +75,7 @@ class ConfigManager:
             "scroll_wheel_mode": "slice",  # slice or zoom
             "window_level_default": None,
             "window_width_default": None,
-            "recent_files": [],  # List of recently opened file/folder paths (max 10)
+            "recent_files": [],  # List of recently opened file/folder paths (max 20)
             "metadata_panel_column_widths": [100, 200, 50, 200],  # Column widths for Tag, Name, VR, Value
             "cine_default_speed": 1.0,  # Default cine playback speed multiplier
             "cine_default_loop": True,  # Default cine loop setting
@@ -455,7 +455,7 @@ class ConfigManager:
         """
         Add a file or folder to recent files list.
         
-        Removes duplicates and keeps only the most recent 10 items.
+        Removes duplicates and keeps only the most recent 20 items.
         
         Args:
             file_path: Path to file or folder
@@ -469,8 +469,8 @@ class ConfigManager:
         # Add to beginning
         recent_files.insert(0, file_path)
         
-        # Keep only last 10
-        recent_files = recent_files[:10]
+        # Keep only last 20
+        recent_files = recent_files[:20]
         
         self.config["recent_files"] = recent_files
         self.save_config()
