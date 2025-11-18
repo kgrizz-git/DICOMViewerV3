@@ -116,6 +116,50 @@ class FileOperationsHandler:
         self._loading_base_message = ""
         self._loading_dot_state = 0
     
+    def _check_large_files(self, file_paths: list[str], threshold_mb: float = 25.0) -> None:
+        """
+        Check for large files and show warning if any exceed the threshold.
+        
+        Args:
+            file_paths: List of file paths to check
+            threshold_mb: Size threshold in MB (default 25 MB)
+        """
+        threshold_bytes = threshold_mb * 1024 * 1024
+        large_files = []
+        
+        for file_path in file_paths:
+            if os.path.isfile(file_path):
+                try:
+                    file_size = os.path.getsize(file_path)
+                    if file_size > threshold_bytes:
+                        filename = os.path.basename(file_path)
+                        size_mb = file_size / (1024 * 1024)
+                        large_files.append((filename, size_mb))
+                except (OSError, ValueError):
+                    # Skip files that can't be checked (permissions, etc.)
+                    continue
+        
+        if large_files:
+            warning_msg = (
+                f"Warning: {len(large_files)} large file(s) detected (>25 MB).\n"
+                f"Loading may cause temporary unresponsiveness.\n"
+                f"Please be patient during loading.\n\n"
+                f"Files:\n"
+            )
+            # Show first 5 files
+            for filename, size_mb in large_files[:5]:
+                warning_msg += f"{filename} ({size_mb:.1f} MB)\n"
+            
+            if len(large_files) > 5:
+                warning_msg += f"\n... and {len(large_files) - 5} more"
+            
+            self.file_dialog.show_warning(
+                self.main_window,
+                "Large File Warning",
+                warning_msg
+            )
+            QApplication.processEvents()
+    
     def _format_source_name(self, file_paths: list[str]) -> str:
         """
         Format source name for status display.
@@ -174,6 +218,9 @@ class FileOperationsHandler:
         
         # Format source name for status display
         source_name = self._format_source_name(file_paths)
+        
+        # Check for large files and show warning
+        self._check_large_files(file_paths)
         
         try:
             # For single file, use animated loading dots
@@ -368,6 +415,18 @@ class FileOperationsHandler:
         # Format source name for status display
         source_name = os.path.basename(folder_path)
         
+        # Check for large files in folder before loading
+        # Get all files in folder to check sizes
+        try:
+            from pathlib import Path
+            folder_path_obj = Path(folder_path)
+            file_paths = [str(p) for p in folder_path_obj.rglob('*') if p.is_file()]
+            if file_paths:
+                self._check_large_files(file_paths)
+        except Exception:
+            # If we can't check files, continue without warning
+            pass
+        
         try:
             # Update status: start loading
             self.update_status_callback(f"Loading files from {source_name}...")
@@ -513,6 +572,10 @@ class FileOperationsHandler:
         if os.path.isfile(file_path):
             # Open as file
             source_name = os.path.basename(file_path)
+            
+            # Check for large file and show warning
+            self._check_large_files([file_path])
+            
             try:
                 # Start animated loading for single file
                 self._start_animated_loading(f"Loading {source_name}")
@@ -633,6 +696,18 @@ class FileOperationsHandler:
         else:
             # Open as folder
             source_name = os.path.basename(file_path)
+            
+            # Check for large files in folder before loading
+            try:
+                from pathlib import Path
+                folder_path_obj = Path(file_path)
+                file_paths = [str(p) for p in folder_path_obj.rglob('*') if p.is_file()]
+                if file_paths:
+                    self._check_large_files(file_paths)
+            except Exception:
+                # If we can't check files, continue without warning
+                pass
+            
             try:
                 # Update status: start loading
                 self.update_status_callback(f"Loading files from {source_name}...")
@@ -768,6 +843,17 @@ class FileOperationsHandler:
             # Format source name for status display
             source_name = os.path.basename(folder_path)
             
+            # Check for large files in folder before loading
+            try:
+                from pathlib import Path
+                folder_path_obj = Path(folder_path)
+                file_paths = [str(p) for p in folder_path_obj.rglob('*') if p.is_file()]
+                if file_paths:
+                    self._check_large_files(file_paths)
+            except Exception:
+                # If we can't check files, continue without warning
+                pass
+            
             try:
                 # Update status: start loading
                 self.update_status_callback(f"Loading files from {source_name}...")
@@ -892,6 +978,9 @@ class FileOperationsHandler:
             
             # Format source name for status display
             source_name = self._format_source_name(files)
+            
+            # Check for large files and show warning
+            self._check_large_files(files)
             
             try:
                 # Update status: start loading
