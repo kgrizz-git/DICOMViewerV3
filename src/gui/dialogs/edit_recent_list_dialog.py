@@ -30,6 +30,7 @@ class EditRecentListDialog(QDialog):
     Features:
     - Display all recent files/folders in a checkable list
     - Remove selected items from the list
+    - Remove all items from the list at once
     - Update config when OK is clicked
     """
     
@@ -75,6 +76,11 @@ class EditRecentListDialog(QDialog):
         self.remove_button.clicked.connect(self._remove_selected)
         button_layout.addWidget(self.remove_button)
         
+        # Remove All button
+        self.remove_all_button = QPushButton("Remove All")
+        self.remove_all_button.clicked.connect(self._remove_all)
+        button_layout.addWidget(self.remove_all_button)
+        
         button_layout.addStretch()
         
         # Dialog buttons
@@ -99,6 +105,7 @@ class EditRecentListDialog(QDialog):
             item.setFlags(Qt.ItemFlag.NoItemFlags)  # Make it non-interactive
             self.list_widget.addItem(item)
             self.remove_button.setEnabled(False)
+            self.remove_all_button.setEnabled(False)
         else:
             for file_path in recent_files:
                 # Create checkable item with full path (no truncation)
@@ -111,6 +118,7 @@ class EditRecentListDialog(QDialog):
                 self.list_widget.addItem(item)
             
             self.remove_button.setEnabled(True)
+            self.remove_all_button.setEnabled(True)
     
     def _remove_selected(self) -> None:
         """Remove checked items from the list."""
@@ -131,6 +139,21 @@ class EditRecentListDialog(QDialog):
             item.setFlags(Qt.ItemFlag.NoItemFlags)
             self.list_widget.addItem(item)
             self.remove_button.setEnabled(False)
+            self.remove_all_button.setEnabled(False)
+    
+    def _remove_all(self) -> None:
+        """Remove all items from the list."""
+        # Clear all items from the list widget
+        self.list_widget.clear()
+        
+        # Show message if list is now empty
+        item = QListWidgetItem("No recent files")
+        item.setFlags(Qt.ItemFlag.NoItemFlags)
+        self.list_widget.addItem(item)
+        
+        # Disable both remove buttons
+        self.remove_button.setEnabled(False)
+        self.remove_all_button.setEnabled(False)
     
     def _on_ok(self) -> None:
         """Handle OK button click - save changes to config."""
