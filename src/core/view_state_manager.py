@@ -123,6 +123,9 @@ class ViewStateManager:
         # Series pixel range storage (for window width slider maximum)
         self.series_pixel_min: Optional[float] = None
         self.series_pixel_max: Optional[float] = None
+        
+        # Callback for redisplaying current slice via slice display manager
+        self.redisplay_slice_callback: Optional[Callable[[bool], None]] = None
     
     def set_series_navigator(self, series_navigator) -> None:
         """
@@ -132,6 +135,25 @@ class ViewStateManager:
             series_navigator: SeriesNavigator instance
         """
         self.series_navigator = series_navigator
+
+    def set_redisplay_slice_callback(self, callback: Callable[[bool], None]) -> None:
+        """
+        Set callback used to redisplay the current slice via SliceDisplayManager.
+        
+        Args:
+            callback: Callable accepting preserve_view flag
+        """
+        self.redisplay_slice_callback = callback
+
+    def _redisplay_current_slice(self, preserve_view: bool) -> None:
+        """
+        Redisplay the current slice via the registered callback.
+        
+        Args:
+            preserve_view: True to preserve zoom/pan, False to refit
+        """
+        if self.redisplay_slice_callback:
+            self.redisplay_slice_callback(preserve_view)
     
     def get_series_identifier(self, dataset: Dataset) -> str:
         """
@@ -259,34 +281,23 @@ class ViewStateManager:
                     
                     # Re-display the current image with the corrected window/level
                     # This fixes the initial display that was rendered with corrupted values
-                    if (self.current_dataset is not None and self.current_studies and 
-                        self.current_study_uid and self.current_series_uid):
-                        if (self.current_study_uid in self.current_studies and 
+                    self._redisplay_current_slice(preserve_view=True)
+                    
+                    # Also regenerate series navigator thumbnail with corrected window/level
+                    if (self.series_navigator and self.current_study_uid and self.current_series_uid and
+                            self.current_study_uid in self.current_studies and
                             self.current_series_uid in self.current_studies[self.current_study_uid]):
-                            datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
-                            if self.current_slice_index < len(datasets):
-                                # Re-render image with correct window/level
-                                image = self.dicom_processor.dataset_to_image(
-                                    self.current_dataset,
-                                    window_center=stored_wc,
-                                    window_width=stored_ww,
-                                    apply_rescale=stored_rescaled
-                                )
-                                if image:
-                                    self.image_viewer.set_image(image, preserve_view=True)
-                                    # print(f"[DEBUG-WL] Re-displayed image with corrected window/level")
-                                    
-                                    # Also regenerate series navigator thumbnail with corrected window/level
-                                    if self.series_navigator and datasets:
-                                        first_dataset = datasets[0]  # Use first slice of series for thumbnail
-                                        self.series_navigator.regenerate_series_thumbnail(
-                                            self.current_study_uid,
-                                            self.current_series_uid,
-                                            first_dataset,
-                                            stored_wc,
-                                            stored_ww,
-                                            stored_rescaled
-                                        )
+                        series_datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
+                        if series_datasets:
+                            first_dataset = series_datasets[0]
+                            self.series_navigator.regenerate_series_thumbnail(
+                                self.current_study_uid,
+                                self.current_series_uid,
+                                first_dataset,
+                                stored_wc,
+                                stored_ww,
+                                stored_rescaled
+                            )
                     
                     # Only update zoom/pan and inversion, preserve window/level values in series_defaults
                     self.series_defaults[self.current_series_identifier].update({
@@ -313,11 +324,14 @@ class ViewStateManager:
                     })
             # print(f"[DEBUG-WL] Stored in series_defaults: wc={self.series_defaults[self.current_series_identifier]['window_center']}, ww={self.series_defaults[self.current_series_identifier]['window_width']}, use_rescaled={self.series_defaults[self.current_series_identifier]['use_rescaled_values']}")
     
-    def reset_view(self) -> None:
+    def reset_view(self, skip_redisplay: bool = False) -> None:
         """
         Reset view to initial state (zoom, pan, window center/level).
         
         Uses series-specific defaults if available, otherwise falls back to global initial values.
+        
+        Args:
+            skip_redisplay: If True, skip the internal redisplay (caller will handle it)
         """
         if self.current_dataset is None:
             # No current dataset
@@ -534,45 +548,11 @@ class ViewStateManager:
             self.window_level_user_modified = False
         
         # Re-display current slice with reset window/level and rescale state
-        if self.current_studies and self.current_series_uid:
-            datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
-            if self.current_slice_index < len(datasets):
-                dataset = datasets[self.current_slice_index]
-                # Use current window/level values (which have been reset)
-                image = self.dicom_processor.dataset_to_image(
-                    dataset,
-                    window_center=self.current_window_center,
-                    window_width=self.current_window_width,
-                    apply_rescale=self.use_rescaled_values
-                )
-                if image:
-                    # Set image first (without preserving view to avoid wrong centering)
-                    self.image_viewer.set_image(image, preserve_view=False)
-                    
-                    # Always fit to view and center based on current viewport size
-                    # This ensures the image is properly centered and fits regardless of
-                    # viewport size changes (e.g., navigator visibility, splitter positions)
-                    self.image_viewer.fit_to_view(center_image=True)
-                    
-                    self.image_viewer.last_transform = self.image_viewer.transform()
-                    self.image_viewer.zoom_changed.emit(self.image_viewer.current_zoom)
-                    
-                    # Recreate overlay
-                    from core.dicom_parser import DICOMParser
-                    parser = DICOMParser(dataset)
-                    # Get total slice count
-                    total_slices = len(datasets) if datasets else 0
-                    self.overlay_manager.create_overlay_items(
-                        self.image_viewer.scene,
-                        parser,
-                        total_slices=total_slices if total_slices > 0 else None
-                    )
-                    # Re-display ROIs for current slice
-                    if self.display_rois_for_slice:
-                        self.display_rois_for_slice(dataset)
-                    # Update ROI statistics if there's a selected ROI
-                    if self.roi_coordinator:
-                        self.roi_coordinator(dataset)
+        # Skip if caller will handle redisplay (e.g., to apply projection mode)
+        if skip_redisplay:
+            return
+        
+        self._redisplay_current_slice(preserve_view=False)
     
     def handle_window_changed(self, center: float, width: float) -> None:
         """
@@ -690,31 +670,7 @@ class ViewStateManager:
         self.main_window.update_zoom_preset_status(current_zoom, preset_name)
         
         # Re-display current slice with new window/level
-        if self.current_studies and self.current_series_uid:
-            datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
-            if self.current_slice_index < len(datasets):
-                dataset = datasets[self.current_slice_index]
-                image = self.dicom_processor.dataset_to_image(
-                    dataset,
-                    window_center=center,
-                    window_width=width,
-                    apply_rescale=self.use_rescaled_values
-                )
-                if image:
-                    # Preserve view when window/level changes (same slice)
-                    self.image_viewer.set_image(image, preserve_view=True)
-                    # Recreate overlay to ensure it stays on top
-                    from core.dicom_parser import DICOMParser
-                    parser = DICOMParser(dataset)
-                    total_slices = len(datasets)
-                    self.overlay_manager.create_overlay_items(
-                        self.image_viewer.scene,
-                        parser,
-                        total_slices=total_slices if total_slices > 0 else None
-                    )
-                    # Refresh ROIs to ensure they remain visible
-                    if self.display_rois_for_slice:
-                        self.display_rois_for_slice(dataset)
+        self._redisplay_current_slice(preserve_view=True)
     
     def handle_rescale_toggle(self, checked: bool) -> None:
         """
@@ -813,38 +769,7 @@ class ViewStateManager:
                 )
             
             # Re-display current slice with new rescale setting
-            if self.current_studies and self.current_series_uid:
-                datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
-                if self.current_slice_index < len(datasets):
-                    dataset = datasets[self.current_slice_index]
-                    # Re-display with converted window/level and new rescale setting
-                    if self.current_window_center is not None and self.current_window_width is not None:
-                        image = self.dicom_processor.dataset_to_image(
-                            dataset,
-                            window_center=self.current_window_center,
-                            window_width=self.current_window_width,
-                            apply_rescale=self.use_rescaled_values
-                        )
-                    else:
-                        image = self.dicom_processor.dataset_to_image(
-                            dataset,
-                            apply_rescale=self.use_rescaled_values
-                        )
-                    if image:
-                        # Preserve view when toggling rescale
-                        self.image_viewer.set_image(image, preserve_view=True)
-                        # Recreate overlay
-                        from core.dicom_parser import DICOMParser
-                        parser = DICOMParser(dataset)
-                        total_slices = len(datasets)
-                        self.overlay_manager.create_overlay_items(
-                            self.image_viewer.scene,
-                            parser,
-                            total_slices=total_slices if total_slices > 0 else None
-                        )
-                        # Re-display ROIs for current slice
-                        if self.roi_coordinator:
-                            self.roi_coordinator(dataset)
+            self._redisplay_current_slice(preserve_view=True)
     
     def handle_zoom_changed(self, zoom_level: float) -> None:
         """

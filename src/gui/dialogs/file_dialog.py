@@ -68,11 +68,12 @@ class FileDialog:
         # On macOS, use static method to get native file dialog with sidebar
         if platform.system() == "Darwin":
             # Use static method for native macOS dialog (shows sidebar with shortcuts, iCloud, etc.)
+            # Use "*" instead of "*.*" to show all files including those without extensions
             selected_files, _ = QFileDialog.getOpenFileNames(
                 parent,
                 "Open DICOM File(s)",
                 last_path,
-                "All Files (*.*)"
+                "All Files (*);;DICOM Files (*.dcm)"
             )
             
             if selected_files:
@@ -90,7 +91,8 @@ class FileDialog:
             dialog.setDirectory(last_path)
             
             # Accept all files (extension-agnostic)
-            dialog.setNameFilter("All Files (*.*)")
+            # Use "*" instead of "*.*" to show all files including those without extensions
+            dialog.setNameFilter("All Files (*);;DICOM Files (*.dcm)")
             
             # Ensure dialog appears on top
             dialog.setWindowFlags(dialog.windowFlags() | Qt.WindowStaysOnTopHint)
