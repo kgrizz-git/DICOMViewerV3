@@ -24,6 +24,7 @@ Requirements:
 import os
 from typing import Callable, Optional
 from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import QTimer
 from core.dicom_loader import DICOMLoader
 from core.dicom_organizer import DICOMOrganizer
 from gui.dialogs.file_dialog import FileDialog
@@ -75,6 +76,45 @@ class FileOperationsHandler:
         self.clear_data_callback = clear_data_callback
         self.load_first_slice_callback = load_first_slice_callback
         self.update_status_callback = update_status_callback
+        
+        # Timer for animated loading dots
+        self._loading_timer: Optional[QTimer] = None
+        self._loading_base_message: str = ""
+        self._loading_dot_state: int = 0
+    
+    def _start_animated_loading(self, base_message: str) -> None:
+        """
+        Start animated loading dots for status bar.
+        
+        Args:
+            base_message: Base message to animate (dots will be appended)
+        """
+        self._stop_animated_loading()
+        self._loading_base_message = base_message
+        self._loading_dot_state = 0
+        
+        def update_dots() -> None:
+            """Update dots animation."""
+            dots = ["...", "..", "."][self._loading_dot_state % 3]
+            self.update_status_callback(f"{self._loading_base_message}{dots}")
+            self._loading_dot_state += 1
+            QApplication.processEvents()
+        
+        # Update immediately
+        update_dots()
+        
+        # Create timer to update every 500ms
+        self._loading_timer = QTimer()
+        self._loading_timer.timeout.connect(update_dots)
+        self._loading_timer.start(500)  # Update every 500ms
+    
+    def _stop_animated_loading(self) -> None:
+        """Stop animated loading dots."""
+        if self._loading_timer is not None:
+            self._loading_timer.stop()
+            self._loading_timer = None
+        self._loading_base_message = ""
+        self._loading_dot_state = 0
     
     def _format_source_name(self, file_paths: list[str]) -> str:
         """
@@ -136,20 +176,38 @@ class FileOperationsHandler:
         source_name = self._format_source_name(file_paths)
         
         try:
-            # Update status: start loading
-            self.update_status_callback(f"Loading files from {source_name}...")
+            # For single file, use animated loading dots
+            if len(file_paths) == 1:
+                self._start_animated_loading(f"Loading {source_name}")
+            else:
+                # Update status: start loading
+                self.update_status_callback(f"Loading files from {source_name}...")
             QApplication.processEvents()
             
             # Create progress callback
             def progress_callback(current: int, total: int, filename: str) -> None:
                 if filename:
-                    self.update_status_callback(f"Loading file {current}/{total}: {filename}...")
+                    if total == 1:
+                        # Single file: update animated loading base message
+                        base_msg = filename.rstrip('.')
+                        self._loading_base_message = base_msg
+                        # Update dots immediately
+                        dots = ["...", "..", "."][self._loading_dot_state % 3]
+                        self.update_status_callback(f"{base_msg}{dots}")
+                    else:
+                        # Multiple files: show file count
+                        self.update_status_callback(f"Loading file {current}/{total}: {filename}...")
                 else:
+                    # Stop animation if active
+                    self._stop_animated_loading()
                     self.update_status_callback(f"Loaded {total} file(s). Organizing into studies/series...")
                 QApplication.processEvents()
             
             # Load files
             datasets = self.dicom_loader.load_files(file_paths, progress_callback=progress_callback)
+            
+            # Stop animation after loading completes
+            self._stop_animated_loading()
             
             if not datasets:
                 # Check if there were specific errors
@@ -256,10 +314,13 @@ class FileOperationsHandler:
             return datasets, studies
         
         except SystemExit:
+            self._stop_animated_loading()
             raise  # Don't catch system exit
         except KeyboardInterrupt:
+            self._stop_animated_loading()
             raise  # Don't catch Ctrl+C
         except MemoryError as e:
+            self._stop_animated_loading()
             self.file_dialog.show_error(
                 self.main_window,
                 "Memory Error",
@@ -268,6 +329,7 @@ class FileOperationsHandler:
             )
             return None, None
         except BaseException as e:
+            self._stop_animated_loading()
             # Catch everything else including C extension errors that make it to Python
             error_type = type(e).__name__
             error_msg = f"A critical error occurred during file loading.\n\n"
@@ -452,19 +514,30 @@ class FileOperationsHandler:
             # Open as file
             source_name = os.path.basename(file_path)
             try:
-                # Update status: start loading
-                self.update_status_callback(f"Loading files from {source_name}...")
+                # Start animated loading for single file
+                self._start_animated_loading(f"Loading {source_name}")
                 QApplication.processEvents()
                 
-                # Create progress callback
+                # Create progress callback that updates animated loading
                 def progress_callback(current: int, total: int, filename: str) -> None:
                     if filename:
-                        self.update_status_callback(f"Loading file {current}/{total}: {filename}...")
+                        # Update base message for animated dots
+                        # Extract base message (remove existing dots if any)
+                        base_msg = filename.rstrip('.')
+                        self._loading_base_message = base_msg
+                        # Update dots immediately
+                        dots = ["...", "..", "."][self._loading_dot_state % 3]
+                        self.update_status_callback(f"{base_msg}{dots}")
                     else:
+                        # Stop animation and show final message
+                        self._stop_animated_loading()
                         self.update_status_callback(f"Loaded {total} file(s). Organizing into studies/series...")
                     QApplication.processEvents()
                 
                 datasets = self.dicom_loader.load_files([file_path], progress_callback=progress_callback)
+                
+                # Stop animation after loading completes
+                self._stop_animated_loading()
                 
                 if not datasets:
                     # Check if there were specific errors
