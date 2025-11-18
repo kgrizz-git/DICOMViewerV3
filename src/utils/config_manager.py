@@ -508,6 +508,27 @@ class ConfigManager:
         self.config["metadata_panel_column_widths"] = widths
         self.save_config()
     
+    def get_metadata_panel_column_order(self) -> List[int]:
+        """
+        Get saved column order for metadata panel.
+        
+        Returns:
+            List of logical indices in visual order [Tag, Name, VR, Value]
+            Default: [0, 1, 2, 3] (no reordering)
+        """
+        return self.config.get("metadata_panel_column_order", [0, 1, 2, 3])
+    
+    def set_metadata_panel_column_order(self, order: List[int]) -> None:
+        """
+        Save column order for metadata panel.
+        
+        Args:
+            order: List of logical indices in visual order [Tag, Name, VR, Value]
+                   e.g., [1, 0, 2, 3] means Name column is first visually
+        """
+        self.config["metadata_panel_column_order"] = order
+        self.save_config()
+    
     def get_cine_default_speed(self) -> float:
         """
         Get default cine playback speed multiplier.

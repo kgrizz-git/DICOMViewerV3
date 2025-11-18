@@ -64,8 +64,8 @@ class ZoomDisplayWidget(QWidget):
         self.zoom_spinbox.setRange(self.min_zoom, self.max_zoom)
         self.zoom_spinbox.setValue(1.0)
         self.zoom_spinbox.setDecimals(2)
-        self.zoom_spinbox.setSingleStep(0.1)  # Step size for up/down buttons
-        self.zoom_spinbox.setReadOnly(True)  # Read-only, controlled by slider
+        self.zoom_spinbox.setSingleStep(0.01)  # Step size for up/down buttons (0.01 increments)
+        # Allow editing so up/down buttons work - slider and spinbox both control zoom
         self.zoom_spinbox.valueChanged.connect(self._on_value_changed)
         zoom_row1.addWidget(self.zoom_spinbox)
         zoom_row1.addStretch()  # Push label and spinbox to the left
@@ -109,14 +109,31 @@ class ZoomDisplayWidget(QWidget):
     
     def _on_value_changed(self, value: float) -> None:
         """
-        Handle spinbox value change (if made editable in future).
+        Handle spinbox value change (from up/down buttons or direct editing).
         
         Args:
             value: New zoom value
         """
-        # Currently read-only, so this shouldn't be called
-        # But keep for future extensibility
-        pass
+        # Clamp to range
+        zoom_value = max(self.min_zoom, min(self.max_zoom, value))
+        
+        # Update current zoom
+        self.current_zoom = zoom_value
+        
+        # Update slider (block signals to prevent recursive update)
+        self.zoom_slider.blockSignals(True)
+        # Convert zoom value to slider value (0-1000)
+        zoom_range = self.max_zoom - self.min_zoom
+        if zoom_range > 0:
+            slider_value = int(((zoom_value - self.min_zoom) / zoom_range) * 1000)
+            slider_value = max(0, min(1000, slider_value))
+        else:
+            slider_value = 500
+        self.zoom_slider.setValue(slider_value)
+        self.zoom_slider.blockSignals(False)
+        
+        # Emit signal to update image viewer
+        self.zoom_changed.emit(zoom_value)
     
     def update_zoom(self, zoom_value: float) -> None:
         """
