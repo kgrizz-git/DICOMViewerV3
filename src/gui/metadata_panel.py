@@ -19,9 +19,10 @@ Requirements:
 
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                                 QTreeWidget, QTreeWidgetItem, QLineEdit,
-                                QPushButton, QCheckBox, QSplitter, QDialog)
-from PySide6.QtCore import Qt, Signal, QTimer
-from PySide6.QtGui import QFont
+                                QPushButton, QCheckBox, QSplitter, QDialog,
+                                QStyledItemDelegate, QStyleOptionViewItem, QMenu)
+from PySide6.QtCore import Qt, Signal, QTimer, QPoint
+from PySide6.QtGui import QFont, QPainter
 from typing import Optional, Dict, Any, List
 import pydicom
 from pydicom.dataset import Dataset
@@ -31,6 +32,62 @@ from core.dicom_editor import DICOMEditor
 from core.tag_edit_history import TagEditHistoryManager, EditTagCommand
 from gui.dialogs.tag_edit_dialog import TagEditDialog
 from utils.config_manager import ConfigManager
+
+
+class MetadataItemDelegate(QStyledItemDelegate):
+    """
+    Custom delegate for metadata panel tree widget.
+    
+    This delegate handles indentation rendering:
+    - Group items: Keep their indentation (20px from tree widget)
+    - Tag items: Remove indentation from first column only to make tags fully left-aligned
+    - Other columns (Name, VR, Value): Render normally without adjustment
+    """
+    
+    def paint(self, painter: QPainter, option: QStyleOptionViewItem, index) -> None:
+        """
+        Paint the item with column-specific adjustments.
+        
+        Only adjusts the first column (Tag) for tag items to remove indentation.
+        Other columns render normally to maintain proper alignment.
+        
+        Args:
+            painter: QPainter instance
+            option: Style option for the item
+            index: Model index of the item
+        """
+        # Get the tree widget from the option
+        tree_widget = option.widget
+        if tree_widget is None or not isinstance(tree_widget, QTreeWidget):
+            super().paint(painter, option, index)
+            return
+        
+        # Get the item from the tree widget using the index
+        item = tree_widget.itemFromIndex(index)
+        if item is None:
+            super().paint(painter, option, index)
+            return
+        
+        # Check if this is a tag item (has a parent that is a group item) and we're painting column 0
+        parent = item.parent()
+        is_tag_item = (parent is not None and parent.text(0).startswith("Group "))
+        is_first_column = (index.column() == 0)
+        
+        if is_tag_item and is_first_column:
+            # This is the Tag column of a tag item - remove indentation
+            base_indent = tree_widget.indentation()
+            # Create a modified option with adjusted rect for first column only
+            adjusted_option = QStyleOptionViewItem(option)
+            current_left = adjusted_option.rect.left()
+            if current_left >= base_indent:
+                # Shift the rect left by the indentation amount
+                adjusted_option.rect.setLeft(current_left - base_indent)
+                # Adjust width to maintain the same right edge
+                adjusted_option.rect.setWidth(adjusted_option.rect.width() + base_indent)
+            super().paint(painter, adjusted_option, index)
+        else:
+            # For group items or other columns - render normally
+            super().paint(painter, option, index)
 
 
 class MetadataPanel(QWidget):
@@ -117,10 +174,15 @@ class MetadataPanel(QWidget):
         # Tree widget for tags
         self.tree_widget = QTreeWidget()
         self.tree_widget.setHeaderLabels(["Tag", "Name", "VR", "Value"])
-        # Set indentation for children (group headings will be indented)
-        # Top-level items (tags) will be at 0 indentation (fully left-aligned)
-        self.tree_widget.setIndentation(15)  # Indent group headings by 15px
+        # Set indentation for expand/collapse functionality
+        # The custom delegate will remove indentation from tag items to make them fully left-aligned
+        self.tree_widget.setIndentation(20)  # Indent for expand/collapse indicators (triangle arrows)
         self.tree_widget.setRootIsDecorated(False)  # Hide root expand/collapse indicator
+        # Ensure branch decorations (expand/collapse indicators) are visible
+        # QTreeWidget shows these automatically when items have children
+        
+        # Apply custom delegate to remove indentation from tag items
+        self.tree_widget.setItemDelegate(MetadataItemDelegate(self.tree_widget))
         
         # Restore saved column widths or use defaults
         if self.config_manager is not None:
@@ -143,9 +205,29 @@ class MetadataPanel(QWidget):
             self.tree_widget.setColumnWidth(2, 50)
             self.tree_widget.setColumnWidth(3, 200)
         
-        # Connect to header sectionResized signal to save column widths
+        # Connect to header signals
         header = self.tree_widget.header()
         header.sectionResized.connect(self._on_column_resized)
+        
+        # Enable column reordering
+        header.setSectionsMovable(True)
+        header.sectionMoved.connect(self._on_column_moved)
+        
+        # Restore saved column order if available
+        if self.config_manager is not None:
+            saved_order = self.config_manager.get_metadata_panel_column_order()
+            if len(saved_order) == 4 and set(saved_order) == {0, 1, 2, 3}:
+                # Restore column order by moving sections to their saved visual positions
+                # Move from right to left (highest visual index to lowest) to avoid index shifting
+                for visual_pos in range(3, -1, -1):  # 3, 2, 1, 0
+                    logical_idx = saved_order[visual_pos]
+                    current_visual = header.visualIndex(logical_idx)
+                    if current_visual != visual_pos:
+                        header.moveSection(current_visual, visual_pos)
+        
+        # Enable context menu for collapse/expand
+        self.tree_widget.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.tree_widget.customContextMenuRequested.connect(self._show_context_menu)
         
         self.tree_widget.itemDoubleClicked.connect(self._on_item_double_clicked)
         layout.addWidget(self.tree_widget)
@@ -234,8 +316,8 @@ class MetadataPanel(QWidget):
                 groups[group].append((tag_str, tag_data))
             
             # Create tree items
-            # Group headings will be children of invisible root (indented)
-            # Tags will be top-level items (fully left-aligned with "Tag" header)
+            # Group headings will be top-level children of invisible root (indented)
+            # Tags will be children of group items (enabling collapse) but rendered fully left-aligned via delegate
             root_item = self.tree_widget.invisibleRootItem()
             
             # Create bold font for group headings
@@ -246,13 +328,15 @@ class MetadataPanel(QWidget):
                 # Group header as child of root (will be indented by tree widget indentation)
                 group_item = QTreeWidgetItem(root_item)
                 group_item.setText(0, f"Group {group}")
-                group_item.setFlags(Qt.ItemFlag.NoItemFlags)  # Make group header non-selectable
-                group_item.setChildIndicatorPolicy(QTreeWidgetItem.ChildIndicatorPolicy.DontShowIndicator)
+                # Enable expansion/collapse for group items - need both ItemIsEnabled and ItemIsSelectable
+                group_item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
                 group_item.setFont(0, bold_font)  # Make group heading bold
                 
+                # Add tag items as children first
                 for tag_str, tag_data in tag_list:
-                    # Tags as top-level items (not children) - fully left-aligned with "Tag" header
-                    tag_item = QTreeWidgetItem(self.tree_widget)
+                    # Tags as children of group items (enables collapse functionality)
+                    # The custom delegate will render them fully left-aligned
+                    tag_item = QTreeWidgetItem(group_item)
                     tag_item.setText(0, tag_data.get("tag", tag_str))
                     tag_item.setText(1, tag_data.get("name", ""))
                     tag_item.setText(2, tag_data.get("VR", ""))
@@ -274,6 +358,11 @@ class MetadataPanel(QWidget):
                     tag_item.setText(3, value_str)
                     tag_item.setData(0, Qt.ItemDataRole.UserRole, tag_str)
                     tag_item.setData(0, Qt.ItemDataRole.UserRole + 1, tag_data)
+                
+                # Set indicator policy and expanded state after children are added
+                # This ensures the expand/collapse indicator (triangle arrow) is visible
+                group_item.setChildIndicatorPolicy(QTreeWidgetItem.ChildIndicatorPolicy.ShowIndicator)
+                group_item.setExpanded(True)  # Expand groups by default
         finally:
             # Always re-enable updates, even if an error occurred
             self.tree_widget.setUpdatesEnabled(True)
@@ -325,6 +414,68 @@ class MetadataPanel(QWidget):
             ]
             # Save to config
             self.config_manager.set_metadata_panel_column_widths(widths)
+    
+    def _on_column_moved(self, logical_index: int, old_visual_index: int, new_visual_index: int) -> None:
+        """
+        Handle column move event to save column order.
+        
+        Args:
+            logical_index: Logical index of the column that was moved
+            old_visual_index: Previous visual position
+            new_visual_index: New visual position
+        """
+        if self.config_manager is not None:
+            # Get current visual order of all columns
+            header = self.tree_widget.header()
+            # Build list of logical indices in visual order
+            column_order = []
+            for visual_pos in range(4):
+                logical_idx = header.logicalIndex(visual_pos)
+                column_order.append(logical_idx)
+            # Save to config
+            self.config_manager.set_metadata_panel_column_order(column_order)
+    
+    def _show_context_menu(self, position: QPoint) -> None:
+        """
+        Show context menu for tree widget items.
+        
+        Args:
+            position: Position where context menu was requested (in tree widget coordinates)
+        """
+        item = self.tree_widget.itemAt(position)
+        if item is None:
+            return
+        
+        # Check if it's a group item (starts with "Group ")
+        is_group_item = item.text(0).startswith("Group ")
+        
+        # Create context menu
+        context_menu = QMenu(self)
+        
+        if is_group_item:
+            # Group item - show Collapse/Expand option with double-click hint
+            if item.childCount() > 0:
+                if item.isExpanded():
+                    collapse_action = context_menu.addAction("Collapse (double-click)")
+                    collapse_action.triggered.connect(lambda: item.setExpanded(False))
+                else:
+                    expand_action = context_menu.addAction("Expand (double-click)")
+                    expand_action.triggered.connect(lambda: item.setExpanded(True))
+        else:
+            # Tag item - show Collapse/Expand for its parent group if it has one
+            parent = item.parent()
+            if parent is not None and parent.text(0).startswith("Group "):
+                if parent.childCount() > 0:
+                    if parent.isExpanded():
+                        collapse_action = context_menu.addAction("Collapse Group")
+                        collapse_action.triggered.connect(lambda: parent.setExpanded(False))
+                    else:
+                        expand_action = context_menu.addAction("Expand Group")
+                        expand_action.triggered.connect(lambda: parent.setExpanded(True))
+        
+        # Show context menu at cursor position
+        if context_menu.actions():
+            context_menu.exec(self.tree_widget.mapToGlobal(position))
     
     def _on_item_double_clicked(self, item: QTreeWidgetItem, column: int) -> None:
         """
