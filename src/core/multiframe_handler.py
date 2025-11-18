@@ -30,6 +30,10 @@ def is_multiframe(dataset: Dataset) -> bool:
     """
     Check if a DICOM dataset contains multiple frames.
     
+    For Enhanced Multi-frame DICOMs (e.g., Enhanced MR), checks PerFrameFunctionalGroupsSequence
+    in addition to NumberOfFrames tag, as Enhanced MR files may have NumberOfFrames=1 but
+    multiple frames in PerFrameFunctionalGroupsSequence.
+    
     Args:
         dataset: pydicom Dataset
         
@@ -37,6 +41,7 @@ def is_multiframe(dataset: Dataset) -> bool:
         True if dataset contains multiple frames, False otherwise
     """
     try:
+        # First check NumberOfFrames tag
         if hasattr(dataset, 'NumberOfFrames'):
             num_frames = dataset.NumberOfFrames
             # Handle both string and numeric values
@@ -44,8 +49,22 @@ def is_multiframe(dataset: Dataset) -> bool:
                 try:
                     num_frames = int(num_frames)
                 except (ValueError, TypeError):
-                    return False
-            return int(num_frames) > 1
+                    pass
+                else:
+                    if int(num_frames) > 1:
+                        return True
+            else:
+                if int(num_frames) > 1:
+                    return True
+        
+        # For Enhanced Multi-frame DICOMs, check PerFrameFunctionalGroupsSequence
+        # This is more reliable for Enhanced MR files where NumberOfFrames may be 1
+        # but PerFrameFunctionalGroupsSequence contains multiple frames
+        if hasattr(dataset, 'PerFrameFunctionalGroupsSequence'):
+            seq = dataset.PerFrameFunctionalGroupsSequence
+            if seq and len(seq) > 1:
+                return True
+        
         return False
     except Exception:
         return False
@@ -55,6 +74,9 @@ def get_frame_count(dataset: Dataset) -> int:
     """
     Get the number of frames in a DICOM dataset.
     
+    For Enhanced Multi-frame DICOMs (e.g., Enhanced MR), uses PerFrameFunctionalGroupsSequence
+    length when available, as it's more reliable than NumberOfFrames tag for Enhanced MR files.
+    
     Args:
         dataset: pydicom Dataset
         
@@ -62,6 +84,15 @@ def get_frame_count(dataset: Dataset) -> int:
         Number of frames (1 for single-frame, >1 for multi-frame)
     """
     try:
+        # For Enhanced Multi-frame DICOMs, check PerFrameFunctionalGroupsSequence first
+        # This is more reliable for Enhanced MR files where NumberOfFrames may be 1
+        # but PerFrameFunctionalGroupsSequence contains multiple frames
+        if hasattr(dataset, 'PerFrameFunctionalGroupsSequence'):
+            seq = dataset.PerFrameFunctionalGroupsSequence
+            if seq:
+                return len(seq)
+        
+        # Fall back to NumberOfFrames tag
         if hasattr(dataset, 'NumberOfFrames'):
             num_frames = dataset.NumberOfFrames
             # Handle both string and numeric values
@@ -137,15 +168,38 @@ def get_frame_pixel_array(dataset: Dataset, frame_index: int) -> Optional[np.nda
         # Check if this is a multi-frame dataset
         if is_multiframe(dataset):
             # Extract the specific frame
-            if len(pixel_array.shape) == 3:
-                # Shape is (frames, rows, columns)
+            if len(pixel_array.shape) == 4:
+                # Shape is (frames, rows, columns, channels) - multi-frame color (e.g., RGB)
                 try:
                     frame = pixel_array[frame_index]
-                    # print(f"[FRAME] Extracted frame {frame_index}, shape: {frame.shape}")
+                    # print(f"[FRAME] Extracted RGB frame {frame_index}, shape: {frame.shape}")
                     return frame
                 except (IndexError, ValueError) as e:
                     # print(f"[FRAME] Error extracting frame {frame_index} from pixel array: {e}")
                     return None
+            elif len(pixel_array.shape) == 3:
+                # Could be (frames, rows, columns) for grayscale multi-frame
+                # or (rows, columns, channels) for single-frame color
+                # Check if first dimension matches frame count
+                num_frames = get_frame_count(dataset)
+                if pixel_array.shape[0] == num_frames:
+                    # Shape is (frames, rows, columns) - grayscale multi-frame
+                    try:
+                        frame = pixel_array[frame_index]
+                        # print(f"[FRAME] Extracted frame {frame_index}, shape: {frame.shape}")
+                        return frame
+                    except (IndexError, ValueError) as e:
+                        # print(f"[FRAME] Error extracting frame {frame_index} from pixel array: {e}")
+                        return None
+                else:
+                    # Likely single-frame color (rows, columns, channels)
+                    # Return the single frame if frame_index is 0
+                    if frame_index == 0:
+                        # print(f"[FRAME] Returning single-frame color array for frame 0")
+                        return pixel_array
+                    else:
+                        # print(f"[FRAME] Single-frame color but frame_index={frame_index} (not 0)")
+                        return None
             elif len(pixel_array.shape) == 2:
                 # Single frame, but NumberOfFrames tag says otherwise
                 # Return the single frame if frame_index is 0

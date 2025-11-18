@@ -96,7 +96,7 @@ class ViewStateManager:
         self.initial_window_width: Optional[float] = None
         
         # Series defaults storage: key is series identifier (StudyInstanceUID + SeriesInstanceUID)
-        # Value is dict with: window_center, window_width, zoom, h_scroll, v_scroll, scene_center
+        # Value is dict with: window_center, window_width, zoom, h_scroll, v_scroll, scene_center, image_inverted
         self.series_defaults: Dict[str, Dict] = {}
         
         # Track current series identifier for comparison
@@ -230,7 +230,8 @@ class ViewStateManager:
                     'h_scroll': self.image_viewer.horizontalScrollBar().value(),
                     'v_scroll': self.image_viewer.verticalScrollBar().value(),
                     'scene_center': scene_center,  # Store scene center point in scene coordinates
-                    'use_rescaled_values': self.use_rescaled_values
+                    'use_rescaled_values': self.use_rescaled_values,
+                    'image_inverted': self.image_viewer.image_inverted
                 }
             else:
                 # Entry already exists - check if window/level defaults were already set during display_slice
@@ -287,12 +288,13 @@ class ViewStateManager:
                                             stored_rescaled
                                         )
                     
-                    # Only update zoom/pan, preserve window/level values in series_defaults
+                    # Only update zoom/pan and inversion, preserve window/level values in series_defaults
                     self.series_defaults[self.current_series_identifier].update({
                         'zoom': self.image_viewer.current_zoom,
                         'h_scroll': self.image_viewer.horizontalScrollBar().value(),
                         'v_scroll': self.image_viewer.verticalScrollBar().value(),
-                        'scene_center': scene_center
+                        'scene_center': scene_center,
+                        'image_inverted': self.image_viewer.image_inverted
                     })
                     # Keep the flag set
                     self.series_defaults[self.current_series_identifier]['window_level_defaults_set'] = True
@@ -306,7 +308,8 @@ class ViewStateManager:
                         'h_scroll': self.image_viewer.horizontalScrollBar().value(),
                         'v_scroll': self.image_viewer.verticalScrollBar().value(),
                         'scene_center': scene_center,
-                        'use_rescaled_values': self.use_rescaled_values  # Always update to match current state
+                        'use_rescaled_values': self.use_rescaled_values,  # Always update to match current state
+                        'image_inverted': self.image_viewer.image_inverted
                     })
             # print(f"[DEBUG-WL] Stored in series_defaults: wc={self.series_defaults[self.current_series_identifier]['window_center']}, ww={self.series_defaults[self.current_series_identifier]['window_width']}, use_rescaled={self.series_defaults[self.current_series_identifier]['use_rescaled_values']}")
     
@@ -424,15 +427,19 @@ class ViewStateManager:
                             reset_window_width = ww
                         elif series_pixel_min is not None and series_pixel_max is not None:
                             # Calculate median from series for window center
+                            midpoint = (series_pixel_min + series_pixel_max) / 2.0
                             if series_datasets:
-                                reset_window_center = self.dicom_processor.get_series_pixel_median(
+                                median = self.dicom_processor.get_series_pixel_median(
                                     series_datasets, apply_rescale=use_rescaled
                                 )
-                                # If median calculation failed, fall back to midpoint
-                                if reset_window_center is None:
-                                    reset_window_center = (series_pixel_min + series_pixel_max) / 2.0
+                                # If median calculation failed, use midpoint
+                                if median is None:
+                                    reset_window_center = midpoint
+                                else:
+                                    # Use the greater of median or midpoint
+                                    reset_window_center = max(median, midpoint)
                             else:
-                                reset_window_center = (series_pixel_min + series_pixel_max) / 2.0
+                                reset_window_center = midpoint
                             reset_window_width = series_pixel_max - series_pixel_min
                             if reset_window_width <= 0:
                                 reset_window_width = 1.0
@@ -451,7 +458,15 @@ class ViewStateManager:
                                             rescale_slope, rescale_intercept, _ = self.dicom_processor.get_rescale_parameters(dataset)
                                             if rescale_slope is not None and rescale_intercept is not None:
                                                 pixel_array = pixel_array.astype(np.float32) * float(rescale_slope) + float(rescale_intercept)
-                                        reset_window_center = float(np.median(pixel_array))
+                                        # Calculate both median (excluding zeros) and midpoint, use the greater value
+                                        midpoint = (pixel_min + pixel_max) / 2.0
+                                        non_zero_values = pixel_array[pixel_array != 0]
+                                        if len(non_zero_values) > 0:
+                                            median = float(np.median(non_zero_values))
+                                            reset_window_center = max(median, midpoint)
+                                        else:
+                                            # Fall back to midpoint if all values are zero
+                                            reset_window_center = midpoint
                                     else:
                                         # Fall back to midpoint if pixel array unavailable
                                         reset_window_center = (pixel_min + pixel_max) / 2.0
@@ -979,6 +994,39 @@ class ViewStateManager:
             identifier: Series identifier string
         """
         self.current_series_identifier = identifier
+    
+    def get_series_inversion_state(self, series_identifier: Optional[str] = None) -> bool:
+        """
+        Get inversion state for a series.
+        
+        Args:
+            series_identifier: Optional series identifier. If None, uses current series identifier.
+            
+        Returns:
+            True if image is inverted for this series, False otherwise
+        """
+        if series_identifier is None:
+            series_identifier = self.current_series_identifier
+        
+        if series_identifier and series_identifier in self.series_defaults:
+            return self.series_defaults[series_identifier].get('image_inverted', False)
+        return False
+    
+    def set_series_inversion_state(self, series_identifier: Optional[str] = None, inverted: bool = False) -> None:
+        """
+        Set inversion state for a series.
+        
+        Args:
+            series_identifier: Optional series identifier. If None, uses current series identifier.
+            inverted: True if image should be inverted, False otherwise
+        """
+        if series_identifier is None:
+            series_identifier = self.current_series_identifier
+        
+        if series_identifier:
+            if series_identifier not in self.series_defaults:
+                self.series_defaults[series_identifier] = {}
+            self.series_defaults[series_identifier]['image_inverted'] = inverted
     
     def set_current_data_context(
         self,
