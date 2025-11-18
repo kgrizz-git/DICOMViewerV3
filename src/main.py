@@ -51,6 +51,7 @@ from gui.series_navigator import SeriesNavigator
 from gui.zoom_display_widget import ZoomDisplayWidget
 from gui.cine_player import CinePlayer
 from gui.cine_controls_widget import CineControlsWidget
+from gui.intensity_projection_controls_widget import IntensityProjectionControlsWidget
 from core.dicom_loader import DICOMLoader
 from core.dicom_organizer import DICOMOrganizer
 from core.dicom_parser import DICOMParser
@@ -125,9 +126,13 @@ class DICOMViewerApp(QObject):
         self.annotation_manager = AnnotationManager()
         self.roi_statistics_panel = ROIStatisticsPanel()
         self.roi_list_panel = ROIListPanel()
+        
+        # Flag to track if we're in the middle of a reset operation
+        self._resetting_projection_state = False
         self.roi_list_panel.set_roi_manager(self.roi_manager)
         self.series_navigator = SeriesNavigator(self.dicom_processor)
         self.cine_controls_widget = CineControlsWidget()
+        self.intensity_projection_controls_widget = IntensityProjectionControlsWidget()
         
         # Initialize overlay manager with config settings
         font_size = self.config_manager.get_overlay_font_size()
@@ -211,6 +216,7 @@ class DICOMViewerApp(QObject):
             annotation_manager=self.annotation_manager,
             dicom_organizer=self.dicom_organizer
         )
+        self.view_state_manager.set_redisplay_slice_callback(self._redisplay_current_slice)
         
         # Initialize ROICoordinator
         self.roi_coordinator = ROICoordinator(
@@ -360,6 +366,13 @@ class DICOMViewerApp(QObject):
         self.view_state_manager.reset_window_level_state()
         self.view_state_manager.reset_series_tracking()
         
+        # Reset projection state
+        self.slice_display_manager.reset_projection_state()
+        # Update widget to match reset state
+        self.intensity_projection_controls_widget.set_enabled(False)
+        self.intensity_projection_controls_widget.set_projection_type("aip")
+        self.intensity_projection_controls_widget.set_slice_count(4)
+        
         # Clear current dataset references
         self.current_dataset = None
         self.current_studies = {}
@@ -386,6 +399,13 @@ class DICOMViewerApp(QObject):
     
     def _handle_load_first_slice(self, studies: dict) -> None:
         """Handle loading first slice after file operations."""
+        # Reset projection state when new files are opened
+        self.slice_display_manager.reset_projection_state()
+        # Update widget to match reset state
+        self.intensity_projection_controls_widget.set_enabled(False)
+        self.intensity_projection_controls_widget.set_projection_type("aip")
+        self.intensity_projection_controls_widget.set_slice_count(4)
+        
         first_slice_info = self.file_operations_handler.load_first_slice(studies)
         if first_slice_info:
             self.current_studies = studies
@@ -554,6 +574,7 @@ class DICOMViewerApp(QObject):
             right_layout = QVBoxLayout(self.main_window.right_panel)
         right_layout.addWidget(self.window_level_controls)
         right_layout.addWidget(self.zoom_display_widget)
+        right_layout.addWidget(self.intensity_projection_controls_widget)
         right_layout.addWidget(self.roi_list_panel)
         right_layout.addWidget(self.roi_statistics_panel)
         
@@ -683,6 +704,21 @@ class DICOMViewerApp(QObject):
         # Window/Level preset selection
         self.image_viewer.window_level_preset_selected.connect(self._on_window_level_preset_selected)
         
+        # Intensity projection controls
+        self.intensity_projection_controls_widget.enabled_changed.connect(self._on_projection_enabled_changed)
+        self.intensity_projection_controls_widget.projection_type_changed.connect(self._on_projection_type_changed)
+        self.intensity_projection_controls_widget.slice_count_changed.connect(self._on_projection_slice_count_changed)
+        
+        # Intensity projection context menu signals
+        self.image_viewer.projection_enabled_changed.connect(self._on_projection_enabled_changed)
+        self.image_viewer.projection_type_changed.connect(self._on_projection_type_changed)
+        self.image_viewer.projection_slice_count_changed.connect(self._on_projection_slice_count_changed)
+        
+        # Set callbacks for projection state (for context menu)
+        self.image_viewer.get_projection_enabled_callback = lambda: self.slice_display_manager.projection_enabled
+        self.image_viewer.get_projection_type_callback = lambda: self.slice_display_manager.projection_type
+        self.image_viewer.get_projection_slice_count_callback = lambda: self.slice_display_manager.projection_slice_count
+        
         # Slice navigation
         self.slice_navigator.slice_changed.connect(self._on_slice_changed)
         # Pause cine playback if user manually navigates slices
@@ -731,8 +767,18 @@ class DICOMViewerApp(QObject):
         self.main_window.overlay_font_color_changed.connect(self.overlay_coordinator.handle_overlay_font_color_changed)
         
         # Reset view request (from toolbar and context menu)
-        self.main_window.reset_view_requested.connect(self.view_state_manager.reset_view)
-        self.image_viewer.reset_view_requested.connect(self.view_state_manager.reset_view)
+        def handle_reset_view():
+            # Reset view state only (zoom, pan, window/level)
+            # Do NOT reset projection state or checkbox - leave them as user set them
+            # Skip internal redisplay so we can redisplay through slice_display_manager to apply projection mode
+            self.view_state_manager.reset_view(skip_redisplay=True)
+            
+            # Redisplay current slice to ensure projection mode (if enabled) is applied with refit
+            if self.current_dataset is not None:
+                self._display_slice(self.current_dataset, preserve_view_override=False)
+        
+        self.main_window.reset_view_requested.connect(handle_reset_view)
+        self.image_viewer.reset_view_requested.connect(handle_reset_view)
         
         # Clear measurements signals
         self.main_window.clear_measurements_requested.connect(self.measurement_coordinator.handle_clear_measurements)
@@ -823,6 +869,13 @@ class DICOMViewerApp(QObject):
             self.current_series_uid = new_series_uid
             self.current_slice_index = slice_index
             
+            # Reset projection state when switching series
+            self.slice_display_manager.reset_projection_state()
+            # Update widget to match reset state
+            self.intensity_projection_controls_widget.set_enabled(False)
+            self.intensity_projection_controls_widget.set_projection_type("aip")
+            self.intensity_projection_controls_widget.set_slice_count(4)
+            
             # Update slice display manager context
             self.slice_display_manager.set_current_data_context(
                 self.current_studies,
@@ -911,7 +964,7 @@ class DICOMViewerApp(QObject):
         # Update cine player context and check if series is cine-capable
         self._update_cine_player_context()
     
-    def _display_slice(self, dataset) -> None:
+    def _display_slice(self, dataset, preserve_view_override: Optional[bool] = None) -> None:
         """
         Display a DICOM slice.
         
@@ -932,11 +985,12 @@ class DICOMViewerApp(QObject):
             
             # Display slice using slice display manager
             self.slice_display_manager.display_slice(
-                                dataset,
+                dataset,
                 self.current_studies,
                 self.current_study_uid,
                 self.current_series_uid,
-                self.current_slice_index
+                self.current_slice_index,
+                preserve_view_override=preserve_view_override
             )
             
             # Store initial view state if this is the first image
@@ -965,6 +1019,16 @@ class DICOMViewerApp(QObject):
             import traceback
             print(f"Error displaying slice: {error_msg}")
             traceback.print_exc()
+    
+    def _redisplay_current_slice(self, preserve_view: bool = True) -> None:
+        """
+        Redisplay the current slice via SliceDisplayManager with optional preserve_view override.
+        
+        Args:
+            preserve_view: True to preserve zoom/pan, False to refit
+        """
+        if self.current_dataset is not None:
+            self._display_slice(self.current_dataset, preserve_view_override=preserve_view)
     
     def _display_rois_for_slice(self, dataset) -> None:
         """
@@ -995,6 +1059,76 @@ class DICOMViewerApp(QObject):
             dataset: pydicom Dataset for the current slice
         """
         self.slice_display_manager.display_measurements_for_slice(dataset)
+    
+    def _on_projection_enabled_changed(self, enabled: bool) -> None:
+        """
+        Handle projection enabled state change.
+        
+        This handler is called when the checkbox state changes (either user-initiated or programmatic).
+        When user clicks checkbox, signal is emitted and we should update manager to match user's intent.
+        When programmatically set (e.g., during reset), signals are blocked so this shouldn't be called.
+        
+        Args:
+            enabled: True if projection mode enabled, False otherwise
+        """
+        # print(f"[DEBUG _on_projection_enabled_changed] Called from enabled_changed signal: enabled={enabled}, _resetting_projection_state={self._resetting_projection_state}")
+        # import traceback
+        # print(f"[DEBUG _on_projection_enabled_changed] Call stack:\n{''.join(traceback.format_stack()[-5:-1])}")
+        
+        # Check current states BEFORE updating manager
+        current_widget_state = self.intensity_projection_controls_widget.get_enabled()
+        current_manager_state = self.slice_display_manager.projection_enabled
+        checkbox_visual_state = self.intensity_projection_controls_widget.enable_checkbox.isChecked()
+        # print(f"[DEBUG _on_projection_enabled_changed] Current widget state={current_widget_state}, checkbox visual state={checkbox_visual_state}, manager state={current_manager_state}, signal enabled={enabled}")
+        
+        # If we're resetting and signal doesn't match manager state, sync widget to manager (ignore signal)
+        if self._resetting_projection_state and current_manager_state != enabled:
+            # print(f"[DEBUG _on_projection_enabled_changed] Reset in progress: ignoring signal ({enabled}), syncing widget to manager ({current_manager_state})")
+            self.intensity_projection_controls_widget.set_enabled(current_manager_state)
+        else:
+            # Normal case: update manager state to match the signal (user's intent)
+            # print(f"[DEBUG _on_projection_enabled_changed] Updating manager state to match signal ({enabled})")
+            self.slice_display_manager.set_projection_enabled(enabled)
+            
+            # Widget state should already match signal, but verify and sync if needed
+            if current_widget_state != enabled:
+                # print(f"[DEBUG _on_projection_enabled_changed] Widget state ({current_widget_state}) != signal ({enabled}), syncing widget")
+                self.intensity_projection_controls_widget.set_enabled(enabled)
+            else:
+                # print(f"[DEBUG _on_projection_enabled_changed] Widget state ({current_widget_state}) matches signal ({enabled}), no widget update needed")
+                pass
+        
+        # Redisplay current slice with new projection state
+        if self.current_dataset is not None:
+            self._display_slice(self.current_dataset)
+    
+    def _on_projection_type_changed(self, projection_type: str) -> None:
+        """
+        Handle projection type change.
+        
+        Args:
+            projection_type: "aip", "mip", or "minip"
+        """
+        self.slice_display_manager.set_projection_type(projection_type)
+        # Update widget state
+        self.intensity_projection_controls_widget.set_projection_type(projection_type)
+        # Redisplay current slice with new projection type
+        if self.current_dataset is not None and self.slice_display_manager.projection_enabled:
+            self._display_slice(self.current_dataset)
+    
+    def _on_projection_slice_count_changed(self, count: int) -> None:
+        """
+        Handle projection slice count change.
+        
+        Args:
+            count: Number of slices to combine (2, 3, 4, 6, or 8)
+        """
+        self.slice_display_manager.set_projection_slice_count(count)
+        # Update widget state
+        self.intensity_projection_controls_widget.set_slice_count(count)
+        # Redisplay current slice with new slice count
+        if self.current_dataset is not None and self.slice_display_manager.projection_enabled:
+            self._display_slice(self.current_dataset)
     
     def _open_settings(self) -> None:
         """Handle settings dialog request."""
