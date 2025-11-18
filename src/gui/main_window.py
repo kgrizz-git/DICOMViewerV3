@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (QMainWindow, QMenuBar, QToolBar, QStatusBar,
                                 QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
                                 QMessageBox, QComboBox, QLabel, QSizePolicy, QColorDialog,
                                 QApplication, QDialog, QTextEdit, QPushButton, QDialogButtonBox, QMenu)
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QEvent
 from PySide6.QtGui import QAction, QIcon, QKeySequence, QColor, QDragEnterEvent, QDropEvent
 from typing import Optional, TYPE_CHECKING
 
@@ -37,6 +37,7 @@ import re
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.config_manager import ConfigManager
+from gui.dialogs.edit_recent_list_dialog import EditRecentListDialog
 
 
 class MainWindow(QMainWindow):
@@ -135,10 +136,14 @@ class MainWindow(QMainWindow):
         
         # Recent Files submenu
         self.recent_menu = file_menu.addMenu("&Recent")
-        # Enable context menu for recent menu items
-        self.recent_menu.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.recent_menu.customContextMenuRequested.connect(self._on_recent_menu_context_menu)
+        # Install event filter for context menu support
+        self.recent_menu.installEventFilter(self)
         self._update_recent_menu()
+        
+        # Edit Recent List action
+        edit_recent_list_action = QAction("Edit Recent List...", self)
+        edit_recent_list_action.triggered.connect(self._open_edit_recent_list_dialog)
+        file_menu.addAction(edit_recent_list_action)
         
         file_menu.addSeparator()
         
@@ -1611,50 +1616,62 @@ class MainWindow(QMainWindow):
             no_recent_action.setEnabled(False)
             self.recent_menu.addAction(no_recent_action)
         else:
-            # Add action for each recent file
-            for i, file_path in enumerate(recent_files):
+            # Add action for each recent file using regular QAction for native appearance
+            for file_path in recent_files:
                 # Create display name (truncate if too long)
                 display_name = os.path.basename(file_path) if os.path.isfile(file_path) else os.path.basename(file_path)
                 if len(display_name) > 50:
                     display_name = display_name[:47] + "..."
                 
-                # Add number prefix for keyboard shortcuts (1-9, 0)
-                number = (i + 1) % 10
-                if number == 0:
-                    number = 10
-                action_text = f"&{number} {display_name}"
-                
-                recent_action = QAction(action_text, self)
-                recent_action.setData(file_path)  # Store full path in action data
+                # Create regular QAction with just the display name (no prefixes)
+                recent_action = QAction(display_name, self)
+                # Store file path in action data for event filter
+                recent_action.setData(file_path)
+                # Connect triggered signal to open the file
                 recent_action.triggered.connect(
                     lambda checked, path=file_path: self.open_recent_file_requested.emit(path)
                 )
                 self.recent_menu.addAction(recent_action)
     
-    def _on_recent_menu_context_menu(self, position) -> None:
+    def eventFilter(self, obj, event) -> bool:
         """
-        Handle context menu request for recent menu items.
+        Event filter for handling context menu events on recent menu items.
         
         Args:
-            position: Position where context menu was requested
+            obj: Object that received the event
+            event: Event
+            
+        Returns:
+            True if event was handled, False otherwise
         """
-        # Get the action at the mouse position
-        action = self.recent_menu.actionAt(position)
+        from PySide6.QtGui import QContextMenuEvent
         
-        # Only show context menu if it's a recent file action (has data)
-        if action is None or not action.data():
-            return
+        # Only handle events for the recent menu
+        if obj != self.recent_menu:
+            return super().eventFilter(obj, event)
         
-        # Create context menu
-        context_menu = QMenu(self)
-        remove_action = QAction("Remove", self)
-        remove_action.triggered.connect(
-            lambda: self._remove_recent_file(action.data())
-        )
-        context_menu.addAction(remove_action)
+        # Check if it's a context menu event (right-click)
+        if event.type() == QEvent.Type.ContextMenu:
+            context_event = QContextMenuEvent(event)
+            # Get the action at the mouse position
+            action = self.recent_menu.actionAt(self.recent_menu.mapFromGlobal(context_event.globalPos()))
+            
+            # Only show context menu if it's a recent file action (has data)
+            if action is not None and action.data():
+                file_path = action.data()
+                # Create context menu
+                context_menu = QMenu(self)
+                remove_action = QAction("Remove", self)
+                remove_action.triggered.connect(
+                    lambda: self._remove_recent_file(file_path)
+                )
+                context_menu.addAction(remove_action)
+                
+                # Show context menu at the cursor position
+                context_menu.exec(context_event.globalPos())
+                return True
         
-        # Show context menu at the cursor position
-        context_menu.exec(self.recent_menu.mapToGlobal(position))
+        return super().eventFilter(obj, event)
     
     def _remove_recent_file(self, file_path: str) -> None:
         """
@@ -1670,6 +1687,15 @@ class MainWindow(QMainWindow):
         """
         Public method to update recent menu (called from outside).
         """
+        self._update_recent_menu()
+    
+    def _open_edit_recent_list_dialog(self) -> None:
+        """
+        Open the Edit Recent List dialog.
+        """
+        dialog = EditRecentListDialog(self.config_manager, self)
+        dialog.exec()
+        # Update the recent menu after dialog closes (in case items were removed)
         self._update_recent_menu()
     
     def _on_splitter_moved(self, pos: int, index: int) -> None:
