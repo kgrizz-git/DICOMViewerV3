@@ -232,6 +232,40 @@ class QuickStartGuideDialog(QDialog):
                 <li>Or right-click on ROI → "Delete ROI"</li>
             </ul>
             
+            <h2>Intensity Projections (Combine Slices)</h2>
+            <p>Combine multiple slices to create intensity projections:</p>
+            <ul>
+                <li><strong>Access:</strong> Use the "Combine Slices" widget in the right panel, or right-click on image → "Combine..."</li>
+                <li><strong>Enable:</strong> Check "Enable Combine Slices" to activate projection mode</li>
+                <li><strong>Projection Types:</strong>
+                    <ul>
+                        <li><strong>Average (AIP):</strong> Average intensity across combined slices</li>
+                        <li><strong>Maximum (MIP):</strong> Maximum intensity across combined slices</li>
+                        <li><strong>Minimum (MinIP):</strong> Minimum intensity across combined slices</li>
+                    </ul>
+                </li>
+                <li><strong>Slice Count:</strong> Choose how many slices to combine (2, 3, 4, 6, or 8)</li>
+                <li><strong>Scrolling:</strong> When projection mode is enabled, scrolling through slices shows projections that shift one slice at a time
+                    <ul>
+                        <li>Example: With 4 slices combined, slice 0 shows slices 0-3, slice 1 shows slices 1-4, slice 2 shows slices 2-5, etc.</li>
+                    </ul>
+                </li>
+                <li><strong>Reset:</strong> Projection mode is automatically disabled when:
+                    <ul>
+                        <li>Opening new files or series</li>
+                        <li>Selecting Reset View</li>
+                        <li>Closing files</li>
+                    </ul>
+                </li>
+            </ul>
+            
+            <h2>Image Inversion</h2>
+            <ul>
+                <li><strong>Toggle Inversion:</strong> Press <code>I</code> key or right-click → "Invert Image (I)"</li>
+                <li>Inverts image colors (grayscale or RGB)</li>
+                <li>Inversion state is preserved per series</li>
+            </ul>
+            
             <h2>Window/Level Adjustment</h2>
             <h3>Window/Level Presets</h3>
             <ul>
@@ -298,6 +332,7 @@ class QuickStartGuideDialog(QDialog):
                 <li><strong><code>D</code>:</strong> Delete all ROIs on current slice</li>
                 <li><strong><code>V</code>:</strong> Reset view (restore initial zoom, pan, and window/level)</li>
                 <li><strong><code>N</code>:</strong> Toggle series navigator bar visibility</li>
+                <li><strong><code>I</code>:</strong> Invert image colors</li>
                 <li><strong><code>Spacebar</code>:</strong> Toggle overlay visibility
                     <ul>
                         <li>First press: Hides corner text overlays</li>
@@ -368,12 +403,21 @@ class QuickStartGuideDialog(QDialog):
         <ul>
             <li><strong>View/Edit Tags:</strong> Access via <strong>Tools → View/Edit DICOM Tags</strong> or press <code>Ctrl+T</code>
                 <ul>
-                    <li>Browse all DICOM tags in a tree view</li>
+                    <li>Browse all DICOM tags in a tree view organized by groups</li>
                     <li>Edit individual tag values (double-click or use Edit button)</li>
                     <li>View private tags and vendor-specific data</li>
                     <li>Undo/redo changes using Edit menu</li>
                     <li><strong>Tag Filtering:</strong> Use the search box at the top to filter tags (case-insensitive search across tag number, name, VR, and value)</li>
                     <li>Search results update automatically as you type</li>
+                </ul>
+            </li>
+            <li><strong>Metadata Panel (Left Side):</strong> Quick access to DICOM tags without opening the full tag viewer
+                <ul>
+                    <li><strong>Expand/Collapse Groups:</strong> Double-click on group headers (e.g., "Group 0008") to expand or collapse tag groups</li>
+                    <li><strong>Context Menu:</strong> Right-click on a group header or tag item → "Expand" or "Collapse" to toggle group visibility</li>
+                    <li><strong>Reorder Columns:</strong> Drag column headers horizontally to reorder columns (Tag, Name, VR, Value)</li>
+                    <li>Column order preferences are saved and remembered between sessions</li>
+                    <li><strong>Resize Columns:</strong> Drag column borders to adjust column widths (preferences are saved)</li>
                 </ul>
             </li>
             <li><strong>Export Tags:</strong> Access via <strong>Tools → Export DICOM Tags</strong> or press <code>Shift+Ctrl+T</code>

@@ -1370,6 +1370,8 @@ class MainWindow(QMainWindow):
     <li>Series navigation with thumbnail navigator</li>
     <li>Dark and light themes</li>
     <li>Reset view to fit viewport</li>
+    <li>Intensity projections: Combine slices (AIP, MIP, MinIP)</li>
+    <li>Image inversion (I key)</li>
     </ul>
     <h4>Analysis Tools:</h4>
     <ul>
@@ -1384,6 +1386,8 @@ class MainWindow(QMainWindow):
     <li>Toggle overlay visibility (3 states)</li>
     <li>View and edit all DICOM tags</li>
     <li>Tag filtering/search functionality</li>
+    <li>Expand/collapse tag groups in metadata panel</li>
+    <li>Reorder columns in metadata panel</li>
     <li>Export selected tags to Excel/CSV</li>
     <li>Annotations support: Presentation States, Key Objects, embedded overlays</li>
     </ul>
@@ -1404,7 +1408,6 @@ class MainWindow(QMainWindow):
     <h4>Planned Features (Not yet implemented):</h4>
     <ul>
     <li>Histogram display</li>
-    <li>Intensity projections (AIP/MIP)</li>
     <li>RT STRUCT overlays</li>
     </ul>
 </body>

@@ -25,10 +25,15 @@ This application provides comprehensive DICOM image viewing capabilities with ad
   - First preset (W1, C1) loaded by default
   - If no presets found, window center uses median value, width uses range (max-min)
 - Slice navigation with arrow keys or mouse wheel
+- **Image Inversion**: Press <code>I</code> key or use context menu to invert image colors
 - Series navigation with thumbnail navigator
 - Switch mouse scroll wheel between zooming and slice navigation
 - Dark or light interface option
 - Reset view to fit viewport
+- **Intensity Projections**: Combine multiple slices (2, 3, 4, 6, or 8) to view Average (AIP), Maximum (MIP), or Minimum (MinIP) intensity projections
+  - Scroll through combined projections one underlying slice at a time
+  - Access via right panel widget or context menu → "Combine..."
+- **Image Inversion**: Toggle image inversion with <code>I</code> key or context menu
 - **Cine Playback** (for multi-frame DICOM series):
   - Automatic frame-by-frame playback
   - Play, pause, and stop controls
@@ -43,8 +48,10 @@ This application provides comprehensive DICOM image viewing capabilities with ad
 - Toggle overlay visibility with configurable content (3 states: all visible, corner text hidden, all text hidden)
 - **DICOM Tag Editing:**
   - View and edit all DICOM tags, including private tags
-  - Tree view for browsing tags
+  - Tree view for browsing tags organized by groups
   - **Tag filtering/search**: Search functionality for finding specific tags (case-insensitive, searches tag number, name, VR, and value)
+  - **Expand/collapse groups**: Double-click group headers or use context menu to expand/collapse tag groups
+  - **Reorder columns**: Drag column headers to reorder columns (Tag, Name, VR, Value) - preferences are saved
   - Undo/redo support for tag edits
   - Save changes to DICOM files
 - **Annotations Support:**
@@ -60,9 +67,11 @@ This application provides comprehensive DICOM image viewing capabilities with ad
 - Draw elliptical or rectangular regions of interest (ROIs)
 - Calculate statistics (mean, standard deviation, min, max, area) within ROIs
 - Measure distances (pixels, mm, or cm based on DICOM metadata)
+- **Intensity Projections**: Combine multiple slices (2, 3, 4, 6, or 8) to create Average (AIP), Maximum (MIP), or Minimum (MinIP) intensity projections
+  - Scroll through projections one underlying slice at a time
+  - Access via right panel widget or context menu → "Combine..."
 - Histogram display for whole slice or selected ROI (Not yet implemented)
 - Window width and level indication overlaid on histogram (Not yet implemented)
-- Combine slices into thicker slices (average or maximum intensity projections) (Not yet implemented)
 - Display RT STRUCT overlays (Not yet implemented)
 
 ### Data Management
@@ -97,6 +106,7 @@ This application provides comprehensive DICOM image viewing capabilities with ad
 - **Spacebar**: Toggle overlay visibility (cycles through 3 states)
 - **Arrow Keys**: Navigate slices (Up/Down) and series (Left/Right)
 - **Delete**: Delete selected ROI or measurement
+- **I**: Invert image colors
 - **Ctrl+T**: View/Edit DICOM Tags
 - **Shift+Ctrl+T**: Export DICOM Tags
 

@@ -25,6 +25,7 @@ Requirements:
 
 from typing import Optional, Callable
 import numpy as np
+from PIL import Image
 from pydicom.dataset import Dataset
 from core.dicom_processor import DICOMProcessor
 from core.dicom_parser import DICOMParser
@@ -39,7 +40,7 @@ from tools.annotation_manager import AnnotationManager
 from gui.overlay_manager import OverlayManager
 from gui.roi_list_panel import ROIListPanel
 from gui.roi_statistics_panel import ROIStatisticsPanel
-from utils.dicom_utils import get_pixel_spacing
+from utils.dicom_utils import get_pixel_spacing, get_slice_thickness
 
 
 class SliceDisplayManager:
@@ -118,6 +119,162 @@ class SliceDisplayManager:
         self.current_series_uid: str = ""
         self.current_slice_index: int = 0
         self.current_dataset: Optional[Dataset] = None
+        
+        # Intensity projection state
+        self.projection_enabled: bool = False
+        self.projection_type: str = "aip"  # "aip", "mip", or "minip"
+        self.projection_slice_count: int = 4  # 2, 3, 4, 6, or 8
+    
+    def reset_projection_state(self) -> None:
+        """
+        Reset intensity projection state to defaults.
+        
+        Called when new series/file is opened, Reset View is selected, or file is closed.
+        """
+        self.projection_enabled = False
+        self.projection_type = "aip"
+        self.projection_slice_count = 4
+    
+    def set_projection_enabled(self, enabled: bool) -> None:
+        """
+        Set projection enabled state.
+        
+        Args:
+            enabled: True to enable projection mode, False to disable
+        """
+        self.projection_enabled = enabled
+    
+    def set_projection_type(self, projection_type: str) -> None:
+        """
+        Set projection type.
+        
+        Args:
+            projection_type: "aip", "mip", or "minip"
+        """
+        if projection_type in ["aip", "mip", "minip"]:
+            self.projection_type = projection_type
+    
+    def set_projection_slice_count(self, count: int) -> None:
+        """
+        Set number of slices to combine for projection.
+        
+        Args:
+            count: Number of slices (2, 3, 4, 6, or 8)
+        """
+        if count in [2, 3, 4, 6, 8]:
+            self.projection_slice_count = count
+    
+    def _create_projection_image(
+        self,
+        dataset: Dataset,
+        current_studies: dict,
+        current_study_uid: str,
+        current_series_uid: str,
+        current_slice_index: int,
+        window_center: Optional[float],
+        window_width: Optional[float],
+        use_rescaled_values: bool,
+        rescale_slope: Optional[float],
+        rescale_intercept: Optional[float]
+    ) -> Optional[Image.Image]:
+        """
+        Create a projection image from multiple slices.
+        
+        Args:
+            dataset: Current dataset (for metadata)
+            current_studies: Dictionary of studies
+            current_study_uid: Current study UID
+            current_series_uid: Current series UID
+            current_slice_index: Current slice index
+            window_center: Window center value
+            window_width: Window width value
+            use_rescaled_values: Whether to use rescaled values
+            rescale_slope: Rescale slope
+            rescale_intercept: Rescale intercept
+            
+        Returns:
+            PIL Image or None if projection failed
+        """
+        # Get series datasets
+        if not current_studies or not current_study_uid or not current_series_uid:
+            return None
+        
+        if (current_study_uid not in current_studies or 
+            current_series_uid not in current_studies[current_study_uid]):
+            return None
+        
+        series_datasets = current_studies[current_study_uid][current_series_uid]
+        total_slices = len(series_datasets)
+        
+        if total_slices < 2:
+            # Need at least 2 slices for projection
+            return None
+        
+        # Calculate slice range
+        # Start from current_slice_index, gather projection_slice_count slices
+        start_slice = max(0, current_slice_index)
+        end_slice = min(total_slices - 1, current_slice_index + self.projection_slice_count - 1)
+        
+        # Ensure we have at least 2 slices
+        if end_slice - start_slice + 1 < 2:
+            # Not enough slices available
+            return None
+        
+        # Gather slices for projection
+        projection_slices = []
+        for i in range(start_slice, end_slice + 1):
+            if 0 <= i < total_slices:
+                projection_slices.append(series_datasets[i])
+        
+        if len(projection_slices) < 2:
+            return None
+        
+        # Calculate projection based on type
+        projection_array = None
+        if self.projection_type == "aip":
+            projection_array = self.dicom_processor.average_intensity_projection(projection_slices)
+        elif self.projection_type == "mip":
+            projection_array = self.dicom_processor.maximum_intensity_projection(projection_slices)
+        elif self.projection_type == "minip":
+            projection_array = self.dicom_processor.minimum_intensity_projection(projection_slices)
+        
+        if projection_array is None:
+            return None
+        
+        # Apply rescale if needed
+        if use_rescaled_values and rescale_slope is not None and rescale_intercept is not None:
+            projection_array = projection_array.astype(np.float32) * float(rescale_slope) + float(rescale_intercept)
+        
+        # Apply window/level
+        if window_center is not None and window_width is not None:
+            processed_array = self.dicom_processor.apply_window_level(
+                projection_array,
+                window_center,
+                window_width
+            )
+        else:
+            # No window/level, normalize to 0-255
+            processed_array = projection_array.astype(np.float32)
+            if processed_array.max() > processed_array.min():
+                processed_array = ((processed_array - processed_array.min()) / 
+                                 (processed_array.max() - processed_array.min()) * 255.0)
+            processed_array = np.clip(processed_array, 0, 255).astype(np.uint8)
+        
+        # Convert to PIL Image
+        try:
+            if len(processed_array.shape) == 2:
+                # Grayscale
+                image = Image.fromarray(processed_array, mode='L')
+            elif len(processed_array.shape) == 3 and processed_array.shape[2] == 3:
+                # RGB
+                image = Image.fromarray(processed_array, mode='RGB')
+            else:
+                # Fallback
+                image = Image.fromarray(processed_array)
+            return image
+        except Exception as e:
+            print(f"Error converting projection array to PIL Image: {e}")
+            return None
     
     def display_slice(
         self,
@@ -125,7 +282,8 @@ class SliceDisplayManager:
         current_studies: dict,
         current_study_uid: str,
         current_series_uid: str,
-        current_slice_index: int
+        current_slice_index: int,
+        preserve_view_override: Optional[bool] = None
     ) -> None:
         """
         Display a DICOM slice.
@@ -407,49 +565,89 @@ class SliceDisplayManager:
             # For same series, preserve existing window/level values (already set above)
             
             # Convert to image
-            # If same series and we have preserved window/level values, use them
-            # print(f"[DISPLAY] About to convert dataset to image...")
-            # print(f"[DISPLAY] Window center: {window_center}, Window width: {window_width}")
-            # print(f"[DISPLAY] Use rescaled values: {use_rescaled_values}")
-            try:
-                if is_same_series and window_center is not None and window_width is not None:
-                    # print(f"[DISPLAY] Converting with stored window/level...")
-                    image = self.dicom_processor.dataset_to_image(
+            image = None
+            # Check if projection mode is enabled
+            if self.projection_enabled:
+                # Projection mode: gather slices and calculate projection
+                try:
+                    image = self._create_projection_image(
                         dataset,
-                        window_center=window_center,
-                        window_width=window_width,
-                        apply_rescale=use_rescaled_values
+                        current_studies,
+                        current_study_uid,
+                        current_series_uid,
+                        current_slice_index,
+                        window_center,
+                        window_width,
+                        use_rescaled_values,
+                        rescale_slope,
+                        rescale_intercept
                     )
-                else:
-                    # print(f"[DISPLAY] Converting with auto window/level...")
-                    image = self.dicom_processor.dataset_to_image(
-                        dataset,
-                        apply_rescale=use_rescaled_values
-                    )
-                # print(f"[DISPLAY] Image conversion complete: {image is not None}")
-                if image is None:
-                    # Image conversion failed - this is already handled by dataset_to_image returning None
-                    # print(f"[DISPLAY] Image is None, returning")
-                    return
-            except (MemoryError, ValueError, AttributeError, RuntimeError) as e:
-                # Pixel array access errors during image conversion
-                error_type = type(e).__name__
-                error_msg = f"Error converting dataset to image ({error_type}): {str(e)}"
-                # print(error_msg)
-                # Re-raise to be caught by outer exception handler
-                raise RuntimeError(error_msg) from e
-            except Exception as e:
-                # Other unexpected errors
-                error_type = type(e).__name__
-                error_msg = f"Unexpected error converting dataset to image ({error_type}): {str(e)}"
-                # print(error_msg)
-                raise RuntimeError(error_msg) from e
+                    if image is None:
+                        # Projection failed (e.g., not enough slices available near end of dataset)
+                        # Fall back to normal display but keep projection enabled
+                        # so it works again when scrolling to a valid position
+                        # Continue with normal dataset conversion below
+                        pass
+                except Exception as e:
+                    # Projection error - fall back to normal display
+                    # Only disable on actual errors, not just insufficient slices
+                    error_type = type(e).__name__
+                    print(f"Error creating projection image ({error_type}): {e}")
+                    # Don't disable projection mode for insufficient slices - only for actual errors
+                    # Keep projection enabled so user can scroll back and it will work again
+                    # Continue with normal dataset conversion below
+                    pass
+            
+            # Normal mode or projection fallback: convert single dataset to image
+            # If projection failed (image is None) or projection is disabled, convert normally
+            if image is None:
+                # If same series and we have preserved window/level values, use them
+                # print(f"[DISPLAY] About to convert dataset to image...")
+                # print(f"[DISPLAY] Window center: {window_center}, Window width: {window_width}")
+                # print(f"[DISPLAY] Use rescaled values: {use_rescaled_values}")
+                try:
+                    if is_same_series and window_center is not None and window_width is not None:
+                        # print(f"[DISPLAY] Converting with stored window/level...")
+                        image = self.dicom_processor.dataset_to_image(
+                            dataset,
+                            window_center=window_center,
+                            window_width=window_width,
+                            apply_rescale=use_rescaled_values
+                        )
+                    else:
+                        # print(f"[DISPLAY] Converting with auto window/level...")
+                        image = self.dicom_processor.dataset_to_image(
+                            dataset,
+                            apply_rescale=use_rescaled_values
+                        )
+                    # print(f"[DISPLAY] Image conversion complete: {image is not None}")
+                    if image is None:
+                        # Image conversion failed - this is already handled by dataset_to_image returning None
+                        # print(f"[DISPLAY] Image is None, returning")
+                        return
+                except (MemoryError, ValueError, AttributeError, RuntimeError) as e:
+                    # Pixel array access errors during image conversion
+                    error_type = type(e).__name__
+                    error_msg = f"Error converting dataset to image ({error_type}): {str(e)}"
+                    # print(error_msg)
+                    # Re-raise to be caught by outer exception handler
+                    raise RuntimeError(error_msg) from e
+                except Exception as e:
+                    # Other unexpected errors
+                    error_type = type(e).__name__
+                    error_msg = f"Unexpected error converting dataset to image ({error_type}): {str(e)}"
+                    # print(error_msg)
+                    raise RuntimeError(error_msg) from e
             
             # Restore inversion state for this series if it exists
             # Only pass apply_inversion when preserve_view=False (new slice)
             # When preserve_view=True (scrolling), pass None so set_image() knows it's a new slice
             apply_inversion = None
             preserve_view = is_same_series and not is_new_study_series
+            force_fit_to_view = False
+            if preserve_view_override is not None:
+                preserve_view = preserve_view_override
+                force_fit_to_view = not preserve_view_override
             if not preserve_view:
                 # New slice - apply stored inversion state if it exists
                 if series_identifier and series_identifier in self.view_state_manager.series_defaults:
@@ -461,28 +659,29 @@ class SliceDisplayManager:
             # This allows set_image() to detect it's a new slice and store new original_image
             
             # Set image in viewer - preserve zoom/pan if same series
-            print(f"[DISPLAY] About to set image in viewer...")
-            print(f"[DISPLAY] Slice index: {current_slice_index}, Preserve view: {preserve_view}")
-            print(f"[DISPLAY] Image size: {image.size if image else 'None'}, mode: {image.mode if image else 'None'}")
-            print(f"[DISPLAY] Image id: {id(image) if image else 'None'}")
-            print(f"[DISPLAY] Apply inversion: {apply_inversion}")
+            # print(f"[DISPLAY] About to set image in viewer...")
+            # print(f"[DISPLAY] Slice index: {current_slice_index}, Preserve view: {preserve_view}")
+            # print(f"[DISPLAY] Image size: {image.size if image else 'None'}, mode: {image.mode if image else 'None'}")
+            # print(f"[DISPLAY] Image id: {id(image) if image else 'None'}")
+            # print(f"[DISPLAY] Apply inversion: {apply_inversion}")
             self.image_viewer.set_image(image, preserve_view=preserve_view, apply_inversion=apply_inversion)
-            print(f"[DISPLAY] Image set in viewer successfully")
+            # print(f"[DISPLAY] Image set in viewer successfully")
             
-            # If new study/series, fit to view and center
-            if is_new_study_series:
+            # If new study/series or explicitly requested, fit to view and center
+            if is_new_study_series or force_fit_to_view:
                 self.image_viewer.fit_to_view(center_image=True)
-                # Store zoom and scroll positions after fit_to_view
-                stored_zoom = self.image_viewer.current_zoom
-                stored_h_scroll = self.image_viewer.horizontalScrollBar().value()
-                stored_v_scroll = self.image_viewer.verticalScrollBar().value()
-                # Update series defaults with zoom/pan info if we have window/level already stored
-                if series_identifier in self.view_state_manager.series_defaults:
-                    self.view_state_manager.series_defaults[series_identifier].update({
-                        'zoom': stored_zoom,
-                        'h_scroll': stored_h_scroll,
-                        'v_scroll': stored_v_scroll
-                    })
+                if is_new_study_series:
+                    # Store zoom and scroll positions after fit_to_view
+                    stored_zoom = self.image_viewer.current_zoom
+                    stored_h_scroll = self.image_viewer.horizontalScrollBar().value()
+                    stored_v_scroll = self.image_viewer.verticalScrollBar().value()
+                    # Update series defaults with zoom/pan info if we have window/level already stored
+                    if series_identifier in self.view_state_manager.series_defaults:
+                        self.view_state_manager.series_defaults[series_identifier].update({
+                            'zoom': stored_zoom,
+                            'h_scroll': stored_h_scroll,
+                            'v_scroll': stored_v_scroll
+                        })
             
             # Update metadata panel
             self.metadata_panel.set_dataset(dataset)
@@ -608,10 +807,46 @@ class SliceDisplayManager:
                 if (current_study_uid in current_studies and 
                     current_series_uid in current_studies[current_study_uid]):
                     total_slices = len(current_studies[current_study_uid][current_series_uid])
+            
+            # Calculate projection information if enabled
+            projection_start_slice = None
+            projection_end_slice = None
+            projection_total_thickness = None
+            
+            if self.projection_enabled and total_slices > 0:
+                # Calculate projection slice range using the same logic as _create_projection_image()
+                projection_start_slice = max(0, current_slice_index)
+                projection_end_slice = min(total_slices - 1, current_slice_index + self.projection_slice_count - 1)
+                
+                # Calculate total slice thickness by summing thickness from all slices in the range
+                if (current_study_uid in current_studies and 
+                    current_series_uid in current_studies[current_study_uid]):
+                    series_datasets = current_studies[current_study_uid][current_series_uid]
+                    
+                    total_thickness = 0.0
+                    thickness_count = 0
+                    for i in range(projection_start_slice, projection_end_slice + 1):
+                        if 0 <= i < len(series_datasets):
+                            # series_datasets is a list of datasets (tuples were unpacked during organization)
+                            slice_dataset = series_datasets[i]
+                            thickness = get_slice_thickness(slice_dataset)
+                            if thickness is not None:
+                                total_thickness += thickness
+                                thickness_count += 1
+                    
+                    # Only set total thickness if we found at least one valid thickness value
+                    if thickness_count > 0:
+                        projection_total_thickness = total_thickness
+            
             self.overlay_manager.create_overlay_items(
                 self.image_viewer.scene,
                 parser,
-                total_slices=total_slices if total_slices > 0 else None
+                total_slices=total_slices if total_slices > 0 else None,
+                projection_enabled=self.projection_enabled,
+                projection_start_slice=projection_start_slice,
+                projection_end_slice=projection_end_slice,
+                projection_total_thickness=projection_total_thickness,
+                projection_type=self.projection_type if self.projection_enabled else None
             )
             
             # Extract pixel spacing and set on measurement tool
@@ -820,7 +1055,7 @@ class SliceDisplayManager:
         Args:
             slice_index: New slice index
         """
-        print(f"[SLICE] handle_slice_changed called with slice_index: {slice_index}")
+        # print(f"[SLICE] handle_slice_changed called with slice_index: {slice_index}")
         if not self.current_studies or not self.current_series_uid:
             return
         
@@ -828,8 +1063,8 @@ class SliceDisplayManager:
         if 0 <= slice_index < len(datasets):
             self.current_slice_index = slice_index
             dataset = datasets[slice_index]
-            print(f"[SLICE] Dataset SOPInstanceUID: {getattr(dataset, 'SOPInstanceUID', 'N/A')}")
-            print(f"[SLICE] Dataset InstanceNumber: {getattr(dataset, 'InstanceNumber', 'N/A')}")
+            # print(f"[SLICE] Dataset SOPInstanceUID: {getattr(dataset, 'SOPInstanceUID', 'N/A')}")
+            # print(f"[SLICE] Dataset InstanceNumber: {getattr(dataset, 'InstanceNumber', 'N/A')}")
             self.display_slice(
                 dataset,
                 self.current_studies,

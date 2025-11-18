@@ -78,6 +78,9 @@ class ImageViewer(QGraphicsView):
     annotation_options_requested = Signal()  # Emitted when annotation options dialog is requested
     pixel_info_changed = Signal(str, int, int, int)  # Emitted when pixel info changes (pixel_value_str, x, y, z)
     files_dropped = Signal(list)  # Emitted when files/folders are dropped (list of paths)
+    projection_enabled_changed = Signal(bool)  # Emitted when projection enabled state changes from context menu
+    projection_type_changed = Signal(str)  # Emitted when projection type changes from context menu ("aip", "mip", "minip")
+    projection_slice_count_changed = Signal(int)  # Emitted when projection slice count changes from context menu
     
     def __init__(self, parent: Optional[QWidget] = None, config_manager=None):
         """
@@ -172,6 +175,11 @@ class ImageViewer(QGraphicsView):
         # Callback to get ROI from item (set from main.py)
         self.get_roi_from_item_callback: Optional[Callable[[object], Optional[object]]] = None
         self.delete_all_rois_callback: Optional[Callable[[], None]] = None
+        
+        # Callbacks for projection state (set from main.py)
+        self.get_projection_enabled_callback: Optional[Callable[[], bool]] = None
+        self.get_projection_type_callback: Optional[Callable[[], str]] = None
+        self.get_projection_slice_count_callback: Optional[Callable[[], int]] = None
         
         # Sensitivity factors for window/level adjustment (pixels to units)
         # These will be set dynamically based on current ranges
@@ -287,12 +295,12 @@ class ImageViewer(QGraphicsView):
             preserve_view: If True, preserve current zoom and pan position
             apply_inversion: Optional bool to override inversion state. If None, uses self.image_inverted
         """
-        print(f"[VIEWER] set_image called")
-        print(f"[VIEWER] Image size: {image.size}, mode: {image.mode}, preserve_view: {preserve_view}")
-        print(f"[VIEWER] Image id: {id(image)}")
-        print(f"[VIEWER] Apply inversion: {apply_inversion}")
-        print(f"[VIEWER] Current image_inverted: {self.image_inverted}")
-        print(f"[VIEWER] Current original_image id: {id(self.original_image) if self.original_image else 'None'}")
+        # print(f"[VIEWER] set_image called")
+        # print(f"[VIEWER] Image size: {image.size}, mode: {image.mode}, preserve_view: {preserve_view}")
+        # print(f"[VIEWER] Image id: {id(image)}")
+        # print(f"[VIEWER] Apply inversion: {apply_inversion}")
+        # print(f"[VIEWER] Current image_inverted: {self.image_inverted}")
+        # print(f"[VIEWER] Current original_image id: {id(self.original_image) if self.original_image else 'None'}")
         
         # Store original image for inversion
         # When preserve_view=False: new slice, always store new original_image
@@ -300,11 +308,11 @@ class ImageViewer(QGraphicsView):
         # When preserve_view=True and apply_inversion is None: new slice (scrolling), store new original_image
         if not preserve_view:
             # New slice - always store new original image (non-inverted)
-            print(f"[VIEWER] Storing new original_image (preserve_view=False)")
-            print(f"[VIEWER] Before: original_image id = {id(self.original_image) if self.original_image else 'None'}")
-            print(f"[VIEWER] Image to copy id = {id(image)}")
+            # print(f"[VIEWER] Storing new original_image (preserve_view=False)")
+            # print(f"[VIEWER] Before: original_image id = {id(self.original_image) if self.original_image else 'None'}")
+            # print(f"[VIEWER] Image to copy id = {id(image)}")
             self.original_image = image.copy()
-            print(f"[VIEWER] After: original_image id = {id(self.original_image)}")
+            # print(f"[VIEWER] After: original_image id = {id(self.original_image)}")
             
             # Update inversion state FIRST before determining if we need to invert
             # If apply_inversion is provided, use it (stored state for this series)
@@ -323,8 +331,8 @@ class ImageViewer(QGraphicsView):
             if should_invert:
                 image = self._apply_inversion(image)
         elif preserve_view:
-            print(f"[VIEWER] preserve_view=True branch")
-            print(f"[VIEWER] apply_inversion = {apply_inversion}")
+            # print(f"[VIEWER] preserve_view=True branch")
+            # print(f"[VIEWER] apply_inversion = {apply_inversion}")
             # Same series - might be same slice (inversion toggle) or new slice (scrolling)
             if apply_inversion is not None:
                 # Same slice - inversion toggle, preserve existing original_image
@@ -338,15 +346,15 @@ class ImageViewer(QGraphicsView):
                         image = self.original_image
             else:
                 # New slice (scrolling within same series) - store new original_image
-                print(f"[VIEWER] Storing new original_image (scrolling within same series)")
-                print(f"[VIEWER] Before: original_image id = {id(self.original_image) if self.original_image else 'None'}")
-                print(f"[VIEWER] Image to copy id = {id(image)}")
+                # print(f"[VIEWER] Storing new original_image (scrolling within same series)")
+                # print(f"[VIEWER] Before: original_image id = {id(self.original_image) if self.original_image else 'None'}")
+                # print(f"[VIEWER] Image to copy id = {id(image)}")
                 self.original_image = image.copy()
-                print(f"[VIEWER] After: original_image id = {id(self.original_image)}")
+                # print(f"[VIEWER] After: original_image id = {id(self.original_image)}")
                 # Don't reset inversion state - preserve it for the series
                 # Apply inversion if the series is currently inverted
                 if self.image_inverted:
-                    print(f"[VIEWER] Applying inversion to new slice (series is inverted)")
+                    # print(f"[VIEWER] Applying inversion to new slice (series is inverted)")
                     image = self._apply_inversion(image)
                 # If image_inverted is False, image is already non-inverted (from dataset), use as-is
         # If preserve_view is True and apply_inversion is None,
@@ -403,14 +411,14 @@ class ImageViewer(QGraphicsView):
         
         # print(f"[VIEWER] QImage created, converting to QPixmap...")
         pixmap = QPixmap.fromImage(qimage)
-        print(f"[VIEWER] QPixmap created: {pixmap.width()}x{pixmap.height()}, isNull: {pixmap.isNull()}")
-        print(f"[VIEWER] Pixmap cache key: {pixmap.cacheKey() if hasattr(pixmap, 'cacheKey') else 'N/A'}")
+        # print(f"[VIEWER] QPixmap created: {pixmap.width()}x{pixmap.height()}, isNull: {pixmap.isNull()}")
+        # print(f"[VIEWER] Pixmap cache key: {pixmap.cacheKey() if hasattr(pixmap, 'cacheKey') else 'N/A'}")
         
         # Remove old image item only
         # Note: ROIs and overlays will be preserved and re-added by their managers
         if self.image_item is not None:
             old_pixmap = self.image_item.pixmap()
-            print(f"[VIEWER] Removing old image item, pixmap cache key: {old_pixmap.cacheKey() if old_pixmap and hasattr(old_pixmap, 'cacheKey') else 'None'}")
+            # print(f"[VIEWER] Removing old image item, pixmap cache key: {old_pixmap.cacheKey() if old_pixmap and hasattr(old_pixmap, 'cacheKey') else 'None'}")
             self.scene.removeItem(self.image_item)
         
         # Create new image item
@@ -418,16 +426,16 @@ class ImageViewer(QGraphicsView):
         self.image_item = QGraphicsPixmapItem(pixmap)
         # Set image item to lowest Z-value so other items appear on top
         self.image_item.setZValue(0)
-        print(f"[VIEWER] New image item created, pixmap cache key: {self.image_item.pixmap().cacheKey() if self.image_item.pixmap() and hasattr(self.image_item.pixmap(), 'cacheKey') else 'None'}")
+        # print(f"[VIEWER] New image item created, pixmap cache key: {self.image_item.pixmap().cacheKey() if self.image_item.pixmap() and hasattr(self.image_item.pixmap(), 'cacheKey') else 'None'}")
         # print(f"[VIEWER] Adding item to scene...")
         self.scene.addItem(self.image_item)
-        print(f"[VIEWER] Item added to scene successfully")
+        # print(f"[VIEWER] Item added to scene successfully")
         
         # Force scene and viewport update to ensure display refreshes
-        print(f"[VIEWER] Forcing scene and viewport update...")
+        # print(f"[VIEWER] Forcing scene and viewport update...")
         self.scene.invalidate(self.scene.sceneRect())
         self.viewport().update()
-        print(f"[VIEWER] Scene and viewport updated")
+        # print(f"[VIEWER] Scene and viewport updated")
         
         # Set scene rect to image dimensions to ensure proper overlay positioning
         # print(f"[VIEWER] Getting image bounding rect...")
@@ -1256,6 +1264,70 @@ class ImageViewer(QGraphicsView):
                         zoom_action.triggered.connect(
                             lambda: self.context_menu_scroll_wheel_mode_changed.emit("zoom")
                         )
+                        
+                        context_menu.addSeparator()
+                        
+                        # Combine Slices submenu
+                        combine_menu = context_menu.addMenu("Combine...")
+                        
+                        # Enable/disable toggle
+                        enable_action = combine_menu.addAction("Enable Combine Slices")
+                        enable_action.setCheckable(True)
+                        if self.get_projection_enabled_callback:
+                            enable_action.setChecked(self.get_projection_enabled_callback())
+                        enable_action.triggered.connect(
+                            lambda checked: self.projection_enabled_changed.emit(checked)
+                        )
+                        
+                        combine_menu.addSeparator()
+                        
+                        # Projection type submenu
+                        projection_type_menu = combine_menu.addMenu("Projection Type")
+                        from PySide6.QtGui import QActionGroup
+                        projection_type_group = QActionGroup(projection_type_menu)
+                        projection_type_group.setExclusive(True)
+                        
+                        aip_action = projection_type_menu.addAction("Average (AIP)")
+                        aip_action.setCheckable(True)
+                        projection_type_group.addAction(aip_action)
+                        if self.get_projection_type_callback:
+                            aip_action.setChecked(self.get_projection_type_callback() == "aip")
+                        aip_action.triggered.connect(
+                            lambda: self.projection_type_changed.emit("aip")
+                        )
+                        
+                        mip_action = projection_type_menu.addAction("Maximum (MIP)")
+                        mip_action.setCheckable(True)
+                        projection_type_group.addAction(mip_action)
+                        if self.get_projection_type_callback:
+                            mip_action.setChecked(self.get_projection_type_callback() == "mip")
+                        mip_action.triggered.connect(
+                            lambda: self.projection_type_changed.emit("mip")
+                        )
+                        
+                        minip_action = projection_type_menu.addAction("Minimum (MinIP)")
+                        minip_action.setCheckable(True)
+                        projection_type_group.addAction(minip_action)
+                        if self.get_projection_type_callback:
+                            minip_action.setChecked(self.get_projection_type_callback() == "minip")
+                        minip_action.triggered.connect(
+                            lambda: self.projection_type_changed.emit("minip")
+                        )
+                        
+                        # Slice count submenu
+                        slice_count_menu = combine_menu.addMenu("Slice Count")
+                        slice_count_group = QActionGroup(slice_count_menu)
+                        slice_count_group.setExclusive(True)
+                        
+                        for count in [2, 3, 4, 6, 8]:
+                            count_action = slice_count_menu.addAction(str(count))
+                            count_action.setCheckable(True)
+                            slice_count_group.addAction(count_action)
+                            if self.get_projection_slice_count_callback:
+                                count_action.setChecked(self.get_projection_slice_count_callback() == count)
+                            count_action.triggered.connect(
+                                lambda checked, c=count: self.projection_slice_count_changed.emit(c) if checked else None
+                            )
                         
                         context_menu.addSeparator()
                         

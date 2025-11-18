@@ -1134,8 +1134,8 @@ class DICOMProcessor:
         if pixel_array is None:
             # print(f"[PROCESSOR] Pixel array is None, returning None")
             return None
-        print(f"[PROCESSOR] Pixel array shape: {pixel_array.shape}, dtype: {pixel_array.dtype}")
-        print(f"[PROCESSOR] Pixel array min: {pixel_array.min()}, max: {pixel_array.max()}, mean: {pixel_array.mean():.2f}")
+        # print(f"[PROCESSOR] Pixel array shape: {pixel_array.shape}, dtype: {pixel_array.dtype}")
+        # print(f"[PROCESSOR] Pixel array min: {pixel_array.min()}, max: {pixel_array.max()}, mean: {pixel_array.mean():.2f}")
         
         # Detect if this is a color image
         is_color, photometric_interpretation = DICOMProcessor.is_color_image(dataset)
@@ -1409,6 +1409,35 @@ class DICOMProcessor:
         mip = np.max(stacked, axis=0).astype(np.float32)
         
         return mip
+    
+    @staticmethod
+    def minimum_intensity_projection(slices: List[Dataset]) -> Optional[np.ndarray]:
+        """
+        Create Minimum Intensity Projection (MinIP) from multiple slices.
+        
+        Args:
+            slices: List of pydicom Dataset objects
+            
+        Returns:
+            NumPy array representing the MinIP, or None if failed
+        """
+        if not slices:
+            return None
+        
+        pixel_arrays = []
+        for dataset in slices:
+            pixel_array = DICOMProcessor.get_pixel_array(dataset)
+            if pixel_array is not None:
+                pixel_arrays.append(pixel_array)
+        
+        if not pixel_arrays:
+            return None
+        
+        # Stack arrays and compute minimum
+        stacked = np.stack(pixel_arrays, axis=0)
+        minip = np.min(stacked, axis=0).astype(np.float32)
+        
+        return minip
     
     @staticmethod
     def get_pixel_value_range(dataset: Dataset, apply_rescale: bool = False) -> Tuple[Optional[float], Optional[float]]:
