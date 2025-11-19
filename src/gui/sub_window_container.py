@@ -156,10 +156,15 @@ class SubWindowContainer(QFrame):
             if event.type() == QEvent.Type.MouseButtonPress:
                 # Click on image viewer - set focus to this container
                 if not self.is_focused:
+                    # CRITICAL: Accept the event to prevent ImageViewer from processing it
+                    # This prevents panning from starting before focus is set
+                    event.accept()
                     # Request focus change (will be handled by parent layout)
                     self.set_focused(True)
                     # Emit signal to notify parent
                     self.focus_changed.emit(True)
+                    # Return True to indicate we handled the event
+                    return True
         
         return super().eventFilter(obj, event)
     
@@ -172,9 +177,18 @@ class SubWindowContainer(QFrame):
         """
         if event.button() == Qt.MouseButton.LeftButton:
             if not self.is_focused:
+                # Accept the event to prevent propagation to ImageViewer
+                event.accept()
+                # Set focus to this container
                 self.set_focused(True)
+                # Emit signal to notify parent
                 self.focus_changed.emit(True)
-        elif event.button() == Qt.MouseButton.RightButton:
+                # Don't call super() to prevent ImageViewer from processing the event
+                # This prevents panning from starting
+                return
+        
+        # For right button or already focused, allow normal processing
+        if event.button() == Qt.MouseButton.RightButton:
             # Emit context menu request signal
             self.context_menu_requested.emit()
         
