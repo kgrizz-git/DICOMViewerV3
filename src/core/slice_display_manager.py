@@ -365,6 +365,8 @@ class SliceDisplayManager:
             # For new series, these should be None (we just cleared them above)
             window_center = self.view_state_manager.current_window_center
             window_width = self.view_state_manager.current_window_width
+            print(f"[DEBUG-WL] display_slice: Using window_center={window_center}, window_width={window_width}")
+            print(f"[DEBUG-WL]   is_new_study_series={is_new_study_series}, is_same_series={is_same_series}")
             # For new series, use the rescale state we just set; for same series, use existing state
             if is_new_study_series:
                 use_rescaled_values = (rescale_slope is not None and rescale_intercept is not None)
@@ -602,12 +604,13 @@ class SliceDisplayManager:
             # If projection failed (image is None) or projection is disabled, convert normally
             if image is None:
                 # If same series and we have preserved window/level values, use them
-                # print(f"[DISPLAY] About to convert dataset to image...")
-                # print(f"[DISPLAY] Window center: {window_center}, Window width: {window_width}")
-                # print(f"[DISPLAY] Use rescaled values: {use_rescaled_values}")
+                print(f"[DEBUG-WL] About to convert dataset to image...")
+                print(f"[DEBUG-WL]   Window center: {window_center}, Window width: {window_width}")
+                print(f"[DEBUG-WL]   Use rescaled values: {use_rescaled_values}")
+                print(f"[DEBUG-WL]   is_same_series: {is_same_series}")
                 try:
                     if is_same_series and window_center is not None and window_width is not None:
-                        # print(f"[DISPLAY] Converting with stored window/level...")
+                        print(f"[DEBUG-WL] Converting with stored window/level: center={window_center}, width={window_width}")
                         image = self.dicom_processor.dataset_to_image(
                             dataset,
                             window_center=window_center,
@@ -615,7 +618,7 @@ class SliceDisplayManager:
                             apply_rescale=use_rescaled_values
                         )
                     else:
-                        # print(f"[DISPLAY] Converting with auto window/level...")
+                        print(f"[DEBUG-WL] Converting with auto window/level (is_same_series={is_same_series}, window_center={window_center}, window_width={window_width})")
                         image = self.dicom_processor.dataset_to_image(
                             dataset,
                             apply_rescale=use_rescaled_values
