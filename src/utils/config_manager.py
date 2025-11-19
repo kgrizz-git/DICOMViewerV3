@@ -98,6 +98,7 @@ class ConfigManager:
             "measurement_line_color_b": 0,
             # ROI statistics visibility defaults
             "roi_default_visible_statistics": ["mean", "std", "min", "max", "count", "area"],  # Default visible statistics for new ROIs
+            "multi_window_layout": "1x1",  # Multi-window layout mode: "1x1", "1x2", "2x1", "2x2"
         }
         
         # Load configuration
@@ -299,6 +300,26 @@ class ConfigManager:
         """
         if mode in ["slice", "zoom"]:
             self.config["scroll_wheel_mode"] = mode
+            self.save_config()
+    
+    def get_multi_window_layout(self) -> str:
+        """
+        Get the multi-window layout mode.
+        
+        Returns:
+            Layout mode ("1x1", "1x2", "2x1", or "2x2")
+        """
+        return self.config.get("multi_window_layout", "1x1")
+    
+    def set_multi_window_layout(self, layout_mode: str) -> None:
+        """
+        Set the multi-window layout mode.
+        
+        Args:
+            layout_mode: Layout mode ("1x1", "1x2", "2x1", or "2x2")
+        """
+        if layout_mode in ["1x1", "1x2", "2x1", "2x2"]:
+            self.config["multi_window_layout"] = layout_mode
             self.save_config()
     
     def get_overlay_font_size(self) -> int:
