@@ -190,17 +190,49 @@ class DICOMLoader:
                 
                 if hasattr(dataset, 'PixelData'):
                     print(f"Pixel Data Length: {len(dataset.PixelData):,} bytes")
+                    
+                    # Check if data is compressed/encapsulated
+                    is_compressed = False
+                    compression_type = None
+                    if hasattr(dataset, 'file_meta') and hasattr(dataset.file_meta, 'TransferSyntaxUID'):
+                        transfer_syntax_str = str(dataset.file_meta.TransferSyntaxUID)
+                        # List of compressed transfer syntaxes
+                        compressed_syntaxes = {
+                            '1.2.840.10008.1.2.4': 'RLE Lossless',
+                            '1.2.840.10008.1.2.4.50': 'JPEG Baseline (Process 1)',
+                            '1.2.840.10008.1.2.4.51': 'JPEG Extended (Process 2 & 4)',
+                            '1.2.840.10008.1.2.4.57': 'JPEG Lossless, Non-Hierarchical (Process 14)',
+                            '1.2.840.10008.1.2.4.70': 'JPEG Lossless, Non-Hierarchical (Process 14 [Selection Value 1])',
+                            '1.2.840.10008.1.2.4.80': 'JPEG-LS Lossless',
+                            '1.2.840.10008.1.2.4.81': 'JPEG-LS Lossy (Near-Lossless)',
+                            '1.2.840.10008.1.2.4.90': 'JPEG 2000 Image Compression (Lossless Only)',
+                            '1.2.840.10008.1.2.4.91': 'JPEG 2000 Image Compression',
+                        }
+                        if transfer_syntax_str in compressed_syntaxes:
+                            is_compressed = True
+                            compression_type = compressed_syntaxes[transfer_syntax_str]
+                    
                     # Calculate expected vs actual
                     rows = int(getattr(dataset, 'Rows', 0))
                     cols = int(getattr(dataset, 'Columns', 0))
                     frames = num_frames
                     bits = int(getattr(dataset, 'BitsAllocated', 16))
-                    expected = rows * cols * frames * (bits // 8)
+                    samples = int(getattr(dataset, 'SamplesPerPixel', 1))  # Add SamplesPerPixel for color images
+                    expected = rows * cols * frames * samples * (bits // 8)
                     actual = len(dataset.PixelData)
                     padding = actual - expected
                     padding_pct = (padding / actual * 100) if actual > 0 else 0
+                    
                     print(f"Expected Size: {expected:,} bytes")
-                    print(f"Padding: {padding:,} bytes ({padding_pct:.1f}%)")
+                    if is_compressed:
+                        print(f"Compression: {compression_type} (data is compressed/encapsulated)")
+                        print(f"Size Difference: {padding:,} bytes ({padding_pct:.1f}%)")
+                        if padding < 0:
+                            print(f"  Note: Compressed data is smaller than uncompressed size (expected)")
+                    else:
+                        print(f"Padding: {padding:,} bytes ({padding_pct:.1f}%)")
+                        if padding < 0:
+                            print(f"  Warning: Actual size is smaller than expected - data may be compressed or encapsulated")
                 
                 # For Enhanced Multi-frame DICOMs, pre-load pixel array to ensure correct 3D shape
                 # This is necessary because Enhanced Multi-frame files may not expose pixel data

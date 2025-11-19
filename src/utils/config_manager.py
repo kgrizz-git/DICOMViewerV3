@@ -398,12 +398,12 @@ class ConfigManager:
             self.config["overlay_tags"] = {}
         
         if modality not in self.config["overlay_tags"]:
-            # Return default: current minimal fields in upper-left
+            # Return default: tags distributed across corners
             return {
-                "upper_left": ["PatientName", "StudyDate", "SeriesDescription", "InstanceNumber"],
-                "upper_right": [],
-                "lower_left": [],
-                "lower_right": []
+                "upper_left": ["PatientName", "PatientID", "StudyDate"],
+                "upper_right": ["StationName", "PerformedStationName"],
+                "lower_left": ["InstanceNumber", "SliceThickness", "SliceLocation"],
+                "lower_right": ["SeriesNumber", "SeriesDescription", "StudyDescription"]
             }
         
         tags = self.config["overlay_tags"][modality]
