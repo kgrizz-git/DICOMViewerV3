@@ -21,8 +21,8 @@ Requirements:
 
 from PySide6.QtWidgets import (QWidget, QHBoxLayout, QScrollArea, QVBoxLayout,
                                 QLabel, QFrame)
-from PySide6.QtCore import Qt, Signal, QSize, QPoint
-from PySide6.QtGui import QPixmap, QImage, QPainter, QFont, QColor
+from PySide6.QtCore import Qt, Signal, QSize, QPoint, QMimeData
+from PySide6.QtGui import QPixmap, QImage, QPainter, QFont, QColor, QDrag, QMouseEvent
 from typing import Optional, Dict
 from pydicom.dataset import Dataset
 from core.dicom_processor import DICOMProcessor
@@ -78,11 +78,71 @@ class SeriesThumbnail(QFrame):
             self.setStyleSheet("QFrame { border: 2px solid gray; }")
         self.update()
     
-    def mousePressEvent(self, event) -> None:
-        """Handle mouse click to select series."""
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        """Handle mouse click to select series or start drag operation."""
         if event.button() == Qt.MouseButton.LeftButton:
+            # Store press position for drag detection
+            self.drag_start_position = event.pos()
             self.clicked.emit(self.series_uid)
         super().mousePressEvent(event)
+    
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        """Handle mouse move to start drag operation."""
+        if not (event.buttons() & Qt.MouseButton.LeftButton):
+            return
+        
+        if not hasattr(self, 'drag_start_position'):
+            return
+        
+        # Check if mouse has moved enough to start drag
+        if (event.pos() - self.drag_start_position).manhattanLength() < 10:
+            return  # Not enough movement
+        
+        # Create drag object
+        drag = QDrag(self)
+        mime_data = QMimeData()
+        
+        # Set mime data with series UID
+        # Format: "series_uid:UID" (slice_index will default to 0 in drop handler)
+        mime_data.setText(f"series_uid:{self.series_uid}")
+        drag.setMimeData(mime_data)
+        
+        # Create drag pixmap (thumbnail of this series)
+        if self.thumbnail_image is not None:
+            # Create a small pixmap from thumbnail
+            pixmap = QPixmap.fromImage(self._thumbnail_to_qimage(self.thumbnail_image))
+            # Scale to reasonable drag size
+            drag_pixmap = pixmap.scaled(64, 64, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            drag.setPixmap(drag_pixmap)
+            drag.setHotSpot(QPoint(32, 32))
+        
+        # Execute drag
+        drag.exec(Qt.DropAction.CopyAction)
+    
+    def _thumbnail_to_qimage(self, pil_image) -> QImage:
+        """Convert PIL Image to QImage for drag pixmap."""
+        import numpy as np
+        try:
+            img_array = np.array(pil_image)
+            if not img_array.flags['C_CONTIGUOUS']:
+                img_array = np.ascontiguousarray(img_array)
+            
+            if pil_image.mode == 'L':
+                height, width = img_array.shape
+                return QImage(img_array.data, width, height, width, QImage.Format.Format_Grayscale8)
+            elif pil_image.mode == 'RGB':
+                height, width, channels = img_array.shape
+                return QImage(img_array.data, width, height, width * 3, QImage.Format.Format_RGB888)
+            else:
+                rgb_image = pil_image.convert('RGB')
+                img_array = np.array(rgb_image)
+                if not img_array.flags['C_CONTIGUOUS']:
+                    img_array = np.ascontiguousarray(img_array)
+                height, width, channels = img_array.shape
+                return QImage(img_array.data, width, height, width * 3, QImage.Format.Format_RGB888)
+        except Exception:
+            # Fallback: create empty QImage
+            return QImage(64, 64, QImage.Format.Format_RGB888)
     
     def paintEvent(self, event) -> None:
         """Paint thumbnail image with series number overlay."""

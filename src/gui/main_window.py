@@ -78,6 +78,7 @@ class MainWindow(QMainWindow):
     undo_tag_edit_requested = Signal()  # Emitted when undo tag edit is requested
     redo_tag_edit_requested = Signal()  # Emitted when redo tag edit is requested
     open_files_from_paths_requested = Signal(list)  # Emitted when files/folders are dropped (list of paths)
+    layout_changed = Signal(str)  # Emitted when layout mode changes ("1x1", "1x2", "2x1", "2x2")
     # Note: Cine control signals moved to CineControlsWidget
     # Keeping these signals for backward compatibility but they're not used anymore
     
@@ -223,6 +224,31 @@ class MainWindow(QMainWindow):
         annotation_options_action = QAction("Annotation &Options...", self)
         annotation_options_action.triggered.connect(self.annotation_options_requested.emit)
         view_menu.addAction(annotation_options_action)
+        
+        view_menu.addSeparator()
+        
+        # Layout submenu
+        layout_menu = view_menu.addMenu("&Layout")
+        self.layout_1x1_action = QAction("&1x1", self)
+        self.layout_1x1_action.setCheckable(True)
+        self.layout_1x1_action.setChecked(True)  # Default
+        self.layout_1x1_action.triggered.connect(lambda: self._on_layout_changed("1x1"))
+        layout_menu.addAction(self.layout_1x1_action)
+        
+        self.layout_1x2_action = QAction("&1x2", self)
+        self.layout_1x2_action.setCheckable(True)
+        self.layout_1x2_action.triggered.connect(lambda: self._on_layout_changed("1x2"))
+        layout_menu.addAction(self.layout_1x2_action)
+        
+        self.layout_2x1_action = QAction("&2x1", self)
+        self.layout_2x1_action.setCheckable(True)
+        self.layout_2x1_action.triggered.connect(lambda: self._on_layout_changed("2x1"))
+        layout_menu.addAction(self.layout_2x1_action)
+        
+        self.layout_2x2_action = QAction("&2x2", self)
+        self.layout_2x2_action.setCheckable(True)
+        self.layout_2x2_action.triggered.connect(lambda: self._on_layout_changed("2x2"))
+        layout_menu.addAction(self.layout_2x2_action)
         
         # Tools menu
         tools_menu = menubar.addMenu("&Tools")
@@ -1862,6 +1888,31 @@ class MainWindow(QMainWindow):
             self.open_files_from_paths_requested.emit(paths)
         
         event.acceptProposedAction()
+    
+    def _on_layout_changed(self, layout_mode: str) -> None:
+        """
+        Handle layout mode change from menu.
+        
+        Args:
+            layout_mode: Layout mode ("1x1", "1x2", "2x1", "2x2")
+        """
+        # Update menu checkmarks
+        self.layout_1x1_action.setChecked(layout_mode == "1x1")
+        self.layout_1x2_action.setChecked(layout_mode == "1x2")
+        self.layout_2x1_action.setChecked(layout_mode == "2x1")
+        self.layout_2x2_action.setChecked(layout_mode == "2x2")
+        
+        # Emit signal
+        self.layout_changed.emit(layout_mode)
+    
+    def set_layout_mode(self, layout_mode: str) -> None:
+        """
+        Set the layout mode (called from outside to update menu state).
+        
+        Args:
+            layout_mode: Layout mode ("1x1", "1x2", "2x1", "2x2")
+        """
+        self._on_layout_changed(layout_mode)
     
     def closeEvent(self, event) -> None:
         """

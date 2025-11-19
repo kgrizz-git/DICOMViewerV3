@@ -76,11 +76,13 @@ class ImageViewer(QGraphicsView):
     clear_measurements_requested = Signal()  # Emitted when clear measurements is requested
     toggle_overlay_requested = Signal()  # Emitted when toggle overlay is requested
     annotation_options_requested = Signal()  # Emitted when annotation options dialog is requested
+    assign_series_requested = Signal(str)  # Emitted when series assignment is requested (series_uid)
     pixel_info_changed = Signal(str, int, int, int)  # Emitted when pixel info changes (pixel_value_str, x, y, z)
     files_dropped = Signal(list)  # Emitted when files/folders are dropped (list of paths)
     projection_enabled_changed = Signal(bool)  # Emitted when projection enabled state changes from context menu
     projection_type_changed = Signal(str)  # Emitted when projection type changes from context menu ("aip", "mip", "minip")
     projection_slice_count_changed = Signal(int)  # Emitted when projection slice count changes from context menu
+    layout_change_requested = Signal(str)  # Emitted when layout change is requested from context menu ("1x1", "1x2", "2x1", "2x2")
     
     def __init__(self, parent: Optional[QWidget] = None, config_manager=None):
         """
@@ -147,6 +149,7 @@ class ImageViewer(QGraphicsView):
         
         # Callback to get cine loop state (set from main.py)
         self.get_cine_loop_state_callback: Optional[Callable[[], bool]] = None
+        self.get_available_series_callback: Optional[Callable[[], list]] = None  # Returns list of (series_uid, series_name) tuples
         
         # Rescale toggle state (for context menu)
         self.use_rescaled_values = False
@@ -1158,6 +1161,41 @@ class ImageViewer(QGraphicsView):
                         # Note: Text will be updated dynamically by main window based on visibility
                         toggle_navigator_action = context_menu.addAction("Toggle Series Navigator (N)")
                         toggle_navigator_action.triggered.connect(self.toggle_series_navigator_requested.emit)
+                        
+                        # Assign Series submenu (for multi-window layout)
+                        assign_series_menu = context_menu.addMenu("Assign Series to Focused Window")
+                        if hasattr(self, 'get_available_series_callback') and self.get_available_series_callback:
+                            series_list = self.get_available_series_callback()
+                            if series_list:
+                                for series_uid, series_name in series_list:
+                                    action = assign_series_menu.addAction(series_name)
+                                    action.triggered.connect(lambda checked, uid=series_uid: self.assign_series_requested.emit(uid))
+                            else:
+                                assign_series_menu.setEnabled(False)
+                        else:
+                            assign_series_menu.setEnabled(False)
+                        
+                        context_menu.addSeparator()
+                        
+                        # Layout submenu
+                        layout_menu = context_menu.addMenu("Layout")
+                        layout_1x1_action = layout_menu.addAction("1x1")
+                        layout_1x1_action.setCheckable(True)
+                        layout_1x1_action.triggered.connect(lambda: self.layout_change_requested.emit("1x1"))
+                        
+                        layout_1x2_action = layout_menu.addAction("1x2")
+                        layout_1x2_action.setCheckable(True)
+                        layout_1x2_action.triggered.connect(lambda: self.layout_change_requested.emit("1x2"))
+                        
+                        layout_2x1_action = layout_menu.addAction("2x1")
+                        layout_2x1_action.setCheckable(True)
+                        layout_2x1_action.triggered.connect(lambda: self.layout_change_requested.emit("2x1"))
+                        
+                        layout_2x2_action = layout_menu.addAction("2x2")
+                        layout_2x2_action.setCheckable(True)
+                        layout_2x2_action.triggered.connect(lambda: self.layout_change_requested.emit("2x2"))
+                        
+                        # Note: Checkmarks will be updated by main.py based on current layout
                         
                         context_menu.addSeparator()
                         

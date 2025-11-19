@@ -42,6 +42,8 @@ from gui.dialogs.tag_viewer_dialog import TagViewerDialog
 from gui.dialogs.overlay_config_dialog import OverlayConfigDialog
 from gui.dialogs.annotation_options_dialog import AnnotationOptionsDialog
 from gui.image_viewer import ImageViewer
+from gui.multi_window_layout import MultiWindowLayout
+from gui.sub_window_container import SubWindowContainer
 from gui.metadata_panel import MetadataPanel
 from gui.window_level_controls import WindowLevelControls
 from gui.roi_statistics_panel import ROIStatisticsPanel
@@ -110,11 +112,28 @@ class DICOMViewerApp(QObject):
         
         # Create components
         self.file_dialog = FileDialog(self.config_manager)
-        self.image_viewer = ImageViewer(config_manager=self.config_manager)
         
-        # Set image viewer reference in main window for theme updates
-        self.main_window.image_viewer = self.image_viewer
-        # Apply theme again to set background color now that image_viewer is assigned
+        # Create multi-window layout instead of single image viewer
+        self.multi_window_layout = MultiWindowLayout(config_manager=self.config_manager)
+        
+        # Get initial layout from config
+        initial_layout = self.config_manager.get_multi_window_layout()
+        self.multi_window_layout.set_layout(initial_layout)
+        
+        # For backward compatibility, keep image_viewer reference pointing to first subwindow's viewer
+        # This will be updated when subwindows are created
+        self.image_viewer: Optional[ImageViewer] = None
+        
+        # Per-subwindow managers (will be created dynamically)
+        # Structure: {subwindow_index: {manager_name: manager_instance}}
+        self.subwindow_managers: Dict[int, Dict] = {}
+        
+        # Currently focused subwindow index
+        self.focused_subwindow_index: int = 0
+        
+        # Set image viewer reference in main window for theme updates (will be updated)
+        self.main_window.image_viewer = None  # Will be set after subwindows are created
+        # Apply theme again to set background color
         self.main_window._apply_theme()
         self.metadata_panel = MetadataPanel(config_manager=self.config_manager)
         self.metadata_panel.set_history_manager(self.tag_edit_history)
@@ -145,15 +164,70 @@ class DICOMViewerApp(QObject):
         # Overlay manager initializes to state 0 (all shown) by default
         # Do not load state from config - always start with everything visible
         
-        # Set scroll wheel mode
+        # Set scroll wheel mode (will be applied to subwindows after creation)
         scroll_mode = self.config_manager.get_scroll_wheel_mode()
-        self.image_viewer.set_scroll_wheel_mode(scroll_mode)
         self.slice_navigator.set_scroll_wheel_mode(scroll_mode)
         
         # Set up UI layout
         self._setup_ui()
         
-        # Current data
+        # Initialize subwindow data structure (needed by _initialize_subwindow_managers)
+        # Structure: {subwindow_index: {current_dataset, current_slice_index, current_series_uid, current_study_uid}}
+        self.subwindow_data: Dict[int, Dict] = {}
+        
+        # Initialize per-subwindow managers for all subwindows
+        self._initialize_subwindow_managers()
+        
+        # Ensure focused subwindow has managers and update references
+        # This must happen before _initialize_handlers() which needs these references
+        print(f"DEBUG: Setting up focused subwindow references")
+        print(f"DEBUG: subwindow_managers keys: {list(self.subwindow_managers.keys())}")
+        
+        focused_subwindow = self.multi_window_layout.get_focused_subwindow()
+        print(f"DEBUG: Focused subwindow: {focused_subwindow}")
+        
+        if focused_subwindow:
+            subwindows = self.multi_window_layout.get_all_subwindows()
+            print(f"DEBUG: Focused subwindow in subwindows list: {focused_subwindow in subwindows}")
+            if focused_subwindow in subwindows:
+                focused_idx = subwindows.index(focused_subwindow)
+                print(f"DEBUG: Focused subwindow index: {focused_idx}")
+                print(f"DEBUG: Index in managers: {focused_idx in self.subwindow_managers}")
+                if focused_idx in self.subwindow_managers:
+                    # Update references immediately so _initialize_handlers() can use them
+                    print(f"DEBUG: Calling _update_focused_subwindow_references()")
+                    self._update_focused_subwindow_references()
+        
+        # If still no managers set, ensure at least the first subwindow's managers are used
+        if not hasattr(self, 'roi_coordinator') or self.roi_coordinator is None:
+            print(f"DEBUG: roi_coordinator not set, using fallback")
+            subwindows = self.multi_window_layout.get_all_subwindows()
+            print(f"DEBUG: Fallback - subwindows count: {len(subwindows) if subwindows else 0}")
+            print(f"DEBUG: Fallback - has index 0: {0 in self.subwindow_managers if self.subwindow_managers else False}")
+            if subwindows and 0 in self.subwindow_managers:
+                # Use first subwindow's managers as fallback
+                print(f"DEBUG: Using first subwindow's managers as fallback")
+                managers = self.subwindow_managers[0]
+                self.view_state_manager = managers['view_state_manager']
+                self.slice_display_manager = managers['slice_display_manager']
+                self.roi_coordinator = managers['roi_coordinator']
+                self.measurement_coordinator = managers['measurement_coordinator']
+                self.overlay_coordinator = managers['overlay_coordinator']
+                self.roi_manager = managers['roi_manager']
+                self.measurement_tool = managers['measurement_tool']
+                self.overlay_manager = managers['overlay_manager']
+                if subwindows[0]:
+                    self.image_viewer = subwindows[0].image_viewer
+                    self.main_window.image_viewer = self.image_viewer
+                print(f"DEBUG: Fallback managers set successfully")
+            else:
+                print(f"DEBUG: Fallback failed - no subwindows or no managers at index 0")
+        
+        print(f"DEBUG: Final check - has roi_coordinator: {hasattr(self, 'roi_coordinator')}")
+        if hasattr(self, 'roi_coordinator'):
+            print(f"DEBUG: roi_coordinator is None: {self.roi_coordinator is None}")
+        
+        # Legacy current data (for backward compatibility, points to focused subwindow)
         self.current_datasets: list = []
         self.current_studies: dict = {}
         self.current_slice_index = 0
@@ -161,30 +235,469 @@ class DICOMViewerApp(QObject):
         self.current_study_uid = ""
         self.current_dataset: Optional[Dataset] = None
         
-        # Initialize handler classes
+        # Initialize handler classes (will use focused subwindow's managers)
         self._initialize_handlers()
         
         # Connect signals
         self._connect_signals()
         
-        # Initialize pan mode to match toolbar state (Pan button is checked by default)
-        self.image_viewer.set_mouse_mode("pan")
+        # Initialize pan mode on all subwindows
+        for subwindow in self.multi_window_layout.get_all_subwindows():
+            if subwindow:
+                subwindow.image_viewer.set_mouse_mode("pan")
+    
+    def _initialize_subwindow_managers(self) -> None:
+        """Initialize managers for each subwindow."""
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        
+        # Debug output
+        print(f"DEBUG: _initialize_subwindow_managers called")
+        print(f"DEBUG: Subwindows count from get_all_subwindows(): {len(subwindows)}")
+        print(f"DEBUG: Current layout mode: {self.multi_window_layout.get_layout_mode()}")
+        
+        # Ensure we have at least one subwindow - force creation if needed
+        if not subwindows:
+            print("DEBUG: No subwindows found, forcing creation of 1x1 layout")
+            # Force creation of at least one subwindow
+            self.multi_window_layout.set_layout("1x1")
+            subwindows = self.multi_window_layout.get_all_subwindows()
+            print(f"DEBUG: After forcing layout, subwindows count: {len(subwindows)}")
+            if not subwindows:
+                raise RuntimeError("Failed to create subwindows. Cannot initialize managers.")
+        
+        print(f"DEBUG: Creating managers for {len(subwindows)} subwindows")
+        
+        for idx, subwindow in enumerate(subwindows):
+            if subwindow is None:
+                print(f"DEBUG: Skipping None subwindow at index {idx}")
+                continue
+            
+            print(f"DEBUG: Creating managers for subwindow {idx}")
+            
+            image_viewer = subwindow.image_viewer
+            
+            # Set scroll wheel mode
+            scroll_mode = self.config_manager.get_scroll_wheel_mode()
+            image_viewer.set_scroll_wheel_mode(scroll_mode)
+            
+            # Create managers for this subwindow
+            managers = {}
+            
+            # ROI Manager
+            managers['roi_manager'] = ROIManager(config_manager=self.config_manager)
+            
+            # Measurement Tool
+            managers['measurement_tool'] = MeasurementTool(config_manager=self.config_manager)
+            
+            # Overlay Manager (shared config, but per-window items)
+            font_size = self.config_manager.get_overlay_font_size()
+            font_color = self.config_manager.get_overlay_font_color()
+            managers['overlay_manager'] = OverlayManager(
+                font_size=font_size,
+                font_color=font_color,
+                config_manager=self.config_manager
+            )
+            
+            # View State Manager
+            managers['view_state_manager'] = ViewStateManager(
+                self.dicom_processor,
+                image_viewer,
+                self.window_level_controls,  # Will be updated per subwindow later
+                self.main_window,
+                managers['overlay_manager'],
+                overlay_coordinator=None,  # Will be set later
+                roi_coordinator=None,  # Will be set later
+                display_rois_for_slice=None  # Will be set later
+            )
+            
+            # Slice Display Manager
+            managers['slice_display_manager'] = SliceDisplayManager(
+                self.dicom_processor,
+                image_viewer,
+                self.metadata_panel,  # Shared metadata panel
+                self.slice_navigator,  # Shared slice navigator
+                self.window_level_controls,  # Will be coordinated per subwindow
+                managers['roi_manager'],
+                managers['measurement_tool'],
+                managers['overlay_manager'],
+                managers['view_state_manager'],
+                update_tag_viewer_callback=self._update_tag_viewer,
+                display_rois_callback=None,
+                display_measurements_callback=None,
+                roi_list_panel=self.roi_list_panel,  # Shared, will be updated per focus
+                roi_statistics_panel=self.roi_statistics_panel,  # Shared, will be updated per focus
+                update_roi_statistics_overlays_callback=None,
+                annotation_manager=self.annotation_manager,
+                dicom_organizer=self.dicom_organizer
+            )
+            
+            # ROI Coordinator
+            managers['roi_coordinator'] = ROICoordinator(
+                managers['roi_manager'],
+                self.roi_list_panel,  # Shared, will be updated per focus
+                self.roi_statistics_panel,  # Shared, will be updated per focus
+                image_viewer,
+                self.dicom_processor,
+                self.window_level_controls,  # Will be coordinated per subwindow
+                self.main_window,
+                get_current_dataset=lambda idx=idx: self._get_subwindow_dataset(idx),
+                get_current_slice_index=lambda idx=idx: self._get_subwindow_slice_index(idx),
+                get_rescale_params=self._get_rescale_params,
+                set_mouse_mode_callback=self._set_mouse_mode_via_handler,
+                get_projection_enabled=lambda idx=idx: managers['slice_display_manager'].projection_enabled,
+                get_projection_type=lambda idx=idx: managers['slice_display_manager'].projection_type,
+                get_projection_slice_count=lambda idx=idx: managers['slice_display_manager'].projection_slice_count,
+                get_current_studies=lambda: self.current_studies
+            )
+            
+            # Measurement Coordinator
+            managers['measurement_coordinator'] = MeasurementCoordinator(
+                managers['measurement_tool'],
+                image_viewer,
+                get_current_dataset=lambda idx=idx: self._get_subwindow_dataset(idx),
+                get_current_slice_index=lambda idx=idx: self._get_subwindow_slice_index(idx)
+            )
+            
+            # Overlay Coordinator
+            managers['overlay_coordinator'] = OverlayCoordinator(
+                managers['overlay_manager'],
+                image_viewer,
+                get_current_dataset=lambda idx=idx: self._get_subwindow_dataset(idx),
+                get_current_studies=lambda: self.current_studies,
+                get_current_study_uid=lambda idx=idx: self._get_subwindow_study_uid(idx),
+                get_current_series_uid=lambda idx=idx: self._get_subwindow_series_uid(idx),
+                get_current_slice_index=lambda idx=idx: self._get_subwindow_slice_index(idx),
+                hide_measurement_labels=managers['measurement_coordinator'].hide_measurement_labels,
+                hide_measurement_graphics=managers['measurement_coordinator'].hide_measurement_graphics,
+                hide_roi_graphics=managers['roi_coordinator'].hide_roi_graphics if hasattr(managers['roi_coordinator'], 'hide_roi_graphics') else None,
+                hide_roi_statistics_overlays=managers['roi_coordinator'].hide_roi_statistics_overlays
+            )
+            
+            # Update view state manager callbacks
+            managers['view_state_manager'].overlay_coordinator = managers['overlay_coordinator'].handle_overlay_config_applied
+            managers['view_state_manager'].roi_coordinator = lambda dataset: managers['roi_coordinator'].update_roi_statistics(
+                managers['roi_manager'].get_selected_roi()
+            ) if managers['roi_manager'].get_selected_roi() else None
+            managers['view_state_manager'].display_rois_for_slice = lambda preserve_view=False: self._display_rois_for_subwindow(idx, preserve_view)
+            managers['view_state_manager'].set_redisplay_slice_callback(lambda preserve_view=False: self._redisplay_subwindow_slice(idx, preserve_view))
+            managers['view_state_manager'].set_series_navigator(self.series_navigator)
+            
+            # Update slice display manager callbacks
+            managers['slice_display_manager'].update_roi_statistics_overlays_callback = managers['roi_coordinator'].update_roi_statistics_overlays
+            
+            # Connect inversion callback
+            def on_inversion_state_changed(inverted: bool, idx=idx) -> None:
+                if managers['view_state_manager'].current_series_identifier:
+                    managers['view_state_manager'].set_series_inversion_state(
+                        managers['view_state_manager'].current_series_identifier,
+                        inverted
+                    )
+            image_viewer.inversion_state_changed_callback = on_inversion_state_changed
+            
+            # Store managers
+            self.subwindow_managers[idx] = managers
+            print(f"DEBUG: Stored managers for subwindow {idx}")
+            
+            # Initialize subwindow data
+            self.subwindow_data[idx] = {
+                'current_dataset': None,
+                'current_slice_index': 0,
+                'current_series_uid': '',
+                'current_study_uid': '',
+                'current_datasets': []
+            }
+        
+        print(f"DEBUG: _initialize_subwindow_managers complete. Total managers created: {len(self.subwindow_managers)}")
+    
+    def _create_managers_for_subwindow(self, idx: int, subwindow: SubWindowContainer) -> None:
+        """Create managers for a specific subwindow."""
+        if subwindow is None:
+            return
+        
+        print(f"DEBUG: Creating managers for subwindow {idx}")
+        
+        image_viewer = subwindow.image_viewer
+        
+        # Set scroll wheel mode
+        scroll_mode = self.config_manager.get_scroll_wheel_mode()
+        image_viewer.set_scroll_wheel_mode(scroll_mode)
+        
+        # Create managers for this subwindow
+        managers = {}
+        
+        # ROI Manager
+        managers['roi_manager'] = ROIManager(config_manager=self.config_manager)
+        
+        # Measurement Tool
+        managers['measurement_tool'] = MeasurementTool(config_manager=self.config_manager)
+        
+        # Overlay Manager (shared config, but per-window items)
+        font_size = self.config_manager.get_overlay_font_size()
+        font_color = self.config_manager.get_overlay_font_color()
+        managers['overlay_manager'] = OverlayManager(
+            font_size=font_size,
+            font_color=font_color,
+            config_manager=self.config_manager
+        )
+        
+        # View State Manager
+        managers['view_state_manager'] = ViewStateManager(
+            self.dicom_processor,
+            image_viewer,
+            self.window_level_controls,
+            self.main_window,
+            managers['overlay_manager'],
+            overlay_coordinator=None,
+            roi_coordinator=None,
+            display_rois_for_slice=None
+        )
+        
+        # Slice Display Manager
+        managers['slice_display_manager'] = SliceDisplayManager(
+            self.dicom_processor,
+            image_viewer,
+            self.metadata_panel,
+            self.slice_navigator,
+            self.window_level_controls,
+            managers['roi_manager'],
+            managers['measurement_tool'],
+            managers['overlay_manager'],
+            managers['view_state_manager'],
+            update_tag_viewer_callback=self._update_tag_viewer,
+            display_rois_callback=None,
+            display_measurements_callback=None,
+            roi_list_panel=self.roi_list_panel,
+            roi_statistics_panel=self.roi_statistics_panel,
+            update_roi_statistics_overlays_callback=None,
+            annotation_manager=self.annotation_manager,
+            dicom_organizer=self.dicom_organizer
+        )
+        
+        # ROI Coordinator
+        managers['roi_coordinator'] = ROICoordinator(
+            managers['roi_manager'],
+            self.roi_list_panel,
+            self.roi_statistics_panel,
+            image_viewer,
+            self.dicom_processor,
+            self.window_level_controls,
+            self.main_window,
+            get_current_dataset=lambda idx=idx: self._get_subwindow_dataset(idx),
+            get_current_slice_index=lambda idx=idx: self._get_subwindow_slice_index(idx),
+            get_rescale_params=self._get_rescale_params,
+            set_mouse_mode_callback=self._set_mouse_mode_via_handler,
+            get_projection_enabled=lambda idx=idx: managers['slice_display_manager'].projection_enabled,
+            get_projection_type=lambda idx=idx: managers['slice_display_manager'].projection_type,
+            get_projection_slice_count=lambda idx=idx: managers['slice_display_manager'].projection_slice_count,
+            get_current_studies=lambda: self.current_studies
+        )
+        
+        # Measurement Coordinator
+        managers['measurement_coordinator'] = MeasurementCoordinator(
+            managers['measurement_tool'],
+            image_viewer,
+            get_current_dataset=lambda idx=idx: self._get_subwindow_dataset(idx),
+            get_current_slice_index=lambda idx=idx: self._get_subwindow_slice_index(idx)
+        )
+        
+        # Overlay Coordinator
+        managers['overlay_coordinator'] = OverlayCoordinator(
+            managers['overlay_manager'],
+            image_viewer,
+            get_current_dataset=lambda idx=idx: self._get_subwindow_dataset(idx),
+            get_current_studies=lambda: self.current_studies,
+            get_current_study_uid=lambda idx=idx: self._get_subwindow_study_uid(idx),
+            get_current_series_uid=lambda idx=idx: self._get_subwindow_series_uid(idx),
+            get_current_slice_index=lambda idx=idx: self._get_subwindow_slice_index(idx),
+            hide_measurement_labels=managers['measurement_coordinator'].hide_measurement_labels,
+            hide_measurement_graphics=managers['measurement_coordinator'].hide_measurement_graphics,
+            hide_roi_graphics=managers['roi_coordinator'].hide_roi_graphics if hasattr(managers['roi_coordinator'], 'hide_roi_graphics') else None,
+            hide_roi_statistics_overlays=managers['roi_coordinator'].hide_roi_statistics_overlays
+        )
+        
+        # Update view state manager callbacks
+        managers['view_state_manager'].overlay_coordinator = managers['overlay_coordinator'].handle_overlay_config_applied
+        managers['view_state_manager'].roi_coordinator = lambda dataset: managers['roi_coordinator'].update_roi_statistics(
+            managers['roi_manager'].get_selected_roi()
+        ) if managers['roi_manager'].get_selected_roi() else None
+        managers['view_state_manager'].display_rois_for_slice = lambda preserve_view=False: self._display_rois_for_subwindow(idx, preserve_view)
+        managers['view_state_manager'].set_redisplay_slice_callback(lambda preserve_view=False: self._redisplay_subwindow_slice(idx, preserve_view))
+        managers['view_state_manager'].set_series_navigator(self.series_navigator)
+        
+        # Update slice display manager callbacks
+        managers['slice_display_manager'].update_roi_statistics_overlays_callback = managers['roi_coordinator'].update_roi_statistics_overlays
+        
+        # Connect inversion callback
+        def on_inversion_state_changed(inverted: bool, idx=idx) -> None:
+            if managers['view_state_manager'].current_series_identifier:
+                managers['view_state_manager'].set_series_inversion_state(
+                    managers['view_state_manager'].current_series_identifier,
+                    inverted
+                )
+        image_viewer.inversion_state_changed_callback = on_inversion_state_changed
+        
+        # Store managers
+        self.subwindow_managers[idx] = managers
+        print(f"DEBUG: Stored managers for subwindow {idx}")
+        
+        # Initialize subwindow data if not exists
+        if idx not in self.subwindow_data:
+            self.subwindow_data[idx] = {
+                'current_dataset': None,
+                'current_slice_index': 0,
+                'current_series_uid': '',
+                'current_study_uid': '',
+                'current_datasets': []
+            }
+        
+        # Set pan mode
+        image_viewer.set_mouse_mode("pan")
+    
+    def _get_subwindow_dataset(self, idx: int) -> Optional[Dataset]:
+        """Get current dataset for a subwindow."""
+        if idx in self.subwindow_data:
+            return self.subwindow_data[idx].get('current_dataset')
+        return None
+    
+    def _get_subwindow_slice_index(self, idx: int) -> int:
+        """Get current slice index for a subwindow."""
+        if idx in self.subwindow_data:
+            return self.subwindow_data[idx].get('current_slice_index', 0)
+        return 0
+    
+    def _get_subwindow_study_uid(self, idx: int) -> str:
+        """Get current study UID for a subwindow."""
+        if idx in self.subwindow_data:
+            return self.subwindow_data[idx].get('current_study_uid', '')
+        return ''
+    
+    def _get_subwindow_series_uid(self, idx: int) -> str:
+        """Get current series UID for a subwindow."""
+        if idx in self.subwindow_data:
+            return self.subwindow_data[idx].get('current_series_uid', '')
+        return ''
+    
+    def _update_focused_subwindow_references(self) -> None:
+        """Update legacy references to point to focused subwindow's managers and data."""
+        focused_subwindow = self.multi_window_layout.get_focused_subwindow()
+        if not focused_subwindow:
+            return
+        
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        if focused_subwindow not in subwindows:
+            return
+        
+        focused_idx = subwindows.index(focused_subwindow)
+        self.focused_subwindow_index = focused_idx
+        
+        # Update manager references
+        if focused_idx in self.subwindow_managers:
+            managers = self.subwindow_managers[focused_idx]
+            self.view_state_manager = managers['view_state_manager']
+            self.slice_display_manager = managers['slice_display_manager']
+            self.roi_coordinator = managers['roi_coordinator']
+            self.measurement_coordinator = managers['measurement_coordinator']
+            self.overlay_coordinator = managers['overlay_coordinator']
+            self.roi_manager = managers['roi_manager']
+            self.measurement_tool = managers['measurement_tool']
+            self.overlay_manager = managers['overlay_manager']
+        
+        # Update image viewer reference
+        self.image_viewer = focused_subwindow.image_viewer
+        self.main_window.image_viewer = self.image_viewer
+        
+        # Update current data references (point to focused subwindow's data)
+        if focused_idx in self.subwindow_data:
+            data = self.subwindow_data[focused_idx]
+            self.current_dataset = data.get('current_dataset')
+            self.current_slice_index = data.get('current_slice_index', 0)
+            self.current_series_uid = data.get('current_series_uid', '')
+            self.current_study_uid = data.get('current_study_uid', '')
+            self.current_datasets = data.get('current_datasets', [])
+        
+        # Update right panel controls to show focused subwindow's state
+        self._update_right_panel_for_focused_subwindow()
+        
+        # Update left panel controls to show focused subwindow's state
+        self._update_left_panel_for_focused_subwindow()
+        
+        # Update keyboard event handler to use focused subwindow's image_viewer
+        if hasattr(self, 'keyboard_event_handler') and self.image_viewer:
+            self.keyboard_event_handler.image_viewer = self.image_viewer
+        
+        # Set keyboard focus to focused subwindow's ImageViewer
+        if self.image_viewer:
+            self.image_viewer.setFocus()
+    
+    def _update_right_panel_for_focused_subwindow(self) -> None:
+        """Update right panel controls to reflect focused subwindow's state."""
+        if self.image_viewer is None:
+            return
+        
+        # Update zoom display
+        self.zoom_display_widget.update_zoom(self.image_viewer.current_zoom)
+        
+        # Update ROI list (will be updated when slice is displayed)
+        # Update ROI statistics (will be updated when ROI is selected)
+        # Window/level controls will be updated via signals
+    
+    def _update_left_panel_for_focused_subwindow(self) -> None:
+        """Update left panel controls (metadata, cine) to reflect focused subwindow's state."""
+        if self.current_dataset is None:
+            return
+        
+        # Update metadata panel with focused subwindow's dataset
+        self.metadata_panel.set_dataset(self.current_dataset)
+        
+        # Update cine player context for focused subwindow
+        self._update_cine_player_context()
+    
+    def _display_rois_for_subwindow(self, idx: int, preserve_view: bool = False) -> None:
+        """Display ROIs for a specific subwindow."""
+        if idx not in self.subwindow_managers:
+            return
+        managers = self.subwindow_managers[idx]
+        # This will be implemented to display ROIs for the subwindow's current slice
+        # For now, placeholder
+        pass
+    
+    def _redisplay_subwindow_slice(self, idx: int, preserve_view: bool = False) -> None:
+        """Redisplay slice for a specific subwindow."""
+        if idx not in self.subwindow_managers:
+            return
+        managers = self.subwindow_managers[idx]
+        slice_display_manager = managers['slice_display_manager']
+        # Call the slice display manager's display method
+        # This will be connected properly later
+        pass
     
     def _initialize_handlers(self) -> None:
         """Initialize all handler classes."""
-        # Initialize ViewStateManager
-        self.view_state_manager = ViewStateManager(
-            self.dicom_processor,
-            self.image_viewer,
-            self.window_level_controls,
-            self.main_window,
-            self.overlay_manager,
-            overlay_coordinator=None,  # Will be set after overlay coordinator is created
-            roi_coordinator=None,  # Will be set after ROI coordinator is created
-            display_rois_for_slice=None  # Will be set after slice display manager is created
-        )
+        # Note: Per-subwindow managers are created in _initialize_subwindow_managers
+        # References to focused subwindow's managers should already be set in __init__
+        # before this method is called. If not, we'll use the first subwindow's managers.
         
-        # Initialize FileOperationsHandler
+        # Ensure managers are set (should already be set in __init__, but double-check)
+        if not hasattr(self, 'roi_coordinator') or self.roi_coordinator is None:
+            # Fallback: use first subwindow's managers
+            subwindows = self.multi_window_layout.get_all_subwindows()
+            if subwindows and 0 in self.subwindow_managers:
+                managers = self.subwindow_managers[0]
+                self.view_state_manager = managers['view_state_manager']
+                self.slice_display_manager = managers['slice_display_manager']
+                self.roi_coordinator = managers['roi_coordinator']
+                self.measurement_coordinator = managers['measurement_coordinator']
+                self.overlay_coordinator = managers['overlay_coordinator']
+                self.roi_manager = managers['roi_manager']
+                self.measurement_tool = managers['measurement_tool']
+                self.overlay_manager = managers['overlay_manager']
+                if subwindows[0]:
+                    self.image_viewer = subwindows[0].image_viewer
+                    self.main_window.image_viewer = self.image_viewer
+            else:
+                raise RuntimeError("No subwindow managers available. Cannot initialize handlers.")
+        
+        # Initialize FileOperationsHandler (shared, not per-subwindow)
         self.file_operations_handler = FileOperationsHandler(
             self.dicom_loader,
             self.dicom_organizer,
@@ -195,97 +708,6 @@ class DICOMViewerApp(QObject):
             load_first_slice_callback=self._handle_load_first_slice,
             update_status_callback=self.main_window.update_status
         )
-        
-        # Initialize SliceDisplayManager
-        self.slice_display_manager = SliceDisplayManager(
-            self.dicom_processor,
-            self.image_viewer,
-            self.metadata_panel,
-            self.slice_navigator,
-            self.window_level_controls,
-            self.roi_manager,
-            self.measurement_tool,
-            self.overlay_manager,
-            self.view_state_manager,
-            update_tag_viewer_callback=self._update_tag_viewer,
-            display_rois_callback=None,  # Will use default
-            display_measurements_callback=None,  # Will use default
-            roi_list_panel=self.roi_list_panel,
-            roi_statistics_panel=self.roi_statistics_panel,
-            update_roi_statistics_overlays_callback=None,  # Will be set after ROI coordinator is created
-            annotation_manager=self.annotation_manager,
-            dicom_organizer=self.dicom_organizer
-        )
-        self.view_state_manager.set_redisplay_slice_callback(self._redisplay_current_slice)
-        
-        # Initialize ROICoordinator
-        self.roi_coordinator = ROICoordinator(
-            self.roi_manager,
-            self.roi_list_panel,
-            self.roi_statistics_panel,
-            self.image_viewer,
-            self.dicom_processor,
-            self.window_level_controls,
-            self.main_window,
-            get_current_dataset=lambda: self.current_dataset,
-            get_current_slice_index=lambda: self.current_slice_index,
-            get_rescale_params=self._get_rescale_params,
-            set_mouse_mode_callback=self._set_mouse_mode_via_handler,
-            get_projection_enabled=lambda: self.slice_display_manager.projection_enabled,
-            get_projection_type=lambda: self.slice_display_manager.projection_type,
-            get_projection_slice_count=lambda: self.slice_display_manager.projection_slice_count,
-            get_current_studies=lambda: self.current_studies
-        )
-        
-        # Update view state manager with ROI coordinator
-        self.view_state_manager.roi_coordinator = lambda dataset: self.roi_coordinator.update_roi_statistics(
-            self.roi_manager.get_selected_roi()
-        ) if self.roi_manager.get_selected_roi() else None
-        
-        # Update view state manager with display_rois_for_slice callback
-        self.view_state_manager.display_rois_for_slice = self._display_rois_for_slice
-        
-        # Update view state manager with series_navigator reference
-        self.view_state_manager.set_series_navigator(self.series_navigator)
-        
-        # Connect image viewer inversion callback to view state manager
-        def on_inversion_state_changed(inverted: bool) -> None:
-            """Handle inversion state change - store in ViewStateManager."""
-            if self.view_state_manager.current_series_identifier:
-                self.view_state_manager.set_series_inversion_state(
-                    self.view_state_manager.current_series_identifier,
-                    inverted
-                )
-        self.image_viewer.inversion_state_changed_callback = on_inversion_state_changed
-        
-        # Update slice display manager with ROI coordinator callback
-        self.slice_display_manager.update_roi_statistics_overlays_callback = self.roi_coordinator.update_roi_statistics_overlays
-        
-        # Initialize MeasurementCoordinator
-        self.measurement_coordinator = MeasurementCoordinator(
-            self.measurement_tool,
-            self.image_viewer,
-            get_current_dataset=lambda: self.current_dataset,
-            get_current_slice_index=lambda: self.current_slice_index
-        )
-        
-        # Initialize OverlayCoordinator
-        self.overlay_coordinator = OverlayCoordinator(
-            self.overlay_manager,
-            self.image_viewer,
-            get_current_dataset=lambda: self.current_dataset,
-            get_current_studies=lambda: self.current_studies,
-            get_current_study_uid=lambda: self.current_study_uid,
-            get_current_series_uid=lambda: self.current_series_uid,
-            get_current_slice_index=lambda: self.current_slice_index,
-            hide_measurement_labels=self.measurement_coordinator.hide_measurement_labels,
-            hide_measurement_graphics=self.measurement_coordinator.hide_measurement_graphics,
-            hide_roi_graphics=self.roi_coordinator.hide_roi_graphics if hasattr(self.roi_coordinator, 'hide_roi_graphics') else None,
-            hide_roi_statistics_overlays=self.roi_coordinator.hide_roi_statistics_overlays
-        )
-        
-        # Update view state manager with overlay coordinator
-        self.view_state_manager.overlay_coordinator = self.overlay_coordinator.handle_overlay_config_applied
         
         # Initialize DialogCoordinator
         self.dialog_coordinator = DialogCoordinator(
@@ -324,6 +746,13 @@ class DICOMViewerApp(QObject):
         self.cine_controls_widget.set_loop(default_loop)
         
         # Initialize KeyboardEventHandler
+        # Ensure all required managers exist before initializing
+        if not all([hasattr(self, attr) and getattr(self, attr) is not None 
+                   for attr in ['roi_manager', 'measurement_tool', 'overlay_manager', 
+                               'image_viewer', 'roi_coordinator', 'measurement_coordinator', 
+                               'overlay_coordinator', 'view_state_manager']]):
+            raise RuntimeError("Required managers not initialized. Cannot create KeyboardEventHandler.")
+        
         self.keyboard_event_handler = KeyboardEventHandler(
             self.roi_manager,
             self.measurement_tool,
@@ -345,50 +774,81 @@ class DICOMViewerApp(QObject):
         )
     
     def _clear_data(self) -> None:
-        """Clear all ROIs, measurements, and related data."""
-        self.roi_manager.clear_all_rois(self.image_viewer.scene)
+        """Clear all ROIs, measurements, and related data for all subwindows."""
+        # Clear data for ALL subwindows, not just focused one
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        for idx, subwindow in enumerate(subwindows):
+            if subwindow and subwindow.image_viewer and subwindow.image_viewer.scene:
+                # Get the managers for this subwindow
+                if idx in self.subwindow_managers:
+                    managers = self.subwindow_managers[idx]
+                    roi_manager = managers.get('roi_manager')
+                    measurement_tool = managers.get('measurement_tool')
+                    if roi_manager:
+                        roi_manager.clear_all_rois(subwindow.image_viewer.scene)
+                    if measurement_tool:
+                        measurement_tool.clear_measurements(subwindow.image_viewer.scene)
+        
+        # Update shared panels (these show focused subwindow's data)
         self.roi_list_panel.update_roi_list("", "", 0)  # Clear list
         self.roi_statistics_panel.clear_statistics()
-        self.measurement_tool.clear_measurements(self.image_viewer.scene)
     
     def _close_files(self) -> None:
         """Close currently open files/folder and clear all data."""
-        # Clear all ROIs, measurements, and related data
+        # Clear all ROIs, measurements, and related data for all subwindows
         self._clear_data()
         
-        # Clear image viewer
-        self.image_viewer.scene.clear()
-        self.image_viewer.image_item = None
+        # Clear image viewers for ALL subwindows
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        for subwindow in subwindows:
+            if subwindow and subwindow.image_viewer:
+                # Clear scene
+                subwindow.image_viewer.scene.clear()
+                subwindow.image_viewer.image_item = None
+                # Force viewport update to ensure cleared scene is visible
+                subwindow.image_viewer.viewport().update()
         
-        # Clear overlay items list (items already cleared by scene.clear())
-        self.overlay_manager.overlay_items.clear()
+        # Clear overlay items for all subwindows
+        for idx in self.subwindow_managers:
+            managers = self.subwindow_managers[idx]
+            overlay_manager = managers.get('overlay_manager')
+            if overlay_manager:
+                overlay_manager.overlay_items.clear()
         
-        # Clear metadata panel
+        # Clear metadata panel (shared)
         self.metadata_panel.set_dataset(None)
         
-        # Reset view state
-        self.view_state_manager.reset_window_level_state()
-        self.view_state_manager.reset_series_tracking()
+        # Reset view state for all subwindows
+        for idx in self.subwindow_managers:
+            managers = self.subwindow_managers[idx]
+            view_state_manager = managers.get('view_state_manager')
+            slice_display_manager = managers.get('slice_display_manager')
+            if view_state_manager:
+                view_state_manager.reset_window_level_state()
+                view_state_manager.reset_series_tracking()
+            if slice_display_manager:
+                slice_display_manager.reset_projection_state()
         
-        # Reset projection state
-        self.slice_display_manager.reset_projection_state()
-        # Update widget to match reset state
+        # Update shared widget state
         self.intensity_projection_controls_widget.set_enabled(False)
         self.intensity_projection_controls_widget.set_projection_type("aip")
         self.intensity_projection_controls_widget.set_slice_count(4)
         
-        # Clear current dataset references
+        # Clear all subwindow data structures
+        self.subwindow_data.clear()
+        
+        # Clear current dataset references (legacy, points to focused subwindow)
         self.current_dataset = None
         self.current_studies = {}
         self.current_study_uid = ""
         self.current_series_uid = ""
         self.current_slice_index = 0
         
-        # Reset slice navigator
+        # Reset slice navigator (shared)
         self.slice_navigator.set_total_slices(0)
         self.slice_navigator.set_current_slice(0)
         
-        # Clear series navigator
+        # Clear series navigator (shared)
         self.series_navigator.update_series_list({}, "", "")
         
         # Clear tag edit history
@@ -403,6 +863,24 @@ class DICOMViewerApp(QObject):
     
     def _handle_load_first_slice(self, studies: dict) -> None:
         """Handle loading first slice after file operations."""
+        # Clear all subwindows before loading new files
+        # This ensures old images don't persist in non-focused subwindows
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        for subwindow in subwindows:
+            if subwindow and subwindow.image_viewer:
+                # Clear scene to remove old images
+                subwindow.image_viewer.scene.clear()
+                subwindow.image_viewer.image_item = None
+                # Force viewport update
+                subwindow.image_viewer.viewport().update()
+        
+        # Clear overlay items for all subwindows
+        for idx in self.subwindow_managers:
+            managers = self.subwindow_managers[idx]
+            overlay_manager = managers.get('overlay_manager')
+            if overlay_manager:
+                overlay_manager.overlay_items.clear()
+        
         # Reset projection state when new files are opened
         self.slice_display_manager.reset_projection_state()
         # Update widget to match reset state
@@ -416,6 +894,32 @@ class DICOMViewerApp(QObject):
             self.current_study_uid = first_slice_info['study_uid']
             self.current_series_uid = first_slice_info['series_uid']
             self.current_slice_index = first_slice_info['slice_index']
+            
+            # Clear stale subwindow data that references series not in current_studies
+            # This prevents navigation failures when subwindows have outdated series references
+            stale_count = 0
+            for idx in list(self.subwindow_data.keys()):
+                data = self.subwindow_data[idx]
+                study_uid = data.get('current_study_uid', '')
+                series_uid = data.get('current_series_uid', '')
+                if study_uid and series_uid:
+                    # Check if this series still exists in the loaded studies
+                    if (study_uid not in self.current_studies or 
+                        series_uid not in self.current_studies.get(study_uid, {})):
+                        # Stale data - clear it
+                        print(f"[DEBUG] Clearing stale subwindow data for subwindow {idx}: "
+                              f"study={study_uid[:20] if study_uid else 'None'}..., "
+                              f"series={series_uid[:20] if series_uid else 'None'}...")
+                        self.subwindow_data[idx] = {
+                            'current_dataset': None,
+                            'current_slice_index': 0,
+                            'current_series_uid': '',
+                            'current_study_uid': '',
+                            'current_datasets': []
+                        }
+                        stale_count += 1
+            if stale_count > 0:
+                print(f"[DEBUG] Cleared stale data from {stale_count} subwindow(s)")
             
             # Load Presentation States and Key Objects into annotation manager
             # Collect all presentation states and key objects from all studies
@@ -460,6 +964,85 @@ class DICOMViewerApp(QObject):
             
             # Update current dataset reference
             self.current_dataset = first_slice_info['dataset']
+            
+            # Initialize subwindow_data[0] with loaded data for the first subwindow
+            # This ensures the first subwindow can navigate and respond to controls
+            focused_idx = self.focused_subwindow_index if hasattr(self, 'focused_subwindow_index') else 0
+            if focused_idx not in self.subwindow_data:
+                self.subwindow_data[focused_idx] = {}
+            
+            # Extract actual SeriesInstanceUID from the dataset that was displayed
+            # This ensures subwindow_data always reflects what's actually shown
+            displayed_dataset = first_slice_info['dataset']
+            extracted_series_uid = getattr(displayed_dataset, 'SeriesInstanceUID', '')
+            extracted_study_uid = getattr(displayed_dataset, 'StudyInstanceUID', '')
+            
+            # Get stored values for comparison
+            stored_series_uid = self.current_series_uid
+            stored_study_uid = self.current_study_uid
+            
+            # Log the sync with FULL UIDs (not truncated) to diagnose mismatches
+            if extracted_series_uid != stored_series_uid:
+                print(f"[DEBUG] Syncing subwindow_data after initial load: MISMATCH detected!")
+                print(f"[DEBUG]   Extracted series_uid from dataset: {extracted_series_uid}")
+                print(f"[DEBUG]   Stored series_uid: {stored_series_uid}")
+                print(f"[DEBUG]   Series UID match: False - updating stored value to match dataset")
+            else:
+                print(f"[DEBUG] Syncing subwindow_data after initial load: series_uid matches")
+                print(f"[DEBUG]   Series UID: {extracted_series_uid}")
+            
+            if extracted_study_uid != stored_study_uid:
+                print(f"[DEBUG]   Extracted study_uid from dataset: {extracted_study_uid}")
+                print(f"[DEBUG]   Stored study_uid: {stored_study_uid}")
+                print(f"[DEBUG]   Study UID match: False - updating stored value to match dataset")
+            
+            # Update subwindow_data and legacy references with extracted UIDs from dataset
+            # This ensures navigation always starts from the correct series that's actually displayed
+            self.subwindow_data[focused_idx]['current_dataset'] = displayed_dataset
+            self.subwindow_data[focused_idx]['current_slice_index'] = self.current_slice_index
+            self.subwindow_data[focused_idx]['current_series_uid'] = extracted_series_uid
+            self.subwindow_data[focused_idx]['current_study_uid'] = extracted_study_uid
+            
+            # Update legacy references to match
+            self.current_series_uid = extracted_series_uid
+            self.current_study_uid = extracted_study_uid
+            
+            # Get all datasets for the actual series (using extracted UID)
+            if extracted_study_uid in studies and extracted_series_uid in studies[extracted_study_uid]:
+                series_datasets = studies[extracted_study_uid][extracted_series_uid]
+                self.subwindow_data[focused_idx]['current_datasets'] = series_datasets
+            else:
+                # Fallback to stored values if extracted UIDs don't exist in studies
+                print(f"[DEBUG] WARNING: Extracted UIDs not found in studies, using stored values")
+                series_datasets = studies[self.current_study_uid][self.current_series_uid]
+                self.subwindow_data[focused_idx]['current_datasets'] = series_datasets
+            
+            # Ensure focused subwindow's slice_display_manager context is initialized with loaded data
+            # This is critical for navigation and window/level controls to work
+            # Use extracted UIDs to ensure context matches what's actually displayed
+            if focused_idx in self.subwindow_managers:
+                managers = self.subwindow_managers[focused_idx]
+                slice_display_manager = managers.get('slice_display_manager')
+                view_state_manager = managers.get('view_state_manager')
+                
+                if slice_display_manager:
+                    slice_display_manager.set_current_data_context(
+                        self.current_studies,
+                        extracted_study_uid,  # Use extracted UID, not stored
+                        extracted_series_uid,  # Use extracted UID, not stored
+                        self.current_slice_index
+                    )
+                
+                # Ensure view_state_manager has the current dataset for window/level controls
+                if view_state_manager:
+                    view_state_manager.current_dataset = first_slice_info['dataset']
+                    # The window/level will be set when display_slice is called above
+                    # We just need to ensure the dataset is set so handle_window_changed can work
+            
+            # Ensure window/level controls are connected to the focused subwindow's view_state_manager
+            # Reconnect signals to ensure they point to the correct manager
+            self._disconnect_focused_subwindow_signals()
+            self._connect_focused_subwindow_signals()
             
             # Update cine player context and check if series is cine-capable
             self._update_cine_player_context()
@@ -554,12 +1137,12 @@ class DICOMViewerApp(QObject):
     
     def _setup_ui(self) -> None:
         """Set up the user interface layout."""
-        # Add image viewer to center panel
+        # Add multi-window layout to center panel
         center_layout = self.main_window.center_panel.layout()
         if center_layout is None:
             from PySide6.QtWidgets import QVBoxLayout
             center_layout = QVBoxLayout(self.main_window.center_panel)
-        center_layout.addWidget(self.image_viewer)
+        center_layout.addWidget(self.multi_window_layout)
         
         # Add cine controls widget and metadata panel to left panel
         left_layout = self.main_window.left_panel.layout()
@@ -587,40 +1170,394 @@ class DICOMViewerApp(QObject):
     
     def _connect_signals(self) -> None:
         """Connect signals between components."""
+        # Multi-window layout signals
+        self.multi_window_layout.focused_subwindow_changed.connect(self._on_focused_subwindow_changed)
+        self.multi_window_layout.layout_changed.connect(self._on_layout_changed)
+        
+        # Main window layout signal
+        self.main_window.layout_changed.connect(self._on_main_window_layout_changed)
+        
         # File operations
         self.main_window.open_file_requested.connect(self._open_files)
         self.main_window.open_folder_requested.connect(self._open_folder)
         self.main_window.open_recent_file_requested.connect(self._open_recent_file)
         self.main_window.open_files_from_paths_requested.connect(self._open_files_from_paths)
-        self.image_viewer.files_dropped.connect(self._open_files_from_paths)
+        # Files dropped will be connected per subwindow
         self.main_window.close_requested.connect(self._close_files)
         
-        # Settings
+        # Settings (shared, not per-subwindow)
         self.main_window.settings_requested.connect(self._open_settings)
         self.main_window.overlay_settings_requested.connect(self._open_overlay_settings)
         
-        # Tag viewer
+        # Tag viewer (shared)
         self.main_window.tag_viewer_requested.connect(self._open_tag_viewer)
         
-        # Overlay configuration
+        # Overlay configuration (shared)
         self.main_window.overlay_config_requested.connect(self._open_overlay_config)
         
-        # Annotation options
+        # Annotation options (shared)
         self.main_window.annotation_options_requested.connect(self._open_annotation_options)
-        self.image_viewer.annotation_options_requested.connect(self._open_annotation_options)
         
-        # Quick Start Guide
+        # Quick Start Guide (shared)
         self.main_window.quick_start_guide_requested.connect(self._open_quick_start_guide)
         
-        # Tag Export
+        # Tag Export (shared)
         self.main_window.tag_export_requested.connect(self._open_tag_export)
         
-        # Export
+        # Export (shared)
         self.main_window.export_requested.connect(self._open_export)
         
-        # Undo/Redo tag edits
+        # Undo/Redo tag edits (shared)
         self.main_window.undo_tag_edit_requested.connect(self._undo_tag_edit)
         self.main_window.redo_tag_edit_requested.connect(self._redo_tag_edit)
+        
+        # Connect signals for all subwindows
+        self._connect_subwindow_signals()
+        
+        # Connect signals for focused subwindow (initial)
+        self._connect_focused_subwindow_signals()
+    
+    def _on_focused_subwindow_changed(self, subwindow: SubWindowContainer) -> None:
+        """Handle focused subwindow change."""
+        # Disconnect signals from previous focused subwindow
+        self._disconnect_focused_subwindow_signals()
+        
+        # Update references
+        self._update_focused_subwindow_references()
+        
+        # Connect signals for new focused subwindow
+        self._connect_focused_subwindow_signals()
+        
+        # Update right panel
+        self._update_right_panel_for_focused_subwindow()
+        
+        # Update series navigator highlighting
+        self._update_series_navigator_highlighting()
+    
+    def _update_series_navigator_highlighting(self) -> None:
+        """Update series navigator highlighting based on focused subwindow's series."""
+        if self.current_series_uid:
+            self.series_navigator.set_current_series(self.current_series_uid)
+    
+    def _on_layout_changed(self, layout_mode: str) -> None:
+        """Handle layout mode change from multi-window layout."""
+        # Save to config
+        self.config_manager.set_multi_window_layout(layout_mode)
+        
+        # Update main window menu state
+        self.main_window.set_layout_mode(layout_mode)
+        
+        # Reinitialize subwindow managers if needed (when subwindows are added/removed)
+        # For now, subwindows are created on demand, so we may need to create managers for new ones
+        self._ensure_all_subwindows_have_managers()
+        
+        # Reconnect signals for any newly created subwindows
+        self._connect_subwindow_signals()
+    
+    def _on_main_window_layout_changed(self, layout_mode: str) -> None:
+        """Handle layout mode change from main window menu."""
+        self.multi_window_layout.set_layout(layout_mode)
+    
+    def _ensure_all_subwindows_have_managers(self) -> None:
+        """Ensure all visible subwindows have managers initialized."""
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        for idx, subwindow in enumerate(subwindows):
+            if subwindow and idx not in self.subwindow_managers:
+                # Create managers for this subwindow
+                # Use the same logic as _initialize_subwindow_managers but only for this subwindow
+                self._create_managers_for_subwindow(idx, subwindow)
+    
+    def _connect_subwindow_signals(self) -> None:
+        """Connect signals that apply to all subwindows."""
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        for subwindow in subwindows:
+            if subwindow:
+                image_viewer = subwindow.image_viewer
+                # Connect files dropped for all subwindows
+                image_viewer.files_dropped.connect(self._open_files_from_paths)
+                
+                # Connect layout change requested from context menu
+                image_viewer.layout_change_requested.connect(self._on_layout_change_requested)
+                
+                # Connect assign series request
+                subwindow.assign_series_requested.connect(self._on_assign_series_requested)
+    
+    def _on_layout_change_requested(self, layout_mode: str) -> None:
+        """Handle layout change request from image viewer context menu."""
+        self.multi_window_layout.set_layout(layout_mode)
+    
+    def _on_assign_series_requested(self, series_uid: str, slice_index: int) -> None:
+        """Handle series assignment request from subwindow."""
+        # Find which subwindow requested the assignment
+        sender = self.sender()
+        if isinstance(sender, SubWindowContainer):
+            # Assign series/slice to this subwindow
+            self._assign_series_to_subwindow(sender, series_uid, slice_index)
+    
+    def _assign_series_to_subwindow(self, subwindow: SubWindowContainer, series_uid: str, slice_index: int) -> None:
+        """Assign a series/slice to a specific subwindow."""
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        if subwindow not in subwindows:
+            return
+        
+        idx = subwindows.index(subwindow)
+        
+        # Ensure managers exist for this subwindow
+        if idx not in self.subwindow_managers:
+            # Need to create managers for this subwindow
+            # This can happen if layout changed and new subwindows were created
+            self._ensure_all_subwindows_have_managers()
+        
+        # Find the series in current studies
+        if not self.current_studies:
+            return
+        
+        # Find study and series
+        target_study_uid = None
+        for study_uid, series_dict in self.current_studies.items():
+            if series_uid in series_dict:
+                target_study_uid = study_uid
+                break
+        
+        if target_study_uid is None:
+            return
+        
+        # Get series datasets
+        series_datasets = self.current_studies[target_study_uid][series_uid]
+        if not series_datasets:
+            return
+        
+        # Clamp slice index
+        slice_index = max(0, min(slice_index, len(series_datasets) - 1))
+        
+        # Update subwindow data
+        if idx not in self.subwindow_data:
+            self.subwindow_data[idx] = {}
+        
+        self.subwindow_data[idx]['current_study_uid'] = target_study_uid
+        self.subwindow_data[idx]['current_series_uid'] = series_uid
+        self.subwindow_data[idx]['current_slice_index'] = slice_index
+        self.subwindow_data[idx]['current_datasets'] = series_datasets
+        self.subwindow_data[idx]['current_dataset'] = series_datasets[slice_index] if slice_index < len(series_datasets) else series_datasets[0]
+        
+        # Update subwindow assignment
+        subwindow.set_assigned_series(series_uid, slice_index)
+        
+        # Display the slice in this subwindow
+        if idx in self.subwindow_managers:
+            managers = self.subwindow_managers[idx]
+            slice_display_manager = managers['slice_display_manager']
+            slice_display_manager.display_slice(
+                self.subwindow_data[idx]['current_dataset'],
+                self.current_studies,
+                target_study_uid,
+                series_uid,
+                slice_index
+            )
+        
+        # Update series navigator highlighting to show the assigned series
+        # This ensures highlighting updates when series are assigned via drag-and-drop or context menu
+        self.series_navigator.set_current_series(series_uid)
+        
+        # If this subwindow is the focused one, also update legacy references and highlighting
+        if subwindow == self.multi_window_layout.get_focused_subwindow():
+            self.current_series_uid = series_uid
+            self.current_study_uid = target_study_uid
+            self.current_slice_index = slice_index
+            self.current_dataset = self.subwindow_data[idx]['current_dataset']
+            self._update_series_navigator_highlighting()
+    
+    def _disconnect_focused_subwindow_signals(self) -> None:
+        """Disconnect signals from previously focused subwindow."""
+        if self.image_viewer is None:
+            return
+        
+        print("[DEBUG] Disconnecting signals from focused subwindow ImageViewer")
+        
+        try:
+            # Annotation options
+            self.image_viewer.annotation_options_requested.disconnect()
+        except (TypeError, RuntimeError):
+            pass  # Signal not connected or object deleted
+        
+        try:
+            # ROI drawing signals
+            self.image_viewer.roi_drawing_started.disconnect()
+            self.image_viewer.roi_drawing_updated.disconnect()
+            self.image_viewer.roi_drawing_finished.disconnect()
+        except (TypeError, RuntimeError):
+            pass
+        
+        try:
+            # Measurement signals
+            self.image_viewer.measurement_started.disconnect()
+            self.image_viewer.measurement_updated.disconnect()
+            self.image_viewer.measurement_finished.disconnect()
+        except (TypeError, RuntimeError):
+            pass
+        
+        try:
+            # ROI click signals
+            self.image_viewer.roi_clicked.disconnect()
+            self.image_viewer.image_clicked_no_roi.disconnect()
+        except (TypeError, RuntimeError):
+            pass
+        
+        try:
+            # ROI delete signals
+            self.image_viewer.roi_delete_requested.disconnect()
+            self.image_viewer.measurement_delete_requested.disconnect()
+        except (TypeError, RuntimeError):
+            pass
+        
+        try:
+            # ROI statistics signals
+            self.image_viewer.roi_statistics_overlay_toggle_requested.disconnect()
+            self.image_viewer.roi_statistics_selection_changed.disconnect()
+        except (TypeError, RuntimeError):
+            pass
+        
+        try:
+            # Scene selection changed
+            if self.image_viewer.scene is not None:
+                self.image_viewer.scene.selectionChanged.disconnect()
+        except (TypeError, RuntimeError, AttributeError):
+            pass
+        
+        try:
+            # Scroll wheel for slice navigation
+            self.image_viewer.wheel_event_for_slice.disconnect()
+        except (TypeError, RuntimeError):
+            pass
+        
+        try:
+            # Pixel info
+            self.image_viewer.pixel_info_changed.disconnect()
+        except (TypeError, RuntimeError):
+            pass
+        
+        try:
+            # Window/Level preset selection
+            self.image_viewer.window_level_preset_selected.disconnect()
+        except (TypeError, RuntimeError):
+            pass
+        
+        try:
+            # Intensity projection context menu signals
+            self.image_viewer.projection_enabled_changed.disconnect()
+            self.image_viewer.projection_type_changed.disconnect()
+            self.image_viewer.projection_slice_count_changed.disconnect()
+        except (TypeError, RuntimeError):
+            pass
+        
+        try:
+            # Context menu changes
+            self.image_viewer.context_menu_mouse_mode_changed.disconnect()
+            self.image_viewer.context_menu_scroll_wheel_mode_changed.disconnect()
+            self.image_viewer.context_menu_rescale_toggle_changed.disconnect()
+        except (TypeError, RuntimeError):
+            pass
+        
+        try:
+            # Zoom and transform changes
+            self.image_viewer.zoom_changed.disconnect()
+            self.image_viewer.transform_changed.disconnect()
+        except (TypeError, RuntimeError):
+            pass
+        
+        try:
+            # Arrow key navigation
+            self.image_viewer.arrow_key_pressed.disconnect()
+        except (TypeError, RuntimeError):
+            pass
+        
+        try:
+            # Right mouse drag for window/level
+            self.image_viewer.right_mouse_press_for_drag.disconnect()
+            self.image_viewer.window_level_drag_changed.disconnect()
+        except (TypeError, RuntimeError):
+            pass
+        
+        try:
+            # Series navigation (CRITICAL - this is causing the double navigation)
+            self.image_viewer.series_navigation_requested.disconnect()
+        except (TypeError, RuntimeError):
+            pass
+        
+        try:
+            # ROI list panel signals
+            self.roi_list_panel.roi_selected.disconnect()
+            self.roi_list_panel.roi_deleted.disconnect()
+            self.roi_list_panel.delete_all_requested.disconnect()
+        except (TypeError, RuntimeError, AttributeError):
+            pass
+        
+        try:
+            # Slice navigator signals
+            self.slice_navigator.slice_changed.disconnect()
+        except (TypeError, RuntimeError, AttributeError):
+            pass
+        
+        try:
+            # Window/level controls
+            self.window_level_controls.window_changed.disconnect()
+        except (TypeError, RuntimeError, AttributeError):
+            pass
+        
+        try:
+            # Intensity projection controls
+            self.intensity_projection_controls_widget.enabled_changed.disconnect()
+            self.intensity_projection_controls_widget.projection_type_changed.disconnect()
+            self.intensity_projection_controls_widget.slice_count_changed.disconnect()
+        except (TypeError, RuntimeError, AttributeError):
+            pass
+        
+        try:
+            # Mouse mode and scroll wheel mode changes
+            self.main_window.mouse_mode_changed.disconnect()
+            self.main_window.scroll_wheel_mode_changed.disconnect()
+        except (TypeError, RuntimeError, AttributeError):
+            pass
+        
+        try:
+            # Rescale toggle from toolbar
+            self.main_window.rescale_toggle_changed.disconnect()
+        except (TypeError, RuntimeError, AttributeError):
+            pass
+        
+        try:
+            # Series navigation from main window
+            self.main_window.series_navigation_requested.disconnect()
+        except (TypeError, RuntimeError, AttributeError):
+            pass
+        
+        try:
+            # Overlay font size and color changes
+            self.main_window.overlay_font_size_changed.disconnect()
+            self.main_window.overlay_font_color_changed.disconnect()
+        except (TypeError, RuntimeError, AttributeError):
+            pass
+        
+        try:
+            # Zoom display widget
+            self.zoom_display_widget.zoom_changed.disconnect()
+        except (TypeError, RuntimeError, AttributeError):
+            pass
+        
+        print("[DEBUG] Finished disconnecting signals from focused subwindow ImageViewer")
+    
+    def _connect_focused_subwindow_signals(self) -> None:
+        """Connect signals for the currently focused subwindow."""
+        # CRITICAL: Disconnect any existing connections first to prevent duplicates
+        self._disconnect_focused_subwindow_signals()
+        
+        if self.image_viewer is None:
+            return
+        
+        print("[DEBUG] Connecting signals for focused subwindow ImageViewer")
+        
+        # Annotation options from image viewer
+        self.image_viewer.annotation_options_requested.connect(self._open_annotation_options)
         
         # ROI drawing signals
         self.image_viewer.roi_drawing_started.connect(self.roi_coordinator.handle_roi_drawing_started)
@@ -686,6 +1623,24 @@ class DICOMViewerApp(QObject):
             get_slice_index=lambda: self.current_slice_index,
             get_use_rescaled=lambda: self.view_state_manager.use_rescaled_values if self.view_state_manager else False
         )
+        
+        # Set callback for available series (for context menu)
+        def get_available_series() -> list:
+            """Get list of available series for context menu."""
+            if not self.current_studies:
+                return []
+            series_list = []
+            for study_uid, series_dict in self.current_studies.items():
+                for series_uid, datasets in series_dict.items():
+                    if datasets:
+                        first_dataset = datasets[0]
+                        series_num = getattr(first_dataset, 'SeriesNumber', '')
+                        series_desc = getattr(first_dataset, 'SeriesDescription', 'Unknown Series')
+                        modality = getattr(first_dataset, 'Modality', '')
+                        series_name = f"Series {series_num}: {series_desc} ({modality})"
+                        series_list.append((series_uid, series_name))
+            return series_list
+        self.image_viewer.get_available_series_callback = get_available_series
         
         # Set callbacks for window/level presets
         def get_presets_callback():
@@ -766,9 +1721,9 @@ class DICOMViewerApp(QObject):
         self.image_viewer.series_navigation_requested.connect(self._on_series_navigation_requested)
         self.main_window.series_navigation_requested.connect(self._on_series_navigation_requested)
         
-        # Overlay font size and color changes
-        self.main_window.overlay_font_size_changed.connect(self.overlay_coordinator.handle_overlay_font_size_changed)
-        self.main_window.overlay_font_color_changed.connect(self.overlay_coordinator.handle_overlay_font_color_changed)
+        # Overlay font size and color changes (will be handled by _on_overlay_font_size_changed and _on_overlay_font_color_changed)
+        self.main_window.overlay_font_size_changed.connect(self._on_overlay_font_size_changed)
+        self.main_window.overlay_font_color_changed.connect(self._on_overlay_font_color_changed)
         
         # Reset view request (from toolbar and context menu)
         def handle_reset_view():
@@ -822,6 +1777,9 @@ class DICOMViewerApp(QObject):
         
         # Set callback to get cine loop state for context menu
         self.image_viewer.get_cine_loop_state_callback = self._get_cine_loop_state
+        
+        # Connect assign series signal from image viewer context menu
+        self.image_viewer.assign_series_requested.connect(self._on_assign_series_from_context_menu)
     
     def _open_files(self) -> None:
         """Handle open files request."""
@@ -863,15 +1821,132 @@ class DICOMViewerApp(QObject):
     
     def _on_series_navigation_requested(self, direction: int) -> None:
         """
-        Handle series navigation request from image viewer.
+        Handle series navigation request from image viewer (focused subwindow only).
         
         Args:
             direction: -1 for left/previous series, 1 for right/next series
         """
+        # Get focused subwindow's data
+        focused_idx = self.focused_subwindow_index
+        if focused_idx not in self.subwindow_data:
+            print(f"[DEBUG] Series navigation: subwindow {focused_idx} not in subwindow_data")
+            return
+        
+        data = self.subwindow_data[focused_idx]
+        focused_study_uid = data.get('current_study_uid', '')
+        focused_series_uid = data.get('current_series_uid', '')
+        focused_slice_index = data.get('current_slice_index', 0)
+        
+        # CRITICAL FIX: Extract actual series_uid from currently displayed dataset
+        # This ensures we navigate from what's actually shown, not what's stored
+        displayed_dataset = data.get('current_dataset')
+        if displayed_dataset:
+            extracted_series_uid = getattr(displayed_dataset, 'SeriesInstanceUID', '')
+            extracted_study_uid = getattr(displayed_dataset, 'StudyInstanceUID', '')
+            
+            if extracted_series_uid and extracted_series_uid != focused_series_uid:
+                print(f"[DEBUG] Series navigation: MISMATCH at start! Stored={focused_series_uid}, Extracted={extracted_series_uid}")
+                print(f"[DEBUG]   Full stored UID: {focused_series_uid}")
+                print(f"[DEBUG]   Full extracted UID: {extracted_series_uid}")
+                print(f"[DEBUG]   Using extracted UID for navigation")
+                # Use the extracted UID - this is what's actually displayed
+                focused_series_uid = extracted_series_uid
+                focused_study_uid = extracted_study_uid
+                # Update subwindow_data immediately to fix the mismatch
+                data['current_series_uid'] = extracted_series_uid
+                data['current_study_uid'] = extracted_study_uid
+        elif not focused_series_uid:
+            print(f"[DEBUG] Series navigation: No dataset and no stored series_uid, cannot navigate")
+            return
+        
+        print(f"[DEBUG] Series navigation: subwindow {focused_idx}, study={focused_study_uid[:20] if focused_study_uid else 'None'}..., "
+              f"series={focused_series_uid[:20] if focused_series_uid else 'None'}..., direction={direction}")
+        
+        # Ensure we have valid study UID and that the study exists in current_studies
+        if not focused_study_uid or focused_study_uid not in self.current_studies:
+            print(f"[DEBUG] Series navigation: Invalid study UID or study not in current_studies")
+            return
+        
+        # Validate that the series_uid exists in the study (critical fix for skipping)
+        study_series = self.current_studies[focused_study_uid]
+        if focused_series_uid and focused_series_uid not in study_series:
+            # Series doesn't exist - might be stale data
+            # Use first series in study as fallback
+            print(f"[DEBUG] Series navigation: Series {focused_series_uid[:20] if focused_series_uid else 'None'}... not found in study. "
+                  f"Available series: {list(study_series.keys())[:3]}... (showing first 3)")
+            if study_series:
+                # Get first series (sorted by SeriesNumber if available)
+                series_list = []
+                for series_uid, datasets in study_series.items():
+                    if datasets:
+                        first_dataset = datasets[0]
+                        series_number = getattr(first_dataset, 'SeriesNumber', None)
+                        try:
+                            series_num = int(series_number) if series_number is not None else 0
+                        except (ValueError, TypeError):
+                            series_num = 0
+                        series_list.append((series_num, series_uid, datasets))
+                series_list.sort(key=lambda x: x[0])
+                
+                if series_list:
+                    _, first_series_uid, first_datasets = series_list[0]
+                    focused_series_uid = first_series_uid
+                    # Update subwindow_data with correct series
+                    self.subwindow_data[focused_idx]['current_series_uid'] = first_series_uid
+                    self.subwindow_data[focused_idx]['current_dataset'] = first_datasets[0]
+                    self.subwindow_data[focused_idx]['current_slice_index'] = 0
+                    focused_slice_index = 0
+                    print(f"[DEBUG] Series navigation: Using fallback series {first_series_uid[:20]}...")
+                else:
+                    print(f"[DEBUG] Series navigation: No valid series in study, cannot navigate")
+                    return
+            else:
+                print(f"[DEBUG] Series navigation: Study has no series, cannot navigate")
+                return
+        
+        # Set context to match focused subwindow's data BEFORE navigation
+        # This is critical - the slice_display_manager needs the correct context
+        self.slice_display_manager.set_current_data_context(
+            self.current_studies,
+            focused_study_uid,
+            focused_series_uid,
+            focused_slice_index
+        )
+        
+        # Verify context was set correctly (debug check)
+        # Ensure the slice_display_manager's internal state matches what we set
+        if (self.slice_display_manager.current_study_uid != focused_study_uid or 
+            self.slice_display_manager.current_series_uid != focused_series_uid):
+            print(f"[DEBUG] Series navigation: Context mismatch detected. "
+                  f"Expected study={focused_study_uid[:20]}..., series={focused_series_uid[:20]}..., "
+                  f"Got study={self.slice_display_manager.current_study_uid[:20] if self.slice_display_manager.current_study_uid else 'None'}..., "
+                  f"series={self.slice_display_manager.current_series_uid[:20] if self.slice_display_manager.current_series_uid else 'None'}...")
+            # Context didn't update correctly, force it again
+            self.slice_display_manager.set_current_data_context(
+                self.current_studies,
+                focused_study_uid,
+                focused_series_uid,
+                focused_slice_index
+            )
+        
+        # Navigate series for focused subwindow
         new_series_uid, slice_index, dataset = self.slice_display_manager.handle_series_navigation(direction)
+        
+        if new_series_uid is None:
+            print(f"[DEBUG] Series navigation: handle_series_navigation returned None (navigation failed)")
+        else:
+            print(f"[DEBUG] Series navigation: Successfully navigated to series {new_series_uid[:20]}..., slice_index={slice_index}")
         if new_series_uid is not None and dataset is not None:
+            # Update focused subwindow's data
+            self.subwindow_data[focused_idx]['current_series_uid'] = new_series_uid
+            self.subwindow_data[focused_idx]['current_slice_index'] = slice_index
+            self.subwindow_data[focused_idx]['current_dataset'] = dataset
+            
+            # Update legacy references (point to focused subwindow)
             self.current_series_uid = new_series_uid
             self.current_slice_index = slice_index
+            self.current_dataset = dataset
+            self.current_study_uid = focused_study_uid  # Ensure study_uid matches
             
             # Reset projection state when switching series
             self.slice_display_manager.reset_projection_state()
@@ -880,55 +1955,103 @@ class DICOMViewerApp(QObject):
             self.intensity_projection_controls_widget.set_projection_type("aip")
             self.intensity_projection_controls_widget.set_slice_count(4)
             
-            # Update slice display manager context
-            self.slice_display_manager.set_current_data_context(
-                self.current_studies,
-                self.current_study_uid,
-                self.current_series_uid,
-                self.current_slice_index
-            )
-            
             # Display slice
             self.slice_display_manager.display_slice(
                 dataset,
                 self.current_studies,
-                self.current_study_uid,
-                self.current_series_uid,
-                self.current_slice_index
+                focused_study_uid,  # Use focused subwindow's study_uid
+                new_series_uid,
+                slice_index
             )
             
-            # Update current dataset reference
+            # Extract actual SeriesInstanceUID from the dataset that was displayed
+            # This ensures subwindow_data always reflects what's actually shown
+            extracted_series_uid = getattr(dataset, 'SeriesInstanceUID', '')
+            extracted_study_uid = getattr(dataset, 'StudyInstanceUID', '')
+            
+            # Get stored values for comparison
+            stored_series_uid = new_series_uid
+            stored_study_uid = focused_study_uid
+            
+            # Log the sync with FULL UIDs (not truncated) to diagnose mismatches
+            if extracted_series_uid != stored_series_uid:
+                print(f"[DEBUG] Syncing subwindow_data after navigation: MISMATCH detected!")
+                print(f"[DEBUG]   Extracted series_uid from dataset: {extracted_series_uid}")
+                print(f"[DEBUG]   Stored series_uid (from navigation): {stored_series_uid}")
+                print(f"[DEBUG]   Series UID match: False - updating stored value to match dataset")
+            else:
+                print(f"[DEBUG] Syncing subwindow_data after navigation: series_uid matches")
+                print(f"[DEBUG]   Series UID: {extracted_series_uid}")
+            
+            if extracted_study_uid != stored_study_uid:
+                print(f"[DEBUG]   Extracted study_uid from dataset: {extracted_study_uid}")
+                print(f"[DEBUG]   Stored study_uid: {stored_study_uid}")
+                print(f"[DEBUG]   Study UID match: False - updating stored value to match dataset")
+            
+            # Update subwindow_data with extracted UIDs from dataset
+            # This ensures navigation always starts from the correct series that's actually displayed
+            self.subwindow_data[focused_idx]['current_series_uid'] = extracted_series_uid
+            self.subwindow_data[focused_idx]['current_study_uid'] = extracted_study_uid
+            self.subwindow_data[focused_idx]['current_dataset'] = dataset
+            self.subwindow_data[focused_idx]['current_slice_index'] = slice_index
+            
+            # Update legacy references to match
+            self.current_series_uid = extracted_series_uid
+            self.current_study_uid = extracted_study_uid
+            self.current_slice_index = slice_index
             self.current_dataset = dataset
+            
+            # Update slice display manager context with extracted UIDs (after sync)
+            # This ensures the manager's context matches what's actually displayed
+            self.slice_display_manager.set_current_data_context(
+                self.current_studies,
+                extracted_study_uid,  # Use extracted UID
+                extracted_series_uid,  # Use extracted UID
+                slice_index
+            )
             
             # Update undo/redo state when dataset changes
             self._update_undo_redo_state()
             
-            # Update slice navigator
+            # Update slice navigator (shared, shows focused subwindow's slice)
             if self.current_studies and self.current_study_uid and self.current_series_uid:
                 datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
                 self.slice_navigator.set_total_slices(len(datasets))
                 self.slice_navigator.set_current_slice(slice_index)
             
             # Update series navigator highlighting
+            print(f"[DEBUG] Updating series navigator: setting current_series_uid={self.current_series_uid}")
+            print(f"[DEBUG]   Full UID: {self.current_series_uid}")
+            available_thumbnails = list(self.series_navigator.thumbnails.keys())
+            print(f"[DEBUG]   Available thumbnails ({len(available_thumbnails)}): {[uid[:30] + '...' if len(uid) > 30 else uid for uid in available_thumbnails[:5]]}")
+            if self.current_series_uid not in available_thumbnails:
+                print(f"[DEBUG]   WARNING: series_uid not found in thumbnails! This will cause highlighting to fail.")
             self.series_navigator.set_current_series(self.current_series_uid)
             
             # Update cine player context and check if series is cine-capable
             self._update_cine_player_context()
-        
-            # Display ROIs for this slice (now handled by display_slice, but kept for compatibility)
-            # self.slice_display_manager.display_rois_for_slice(dataset)
     
     def _on_series_navigator_selected(self, series_uid: str) -> None:
         """
-        Handle series selection from series navigator.
+        Handle series selection from series navigator (assigns to focused subwindow).
         
         Args:
             series_uid: Selected series UID
         """
-        if not self.current_studies or self.current_study_uid not in self.current_studies:
+        if not self.current_studies:
             return
         
-        study_series = self.current_studies[self.current_study_uid]
+        # Find study containing this series
+        target_study_uid = None
+        for study_uid, series_dict in self.current_studies.items():
+            if series_uid in series_dict:
+                target_study_uid = study_uid
+                break
+        
+        if target_study_uid is None:
+            return
+        
+        study_series = self.current_studies[target_study_uid]
         if series_uid not in study_series:
             return
         
@@ -936,44 +2059,22 @@ class DICOMViewerApp(QObject):
         if not datasets:
             return
         
-        # Navigate to first slice of selected series
-        self.current_series_uid = series_uid
-        self.current_slice_index = 0
-        self.current_dataset = datasets[0]
+        # Assign to focused subwindow
+        focused_subwindow = self.multi_window_layout.get_focused_subwindow()
+        if focused_subwindow:
+            # Assign first slice of selected series to focused subwindow
+            # _assign_series_to_subwindow will handle the display
+            self._assign_series_to_subwindow(focused_subwindow, series_uid, 0)
+    
+    def _on_assign_series_from_context_menu(self, series_uid: str) -> None:
+        """
+        Handle series assignment request from context menu (assigns to focused subwindow).
         
-        # Reset projection state when switching series
-        self.slice_display_manager.reset_projection_state()
-        # Update widget to match reset state
-        self.intensity_projection_controls_widget.set_enabled(False)
-        self.intensity_projection_controls_widget.set_projection_type("aip")
-        self.intensity_projection_controls_widget.set_slice_count(4)
-        
-        # Update slice display manager context
-        self.slice_display_manager.set_current_data_context(
-            self.current_studies,
-            self.current_study_uid,
-            self.current_series_uid,
-            self.current_slice_index
-        )
-        
-        # Display slice
-        self.slice_display_manager.display_slice(
-            self.current_dataset,
-            self.current_studies,
-            self.current_study_uid,
-            self.current_series_uid,
-            self.current_slice_index
-        )
-        
-        # Update slice navigator
-        self.slice_navigator.set_total_slices(len(datasets))
-        self.slice_navigator.set_current_slice(0)
-        
-        # Update series navigator highlighting
-        self.series_navigator.set_current_series(self.current_series_uid)
-        
-        # Update cine player context and check if series is cine-capable
-        self._update_cine_player_context()
+        Args:
+            series_uid: Selected series UID
+        """
+        # Same logic as _on_series_navigator_selected
+        self._on_series_navigator_selected(series_uid)
     
     def _display_slice(self, dataset, preserve_view_override: Optional[bool] = None) -> None:
         """
@@ -1574,23 +2675,49 @@ class DICOMViewerApp(QObject):
     
     def _on_overlay_font_size_changed(self, font_size: int) -> None:
         """
-        Handle overlay font size change from toolbar.
+        Handle overlay font size change from toolbar - update ALL subwindows.
         
         Args:
             font_size: New font size in points
         """
-        self.overlay_coordinator.handle_overlay_font_size_changed(font_size)
+        # Update all subwindows' overlay managers
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        for idx, subwindow in enumerate(subwindows):
+            if subwindow and idx in self.subwindow_managers:
+                managers = self.subwindow_managers[idx]
+                overlay_manager = managers.get('overlay_manager')
+                overlay_coordinator = managers.get('overlay_coordinator')
+                
+                if overlay_manager:
+                    overlay_manager.set_font_size(font_size)
+                    
+                    # Recreate overlay for this subwindow if it has data
+                    if overlay_coordinator:
+                        overlay_coordinator.handle_overlay_font_size_changed(font_size)
     
     def _on_overlay_font_color_changed(self, r: int, g: int, b: int) -> None:
         """
-        Handle overlay font color change from toolbar.
+        Handle overlay font color change from toolbar - update ALL subwindows.
         
         Args:
             r: Red component (0-255)
             g: Green component (0-255)
             b: Blue component (0-255)
         """
-        self.overlay_coordinator.handle_overlay_font_color_changed(r, g, b)
+        # Update all subwindows' overlay managers
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        for idx, subwindow in enumerate(subwindows):
+            if subwindow and idx in self.subwindow_managers:
+                managers = self.subwindow_managers[idx]
+                overlay_manager = managers.get('overlay_manager')
+                overlay_coordinator = managers.get('overlay_coordinator')
+                
+                if overlay_manager:
+                    overlay_manager.set_font_color(r, g, b)
+                    
+                    # Recreate overlay for this subwindow if it has data
+                    if overlay_coordinator:
+                        overlay_coordinator.handle_overlay_font_color_changed(r, g, b)
     
     def _on_scene_selection_changed(self) -> None:
         """Handle scene selection change (e.g., when ROI is moved)."""
@@ -1607,28 +2734,54 @@ class DICOMViewerApp(QObject):
     
     def _on_slice_changed(self, slice_index: int) -> None:
         """
-        Handle slice index change.
+        Handle slice change from slice navigator (affects focused subwindow only).
         
         Args:
             slice_index: New slice index
         """
-        # print(f"[ROI DEBUG] _on_slice_changed called with slice_index={slice_index}")
-        # print(f"[ROI DEBUG] BEFORE update: self.current_slice_index={self.current_slice_index}")
-        # Update current slice index FIRST before any operations that might use it
-        self.current_slice_index = slice_index
-        # Update current dataset reference
-        if self.current_studies and self.current_series_uid:
-            datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
-            if 0 <= slice_index < len(datasets):
-                self.current_dataset = datasets[slice_index]
-        # print(f"[ROI DEBUG] AFTER update: self.current_slice_index={self.current_slice_index}")
-        # Now handle the slice change - at this point self.current_slice_index is correct
-        self.slice_display_manager.handle_slice_changed(slice_index)
-        
-        # Update frame slider position
-        total_slices = self.slice_navigator.total_slices
-        if total_slices > 0:
-            self.cine_controls_widget.update_frame_position(slice_index, total_slices)
+        # Update focused subwindow's slice
+        focused_idx = self.focused_subwindow_index
+        if focused_idx in self.subwindow_data and focused_idx in self.subwindow_managers:
+            data = self.subwindow_data[focused_idx]
+            managers = self.subwindow_managers[focused_idx]
+            
+            # Get current series
+            series_uid = data.get('current_series_uid', '')
+            study_uid = data.get('current_study_uid', '')
+            
+            if not series_uid or not study_uid:
+                return
+            
+            # Get series datasets
+            if study_uid not in self.current_studies or series_uid not in self.current_studies[study_uid]:
+                return
+            
+            series_datasets = self.current_studies[study_uid][series_uid]
+            if not series_datasets or slice_index < 0 or slice_index >= len(series_datasets):
+                return
+            
+            # Update subwindow data
+            data['current_slice_index'] = slice_index
+            data['current_dataset'] = series_datasets[slice_index]
+            
+            # Update legacy references
+            self.current_slice_index = slice_index
+            self.current_dataset = series_datasets[slice_index]
+            
+            # Display slice using focused subwindow's slice display manager
+            slice_display_manager = managers['slice_display_manager']
+            slice_display_manager.display_slice(
+                series_datasets[slice_index],
+                self.current_studies,
+                study_uid,
+                series_uid,
+                slice_index
+            )
+            
+            # Update frame slider position
+            total_slices = len(series_datasets)
+            if total_slices > 0:
+                self.cine_controls_widget.update_frame_position(slice_index, total_slices)
     
     def _on_manual_slice_navigation(self, slice_index: int) -> None:
         """
@@ -1831,7 +2984,18 @@ class DICOMViewerApp(QObject):
         """
         # Show window maximized (full-screen)
         self.main_window.showMaximized()
+        
+        # Set keyboard focus after window is shown
+        # Use QTimer to ensure window is fully visible before setting focus
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(100, self._set_initial_keyboard_focus)
+        
         return self.app.exec()
+    
+    def _set_initial_keyboard_focus(self) -> None:
+        """Set keyboard focus to the focused subwindow after window is shown."""
+        if self.image_viewer:
+            self.image_viewer.setFocus()
 
 
 def exception_hook(exctype, value, tb):
