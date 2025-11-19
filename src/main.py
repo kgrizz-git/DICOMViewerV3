@@ -230,7 +230,11 @@ class DICOMViewerApp(QObject):
             get_current_dataset=lambda: self.current_dataset,
             get_current_slice_index=lambda: self.current_slice_index,
             get_rescale_params=self._get_rescale_params,
-            set_mouse_mode_callback=self._set_mouse_mode_via_handler
+            set_mouse_mode_callback=self._set_mouse_mode_via_handler,
+            get_projection_enabled=lambda: self.slice_display_manager.projection_enabled,
+            get_projection_type=lambda: self.slice_display_manager.projection_type,
+            get_projection_slice_count=lambda: self.slice_display_manager.projection_slice_count,
+            get_current_studies=lambda: self.current_studies
         )
         
         # Update view state manager with ROI coordinator
@@ -1158,8 +1162,8 @@ class DICOMViewerApp(QObject):
             if modality:
                 # Normalize modality (strip whitespace)
                 modality_str = str(modality).strip()
-                # Valid modalities list (must match overlay_config_dialog.py)
-                valid_modalities = ["default", "CT", "MR", "US", "CR", "DX", "RF", "XA", "NM", "PT", "RT", "MG"]
+                # Valid modalities list (must match overlay_config_dialog.py, alphabetical order, default first)
+                valid_modalities = ["default", "CR", "CT", "DX", "MG", "MR", "NM", "PT", "RF", "RT", "US", "XA"]
                 if modality_str in valid_modalities:
                     current_modality = modality_str
                 # If modality is not in valid list, current_modality remains None (will default to "default")

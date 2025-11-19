@@ -90,8 +90,8 @@ class OverlayConfigDialog(QDialog):
         self.setModal(True)
         self.resize(700, 600)
         
-        # Valid modalities list
-        valid_modalities = ["default", "CT", "MR", "US", "CR", "DX", "RF", "XA", "NM", "PT", "RT", "MG"]
+        # Valid modalities list (alphabetical order, default first)
+        valid_modalities = ["default", "CR", "CT", "DX", "MG", "MR", "NM", "PT", "RF", "RT", "US", "XA"]
         
         # Store current modality - use initial_modality if provided and valid, otherwise "default"
         if initial_modality and initial_modality.strip() in valid_modalities:
@@ -118,7 +118,7 @@ class OverlayConfigDialog(QDialog):
         modality_label = QLabel("Modality:")
         self.modality_combo = QComboBox()
         # Sort modalities alphabetically, but keep "default" first
-        modalities = ["default"] + sorted(["CT", "MR", "US", "CR", "DX", "NM", "PT", "RT", "MG"])
+        modalities = ["default"] + sorted(["CR", "CT", "DX", "MG", "MR", "NM", "PT", "RF", "RT", "US", "XA"])
         self.modality_combo.addItems(modalities)
         self.modality_combo.currentTextChanged.connect(self._on_modality_changed)
         modality_layout.addWidget(modality_label)
@@ -492,7 +492,7 @@ class OverlayConfigDialog(QDialog):
         # Initialize modality_configs with all modalities from config_manager
         # This ensures we have a baseline for all modalities, and any changes
         # made by the user will be stored in memory and only applied on OK
-        modalities = ["default", "CT", "MR", "US", "CR", "DX", "NM", "PT", "RT"]
+        modalities = ["default"] + sorted(["CR", "CT", "DX", "MG", "MR", "NM", "PT", "RF", "RT", "US", "XA"])
         for modality in modalities:
             self.modality_configs[modality] = self.config_manager.get_overlay_tags(modality)
         

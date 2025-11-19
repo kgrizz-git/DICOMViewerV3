@@ -214,15 +214,15 @@ class MainWindow(QMainWindow):
         overlay_config_action.triggered.connect(self.overlay_config_requested.emit)
         view_menu.addAction(overlay_config_action)
         
-        # Annotation Options action
-        annotation_options_action = QAction("Annotation &Options...", self)
-        annotation_options_action.triggered.connect(self.annotation_options_requested.emit)
-        view_menu.addAction(annotation_options_action)
-        
         # Overlay Settings action
         overlay_settings_action = QAction("Overlay &Settings...", self)
         overlay_settings_action.triggered.connect(self.overlay_settings_requested.emit)
         view_menu.addAction(overlay_settings_action)
+        
+        # Annotation Options action
+        annotation_options_action = QAction("Annotation &Options...", self)
+        annotation_options_action.triggered.connect(self.annotation_options_requested.emit)
+        view_menu.addAction(annotation_options_action)
         
         # Tools menu
         tools_menu = menubar.addMenu("&Tools")

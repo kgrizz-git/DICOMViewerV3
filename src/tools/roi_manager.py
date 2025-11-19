@@ -64,11 +64,12 @@ class ROIGraphicsEllipseItem(QGraphicsEllipseItem):
             if self._last_callback_pos is None or (current_pos - self._last_callback_pos).manhattanLength() > 1.0:
                 if self.on_moved_callback:
                     try:
-                        print("[DEBUG-ROI] ROIGraphicsEllipseItem mouseMoveEvent - triggering callback")
+                        # print("[DEBUG-ROI] ROIGraphicsEllipseItem mouseMoveEvent - triggering callback")
                         self.on_moved_callback()
                         self._last_callback_pos = current_pos
                     except Exception as e:
-                        print(f"[DEBUG-ROI] Error in ROI movement callback from mouseMoveEvent: {e}")
+                        # print(f"[DEBUG-ROI] Error in ROI movement callback from mouseMoveEvent: {e}")
+                        pass
 
 
 class ROIGraphicsRectItem(QGraphicsRectItem):
@@ -86,12 +87,13 @@ class ROIGraphicsRectItem(QGraphicsRectItem):
         # For rectangles/ellipses, when ItemIsMovable is set, Qt moves them by changing position
         # ItemPositionHasChanged fires after the position has changed
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged:
-            print("[DEBUG-ROI] ROIGraphicsRectItem position changed")
+            # print("[DEBUG-ROI] ROIGraphicsRectItem position changed")
             if self.on_moved_callback:
                 try:
                     self.on_moved_callback()
                 except Exception as e:
-                    print(f"[DEBUG-ROI] Error in ROI movement callback: {e}")
+                    # print(f"[DEBUG-ROI] Error in ROI movement callback: {e}")
+                    pass
         return super().itemChange(change, value)
     
     def mouseMoveEvent(self, event: QGraphicsSceneMouseEvent) -> None:
@@ -105,11 +107,12 @@ class ROIGraphicsRectItem(QGraphicsRectItem):
             if self._last_callback_pos is None or (current_pos - self._last_callback_pos).manhattanLength() > 1.0:
                 if self.on_moved_callback:
                     try:
-                        print("[DEBUG-ROI] ROIGraphicsRectItem mouseMoveEvent - triggering callback")
+                        # print("[DEBUG-ROI] ROIGraphicsRectItem mouseMoveEvent - triggering callback")
                         self.on_moved_callback()
                         self._last_callback_pos = current_pos
                     except Exception as e:
-                        print(f"[DEBUG-ROI] Error in ROI movement callback from mouseMoveEvent: {e}")
+                        # print(f"[DEBUG-ROI] Error in ROI movement callback from mouseMoveEvent: {e}")
+                        pass
 
 
 class DraggableStatisticsOverlay(QGraphicsTextItem):
@@ -150,20 +153,20 @@ class DraggableStatisticsOverlay(QGraphicsTextItem):
             try:
                 # Check if ROI still exists and is valid
                 if self.roi is None:
-                    print("[DEBUG-OVERLAY] ROI is None in overlay itemChange")
+                    # print("[DEBUG-OVERLAY] ROI is None in overlay itemChange")
                     return super().itemChange(change, value)
                 
                 # Check if ROI item still exists and is in scene
                 if not hasattr(self.roi, 'item') or self.roi.item is None:
-                    print("[DEBUG-OVERLAY] ROI item is None")
+                    # print("[DEBUG-OVERLAY] ROI item is None")
                     return super().itemChange(change, value)
                 
                 if self.roi.item.scene() is None:
-                    print("[DEBUG-OVERLAY] ROI item not in scene")
+                    # print("[DEBUG-OVERLAY] ROI item not in scene")
                     return super().itemChange(change, value)
                 
                 if self.scene() is None:
-                    print("[DEBUG-OVERLAY] Overlay not in scene")
+                    # print("[DEBUG-OVERLAY] Overlay not in scene")
                     return super().itemChange(change, value)
                 
                 view = self.scene().views()[0] if self.scene().views() else None
@@ -186,7 +189,8 @@ class DraggableStatisticsOverlay(QGraphicsTextItem):
                     if self.offset_update_callback:
                         self.offset_update_callback(offset_x, offset_y)
             except Exception as e:
-                print(f"[DEBUG-OVERLAY] Error in overlay itemChange: {e}")
+                # print(f"[DEBUG-OVERLAY] Error in overlay itemChange: {e}")
+                pass
                 import traceback
                 traceback.print_exc()
         
@@ -516,11 +520,11 @@ class ROIManager:
         Returns:
             True if deleted, False otherwise
         """
-        print(f"[DEBUG-ROI] delete_roi called for ROI {id(roi)}")
+        # print(f"[DEBUG-ROI] delete_roi called for ROI {id(roi)}")
         # Find and remove from rois dict
         for roi_list in self.rois.values():
             if roi in roi_list:
-                print(f"[DEBUG-ROI] Found ROI in list, removing")
+                # print(f"[DEBUG-ROI] Found ROI in list, removing")
                 roi_list.remove(roi)
                 # Remove statistics overlay BEFORE removing ROI item from scene
                 # This ensures the overlay is properly removed
@@ -529,17 +533,17 @@ class ROIManager:
                 roi.statistics = None
                 # Only remove if item actually belongs to this scene
                 if roi.item.scene() == scene:
-                    print(f"[DEBUG-ROI] Removing ROI item from scene")
+                    # print(f"[DEBUG-ROI] Removing ROI item from scene")
                     scene.removeItem(roi.item)
                 
                 # Deselect if this was the selected ROI
                 if self.selected_roi == roi:
-                    print(f"[DEBUG-ROI] Deselecting deleted ROI")
+                    # print(f"[DEBUG-ROI] Deselecting deleted ROI")
                     self.selected_roi = None
                 
-                print(f"[DEBUG-ROI] ROI deletion complete")
+                # print(f"[DEBUG-ROI] ROI deletion complete")
                 return True
-        print(f"[DEBUG-ROI] ROI not found in lists")
+        # print(f"[DEBUG-ROI] ROI not found in lists")
         return False
     
     def get_rois_for_slice(self, study_uid: str, series_uid: str, instance_identifier: int) -> List[ROIItem]:
@@ -898,11 +902,11 @@ class ROIManager:
             roi: ROI item
             scene: QGraphicsScene to remove item from
         """
-        print(f"[DEBUG-OVERLAY] remove_statistics_overlay called for ROI {id(roi)}")
+        # print(f"[DEBUG-OVERLAY] remove_statistics_overlay called for ROI {id(roi)}")
         removed_any = False
         if roi.statistics_overlay_item is not None:
             overlay_item = roi.statistics_overlay_item
-            print(f"[DEBUG-OVERLAY] Removing overlay item {id(overlay_item)}")
+            # print(f"[DEBUG-OVERLAY] Removing overlay item {id(overlay_item)}")
             # Clear reference FIRST to prevent re-access
             roi.statistics_overlay_item = None
             # Disconnect overlay from ROI to prevent crashes
@@ -912,11 +916,12 @@ class ROIManager:
                 overlay_item.mark_deleted()
             # Remove from scene if it's in the scene
             if scene and overlay_item.scene() == scene:
-                print(f"[DEBUG-OVERLAY] Removing overlay from scene")
+                # print(f"[DEBUG-OVERLAY] Removing overlay from scene")
                 scene.removeItem(overlay_item)
                 removed_any = True
         else:
-            print(f"[DEBUG-OVERLAY] No overlay item reference to remove")
+            # print(f"[DEBUG-OVERLAY] No overlay item reference to remove")
+            pass
         
         # Fallback: search the scene for any text items tagged with this ROI id
         if scene is not None:
@@ -926,7 +931,8 @@ class ROIManager:
                     if item.data(0) == id(roi):
                         items_to_remove.append(item)
             if items_to_remove:
-                print(f"[DEBUG-OVERLAY] Removing {len(items_to_remove)} orphan overlay items for ROI {id(roi)}")
+                # print(f"[DEBUG-OVERLAY] Removing {len(items_to_remove)} orphan overlay items for ROI {id(roi)}")
+                pass
             for item in items_to_remove:
                 if hasattr(item, 'roi'):
                     item.roi = None
@@ -937,7 +943,7 @@ class ROIManager:
         
         if scene is not None and removed_any:
             scene.update()
-            print(f"[DEBUG-OVERLAY] Scene updated after overlay removal")
+            # print(f"[DEBUG-OVERLAY] Scene updated after overlay removal")
     
     def remove_all_statistics_overlays_from_scene(self, scene) -> None:
         """
