@@ -1502,7 +1502,28 @@ class MainWindow(QMainWindow):
             action.blockSignals(False)
         
         # Emit signal AFTER updating toolbar buttons
-        self.mouse_mode_changed.emit(mode)
+    
+    def get_current_mouse_mode(self) -> str:
+        """
+        Get the current mouse mode from toolbar.
+        
+        Returns:
+            Current mouse mode string ("select", "roi_ellipse", "roi_rectangle", "measure", "zoom", "pan", "auto_window_level")
+        """
+        if self.mouse_mode_select_action.isChecked():
+            return "select"
+        elif self.mouse_mode_ellipse_roi_action.isChecked():
+            return "roi_ellipse"
+        elif self.mouse_mode_rectangle_roi_action.isChecked():
+            return "roi_rectangle"
+        elif self.mouse_mode_measure_action.isChecked():
+            return "measure"
+        elif self.mouse_mode_zoom_action.isChecked():
+            return "zoom"
+        elif self.mouse_mode_auto_window_level_action.isChecked():
+            return "auto_window_level"
+        else:  # pan is default
+            return "pan"
     
     def set_mouse_mode_checked(self, mode: str) -> None:
         """

@@ -408,6 +408,10 @@ class DICOMViewerApp(QObject):
             }
         
         print(f"DEBUG: _initialize_subwindow_managers complete. Total managers created: {len(self.subwindow_managers)}")
+        
+        # Connect transform/zoom signals for all subwindows to their own ViewStateManager
+        # This ensures overlays update correctly when panning/zooming in any subwindow
+        self._connect_all_subwindow_transform_signals()
     
     def _create_managers_for_subwindow(self, idx: int, subwindow: SubWindowContainer) -> None:
         """Create managers for a specific subwindow."""
@@ -625,6 +629,14 @@ class DICOMViewerApp(QObject):
         if hasattr(self, 'keyboard_event_handler') and self.image_viewer:
             self.keyboard_event_handler.image_viewer = self.image_viewer
         
+        # Update mouse mode handler reference and apply current mode
+        if hasattr(self, 'mouse_mode_handler') and self.image_viewer:
+            self.mouse_mode_handler.image_viewer = self.image_viewer
+            # Apply current mouse mode from toolbar to newly focused subwindow
+            current_mode = self.main_window.get_current_mouse_mode()
+            if current_mode:
+                self.image_viewer.set_mouse_mode(current_mode)
+        
         # Set keyboard focus to focused subwindow's ImageViewer
         if self.image_viewer:
             self.image_viewer.setFocus()
@@ -637,9 +649,22 @@ class DICOMViewerApp(QObject):
         # Update zoom display
         self.zoom_display_widget.update_zoom(self.image_viewer.current_zoom)
         
+        # Update window/level controls with focused subwindow's current values
+        if (self.view_state_manager and 
+            self.view_state_manager.current_window_center is not None and 
+            self.view_state_manager.current_window_width is not None):
+            # Get current rescale state
+            unit = self.view_state_manager.rescale_type if self.view_state_manager.use_rescaled_values else None
+            # Update controls (block signals to prevent triggering changes)
+            self.window_level_controls.set_window_level(
+                self.view_state_manager.current_window_center,
+                self.view_state_manager.current_window_width,
+                block_signals=True,
+                unit=unit
+            )
+        
         # Update ROI list (will be updated when slice is displayed)
         # Update ROI statistics (will be updated when ROI is selected)
-        # Window/level controls will be updated via signals
     
     def _update_left_panel_for_focused_subwindow(self) -> None:
         """Update left panel controls (metadata, cine) to reflect focused subwindow's state."""
@@ -665,11 +690,30 @@ class DICOMViewerApp(QObject):
         """Redisplay slice for a specific subwindow."""
         if idx not in self.subwindow_managers:
             return
+        
         managers = self.subwindow_managers[idx]
         slice_display_manager = managers['slice_display_manager']
-        # Call the slice display manager's display method
-        # This will be connected properly later
-        pass
+        
+        # Get current data for this subwindow
+        if idx not in self.subwindow_data:
+            return
+        
+        data = self.subwindow_data[idx]
+        dataset = data.get('current_dataset')
+        study_uid = data.get('current_study_uid', '')
+        series_uid = data.get('current_series_uid', '')
+        slice_index = data.get('current_slice_index', 0)
+        
+        if dataset and study_uid and series_uid and self.current_studies:
+            # Redisplay the slice with current window/level
+            slice_display_manager.display_slice(
+                dataset,
+                self.current_studies,
+                study_uid,
+                series_uid,
+                slice_index,
+                preserve_view_override=preserve_view
+            )
     
     def _initialize_handlers(self) -> None:
         """Initialize all handler classes."""
@@ -1266,11 +1310,14 @@ class DICOMViewerApp(QObject):
                 # Create managers for this subwindow
                 # Use the same logic as _initialize_subwindow_managers but only for this subwindow
                 self._create_managers_for_subwindow(idx, subwindow)
+        
+        # Connect transform/zoom signals for any newly created subwindows
+        self._connect_all_subwindow_transform_signals()
     
     def _connect_subwindow_signals(self) -> None:
         """Connect signals that apply to all subwindows."""
         subwindows = self.multi_window_layout.get_all_subwindows()
-        for subwindow in subwindows:
+        for idx, subwindow in enumerate(subwindows):
             if subwindow:
                 image_viewer = subwindow.image_viewer
                 # Connect files dropped for all subwindows
@@ -1281,6 +1328,38 @@ class DICOMViewerApp(QObject):
                 
                 # Connect assign series request
                 subwindow.assign_series_requested.connect(self._on_assign_series_requested)
+        
+        # Connect transform/zoom signals for all subwindows to their own ViewStateManager
+        # This ensures overlays update correctly when panning/zooming in any subwindow
+        self._connect_all_subwindow_transform_signals()
+    
+    def _connect_all_subwindow_transform_signals(self) -> None:
+        """Connect transform_changed and zoom_changed signals for all subwindows to their own ViewStateManager."""
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        
+        for idx, subwindow in enumerate(subwindows):
+            if subwindow and idx in self.subwindow_managers:
+                image_viewer = subwindow.image_viewer
+                managers = self.subwindow_managers[idx]
+                view_state_manager = managers.get('view_state_manager')
+                
+                if view_state_manager:
+                    # Disconnect any existing ViewStateManager connections first to avoid duplicates
+                    # Note: For focused subwindow, _connect_focused_subwindow_signals() will also connect
+                    # additional handlers (like zoom_display_widget), but we want the ViewStateManager
+                    # connection for all subwindows to ensure overlays update correctly
+                    try:
+                        image_viewer.transform_changed.disconnect(view_state_manager.handle_transform_changed)
+                    except (TypeError, RuntimeError):
+                        pass
+                    try:
+                        image_viewer.zoom_changed.disconnect(view_state_manager.handle_zoom_changed)
+                    except (TypeError, RuntimeError):
+                        pass
+                    
+                    # Connect to this subwindow's ViewStateManager
+                    image_viewer.transform_changed.connect(view_state_manager.handle_transform_changed)
+                    image_viewer.zoom_changed.connect(view_state_manager.handle_zoom_changed)
     
     def _on_layout_change_requested(self, layout_mode: str) -> None:
         """Handle layout change request from image viewer context menu."""
