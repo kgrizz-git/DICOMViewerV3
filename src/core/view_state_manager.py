@@ -152,12 +152,13 @@ class ViewStateManager:
         Args:
             preserve_view: True to preserve zoom/pan, False to refit
         """
-        print(f"[DEBUG-WL] _redisplay_current_slice called: preserve_view={preserve_view}")
-        print(f"[DEBUG-WL]   redisplay_slice_callback: {self.redisplay_slice_callback}")
+        # print(f"[DEBUG-WL] _redisplay_current_slice called: preserve_view={preserve_view}")
+        # print(f"[DEBUG-WL]   redisplay_slice_callback: {self.redisplay_slice_callback}")
         if self.redisplay_slice_callback:
             self.redisplay_slice_callback(preserve_view)
         else:
-            print(f"[DEBUG-WL]   WARNING: redisplay_slice_callback is None!")
+            # print(f"[DEBUG-WL]   WARNING: redisplay_slice_callback is None!")
+            pass
     
     def get_series_identifier(self, dataset: Dataset) -> str:
         """
@@ -567,11 +568,11 @@ class ViewStateManager:
             width: Window width
         """
         # DEBUG: Print received values and current state
-        print(f"[DEBUG-WL] handle_window_changed called: center={center:.2f}, width={width:.2f}")
-        print(f"[DEBUG-WL]   Current stored: center={self.current_window_center}, width={self.current_window_width}")
-        print(f"[DEBUG-WL]   ImageViewer: {self.image_viewer}")
-        print(f"[DEBUG-WL]   Rescale state: use_rescaled={self.use_rescaled_values}, slope={self.rescale_slope}, intercept={self.rescale_intercept}")
-        print(f"[DEBUG-WL]   Available presets: {len(self.window_level_presets) if self.window_level_presets else 0}")
+        # print(f"[DEBUG-WL] handle_window_changed called: center={center:.2f}, width={width:.2f}")
+        # print(f"[DEBUG-WL]   Current stored: center={self.current_window_center}, width={self.current_window_width}")
+        # print(f"[DEBUG-WL]   ImageViewer: {self.image_viewer}")
+        # print(f"[DEBUG-WL]   Rescale state: use_rescaled={self.use_rescaled_values}, slope={self.rescale_slope}, intercept={self.rescale_intercept}")
+        # print(f"[DEBUG-WL]   Available presets: {len(self.window_level_presets) if self.window_level_presets else 0}")
         
         # Check if received values match stored values (to detect stale values from previous series)
         # Use small tolerance for comparison
@@ -679,8 +680,8 @@ class ViewStateManager:
         self.main_window.update_zoom_preset_status(current_zoom, preset_name)
         
         # DEBUG: Log final stored values before redisplay
-        print(f"[DEBUG-WL]   After update: center={self.current_window_center}, width={self.current_window_width}")
-        print(f"[DEBUG-WL]   Calling _redisplay_current_slice(preserve_view=True)")
+        # print(f"[DEBUG-WL]   After update: center={self.current_window_center}, width={self.current_window_width}")
+        # print(f"[DEBUG-WL]   Calling _redisplay_current_slice(preserve_view=True)")
         
         # Re-display current slice with new window/level
         self._redisplay_current_slice(preserve_view=True)

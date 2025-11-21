@@ -643,9 +643,9 @@ class DICOMViewerApp(QObject):
     
     def _update_right_panel_for_focused_subwindow(self) -> None:
         """Update right panel controls to reflect focused subwindow's state."""
-        print(f"[DEBUG-WL] _update_right_panel_for_focused_subwindow called")
+        # print(f"[DEBUG-WL] _update_right_panel_for_focused_subwindow called")
         if self.image_viewer is None:
-            print(f"[DEBUG-WL]   ERROR: image_viewer is None")
+            # print(f"[DEBUG-WL]   ERROR: image_viewer is None")
             return
         
         # Update zoom display
@@ -653,12 +653,12 @@ class DICOMViewerApp(QObject):
         
         # Update window/level controls with focused subwindow's current values
         if self.view_state_manager:
-            print(f"[DEBUG-WL]   ViewStateManager values: center={self.view_state_manager.current_window_center}, width={self.view_state_manager.current_window_width}")
+            # print(f"[DEBUG-WL]   ViewStateManager values: center={self.view_state_manager.current_window_center}, width={self.view_state_manager.current_window_width}")
             if (self.view_state_manager.current_window_center is not None and 
                 self.view_state_manager.current_window_width is not None):
                 # Get current rescale state
                 unit = self.view_state_manager.rescale_type if self.view_state_manager.use_rescaled_values else None
-                print(f"[DEBUG-WL]   Setting window_level_controls: center={self.view_state_manager.current_window_center}, width={self.view_state_manager.current_window_width}, unit={unit}")
+                # print(f"[DEBUG-WL]   Setting window_level_controls: center={self.view_state_manager.current_window_center}, width={self.view_state_manager.current_window_width}, unit={unit}")
                 # Update controls (block signals to prevent triggering changes)
                 self.window_level_controls.set_window_level(
                     self.view_state_manager.current_window_center,
@@ -667,9 +667,11 @@ class DICOMViewerApp(QObject):
                     unit=unit
                 )
             else:
-                print(f"[DEBUG-WL]   WARNING: ViewStateManager window/level values are None")
+                # print(f"[DEBUG-WL]   WARNING: ViewStateManager window/level values are None")
+                pass
         else:
-            print(f"[DEBUG-WL]   ERROR: view_state_manager is None")
+            # print(f"[DEBUG-WL]   ERROR: view_state_manager is None")
+            pass
         
         # Update ROI list (will be updated when slice is displayed)
         # Update ROI statistics (will be updated when ROI is selected)
@@ -696,20 +698,20 @@ class DICOMViewerApp(QObject):
     
     def _redisplay_subwindow_slice(self, idx: int, preserve_view: bool = False) -> None:
         """Redisplay slice for a specific subwindow."""
-        print(f"[DEBUG-WL] _redisplay_subwindow_slice called: idx={idx}, preserve_view={preserve_view}")
+        # print(f"[DEBUG-WL] _redisplay_subwindow_slice called: idx={idx}, preserve_view={preserve_view}")
         if idx not in self.subwindow_managers:
-            print(f"[DEBUG-WL]   ERROR: idx {idx} not in subwindow_managers")
+            # print(f"[DEBUG-WL]   ERROR: idx {idx} not in subwindow_managers")
             return
         
         managers = self.subwindow_managers[idx]
         view_state_manager = managers.get('view_state_manager')
         slice_display_manager = managers['slice_display_manager']
         
-        print(f"[DEBUG-WL]   ViewStateManager stored values: center={view_state_manager.current_window_center if view_state_manager else 'None'}, width={view_state_manager.current_window_width if view_state_manager else 'None'}")
+        # print(f"[DEBUG-WL]   ViewStateManager stored values: center={view_state_manager.current_window_center if view_state_manager else 'None'}, width={view_state_manager.current_window_width if view_state_manager else 'None'}")
         
         # Get current data for this subwindow
         if idx not in self.subwindow_data:
-            print(f"[DEBUG-WL]   ERROR: idx {idx} not in subwindow_data")
+            # print(f"[DEBUG-WL]   ERROR: idx {idx} not in subwindow_data")
             return
         
         data = self.subwindow_data[idx]
@@ -719,7 +721,7 @@ class DICOMViewerApp(QObject):
         slice_index = data.get('current_slice_index', 0)
         
         if dataset and study_uid and series_uid and self.current_studies:
-            print(f"[DEBUG-WL]   Calling display_slice with dataset, study={study_uid[:20] if len(study_uid) > 20 else study_uid}..., series={series_uid[:20] if len(series_uid) > 20 else series_uid}...")
+            # print(f"[DEBUG-WL]   Calling display_slice with dataset, study={study_uid[:20] if len(study_uid) > 20 else study_uid}..., series={series_uid[:20] if len(series_uid) > 20 else series_uid}...")
             # Redisplay the slice with current window/level
             slice_display_manager.display_slice(
                 dataset,
@@ -730,7 +732,8 @@ class DICOMViewerApp(QObject):
                 preserve_view_override=preserve_view
             )
         else:
-            print(f"[DEBUG-WL]   ERROR: Missing data - dataset={dataset is not None}, study_uid={bool(study_uid)}, series_uid={bool(series_uid)}, current_studies={bool(self.current_studies)}")
+            # print(f"[DEBUG-WL]   ERROR: Missing data - dataset={dataset is not None}, study_uid={bool(study_uid)}, series_uid={bool(series_uid)}, current_studies={bool(self.current_studies)}")
+            pass
     
     def _initialize_handlers(self) -> None:
         """Initialize all handler classes."""
@@ -1280,6 +1283,7 @@ class DICOMViewerApp(QObject):
     
     def _on_focused_subwindow_changed(self, subwindow: SubWindowContainer) -> None:
         """Handle focused subwindow change."""
+        print(f"[DEBUG-FOCUS] DICOMViewerApp._on_focused_subwindow_changed: Called with subwindow={subwindow}")
         # Disconnect signals from previous focused subwindow
         self._disconnect_focused_subwindow_signals()
         
@@ -1288,6 +1292,21 @@ class DICOMViewerApp(QObject):
         
         # Connect signals for new focused subwindow
         self._connect_focused_subwindow_signals()
+        
+        # Update keyboard event handler's reset_view_callback to use focused subwindow's view_state_manager
+        if self.keyboard_event_handler and self.view_state_manager:
+            self.keyboard_event_handler.reset_view_callback = self.view_state_manager.reset_view
+        
+        # Update ROI list panel's ROI manager to use focused subwindow's ROI manager
+        if self.roi_list_panel and self.roi_manager:
+            self.roi_list_panel.set_roi_manager(self.roi_manager)
+            # Update ROI list for current slice of focused subwindow
+            if self.current_dataset is not None:
+                study_uid = getattr(self.current_dataset, 'StudyInstanceUID', '')
+                series_uid = getattr(self.current_dataset, 'SeriesInstanceUID', '')
+                # Use current_slice_index as instance identifier (same as display_rois_for_slice)
+                instance_identifier = self.current_slice_index
+                self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
         
         # Update right panel
         self._update_right_panel_for_focused_subwindow()
@@ -1468,7 +1487,7 @@ class DICOMViewerApp(QObject):
         if self.image_viewer is None:
             return
         
-        print("[DEBUG] Disconnecting signals from focused subwindow ImageViewer")
+        # print("[DEBUG] Disconnecting signals from focused subwindow ImageViewer")
         
         try:
             # Annotation options
@@ -1650,13 +1669,13 @@ class DICOMViewerApp(QObject):
         if self.image_viewer is None:
             return
         
-        print("[DEBUG] Connecting signals for focused subwindow ImageViewer")
+        # print("[DEBUG] Connecting signals for focused subwindow ImageViewer")
         
         # CRITICAL FIX: Update the redisplay callback to use the current focused subwindow index
         # This ensures window/level changes redisplay the correct subwindow
         if self.view_state_manager:
             focused_idx = self.focused_subwindow_index
-            print(f"[DEBUG-WL] Updating redisplay callback for focused subwindow idx={focused_idx}")
+            # print(f"[DEBUG-WL] Updating redisplay callback for focused subwindow idx={focused_idx}")
             self.view_state_manager.set_redisplay_slice_callback(
                 lambda preserve_view=False: self._redisplay_subwindow_slice(focused_idx, preserve_view)
             )
