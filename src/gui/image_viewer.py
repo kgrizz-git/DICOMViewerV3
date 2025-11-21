@@ -762,6 +762,26 @@ class ImageViewer(QGraphicsView):
         Args:
             event: Mouse event
         """
+        # Hybrid approach: Check if parent is a SubWindowContainer and handle focus
+        # This works in conjunction with the event filter in SubWindowContainer
+        from gui.sub_window_container import SubWindowContainer
+        parent = self.parent()
+        if isinstance(parent, SubWindowContainer):
+            if not parent.is_focused:
+                # Parent container is not focused - request focus first
+                # This ensures single-click on unfocused subwindow sets focus
+                if event.button() == Qt.MouseButton.LeftButton:
+                    print(f"[DEBUG-FOCUS] ImageViewer.mousePressEvent: Parent SubWindowContainer not focused, setting focus")
+                    # Accept the event to prevent further processing
+                    event.accept()
+                    # Request focus change
+                    parent.set_focused(True)
+                    parent.focus_changed.emit(True)
+                    print(f"[DEBUG-FOCUS] ImageViewer.mousePressEvent: Focus set and signal emitted, returning early")
+                    # Return early - don't process the click as pan/zoom/etc
+                    # The user can click again if they want to interact
+                    return
+        
         if event.button() == Qt.MouseButton.LeftButton:
             # Handle select mode - allow default Qt selection behavior
             if self.mouse_mode == "select":
