@@ -20,10 +20,18 @@ Requirements:
 """
 
 from PySide6.QtCore import QObject, QTimer, Signal
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from pydicom.dataset import Dataset
 from core.dicom_parser import get_frame_rate_from_dicom
 from core.multiframe_handler import is_multiframe, get_frame_count
+from core.slice_grouping import (
+    group_datasets_by_slice,
+    get_slice_index_for_dataset,
+    get_frame_index_in_slice,
+    get_slice_frame_count,
+    get_total_slices as get_total_slice_groups,
+    get_first_frame_index_for_slice
+)
 
 
 class CinePlayer(QObject):
@@ -77,6 +85,13 @@ class CinePlayer(QObject):
         self.current_studies: Optional[Dict] = None
         self.current_study_uid: Optional[str] = None
         self.current_series_uid: Optional[str] = None
+        
+        # Datasets for slice-aware navigation
+        self.current_datasets: Optional[List[Dataset]] = None
+        
+        # Loop bounds (None means use full range)
+        self.loop_start_frame: Optional[int] = None
+        self.loop_end_frame: Optional[int] = None
     
     def set_series_context(self, studies: Optional[Dict], study_uid: Optional[str], series_uid: Optional[str]) -> None:
         """
@@ -91,9 +106,42 @@ class CinePlayer(QObject):
         self.current_study_uid = study_uid
         self.current_series_uid = series_uid
         
+        # Update datasets if available
+        if studies and study_uid and series_uid:
+            if study_uid in studies and series_uid in studies[study_uid]:
+                self.current_datasets = studies[study_uid][series_uid]
+            else:
+                self.current_datasets = None
+        else:
+            self.current_datasets = None
+        
         # Stop playback if series changes
         if self.is_playing:
             self.stop_playback()
+        
+        # Clear loop bounds when series changes
+        self.loop_start_frame = None
+        self.loop_end_frame = None
+    
+    def set_datasets(self, datasets: List[Dataset]) -> None:
+        """
+        Set the datasets list for slice-aware navigation.
+        
+        Args:
+            datasets: List of DICOM datasets in the series
+        """
+        self.current_datasets = datasets
+    
+    def get_slice_groups(self) -> Dict[int, List[Dataset]]:
+        """
+        Get slice groups for the current datasets.
+        
+        Returns:
+            Dictionary mapping original dataset ID (via id()) to list of frame datasets
+        """
+        if not self.current_datasets:
+            return {}
+        return group_datasets_by_slice(self.current_datasets)
     
     def is_cine_capable(self, studies: Optional[Dict], study_uid: Optional[str], series_uid: Optional[str]) -> bool:
         """
@@ -240,23 +288,71 @@ class CinePlayer(QObject):
             self.stop_playback()
             return
         
-        current_slice = self.get_current_slice()
-        next_slice = current_slice + 1
+        current_index = self.get_current_slice()
         
-        # Check if we've reached the end
-        if next_slice >= total_slices:
-            if self.loop_enabled:
-                # Loop back to beginning
-                next_slice = 0
+        # Determine loop bounds
+        loop_start = self.loop_start_frame if self.loop_start_frame is not None else 0
+        loop_end = self.loop_end_frame if self.loop_end_frame is not None else (total_slices - 1)
+        
+        # Clamp loop bounds to valid range
+        loop_start = max(0, min(loop_start, total_slices - 1))
+        loop_end = max(0, min(loop_end, total_slices - 1))
+        
+        # If we have datasets and slice grouping info, use slice-aware navigation
+        if self.current_datasets and len(self.current_datasets) > 0:
+            # Get current slice group
+            current_slice_index = get_slice_index_for_dataset(self.current_datasets, current_index)
+            current_frame_in_slice = get_frame_index_in_slice(self.current_datasets, current_index)
+            frames_in_current_slice = get_slice_frame_count(self.current_datasets, current_slice_index)
+            total_slice_groups = get_total_slice_groups(self.current_datasets)
+            
+            # Check if there are more frames in current slice
+            if current_frame_in_slice + 1 < frames_in_current_slice:
+                # More frames in current slice - advance to next frame in same slice
+                next_index = current_index + 1
             else:
-                # Stop at last frame
+                # Finished current slice - move to first frame of next slice
+                if current_slice_index + 1 < total_slice_groups:
+                    # Move to next slice
+                    next_slice_index = current_slice_index + 1
+                    next_index = get_first_frame_index_for_slice(self.current_datasets, next_slice_index)
+                else:
+                    # At last slice - check loop
+                    if self.loop_enabled:
+                        # Loop back to first slice
+                        next_index = get_first_frame_index_for_slice(self.current_datasets, 0)
+                    else:
+                        # Stop at last frame
+                        self.stop_playback()
+                        return
+        else:
+            # Fallback to simple linear advancement
+            next_index = current_index + 1
+            
+            # Check if we've reached the end
+            if next_index >= total_slices:
+                if self.loop_enabled:
+                    # Loop back to beginning
+                    next_index = loop_start
+                else:
+                    # Stop at last frame
+                    self.stop_playback()
+                    return
+        
+        # Apply loop bounds
+        if next_index < loop_start:
+            next_index = loop_start
+        elif next_index > loop_end:
+            if self.loop_enabled:
+                next_index = loop_start
+            else:
                 self.stop_playback()
                 return
         
         # Set flag to indicate this is a cine player advance
         self._is_cine_advancing = True
         # Request frame advancement
-        self.frame_advance_requested.emit(next_slice)
+        self.frame_advance_requested.emit(next_index)
         # Reset flag after a short delay (frame change should happen immediately)
         # We'll reset it in the frame advance handler
     
@@ -299,4 +395,20 @@ class CinePlayer(QObject):
             True if playing, False otherwise
         """
         return self.is_playing
+    
+    def set_loop_bounds(self, start_frame: Optional[int], end_frame: Optional[int]) -> None:
+        """
+        Set loop bounds for playback.
+        
+        Args:
+            start_frame: Start frame index (None to clear)
+            end_frame: End frame index (None to clear)
+        """
+        self.loop_start_frame = start_frame
+        self.loop_end_frame = end_frame
+    
+    def clear_loop_bounds(self) -> None:
+        """Clear loop bounds (use full range)."""
+        self.loop_start_frame = None
+        self.loop_end_frame = None
 

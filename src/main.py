@@ -29,7 +29,7 @@ src_dir = Path(__file__).parent
 sys.path.insert(0, str(src_dir))
 
 from PySide6.QtWidgets import QApplication, QMessageBox, QStyleFactory
-from PySide6.QtCore import Qt, QPointF, QObject
+from PySide6.QtCore import Qt, QPointF, QObject, QTimer, QRectF, QSize
 from PySide6.QtGui import QKeyEvent
 from typing import Optional, Dict
 import pydicom
@@ -412,6 +412,9 @@ class DICOMViewerApp(QObject):
         # Connect transform/zoom signals for all subwindows to their own ViewStateManager
         # This ensures overlays update correctly when panning/zooming in any subwindow
         self._connect_all_subwindow_transform_signals()
+        
+        # Note: Context menu signals will be connected after mouse_mode_handler is created
+        # See _connect_all_subwindow_context_menu_signals() called from _initialize_handlers()
     
     def _create_managers_for_subwindow(self, idx: int, subwindow: SubWindowContainer) -> None:
         """Create managers for a specific subwindow."""
@@ -792,6 +795,9 @@ class DICOMViewerApp(QObject):
             self.slice_navigator,
             self.config_manager
         )
+        
+        # Connect context menu signals for all subwindows (now that mouse_mode_handler exists)
+        self._connect_all_subwindow_context_menu_signals()
         
         # Initialize CinePlayer
         self.cine_player = CinePlayer(
@@ -1321,6 +1327,9 @@ class DICOMViewerApp(QObject):
     
     def _on_layout_changed(self, layout_mode: str) -> None:
         """Handle layout mode change from multi-window layout."""
+        # Capture view state for all existing subwindows before layout change
+        view_states = self._capture_subwindow_view_states()
+        
         # Save to config
         self.config_manager.set_multi_window_layout(layout_mode)
         
@@ -1333,10 +1342,140 @@ class DICOMViewerApp(QObject):
         
         # Reconnect signals for any newly created subwindows
         self._connect_subwindow_signals()
+        
+        # Restore views with preserved visible area after layout change completes
+        # Use QTimer to defer restoration until after layout processing
+        if view_states:
+            QTimer.singleShot(0, lambda: self._restore_subwindow_views(view_states))
     
     def _on_main_window_layout_changed(self, layout_mode: str) -> None:
         """Handle layout mode change from main window menu."""
         self.multi_window_layout.set_layout(layout_mode)
+    
+    def _capture_subwindow_view_states(self) -> Dict[int, Dict]:
+        """
+        Capture view state for all existing subwindows before layout change.
+        
+        Returns:
+            Dictionary mapping subwindow index to view state dict:
+            {index: {'viewport_rect': QRectF, 'zoom': float, 'scene_center': QPointF, 'old_size': QSize}}
+        """
+        view_states = {}
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        
+        for idx, subwindow in enumerate(subwindows):
+            if subwindow is None:
+                continue
+            
+            image_viewer = subwindow.image_viewer
+            if image_viewer is None:
+                continue
+            
+            # Only capture if image is displayed
+            if image_viewer.image_item is None:
+                continue
+            
+            # Get viewport rect in scene coordinates
+            viewport_rect = image_viewer.viewport().rect()
+            top_left = image_viewer.mapToScene(viewport_rect.topLeft())
+            bottom_right = image_viewer.mapToScene(viewport_rect.bottomRight())
+            viewport_rect_scene = QRectF(top_left, bottom_right)
+            
+            # Get current zoom
+            zoom = image_viewer.current_zoom
+            
+            # Get scene center (viewport center in scene coordinates)
+            viewport_center = QPointF(viewport_rect.width() / 2.0, viewport_rect.height() / 2.0)
+            scene_center = image_viewer.mapToScene(viewport_center.toPoint())
+            
+            # Get old subwindow size
+            old_size = subwindow.size()
+            
+            view_states[idx] = {
+                'viewport_rect': viewport_rect_scene,
+                'zoom': zoom,
+                'scene_center': scene_center,
+                'old_size': old_size
+            }
+        
+        return view_states
+    
+    def _restore_subwindow_views(self, view_states: Dict[int, Dict]) -> None:
+        """
+        Restore subwindow views with preserved visible area after layout change.
+        
+        Args:
+            view_states: Dictionary of captured view states from _capture_subwindow_view_states()
+        """
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        
+        for idx, view_state in view_states.items():
+            try:
+                # Check if this subwindow still exists
+                if idx >= len(subwindows) or subwindows[idx] is None:
+                    continue
+                
+                subwindow = subwindows[idx]
+                image_viewer = subwindow.image_viewer
+                if image_viewer is None:
+                    continue
+                
+                # Check if image is still displayed
+                if image_viewer.image_item is None:
+                    continue
+                
+                # Get captured state
+                viewport_rect_scene = view_state.get('viewport_rect')
+                old_zoom = view_state.get('zoom', 1.0)
+                scene_center = view_state.get('scene_center')
+                old_size = view_state.get('old_size')
+                
+                if viewport_rect_scene is None or scene_center is None:
+                    continue
+                
+                # Get new subwindow size
+                new_size = subwindow.size()
+                if new_size.width() <= 0 or new_size.height() <= 0:
+                    continue
+                
+                # Calculate visible area dimensions in scene coordinates
+                visible_width = abs(viewport_rect_scene.width())
+                visible_height = abs(viewport_rect_scene.height())
+                
+                if visible_width <= 0 or visible_height <= 0:
+                    continue
+                
+                # Calculate required zoom to make visible area fill new subwindow
+                # Account for the fact that zoom affects how viewport maps to scene
+                # We want: new_viewport_size / new_zoom = visible_size
+                # So: new_zoom = new_viewport_size / visible_size
+                new_viewport_width = new_size.width()
+                new_viewport_height = new_size.height()
+                
+                zoom_x = new_viewport_width / visible_width if visible_width > 0 else old_zoom
+                zoom_y = new_viewport_height / visible_height if visible_height > 0 else old_zoom
+                
+                # Use minimum to ensure visible area fits (preserves aspect ratio)
+                new_zoom = min(zoom_x, zoom_y)
+                
+                # Ensure minimum zoom
+                if hasattr(image_viewer, 'min_zoom') and new_zoom < image_viewer.min_zoom:
+                    new_zoom = image_viewer.min_zoom
+                
+                # Ensure maximum zoom
+                if hasattr(image_viewer, 'max_zoom') and new_zoom > image_viewer.max_zoom:
+                    new_zoom = image_viewer.max_zoom
+                
+                # Apply zoom
+                image_viewer.set_zoom(new_zoom)
+                
+                # Center on the same scene point to preserve visible area
+                # After zoom change, we need to recalculate center position
+                image_viewer.centerOn(scene_center)
+            except Exception as e:
+                # Handle any errors gracefully - don't break layout change
+                print(f"Error restoring view for subwindow {idx}: {e}")
+                continue
     
     def _ensure_all_subwindows_have_managers(self) -> None:
         """Ensure all visible subwindows have managers initialized."""
@@ -1396,6 +1535,16 @@ class DICOMViewerApp(QObject):
                     # Connect to this subwindow's ViewStateManager
                     image_viewer.transform_changed.connect(view_state_manager.handle_transform_changed)
                     image_viewer.zoom_changed.connect(view_state_manager.handle_zoom_changed)
+    
+    def _connect_all_subwindow_context_menu_signals(self) -> None:
+        """Connect context menu signals for all subwindows."""
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        for idx, subwindow in enumerate(subwindows):
+            if subwindow:
+                image_viewer = subwindow.image_viewer
+                image_viewer.context_menu_scroll_wheel_mode_changed.connect(
+                    self.mouse_mode_handler.handle_context_menu_scroll_wheel_mode_changed
+                )
     
     def _on_layout_change_requested(self, layout_mode: str) -> None:
         """Handle layout change request from image viewer context menu."""
@@ -1811,7 +1960,8 @@ class DICOMViewerApp(QObject):
         self.main_window.mouse_mode_changed.connect(self.mouse_mode_handler.handle_mouse_mode_changed)
         
         # Scroll wheel mode changes
-        self.main_window.scroll_wheel_mode_changed.connect(self.mouse_mode_handler.handle_scroll_wheel_mode_changed)
+        # Connect to _on_scroll_wheel_mode_changed() which updates all subwindows
+        self.main_window.scroll_wheel_mode_changed.connect(self._on_scroll_wheel_mode_changed)
         
         # Context menu changes (from image viewer)
         self.image_viewer.context_menu_mouse_mode_changed.connect(self.mouse_mode_handler.handle_context_menu_mouse_mode_changed)
@@ -1892,6 +2042,9 @@ class DICOMViewerApp(QObject):
         self.cine_controls_widget.speed_changed.connect(self._on_cine_speed_changed)
         self.cine_controls_widget.loop_toggled.connect(self._on_cine_loop_toggled)
         self.cine_controls_widget.frame_position_changed.connect(self._on_frame_slider_changed)
+        self.cine_controls_widget.loop_start_set.connect(self._on_cine_loop_start_set)
+        self.cine_controls_widget.loop_end_set.connect(self._on_cine_loop_end_set)
+        self.cine_controls_widget.loop_bounds_cleared.connect(self._on_cine_loop_bounds_cleared)
         
         # Cine control signals from context menu
         self.image_viewer.cine_play_requested.connect(self._on_cine_play)
@@ -2614,6 +2767,11 @@ class DICOMViewerApp(QObject):
             mode: "slice" or "zoom"
         """
         self.mouse_mode_handler.handle_scroll_wheel_mode_changed(mode)
+        # Also update all subwindows to make scroll wheel mode global
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        for subwindow in subwindows:
+            if subwindow:
+                subwindow.image_viewer.set_scroll_wheel_mode(mode)
     
     def _on_context_menu_mouse_mode_changed(self, mode: str) -> None:
         """
@@ -2863,6 +3021,9 @@ class DICOMViewerApp(QObject):
         Args:
             slice_index: New slice index
         """
+        # Check if this slice change was from a cine advance before processing
+        was_cine_advancing = self.cine_player.is_cine_advancing()
+        
         # Update focused subwindow's slice
         focused_idx = self.focused_subwindow_index
         if focused_idx in self.subwindow_data and focused_idx in self.subwindow_managers:
@@ -2906,6 +3067,10 @@ class DICOMViewerApp(QObject):
             total_slices = len(series_datasets)
             if total_slices > 0:
                 self.cine_controls_widget.update_frame_position(slice_index, total_slices)
+        
+        # Reset cine advancing flag after all slice change processing is complete
+        if was_cine_advancing:
+            QTimer.singleShot(0, self.cine_player.reset_cine_advancing_flag)
     
     def _on_manual_slice_navigation(self, slice_index: int) -> None:
         """
@@ -2928,6 +3093,15 @@ class DICOMViewerApp(QObject):
             self.current_study_uid,
             self.current_series_uid
         )
+        
+        # Pass datasets to cine player for slice-aware navigation
+        if (self.current_studies and self.current_study_uid and self.current_series_uid and
+            self.current_study_uid in self.current_studies and
+            self.current_series_uid in self.current_studies[self.current_study_uid]):
+            datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
+            self.cine_player.set_datasets(datasets)
+            # Clear loop bounds in widget when series changes
+            self.cine_controls_widget.set_loop_bounds(None, None)
         
         # Check if current series is cine-capable
         is_cine_capable = self.cine_player.is_cine_capable(
@@ -2964,8 +3138,7 @@ class DICOMViewerApp(QObject):
         # Use slice navigator's advance_to_frame with loop support
         loop_enabled = self.cine_player.loop_enabled
         self.slice_navigator.advance_to_frame(frame_index, loop=loop_enabled)
-        # Reset the cine advancing flag after frame advance
-        self.cine_player.reset_cine_advancing_flag()
+        # Flag will be reset in _on_slice_changed() after processing completes
     
     def _on_cine_playback_state_changed(self, is_playing: bool) -> None:
         """
@@ -3030,6 +3203,38 @@ class DICOMViewerApp(QObject):
             True if loop is enabled, False otherwise
         """
         return self.cine_player.loop_enabled
+    
+    def _on_cine_loop_start_set(self, frame_index: int) -> None:
+        """
+        Handle loop start frame set from cine controls.
+        
+        Args:
+            frame_index: Frame index to set as loop start
+        """
+        # Get current loop end (if any)
+        loop_end = self.cine_player.loop_end_frame
+        self.cine_player.set_loop_bounds(frame_index, loop_end)
+        # Update widget to reflect bounds
+        self.cine_controls_widget.set_loop_bounds(frame_index, loop_end)
+    
+    def _on_cine_loop_end_set(self, frame_index: int) -> None:
+        """
+        Handle loop end frame set from cine controls.
+        
+        Args:
+            frame_index: Frame index to set as loop end
+        """
+        # Get current loop start (if any)
+        loop_start = self.cine_player.loop_start_frame
+        self.cine_player.set_loop_bounds(loop_start, frame_index)
+        # Update widget to reflect bounds
+        self.cine_controls_widget.set_loop_bounds(loop_start, frame_index)
+    
+    def _on_cine_loop_bounds_cleared(self) -> None:
+        """Handle loop bounds cleared from cine controls."""
+        self.cine_player.clear_loop_bounds()
+        # Update widget to reflect cleared bounds
+        self.cine_controls_widget.set_loop_bounds(None, None)
     
     def _on_frame_slider_changed(self, frame_index: int) -> None:
         """

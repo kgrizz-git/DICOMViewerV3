@@ -16,9 +16,10 @@ Requirements:
 """
 
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-                                QPushButton, QComboBox, QGroupBox, QSizePolicy, QSlider)
+                                QPushButton, QComboBox, QGroupBox, QSizePolicy, QSlider, QMenu)
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QAction, QContextMenuEvent, QPainter, QColor
+from typing import Optional
 
 
 class CineControlsWidget(QWidget):
@@ -42,6 +43,9 @@ class CineControlsWidget(QWidget):
     speed_changed = Signal(float)  # Emitted when speed changes (speed multiplier)
     loop_toggled = Signal(bool)  # Emitted when loop is toggled
     frame_position_changed = Signal(int)  # Emitted when frame slider is moved (frame index)
+    loop_start_set = Signal(int)  # Emitted when loop start is set (frame index)
+    loop_end_set = Signal(int)  # Emitted when loop end is set (frame index)
+    loop_bounds_cleared = Signal()  # Emitted when loop bounds are cleared
     
     def __init__(self, parent=None):
         """
@@ -55,6 +59,10 @@ class CineControlsWidget(QWidget):
         
         self._create_ui()
         self._set_controls_enabled(False)
+        
+        # Loop bounds state
+        self.loop_start_frame: Optional[int] = None
+        self.loop_end_frame: Optional[int] = None
     
     def _create_ui(self) -> None:
         """Create the UI components."""
@@ -128,9 +136,12 @@ class CineControlsWidget(QWidget):
         self.frame_slider.setMinimum(0)
         self.frame_slider.setMaximum(0)
         self.frame_slider.setValue(0)
-        self.frame_slider.setToolTip("Current frame / Total frames")
+        self.frame_slider.setToolTip("Current frame / Total frames\nRight-click to set loop bounds")
         self.frame_slider.setEnabled(False)
         self.frame_slider.valueChanged.connect(self._on_frame_slider_changed)
+        # Enable context menu for right-click
+        self.frame_slider.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.frame_slider.customContextMenuRequested.connect(self._on_frame_slider_context_menu)
         speed_fps_layout.addWidget(self.frame_slider, 1)  # Give slider stretch factor to take available space
         
         # Frame position label (e.g., "1 / 10")
@@ -266,4 +277,122 @@ class CineControlsWidget(QWidget):
         
         # Update label (display 1-based frame numbers)
         self.frame_position_label.setText(f"{current_frame + 1} / {total_frames}")
+        
+        # Update slider to show loop bounds visually
+        self._update_loop_bounds_display()
+    
+    def _on_frame_slider_context_menu(self, position) -> None:
+        """Handle right-click context menu on frame slider."""
+        if not self.frame_slider.isEnabled():
+            return
+        
+        menu = QMenu(self)
+        
+        # Get current slider value at click position
+        # Position is relative to the slider widget
+        # For horizontal slider, map x coordinate to value
+        if self.frame_slider.orientation() == Qt.Orientation.Horizontal:
+            # Get slider's groove rect (the actual draggable area)
+            slider_rect = self.frame_slider.rect()
+            # Account for slider handle and margins
+            # QSlider typically has some margin, so we need to adjust
+            # Use a simple approach: map click position to value range
+            click_x = position.x()
+            slider_width = slider_rect.width()
+            if slider_width > 0:
+                # Normalize to 0-1 range
+                ratio = max(0.0, min(1.0, click_x / slider_width))
+                max_val = self.frame_slider.maximum()
+                min_val = self.frame_slider.minimum()
+                # Map ratio to value range
+                clicked_frame = int(min_val + ratio * (max_val - min_val + 1))
+                clicked_frame = max(min_val, min(clicked_frame, max_val))
+            else:
+                clicked_frame = self.frame_slider.value()
+        else:
+            clicked_frame = self.frame_slider.value()
+        
+        # Set Loop Start action
+        set_start_action = QAction("Set Loop Start", self)
+        set_start_action.setToolTip(f"Set loop start to frame {clicked_frame + 1}")
+        set_start_action.triggered.connect(lambda: self._set_loop_start(clicked_frame))
+        menu.addAction(set_start_action)
+        
+        # Set Loop End action
+        set_end_action = QAction("Set Loop End", self)
+        set_end_action.setToolTip(f"Set loop end to frame {clicked_frame + 1}")
+        set_end_action.triggered.connect(lambda: self._set_loop_end(clicked_frame))
+        menu.addAction(set_end_action)
+        
+        menu.addSeparator()
+        
+        # Clear Loop Bounds action
+        clear_action = QAction("Clear Loop Bounds", self)
+        clear_action.setEnabled(self.loop_start_frame is not None or self.loop_end_frame is not None)
+        clear_action.triggered.connect(self._clear_loop_bounds)
+        menu.addAction(clear_action)
+        
+        # Show menu at cursor position
+        menu.exec(self.frame_slider.mapToGlobal(position))
+    
+    def _set_loop_start(self, frame_index: int) -> None:
+        """Set loop start frame."""
+        self.loop_start_frame = frame_index
+        if self.loop_end_frame is not None and self.loop_end_frame < frame_index:
+            # Adjust end if it's before start
+            self.loop_end_frame = frame_index
+        self.loop_start_set.emit(frame_index)
+        self._update_loop_bounds_display()
+    
+    def _set_loop_end(self, frame_index: int) -> None:
+        """Set loop end frame."""
+        self.loop_end_frame = frame_index
+        if self.loop_start_frame is not None and self.loop_start_frame > frame_index:
+            # Adjust start if it's after end
+            self.loop_start_frame = frame_index
+        self.loop_end_set.emit(frame_index)
+        self._update_loop_bounds_display()
+    
+    def _clear_loop_bounds(self) -> None:
+        """Clear loop bounds."""
+        self.loop_start_frame = None
+        self.loop_end_frame = None
+        self.loop_bounds_cleared.emit()
+        self._update_loop_bounds_display()
+    
+    def _update_loop_bounds_display(self) -> None:
+        """Update visual display of loop bounds on slider."""
+        # Use stylesheet to show loop bounds region
+        # This is a simple approach - could be enhanced with custom painting for better visuals
+        if self.loop_start_frame is not None and self.loop_end_frame is not None:
+            max_val = self.frame_slider.maximum()
+            if max_val > 0:
+                start_ratio = self.loop_start_frame / max_val
+                end_ratio = self.loop_end_frame / max_val
+                # Note: QSlider doesn't directly support styling loop regions
+                # For now, we'll just update the tooltip to show bounds
+                tooltip = f"Current frame / Total frames\nLoop bounds: {self.loop_start_frame + 1} - {self.loop_end_frame + 1}\nRight-click to change"
+                self.frame_slider.setToolTip(tooltip)
+            else:
+                self.frame_slider.setToolTip("Current frame / Total frames\nRight-click to set loop bounds")
+        elif self.loop_start_frame is not None:
+            tooltip = f"Current frame / Total frames\nLoop start: {self.loop_start_frame + 1}\nRight-click to set loop end or clear"
+            self.frame_slider.setToolTip(tooltip)
+        elif self.loop_end_frame is not None:
+            tooltip = f"Current frame / Total frames\nLoop end: {self.loop_end_frame + 1}\nRight-click to set loop start or clear"
+            self.frame_slider.setToolTip(tooltip)
+        else:
+            self.frame_slider.setToolTip("Current frame / Total frames\nRight-click to set loop bounds")
+    
+    def set_loop_bounds(self, start_frame: Optional[int], end_frame: Optional[int]) -> None:
+        """
+        Set loop bounds from external source.
+        
+        Args:
+            start_frame: Start frame index (None to clear)
+            end_frame: End frame index (None to clear)
+        """
+        self.loop_start_frame = start_frame
+        self.loop_end_frame = end_frame
+        self._update_loop_bounds_display()
 
