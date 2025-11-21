@@ -792,12 +792,17 @@ class ViewStateManager:
         Updates overlay positions immediately to keep text anchored to viewport edges
         during zoom operations, eliminating jitter.
         
+        Updates overlay for all subwindows (focused and unfocused) to ensure
+        overlays stay fixed relative to viewport, not the image.
+        
         Args:
             zoom_level: Current zoom level
         """
         # Update overlay positions immediately when zoom changes
         # This eliminates jitter by updating synchronously with zoom changes,
         # rather than waiting for the delayed transform_changed signal
+        # We update for ALL subwindows (focused and unfocused) so overlays
+        # stay anchored to viewport edges, not the image
         if self.current_dataset is not None:
             self.overlay_manager.update_overlay_positions(self.image_viewer.scene)
     
@@ -807,8 +812,13 @@ class ViewStateManager:
         
         Updates overlay positions to keep text anchored to viewport edges.
         This is called after the transform is fully applied.
+        
+        Updates overlay for all subwindows (focused and unfocused) to ensure
+        overlays stay fixed relative to viewport, not the image.
         """
         # Update overlay positions when transform changes
+        # We update for ALL subwindows (focused and unfocused) so overlays
+        # stay anchored to viewport edges, not the image
         if self.current_dataset is not None:
             self.overlay_manager.update_overlay_positions(self.image_viewer.scene)
     
@@ -833,7 +843,18 @@ class ViewStateManager:
         when the left or right panels are resized.
         Also rescales the image to fill the viewport and restores the centered view
         if a scene center was captured.
+        
+        Only updates overlay if the subwindow is focused, preventing overlay movement
+        when hovering over unfocused subwindows.
         """
+        # Check if this subwindow is focused before updating overlay
+        # This prevents overlay from moving when hovering over unfocused subwindows
+        from gui.sub_window_container import SubWindowContainer
+        parent = self.image_viewer.parent()
+        is_focused = True  # Default to True if not in a subwindow container
+        if isinstance(parent, SubWindowContainer):
+            is_focused = parent.is_focused
+        
         # Rescale image to fill viewport and restore center if we captured a scene center point
         if self.saved_scene_center is not None and self.image_viewer.image_item is not None:
             # First, fit the image to the new viewport size (rescale to fill)
@@ -842,8 +863,8 @@ class ViewStateManager:
             self.image_viewer.centerOn(self.saved_scene_center)
             self.saved_scene_center = None  # Clear after use
         
-        # Update overlay positions when viewport size changes
-        if self.current_dataset is not None:
+        # Update overlay positions when viewport size changes (only if focused)
+        if is_focused and self.current_dataset is not None:
             self.overlay_manager.update_overlay_positions(self.image_viewer.scene)
     
     def handle_window_level_drag(self, center_delta: float, width_delta: float) -> None:

@@ -683,6 +683,39 @@ class OverlayManager:
         if view is None:
             return
         
+        # Check if this view belongs to a subwindow and if it's focused
+        # We need to traverse the widget hierarchy to find the SubWindowContainer
+        # View -> (may have layout parent) -> SubWindowContainer
+        from gui.sub_window_container import SubWindowContainer
+        
+        # Traverse up the widget hierarchy to find SubWindowContainer
+        subwindow_container = None
+        current_widget = view
+        max_depth = 5  # Safety limit to avoid infinite loops
+        depth = 0
+        
+        while current_widget is not None and depth < max_depth:
+            parent = current_widget.parent()
+            if isinstance(parent, SubWindowContainer):
+                subwindow_container = parent
+                break
+            current_widget = parent
+            depth += 1
+        
+        # Add detailed debug logging
+        view_type = type(view).__name__
+        parent_type = type(view.parent()).__name__ if view.parent() else "None"
+        found_container = subwindow_container is not None
+        is_focused = subwindow_container.is_focused if subwindow_container else None
+        
+        print(f"[DEBUG-OVERLAY] update_overlay_positions: view={view_type}, parent={parent_type}, "
+              f"found_container={found_container}, is_focused={is_focused}")
+        
+        # IMPORTANT: We ALWAYS update overlay positions, regardless of focus state
+        # This ensures overlays stay fixed relative to the viewport, not the image
+        # When zooming unfocused subwindows, we still need to update positions
+        # so the overlay stays at viewport edges (not moving with the image)
+        
         # Get scene dimensions
         scene_rect = scene.sceneRect()
         if scene_rect.width() <= 0 or scene_rect.height() <= 0:

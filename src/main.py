@@ -1402,7 +1402,10 @@ class DICOMViewerApp(QObject):
     
     def _restore_subwindow_views(self, view_states: Dict[int, Dict]) -> None:
         """
-        Restore subwindow views with preserved visible area after layout change.
+        Restore subwindow views after layout change.
+        
+        For layout changes, we want to fit images to the new viewport size
+        rather than preserving the exact visible area, so images scale appropriately.
         
         Args:
             view_states: Dictionary of captured view states from _capture_subwindow_view_states()
@@ -1424,54 +1427,19 @@ class DICOMViewerApp(QObject):
                 if image_viewer.image_item is None:
                     continue
                 
-                # Get captured state
-                viewport_rect_scene = view_state.get('viewport_rect')
-                old_zoom = view_state.get('zoom', 1.0)
-                scene_center = view_state.get('scene_center')
-                old_size = view_state.get('old_size')
+                # For layout changes, fit the image to the new viewport size
+                # This ensures images scale appropriately when switching between 1x1, 1x2, 2x1, 2x2 layouts
+                # Use QTimer to ensure viewport size is updated before fitting
+                from PySide6.QtCore import QTimer
+                def fit_image_to_viewport():
+                    """Fit image to viewport after layout change."""
+                    if image_viewer.image_item is not None:
+                        # Fit to view with centering for better UX
+                        image_viewer.fit_to_view(center_image=True)
                 
-                if viewport_rect_scene is None or scene_center is None:
-                    continue
+                # Delay slightly to ensure viewport geometry is updated
+                QTimer.singleShot(50, fit_image_to_viewport)
                 
-                # Get new subwindow size
-                new_size = subwindow.size()
-                if new_size.width() <= 0 or new_size.height() <= 0:
-                    continue
-                
-                # Calculate visible area dimensions in scene coordinates
-                visible_width = abs(viewport_rect_scene.width())
-                visible_height = abs(viewport_rect_scene.height())
-                
-                if visible_width <= 0 or visible_height <= 0:
-                    continue
-                
-                # Calculate required zoom to make visible area fill new subwindow
-                # Account for the fact that zoom affects how viewport maps to scene
-                # We want: new_viewport_size / new_zoom = visible_size
-                # So: new_zoom = new_viewport_size / visible_size
-                new_viewport_width = new_size.width()
-                new_viewport_height = new_size.height()
-                
-                zoom_x = new_viewport_width / visible_width if visible_width > 0 else old_zoom
-                zoom_y = new_viewport_height / visible_height if visible_height > 0 else old_zoom
-                
-                # Use minimum to ensure visible area fits (preserves aspect ratio)
-                new_zoom = min(zoom_x, zoom_y)
-                
-                # Ensure minimum zoom
-                if hasattr(image_viewer, 'min_zoom') and new_zoom < image_viewer.min_zoom:
-                    new_zoom = image_viewer.min_zoom
-                
-                # Ensure maximum zoom
-                if hasattr(image_viewer, 'max_zoom') and new_zoom > image_viewer.max_zoom:
-                    new_zoom = image_viewer.max_zoom
-                
-                # Apply zoom
-                image_viewer.set_zoom(new_zoom)
-                
-                # Center on the same scene point to preserve visible area
-                # After zoom change, we need to recalculate center position
-                image_viewer.centerOn(scene_center)
             except Exception as e:
                 # Handle any errors gracefully - don't break layout change
                 print(f"Error restoring view for subwindow {idx}: {e}")
