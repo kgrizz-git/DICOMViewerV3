@@ -93,13 +93,14 @@ class SubWindowContainer(QFrame):
             focused: True if this subwindow should be focused
         """
         if self.is_focused != focused:
-            print(f"[DEBUG-FOCUS] SubWindowContainer.set_focused: Changing focus from {self.is_focused} to {focused}")
+            # print(f"[DEBUG-FOCUS] SubWindowContainer.set_focused: Changing focus from {self.is_focused} to {focused}")
             self.is_focused = focused
             self._update_border_style()
             self.focus_changed.emit(focused)
-            print(f"[DEBUG-FOCUS] SubWindowContainer.set_focused: Focus state updated and signal emitted")
+            # print(f"[DEBUG-FOCUS] SubWindowContainer.set_focused: Focus state updated and signal emitted")
         else:
-            print(f"[DEBUG-FOCUS] SubWindowContainer.set_focused: Focus already {focused}, no change needed")
+            # print(f"[DEBUG-FOCUS] SubWindowContainer.set_focused: Focus already {focused}, no change needed")
+            pass
     
     def _update_border_style(self) -> None:
         """Update the border style based on focus state."""
@@ -158,23 +159,24 @@ class SubWindowContainer(QFrame):
         
         if obj == self.image_viewer:
             if event.type() == QEvent.Type.MouseButtonPress:
-                print(f"[DEBUG-FOCUS] SubWindowContainer.eventFilter: MouseButtonPress intercepted on image_viewer, is_focused={self.is_focused}")
+                # print(f"[DEBUG-FOCUS] SubWindowContainer.eventFilter: MouseButtonPress intercepted on image_viewer, is_focused={self.is_focused}")
                 # Click on image viewer - set focus to this container
                 if not self.is_focused:
-                    print(f"[DEBUG-FOCUS] SubWindowContainer.eventFilter: Container not focused, requesting focus change")
+                    # print(f"[DEBUG-FOCUS] SubWindowContainer.eventFilter: Container not focused, requesting focus change")
                     # CRITICAL: Accept the event to prevent ImageViewer from processing it
                     # This prevents panning from starting before focus is set
                     event.accept()
-                    print(f"[DEBUG-FOCUS] SubWindowContainer.eventFilter: Event accepted, setting focus and emitting signal")
+                    # print(f"[DEBUG-FOCUS] SubWindowContainer.eventFilter: Event accepted, setting focus and emitting signal")
                     # Request focus change (will be handled by parent layout)
                     self.set_focused(True)
                     # Emit signal to notify parent
                     self.focus_changed.emit(True)
-                    print(f"[DEBUG-FOCUS] SubWindowContainer.eventFilter: Focus set and signal emitted, returning True")
+                    # print(f"[DEBUG-FOCUS] SubWindowContainer.eventFilter: Focus set and signal emitted, returning True")
                     # Return True to indicate we handled the event
                     return True
                 else:
-                    print(f"[DEBUG-FOCUS] SubWindowContainer.eventFilter: Container already focused, allowing event to pass through")
+                    # print(f"[DEBUG-FOCUS] SubWindowContainer.eventFilter: Container already focused, allowing event to pass through")
+                    pass
         
         return super().eventFilter(obj, event)
     
@@ -186,16 +188,16 @@ class SubWindowContainer(QFrame):
             event: Mouse event
         """
         if event.button() == Qt.MouseButton.LeftButton:
-            print(f"[DEBUG-FOCUS] SubWindowContainer.mousePressEvent: LeftButton click received, is_focused={self.is_focused}")
+            # print(f"[DEBUG-FOCUS] SubWindowContainer.mousePressEvent: LeftButton click received, is_focused={self.is_focused}")
             if not self.is_focused:
-                print(f"[DEBUG-FOCUS] SubWindowContainer.mousePressEvent: Container not focused, setting focus")
+                # print(f"[DEBUG-FOCUS] SubWindowContainer.mousePressEvent: Container not focused, setting focus")
                 # Accept the event to prevent propagation to ImageViewer
                 event.accept()
                 # Set focus to this container
                 self.set_focused(True)
                 # Emit signal to notify parent
                 self.focus_changed.emit(True)
-                print(f"[DEBUG-FOCUS] SubWindowContainer.mousePressEvent: Focus set and signal emitted, returning early")
+                # print(f"[DEBUG-FOCUS] SubWindowContainer.mousePressEvent: Focus set and signal emitted, returning early")
                 # Don't call super() to prevent ImageViewer from processing the event
                 # This prevents panning from starting
                 return

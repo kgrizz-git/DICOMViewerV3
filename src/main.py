@@ -119,6 +119,8 @@ class DICOMViewerApp(QObject):
         # Get initial layout from config
         initial_layout = self.config_manager.get_multi_window_layout()
         self.multi_window_layout.set_layout(initial_layout)
+        # Update menu checkmarks to reflect the actual layout (defaults to "1x1" if no config exists)
+        self.main_window.set_layout_mode(initial_layout)
         
         # For backward compatibility, keep image_viewer reference pointing to first subwindow's viewer
         # This will be updated when subwindows are created
@@ -180,33 +182,33 @@ class DICOMViewerApp(QObject):
         
         # Ensure focused subwindow has managers and update references
         # This must happen before _initialize_handlers() which needs these references
-        print(f"DEBUG: Setting up focused subwindow references")
-        print(f"DEBUG: subwindow_managers keys: {list(self.subwindow_managers.keys())}")
+        # print(f"DEBUG: Setting up focused subwindow references")
+        # print(f"DEBUG: subwindow_managers keys: {list(self.subwindow_managers.keys())}")
         
         focused_subwindow = self.multi_window_layout.get_focused_subwindow()
-        print(f"DEBUG: Focused subwindow: {focused_subwindow}")
+        # print(f"DEBUG: Focused subwindow: {focused_subwindow}")
         
         if focused_subwindow:
             subwindows = self.multi_window_layout.get_all_subwindows()
-            print(f"DEBUG: Focused subwindow in subwindows list: {focused_subwindow in subwindows}")
+            # print(f"DEBUG: Focused subwindow in subwindows list: {focused_subwindow in subwindows}")
             if focused_subwindow in subwindows:
                 focused_idx = subwindows.index(focused_subwindow)
-                print(f"DEBUG: Focused subwindow index: {focused_idx}")
-                print(f"DEBUG: Index in managers: {focused_idx in self.subwindow_managers}")
+                # print(f"DEBUG: Focused subwindow index: {focused_idx}")
+                # print(f"DEBUG: Index in managers: {focused_idx in self.subwindow_managers}")
                 if focused_idx in self.subwindow_managers:
                     # Update references immediately so _initialize_handlers() can use them
-                    print(f"DEBUG: Calling _update_focused_subwindow_references()")
+                    # print(f"DEBUG: Calling _update_focused_subwindow_references()")
                     self._update_focused_subwindow_references()
         
         # If still no managers set, ensure at least the first subwindow's managers are used
         if not hasattr(self, 'roi_coordinator') or self.roi_coordinator is None:
-            print(f"DEBUG: roi_coordinator not set, using fallback")
+            # print(f"DEBUG: roi_coordinator not set, using fallback")
             subwindows = self.multi_window_layout.get_all_subwindows()
-            print(f"DEBUG: Fallback - subwindows count: {len(subwindows) if subwindows else 0}")
-            print(f"DEBUG: Fallback - has index 0: {0 in self.subwindow_managers if self.subwindow_managers else False}")
+            # print(f"DEBUG: Fallback - subwindows count: {len(subwindows) if subwindows else 0}")
+            # print(f"DEBUG: Fallback - has index 0: {0 in self.subwindow_managers if self.subwindow_managers else False}")
             if subwindows and 0 in self.subwindow_managers:
                 # Use first subwindow's managers as fallback
-                print(f"DEBUG: Using first subwindow's managers as fallback")
+                # print(f"DEBUG: Using first subwindow's managers as fallback")
                 managers = self.subwindow_managers[0]
                 self.view_state_manager = managers['view_state_manager']
                 self.slice_display_manager = managers['slice_display_manager']
@@ -219,13 +221,15 @@ class DICOMViewerApp(QObject):
                 if subwindows[0]:
                     self.image_viewer = subwindows[0].image_viewer
                     self.main_window.image_viewer = self.image_viewer
-                print(f"DEBUG: Fallback managers set successfully")
+                # print(f"DEBUG: Fallback managers set successfully")
             else:
-                print(f"DEBUG: Fallback failed - no subwindows or no managers at index 0")
+                # print(f"DEBUG: Fallback failed - no subwindows or no managers at index 0")
+                pass
         
-        print(f"DEBUG: Final check - has roi_coordinator: {hasattr(self, 'roi_coordinator')}")
+        # print(f"DEBUG: Final check - has roi_coordinator: {hasattr(self, 'roi_coordinator')}")
         if hasattr(self, 'roi_coordinator'):
-            print(f"DEBUG: roi_coordinator is None: {self.roi_coordinator is None}")
+            # print(f"DEBUG: roi_coordinator is None: {self.roi_coordinator is None}")
+            pass
         
         # Legacy current data (for backward compatibility, points to focused subwindow)
         self.current_datasets: list = []
@@ -251,28 +255,28 @@ class DICOMViewerApp(QObject):
         subwindows = self.multi_window_layout.get_all_subwindows()
         
         # Debug output
-        print(f"DEBUG: _initialize_subwindow_managers called")
-        print(f"DEBUG: Subwindows count from get_all_subwindows(): {len(subwindows)}")
-        print(f"DEBUG: Current layout mode: {self.multi_window_layout.get_layout_mode()}")
+        # print(f"DEBUG: _initialize_subwindow_managers called")
+        # print(f"DEBUG: Subwindows count from get_all_subwindows(): {len(subwindows)}")
+        # print(f"DEBUG: Current layout mode: {self.multi_window_layout.get_layout_mode()}")
         
         # Ensure we have at least one subwindow - force creation if needed
         if not subwindows:
-            print("DEBUG: No subwindows found, forcing creation of 1x1 layout")
+            # print("DEBUG: No subwindows found, forcing creation of 1x1 layout")
             # Force creation of at least one subwindow
             self.multi_window_layout.set_layout("1x1")
             subwindows = self.multi_window_layout.get_all_subwindows()
-            print(f"DEBUG: After forcing layout, subwindows count: {len(subwindows)}")
+            # print(f"DEBUG: After forcing layout, subwindows count: {len(subwindows)}")
             if not subwindows:
                 raise RuntimeError("Failed to create subwindows. Cannot initialize managers.")
         
-        print(f"DEBUG: Creating managers for {len(subwindows)} subwindows")
+        # print(f"DEBUG: Creating managers for {len(subwindows)} subwindows")
         
         for idx, subwindow in enumerate(subwindows):
             if subwindow is None:
-                print(f"DEBUG: Skipping None subwindow at index {idx}")
+                # print(f"DEBUG: Skipping None subwindow at index {idx}")
                 continue
             
-            print(f"DEBUG: Creating managers for subwindow {idx}")
+            # print(f"DEBUG: Creating managers for subwindow {idx}")
             
             image_viewer = subwindow.image_viewer
             
@@ -396,7 +400,7 @@ class DICOMViewerApp(QObject):
             
             # Store managers
             self.subwindow_managers[idx] = managers
-            print(f"DEBUG: Stored managers for subwindow {idx}")
+            # print(f"DEBUG: Stored managers for subwindow {idx}")
             
             # Initialize subwindow data
             self.subwindow_data[idx] = {
@@ -407,7 +411,7 @@ class DICOMViewerApp(QObject):
                 'current_datasets': []
             }
         
-        print(f"DEBUG: _initialize_subwindow_managers complete. Total managers created: {len(self.subwindow_managers)}")
+        # print(f"DEBUG: _initialize_subwindow_managers complete. Total managers created: {len(self.subwindow_managers)}")
         
         # Connect transform/zoom signals for all subwindows to their own ViewStateManager
         # This ensures overlays update correctly when panning/zooming in any subwindow
@@ -421,7 +425,7 @@ class DICOMViewerApp(QObject):
         if subwindow is None:
             return
         
-        print(f"DEBUG: Creating managers for subwindow {idx}")
+        # print(f"DEBUG: Creating managers for subwindow {idx}")
         
         image_viewer = subwindow.image_viewer
         
@@ -545,7 +549,7 @@ class DICOMViewerApp(QObject):
         
         # Store managers
         self.subwindow_managers[idx] = managers
-        print(f"DEBUG: Stored managers for subwindow {idx}")
+        # print(f"DEBUG: Stored managers for subwindow {idx}")
         
         # Initialize subwindow data if not exists
         if idx not in self.subwindow_data:
@@ -675,6 +679,24 @@ class DICOMViewerApp(QObject):
         else:
             # print(f"[DEBUG-WL]   ERROR: view_state_manager is None")
             pass
+        
+        # Update intensity projection controls widget with focused subwindow's projection state
+        if self.slice_display_manager:
+            # Update enabled state (this method blocks signals on the checkbox internally)
+            self.intensity_projection_controls_widget.set_enabled(
+                self.slice_display_manager.projection_enabled,
+                keep_signals_blocked=False
+            )
+            
+            # Update projection type (this method blocks signals on the combo box internally)
+            self.intensity_projection_controls_widget.set_projection_type(
+                self.slice_display_manager.projection_type
+            )
+            
+            # Update slice count (this method blocks signals on the combo box internally)
+            self.intensity_projection_controls_widget.set_slice_count(
+                self.slice_display_manager.projection_slice_count
+            )
         
         # Update ROI list (will be updated when slice is displayed)
         # Update ROI statistics (will be updated when ROI is selected)
@@ -1289,7 +1311,7 @@ class DICOMViewerApp(QObject):
     
     def _on_focused_subwindow_changed(self, subwindow: SubWindowContainer) -> None:
         """Handle focused subwindow change."""
-        print(f"[DEBUG-FOCUS] DICOMViewerApp._on_focused_subwindow_changed: Called with subwindow={subwindow}")
+        # print(f"[DEBUG-FOCUS] DICOMViewerApp._on_focused_subwindow_changed: Called with subwindow={subwindow}")
         # Disconnect signals from previous focused subwindow
         self._disconnect_focused_subwindow_signals()
         
@@ -1819,7 +1841,7 @@ class DICOMViewerApp(QObject):
         except (TypeError, RuntimeError, AttributeError):
             pass
         
-        print("[DEBUG] Finished disconnecting signals from focused subwindow ImageViewer")
+        # print("[DEBUG] Finished disconnecting signals from focused subwindow ImageViewer")
     
     def _connect_focused_subwindow_signals(self) -> None:
         """Connect signals for the currently focused subwindow."""
