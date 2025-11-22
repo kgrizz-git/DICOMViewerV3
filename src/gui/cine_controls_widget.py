@@ -136,7 +136,7 @@ class CineControlsWidget(QWidget):
         self.frame_slider.setMinimum(0)
         self.frame_slider.setMaximum(0)
         self.frame_slider.setValue(0)
-        self.frame_slider.setToolTip("Current frame / Total frames\nRight-click to set loop bounds")
+        self.frame_slider.setToolTip("Current frame / Total frames\nRight-click to set cine bounds")
         self.frame_slider.setEnabled(False)
         self.frame_slider.valueChanged.connect(self._on_frame_slider_changed)
         # Enable context menu for right-click
@@ -312,22 +312,22 @@ class CineControlsWidget(QWidget):
         else:
             clicked_frame = self.frame_slider.value()
         
-        # Set Loop Start action
-        set_start_action = QAction("Set Loop Start", self)
-        set_start_action.setToolTip(f"Set loop start to frame {clicked_frame + 1}")
+        # Set Cine Start action
+        set_start_action = QAction("Set Cine Start", self)
+        set_start_action.setToolTip(f"Set cine start to frame {clicked_frame + 1}")
         set_start_action.triggered.connect(lambda: self._set_loop_start(clicked_frame))
         menu.addAction(set_start_action)
         
-        # Set Loop End action
-        set_end_action = QAction("Set Loop End", self)
-        set_end_action.setToolTip(f"Set loop end to frame {clicked_frame + 1}")
+        # Set Cine End action
+        set_end_action = QAction("Set Cine End", self)
+        set_end_action.setToolTip(f"Set cine end to frame {clicked_frame + 1}")
         set_end_action.triggered.connect(lambda: self._set_loop_end(clicked_frame))
         menu.addAction(set_end_action)
         
         menu.addSeparator()
         
-        # Clear Loop Bounds action
-        clear_action = QAction("Clear Loop Bounds", self)
+        # Clear Cine Bounds action
+        clear_action = QAction("Clear Cine Bounds", self)
         clear_action.setEnabled(self.loop_start_frame is not None or self.loop_end_frame is not None)
         clear_action.triggered.connect(self._clear_loop_bounds)
         menu.addAction(clear_action)
@@ -371,18 +371,18 @@ class CineControlsWidget(QWidget):
                 end_ratio = self.loop_end_frame / max_val
                 # Note: QSlider doesn't directly support styling loop regions
                 # For now, we'll just update the tooltip to show bounds
-                tooltip = f"Current frame / Total frames\nLoop bounds: {self.loop_start_frame + 1} - {self.loop_end_frame + 1}\nRight-click to change"
+                tooltip = f"Current frame / Total frames\nCine bounds: {self.loop_start_frame + 1} - {self.loop_end_frame + 1}\nRight-click to change"
                 self.frame_slider.setToolTip(tooltip)
             else:
-                self.frame_slider.setToolTip("Current frame / Total frames\nRight-click to set loop bounds")
+                self.frame_slider.setToolTip("Current frame / Total frames\nRight-click to set cine bounds")
         elif self.loop_start_frame is not None:
-            tooltip = f"Current frame / Total frames\nLoop start: {self.loop_start_frame + 1}\nRight-click to set loop end or clear"
+            tooltip = f"Current frame / Total frames\nCine start: {self.loop_start_frame + 1}\nRight-click to set cine end or clear"
             self.frame_slider.setToolTip(tooltip)
         elif self.loop_end_frame is not None:
-            tooltip = f"Current frame / Total frames\nLoop end: {self.loop_end_frame + 1}\nRight-click to set loop start or clear"
+            tooltip = f"Current frame / Total frames\nCine end: {self.loop_end_frame + 1}\nRight-click to set cine start or clear"
             self.frame_slider.setToolTip(tooltip)
         else:
-            self.frame_slider.setToolTip("Current frame / Total frames\nRight-click to set loop bounds")
+            self.frame_slider.setToolTip("Current frame / Total frames\nRight-click to set cine bounds")
     
     def set_loop_bounds(self, start_frame: Optional[int], end_frame: Optional[int]) -> None:
         """

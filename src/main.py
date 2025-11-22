@@ -900,12 +900,19 @@ class DICOMViewerApp(QObject):
                 # Force viewport update to ensure cleared scene is visible
                 subwindow.image_viewer.viewport().update()
         
-        # Clear overlay items for all subwindows
+        # Clear overlay items for all subwindows (including viewport corner overlays)
         for idx in self.subwindow_managers:
             managers = self.subwindow_managers[idx]
             overlay_manager = managers.get('overlay_manager')
             if overlay_manager:
-                overlay_manager.overlay_items.clear()
+                # Get the scene from the corresponding subwindow to properly clear overlays
+                subwindows = self.multi_window_layout.get_all_subwindows()
+                if idx < len(subwindows) and subwindows[idx] and subwindows[idx].image_viewer:
+                    scene = subwindows[idx].image_viewer.scene
+                    overlay_manager.clear_overlay_items(scene)
+                else:
+                    # Fallback: just clear the items list if scene not available
+                    overlay_manager.overlay_items.clear()
         
         # Clear metadata panel (shared)
         self.metadata_panel.set_dataset(None)
@@ -966,12 +973,19 @@ class DICOMViewerApp(QObject):
                 # Force viewport update
                 subwindow.image_viewer.viewport().update()
         
-        # Clear overlay items for all subwindows
+        # Clear overlay items for all subwindows (including viewport corner overlays)
         for idx in self.subwindow_managers:
             managers = self.subwindow_managers[idx]
             overlay_manager = managers.get('overlay_manager')
             if overlay_manager:
-                overlay_manager.overlay_items.clear()
+                # Get the scene from the corresponding subwindow to properly clear overlays
+                subwindows = self.multi_window_layout.get_all_subwindows()
+                if idx < len(subwindows) and subwindows[idx] and subwindows[idx].image_viewer:
+                    scene = subwindows[idx].image_viewer.scene
+                    overlay_manager.clear_overlay_items(scene)
+                else:
+                    # Fallback: just clear the items list if scene not available
+                    overlay_manager.overlay_items.clear()
         
         # Reset projection state when new files are opened
         self.slice_display_manager.reset_projection_state()
@@ -1037,29 +1051,46 @@ class DICOMViewerApp(QObject):
                 self.annotation_manager.load_key_objects(all_key_objects)
                 # print(f"[ANNOTATIONS] Loaded Key Objects for {len(all_key_objects)} studies")
             
-            # Reset view state
-            self.view_state_manager.reset_window_level_state()
-            self.view_state_manager.reset_series_tracking()
+            # Always load first series to subwindow 0 and make it focused
+            subwindow_0 = self.multi_window_layout.get_subwindow(0)
+            if subwindow_0:
+                self.multi_window_layout.set_focused_subwindow(subwindow_0)
+                self.focused_subwindow_index = 0
+            
+            # Get subwindow 0's managers for loading the first series
+            if 0 not in self.subwindow_managers:
+                # Ensure managers exist for subwindow 0
+                self._ensure_all_subwindows_have_managers()
+            
+            managers_0 = self.subwindow_managers[0]
+            slice_display_manager_0 = managers_0.get('slice_display_manager')
+            view_state_manager_0 = managers_0.get('view_state_manager')
+            
+            # Reset view state for subwindow 0
+            if view_state_manager_0:
+                view_state_manager_0.reset_window_level_state()
+                view_state_manager_0.reset_series_tracking()
             
             # Set up slice navigator
             self.slice_navigator.set_total_slices(first_slice_info['total_slices'])
             self.slice_navigator.set_current_slice(0)
             
-            # Display slice
-            self.slice_display_manager.display_slice(
-                first_slice_info['dataset'],
-                self.current_studies,
-                self.current_study_uid,
-                self.current_series_uid,
-                self.current_slice_index
-            )
+            # Display slice in subwindow 0
+            if slice_display_manager_0:
+                slice_display_manager_0.display_slice(
+                    first_slice_info['dataset'],
+                    self.current_studies,
+                    self.current_study_uid,
+                    self.current_series_uid,
+                    self.current_slice_index
+                )
             
             # Update current dataset reference
             self.current_dataset = first_slice_info['dataset']
             
             # Initialize subwindow_data[0] with loaded data for the first subwindow
             # This ensures the first subwindow can navigate and respond to controls
-            focused_idx = self.focused_subwindow_index if hasattr(self, 'focused_subwindow_index') else 0
+            focused_idx = 0
             if focused_idx not in self.subwindow_data:
                 self.subwindow_data[focused_idx] = {}
             
@@ -1109,29 +1140,31 @@ class DICOMViewerApp(QObject):
                 series_datasets = studies[self.current_study_uid][self.current_series_uid]
                 self.subwindow_data[focused_idx]['current_datasets'] = series_datasets
             
-            # Ensure focused subwindow's slice_display_manager context is initialized with loaded data
+            # Ensure subwindow 0's slice_display_manager context is initialized with loaded data
             # This is critical for navigation and window/level controls to work
             # Use extracted UIDs to ensure context matches what's actually displayed
-            if focused_idx in self.subwindow_managers:
-                managers = self.subwindow_managers[focused_idx]
-                slice_display_manager = managers.get('slice_display_manager')
-                view_state_manager = managers.get('view_state_manager')
-                
-                if slice_display_manager:
-                    slice_display_manager.set_current_data_context(
-                        self.current_studies,
-                        extracted_study_uid,  # Use extracted UID, not stored
-                        extracted_series_uid,  # Use extracted UID, not stored
-                        self.current_slice_index
-                    )
-                
-                # Ensure view_state_manager has the current dataset for window/level controls
-                if view_state_manager:
-                    view_state_manager.current_dataset = first_slice_info['dataset']
-                    # The window/level will be set when display_slice is called above
-                    # We just need to ensure the dataset is set so handle_window_changed can work
+            if slice_display_manager_0:
+                slice_display_manager_0.set_current_data_context(
+                    self.current_studies,
+                    extracted_study_uid,  # Use extracted UID, not stored
+                    extracted_series_uid,  # Use extracted UID, not stored
+                    self.current_slice_index
+                )
             
-            # Ensure window/level controls are connected to the focused subwindow's view_state_manager
+            # Ensure view_state_manager has the current dataset for window/level controls
+            if view_state_manager_0:
+                view_state_manager_0.current_dataset = first_slice_info['dataset']
+                # The window/level will be set when display_slice is called above
+                # We just need to ensure the dataset is set so handle_window_changed can work
+            
+            # Update references to point to subwindow 0's managers
+            self.view_state_manager = view_state_manager_0
+            self.slice_display_manager = slice_display_manager_0
+            if 0 in self.subwindow_managers:
+                managers_0 = self.subwindow_managers[0]
+                self.roi_coordinator = managers_0.get('roi_coordinator')
+            
+            # Ensure window/level controls are connected to subwindow 0's view_state_manager
             # Reconnect signals to ensure they point to the correct manager
             self._disconnect_focused_subwindow_signals()
             self._connect_focused_subwindow_signals()

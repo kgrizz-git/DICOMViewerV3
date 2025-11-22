@@ -173,6 +173,7 @@ class QuickStartGuideDialog(QDialog):
                 <li><strong>Loop:</strong> Toggle continuous looping (when enabled, playback restarts from first frame after reaching the end)</li>
                 <li><strong>Speed:</strong> Adjust playback speed (0.25x, 0.5x, 1x, 2x, 4x)</li>
                 <li><strong>Frame Slider:</strong> Drag to jump to a specific frame, or watch it move automatically during playback</li>
+                <li><strong>Setting Cine Limits:</strong> Right-click on the frame slider/progress bar to set cine start/end limits (applies to both looping and non-looping playback)</li>
                 <li><strong>Frame Position:</strong> Shows current frame number and total frames (e.g., "5 / 20")</li>
                 <li><strong>FPS Display:</strong> Shows current frame rate during playback</li>
                 <li><strong>Context Menu:</strong> Right-click on image → "Loop Cine" to toggle loop mode</li>
