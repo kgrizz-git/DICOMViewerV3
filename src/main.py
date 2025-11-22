@@ -60,6 +60,7 @@ from core.dicom_parser import DICOMParser
 from core.dicom_processor import DICOMProcessor
 from core.tag_edit_history import TagEditHistoryManager
 from utils.config_manager import ConfigManager
+from utils.dicom_utils import get_composite_series_key
 from tools.roi_manager import ROIManager
 from tools.measurement_tool import MeasurementTool
 from tools.annotation_manager import AnnotationManager
@@ -1094,10 +1095,10 @@ class DICOMViewerApp(QObject):
             if focused_idx not in self.subwindow_data:
                 self.subwindow_data[focused_idx] = {}
             
-            # Extract actual SeriesInstanceUID from the dataset that was displayed
+            # Extract actual composite series key from the dataset that was displayed
             # This ensures subwindow_data always reflects what's actually shown
             displayed_dataset = first_slice_info['dataset']
-            extracted_series_uid = getattr(displayed_dataset, 'SeriesInstanceUID', '')
+            extracted_series_uid = get_composite_series_key(displayed_dataset)
             extracted_study_uid = getattr(displayed_dataset, 'StudyInstanceUID', '')
             
             # Get stored values for comparison
@@ -1258,7 +1259,7 @@ class DICOMViewerApp(QObject):
         """Update ROI list panel."""
         if self.current_dataset is not None:
             study_uid = getattr(self.current_dataset, 'StudyInstanceUID', '')
-            series_uid = getattr(self.current_dataset, 'SeriesInstanceUID', '')
+            series_uid = get_composite_series_key(self.current_dataset)
             # Use current slice index as instance identifier (array position)
             instance_identifier = self.current_slice_index
             self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
@@ -1367,7 +1368,7 @@ class DICOMViewerApp(QObject):
             # Update ROI list for current slice of focused subwindow
             if self.current_dataset is not None:
                 study_uid = getattr(self.current_dataset, 'StudyInstanceUID', '')
-                series_uid = getattr(self.current_dataset, 'SeriesInstanceUID', '')
+                series_uid = get_composite_series_key(self.current_dataset)
                 # Use current_slice_index as instance identifier (same as display_rois_for_slice)
                 instance_identifier = self.current_slice_index
                 self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
@@ -2188,11 +2189,11 @@ class DICOMViewerApp(QObject):
         focused_series_uid = data.get('current_series_uid', '')
         focused_slice_index = data.get('current_slice_index', 0)
         
-        # CRITICAL FIX: Extract actual series_uid from currently displayed dataset
+        # CRITICAL FIX: Extract actual composite series key from currently displayed dataset
         # This ensures we navigate from what's actually shown, not what's stored
         displayed_dataset = data.get('current_dataset')
         if displayed_dataset:
-            extracted_series_uid = getattr(displayed_dataset, 'SeriesInstanceUID', '')
+            extracted_series_uid = get_composite_series_key(displayed_dataset)
             extracted_study_uid = getattr(displayed_dataset, 'StudyInstanceUID', '')
             
             if extracted_series_uid and extracted_series_uid != focused_series_uid:
@@ -2315,9 +2316,9 @@ class DICOMViewerApp(QObject):
                 slice_index
             )
             
-            # Extract actual SeriesInstanceUID from the dataset that was displayed
+            # Extract actual composite series key from the dataset that was displayed
             # This ensures subwindow_data always reflects what's actually shown
-            extracted_series_uid = getattr(dataset, 'SeriesInstanceUID', '')
+            extracted_series_uid = get_composite_series_key(dataset)
             extracted_study_uid = getattr(dataset, 'StudyInstanceUID', '')
             
             # Get stored values for comparison
@@ -2503,7 +2504,7 @@ class DICOMViewerApp(QObject):
         self.slice_display_manager.display_rois_for_slice(dataset)
         # Check if there's a selected ROI for this slice and restore UI state
         study_uid = getattr(dataset, 'StudyInstanceUID', '')
-        series_uid = getattr(dataset, 'SeriesInstanceUID', '')
+        series_uid = get_composite_series_key(dataset)
         # Use current slice index as instance identifier (array position)
         instance_identifier = self.current_slice_index
         rois = self.roi_manager.get_rois_for_slice(study_uid, series_uid, instance_identifier)
@@ -2877,7 +2878,7 @@ class DICOMViewerApp(QObject):
         selected_roi = self.roi_manager.get_selected_roi()
         if selected_roi is not None and self.current_dataset is not None:
             study_uid = getattr(self.current_dataset, 'StudyInstanceUID', '')
-            series_uid = getattr(self.current_dataset, 'SeriesInstanceUID', '')
+            series_uid = get_composite_series_key(self.current_dataset)
             # Use current slice index as instance identifier (array position)
             instance_identifier = self.current_slice_index
             current_slice_rois = self.roi_manager.get_rois_for_slice(study_uid, series_uid, instance_identifier)

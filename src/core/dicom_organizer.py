@@ -2,8 +2,8 @@
 DICOM Series and Study Organizer
 
 This module organizes DICOM files into studies and series based on their metadata.
-Groups files by StudyInstanceUID and SeriesInstanceUID, and sorts slices by
-InstanceNumber or SliceLocation.
+Groups files by StudyInstanceUID and composite series keys (SeriesInstanceUID + SeriesNumber),
+and sorts slices by InstanceNumber or SliceLocation.
 
 Inputs:
     - List of pydicom.Dataset objects
@@ -22,6 +22,7 @@ from collections import defaultdict
 import pydicom
 from pydicom.dataset import Dataset
 from core.multiframe_handler import is_multiframe, get_frame_count, create_frame_dataset
+from utils.dicom_utils import get_composite_series_key
 
 
 class DICOMOrganizer:
@@ -30,8 +31,12 @@ class DICOMOrganizer:
     
     Groups files by:
     - StudyInstanceUID (studies)
-    - SeriesInstanceUID (series within studies)
+    - Composite series key (SeriesInstanceUID + SeriesNumber) for series within studies
     - Sorts slices by InstanceNumber or SliceLocation
+    
+    The composite series key combines SeriesInstanceUID with SeriesNumber to handle
+    edge cases where the same SeriesInstanceUID appears with different SeriesNumber
+    values, which should be treated as separate series.
     """
     
     def __init__(self):
@@ -51,7 +56,8 @@ class DICOMOrganizer:
             file_paths: Optional list of file paths corresponding to datasets
             
         Returns:
-            Dictionary structure: {StudyInstanceUID: {SeriesInstanceUID: [sorted_datasets]}}
+            Dictionary structure: {StudyInstanceUID: {composite_series_key: [sorted_datasets]}}
+            where composite_series_key is "SeriesInstanceUID_SeriesNumber" or "SeriesInstanceUID"
         """
         self.studies = {}
         self.file_paths = {}
@@ -127,7 +133,7 @@ class DICOMOrganizer:
                     # We'll process these when displaying the image
                     pass
             
-            # Get study and series UIDs for image files
+            # Get study UID and composite series key for image files
             study_uid = self._get_tag_value(dataset, "StudyInstanceUID", "")
             series_uid = self._get_tag_value(dataset, "SeriesInstanceUID", "")
             
@@ -135,6 +141,9 @@ class DICOMOrganizer:
                 # Skip files without proper UIDs
                 # print(f"[ANNOTATIONS] Skipping file {idx}: missing StudyInstanceUID or SeriesInstanceUID (SOP Class: {sop_class_uid_str[:50]}...)")
                 continue
+            
+            # Generate composite series key (includes SeriesNumber if available)
+            composite_series_key = get_composite_series_key(dataset)
             
             file_path = file_paths[idx] if file_paths and idx < len(file_paths) else None
             
@@ -152,26 +161,26 @@ class DICOMOrganizer:
                         # Store frame index in dataset for reference
                         frame_dataset._frame_index = frame_index
                         frame_dataset._original_dataset = dataset
-                        # Add frame to the series
-                        study_dict[study_uid][series_uid].append((frame_dataset, file_path))
+                        # Add frame to the series using composite key
+                        study_dict[study_uid][composite_series_key].append((frame_dataset, file_path))
                 
                 # print(f"[ORGANIZE] Successfully split into {num_frames} frame wrappers")
             else:
-                # Single-frame file - add as-is
-                study_dict[study_uid][series_uid].append((dataset, file_path))
+                # Single-frame file - add as-is using composite key
+                study_dict[study_uid][composite_series_key].append((dataset, file_path))
         
         # Sort slices within each series and organize
         for study_uid, series_dict in study_dict.items():
             self.studies[study_uid] = {}
             
-            for series_uid, slice_list in series_dict.items():
+            for composite_series_key, slice_list in series_dict.items():
                 # Sort slices by InstanceNumber or SliceLocation
                 sorted_slices = self._sort_slices(slice_list)
                 
-                # Store datasets
-                self.studies[study_uid][series_uid] = [ds for ds, _ in sorted_slices]
+                # Store datasets using composite series key
+                self.studies[study_uid][composite_series_key] = [ds for ds, _ in sorted_slices]
                 
-                # Store file paths if available
+                # Store file paths if available (using composite series key)
                 for idx, (ds, path) in enumerate(sorted_slices):
                     if path:
                         # For multi-frame files, use frame index as part of instance identifier
@@ -185,7 +194,7 @@ class DICOMOrganizer:
                             instance_num = int(base_instance) * 10000 + frame_index
                         else:
                             instance_num = self._get_tag_value(ds, "InstanceNumber", idx)
-                        self.file_paths[(study_uid, series_uid, instance_num)] = path
+                        self.file_paths[(study_uid, composite_series_key, instance_num)] = path
         
         # Print summary of detected annotation files
         # print(f"[ANNOTATIONS] Organization complete: {ps_count} Presentation State(s), {ko_count} Key Object(s)")
@@ -291,30 +300,32 @@ class DICOMOrganizer:
         Get organized studies structure.
         
         Returns:
-            Dictionary: {StudyInstanceUID: {SeriesInstanceUID: [sorted_datasets]}}
+            Dictionary: {StudyInstanceUID: {composite_series_key: [sorted_datasets]}}
+            where composite_series_key is "SeriesInstanceUID_SeriesNumber" or "SeriesInstanceUID"
         """
         return self.studies
     
     def get_series_list(self, study_uid: Optional[str] = None) -> List[Tuple[str, str]]:
         """
-        Get list of (study_uid, series_uid) pairs.
+        Get list of (study_uid, composite_series_key) pairs.
         
         Args:
             study_uid: Optional study UID to filter by
             
         Returns:
-            List of (study_uid, series_uid) tuples
+            List of (study_uid, composite_series_key) tuples
+            where composite_series_key is "SeriesInstanceUID_SeriesNumber" or "SeriesInstanceUID"
         """
         series_list = []
         
         if study_uid:
             if study_uid in self.studies:
-                for series_uid in self.studies[study_uid].keys():
-                    series_list.append((study_uid, series_uid))
+                for composite_series_key in self.studies[study_uid].keys():
+                    series_list.append((study_uid, composite_series_key))
         else:
             for study_uid, series_dict in self.studies.items():
-                for series_uid in series_dict.keys():
-                    series_list.append((study_uid, series_uid))
+                for composite_series_key in series_dict.keys():
+                    series_list.append((study_uid, composite_series_key))
         
         return series_list
     
@@ -324,7 +335,7 @@ class DICOMOrganizer:
         
         Args:
             study_uid: Study Instance UID
-            series_uid: Series Instance UID
+            series_uid: Composite series key (SeriesInstanceUID_SeriesNumber or SeriesInstanceUID)
             
         Returns:
             Number of slices
@@ -339,7 +350,7 @@ class DICOMOrganizer:
         
         Args:
             study_uid: Study Instance UID
-            series_uid: Series Instance UID
+            series_uid: Composite series key (SeriesInstanceUID_SeriesNumber or SeriesInstanceUID)
             instance_number: Instance number
             
         Returns:

@@ -32,7 +32,7 @@ from gui.image_viewer import ImageViewer
 from core.dicom_processor import DICOMProcessor
 from gui.window_level_controls import WindowLevelControls
 from gui.main_window import MainWindow
-from utils.dicom_utils import get_pixel_spacing
+from utils.dicom_utils import get_pixel_spacing, get_composite_series_key
 
 
 class ROICoordinator:
@@ -145,7 +145,7 @@ class ROICoordinator:
             
             # Extract DICOM identifiers
             study_uid = getattr(current_dataset, 'StudyInstanceUID', '')
-            series_uid = getattr(current_dataset, 'SeriesInstanceUID', '')
+            series_uid = get_composite_series_key(current_dataset)
             current_slice_index = self.get_current_slice_index()
             
             # Get series datasets
@@ -214,7 +214,7 @@ class ROICoordinator:
         
         # Extract DICOM identifiers
         study_uid = getattr(current_dataset, 'StudyInstanceUID', '')
-        series_uid = getattr(current_dataset, 'SeriesInstanceUID', '')
+        series_uid = get_composite_series_key(current_dataset)
         # Use current slice index as instance identifier (array position)
         instance_identifier = self.get_current_slice_index()
         
@@ -242,7 +242,7 @@ class ROICoordinator:
         instance_identifier = self.get_current_slice_index()
         if current_dataset is not None:
             study_uid = getattr(current_dataset, 'StudyInstanceUID', '')
-            series_uid = getattr(current_dataset, 'SeriesInstanceUID', '')
+            series_uid = get_composite_series_key(current_dataset)
         
         # Check if we're in auto_window_level mode
         if self.image_viewer.mouse_mode == "auto_window_level" and roi_item is not None:
@@ -375,7 +375,7 @@ class ROICoordinator:
             current_dataset = self.get_current_dataset()
             if current_dataset is not None:
                 study_uid = getattr(current_dataset, 'StudyInstanceUID', '')
-                series_uid = getattr(current_dataset, 'SeriesInstanceUID', '')
+                series_uid = get_composite_series_key(current_dataset)
                 # Use current slice index as instance identifier (array position)
                 instance_identifier = self.get_current_slice_index()
                 self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
@@ -407,7 +407,7 @@ class ROICoordinator:
         current_dataset = self.get_current_dataset()
         if current_dataset is not None:
             study_uid = getattr(current_dataset, 'StudyInstanceUID', '')
-            series_uid = getattr(current_dataset, 'SeriesInstanceUID', '')
+            series_uid = get_composite_series_key(current_dataset)
             instance_identifier = self.get_current_slice_index()
             remaining_rois = self.roi_manager.get_rois_for_slice(study_uid, series_uid, instance_identifier)
             if remaining_rois:
@@ -430,7 +430,7 @@ class ROICoordinator:
         
         # Get current slice identifiers
         study_uid = getattr(current_dataset, 'StudyInstanceUID', '')
-        series_uid = getattr(current_dataset, 'SeriesInstanceUID', '')
+        series_uid = get_composite_series_key(current_dataset)
         
         if not study_uid or not series_uid:
             return
@@ -464,7 +464,7 @@ class ROICoordinator:
         try:
             # Extract DICOM identifiers
             study_uid = getattr(current_dataset, 'StudyInstanceUID', '')
-            series_uid = getattr(current_dataset, 'SeriesInstanceUID', '')
+            series_uid = get_composite_series_key(current_dataset)
             # Use current slice index as instance identifier (array position)
             instance_identifier = self.get_current_slice_index()
             
@@ -530,7 +530,7 @@ class ROICoordinator:
                 current_dataset = self.get_current_dataset()
                 if current_dataset is not None:
                     study_uid = getattr(current_dataset, 'StudyInstanceUID', '')
-                    series_uid = getattr(current_dataset, 'SeriesInstanceUID', '')
+                    series_uid = get_composite_series_key(current_dataset)
                     instance_identifier = self.get_current_slice_index()
                     rois = self.roi_manager.get_rois_for_slice(study_uid, series_uid, instance_identifier)
                     for roi in rois:
@@ -570,7 +570,7 @@ class ROICoordinator:
         
         # Extract DICOM identifiers
         study_uid = getattr(current_dataset, 'StudyInstanceUID', '')
-        series_uid = getattr(current_dataset, 'SeriesInstanceUID', '')
+        series_uid = get_composite_series_key(current_dataset)
         instance_identifier = self.get_current_slice_index()
         
         # Get all ROIs for current slice

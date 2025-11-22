@@ -300,3 +300,38 @@ def get_image_orientation(dataset: Dataset) -> Optional[Tuple[np.ndarray, np.nda
     
     return None
 
+
+def get_composite_series_key(dataset: Dataset) -> str:
+    """
+    Generate composite series key from SeriesInstanceUID and SeriesNumber.
+    
+    Creates a unique identifier for series that combines SeriesInstanceUID with SeriesNumber
+    to handle edge cases where the same SeriesInstanceUID appears with different SeriesNumber
+    values, which should be treated as separate series.
+    
+    Format: "SeriesInstanceUID_SeriesNumber" if SeriesNumber exists and is valid,
+            otherwise just "SeriesInstanceUID"
+    
+    Args:
+        dataset: pydicom Dataset
+        
+    Returns:
+        Composite series key string
+    """
+    series_uid = getattr(dataset, 'SeriesInstanceUID', '')
+    if not series_uid:
+        return ''
+    
+    series_number = getattr(dataset, 'SeriesNumber', None)
+    
+    # Include SeriesNumber in key if it exists and is valid
+    if series_number is not None:
+        # Convert to string and strip whitespace
+        series_num_str = str(series_number).strip()
+        # Only include if non-empty
+        if series_num_str:
+            return f"{series_uid}_{series_num_str}"
+    
+    # Fall back to just SeriesInstanceUID if SeriesNumber is missing or empty
+    return series_uid
+
