@@ -232,20 +232,53 @@ class MetadataPanel(QWidget):
         self.tree_widget.itemDoubleClicked.connect(self._on_item_double_clicked)
         layout.addWidget(self.tree_widget)
     
-    def set_dataset(self, dataset: Dataset) -> None:
+    def set_dataset(self, dataset: Optional[Dataset], clear_filter: bool = False) -> None:
         """
         Set the DICOM dataset to display.
         
         Args:
-            dataset: pydicom Dataset
+            dataset: pydicom Dataset or None to clear
+            clear_filter: If True, clear the search filter. If False, preserve current filter.
+                         Always clears filter if dataset is None.
         """
         self.dataset = dataset
+        
+        if dataset is None:
+            # Clear everything when dataset is None
+            self.parser = None
+            self.editor = None
+            self._cached_tags = None
+            self._cached_search_text = ""
+            self.search_edit.clear()
+            self.tree_widget.clear()
+            return
+        
         self.parser = DICOMParser(dataset)
         self.editor = DICOMEditor(dataset)
         # Clear cache when dataset changes
         self._cached_tags = None
+        
+        # Handle filter clearing
+        if clear_filter:
+            self._cached_search_text = ""
+            self.search_edit.clear()
+            current_search_text = ""
+        else:
+            # Preserve current search filter text so it persists when switching subwindows or resetting view
+            current_search_text = self.search_edit.text()
+            self._cached_search_text = current_search_text
+        
+        # Apply the filter to the new dataset
+        self._populate_tags(current_search_text)
+    
+    def clear_filter(self) -> None:
+        """
+        Clear the search filter and repopulate tags without filter.
+        """
         self._cached_search_text = ""
-        self._populate_tags()
+        self.search_edit.clear()
+        if self.parser is not None:
+            self._populate_tags("")
     
     def _populate_tags(self, search_text: str = "") -> None:
         """

@@ -1169,6 +1169,9 @@ class DICOMViewerApp(QObject):
             self._disconnect_focused_subwindow_signals()
             self._connect_focused_subwindow_signals()
             
+            # Clear metadata panel filter when loading new files
+            self.metadata_panel.clear_filter()
+            
             # Update cine player context and check if series is cine-capable
             self._update_cine_player_context()
             
@@ -1677,7 +1680,7 @@ class DICOMViewerApp(QObject):
         if idx in self.subwindow_managers:
             managers = self.subwindow_managers[idx]
             slice_display_manager = managers['slice_display_manager']
-            # Only update global window/level controls if this is the focused subwindow
+            # Only update global window/level controls and metadata panel if this is the focused subwindow
             # For unfocused subwindows, only update internal ViewStateManager values
             is_focused = (subwindow == self.multi_window_layout.get_focused_subwindow())
             slice_display_manager.display_slice(
@@ -1686,7 +1689,8 @@ class DICOMViewerApp(QObject):
                 target_study_uid,
                 series_uid,
                 slice_index,
-                update_controls=is_focused
+                update_controls=is_focused,
+                update_metadata=is_focused
             )
         
         # Update series navigator highlighting to show the assigned series
