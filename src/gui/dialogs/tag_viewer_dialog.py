@@ -20,9 +20,9 @@ Requirements:
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                                 QTreeWidget, QTreeWidgetItem, QLineEdit,
                                 QPushButton, QCheckBox, QGroupBox, QMessageBox,
-                                QMenu)
+                                QMenu, QAbstractItemView, QApplication, QHeaderView)
 from PySide6.QtCore import Qt, Signal, QTimer
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QAction, QKeySequence, QShortcut
 from typing import Optional, Dict, Any
 import pydicom
 from pydicom.dataset import Dataset
@@ -118,15 +118,32 @@ class TagViewerDialog(QDialog):
         # Tree widget for tags
         self.tree_widget = QTreeWidget()
         self.tree_widget.setHeaderLabels(["Tag", "Name", "VR", "Value"])
+        # Set initial column widths (can expand beyond these)
         self.tree_widget.setColumnWidth(0, 100)
         self.tree_widget.setColumnWidth(1, 200)
         self.tree_widget.setColumnWidth(2, 50)
         self.tree_widget.setColumnWidth(3, 300)
+        # Enable horizontal scrolling to see full content
+        self.tree_widget.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self.tree_widget.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        # Prevent text elision to show full content
+        self.tree_widget.setTextElideMode(Qt.TextElideMode.ElideNone)
+        # Don't stretch last section - allow columns to have natural width for horizontal scrolling
+        self.tree_widget.header().setStretchLastSection(False)
+        # Set section resize mode to allow manual resizing and natural content width
+        self.tree_widget.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
+        self.tree_widget.header().setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
+        self.tree_widget.header().setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)
+        self.tree_widget.header().setSectionResizeMode(3, QHeaderView.ResizeMode.Interactive)
         self.tree_widget.setAlternatingRowColors(True)
         self.tree_widget.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tree_widget.customContextMenuRequested.connect(self._show_context_menu)
         self.tree_widget.itemDoubleClicked.connect(self._on_item_double_clicked)
         layout.addWidget(self.tree_widget)
+        
+        # Add keyboard shortcut for copy (Ctrl+C)
+        copy_shortcut = QShortcut(QKeySequence("Ctrl+C"), self)
+        copy_shortcut.activated.connect(self._copy_selected_to_clipboard)
         
         # Buttons
         button_layout = QHBoxLayout()
@@ -248,10 +265,13 @@ class TagViewerDialog(QDialog):
             
             # Resize columns only on initial load (no search text)
             # Skip expensive column resizing during filtering/searching
+            # Note: resizeColumnToContents allows columns to expand beyond viewport for horizontal scrolling
             if not search_text:
                 self.tree_widget.resizeColumnToContents(0)
                 self.tree_widget.resizeColumnToContents(1)
                 self.tree_widget.resizeColumnToContents(2)
+                # For the value column, resize to contents but ensure it can expand
+                self.tree_widget.resizeColumnToContents(3)
         finally:
             # Always re-enable updates, even if an error occurred
             self.tree_widget.setUpdatesEnabled(True)
@@ -384,7 +404,7 @@ class TagViewerDialog(QDialog):
     
     def _show_context_menu(self, position) -> None:
         """
-        Show context menu for tag items.
+        Show context menu for tag items with copy options.
         
         Args:
             position: Position where context menu was requested
@@ -393,10 +413,100 @@ class TagViewerDialog(QDialog):
         if item is None or item.parent() is None:
             return  # Skip group items
         
+        # Determine which column was clicked
+        column = self.tree_widget.columnAt(position.x())
+        if column < 0:
+            # Fallback: use current column if available
+            column = self.tree_widget.currentColumn()
+            if column < 0:
+                column = 0  # Default to first column
+        
         menu = QMenu(self)
+        
+        # Edit action
         edit_action = QAction("Edit Tag", self)
         edit_action.triggered.connect(lambda: self._edit_tag_item(item))
         menu.addAction(edit_action)
         
+        menu.addSeparator()
+        
+        # Copy actions
+        copy_tag_action = QAction("Copy Tag", self)
+        copy_tag_action.triggered.connect(lambda: self._copy_to_clipboard(item, 0))
+        menu.addAction(copy_tag_action)
+        
+        copy_name_action = QAction("Copy Name", self)
+        copy_name_action.triggered.connect(lambda: self._copy_to_clipboard(item, 1))
+        menu.addAction(copy_name_action)
+        
+        copy_vr_action = QAction("Copy VR", self)
+        copy_vr_action.triggered.connect(lambda: self._copy_to_clipboard(item, 2))
+        menu.addAction(copy_vr_action)
+        
+        copy_value_action = QAction("Copy Value", self)
+        copy_value_action.triggered.connect(lambda: self._copy_to_clipboard(item, 3))
+        menu.addAction(copy_value_action)
+        
+        menu.addSeparator()
+        
+        copy_all_action = QAction("Copy All", self)
+        copy_all_action.triggered.connect(lambda: self._copy_all_to_clipboard(item))
+        menu.addAction(copy_all_action)
+        
         menu.exec(self.tree_widget.mapToGlobal(position))
+    
+    def _copy_to_clipboard(self, item: QTreeWidgetItem, column: int) -> None:
+        """
+        Copy a specific column's text to clipboard.
+        
+        Args:
+            item: Tree widget item
+            column: Column index to copy (0=Tag, 1=Name, 2=VR, 3=Value)
+        """
+        if item is None:
+            return
+        
+        text = item.text(column)
+        clipboard = QApplication.clipboard()
+        clipboard.setText(text)
+    
+    def _copy_all_to_clipboard(self, item: QTreeWidgetItem) -> None:
+        """
+        Copy all fields from a row to clipboard (tab-separated).
+        
+        Args:
+            item: Tree widget item
+        """
+        if item is None:
+            return
+        
+        # Get all column texts
+        tag_text = item.text(0)
+        name_text = item.text(1)
+        vr_text = item.text(2)
+        value_text = item.text(3)
+        
+        # Combine with tab separator
+        all_text = f"{tag_text}\t{name_text}\t{vr_text}\t{value_text}"
+        
+        clipboard = QApplication.clipboard()
+        clipboard.setText(all_text)
+    
+    def _copy_selected_to_clipboard(self) -> None:
+        """
+        Copy selected item to clipboard using keyboard shortcut.
+        Copies the current column if available, otherwise copies all fields.
+        """
+        current_item = self.tree_widget.currentItem()
+        if current_item is None or current_item.parent() is None:
+            return  # Skip if no selection or group item
+        
+        # Get current column
+        current_column = self.tree_widget.currentColumn()
+        if current_column >= 0:
+            # Copy the current column
+            self._copy_to_clipboard(current_item, current_column)
+        else:
+            # Otherwise, copy all fields
+            self._copy_all_to_clipboard(current_item)
 
