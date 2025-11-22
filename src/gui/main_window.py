@@ -1501,7 +1501,8 @@ class MainWindow(QMainWindow):
         for action in all_actions:
             action.blockSignals(False)
         
-        # Emit signal AFTER updating toolbar buttons
+        # Emit signal AFTER updating toolbar buttons to actually change the mode
+        self.mouse_mode_changed.emit(mode)
     
     def get_current_mouse_mode(self) -> str:
         """

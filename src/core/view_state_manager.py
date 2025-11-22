@@ -30,6 +30,7 @@ from core.dicom_processor import DICOMProcessor
 from gui.image_viewer import ImageViewer
 from gui.window_level_controls import WindowLevelControls
 from gui.main_window import MainWindow
+from utils.dicom_utils import get_composite_series_key
 
 
 class ViewStateManager:
@@ -95,8 +96,9 @@ class ViewStateManager:
         self.initial_window_center: Optional[float] = None
         self.initial_window_width: Optional[float] = None
         
-        # Series defaults storage: key is series identifier (StudyInstanceUID + SeriesInstanceUID)
+        # Series defaults storage: key is series identifier (StudyInstanceUID + composite_series_key)
         # Value is dict with: window_center, window_width, zoom, h_scroll, v_scroll, scene_center, image_inverted
+        # composite_series_key includes SeriesNumber if available
         self.series_defaults: Dict[str, Dict] = {}
         
         # Track current series identifier for comparison
@@ -163,17 +165,18 @@ class ViewStateManager:
     def get_series_identifier(self, dataset: Dataset) -> str:
         """
         Get a unique identifier for a study/series combination.
-        Uses StudyInstanceUID and SeriesInstanceUID.
+        Uses StudyInstanceUID and composite series key (SeriesInstanceUID + SeriesNumber).
         
         Args:
             dataset: pydicom Dataset
             
         Returns:
-            Series identifier string
+            Series identifier string in format: "StudyInstanceUID_composite_series_key"
+            where composite_series_key is "SeriesInstanceUID_SeriesNumber" or "SeriesInstanceUID"
         """
         study_uid = getattr(dataset, 'StudyInstanceUID', '')
-        series_uid = getattr(dataset, 'SeriesInstanceUID', '')
-        return f"{study_uid}_{series_uid}"
+        composite_series_key = get_composite_series_key(dataset)
+        return f"{study_uid}_{composite_series_key}"
     
     def is_new_study_or_series(self, dataset: Dataset) -> bool:
         """

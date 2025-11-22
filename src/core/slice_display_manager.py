@@ -40,7 +40,7 @@ from tools.annotation_manager import AnnotationManager
 from gui.overlay_manager import OverlayManager
 from gui.roi_list_panel import ROIListPanel
 from gui.roi_statistics_panel import ROIStatisticsPanel
-from utils.dicom_utils import get_pixel_spacing, get_slice_thickness
+from utils.dicom_utils import get_pixel_spacing, get_slice_thickness, get_composite_series_key
 
 
 class SliceDisplayManager:
@@ -321,8 +321,8 @@ class SliceDisplayManager:
             rescale_slope, rescale_intercept, rescale_type = self.dicom_processor.get_rescale_parameters(dataset)
             self.view_state_manager.set_rescale_parameters(rescale_slope, rescale_intercept, rescale_type)
             
-            # Get series UID from dataset to check if we're in the same series
-            new_series_uid = getattr(dataset, 'SeriesInstanceUID', '')
+            # Get composite series key from dataset to check if we're in the same series
+            new_series_uid = get_composite_series_key(dataset)
             is_same_series = (new_series_uid == current_series_uid and current_series_uid != "")
             
             # Detect if this is a new study/series
@@ -874,7 +874,7 @@ class SliceDisplayManager:
             
             # Set current slice context for ROI manager and measurements
             study_uid = getattr(dataset, 'StudyInstanceUID', '')
-            series_uid = getattr(dataset, 'SeriesInstanceUID', '')
+            series_uid = get_composite_series_key(dataset)
             # Use current_slice_index as instance identifier (array position)
             instance_identifier = current_slice_index
             # Update ROI manager's current slice context
@@ -967,7 +967,7 @@ class SliceDisplayManager:
         """
         # Extract DICOM identifiers
         study_uid = getattr(dataset, 'StudyInstanceUID', '')
-        series_uid = getattr(dataset, 'SeriesInstanceUID', '')
+        series_uid = get_composite_series_key(dataset)
         # Use current_slice_index as instance identifier (array position)
         instance_identifier = self.current_slice_index
         # print(f"[ROI DEBUG] display_rois_for_slice retrieving ROIs with instance_identifier={instance_identifier} (self.current_slice_index)")
@@ -1053,7 +1053,7 @@ class SliceDisplayManager:
         """
         # Extract DICOM identifiers
         study_uid = getattr(dataset, 'StudyInstanceUID', '')
-        series_uid = getattr(dataset, 'SeriesInstanceUID', '')
+        series_uid = get_composite_series_key(dataset)
         # Use current_slice_index as instance identifier (array position)
         instance_identifier = self.current_slice_index
         

@@ -20,6 +20,7 @@ from typing import Optional, Callable
 from pydicom.dataset import Dataset
 from tools.measurement_tool import MeasurementTool
 from gui.image_viewer import ImageViewer
+from utils.dicom_utils import get_composite_series_key
 
 
 class MeasurementCoordinator:
@@ -64,7 +65,7 @@ class MeasurementCoordinator:
         current_dataset = self.get_current_dataset()
         if current_dataset is not None:
             study_uid = getattr(current_dataset, 'StudyInstanceUID', '')
-            series_uid = getattr(current_dataset, 'SeriesInstanceUID', '')
+            series_uid = get_composite_series_key(current_dataset)
             # Use current slice index as instance identifier (array position)
             instance_identifier = self.get_current_slice_index()
             self.measurement_tool.set_current_slice(study_uid, series_uid, instance_identifier)
@@ -110,7 +111,7 @@ class MeasurementCoordinator:
             if current_dataset is not None:
                 # Extract DICOM identifiers for current slice
                 study_uid = getattr(current_dataset, 'StudyInstanceUID', '')
-                series_uid = getattr(current_dataset, 'SeriesInstanceUID', '')
+                series_uid = get_composite_series_key(current_dataset)
                 # Use current slice index as instance identifier (array position)
                 instance_identifier = self.get_current_slice_index()
                 

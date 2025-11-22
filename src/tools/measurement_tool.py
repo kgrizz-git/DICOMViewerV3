@@ -17,9 +17,9 @@ Requirements:
     - dicom_utils for distance conversion
 """
 
-from PySide6.QtWidgets import QGraphicsLineItem, QGraphicsTextItem, QGraphicsItemGroup, QGraphicsItem, QGraphicsEllipseItem
+from PySide6.QtWidgets import QGraphicsLineItem, QGraphicsTextItem, QGraphicsItemGroup, QGraphicsItem, QGraphicsEllipseItem, QGraphicsSceneMouseEvent
 from PySide6.QtCore import Qt, QPointF, QLineF, QRectF
-from PySide6.QtGui import QPen, QColor, QFont, QBrush, QPainter, QPainterPath
+from PySide6.QtGui import QPen, QColor, QFont, QBrush, QPainter, QPainterPath, QPainterPathStroker
 from typing import List, Optional, Tuple, Dict, Callable
 import numpy as np
 import math
@@ -81,28 +81,52 @@ class DraggableMeasurementText(QGraphicsTextItem):
 class MeasurementHandle(QGraphicsEllipseItem):
     """
     Handle for editing measurement endpoints.
+    
+    Child of MeasurementItem group for automatic movement and lifecycle management.
     """
     
-    def __init__(self, parent: 'MeasurementItem', is_start: bool):
+    def __init__(self, measurement: 'MeasurementItem', is_start: bool):
         """
-        Initialize handle.
+        Initialize handle as child of measurement item.
         
         Args:
-            parent: Parent MeasurementItem
+            measurement: Parent MeasurementItem (Qt parent)
             is_start: True if this is the start handle, False for end handle
         """
-        handle_size = 6.0
-        super().__init__(-handle_size, -handle_size, handle_size * 2, handle_size * 2, parent)
-        self.parent_measurement = parent
+        handle_size = 8.0  # Larger for easier clicking
+        # Pass measurement as Qt parent so handle is a child of the group
+        super().__init__(-handle_size, -handle_size, handle_size * 2, handle_size * 2, measurement)
+        self.parent_measurement = measurement
         self.is_start = is_start
         
+        # Styling - more opaque for better visibility
         handle_pen = QPen(QColor(0, 255, 0), 2)  # Green outline
-        handle_brush = QBrush(QColor(0, 255, 0, 128))  # Semi-transparent green fill
+        handle_brush = QBrush(QColor(0, 255, 0, 180))  # More opaque green fill
         self.setPen(handle_pen)
         self.setBrush(handle_brush)
+        
+        # Flags
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
-        self.setZValue(152)  # Above line and text
+        self.setZValue(200)  # Above measurement (150) for priority selection
+        
+        # Cursor for better UX
+        self.setCursor(Qt.CursorShape.SizeAllCursor)
+    
+    def mousePressEvent(self, event: 'QGraphicsSceneMouseEvent') -> None:
+        """
+        Handle mouse press to keep measurement selected.
+        
+        Args:
+            event: Mouse press event
+        """
+        # Keep parent measurement selected when clicking handle
+        if self.parent_measurement is not None:
+            if not self.parent_measurement.isSelected():
+                self.parent_measurement.setSelected(True)
+        
+        # Call parent to handle the drag
+        super().mousePressEvent(event)
     
     def itemChange(self, change: QGraphicsItem.GraphicsItemChange, value) -> object:
         """
@@ -110,29 +134,53 @@ class MeasurementHandle(QGraphicsEllipseItem):
         
         Args:
             change: Type of change
-            value: New value
+            value: New value (parent-relative coordinates since handle is a child)
             
         Returns:
             Modified value
         """
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionChange:
-            # Notify parent of handle movement
+            # Handle position is now in parent-relative coordinates (group coordinates)
             if self.parent_measurement is not None:
-                handle_pos = value
-                # Convert handle position (relative to group) to scene coordinates
-                scene_pos = self.parent_measurement.mapToScene(handle_pos)
+                # Check if measurement is still valid (hasn't been deleted)
+                if self.parent_measurement.scene() is None:
+                    return value  # Measurement deleted, don't update
                 
-                if self.is_start:
-                    # Update start point
-                    self.parent_measurement.start_point = scene_pos
-                    # Update group position to new start point
-                    self.parent_measurement.setPos(self.parent_measurement.start_point)
-                else:
-                    # Update end point
-                    self.parent_measurement.end_point = scene_pos
+                # Prevent recursive updates
+                if hasattr(self.parent_measurement, '_updating_handles'):
+                    if self.parent_measurement._updating_handles:
+                        return value
                 
-                # Recalculate distance
-                self.parent_measurement.update_distance()
+                # Value is in parent-relative coordinates (group coordinates)
+                parent_relative_pos = value
+                # Convert to scene coordinates
+                scene_pos = self.parent_measurement.mapToScene(parent_relative_pos)
+                
+                self.parent_measurement._updating_handles = True
+                
+                try:
+                    if self.is_start:
+                        # Update start point in scene coordinates
+                        self.parent_measurement.start_point = scene_pos
+                        # Update group position to new start point
+                        self.parent_measurement.setPos(self.parent_measurement.start_point)
+                        # Recalculate distance (this already calls update_handle_positions())
+                        self.parent_measurement.update_distance()
+                        # Handle position should be at (0, 0) relative to group
+                        return QPointF(0, 0)
+                    else:
+                        # Update end point in scene coordinates
+                        self.parent_measurement.end_point = scene_pos
+                        # Recalculate distance (this already calls update_handle_positions())
+                        self.parent_measurement.update_distance()
+                        # Update end_relative and return new position in group coordinates
+                        self.parent_measurement.end_relative = (
+                            self.parent_measurement.end_point - 
+                            self.parent_measurement.start_point
+                        )
+                        return self.parent_measurement.end_relative
+                finally:
+                    self.parent_measurement._updating_handles = False
         
         return super().itemChange(change, value)
 
@@ -189,24 +237,23 @@ class MeasurementItem(QGraphicsItemGroup):
         # Text position relative to group
         text_item.setPos(text_scene_pos - start_point)
         
-        # Create endpoint handles (small circles)
-        # Create without parent, then add to group to ensure proper coordinate system
-        # Start point handle (at group origin, so (0, 0) relative to group)
-        self.start_handle = MeasurementHandle(None, is_start=True)
-        self.start_handle.parent_measurement = self  # Set parent reference manually
-        self.addToGroup(self.start_handle)
-        self.start_handle.setPos(QPointF(0, 0))  # At group origin
+        # Create handles as children of this group
+        # They will be positioned in group-relative coordinates
+        self.start_handle = MeasurementHandle(self, is_start=True)
+        self.end_handle = MeasurementHandle(self, is_start=False)
         
-        # End point handle (relative to group) - use stored end_relative
-        self.end_handle = MeasurementHandle(None, is_start=False)
-        self.end_handle.parent_measurement = self  # Set parent reference manually
-        self.addToGroup(self.end_handle)
-        # Set position AFTER adding to group
-        self.end_handle.setPos(self.end_relative)
+        # Initially hide handles (they'll be shown when measurement is selected)
+        self.start_handle.hide()
+        self.end_handle.hide()
         
         # Make the group selectable and movable
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
+        # Disable Qt's default selection rectangle - we'll draw our own
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemUsesExtendedStyleOption, True)
+        
+        # Initialize flag to prevent recursive handle updates
+        self._updating_handles = False
         
         # Calculate initial distance
         self.update_distance()
@@ -215,8 +262,10 @@ class MeasurementItem(QGraphicsItemGroup):
         """
         Return bounding rectangle for the measurement.
         
+        Handles are separate items, so they're not included in this bounding rect.
+        
         Returns:
-            Bounding rectangle that includes line, text, and handles
+            Bounding rectangle that includes line and text only
         """
         # Get line bounding rect (relative to group)
         line_rect = self.line_item.boundingRect()
@@ -226,85 +275,66 @@ class MeasurementItem(QGraphicsItemGroup):
         text_pos = self.text_item.pos()
         text_rect.translate(text_pos)
         
-        # Get handle bounding rects (relative to group)
-        handle_size = 6.0
-        start_handle_rect = QRectF(-handle_size, -handle_size, handle_size * 2, handle_size * 2)
-        # Use stored end_relative (group-relative coordinates)
-        end_handle_rect = QRectF(
-            self.end_relative.x() - handle_size, self.end_relative.y() - handle_size,
-            handle_size * 2, handle_size * 2
-        )
-        
-        # Combine all rects
+        # Combine line and text rects
         combined_rect = line_rect
         combined_rect = combined_rect.united(text_rect)
-        combined_rect = combined_rect.united(start_handle_rect)
-        combined_rect = combined_rect.united(end_handle_rect)
         
-        # Add some padding for selection outline
-        padding = 5.0
+        # Minimal padding for selection outline (reduced from 5.0 to 2.0)
+        padding = 2.0
         combined_rect.adjust(-padding, -padding, padding, padding)
         
         return combined_rect
     
     def shape(self) -> QPainterPath:
         """
-        Return shape for hit testing.
+        Return shape for hit testing - only line stroke, no handles.
+        
+        Handles are separate items with their own shape() for hit testing.
         
         Returns:
-            QPainterPath that includes line and handles for accurate clicking
+            QPainterPath with stroked line for accurate clicking
         """
-        path = QPainterPath()
-        
-        # Add line to path
+        # Create line path
         line = self.line_item.line()
-        path.moveTo(line.p1())
-        path.lineTo(line.p2())
+        line_path = QPainterPath()
+        line_path.moveTo(line.p1())
+        line_path.lineTo(line.p2())
         
-        # Add handles to path (make them clickable)
-        handle_size = 6.0
-        handle_radius = handle_size
+        # Create stroked path with 4px width for hit testing (reduced from 8px)
+        pen = QPen(QColor(0, 255, 0), 4)
+        stroker = QPainterPathStroker(pen)
+        stroked_path = stroker.createStroke(line_path)
         
-        # Start handle
-        start_handle_path = QPainterPath()
-        start_handle_path.addEllipse(-handle_radius, -handle_radius, handle_radius * 2, handle_radius * 2)
-        path.addPath(start_handle_path)
-        
-        # End handle - use stored end_relative (group-relative coordinates)
-        end_handle_path = QPainterPath()
-        end_handle_path.addEllipse(
-            self.end_relative.x() - handle_radius, self.end_relative.y() - handle_radius,
-            handle_radius * 2, handle_radius * 2
-        )
-        path.addPath(end_handle_path)
-        
-        # Create a stroke path for the line (wider hit area)
-        stroke_path = QPainterPath()
-        line = self.line_item.line()
-        stroke_path.moveTo(line.p1())
-        stroke_path.lineTo(line.p2())
-        
-        # Create a stroked path with width for easier clicking
-        pen = QPen(QColor(0, 255, 0), 8)  # Wider stroke for hit testing
-        stroked_path = QPainterPath()
-        stroked_path.addPath(stroke_path)
-        
-        # Combine with handles
-        path.addPath(stroked_path)
-        
-        return path
+        return stroked_path
     
     def paint(self, painter: QPainter, option, widget=None) -> None:
         """
         Paint selection indicator when item is selected.
+        
+        Handles are separate items, so they handle their own selection indicators.
         
         Args:
             painter: QPainter to draw with
             option: Style option
             widget: Optional widget
         """
-        if self.isSelected():
-            # Draw selection indicator (dashed line along the measurement)
+        # Check selection state FIRST before modifying option
+        is_selected = self.isSelected()
+        
+        # Suppress Qt's default selection rectangle by clearing the selected state
+        # before calling parent paint
+        from PySide6.QtWidgets import QStyle
+        original_state = option.state
+        option.state = option.state & ~QStyle.StateFlag.State_Selected
+        
+        # Call parent paint first to draw children (line and text)
+        super().paint(painter, option, widget)
+        
+        # Restore original state
+        option.state = original_state
+        
+        # Draw our custom selection indicator (yellow dashed line)
+        if is_selected:
             painter.save()
             
             # Set pen for selection indicator
@@ -315,24 +345,75 @@ class MeasurementItem(QGraphicsItemGroup):
             line = self.line_item.line()
             painter.drawLine(line)
             
-            # Draw selection outline around handles
-            handle_size = 6.0
-            handle_pen = QPen(QColor(255, 255, 0), 2, Qt.PenStyle.DashLine)
-            painter.setPen(handle_pen)
-            
-            # Start handle
-            painter.drawEllipse(QRectF(-handle_size, -handle_size, handle_size * 2, handle_size * 2))
-            
-            # End handle - use stored end_relative (group-relative coordinates)
-            painter.drawEllipse(QRectF(
-                self.end_relative.x() - handle_size, self.end_relative.y() - handle_size,
-                handle_size * 2, handle_size * 2
-            ))
+            # Note: Handles are separate items and will show their own selection indicators
             
             painter.restore()
+    
+    def show_handles(self) -> None:
+        """
+        Show handles when measurement is selected.
         
-        # Call parent paint to draw children
-        super().paint(painter, option, widget)
+        Since handles are children, they're automatically in the scene.
+        Just update positions and show them.
+        """
+        if self.scene() is None:
+            return
+        
+        if self.start_handle is None or self.end_handle is None:
+            return
+        
+        # Update handle positions (in group-relative coordinates)
+        self.update_handle_positions()
+        
+        # Show handles
+        self.start_handle.show()
+        self.end_handle.show()
+    
+    def hide_handles(self) -> None:
+        """
+        Hide handles when measurement is deselected.
+        
+        Since handles are children, they stay in the scene but are hidden.
+        """
+        if self.start_handle is not None:
+            self.start_handle.hide()
+        if self.end_handle is not None:
+            self.end_handle.hide()
+    
+    def update_handle_positions(self, force: bool = False) -> None:
+        """
+        Update handle positions in group-relative coordinates.
+        
+        Called when measurement endpoints change or measurement is moved.
+        Since handles are children, they use group-relative coordinates.
+        
+        Args:
+            force: If True, bypasses recursion check (used when called from update_distance())
+        """
+        if self.scene() is None:
+            return
+        
+        if self.start_handle is None or self.end_handle is None:
+            return
+        
+        # Allow updates if forced (called from update_distance) or not currently updating
+        if not force and hasattr(self, '_updating_handles') and self._updating_handles:
+            return
+        
+        # Set flag to indicate we're programmatically updating handles
+        # This prevents handle's itemChange from triggering updates
+        was_updating = getattr(self, '_updating_handles', False)
+        self._updating_handles = True
+        
+        try:
+            # Start handle at (0, 0) relative to group (group position is at start_point)
+            self.start_handle.setPos(QPointF(0, 0))
+            
+            # End handle at end_relative (group-relative coordinates)
+            self.end_handle.setPos(self.end_relative)
+        finally:
+            # Restore original flag state
+            self._updating_handles = was_updating
     
     def update_distance(self, pixel_spacing: Optional[Tuple[float, float]] = None) -> None:
         """
@@ -400,23 +481,16 @@ class MeasurementItem(QGraphicsItemGroup):
         if isinstance(self.text_item, DraggableMeasurementText):
             self.text_item._updating_position = False
         
-        # Update endpoint handles
-        handle_size = 6.0
-        # Start handle is at (0, 0) relative to group
-        self.start_handle.setRect(-handle_size, -handle_size, handle_size * 2, handle_size * 2)
-        # End handle is at end_relative
-        self.end_handle.setRect(
-            self.end_relative.x() - handle_size, self.end_relative.y() - handle_size,
-            handle_size * 2, handle_size * 2
-        )
-        self.end_handle.setPos(self.end_relative)
-        
         # Update group position to start_point
         self.setPos(self.start_point)
+        
+        # Update handle positions in scene coordinates (handles are separate items)
+        # Force update to bypass recursion check since we're updating from distance calculation
+        self.update_handle_positions(force=True)
     
     def itemChange(self, change: QGraphicsItem.GraphicsItemChange, value) -> object:
         """
-        Handle item changes (e.g., position changes when moved).
+        Handle item changes (e.g., position changes when moved, selection changes).
         
         Args:
             change: Type of change
@@ -461,17 +535,23 @@ class MeasurementItem(QGraphicsItemGroup):
             if isinstance(self.text_item, DraggableMeasurementText):
                 self.text_item._updating_position = False
             
-            # Update endpoint handles
-            handle_size = 6.0
-            self.start_handle.setRect(-handle_size, -handle_size, handle_size * 2, handle_size * 2)
-            self.end_handle.setRect(
-                self.end_relative.x() - handle_size, self.end_relative.y() - handle_size,
-                handle_size * 2, handle_size * 2
-            )
-            self.end_handle.setPos(self.end_relative)
+            # Update handle positions in scene coordinates (handles are separate items)
+            # Use force=True to ensure handles are updated even if _updating_handles flag is set
+            # (though it shouldn't be when moving the measurement line itself)
+            self.update_handle_positions(force=True)
             
             # Update group position to new start point
             return self.start_point
+        
+        elif change == QGraphicsItem.GraphicsItemChange.ItemSelectedHasChanged:
+            # Show/hide handles based on selection state
+            if value:  # Selected
+                self.show_handles()
+            else:  # Deselected
+                self.hide_handles()
+            
+            # Force update to redraw selection indicator (yellow dashed line)
+            self.update()
         
         return super().itemChange(change, value)
 
@@ -726,8 +806,13 @@ class MeasurementTool:
         measurement.update_distance()
         
         # Add the group (not individual items) to the scene
+        # Handles are already children of the group, so they're automatically added
         scene.addItem(measurement)
         measurement.setZValue(150)  # Above image and ROIs but below overlay
+        
+        # Handles are already created as children in MeasurementItem.__init__()
+        # They're already hidden initially, and will be shown when measurement is selected
+        # update_handle_positions() is already called in update_distance()
         
         # Store measurement in per-slice dictionary
         key = (self.current_study_uid, self.current_series_uid, self.current_instance_identifier)
@@ -803,6 +888,7 @@ class MeasurementTool:
                 
                 # Remove from scene if it doesn't belong to current slice
                 if not belongs_to_current and item.scene() == scene:
+                    # Handles are children, so they're automatically removed with the item
                     scene.removeItem(item)
     
     def display_measurements_for_slice(self, study_uid: str, series_uid: str, instance_identifier: int, scene) -> None:
@@ -844,6 +930,7 @@ class MeasurementTool:
             for measurement in self.measurements[key]:
                 # Only remove if item actually belongs to this scene
                 if measurement.scene() == scene:
+                    # Handles are children, so they're automatically removed with the item
                     scene.removeItem(measurement)
             del self.measurements[key]
     
@@ -855,7 +942,7 @@ class MeasurementTool:
             measurement: MeasurementItem to delete
             scene: QGraphicsScene to remove item from
         """
-        # Remove from scene
+        # Remove from scene (handles are children, so they're automatically removed)
         if measurement.scene() == scene:
             scene.removeItem(measurement)
         
@@ -879,6 +966,7 @@ class MeasurementTool:
             for measurement in measurement_list:
                 # Only remove if item actually belongs to this scene
                 if measurement.scene() == scene:
+                    # Handles are children, so they're automatically removed with the item
                     scene.removeItem(measurement)
         self.measurements.clear()
 
