@@ -79,11 +79,11 @@ class SeriesThumbnail(QFrame):
         self.update()
     
     def mousePressEvent(self, event: QMouseEvent) -> None:
-        """Handle mouse click to select series or start drag operation."""
+        """Handle mouse click to start drag operation."""
         if event.button() == Qt.MouseButton.LeftButton:
             # Store press position for drag detection
             self.drag_start_position = event.pos()
-            self.clicked.emit(self.series_uid)
+            # Single-click loading disabled - series can be loaded via context menu, drag-and-drop, or arrow keys
         super().mousePressEvent(event)
     
     def mouseMoveEvent(self, event: QMouseEvent) -> None:

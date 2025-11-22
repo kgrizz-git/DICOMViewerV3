@@ -283,7 +283,8 @@ class SliceDisplayManager:
         current_study_uid: str,
         current_series_uid: str,
         current_slice_index: int,
-        preserve_view_override: Optional[bool] = None
+        preserve_view_override: Optional[bool] = None,
+        update_controls: bool = True
     ) -> None:
         """
         Display a DICOM slice.
@@ -294,6 +295,10 @@ class SliceDisplayManager:
             current_study_uid: Current study UID
             current_series_uid: Current series UID
             current_slice_index: Current slice index
+            preserve_view_override: Optional override for preserving view state
+            update_controls: If True, update the global window/level controls UI.
+                           If False, only update internal ViewStateManager values.
+                           Default is True for backward compatibility.
         """
         try:
             # Update current context
@@ -713,7 +718,8 @@ class SliceDisplayManager:
                         center_range = (pixel_min, pixel_max)
                         width_range = (1.0, max(1.0, pixel_max - pixel_min))
                     
-                    self.window_level_controls.set_ranges(center_range, width_range)
+                    if update_controls:
+                        self.window_level_controls.set_ranges(center_range, width_range)
             except Exception as e:
                 # If pixel value range calculation fails, use default ranges
                 error_type = type(e).__name__
@@ -722,7 +728,8 @@ class SliceDisplayManager:
             
             # Update window/level controls unit label
             unit = rescale_type if (use_rescaled_values and rescale_type) else None
-            self.window_level_controls.set_unit(unit)
+            if update_controls:
+                self.window_level_controls.set_unit(unit)
             
             # Update window/level controls with current values
             # Validate window/level values are within current dataset's pixel range
@@ -756,15 +763,17 @@ class SliceDisplayManager:
             if is_new_study_series and window_center is not None and window_width is not None:
                 # New series - use calculated/stored defaults
                 # print(f"[DEBUG-PRESET-MATCH] Setting window/level for new series: wc={window_center:.2f}, ww={window_width:.2f}, block_signals=True")
-                self.window_level_controls.set_window_level(
-                    window_center, window_width, block_signals=True, unit=unit
-                )
+                if update_controls:
+                    self.window_level_controls.set_window_level(
+                        window_center, window_width, block_signals=True, unit=unit
+                    )
             elif is_same_series and window_center is not None and window_width is not None:
                 # Same series - preserve existing window/level values (if valid)
                 # print(f"[DEBUG-PRESET-MATCH] Setting window/level for same series: wc={window_center:.2f}, ww={window_width:.2f}, block_signals=True")
-                self.window_level_controls.set_window_level(
-                    window_center, window_width, block_signals=True, unit=unit
-                )
+                if update_controls:
+                    self.window_level_controls.set_window_level(
+                        window_center, window_width, block_signals=True, unit=unit
+                    )
             else:
                 # Only recalculate if values are truly missing (not for same series with valid values)
                 if not is_same_series or (window_center is None or window_width is None):
@@ -787,7 +796,8 @@ class SliceDisplayManager:
                                     wc, ww, rescale_slope, rescale_intercept
                                 )
                         # print(f"[DEBUG-PRESET-MATCH] Setting window/level from dataset: wc={wc:.2f}, ww={ww:.2f}, block_signals=True")
-                        self.window_level_controls.set_window_level(wc, ww, block_signals=True, unit=unit)
+                        if update_controls:
+                            self.window_level_controls.set_window_level(wc, ww, block_signals=True, unit=unit)
                         self.view_state_manager.current_window_center = wc
                         self.view_state_manager.current_window_width = ww
                     elif pixel_min is not None and pixel_max is not None:
@@ -797,7 +807,8 @@ class SliceDisplayManager:
                         if default_width <= 0:
                             default_width = 1.0
                         # print(f"[DEBUG-PRESET-MATCH] Setting window/level from pixel range: wc={default_center:.2f}, ww={default_width:.2f}, block_signals=True")
-                        self.window_level_controls.set_window_level(default_center, default_width, block_signals=True, unit=unit)
+                        if update_controls:
+                            self.window_level_controls.set_window_level(default_center, default_width, block_signals=True, unit=unit)
                         self.view_state_manager.current_window_center = default_center
                         self.view_state_manager.current_window_width = default_width
                     self.view_state_manager.window_level_user_modified = False
