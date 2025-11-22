@@ -18,7 +18,8 @@ Requirements:
 """
 
 from PySide6.QtWidgets import (QGraphicsItem, QGraphicsTextItem, QGraphicsLineItem,
-                                QGraphicsEllipseItem, QGraphicsPathItem, QGraphicsPolygonItem)
+                                QGraphicsEllipseItem, QGraphicsPathItem, QGraphicsPolygonItem,
+                                QGraphicsScene)
 from PySide6.QtCore import Qt, QPointF, QRectF
 from PySide6.QtGui import QPen, QColor, QBrush, QPainterPath, QPolygonF
 from typing import List, Optional, Dict
@@ -40,7 +41,8 @@ class AnnotationManager:
     
     def __init__(self):
         """Initialize the annotation manager."""
-        self.annotations: List[QGraphicsItem] = []
+        # Dictionary mapping scenes to their annotation items for multi-subwindow support
+        self.annotations: Dict[QGraphicsScene, List[QGraphicsItem]] = {}
         self.rt_struct_data: Optional[Dataset] = None
         
         # Presentation State and Key Object handlers
@@ -50,6 +52,18 @@ class AnnotationManager:
         # Storage for Presentation States and Key Objects
         self.presentation_states: Dict[str, List[Dataset]] = {}  # Keyed by StudyInstanceUID
         self.key_objects: Dict[str, List[Dataset]] = {}  # Keyed by StudyInstanceUID
+    
+    def _add_annotation_to_scene(self, scene: QGraphicsScene, item: QGraphicsItem) -> None:
+        """
+        Add an annotation item to the scene-specific tracking list.
+        
+        Args:
+            scene: QGraphicsScene the item belongs to
+            item: QGraphicsItem to track
+        """
+        if scene not in self.annotations:
+            self.annotations[scene] = []
+        self.annotations[scene].append(item)
     
     def load_rt_struct(self, dataset: Dataset) -> bool:
         """
@@ -171,7 +185,7 @@ class AnnotationManager:
             
             scene.addItem(polygon_item)
             items.append(polygon_item)
-            self.annotations.append(polygon_item)
+            self._add_annotation_to_scene(scene, polygon_item)
         
         return items
     
@@ -348,7 +362,7 @@ class AnnotationManager:
                                 text_item.setVisible(True)
                                 scene.addItem(text_item)
                                 items.append(text_item)
-                                self.annotations.append(text_item)
+                                self._add_annotation_to_scene(scene, text_item)
                             else:
                                 # print(f"[ANNOTATIONS] Text annotation out of bounds: ({x}, {y})")
                                 pass
@@ -371,7 +385,7 @@ class AnnotationManager:
                             path_item.setVisible(True)
                             scene.addItem(path_item)
                             items.append(path_item)
-                            self.annotations.append(path_item)
+                            self._add_annotation_to_scene(scene, path_item)
                         else:
                             # print(f"[ANNOTATIONS] Polyline annotation out of bounds: ({first_x}, {first_y})")
                             pass
@@ -399,7 +413,7 @@ class AnnotationManager:
                             ellipse_item.setVisible(True)
                             scene.addItem(ellipse_item)
                             items.append(ellipse_item)
-                            self.annotations.append(ellipse_item)
+                            self._add_annotation_to_scene(scene, ellipse_item)
                         else:
                             # print(f"[ANNOTATIONS] Circle annotation out of bounds: center=({center[0]}, {center[1]})")
                             pass
@@ -426,7 +440,7 @@ class AnnotationManager:
                             ellipse_item.setVisible(True)
                             scene.addItem(ellipse_item)
                             items.append(ellipse_item)
-                            self.annotations.append(ellipse_item)
+                            self._add_annotation_to_scene(scene, ellipse_item)
                         else:
                             # print(f"[ANNOTATIONS] Ellipse annotation out of bounds: ({min_x}, {min_y}) to ({max_x}, {max_y})")
                             pass
@@ -449,7 +463,7 @@ class AnnotationManager:
                             ellipse_item.setVisible(True)
                             scene.addItem(ellipse_item)
                             items.append(ellipse_item)
-                            self.annotations.append(ellipse_item)
+                            self._add_annotation_to_scene(scene, ellipse_item)
                         else:
                             # print(f"[ANNOTATIONS] Point annotation out of bounds: ({x}, {y})")
                             pass
@@ -473,7 +487,7 @@ class AnnotationManager:
                             # print(f"[ANNOTATIONS] Created overlay bitmap item")
                             scene.addItem(bitmap_item)
                             items.append(bitmap_item)
-                            self.annotations.append(bitmap_item)
+                            self._add_annotation_to_scene(scene, bitmap_item)
                         else:
                             # Fallback to path rendering if bitmap fails
                             # print(f"[ANNOTATIONS] Bitmap rendering failed, falling back to paths")
@@ -1121,7 +1135,7 @@ class AnnotationManager:
                     path_item.setVisible(True)
                     scene.addItem(path_item)
                     items.append(path_item)
-                    self.annotations.append(path_item)
+                    self._add_annotation_to_scene(scene, path_item)
         
         # Render individual points only if no paths
         if coords and len(coords) > 0 and not overlay_paths:
@@ -1139,16 +1153,22 @@ class AnnotationManager:
                 point_item.setVisible(True)
                 scene.addItem(point_item)
                 items.append(point_item)
-                self.annotations.append(point_item)
+                self._add_annotation_to_scene(scene, point_item)
     
     def clear_annotations(self, scene) -> None:
         """
-        Clear all annotations from scene.
+        Clear all annotations from the specified scene.
         
         Args:
             scene: QGraphicsScene to remove items from
         """
-        for item in self.annotations:
-            scene.removeItem(item)
-        self.annotations.clear()
+        # Only clear annotations that belong to this specific scene
+        if scene in self.annotations:
+            items_to_remove = self.annotations[scene]
+            for item in items_to_remove:
+                # Only remove if item is still in the scene (might have been removed already)
+                if item.scene() == scene:
+                    scene.removeItem(item)
+            # Clear the list for this scene
+            self.annotations[scene] = []
 
