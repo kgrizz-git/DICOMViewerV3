@@ -1644,12 +1644,16 @@ class DICOMViewerApp(QObject):
         if idx in self.subwindow_managers:
             managers = self.subwindow_managers[idx]
             slice_display_manager = managers['slice_display_manager']
+            # Only update global window/level controls if this is the focused subwindow
+            # For unfocused subwindows, only update internal ViewStateManager values
+            is_focused = (subwindow == self.multi_window_layout.get_focused_subwindow())
             slice_display_manager.display_slice(
                 self.subwindow_data[idx]['current_dataset'],
                 self.current_studies,
                 target_study_uid,
                 series_uid,
-                slice_index
+                slice_index,
+                update_controls=is_focused
             )
         
         # Update series navigator highlighting to show the assigned series
