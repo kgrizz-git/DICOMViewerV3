@@ -284,7 +284,8 @@ class SliceDisplayManager:
         current_series_uid: str,
         current_slice_index: int,
         preserve_view_override: Optional[bool] = None,
-        update_controls: bool = True
+        update_controls: bool = True,
+        update_metadata: bool = True
     ) -> None:
         """
         Display a DICOM slice.
@@ -298,6 +299,9 @@ class SliceDisplayManager:
             preserve_view_override: Optional override for preserving view state
             update_controls: If True, update the global window/level controls UI.
                            If False, only update internal ViewStateManager values.
+                           Default is True for backward compatibility.
+            update_metadata: If True, update the metadata panel with the new dataset.
+                           If False, skip metadata panel update.
                            Default is True for backward compatibility.
         """
         try:
@@ -691,8 +695,9 @@ class SliceDisplayManager:
                             'v_scroll': stored_v_scroll
                         })
             
-            # Update metadata panel
-            self.metadata_panel.set_dataset(dataset)
+            # Update metadata panel (only for focused subwindow)
+            if update_metadata:
+                self.metadata_panel.set_dataset(dataset)
             
             # Update tag viewer if open
             if self.update_tag_viewer_callback:
