@@ -529,21 +529,34 @@ class ImageViewer(QGraphicsView):
             center_image: If True, center the image in the viewport (for initialization/reset).
                          If False, preserve current view position.
         """
+        print(f"[DEBUG-FIT] fit_to_view called: center_image={center_image}")
         if self.image_item is None:
+            print(f"[DEBUG-FIT] fit_to_view: image_item is None, returning")
             return
         
         # Get scene rect
         scene_rect = self.image_item.boundingRect()
+        print(f"[DEBUG-FIT] fit_to_view: scene_rect = {scene_rect.width():.1f}x{scene_rect.height():.1f}")
         if scene_rect.isEmpty():
+            print(f"[DEBUG-FIT] fit_to_view: scene_rect is empty, returning")
             return
         
+        viewport = self.viewport()
+        if viewport:
+            viewport_size = f"{viewport.width()}x{viewport.height()}"
+        else:
+            viewport_size = "None"
+        print(f"[DEBUG-FIT] fit_to_view: viewport size = {viewport_size}")
+        
         # Fit in view
+        print(f"[DEBUG-FIT] fit_to_view: Calling fitInView")
         self.fitInView(scene_rect, Qt.AspectRatioMode.KeepAspectRatio)
         
         # Update zoom level
         transform = self.transform()
         self.current_zoom = transform.m11()
         self.last_transform = transform
+        print(f"[DEBUG-FIT] fit_to_view: After fitInView, zoom = {self.current_zoom:.6f}")
         self.zoom_changed.emit(self.current_zoom)
         
         # If image is smaller than viewport and center_image is True, manually center it
@@ -554,9 +567,11 @@ class ImageViewer(QGraphicsView):
             scaled_width = scene_rect.width() * self.current_zoom
             scaled_height = scene_rect.height() * self.current_zoom
             
+            print(f"[DEBUG-FIT] fit_to_view: center_image=True, scaled_size={scaled_width:.1f}x{scaled_height:.1f}, viewport={viewport_width}x{viewport_height}")
             if scaled_width < viewport_width or scaled_height < viewport_height:
                 # Image is smaller than viewport - center it
                 image_center = scene_rect.center()
+                print(f"[DEBUG-FIT] fit_to_view: Centering on {image_center}")
                 self.centerOn(image_center)
     
     def zoom_in(self) -> None:

@@ -798,6 +798,10 @@ class ViewStateManager:
         Args:
             zoom_level: Current zoom level
         """
+        # Diagnostic logging: Zoom change event (commented out to reduce noise)
+        # view_transform = self.image_viewer.transform()
+        # print(f"[DEBUG-DIAG] handle_zoom_changed: zoom_level={zoom_level:.6f}, transform_scale={view_transform.m11():.6f}")
+        
         # Update overlay positions immediately when zoom changes
         # This eliminates jitter by updating synchronously with zoom changes,
         # rather than waiting for the delayed transform_changed signal
@@ -816,6 +820,15 @@ class ViewStateManager:
         Updates overlay for all subwindows (focused and unfocused) to ensure
         overlays stay fixed relative to viewport, not the image.
         """
+        # Diagnostic logging: Transform change event (only log panning, not zoom)
+        view_transform = self.image_viewer.transform()
+        translation_x = view_transform.m31()
+        translation_y = view_transform.m32()
+        # Only log if there's actual translation (panning) to reduce noise
+        if abs(translation_x) > 0.01 or abs(translation_y) > 0.01:
+            print(f"[DEBUG-DIAG] handle_transform_changed: PAN - transform_scale={view_transform.m11():.6f}, "
+                  f"translation=({translation_x:.2f}, {translation_y:.2f})")
+        
         # Update overlay positions when transform changes
         # We update for ALL subwindows (focused and unfocused) so overlays
         # stay anchored to viewport edges, not the image
@@ -824,7 +837,7 @@ class ViewStateManager:
     
     def handle_viewport_resizing(self) -> None:
         """
-        Handle viewport resize start (when splitter starts moving).
+        Handle viewport resize start (when splitter starts moving, series navigator visibility changes, or layout changes).
         
         Captures the current viewport center in scene coordinates before the resize
         completes, so we can restore it after resize to maintain the centered view.
@@ -834,15 +847,16 @@ class ViewStateManager:
             scene_center = self.image_viewer.get_viewport_center_scene()
             if scene_center is not None:
                 self.saved_scene_center = scene_center
+                print(f"[DEBUG-LAYOUT] handle_viewport_resizing: Captured scene center = {scene_center}")
     
     def handle_viewport_resized(self) -> None:
         """
-        Handle viewport resize (when splitter moves or series navigator visibility changes).
+        Handle viewport resize (when splitter moves, series navigator visibility changes, or layout changes).
         
         Updates overlay positions to keep text anchored to viewport edges
         when the left or right panels are resized.
         Also rescales the image to fill the viewport and restores the centered view
-        if a scene center was captured.
+        if a scene center was captured (preserves viewport center for all resize scenarios).
         
         Only updates overlay if the subwindow is focused, preventing overlay movement
         when hovering over unfocused subwindows.
@@ -856,16 +870,26 @@ class ViewStateManager:
             is_focused = parent.is_focused
         
         # Rescale image to fill viewport and restore center if we captured a scene center point
+        # This works for splitter moves, series navigator show/hide, and layout changes
         if self.saved_scene_center is not None and self.image_viewer.image_item is not None:
+            print(f"[DEBUG-LAYOUT] handle_viewport_resized: Restoring scene center = {self.saved_scene_center}")
             # First, fit the image to the new viewport size (rescale to fill)
             self.image_viewer.fit_to_view(center_image=False)
             # Then restore the center point that was captured before the resize
             self.image_viewer.centerOn(self.saved_scene_center)
             self.saved_scene_center = None  # Clear after use
+            print(f"[DEBUG-LAYOUT] handle_viewport_resized: Center restored, saved_scene_center cleared")
         
-        # Update overlay positions when viewport size changes (only if focused)
-        if is_focused and self.current_dataset is not None:
-            self.overlay_manager.update_overlay_positions(self.image_viewer.scene)
+        # Update overlay positions when viewport size changes
+        # For QWidget overlays, always update (they stay fixed at viewport corners)
+        # For QGraphicsItem overlays, only update if focused
+        if self.current_dataset is not None:
+            if self.overlay_manager.use_widget_overlays:
+                # QWidget overlays: always update on resize
+                self.overlay_manager.update_overlay_positions(self.image_viewer.scene)
+            elif is_focused:
+                # QGraphicsItem overlays: only update if focused
+                self.overlay_manager.update_overlay_positions(self.image_viewer.scene)
     
     def handle_window_level_drag(self, center_delta: float, width_delta: float) -> None:
         """

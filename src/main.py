@@ -1327,14 +1327,21 @@ class DICOMViewerApp(QObject):
     
     def _on_layout_changed(self, layout_mode: str) -> None:
         """Handle layout mode change from multi-window layout."""
-        # Capture view state for all existing subwindows before layout change
-        view_states = self._capture_subwindow_view_states()
-        
         # Save to config
         self.config_manager.set_multi_window_layout(layout_mode)
         
         # Update main window menu state
         self.main_window.set_layout_mode(layout_mode)
+        
+        # Capture scene centers for all subwindows BEFORE layout change
+        # This uses the same mechanism as series navigator show/hide
+        # It preserves the viewport center so we can restore it after layout change
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        for idx, subwindow in enumerate(subwindows):
+            if subwindow and idx in self.subwindow_managers:
+                managers = self.subwindow_managers[idx]
+                if 'view_state_manager' in managers:
+                    managers['view_state_manager'].handle_viewport_resizing()
         
         # Reinitialize subwindow managers if needed (when subwindows are added/removed)
         # For now, subwindows are created on demand, so we may need to create managers for new ones
@@ -1343,10 +1350,21 @@ class DICOMViewerApp(QObject):
         # Reconnect signals for any newly created subwindows
         self._connect_subwindow_signals()
         
-        # Restore views with preserved visible area after layout change completes
-        # Use QTimer to defer restoration until after layout processing
-        if view_states:
-            QTimer.singleShot(0, lambda: self._restore_subwindow_views(view_states))
+        # After layout change completes, trigger viewport_resized for all subwindows
+        # This will fit images to view and restore centers using the same logic as series navigator
+        from PySide6.QtCore import QTimer
+        def trigger_viewport_resized():
+            """Trigger viewport_resized for all subwindows after layout change."""
+            subwindows = self.multi_window_layout.get_all_subwindows()
+            for idx, subwindow in enumerate(subwindows):
+                if subwindow and idx in self.subwindow_managers:
+                    managers = self.subwindow_managers[idx]
+                    if 'view_state_manager' in managers:
+                        managers['view_state_manager'].handle_viewport_resized()
+        
+        # Use QTimer to defer until after layout processing completes
+        # Increase delay to ensure viewport geometry is fully updated
+        QTimer.singleShot(100, trigger_viewport_resized)
     
     def _on_main_window_layout_changed(self, layout_mode: str) -> None:
         """Handle layout mode change from main window menu."""
@@ -1410,22 +1428,29 @@ class DICOMViewerApp(QObject):
         Args:
             view_states: Dictionary of captured view states from _capture_subwindow_view_states()
         """
+        print(f"[DEBUG-LAYOUT] _restore_subwindow_views called with {len(view_states)} view states")
         subwindows = self.multi_window_layout.get_all_subwindows()
+        print(f"[DEBUG-LAYOUT] Found {len(subwindows)} subwindows")
         
         for idx, view_state in view_states.items():
             try:
                 # Check if this subwindow still exists
                 if idx >= len(subwindows) or subwindows[idx] is None:
+                    print(f"[DEBUG-LAYOUT] Subwindow {idx} doesn't exist or is None")
                     continue
                 
                 subwindow = subwindows[idx]
                 image_viewer = subwindow.image_viewer
                 if image_viewer is None:
+                    print(f"[DEBUG-LAYOUT] Subwindow {idx} has no image_viewer")
                     continue
                 
                 # Check if image is still displayed
                 if image_viewer.image_item is None:
+                    print(f"[DEBUG-LAYOUT] Subwindow {idx} has no image_item")
                     continue
+                
+                print(f"[DEBUG-LAYOUT] Subwindow {idx}: image_item exists, scheduling fit_to_view")
                 
                 # For layout changes, fit the image to the new viewport size
                 # This ensures images scale appropriately when switching between 1x1, 1x2, 2x1, 2x2 layouts
@@ -1433,16 +1458,34 @@ class DICOMViewerApp(QObject):
                 from PySide6.QtCore import QTimer
                 def fit_image_to_viewport():
                     """Fit image to viewport after layout change."""
+                    print(f"[DEBUG-LAYOUT] fit_image_to_viewport callback called for subwindow {idx}")
                     if image_viewer.image_item is not None:
-                        # Fit to view with centering for better UX
-                        image_viewer.fit_to_view(center_image=True)
+                        # Verify viewport has actually resized before fitting
+                        viewport = image_viewer.viewport()
+                        if viewport:
+                            viewport_width = viewport.width()
+                            viewport_height = viewport.height()
+                            print(f"[DEBUG-LAYOUT] Subwindow {idx}: viewport size = {viewport_width}x{viewport_height}")
+                            if viewport_width > 0 and viewport_height > 0:
+                                print(f"[DEBUG-LAYOUT] Subwindow {idx}: Calling fit_to_view(center_image=True)")
+                                # Fit to view with centering for better UX
+                                image_viewer.fit_to_view(center_image=True)
+                            else:
+                                print(f"[DEBUG-LAYOUT] Subwindow {idx}: Viewport size invalid, skipping fit_to_view")
+                        else:
+                            print(f"[DEBUG-LAYOUT] Subwindow {idx}: No viewport found")
+                    else:
+                        print(f"[DEBUG-LAYOUT] Subwindow {idx}: image_item is None in callback")
                 
-                # Delay slightly to ensure viewport geometry is updated
-                QTimer.singleShot(50, fit_image_to_viewport)
+                # Increase delay to ensure viewport geometry is fully updated
+                # and overlay widget resize has completed
+                QTimer.singleShot(100, fit_image_to_viewport)
                 
             except Exception as e:
                 # Handle any errors gracefully - don't break layout change
-                print(f"Error restoring view for subwindow {idx}: {e}")
+                print(f"[DEBUG-LAYOUT] Error restoring view for subwindow {idx}: {e}")
+                import traceback
+                traceback.print_exc()
                 continue
     
     def _ensure_all_subwindows_have_managers(self) -> None:
