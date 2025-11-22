@@ -282,16 +282,16 @@ class MultiWindowLayout(QWidget):
         Args:
             focused: True if subwindow gained focus
         """
-        print(f"[DEBUG-FOCUS] MultiWindowLayout._on_subwindow_focus_changed: Signal received, focused={focused}")
+        # print(f"[DEBUG-FOCUS] MultiWindowLayout._on_subwindow_focus_changed: Signal received, focused={focused}")
         if not focused:
-            print(f"[DEBUG-FOCUS] MultiWindowLayout._on_subwindow_focus_changed: Focus loss, ignoring")
+            # print(f"[DEBUG-FOCUS] MultiWindowLayout._on_subwindow_focus_changed: Focus loss, ignoring")
             return  # Only handle focus gain
         
         # Find which subwindow emitted the signal
         sender = self.sender()
-        print(f"[DEBUG-FOCUS] MultiWindowLayout._on_subwindow_focus_changed: Sender={sender}, is SubWindowContainer={isinstance(sender, SubWindowContainer)}")
+        # print(f"[DEBUG-FOCUS] MultiWindowLayout._on_subwindow_focus_changed: Sender={sender}, is SubWindowContainer={isinstance(sender, SubWindowContainer)}")
         if isinstance(sender, SubWindowContainer):
-            print(f"[DEBUG-FOCUS] MultiWindowLayout._on_subwindow_focus_changed: Calling set_focused_subwindow")
+            # print(f"[DEBUG-FOCUS] MultiWindowLayout._on_subwindow_focus_changed: Calling set_focused_subwindow")
             self.set_focused_subwindow(sender)
     
     def set_focused_subwindow(self, subwindow: SubWindowContainer) -> None:
@@ -301,24 +301,24 @@ class MultiWindowLayout(QWidget):
         Args:
             subwindow: SubWindowContainer to focus
         """
-        print(f"[DEBUG-FOCUS] MultiWindowLayout.set_focused_subwindow: Called, current focused={self.focused_subwindow}, new={subwindow}")
+        # print(f"[DEBUG-FOCUS] MultiWindowLayout.set_focused_subwindow: Called, current focused={self.focused_subwindow}, new={subwindow}")
         if subwindow == self.focused_subwindow:
-            print(f"[DEBUG-FOCUS] MultiWindowLayout.set_focused_subwindow: Already focused, returning")
+            # print(f"[DEBUG-FOCUS] MultiWindowLayout.set_focused_subwindow: Already focused, returning")
             return  # Already focused
         
         # Unfocus current subwindow
         if self.focused_subwindow is not None:
-            print(f"[DEBUG-FOCUS] MultiWindowLayout.set_focused_subwindow: Unfocusing previous subwindow")
+            # print(f"[DEBUG-FOCUS] MultiWindowLayout.set_focused_subwindow: Unfocusing previous subwindow")
             self.focused_subwindow.set_focused(False)
         
         # Focus new subwindow
         self.focused_subwindow = subwindow
         if self.focused_subwindow is not None:
-            print(f"[DEBUG-FOCUS] MultiWindowLayout.set_focused_subwindow: Focusing new subwindow")
+            # print(f"[DEBUG-FOCUS] MultiWindowLayout.set_focused_subwindow: Focusing new subwindow")
             self.focused_subwindow.set_focused(True)
         
         # Emit signal
-        print(f"[DEBUG-FOCUS] MultiWindowLayout.set_focused_subwindow: Emitting focused_subwindow_changed signal")
+        # print(f"[DEBUG-FOCUS] MultiWindowLayout.set_focused_subwindow: Emitting focused_subwindow_changed signal")
         self.focused_subwindow_changed.emit(self.focused_subwindow)
     
     def get_focused_subwindow(self) -> Optional[SubWindowContainer]:
