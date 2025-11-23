@@ -50,6 +50,7 @@ class HistogramWidget(QWidget):
         self.roi_mask: Optional[np.ndarray] = None
         self.window_center: Optional[float] = None
         self.window_width: Optional[float] = None
+        self.use_log_scale: bool = False
     
     def _create_ui(self) -> None:
         """Create the UI components."""
@@ -103,6 +104,16 @@ class HistogramWidget(QWidget):
         self.window_width = width
         self._update_histogram()
     
+    def set_log_scale(self, use_log: bool) -> None:
+        """
+        Set whether to use log scale for y-axis.
+        
+        Args:
+            use_log: True for log scale, False for linear scale
+        """
+        self.use_log_scale = use_log
+        self._update_histogram()
+    
     def _update_histogram(self) -> None:
         """Update the histogram display."""
         if self.pixel_array is None:
@@ -128,21 +139,43 @@ class HistogramWidget(QWidget):
         self.axes.plot(bin_centers, hist, 'b-', linewidth=1.5, label='Histogram')
         self.axes.fill_between(bin_centers, 0, hist, alpha=0.3)
         
-        # Add window/level indicators
+        # Add window/level box overlay (no fill)
         if self.window_center is not None and self.window_width is not None:
             window_min = self.window_center - self.window_width / 2.0
-            window_max = self.window_center + self.window_width / 2.0
             
-            # Vertical line for window center
-            self.axes.axvline(self.window_center, color='r', linestyle='--', 
-                            linewidth=2, label='Window Center')
+            # Get y-axis limits for box height
+            y_min, y_max = self.axes.get_ylim()
+            box_height = y_max - y_min
             
-            # Shaded region for window width
-            self.axes.axvspan(window_min, window_max, alpha=0.2, color='red', 
-                            label='Window Width')
+            # Draw box (rectangle with no fill, just outline)
+            from matplotlib.patches import Rectangle
+            box = Rectangle(
+                (window_min, y_min),
+                self.window_width,
+                box_height,
+                linewidth=2,
+                edgecolor='red',
+                facecolor='none',  # No fill
+                linestyle='--',
+                label='Window/Level'
+            )
+            self.axes.add_patch(box)
+            
+            # Optional: Add vertical line at center for clarity
+            self.axes.axvline(self.window_center, color='r', linestyle=':', 
+                            linewidth=1, alpha=0.5)
         
         self.axes.set_xlabel("Pixel Value")
         self.axes.set_ylabel("Frequency")
+        
+        # Set y-axis scale
+        if self.use_log_scale:
+            self.axes.set_yscale('log')
+            # Avoid log(0) issues by setting a minimum
+            self.axes.set_ylim(bottom=0.1)
+        else:
+            self.axes.set_yscale('linear')
+        
         self.axes.legend(loc='upper right')
         self.axes.grid(True, alpha=0.3)
         

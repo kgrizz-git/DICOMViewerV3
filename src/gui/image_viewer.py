@@ -57,6 +57,7 @@ class ImageViewer(QGraphicsView):
     roi_statistics_overlay_toggle_requested = Signal(object, bool)  # Emitted when ROI statistics overlay toggle is requested (ROIItem, visible)
     roi_statistics_selection_changed = Signal(object, set)  # Emitted when ROI statistics selection changes (ROIItem, statistics_set)
     reset_view_requested = Signal()  # Emitted when reset view is requested from context menu
+    reset_all_views_requested = Signal()  # Emitted when reset all views is requested from context menu
     context_menu_mouse_mode_changed = Signal(str)  # Emitted when mouse mode is changed from context menu
     context_menu_scroll_wheel_mode_changed = Signal(str)  # Emitted when scroll wheel mode is changed from context menu
     context_menu_rescale_toggle_changed = Signal(bool)  # Emitted when rescale toggle is changed from context menu
@@ -1246,6 +1247,11 @@ class ImageViewer(QGraphicsView):
                         # Reset View action
                         reset_action = context_menu.addAction("Reset View (V)")
                         reset_action.triggered.connect(self.reset_view_requested.emit)
+                        
+                        # Reset All Views action
+                        if hasattr(self, 'reset_all_views_requested'):
+                            reset_all_action = context_menu.addAction("Reset All Views (A)")
+                            reset_all_action.triggered.connect(self.reset_all_views_requested.emit)
                         
                         # Toggle Overlay action
                         toggle_overlay_action = context_menu.addAction("Toggle Overlay (Spacebar)")
