@@ -271,6 +271,11 @@ class MainWindow(QMainWindow):
         quick_start_action = QAction("&Quick Start Guide", self)
         quick_start_action.triggered.connect(self.quick_start_guide_requested.emit)
         help_menu.addAction(quick_start_action)
+        
+        disclaimer_action = QAction("&Disclaimer", self)
+        disclaimer_action.triggered.connect(self._show_disclaimer)
+        help_menu.addAction(disclaimer_action)
+        
         help_menu.addSeparator()
         
         about_action = QAction("&About", self)
@@ -1340,6 +1345,11 @@ class MainWindow(QMainWindow):
         # Save to config and apply
         self.config_manager.set_theme(theme)
         self._apply_theme()
+    
+    def _show_disclaimer(self) -> None:
+        """Show the disclaimer dialog."""
+        from gui.dialogs.disclaimer_dialog import DisclaimerDialog
+        DisclaimerDialog.show_disclaimer(self.config_manager, self, force_show=True)
     
     def _show_about(self) -> None:
         """Show the about dialog with scrollable content."""
