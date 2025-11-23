@@ -44,8 +44,9 @@ class DraggableMeasurementText(QGraphicsTextItem):
         self.measurement = measurement
         self.offset_update_callback = offset_update_callback
         self._updating_position = False  # Flag to prevent recursive updates
-        # Make text item selectable so it can be moved independently
+        # Make text item selectable and movable so it can be moved independently
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
     
     def itemChange(self, change: QGraphicsItem.GraphicsItemChange, value) -> object:
         """
@@ -60,22 +61,81 @@ class DraggableMeasurementText(QGraphicsTextItem):
         """
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged and not self._updating_position:
             # Text was moved by user - calculate new offset relative to measurement midpoint
-            if self.parentItem() is not None and self.measurement is not None:
-                # Position is relative to parent (MeasurementItem group)
-                text_pos = self.pos()
-                # Calculate midpoint of measurement line relative to group
-                mid_point_relative = QPointF(
-                    self.measurement.end_relative.x() / 2.0,
-                    self.measurement.end_relative.y() / 2.0
+            if self.measurement is not None:
+                # Position is in scene coordinates (text is not a child of group)
+                text_pos_scene = self.pos()
+                # Calculate midpoint of measurement line in scene coordinates
+                mid_point_scene = QPointF(
+                    (self.measurement.start_point.x() + self.measurement.end_point.x()) / 2.0,
+                    (self.measurement.start_point.y() + self.measurement.end_point.y()) / 2.0
                 )
-                # Calculate offset from midpoint
-                offset = text_pos - mid_point_relative
+                # Calculate offset from midpoint in scene coordinates
+                offset_scene = text_pos_scene - mid_point_scene
                 
-                # Update stored offset
+                # Convert scene offset to viewport pixels for storage
+                # Get view for coordinate conversion
+                view = self.scene().views()[0] if self.scene() and self.scene().views() else None
+                if view is not None:
+                    view_scale = view.transform().m11()
+                    if view_scale > 0:
+                        scene_to_viewport_scale = view_scale
+                    else:
+                        scene_to_viewport_scale = 1.0
+                else:
+                    scene_to_viewport_scale = 1.0
+                
+                print(f"[OFFSET] itemChange - offset_scene: {offset_scene}, view_scale: {view_scale if view is not None else 'None'}")
+                
+                # Convert to viewport pixels
+                offset_viewport = QPointF(
+                    offset_scene.x() * scene_to_viewport_scale,
+                    offset_scene.y() * scene_to_viewport_scale
+                )
+                
+                print(f"[OFFSET] itemChange - offset_viewport: {offset_viewport}")
+                
+                # Update stored offset in viewport pixels
+                self.measurement.text_offset_viewport = offset_viewport
+                
+                # Update stored offset (for backward compatibility)
                 if self.offset_update_callback:
-                    self.offset_update_callback(offset)
+                    self.offset_update_callback(offset_scene)
         
         return super().itemChange(change, value)
+    
+    def mousePressEvent(self, event: QGraphicsSceneMouseEvent) -> None:
+        """
+        Handle mouse press to allow independent selection/dragging.
+        
+        Accepts the event to prevent parent group from handling it,
+        allowing the text to be selected and moved independently.
+        
+        Args:
+            event: Mouse event
+        """
+        print(f"[TEXT-SELECT] DraggableMeasurementText.mousePressEvent called")
+        print(f"[TEXT-SELECT] Event pos: {event.pos()}, scenePos: {event.scenePos()}")
+        print(f"[TEXT-SELECT] Event accepted before: {event.isAccepted()}")
+        
+        event.accept()  # Accept to prevent parent group from handling it
+        print(f"[TEXT-SELECT] Event accepted after: {event.isAccepted()}")
+        
+        # Deselect parent measurement group if it's selected
+        parent = self.parentItem()
+        print(f"[TEXT-SELECT] Parent item: {parent}, is selected: {parent.isSelected() if parent else None}")
+        if parent is not None and parent.isSelected():
+            parent.setSelected(False)
+            print(f"[TEXT-SELECT] Parent deselected: True")
+        else:
+            print(f"[TEXT-SELECT] Parent deselected: False")
+        
+        # Select this text item
+        self.setSelected(True)
+        print(f"[TEXT-SELECT] Text item selected: {self.isSelected()}")
+        print(f"[TEXT-SELECT] Text item flags: ItemIsSelectable={self.flags() & QGraphicsItem.GraphicsItemFlag.ItemIsSelectable}, ItemIsMovable={self.flags() & QGraphicsItem.GraphicsItemFlag.ItemIsMovable}")
+        
+        super().mousePressEvent(event)
+        print(f"[TEXT-SELECT] After super().mousePressEvent(), text selected: {self.isSelected()}")
 
 
 class MeasurementHandle(QGraphicsEllipseItem):
@@ -85,24 +145,28 @@ class MeasurementHandle(QGraphicsEllipseItem):
     Child of MeasurementItem group for automatic movement and lifecycle management.
     """
     
-    def __init__(self, measurement: 'MeasurementItem', is_start: bool):
+    def __init__(self, measurement: 'MeasurementItem', is_start: bool, color: Optional[QColor] = None):
         """
         Initialize handle as separate scene item (not a child).
         
         Args:
             measurement: Parent MeasurementItem (reference only, not Qt parent)
             is_start: True if this is the start handle, False for end handle
+            color: Optional QColor for handle (defaults to green if None)
         """
-        handle_size = 8.0  # Larger for easier clicking
+        handle_size = 6.0  # Smaller handle size
         # Don't pass measurement as Qt parent - handle is independent scene item
         super().__init__(-handle_size, -handle_size, handle_size * 2, handle_size * 2)
         self.parent_measurement = measurement
         self.is_start = is_start
         self._parent_was_movable = False  # Track parent's original movability state
         
-        # Styling - more opaque for better visibility
-        handle_pen = QPen(QColor(0, 255, 0), 2)  # Green outline
-        handle_brush = QBrush(QColor(0, 255, 0, 180))  # More opaque green fill
+        # Styling - use provided color or default to green
+        handle_color = color if color is not None else QColor(0, 255, 0)
+        handle_pen = QPen(handle_color, 2)
+        # Create color with alpha for brush
+        handle_color_with_alpha = QColor(handle_color.red(), handle_color.green(), handle_color.blue(), 180)
+        handle_brush = QBrush(handle_color_with_alpha)
         self.setPen(handle_pen)
         self.setBrush(handle_brush)
         
@@ -110,6 +174,7 @@ class MeasurementHandle(QGraphicsEllipseItem):
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemSendsGeometryChanges, True)  # CRITICAL: Enable itemChange() notifications
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations, True)  # Keep handle size fixed on screen
         self.setZValue(200)  # Above measurement (150) for priority selection
         
         # Cursor for better UX
@@ -122,7 +187,7 @@ class MeasurementHandle(QGraphicsEllipseItem):
         Args:
             event: Mouse press event
         """
-        print(f"[Handle {self.is_start}] mousePressEvent - pos: {event.pos()}, scenePos: {event.scenePos()}")
+        # print(f"[Handle {self.is_start}] mousePressEvent - pos: {event.pos()}, scenePos: {event.scenePos()}")
         
         # Accept the event early to prevent it from propagating to scene selection mechanism
         # This prevents Qt's default selection behavior from deselecting the measurement
@@ -134,7 +199,7 @@ class MeasurementHandle(QGraphicsEllipseItem):
             # Explicitly keep parent measurement selected when clicking handle
             # Do this BEFORE setting flags to ensure selection state is maintained
             if not self.parent_measurement.isSelected():
-                print(f"[Handle {self.is_start}] Keeping parent measurement selected")
+                # print(f"[Handle {self.is_start}] Keeping parent measurement selected")
                 self.parent_measurement.setSelected(True)
             
             # Set flag to indicate handle drag is in progress
@@ -152,7 +217,7 @@ class MeasurementHandle(QGraphicsEllipseItem):
         Args:
             event: Mouse move event
         """
-        print(f"[Handle {self.is_start}] mouseMoveEvent - pos: {event.pos()}, scenePos: {event.scenePos()}")
+        # print(f"[Handle {self.is_start}] mouseMoveEvent - pos: {event.pos()}, scenePos: {event.scenePos()}")
         # Accept the event to prevent parent from handling it
         event.accept()
         super().mouseMoveEvent(event)
@@ -164,7 +229,7 @@ class MeasurementHandle(QGraphicsEllipseItem):
         Args:
             event: Mouse release event
         """
-        print(f"[Handle {self.is_start}] mouseReleaseEvent")
+        # print(f"[Handle {self.is_start}] mouseReleaseEvent")
         # Accept the event to prevent parent from handling it
         event.accept()
         
@@ -190,12 +255,12 @@ class MeasurementHandle(QGraphicsEllipseItem):
             Modified value
         """
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionChange:
-            print(f"[Handle {self.is_start}] ItemPositionChange - value: {value}, current pos: {self.pos()}")
+            # print(f"[Handle {self.is_start}] ItemPositionChange - value: {value}, current pos: {self.pos()}")
             # Allow position change to proceed during drag
             return value
         
         elif change == QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged:
-            print(f"[Handle {self.is_start}] ItemPositionHasChanged - pos: {self.pos()}, parent valid: {self.parent_measurement is not None}")
+            # print(f"[Handle {self.is_start}] ItemPositionHasChanged - pos: {self.pos()}, parent valid: {self.parent_measurement is not None}")
             # Use ItemPositionHasChanged - called AFTER position change is complete
             # This allows the handle to be dragged freely, then we update the measurement
             if self.parent_measurement is not None:
@@ -219,7 +284,7 @@ class MeasurementHandle(QGraphicsEllipseItem):
                         original_end_point = self.parent_measurement.end_point
                         original_start_point = self.parent_measurement.start_point
                         
-                        print(f"[Handle {self.is_start}] Before update - start: {original_start_point}, end: {original_end_point}, handle pos: {scene_pos}")
+                        # print(f"[Handle {self.is_start}] Before update - start: {original_start_point}, end: {original_end_point}, handle pos: {scene_pos}")
                         
                         # Update start point in scene coordinates
                         self.parent_measurement.start_point = scene_pos
@@ -236,15 +301,15 @@ class MeasurementHandle(QGraphicsEllipseItem):
                             self.parent_measurement.start_point
                         )
                         
-                        print(f"[Handle {self.is_start}] After point update - start: {self.parent_measurement.start_point}, end: {self.parent_measurement.end_point}, end_relative: {self.parent_measurement.end_relative}")
+                        # print(f"[Handle {self.is_start}] After point update - start: {self.parent_measurement.start_point}, end: {self.parent_measurement.end_point}, end_relative: {self.parent_measurement.end_relative}")
                         
                         # Recalculate distance (this will update line, text, and handle positions)
-                        print(f"[Handle {self.is_start}] Calling update_distance()...")
+                        # print(f"[Handle {self.is_start}] Calling update_distance()...")
                         self.parent_measurement.update_distance()
-                        print(f"[Handle {self.is_start}] update_distance() completed")
+                        # print(f"[Handle {self.is_start}] update_distance() completed")
                         
                         # Verify stored points are still correct after update_distance()
-                        print(f"[Handle {self.is_start}] After update_distance() - start: {self.parent_measurement.start_point}, end: {self.parent_measurement.end_point}")
+                        # print(f"[Handle {self.is_start}] After update_distance() - start: {self.parent_measurement.start_point}, end: {self.parent_measurement.end_point}")
                         
                         # Force visual update to ensure line is redrawn
                         self.parent_measurement.line_item.update()
@@ -257,13 +322,13 @@ class MeasurementHandle(QGraphicsEllipseItem):
                             line_scene_rect = self.parent_measurement.line_item.mapRectToScene(line_rect)
                             self.parent_measurement.scene().update(line_scene_rect)
                         
-                        print(f"[Handle {self.is_start}] Updated start point to {scene_pos}, end point: {self.parent_measurement.end_point}")
+                        # print(f"[Handle {self.is_start}] Updated start point to {scene_pos}, end point: {self.parent_measurement.end_point}")
                     else:
                         # Store original values for debugging
                         original_end_point = self.parent_measurement.end_point
                         original_start_point = self.parent_measurement.start_point
                         
-                        print(f"[Handle {self.is_start}] Before update - start: {original_start_point}, end: {original_end_point}, handle pos: {scene_pos}")
+                        # print(f"[Handle {self.is_start}] Before update - start: {original_start_point}, end: {original_end_point}, handle pos: {scene_pos}")
                         
                         # Update end point in scene coordinates
                         self.parent_measurement.end_point = scene_pos
@@ -274,15 +339,15 @@ class MeasurementHandle(QGraphicsEllipseItem):
                             self.parent_measurement.start_point
                         )
                         
-                        print(f"[Handle {self.is_start}] After point update - start: {self.parent_measurement.start_point}, end: {self.parent_measurement.end_point}, end_relative: {self.parent_measurement.end_relative}")
+                        # print(f"[Handle {self.is_start}] After point update - start: {self.parent_measurement.start_point}, end: {self.parent_measurement.end_point}, end_relative: {self.parent_measurement.end_relative}")
                         
                         # Recalculate distance (this will update line, text, and handle positions)
-                        print(f"[Handle {self.is_start}] Calling update_distance()...")
+                        # print(f"[Handle {self.is_start}] Calling update_distance()...")
                         self.parent_measurement.update_distance()
-                        print(f"[Handle {self.is_start}] update_distance() completed")
+                        # print(f"[Handle {self.is_start}] update_distance() completed")
                         
                         # Verify stored points are still correct after update_distance()
-                        print(f"[Handle {self.is_start}] After update_distance() - start: {self.parent_measurement.start_point}, end: {self.parent_measurement.end_point}")
+                        # print(f"[Handle {self.is_start}] After update_distance() - start: {self.parent_measurement.start_point}, end: {self.parent_measurement.end_point}")
                         
                         # Force visual update to ensure line is redrawn
                         self.parent_measurement.line_item.update()
@@ -295,7 +360,7 @@ class MeasurementHandle(QGraphicsEllipseItem):
                             line_scene_rect = self.parent_measurement.line_item.mapRectToScene(line_rect)
                             self.parent_measurement.scene().update(line_scene_rect)
                         
-                        print(f"[Handle {self.is_start}] Updated end point to {scene_pos}, start point: {self.parent_measurement.start_point}")
+                        # print(f"[Handle {self.is_start}] Updated end point to {scene_pos}, start point: {self.parent_measurement.start_point}")
                 finally:
                     self.parent_measurement._updating_handles = False
         
@@ -331,7 +396,10 @@ class MeasurementItem(QGraphicsItemGroup):
         self.pixel_spacing = pixel_spacing
         self.distance_pixels = 0.0
         self.distance_formatted = ""
-        self.text_offset = QPointF(0, 0)  # Offset from midpoint for text position
+        # Store offset in viewport pixels (since text has ItemIgnoresTransformations)
+        # This will be converted to scene coordinates when positioning
+        self.text_offset_viewport = QPointF(0, -30)  # Initial offset in viewport pixels (increased from -20)
+        self.text_offset = QPointF(0, 0)  # Will be calculated from viewport offset
         
         # Calculate end_relative BEFORE positioning the group
         # This is the offset from start_point to end_point in scene coordinates
@@ -343,21 +411,29 @@ class MeasurementItem(QGraphicsItemGroup):
         line_scene_pos = line_item.pos()
         text_scene_pos = text_item.pos()
         
-        # Add line and text items to the group
+        # Add line item to the group (text item will be managed separately, not as a child)
         self.addToGroup(line_item)
-        self.addToGroup(text_item)
+        # Don't add text_item to group - it will be added directly to scene for independent selection
+        
+        # Set z-values: text should be above line for easier selection
+        line_item.setZValue(150)
+        text_item.setZValue(151)  # Higher z-value than line for priority selection
+        
+        # Get line color from pen for handles
+        line_pen = line_item.pen()
+        line_color = line_pen.color() if line_pen.color().isValid() else QColor(0, 255, 0)
         
         # Adjust positions to be relative to group
         # Set group position to start_point so line starts at (0,0) relative to group
         self.setPos(start_point)
         line_item.setPos(QPointF(0, 0))  # Line starts at group origin
-        # Text position relative to group
-        text_item.setPos(text_scene_pos - start_point)
+        # Text item is not a child of group, so we'll position it in scene coordinates later
+        # Store initial text position for reference (will be recalculated in update_distance)
         
-        # Create handles as separate scene items (not children)
+        # Create handles as separate scene items (not children) with matching line color
         # They will be positioned in scene coordinates
-        self.start_handle = MeasurementHandle(self, is_start=True)
-        self.end_handle = MeasurementHandle(self, is_start=False)
+        self.start_handle = MeasurementHandle(self, is_start=True, color=line_color)
+        self.end_handle = MeasurementHandle(self, is_start=False, color=line_color)
         
         # Handles are not yet in scene - they'll be added when measurement is selected
         # Set z-value to ensure handles appear above measurement when added
@@ -488,10 +564,10 @@ class MeasurementItem(QGraphicsItemGroup):
         # Add handles to scene if not already present
         # Safety check: ensure handles are always in scene when measurement is selected
         if self.start_handle.scene() != self.scene():
-            print(f"[MeasurementItem] show_handles - adding start_handle to scene")
+            # print(f"[MeasurementItem] show_handles - adding start_handle to scene")
             self.scene().addItem(self.start_handle)
         if self.end_handle.scene() != self.scene():
-            print(f"[MeasurementItem] show_handles - adding end_handle to scene")
+            # print(f"[MeasurementItem] show_handles - adding end_handle to scene")
             self.scene().addItem(self.end_handle)
         
         # Update handle positions in scene coordinates
@@ -502,7 +578,7 @@ class MeasurementItem(QGraphicsItemGroup):
         self.start_handle.show()
         self.end_handle.show()
         
-        print(f"[MeasurementItem] show_handles - handles shown, start in scene: {self.start_handle.scene() is not None}, end in scene: {self.end_handle.scene() is not None}")
+        # print(f"[MeasurementItem] show_handles - handles shown, start in scene: {self.start_handle.scene() is not None}, end in scene: {self.end_handle.scene() is not None}")
     
     def hide_handles(self) -> None:
         """
@@ -548,7 +624,7 @@ class MeasurementItem(QGraphicsItemGroup):
         
         # Only update positions if handles are actually in the scene
         if self.start_handle.scene() is None or self.end_handle.scene() is None:
-            print(f"[MeasurementItem] update_handle_positions - handles not in scene, skipping update")
+            # print(f"[MeasurementItem] update_handle_positions - handles not in scene, skipping update")
             return
         
         # Set flag to indicate we're programmatically updating handles
@@ -557,7 +633,7 @@ class MeasurementItem(QGraphicsItemGroup):
         self._updating_handles = True
         
         try:
-            print(f"[MeasurementItem] update_handle_positions - updating handles to start: {self.start_point}, end: {self.end_point}")
+            # print(f"[MeasurementItem] update_handle_positions - updating handles to start: {self.start_point}, end: {self.end_point}")
             # Start handle at start_point in scene coordinates
             self.start_handle.setPos(self.start_point)
             
@@ -574,7 +650,7 @@ class MeasurementItem(QGraphicsItemGroup):
         Args:
             pixel_spacing: Optional pixel spacing tuple (if None, uses stored pixel_spacing)
         """
-        print(f"[MeasurementItem] update_distance() called - start: {self.start_point}, end: {self.end_point}, _updating_handles: {getattr(self, '_updating_handles', False)}")
+        # print(f"[MeasurementItem] update_distance() called - start: {self.start_point}, end: {self.end_point}, _updating_handles: {getattr(self, '_updating_handles', False)}")
         
         # Use provided pixel_spacing or stored one
         spacing = pixel_spacing if pixel_spacing is not None else self.pixel_spacing
@@ -611,64 +687,94 @@ class MeasurementItem(QGraphicsItemGroup):
         # This ensures consistency when distance is recalculated
         self.end_relative = self.end_point - self.start_point
         
-        print(f"[MeasurementItem] update_distance() - calculated end_relative: {self.end_relative}, distance: {self.distance_formatted}")
+        # print(f"[MeasurementItem] update_distance() - calculated end_relative: {self.end_relative}, distance: {self.distance_formatted}")
         
         # Update line item (relative to group position)
         # Group position is at start_point, so line goes from (0,0) to end_relative
         line = QLineF(QPointF(0, 0), self.end_relative)
         
-        print(f"[MeasurementItem] update_distance() - About to update line from (0,0) to {self.end_relative}")
-        print(f"[MeasurementItem] update_distance() - Current line: {self.line_item.line()}")
-        print(f"[MeasurementItem] update_distance() - Line item scene: {self.line_item.scene() is not None}, Group scene: {self.scene() is not None}")
+        # print(f"[MeasurementItem] update_distance() - About to update line from (0,0) to {self.end_relative}")
+        # print(f"[MeasurementItem] update_distance() - Current line: {self.line_item.line()}")
+        # print(f"[MeasurementItem] update_distance() - Line item scene: {self.line_item.scene() is not None}, Group scene: {self.scene() is not None}")
         
         # CRITICAL: Call prepareGeometryChange() before changing line geometry
         # This notifies Qt that the bounding rect is about to change
-        print(f"[MeasurementItem] update_distance() - Calling prepareGeometryChange() on line_item")
+        # print(f"[MeasurementItem] update_distance() - Calling prepareGeometryChange() on line_item")
         self.line_item.prepareGeometryChange()
         
         # Invalidate old bounding rect area before changing
         if self.scene() is not None:
             old_line_rect = self.line_item.boundingRect()
             old_line_scene_rect = self.line_item.mapRectToScene(old_line_rect)
-            print(f"[MeasurementItem] update_distance() - Invalidating old line rect: {old_line_scene_rect}")
+            # print(f"[MeasurementItem] update_distance() - Invalidating old line rect: {old_line_scene_rect}")
             self.scene().invalidate(old_line_scene_rect)
         
         # Now update the line
-        print(f"[MeasurementItem] update_distance() - Calling setLine() with {line}")
+        # print(f"[MeasurementItem] update_distance() - Calling setLine() with {line}")
         self.line_item.setLine(line)
-        print(f"[MeasurementItem] update_distance() - setLine() completed, new line: {self.line_item.line()}")
+        # print(f"[MeasurementItem] update_distance() - setLine() completed, new line: {self.line_item.line()}")
         
         # Invalidate new bounding rect area after changing
         if self.scene() is not None:
             new_line_rect = self.line_item.boundingRect()
             new_line_scene_rect = self.line_item.mapRectToScene(new_line_rect)
-            print(f"[MeasurementItem] update_distance() - Invalidating new line rect: {new_line_scene_rect}")
+            # print(f"[MeasurementItem] update_distance() - Invalidating new line rect: {new_line_scene_rect}")
             self.scene().invalidate(new_line_scene_rect)
             # Also invalidate group's bounding rect since it contains the line
             group_rect = self.boundingRect()
             group_scene_rect = self.mapRectToScene(group_rect)
-            print(f"[MeasurementItem] update_distance() - Invalidating group rect: {group_scene_rect}")
+            # print(f"[MeasurementItem] update_distance() - Invalidating group rect: {group_scene_rect}")
             self.scene().invalidate(group_scene_rect)
         
         # Force update on line item and group
-        print(f"[MeasurementItem] update_distance() - Calling update() on line_item and group")
+        # print(f"[MeasurementItem] update_distance() - Calling update() on line_item and group")
         self.line_item.update()
         self.update()
-        print(f"[MeasurementItem] update_distance() - All updates completed")
+        # print(f"[MeasurementItem] update_distance() - All updates completed")
         
-        # Update text item position (relative to group) and text
-        mid_point_relative = QPointF(
-            self.end_relative.x() / 2.0,
-            self.end_relative.y() / 2.0
+        # Update text item position in scene coordinates (text is not a child of group)
+        # Calculate midpoint of line in scene coordinates
+        mid_point_scene = QPointF(
+            (self.start_point.x() + self.end_point.x()) / 2.0,
+            (self.start_point.y() + self.end_point.y()) / 2.0
         )
-        # Use stored offset
-        text_pos = mid_point_relative + self.text_offset
+        
+        # Convert viewport pixel offset to scene coordinates
+        # Get view for coordinate conversion (needed for ItemIgnoresTransformations)
+        view = self.scene().views()[0] if self.scene() and self.scene().views() else None
+        if view is not None:
+            # Get the scale factor from the view's transform
+            view_scale = view.transform().m11()
+            if view_scale > 0:
+                # Convert viewport pixels to scene coordinates
+                # If view is zoomed 2x, 1 viewport pixel = 0.5 scene units
+                viewport_to_scene_scale = 1.0 / view_scale
+            else:
+                viewport_to_scene_scale = 1.0
+        else:
+            viewport_to_scene_scale = 1.0
+        
+        print(f"[OFFSET] update_distance() - view_scale: {view_scale if view is not None else 'None'}, viewport_to_scene_scale: {viewport_to_scene_scale}")
+        print(f"[OFFSET] text_offset_viewport: {self.text_offset_viewport}, text_offset (before): {self.text_offset}")
+        
+        # Convert viewport offset to scene coordinates
+        self.text_offset = QPointF(
+            self.text_offset_viewport.x() * viewport_to_scene_scale,
+            self.text_offset_viewport.y() * viewport_to_scene_scale
+        )
+        
+        print(f"[OFFSET] text_offset (after): {self.text_offset}")
+        print(f"[OFFSET] mid_point_scene: {mid_point_scene}, text_pos_scene: {mid_point_scene + self.text_offset}")
+        
+        # Calculate text position in scene coordinates
+        text_pos_scene = mid_point_scene + self.text_offset
         
         # Set updating flag if it's a draggable text item
         if isinstance(self.text_item, DraggableMeasurementText):
             self.text_item._updating_position = True
         
-        self.text_item.setPos(text_pos)
+        # Position text in scene coordinates (not relative to group)
+        self.text_item.setPos(text_pos_scene)
         self.text_item.setPlainText(self.distance_formatted)
         
         # Clear updating flag
@@ -679,23 +785,74 @@ class MeasurementItem(QGraphicsItemGroup):
         # Only set position if it's different to avoid triggering unnecessary position change events
         current_group_pos = self.pos()
         if current_group_pos != self.start_point:
-            print(f"[MeasurementItem] update_distance() - moving group from {current_group_pos} to {self.start_point}")
+            # print(f"[MeasurementItem] update_distance() - moving group from {current_group_pos} to {self.start_point}")
             self.setPos(self.start_point)
         else:
-            print(f"[MeasurementItem] update_distance() - group already at start_point, not moving")
+            # print(f"[MeasurementItem] update_distance() - group already at start_point, not moving")
+            pass
         
         # Update handle positions in scene coordinates (handles are separate items)
         # Force update to bypass recursion check since we're updating from distance calculation
         # This will sync handles to the stored start_point and end_point
-        print(f"[MeasurementItem] update_distance() - calling update_handle_positions(force=True)")
+        # print(f"[MeasurementItem] update_distance() - calling update_handle_positions(force=True)")
         self.update_handle_positions(force=True)
         
         # Verify stored points are still correct after all updates
-        print(f"[MeasurementItem] update_distance() - final start: {self.start_point}, end: {self.end_point}")
+        # print(f"[MeasurementItem] update_distance() - final start: {self.start_point}, end: {self.end_point}")
+    
+    def update_text_offset_for_zoom(self) -> None:
+        """
+        Recalculate text offset when zoom changes.
+        
+        Converts viewport pixel offset to scene coordinates based on current view scale.
+        """
+        if self.text_item is None:
+            return
+        
+        # Get current view and scale
+        view = self.scene().views()[0] if self.scene() and self.scene().views() else None
+        if view is not None:
+            view_scale = view.transform().m11()
+            if view_scale > 0:
+                viewport_to_scene_scale = 1.0 / view_scale
+            else:
+                viewport_to_scene_scale = 1.0
+        else:
+            viewport_to_scene_scale = 1.0
+        
+        print(f"[OFFSET] update_text_offset_for_zoom() - view_scale: {view_scale if view is not None else 'None'}, viewport_to_scene_scale: {viewport_to_scene_scale}")
+        
+        # Recalculate text_offset from text_offset_viewport
+        self.text_offset = QPointF(
+            self.text_offset_viewport.x() * viewport_to_scene_scale,
+            self.text_offset_viewport.y() * viewport_to_scene_scale
+        )
+        
+        print(f"[OFFSET] update_text_offset_for_zoom() - text_offset_viewport: {self.text_offset_viewport}, text_offset: {self.text_offset}")
+        
+        # Calculate midpoint of line in scene coordinates
+        mid_point_scene = QPointF(
+            (self.start_point.x() + self.end_point.x()) / 2.0,
+            (self.start_point.y() + self.end_point.y()) / 2.0
+        )
+        text_pos_scene = mid_point_scene + self.text_offset
+        
+        print(f"[OFFSET] update_text_offset_for_zoom() - mid_point_scene: {mid_point_scene}, text_pos_scene: {text_pos_scene}")
+        
+        # Set updating flag if it's a draggable text item
+        if isinstance(self.text_item, DraggableMeasurementText):
+            self.text_item._updating_position = True
+        
+        # Position text in scene coordinates (not relative to group)
+        self.text_item.setPos(text_pos_scene)
+        
+        # Clear updating flag
+        if isinstance(self.text_item, DraggableMeasurementText):
+            self.text_item._updating_position = False
     
     def mousePressEvent(self, event: 'QGraphicsSceneMouseEvent') -> None:
         """
-        Handle mouse press - allow normal event propagation.
+        Handle mouse press - text item is now separate, so it will receive events directly.
         
         The handle will receive the event first (as a child with higher z-value)
         and set _dragging_handle on this parent if needed.
@@ -703,10 +860,12 @@ class MeasurementItem(QGraphicsItemGroup):
         Args:
             event: Mouse press event
         """
+        # Text item is no longer a child of the group, so it will receive events directly
+        # No need to check for text item clicks here - it handles its own events
+        
         # Store current position to track drag start
         # This allows us to update handles when the line is dragged
         self._last_drag_pos = self.pos()
-        print(f"[MeasurementItem] mousePressEvent - storing drag start position: {self._last_drag_pos}")
         
         # Always call super() to allow normal event propagation
         # If a handle is clicked, it will receive the event first and set _dragging_handle
@@ -723,7 +882,7 @@ class MeasurementItem(QGraphicsItemGroup):
         # If a handle is being dragged, ignore this event
         # Let Qt deliver the event directly to the handle through normal propagation
         if hasattr(self, '_dragging_handle') and self._dragging_handle is not None:
-            print(f"[MeasurementItem] Ignoring mouseMoveEvent - handle {self._dragging_handle.is_start} is being dragged")
+            # print(f"[MeasurementItem] Ignoring mouseMoveEvent - handle {self._dragging_handle.is_start} is being dragged")
             return
         
         # Normal drag of the measurement line itself
@@ -733,7 +892,7 @@ class MeasurementItem(QGraphicsItemGroup):
             # Calculate delta from last position
             delta = current_pos - self._last_drag_pos
             if delta.x() != 0 or delta.y() != 0:
-                print(f"[MeasurementItem] mouseMoveEvent - delta: {delta}, updating handles")
+                # print(f"[MeasurementItem] mouseMoveEvent - delta: {delta}, updating handles")
                 
                 # Update start and end points
                 self.start_point += delta
@@ -773,7 +932,25 @@ class MeasurementItem(QGraphicsItemGroup):
                     self.end_relative.x() / 2.0,
                     self.end_relative.y() / 2.0
                 )
-                # Use stored offset
+                
+                # Convert viewport pixel offset to scene coordinates
+                view = self.scene().views()[0] if self.scene() and self.scene().views() else None
+                if view is not None:
+                    view_scale = view.transform().m11()
+                    if view_scale > 0:
+                        viewport_to_scene_scale = 1.0 / view_scale
+                    else:
+                        viewport_to_scene_scale = 1.0
+                else:
+                    viewport_to_scene_scale = 1.0
+                
+                # Convert viewport offset to scene coordinates
+                self.text_offset = QPointF(
+                    self.text_offset_viewport.x() * viewport_to_scene_scale,
+                    self.text_offset_viewport.y() * viewport_to_scene_scale
+                )
+                
+                # Use converted offset
                 text_pos = mid_point_relative + self.text_offset
                 
                 # Set updating flag if it's a draggable text item
@@ -793,7 +970,7 @@ class MeasurementItem(QGraphicsItemGroup):
                 # Update tracking position for next move event
                 self._last_drag_pos = current_pos
         
-        print(f"[MeasurementItem] mouseMoveEvent - scenePos: {event.scenePos()}")
+        # print(f"[MeasurementItem] mouseMoveEvent - scenePos: {event.scenePos()}")
         super().mouseMoveEvent(event)
     
     def mouseReleaseEvent(self, event: 'QGraphicsSceneMouseEvent') -> None:
@@ -807,13 +984,13 @@ class MeasurementItem(QGraphicsItemGroup):
         # Let Qt deliver the event directly to the handle through normal propagation
         # The handle will clear _dragging_handle in its own mouseReleaseEvent
         if hasattr(self, '_dragging_handle') and self._dragging_handle is not None:
-            print(f"[MeasurementItem] Ignoring mouseReleaseEvent - handle {self._dragging_handle.is_start} is being dragged")
+            # print(f"[MeasurementItem] Ignoring mouseReleaseEvent - handle {self._dragging_handle.is_start} is being dragged")
             # Note: Don't clear _dragging_handle here - let the handle do it in its mouseReleaseEvent
             return
         
         # Clear drag tracking when drag ends
         self._last_drag_pos = None
-        print("[MeasurementItem] mouseReleaseEvent - cleared drag tracking")
+        # print("[MeasurementItem] mouseReleaseEvent - cleared drag tracking")
         
         # Normal release after dragging the measurement line itself
         super().mouseReleaseEvent(event)
@@ -830,12 +1007,12 @@ class MeasurementItem(QGraphicsItemGroup):
             Modified value
         """
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionChange:
-            print(f"[MeasurementItem] ItemPositionChange - value: {value}, _updating_handles: {getattr(self, '_updating_handles', False)}")
+            # print(f"[MeasurementItem] ItemPositionChange - value: {value}, _updating_handles: {getattr(self, '_updating_handles', False)}")
             
             # Skip automatic updates if a handle is being dragged
             # Let handle drag logic handle the update instead
             if hasattr(self, '_updating_handles') and self._updating_handles:
-                print("[MeasurementItem] Skipping update - handle is being dragged")
+                # print("[MeasurementItem] Skipping update - handle is being dragged")
                 return value  # Let handle drag logic handle the update
             
             # When the group is moved, update start and end points
@@ -881,7 +1058,25 @@ class MeasurementItem(QGraphicsItemGroup):
                 self.end_relative.x() / 2.0,
                 self.end_relative.y() / 2.0
             )
-            # Use stored offset
+            
+            # Convert viewport pixel offset to scene coordinates
+            view = self.scene().views()[0] if self.scene() and self.scene().views() else None
+            if view is not None:
+                view_scale = view.transform().m11()
+                if view_scale > 0:
+                    viewport_to_scene_scale = 1.0 / view_scale
+                else:
+                    viewport_to_scene_scale = 1.0
+            else:
+                viewport_to_scene_scale = 1.0
+            
+            # Convert viewport offset to scene coordinates
+            self.text_offset = QPointF(
+                self.text_offset_viewport.x() * viewport_to_scene_scale,
+                self.text_offset_viewport.y() * viewport_to_scene_scale
+            )
+            
+            # Use converted offset
             text_pos = mid_point_relative + self.text_offset
             
             # Set updating flag if it's a draggable text item
@@ -889,6 +1084,43 @@ class MeasurementItem(QGraphicsItemGroup):
                 self.text_item._updating_position = True
             
             self.text_item.setPos(text_pos)
+            
+            # Clear updating flag
+            if isinstance(self.text_item, DraggableMeasurementText):
+                self.text_item._updating_position = False
+            
+            # Update text position in scene coordinates (text is not a child of group)
+            mid_point_scene = QPointF(
+                (self.start_point.x() + self.end_point.x()) / 2.0,
+                (self.start_point.y() + self.end_point.y()) / 2.0
+            )
+            
+            # Convert viewport pixel offset to scene coordinates
+            view = self.scene().views()[0] if self.scene() and self.scene().views() else None
+            if view is not None:
+                view_scale = view.transform().m11()
+                if view_scale > 0:
+                    viewport_to_scene_scale = 1.0 / view_scale
+                else:
+                    viewport_to_scene_scale = 1.0
+            else:
+                viewport_to_scene_scale = 1.0
+            
+            # Convert viewport offset to scene coordinates
+            self.text_offset = QPointF(
+                self.text_offset_viewport.x() * viewport_to_scene_scale,
+                self.text_offset_viewport.y() * viewport_to_scene_scale
+            )
+            
+            # Calculate text position in scene coordinates
+            text_pos_scene = mid_point_scene + self.text_offset
+            
+            # Set updating flag if it's a draggable text item
+            if isinstance(self.text_item, DraggableMeasurementText):
+                self.text_item._updating_position = True
+            
+            # Position text in scene coordinates (not relative to group)
+            self.text_item.setPos(text_pos_scene)
             
             # Clear updating flag
             if isinstance(self.text_item, DraggableMeasurementText):
@@ -906,7 +1138,7 @@ class MeasurementItem(QGraphicsItemGroup):
             # Backup handler for position changes (in case ItemPositionChange isn't triggered)
             # Only process if we're not currently tracking via mouseMoveEvent
             if self._last_drag_pos is None:
-                print(f"[MeasurementItem] ItemPositionHasChanged - pos: {self.pos()}, _updating_handles: {getattr(self, '_updating_handles', False)}")
+                # print(f"[MeasurementItem] ItemPositionHasChanged - pos: {self.pos()}, _updating_handles: {getattr(self, '_updating_handles', False)}")
                 
                 # Skip automatic updates if a handle is being dragged
                 if hasattr(self, '_updating_handles') and self._updating_handles:
@@ -951,17 +1183,37 @@ class MeasurementItem(QGraphicsItemGroup):
                     self.line_item.update()
                     self.update()
                     
-                    # Update text position
-                    mid_point_relative = QPointF(
-                        self.end_relative.x() / 2.0,
-                        self.end_relative.y() / 2.0
+                    # Update text position in scene coordinates (text is not a child of group)
+                    mid_point_scene = QPointF(
+                        (self.start_point.x() + self.end_point.x()) / 2.0,
+                        (self.start_point.y() + self.end_point.y()) / 2.0
                     )
-                    text_pos = mid_point_relative + self.text_offset
+                    
+                    # Convert viewport pixel offset to scene coordinates
+                    view = self.scene().views()[0] if self.scene() and self.scene().views() else None
+                    if view is not None:
+                        view_scale = view.transform().m11()
+                        if view_scale > 0:
+                            viewport_to_scene_scale = 1.0 / view_scale
+                        else:
+                            viewport_to_scene_scale = 1.0
+                    else:
+                        viewport_to_scene_scale = 1.0
+                    
+                    # Convert viewport offset to scene coordinates
+                    self.text_offset = QPointF(
+                        self.text_offset_viewport.x() * viewport_to_scene_scale,
+                        self.text_offset_viewport.y() * viewport_to_scene_scale
+                    )
+                    
+                    # Calculate text position in scene coordinates
+                    text_pos_scene = mid_point_scene + self.text_offset
                     
                     if isinstance(self.text_item, DraggableMeasurementText):
                         self.text_item._updating_position = True
                     
-                    self.text_item.setPos(text_pos)
+                    # Position text in scene coordinates (not relative to group)
+                    self.text_item.setPos(text_pos_scene)
                     
                     if isinstance(self.text_item, DraggableMeasurementText):
                         self.text_item._updating_position = False
@@ -973,7 +1225,7 @@ class MeasurementItem(QGraphicsItemGroup):
             # Check if handle drag is in progress before hiding handles
             # This prevents handles from disappearing during drag
             if hasattr(self, '_handle_drag_in_progress') and self._handle_drag_in_progress:
-                print(f"[MeasurementItem] ItemSelectedHasChanged - handle drag in progress, not hiding handles")
+                # print(f"[MeasurementItem] ItemSelectedHasChanged - handle drag in progress, not hiding handles")
                 # Don't hide handles if a handle is being dragged
                 # The handle will ensure measurement stays selected
                 return value
@@ -986,6 +1238,15 @@ class MeasurementItem(QGraphicsItemGroup):
             
             # Force update to redraw selection indicator (yellow dashed line)
             self.update()
+        
+        elif change == QGraphicsItem.GraphicsItemChange.ItemSceneHasChanged:
+            # Measurement was added to or removed from a scene
+            # If added to a scene, recalculate text offset with correct view scale
+            if value is not None:  # Added to scene
+                # Recalculate text offset now that we have access to the scene/view
+                # This ensures correct viewport-to-scene conversion on initial creation
+                self.update_text_offset_for_zoom()
+            return value
         
         return super().itemChange(change, value)
 
@@ -1212,7 +1473,24 @@ class MeasurementTool:
         def update_text_offset(offset: QPointF) -> None:
             """Update stored text offset when text is moved."""
             if temp_measurement_ref['measurement']:
-                temp_measurement_ref['measurement'].text_offset = offset
+                # Offset is in scene coordinates, convert to viewport pixels for storage
+                view = temp_measurement_ref['measurement'].scene().views()[0] if temp_measurement_ref['measurement'].scene() and temp_measurement_ref['measurement'].scene().views() else None
+                if view is not None:
+                    view_scale = view.transform().m11()
+                    if view_scale > 0:
+                        scene_to_viewport_scale = view_scale
+                    else:
+                        scene_to_viewport_scale = 1.0
+                else:
+                    scene_to_viewport_scale = 1.0
+                
+                # Convert to viewport pixels
+                offset_viewport = QPointF(
+                    offset.x() * scene_to_viewport_scale,
+                    offset.y() * scene_to_viewport_scale
+                )
+                temp_measurement_ref['measurement'].text_offset_viewport = offset_viewport
+                temp_measurement_ref['measurement'].text_offset = offset  # Keep for backward compatibility
         
         draggable_text = DraggableMeasurementText(None, update_text_offset)  # Will set measurement after creation
         draggable_text.setDefaultTextColor(QColor(*font_color))
@@ -1236,13 +1514,18 @@ class MeasurementTool:
         draggable_text.measurement = measurement
         temp_measurement_ref['measurement'] = measurement
         
-        # Distance already calculated, but ensure it's updated
-        measurement.update_distance()
-        
-        # Add the group (not individual items) to the scene
-        # Handles are separate scene items and will be added when measurement is selected
+        # Add the group (not individual items) to the scene FIRST
+        # This ensures scene() is available when update_distance() is called
         scene.addItem(measurement)
         measurement.setZValue(150)  # Above image and ROIs but below overlay
+        
+        # Now update distance - this will have access to scene/view for proper scale conversion
+        measurement.update_distance()
+        
+        # Add text item directly to scene (not as a child of group) for independent selection
+        # Set z-value higher than measurement group for priority selection
+        draggable_text.setZValue(151)  # Above measurement (150) for priority selection
+        scene.addItem(draggable_text)
         
         # Handles are created as separate scene items in MeasurementItem.__init__()
         # They're not yet in the scene and will be added when measurement is selected
@@ -1322,6 +1605,9 @@ class MeasurementTool:
                 
                 # Remove from scene if it doesn't belong to current slice
                 if not belongs_to_current and item.scene() == scene:
+                    # Remove text item from scene (it's not a child of the group)
+                    if item.text_item is not None and item.text_item.scene() == scene:
+                        scene.removeItem(item.text_item)
                     # Remove handles first (they're separate scene items)
                     item.hide_handles()
                     # Then remove the measurement item
@@ -1348,8 +1634,15 @@ class MeasurementTool:
                 scene.addItem(measurement)
                 measurement.setZValue(150)  # Above image and ROIs but below overlay
             
+            # Add text item if not already in scene
+            if measurement.text_item is not None and measurement.text_item.scene() != scene:
+                measurement.text_item.setZValue(151)  # Above measurement (150) for priority selection
+                scene.addItem(measurement.text_item)
+            
             # Ensure measurement is visible
             measurement.show()
+            if measurement.text_item is not None:
+                measurement.text_item.show()
     
     def clear_slice_measurements(self, study_uid: str, series_uid: str, instance_identifier: int, scene) -> None:
         """
@@ -1366,6 +1659,9 @@ class MeasurementTool:
             for measurement in self.measurements[key]:
                 # Only remove if item actually belongs to this scene
                 if measurement.scene() == scene:
+                    # Remove text item from scene (it's not a child of the group)
+                    if measurement.text_item is not None and measurement.text_item.scene() == scene:
+                        scene.removeItem(measurement.text_item)
                     # Remove handles first (they're separate scene items)
                     measurement.hide_handles()
                     # Then remove the measurement item
@@ -1380,8 +1676,11 @@ class MeasurementTool:
             measurement: MeasurementItem to delete
             scene: QGraphicsScene to remove item from
         """
-        # Remove from scene (handles are separate items, so remove them first)
+        # Remove from scene (handles and text are separate items, so remove them first)
         if measurement.scene() == scene:
+            # Remove text item from scene (it's not a child of the group)
+            if measurement.text_item is not None and measurement.text_item.scene() == scene:
+                scene.removeItem(measurement.text_item)
             # Remove handles first (they're separate scene items)
             measurement.hide_handles()
             # Then remove the measurement item
@@ -1407,9 +1706,65 @@ class MeasurementTool:
             for measurement in measurement_list:
                 # Only remove if item actually belongs to this scene
                 if measurement.scene() == scene:
+                    # Remove text item from scene (it's not a child of the group)
+                    if measurement.text_item is not None and measurement.text_item.scene() == scene:
+                        scene.removeItem(measurement.text_item)
                     # Remove handles first (they're separate scene items)
                     measurement.hide_handles()
                     # Then remove the measurement item
                     scene.removeItem(measurement)
         self.measurements.clear()
+    
+    def update_all_measurement_text_offsets(self) -> None:
+        """
+        Update text offset for all measurements when zoom changes.
+        
+        Recalculates text positions based on current view scale to maintain
+        constant viewport pixel offset regardless of zoom level.
+        """
+        for key, measurement_list in self.measurements.items():
+            for measurement in measurement_list:
+                if measurement.scene() is not None:
+                    measurement.update_text_offset_for_zoom()
+    
+    def update_all_measurement_styles(self, config_manager) -> None:
+        """
+        Update styles (line color, thickness, font size, font color) for all existing measurements.
+        
+        Args:
+            config_manager: ConfigManager instance to get current settings
+        """
+        if config_manager is None:
+            return
+        
+        # Get new settings from config
+        pen_width = config_manager.get_measurement_line_thickness()
+        pen_color = config_manager.get_measurement_line_color()
+        font_size = config_manager.get_measurement_font_size()
+        font_color = config_manager.get_measurement_font_color()
+        
+        # Create new pen with updated settings
+        pen = QPen(QColor(*pen_color), pen_width)
+        pen.setCosmetic(True)  # Makes pen width viewport-relative (independent of zoom)
+        
+        # Update all measurements
+        for key, measurement_list in self.measurements.items():
+            for measurement in measurement_list:
+                # Update measurement line pen
+                measurement.line_item.setPen(pen)
+                
+                # Update handle colors to match line color
+                handle_color = QColor(*pen_color)
+                handle_color_with_alpha = QColor(handle_color.red(), handle_color.green(), handle_color.blue(), 180)
+                measurement.start_handle.setPen(QPen(handle_color, 2))
+                measurement.start_handle.setBrush(QBrush(handle_color_with_alpha))
+                measurement.end_handle.setPen(QPen(handle_color, 2))
+                measurement.end_handle.setBrush(QBrush(handle_color_with_alpha))
+                
+                # Update text item font and color
+                if measurement.text_item is not None:
+                    measurement.text_item.setDefaultTextColor(QColor(*font_color))
+                    font = QFont("Arial", font_size)
+                    font.setBold(True)
+                    measurement.text_item.setFont(font)
 

@@ -2372,12 +2372,13 @@ class DICOMViewerApp(QObject):
                 self.slice_navigator.set_current_slice(slice_index)
             
             # Update series navigator highlighting
-            print(f"[DEBUG] Updating series navigator: setting current_series_uid={self.current_series_uid}")
-            print(f"[DEBUG]   Full UID: {self.current_series_uid}")
+            # print(f"[DEBUG] Updating series navigator: setting current_series_uid={self.current_series_uid}")
+            # print(f"[DEBUG]   Full UID: {self.current_series_uid}")
             available_thumbnails = list(self.series_navigator.thumbnails.keys())
-            print(f"[DEBUG]   Available thumbnails ({len(available_thumbnails)}): {[uid[:30] + '...' if len(uid) > 30 else uid for uid in available_thumbnails[:5]]}")
+            # print(f"[DEBUG]   Available thumbnails ({len(available_thumbnails)}): {[uid[:30] + '...' if len(uid) > 30 else uid for uid in available_thumbnails[:5]]}")
             if self.current_series_uid not in available_thumbnails:
-                print(f"[DEBUG]   WARNING: series_uid not found in thumbnails! This will cause highlighting to fail.")
+                # print(f"[DEBUG]   WARNING: series_uid not found in thumbnails! This will cause highlighting to fail.")
+                pass
             self.series_navigator.set_current_series(self.current_series_uid)
             
             # Update cine player context and check if series is cine-capable
@@ -2666,13 +2667,15 @@ class DICOMViewerApp(QObject):
             for roi in roi_list:
                 roi.visible_statistics = default_stats_set.copy()
         
-        # Update ROI statistics overlays
+        # Update styles for all existing ROIs and measurements
+        self.roi_manager.update_all_roi_styles(self.config_manager)
+        self.measurement_tool.update_all_measurement_styles(self.config_manager)
+        
+        # Update ROI statistics overlays (this will also refresh with new font settings)
         if self.current_dataset is not None:
             self.roi_coordinator.update_roi_statistics_overlays()
         
-        # Update ROI line styles (will be done when ROIs are redrawn)
-        # Update measurement styles (will be done when measurements are redrawn)
-        # For now, we'll need to refresh the display
+        # Ensure ROIs and measurements are displayed for current slice
         if self.current_dataset is not None:
             self.slice_display_manager.display_rois_for_slice(self.current_dataset)
             self.slice_display_manager.display_measurements_for_slice(self.current_dataset)
@@ -2897,6 +2900,8 @@ class DICOMViewerApp(QObject):
             zoom_level: Current zoom level
         """
         self.view_state_manager.handle_zoom_changed(zoom_level)
+        # Update measurement text offsets to maintain constant viewport pixel distance
+        self.measurement_tool.update_all_measurement_text_offsets()
         # Update status bar widget with zoom and preset info
         self._update_zoom_preset_status_bar()
     
@@ -2905,6 +2910,8 @@ class DICOMViewerApp(QObject):
         Handle view transform change (zoom/pan).
         """
         self.view_state_manager.handle_transform_changed()
+        # Update measurement text offsets to maintain constant viewport pixel distance
+        self.measurement_tool.update_all_measurement_text_offsets()
     
     def _on_viewport_resizing(self) -> None:
         """
