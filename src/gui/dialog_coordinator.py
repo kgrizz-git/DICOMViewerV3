@@ -25,9 +25,11 @@ from gui.dialogs.annotation_options_dialog import AnnotationOptionsDialog
 from gui.dialogs.tag_export_dialog import TagExportDialog
 from gui.dialogs.export_dialog import ExportDialog
 from gui.dialogs.quick_start_guide_dialog import QuickStartGuideDialog
+from gui.dialogs.histogram_dialog import HistogramDialog
 from gui.main_window import MainWindow
 from utils.config_manager import ConfigManager
 from PySide6.QtWidgets import QMessageBox
+from pydicom.dataset import Dataset
 
 
 class DialogCoordinator:
@@ -51,7 +53,13 @@ class DialogCoordinator:
         get_current_studies: Callable[[], dict],
         settings_applied_callback: Optional[Callable[[], None]] = None,
         overlay_config_applied_callback: Optional[Callable[[], None]] = None,
-        tag_edit_history: Optional[Any] = None
+        tag_edit_history: Optional[Any] = None,
+        get_current_dataset: Optional[Callable[[], Optional[Dataset]]] = None,
+        get_current_slice_index: Optional[Callable[[], int]] = None,
+        get_window_center: Optional[Callable[[], Optional[float]]] = None,
+        get_window_width: Optional[Callable[[], Optional[float]]] = None,
+        get_use_rescaled: Optional[Callable[[], bool]] = None,
+        get_rescale_params: Optional[Callable[[], tuple]] = None
     ):
         """
         Initialize the dialog coordinator.
@@ -63,6 +71,12 @@ class DialogCoordinator:
             settings_applied_callback: Optional callback when settings are applied
             overlay_config_applied_callback: Optional callback when overlay config is applied
             tag_edit_history: Optional TagEditHistoryManager for tag editing undo/redo
+            get_current_dataset: Optional callback to get current dataset
+            get_current_slice_index: Optional callback to get current slice index
+            get_window_center: Optional callback to get current window center
+            get_window_width: Optional callback to get current window width
+            get_use_rescaled: Optional callback to get use_rescaled_values flag
+            get_rescale_params: Optional callback to get (slope, intercept, type) tuple
         """
         self.config_manager = config_manager
         self.main_window = main_window
@@ -72,8 +86,18 @@ class DialogCoordinator:
         self.annotation_options_applied_callback = None  # Will be set from main.py
         self.tag_edit_history = tag_edit_history
         
+        # Store callbacks for histogram dialog
+        self.get_current_dataset = get_current_dataset
+        self.get_current_slice_index = get_current_slice_index
+        self.get_window_center = get_window_center
+        self.get_window_width = get_window_width
+        self.get_use_rescaled = get_use_rescaled
+        self.get_rescale_params = get_rescale_params
+        
         # Tag viewer dialog (persistent)
         self.tag_viewer_dialog: Optional[TagViewerDialog] = None
+        # Histogram dialog (persistent)
+        self.histogram_dialog: Optional[HistogramDialog] = None
     
     def open_settings(self) -> None:
         """Handle settings dialog request."""
@@ -220,4 +244,23 @@ class DialogCoordinator:
         """
         if self.tag_viewer_dialog is not None:
             self.tag_viewer_dialog.clear_filter()
+    
+    def open_histogram(self) -> None:
+        """Handle histogram dialog request."""
+        if self.histogram_dialog is None:
+            self.histogram_dialog = HistogramDialog(
+                self.main_window,
+                get_current_dataset=self.get_current_dataset,
+                get_current_slice_index=self.get_current_slice_index,
+                get_window_center=self.get_window_center,
+                get_window_width=self.get_window_width,
+                get_use_rescaled=self.get_use_rescaled,
+                get_rescale_params=self.get_rescale_params
+            )
+        
+        # Update histogram and show dialog
+        self.histogram_dialog.update_histogram()
+        self.histogram_dialog.show()
+        self.histogram_dialog.raise_()
+        self.histogram_dialog.activateWindow()
 

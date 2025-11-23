@@ -53,7 +53,9 @@ class KeyboardEventHandler:
         clear_roi_statistics_callback: Optional[Callable[[], None]] = None,
         reset_view_callback: Optional[Callable[[], None]] = None,
         toggle_series_navigator_callback: Optional[Callable[[], None]] = None,
-        invert_image_callback: Optional[Callable[[], None]] = None
+        invert_image_callback: Optional[Callable[[], None]] = None,
+        open_histogram_callback: Optional[Callable[[], None]] = None,
+        reset_all_views_callback: Optional[Callable[[], None]] = None
     ):
         """
         Initialize the keyboard event handler.
@@ -75,6 +77,9 @@ class KeyboardEventHandler:
             clear_roi_statistics_callback: Optional callback to clear ROI statistics
             reset_view_callback: Optional callback to reset view
             toggle_series_navigator_callback: Optional callback to toggle series navigator
+            invert_image_callback: Optional callback to invert image
+            open_histogram_callback: Optional callback to open histogram dialog
+            reset_all_views_callback: Optional callback to reset all views
         """
         self.roi_manager = roi_manager
         self.measurement_tool = measurement_tool
@@ -93,6 +98,8 @@ class KeyboardEventHandler:
         self.reset_view_callback = reset_view_callback
         self.toggle_series_navigator_callback = toggle_series_navigator_callback
         self.invert_image_callback = invert_image_callback
+        self.open_histogram_callback = open_histogram_callback
+        self.reset_all_views_callback = reset_all_views_callback
     
     def handle_key_event(self, event: QKeyEvent) -> bool:
         """
@@ -208,6 +215,18 @@ class KeyboardEventHandler:
         elif event.key() == Qt.Key.Key_I:
             if self.invert_image_callback:
                 self.invert_image_callback()
+            return True
+        
+        # H key for Histogram
+        elif event.key() == Qt.Key.Key_H:
+            if self.open_histogram_callback:
+                self.open_histogram_callback()
+            return True
+        
+        # A key for Reset All Views
+        elif event.key() == Qt.Key.Key_A:
+            if self.reset_all_views_callback:
+                self.reset_all_views_callback()
             return True
         
         return False
