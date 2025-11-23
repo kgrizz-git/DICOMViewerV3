@@ -614,9 +614,30 @@ class DICOMViewerApp(QObject):
             self.measurement_tool = managers['measurement_tool']
             self.overlay_manager = managers['overlay_manager']
         
+        # Store previous image_viewer to disconnect signal
+        previous_image_viewer = self.image_viewer if hasattr(self, 'image_viewer') else None
+        
         # Update image viewer reference
         self.image_viewer = focused_subwindow.image_viewer
         self.main_window.image_viewer = self.image_viewer
+        
+        # Disconnect old pixel_info_changed signal if it exists
+        if previous_image_viewer and previous_image_viewer != self.image_viewer:
+            try:
+                previous_image_viewer.pixel_info_changed.disconnect(self._on_pixel_info_changed)
+            except (TypeError, RuntimeError):
+                # Signal may not be connected or already disconnected, ignore
+                pass
+        
+        # Connect pixel_info_changed signal for new image_viewer
+        if self.image_viewer:
+            self.image_viewer.pixel_info_changed.connect(self._on_pixel_info_changed)
+            # Update pixel info callbacks
+            self.image_viewer.set_pixel_info_callbacks(
+                get_dataset=lambda: self.current_dataset,
+                get_slice_index=lambda: self.current_slice_index,
+                get_use_rescaled=lambda: self.view_state_manager.use_rescaled_values if self.view_state_manager else False
+            )
         
         # Update current data references (point to focused subwindow's data)
         if focused_idx in self.subwindow_data:
@@ -958,6 +979,10 @@ class DICOMViewerApp(QObject):
         # Reset undo/redo state
         self._update_undo_redo_state()
         
+        # Clear tag viewer filter
+        if self.dialog_coordinator:
+            self.dialog_coordinator.clear_tag_viewer_filter()
+        
         # Update status
         self.main_window.update_status("Ready")
     
@@ -994,6 +1019,10 @@ class DICOMViewerApp(QObject):
         self.intensity_projection_controls_widget.set_enabled(False)
         self.intensity_projection_controls_widget.set_projection_type("aip")
         self.intensity_projection_controls_widget.set_slice_count(4)
+        
+        # Clear tag viewer filter when opening new files
+        if self.dialog_coordinator:
+            self.dialog_coordinator.clear_tag_viewer_filter()
         
         first_slice_info = self.file_operations_handler.load_first_slice(studies)
         if first_slice_info:

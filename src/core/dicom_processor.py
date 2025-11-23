@@ -1224,6 +1224,139 @@ class DICOMProcessor:
                         window_center, window_width, rescale_slope, rescale_intercept
                     )
         
+        # Handle PALETTE COLOR photometric interpretation
+        # This must happen before YBR conversion and window/level application
+        if photometric_interpretation:
+            pi_upper = photometric_interpretation.upper()
+            if 'PALETTE' in pi_upper and 'COLOR' in pi_upper:
+                # PALETTE COLOR: Convert indexed pixel values to RGB using lookup tables
+                try:
+                    # Get palette lookup tables from dataset
+                    red_lut = None
+                    green_lut = None
+                    blue_lut = None
+                    
+                    if hasattr(dataset, 'RedPaletteColorLookupTableDescriptor'):
+                        # Get descriptor to determine LUT size and first value
+                        red_desc = dataset.RedPaletteColorLookupTableDescriptor
+                        if isinstance(red_desc, (list, tuple)) and len(red_desc) >= 3:
+                            lut_size = int(red_desc[0])
+                            first_value = int(red_desc[1]) if len(red_desc) > 1 else 0
+                            bits_allocated = int(red_desc[2]) if len(red_desc) > 2 else 8
+                        else:
+                            lut_size = 256  # Default
+                            first_value = 0
+                            bits_allocated = 8
+                        
+                        if hasattr(dataset, 'RedPaletteColorLookupTableData'):
+                            red_lut_data = dataset.RedPaletteColorLookupTableData
+                            if isinstance(red_lut_data, bytes):
+                                # Convert bytes to numpy array
+                                if bits_allocated == 8:
+                                    red_lut = np.frombuffer(red_lut_data, dtype=np.uint8)
+                                else:
+                                    red_lut = np.frombuffer(red_lut_data, dtype=np.uint16)
+                            elif isinstance(red_lut_data, (list, tuple)):
+                                red_lut = np.array(red_lut_data, dtype=np.uint16 if bits_allocated > 8 else np.uint8)
+                    
+                    if hasattr(dataset, 'GreenPaletteColorLookupTableDescriptor'):
+                        green_desc = dataset.GreenPaletteColorLookupTableDescriptor
+                        if isinstance(green_desc, (list, tuple)) and len(green_desc) >= 3:
+                            lut_size = int(green_desc[0])
+                            first_value = int(green_desc[1]) if len(green_desc) > 1 else 0
+                            bits_allocated = int(green_desc[2]) if len(green_desc) > 2 else 8
+                        else:
+                            lut_size = 256
+                            first_value = 0
+                            bits_allocated = 8
+                        
+                        if hasattr(dataset, 'GreenPaletteColorLookupTableData'):
+                            green_lut_data = dataset.GreenPaletteColorLookupTableData
+                            if isinstance(green_lut_data, bytes):
+                                if bits_allocated == 8:
+                                    green_lut = np.frombuffer(green_lut_data, dtype=np.uint8)
+                                else:
+                                    green_lut = np.frombuffer(green_lut_data, dtype=np.uint16)
+                            elif isinstance(green_lut_data, (list, tuple)):
+                                green_lut = np.array(green_lut_data, dtype=np.uint16 if bits_allocated > 8 else np.uint8)
+                    
+                    if hasattr(dataset, 'BluePaletteColorLookupTableDescriptor'):
+                        blue_desc = dataset.BluePaletteColorLookupTableDescriptor
+                        if isinstance(blue_desc, (list, tuple)) and len(blue_desc) >= 3:
+                            lut_size = int(blue_desc[0])
+                            first_value = int(blue_desc[1]) if len(blue_desc) > 1 else 0
+                            bits_allocated = int(blue_desc[2]) if len(blue_desc) > 2 else 8
+                        else:
+                            lut_size = 256
+                            first_value = 0
+                            bits_allocated = 8
+                        
+                        if hasattr(dataset, 'BluePaletteColorLookupTableData'):
+                            blue_lut_data = dataset.BluePaletteColorLookupTableData
+                            if isinstance(blue_lut_data, bytes):
+                                if bits_allocated == 8:
+                                    blue_lut = np.frombuffer(blue_lut_data, dtype=np.uint8)
+                                else:
+                                    blue_lut = np.frombuffer(blue_lut_data, dtype=np.uint16)
+                            elif isinstance(blue_lut_data, (list, tuple)):
+                                blue_lut = np.array(blue_lut_data, dtype=np.uint16 if bits_allocated > 8 else np.uint8)
+                    
+                    # Apply palette lookup if we have all three LUTs
+                    if red_lut is not None and green_lut is not None and blue_lut is not None:
+                        # Handle multi-frame palette color
+                        if len(pixel_array.shape) == 3 and pixel_array.shape[2] == 1:
+                            # Single-frame grayscale indexed: (height, width, 1) -> (height, width)
+                            indexed_array = pixel_array[:, :, 0]
+                        elif len(pixel_array.shape) == 2:
+                            # Single-frame grayscale indexed: (height, width)
+                            indexed_array = pixel_array
+                        elif len(pixel_array.shape) == 4:
+                            # Multi-frame: take first frame
+                            indexed_array = pixel_array[0, :, :, 0] if pixel_array.shape[3] == 1 else pixel_array[0, :, :]
+                        else:
+                            indexed_array = pixel_array
+                        
+                        # Clamp indices to valid range
+                        if first_value > 0:
+                            indexed_array = indexed_array - first_value
+                        indexed_array = np.clip(indexed_array, 0, len(red_lut) - 1)
+                        
+                        # Normalize LUTs to 0-255 range if they're 16-bit
+                        if red_lut.dtype == np.uint16:
+                            red_lut = (red_lut / 65535.0 * 255.0).astype(np.uint8)
+                        if green_lut.dtype == np.uint16:
+                            green_lut = (green_lut / 65535.0 * 255.0).astype(np.uint8)
+                        if blue_lut.dtype == np.uint16:
+                            blue_lut = (blue_lut / 65535.0 * 255.0).astype(np.uint8)
+                        
+                        # Apply lookup tables
+                        red_channel = red_lut[indexed_array]
+                        green_channel = green_lut[indexed_array]
+                        blue_channel = blue_lut[indexed_array]
+                        
+                        # Combine into RGB array
+                        if len(indexed_array.shape) == 2:
+                            # Single-frame: (height, width) -> (height, width, 3)
+                            rgb_array = np.stack([red_channel, green_channel, blue_channel], axis=2)
+                        else:
+                            # Multi-frame or other shape
+                            rgb_array = np.stack([red_channel, green_channel, blue_channel], axis=-1)
+                        
+                        pixel_array = rgb_array
+                        # Update flags to indicate this is now RGB color
+                        array_shape = pixel_array.shape
+                        if len(array_shape) == 4:
+                            is_multi_frame_color = True
+                        elif len(array_shape) == 3 and array_shape[2] == 3:
+                            is_single_frame_color = True
+                        is_color = True
+                except Exception as e:
+                    print(f"[PROCESSOR] Error applying palette color lookup: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    # Fallback: treat as grayscale if palette lookup fails
+                    pass
+        
         # Convert YBR to RGB for color images before processing
         if is_color and (is_single_frame_color or is_multi_frame_color):
             if photometric_interpretation:

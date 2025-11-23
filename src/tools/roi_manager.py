@@ -23,7 +23,7 @@ import math
 from PySide6.QtWidgets import (QGraphicsEllipseItem, QGraphicsRectItem, QGraphicsItem, 
                                QGraphicsTextItem, QGraphicsSceneMouseEvent)
 from PySide6.QtCore import Qt, QRectF, QPointF
-from PySide6.QtGui import QPen, QColor, QFont
+from PySide6.QtGui import QPen, QColor, QFont, QTransform
 from typing import List, Optional, Tuple, Dict, Set, Callable
 import numpy as np
 from PIL import Image
@@ -600,6 +600,53 @@ class ROIManager:
                 roi.statistics_overlay_visible = False
                 roi.statistics = None
         self.rois.clear()
+    
+    def update_all_roi_styles(self, config_manager) -> None:
+        """
+        Update styles (pen color, thickness, font size, font color) for all existing ROIs.
+        
+        Args:
+            config_manager: ConfigManager instance to get current settings
+        """
+        if config_manager is None:
+            return
+        
+        # Get new settings from config
+        pen_width = config_manager.get_roi_line_thickness()
+        pen_color = config_manager.get_roi_line_color()
+        font_size = config_manager.get_roi_font_size()
+        font_color = config_manager.get_roi_font_color()
+        
+        # Create new pen with updated settings
+        pen = QPen(QColor(*pen_color), pen_width)
+        pen.setCosmetic(True)  # Makes pen width viewport-relative (independent of zoom)
+        pen.setStyle(Qt.PenStyle.DashLine)
+        
+        # Update all ROIs
+        for key, roi_list in self.rois.items():
+            for roi in roi_list:
+                # Update ROI line pen
+                roi.item.setPen(pen)
+                
+                # Update statistics overlay if it exists
+                if roi.statistics_overlay_item is not None:
+                    text_item = roi.statistics_overlay_item
+                    text_item.setDefaultTextColor(QColor(*font_color))
+                    
+                    # Update font size
+                    if font_size < 6:
+                        font = QFont("Arial", 6)
+                        scale_factor = font_size / 6.0
+                        transform = QTransform()
+                        transform.scale(scale_factor, scale_factor)
+                        text_item.setTransform(transform)
+                    else:
+                        font = QFont("Arial", font_size)
+                        # Reset transform if font size is >= 6
+                        text_item.setTransform(QTransform())
+                    
+                    font.setBold(True)
+                    text_item.setFont(font)
     
     def calculate_statistics(self, roi: ROIItem, pixel_array: np.ndarray, 
                             rescale_slope: Optional[float] = None,

@@ -1058,6 +1058,11 @@ class AnnotationManager:
             # Create graphics item
             pixmap_item = QGraphicsPixmapItem(pixmap)
             pixmap_item.setPos(QPointF(origin_x, origin_y))
+            
+            # Enable smooth pixmap transformation to prevent blocky appearance when zoomed
+            from PySide6.QtCore import Qt
+            pixmap_item.setTransformationMode(Qt.TransformationMode.SmoothTransformation)
+            
             pixmap_item.setZValue(200)
             pixmap_item.setVisible(True)
             

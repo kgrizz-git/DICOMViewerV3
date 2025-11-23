@@ -172,8 +172,17 @@ class TagViewerDialog(QDialog):
         self.editor = DICOMEditor(dataset)
         # Clear cache when dataset changes
         self._cached_tags = None
-        self._cached_search_text = ""
-        self._populate_tags()
+        
+        # Preserve current filter text from search_edit if it exists
+        # This allows the filter to persist when switching between datasets/series
+        current_search_text = self.search_edit.text()
+        if current_search_text:
+            self._cached_search_text = current_search_text
+        else:
+            self._cached_search_text = ""
+        
+        # Apply the preserved filter to the new dataset
+        self._populate_tags(self._cached_search_text)
     
     def _populate_tags(self, search_text: str = "") -> None:
         """
@@ -509,4 +518,14 @@ class TagViewerDialog(QDialog):
         else:
             # Otherwise, copy all fields
             self._copy_all_to_clipboard(current_item)
+    
+    def clear_filter(self) -> None:
+        """
+        Clear the search filter and repopulate tags without filter.
+        This is called when files are closed or new files are opened.
+        """
+        self._cached_search_text = ""
+        self.search_edit.clear()
+        if self.parser is not None:
+            self._populate_tags("")
 

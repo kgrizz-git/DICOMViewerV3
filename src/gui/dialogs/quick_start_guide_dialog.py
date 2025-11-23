@@ -410,6 +410,16 @@ class QuickStartGuideDialog(QDialog):
                     <li>Undo/redo changes using Edit menu</li>
                     <li><strong>Tag Filtering:</strong> Use the search box at the top to filter tags (case-insensitive search across tag number, name, VR, and value)</li>
                     <li>Search results update automatically as you type</li>
+                    <li><strong>Copy Tag Information:</strong> Right-click on any tag item to access context menu with copy options:
+                        <ul>
+                            <li><strong>Copy Tag:</strong> Copy the tag number (e.g., "(0008,0010)")</li>
+                            <li><strong>Copy Name:</strong> Copy the tag name (e.g., "Study Description")</li>
+                            <li><strong>Copy VR:</strong> Copy the Value Representation (e.g., "LO")</li>
+                            <li><strong>Copy Value:</strong> Copy the tag value</li>
+                            <li><strong>Copy All:</strong> Copy all fields (Tag, Name, VR, Value) as tab-separated text</li>
+                        </ul>
+                    </li>
+                    <li>You can also use <code>Ctrl+C</code> to copy the current column or all fields if no column is selected</li>
                 </ul>
             </li>
             <li><strong>Metadata Panel (Left Side):</strong> Quick access to DICOM tags without opening the full tag viewer
