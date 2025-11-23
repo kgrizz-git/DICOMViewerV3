@@ -79,12 +79,27 @@ class AnnotationOptionsDialog(QDialog):
         roi_group = QGroupBox("ROI Settings")
         roi_layout = QFormLayout()
         
-        # ROI Font Size
+        # ROI Font Size with +/- buttons
+        roi_font_size_layout = QHBoxLayout()
+        roi_font_size_decrease_button = QPushButton("−")
+        roi_font_size_decrease_button.setMaximumWidth(30)
+        roi_font_size_decrease_button.clicked.connect(lambda: self.roi_font_size_spinbox.setValue(max(4, self.roi_font_size_spinbox.value() - 1)))
+        
         self.roi_font_size_spinbox = QSpinBox()
         self.roi_font_size_spinbox.setRange(4, 24)
         self.roi_font_size_spinbox.setValue(6)
         self.roi_font_size_spinbox.setSuffix(" pt")
-        roi_layout.addRow("Font Size:", self.roi_font_size_spinbox)
+        
+        roi_font_size_increase_button = QPushButton("+")
+        roi_font_size_increase_button.setMaximumWidth(30)
+        roi_font_size_increase_button.clicked.connect(lambda: self.roi_font_size_spinbox.setValue(min(24, self.roi_font_size_spinbox.value() + 1)))
+        
+        roi_font_size_layout.addWidget(roi_font_size_decrease_button)
+        roi_font_size_layout.addWidget(self.roi_font_size_spinbox)
+        roi_font_size_layout.addWidget(roi_font_size_increase_button)
+        roi_font_size_layout.addStretch()
+        
+        roi_layout.addRow("Font Size:", roi_font_size_layout)
         
         # ROI Font Color
         roi_font_color_layout = QHBoxLayout()
@@ -102,12 +117,27 @@ class AnnotationOptionsDialog(QDialog):
         
         roi_layout.addRow("Font Color:", roi_font_color_layout)
         
-        # ROI Line Thickness
+        # ROI Line Thickness with +/- buttons
+        roi_line_thickness_layout = QHBoxLayout()
+        roi_line_thickness_decrease_button = QPushButton("−")
+        roi_line_thickness_decrease_button.setMaximumWidth(30)
+        roi_line_thickness_decrease_button.clicked.connect(lambda: self.roi_line_thickness_spinbox.setValue(max(1, self.roi_line_thickness_spinbox.value() - 1)))
+        
         self.roi_line_thickness_spinbox = QSpinBox()
         self.roi_line_thickness_spinbox.setRange(1, 10)
         self.roi_line_thickness_spinbox.setValue(2)
         self.roi_line_thickness_spinbox.setSuffix(" px")
-        roi_layout.addRow("Line Thickness:", self.roi_line_thickness_spinbox)
+        
+        roi_line_thickness_increase_button = QPushButton("+")
+        roi_line_thickness_increase_button.setMaximumWidth(30)
+        roi_line_thickness_increase_button.clicked.connect(lambda: self.roi_line_thickness_spinbox.setValue(min(10, self.roi_line_thickness_spinbox.value() + 1)))
+        
+        roi_line_thickness_layout.addWidget(roi_line_thickness_decrease_button)
+        roi_line_thickness_layout.addWidget(self.roi_line_thickness_spinbox)
+        roi_line_thickness_layout.addWidget(roi_line_thickness_increase_button)
+        roi_line_thickness_layout.addStretch()
+        
+        roi_layout.addRow("Line Thickness:", roi_line_thickness_layout)
         
         # ROI Line Color
         roi_line_color_layout = QHBoxLayout()
@@ -154,12 +184,27 @@ class AnnotationOptionsDialog(QDialog):
         measurement_group = QGroupBox("Measurement Settings")
         measurement_layout = QFormLayout()
         
-        # Measurement Font Size
+        # Measurement Font Size with +/- buttons
+        measurement_font_size_layout = QHBoxLayout()
+        measurement_font_size_decrease_button = QPushButton("−")
+        measurement_font_size_decrease_button.setMaximumWidth(30)
+        measurement_font_size_decrease_button.clicked.connect(lambda: self.measurement_font_size_spinbox.setValue(max(4, self.measurement_font_size_spinbox.value() - 1)))
+        
         self.measurement_font_size_spinbox = QSpinBox()
         self.measurement_font_size_spinbox.setRange(4, 24)
         self.measurement_font_size_spinbox.setValue(10)
         self.measurement_font_size_spinbox.setSuffix(" pt")
-        measurement_layout.addRow("Font Size:", self.measurement_font_size_spinbox)
+        
+        measurement_font_size_increase_button = QPushButton("+")
+        measurement_font_size_increase_button.setMaximumWidth(30)
+        measurement_font_size_increase_button.clicked.connect(lambda: self.measurement_font_size_spinbox.setValue(min(24, self.measurement_font_size_spinbox.value() + 1)))
+        
+        measurement_font_size_layout.addWidget(measurement_font_size_decrease_button)
+        measurement_font_size_layout.addWidget(self.measurement_font_size_spinbox)
+        measurement_font_size_layout.addWidget(measurement_font_size_increase_button)
+        measurement_font_size_layout.addStretch()
+        
+        measurement_layout.addRow("Font Size:", measurement_font_size_layout)
         
         # Measurement Font Color
         measurement_font_color_layout = QHBoxLayout()
@@ -177,12 +222,27 @@ class AnnotationOptionsDialog(QDialog):
         
         measurement_layout.addRow("Font Color:", measurement_font_color_layout)
         
-        # Measurement Line Thickness
+        # Measurement Line Thickness with +/- buttons
+        measurement_line_thickness_layout = QHBoxLayout()
+        measurement_line_thickness_decrease_button = QPushButton("−")
+        measurement_line_thickness_decrease_button.setMaximumWidth(30)
+        measurement_line_thickness_decrease_button.clicked.connect(lambda: self.measurement_line_thickness_spinbox.setValue(max(1, self.measurement_line_thickness_spinbox.value() - 1)))
+        
         self.measurement_line_thickness_spinbox = QSpinBox()
         self.measurement_line_thickness_spinbox.setRange(1, 10)
         self.measurement_line_thickness_spinbox.setValue(2)
         self.measurement_line_thickness_spinbox.setSuffix(" px")
-        measurement_layout.addRow("Line Thickness:", self.measurement_line_thickness_spinbox)
+        
+        measurement_line_thickness_increase_button = QPushButton("+")
+        measurement_line_thickness_increase_button.setMaximumWidth(30)
+        measurement_line_thickness_increase_button.clicked.connect(lambda: self.measurement_line_thickness_spinbox.setValue(min(10, self.measurement_line_thickness_spinbox.value() + 1)))
+        
+        measurement_line_thickness_layout.addWidget(measurement_line_thickness_decrease_button)
+        measurement_line_thickness_layout.addWidget(self.measurement_line_thickness_spinbox)
+        measurement_line_thickness_layout.addWidget(measurement_line_thickness_increase_button)
+        measurement_line_thickness_layout.addStretch()
+        
+        measurement_layout.addRow("Line Thickness:", measurement_line_thickness_layout)
         
         # Measurement Line Color
         measurement_line_color_layout = QHBoxLayout()

@@ -212,4 +212,12 @@ class DialogCoordinator:
         """
         if self.tag_viewer_dialog is not None and self.tag_viewer_dialog.isVisible():
             self.tag_viewer_dialog.set_dataset(dataset)
+    
+    def clear_tag_viewer_filter(self) -> None:
+        """
+        Clear the filter in the tag viewer dialog.
+        Called when files are closed or new files are opened.
+        """
+        if self.tag_viewer_dialog is not None:
+            self.tag_viewer_dialog.clear_filter()
 

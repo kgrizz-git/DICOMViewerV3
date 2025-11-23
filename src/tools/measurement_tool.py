@@ -84,7 +84,7 @@ class DraggableMeasurementText(QGraphicsTextItem):
                 else:
                     scene_to_viewport_scale = 1.0
                 
-                print(f"[OFFSET] itemChange - offset_scene: {offset_scene}, view_scale: {view_scale if view is not None else 'None'}")
+                # print(f"[OFFSET] itemChange - offset_scene: {offset_scene}, view_scale: {view_scale if view is not None else 'None'}")
                 
                 # Convert to viewport pixels
                 offset_viewport = QPointF(
@@ -92,7 +92,7 @@ class DraggableMeasurementText(QGraphicsTextItem):
                     offset_scene.y() * scene_to_viewport_scale
                 )
                 
-                print(f"[OFFSET] itemChange - offset_viewport: {offset_viewport}")
+                # print(f"[OFFSET] itemChange - offset_viewport: {offset_viewport}")
                 
                 # Update stored offset in viewport pixels
                 self.measurement.text_offset_viewport = offset_viewport
@@ -754,8 +754,8 @@ class MeasurementItem(QGraphicsItemGroup):
         else:
             viewport_to_scene_scale = 1.0
         
-        print(f"[OFFSET] update_distance() - view_scale: {view_scale if view is not None else 'None'}, viewport_to_scene_scale: {viewport_to_scene_scale}")
-        print(f"[OFFSET] text_offset_viewport: {self.text_offset_viewport}, text_offset (before): {self.text_offset}")
+        # print(f"[OFFSET] update_distance() - view_scale: {view_scale if view is not None else 'None'}, viewport_to_scene_scale: {viewport_to_scene_scale}")
+        # print(f"[OFFSET] text_offset_viewport: {self.text_offset_viewport}, text_offset (before): {self.text_offset}")
         
         # Convert viewport offset to scene coordinates
         self.text_offset = QPointF(
@@ -763,8 +763,8 @@ class MeasurementItem(QGraphicsItemGroup):
             self.text_offset_viewport.y() * viewport_to_scene_scale
         )
         
-        print(f"[OFFSET] text_offset (after): {self.text_offset}")
-        print(f"[OFFSET] mid_point_scene: {mid_point_scene}, text_pos_scene: {mid_point_scene + self.text_offset}")
+        # print(f"[OFFSET] text_offset (after): {self.text_offset}")
+        # print(f"[OFFSET] mid_point_scene: {mid_point_scene}, text_pos_scene: {mid_point_scene + self.text_offset}")
         
         # Calculate text position in scene coordinates
         text_pos_scene = mid_point_scene + self.text_offset
@@ -820,7 +820,7 @@ class MeasurementItem(QGraphicsItemGroup):
         else:
             viewport_to_scene_scale = 1.0
         
-        print(f"[OFFSET] update_text_offset_for_zoom() - view_scale: {view_scale if view is not None else 'None'}, viewport_to_scene_scale: {viewport_to_scene_scale}")
+        # print(f"[OFFSET] update_text_offset_for_zoom() - view_scale: {view_scale if view is not None else 'None'}, viewport_to_scene_scale: {viewport_to_scene_scale}")
         
         # Recalculate text_offset from text_offset_viewport
         self.text_offset = QPointF(
@@ -828,7 +828,7 @@ class MeasurementItem(QGraphicsItemGroup):
             self.text_offset_viewport.y() * viewport_to_scene_scale
         )
         
-        print(f"[OFFSET] update_text_offset_for_zoom() - text_offset_viewport: {self.text_offset_viewport}, text_offset: {self.text_offset}")
+        # print(f"[OFFSET] update_text_offset_for_zoom() - text_offset_viewport: {self.text_offset_viewport}, text_offset: {self.text_offset}")
         
         # Calculate midpoint of line in scene coordinates
         mid_point_scene = QPointF(
@@ -837,7 +837,7 @@ class MeasurementItem(QGraphicsItemGroup):
         )
         text_pos_scene = mid_point_scene + self.text_offset
         
-        print(f"[OFFSET] update_text_offset_for_zoom() - mid_point_scene: {mid_point_scene}, text_pos_scene: {text_pos_scene}")
+        # print(f"[OFFSET] update_text_offset_for_zoom() - mid_point_scene: {mid_point_scene}, text_pos_scene: {text_pos_scene}")
         
         # Set updating flag if it's a draggable text item
         if isinstance(self.text_item, DraggableMeasurementText):
