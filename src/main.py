@@ -647,7 +647,7 @@ class DICOMViewerApp(QObject):
             self.current_series_uid = data.get('current_series_uid', '')
             self.current_study_uid = data.get('current_study_uid', '')
             self.current_datasets = data.get('current_datasets', [])
-            
+        
             # Sync shared slice navigator with focused subwindow's slice index
             # This ensures navigation starts from the correct position
             if self.current_datasets:
@@ -3503,6 +3503,12 @@ class DICOMViewerApp(QObject):
         Returns:
             Exit code
         """
+        # Show disclaimer dialog before showing main window
+        from gui.dialogs.disclaimer_dialog import DisclaimerDialog
+        if not DisclaimerDialog.show_disclaimer(self.config_manager, self.main_window, force_show=False):
+            # User cancelled, exit application
+            return 0
+        
         # Show window maximized (full-screen)
         self.main_window.showMaximized()
         

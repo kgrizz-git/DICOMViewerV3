@@ -99,6 +99,7 @@ class ConfigManager:
             # ROI statistics visibility defaults
             "roi_default_visible_statistics": ["mean", "std", "min", "max", "count", "area"],  # Default visible statistics for new ROIs
             "multi_window_layout": "1x1",  # Multi-window layout mode: "1x1", "1x2", "2x1", "2x2"
+            "disclaimer_accepted": False,  # Whether user has accepted disclaimer and chosen not to see it again
         }
         
         # Load configuration
@@ -701,5 +702,24 @@ class ConfigManager:
     def set_roi_default_visible_statistics(self, statistics: List[str]) -> None:
         """Set default visible statistics for new ROIs."""
         self.config["roi_default_visible_statistics"] = statistics
+        self.save_config()
+    
+    def get_disclaimer_accepted(self) -> bool:
+        """
+        Get whether the user has accepted the disclaimer and chosen not to see it again.
+        
+        Returns:
+            True if disclaimer was accepted and user chose not to see it again, False otherwise
+        """
+        return self.config.get("disclaimer_accepted", False)
+    
+    def set_disclaimer_accepted(self, accepted: bool) -> None:
+        """
+        Set whether the user has accepted the disclaimer.
+        
+        Args:
+            accepted: True if user accepted and chose not to see it again, False otherwise
+        """
+        self.config["disclaimer_accepted"] = accepted
         self.save_config()
 
