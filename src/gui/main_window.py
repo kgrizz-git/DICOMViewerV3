@@ -149,21 +149,6 @@ class MainWindow(QMainWindow):
         
         file_menu.addSeparator()
         
-        # Undo/Redo actions for tag edits
-        self.undo_tag_edit_action = QAction("&Undo Tag Edit", self)
-        self.undo_tag_edit_action.setShortcut(QKeySequence.Undo)
-        self.undo_tag_edit_action.setEnabled(False)
-        self.undo_tag_edit_action.triggered.connect(self.undo_tag_edit_requested.emit)
-        file_menu.addAction(self.undo_tag_edit_action)
-        
-        self.redo_tag_edit_action = QAction("&Redo Tag Edit", self)
-        self.redo_tag_edit_action.setShortcut(QKeySequence.Redo)
-        self.redo_tag_edit_action.setEnabled(False)
-        self.redo_tag_edit_action.triggered.connect(self.redo_tag_edit_requested.emit)
-        file_menu.addAction(self.redo_tag_edit_action)
-        
-        file_menu.addSeparator()
-        
         # Export action
         export_action = QAction("&Export...", self)
         export_action.setShortcut(QKeySequence("Ctrl+E"))
@@ -185,6 +170,22 @@ class MainWindow(QMainWindow):
         exit_action.setShortcut(QKeySequence.Quit)
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
+        
+        # Edit menu
+        edit_menu = menubar.addMenu("&Edit")
+        
+        # Undo/Redo actions for tag edits
+        self.undo_tag_edit_action = QAction("&Undo Tag Edit", self)
+        self.undo_tag_edit_action.setShortcut(QKeySequence.Undo)
+        self.undo_tag_edit_action.setEnabled(False)
+        self.undo_tag_edit_action.triggered.connect(self.undo_tag_edit_requested.emit)
+        edit_menu.addAction(self.undo_tag_edit_action)
+        
+        self.redo_tag_edit_action = QAction("&Redo Tag Edit", self)
+        self.redo_tag_edit_action.setShortcut(QKeySequence.Redo)
+        self.redo_tag_edit_action.setEnabled(False)
+        self.redo_tag_edit_action.triggered.connect(self.redo_tag_edit_requested.emit)
+        edit_menu.addAction(self.redo_tag_edit_action)
         
         # View menu
         view_menu = menubar.addMenu("&View")

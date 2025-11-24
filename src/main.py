@@ -143,6 +143,13 @@ class DICOMViewerApp(QObject):
         self.main_window._apply_theme()
         self.metadata_panel = MetadataPanel(config_manager=self.config_manager)
         self.metadata_panel.set_history_manager(self.tag_edit_history)
+        # Set undo/redo callbacks
+        self.metadata_panel.set_undo_redo_callbacks(
+            lambda: self._undo_tag_edit(),
+            lambda: self._redo_tag_edit(),
+            lambda: self.tag_edit_history.can_undo(self.current_dataset) if self.current_dataset and self.tag_edit_history else False,
+            lambda: self.tag_edit_history.can_redo(self.current_dataset) if self.current_dataset and self.tag_edit_history else False
+        )
         # Initialize privacy mode
         self.metadata_panel.set_privacy_mode(self.privacy_view_enabled)
         self.window_level_controls = WindowLevelControls()
@@ -866,6 +873,15 @@ class DICOMViewerApp(QObject):
         )
         # Set annotation options callback
         self.dialog_coordinator.annotation_options_applied_callback = self._on_annotation_options_applied
+        # Set tag edited callback
+        self.dialog_coordinator.tag_edited_callback = self._on_tag_edited
+        # Set undo/redo callbacks for tag viewer dialog
+        self.dialog_coordinator.undo_redo_callbacks = (
+            lambda: self._undo_tag_edit(),
+            lambda: self._redo_tag_edit(),
+            lambda: self.tag_edit_history.can_undo(self.current_dataset) if self.current_dataset and self.tag_edit_history else False,
+            lambda: self.tag_edit_history.can_redo(self.current_dataset) if self.current_dataset and self.tag_edit_history else False
+        )
         
         # Initialize MouseModeHandler
         self.mouse_mode_handler = MouseModeHandler(
@@ -1026,7 +1042,14 @@ class DICOMViewerApp(QObject):
         self.main_window.update_status("Ready")
     
     def _handle_load_first_slice(self, studies: dict) -> None:
-        """Handle loading first slice after file operations."""
+        """
+        Handle loading first slice after file operations.
+        
+        Clears edited tags for the previous dataset before loading new one.
+        """
+        # Clear edited tags for previous dataset if it exists
+        if self.current_dataset is not None and self.tag_edit_history:
+            self.tag_edit_history.clear_edited_tags(self.current_dataset)
         # Clear all subwindows before loading new files
         # This ensures old images don't persist in non-focused subwindows
         subwindows = self.multi_window_layout.get_all_subwindows()
@@ -1287,6 +1310,28 @@ class DICOMViewerApp(QObject):
     def _update_tag_viewer(self, dataset: Dataset) -> None:
         """Update tag viewer with dataset."""
         self.dialog_coordinator.update_tag_viewer(dataset)
+    
+    def _on_tag_edited(self, tag_str: str, new_value) -> None:
+        """
+        Handle tag edit from either panel - refresh both panels.
+        
+        Args:
+            tag_str: Tag string that was edited
+            new_value: New tag value
+        """
+        # Refresh metadata panel
+        search_text = self.metadata_panel.search_edit.text()
+        self.metadata_panel._cached_tags = None
+        self.metadata_panel._populate_tags(search_text)
+        
+        # Refresh tag viewer dialog if open
+        if self.dialog_coordinator.tag_viewer_dialog:
+            search_text = self.dialog_coordinator.tag_viewer_dialog.search_edit.text()
+            self.dialog_coordinator.tag_viewer_dialog._cached_tags = None
+            self.dialog_coordinator.tag_viewer_dialog._populate_tags(search_text)
+        
+        # Update undo/redo state
+        self._update_undo_redo_state()
     
     def _undo_tag_edit(self) -> None:
         """Handle undo tag edit request."""
@@ -2237,7 +2282,7 @@ class DICOMViewerApp(QObject):
         self.image_viewer.toggle_series_navigator_requested.connect(self.main_window.toggle_series_navigator)
         
         # Tag edit signals
-        self.metadata_panel.tag_edited.connect(lambda: self._update_undo_redo_state())
+        self.metadata_panel.tag_edited.connect(self._on_tag_edited)
         
         # Cine player signals
         self.cine_player.frame_advance_requested.connect(self._on_cine_frame_advance)

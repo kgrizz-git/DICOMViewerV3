@@ -22,8 +22,8 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                                 QPushButton, QCheckBox, QGroupBox, QMessageBox,
                                 QMenu, QAbstractItemView, QApplication, QHeaderView)
 from PySide6.QtCore import Qt, Signal, QTimer
-from PySide6.QtGui import QAction, QKeySequence, QShortcut
-from typing import Optional, Dict, Any
+from PySide6.QtGui import QAction, QKeySequence, QShortcut, QColor
+from typing import Optional, Dict, Any, Callable
 import pydicom
 from pydicom.dataset import Dataset
 
@@ -43,6 +43,9 @@ class TagViewerDialog(QDialog):
     - Show/hide private tags
     - Resizable window
     """
+    
+    # Signals
+    tag_edited = Signal(str, object)  # (tag_string, new_value)
     
     def __init__(self, parent=None):
         """
@@ -64,6 +67,12 @@ class TagViewerDialog(QDialog):
         self.all_tag_items: list = []  # Store all items for filtering
         self.editor: Optional[DICOMEditor] = None
         self.history_manager: Optional[TagEditHistoryManager] = None
+        
+        # Undo/redo callbacks
+        self.undo_callback: Optional[Callable] = None
+        self.redo_callback: Optional[Callable] = None
+        self.can_undo_callback: Optional[Callable] = None
+        self.can_redo_callback: Optional[Callable] = None
         
         # Caching for performance
         self._cached_tags: Optional[Dict[str, Any]] = None
@@ -88,6 +97,38 @@ class TagViewerDialog(QDialog):
             history_manager: TagEditHistoryManager instance
         """
         self.history_manager = history_manager
+    
+    def set_undo_redo_callbacks(self, undo_cb: Callable, redo_cb: Callable,
+                                can_undo_cb: Callable, can_redo_cb: Callable) -> None:
+        """
+        Set callbacks for undo/redo operations.
+        
+        Args:
+            undo_cb: Callback to execute undo
+            redo_cb: Callback to execute redo
+            can_undo_cb: Callback to check if undo is available
+            can_redo_cb: Callback to check if redo is available
+        """
+        self.undo_callback = undo_cb
+        self.redo_callback = redo_cb
+        self.can_undo_callback = can_undo_cb
+        self.can_redo_callback = can_redo_cb
+    
+    def _undo_tag_edit(self) -> None:
+        """Handle undo tag edit from context menu."""
+        if self.undo_callback:
+            self.undo_callback()
+            # Refresh display
+            search_text = self.search_edit.text()
+            self._populate_tags(search_text)
+    
+    def _redo_tag_edit(self) -> None:
+        """Handle redo tag edit from context menu."""
+        if self.redo_callback:
+            self.redo_callback()
+            # Refresh display
+            search_text = self.search_edit.text()
+            self._populate_tags(search_text)
     
     def set_privacy_mode(self, enabled: bool) -> None:
         """
@@ -274,7 +315,18 @@ class TagViewerDialog(QDialog):
                 for tag_str, tag_data in tag_list:
                     tag_item = QTreeWidgetItem(group_item)
                     tag_item.setText(0, tag_data.get("tag", tag_str))
-                    tag_item.setText(1, tag_data.get("name", ""))
+                    
+                    # Check if tag is edited
+                    tag_name = tag_data.get("name", "")
+                    is_edited = False
+                    if self.history_manager and self.dataset:
+                        is_edited = self.history_manager.is_tag_edited(self.dataset, tag_str)
+                    
+                    # Add asterisk to name if edited
+                    if is_edited:
+                        tag_name = tag_name + "*"
+                    
+                    tag_item.setText(1, tag_name)
                     tag_item.setText(2, tag_data.get("VR", ""))
                     
                     # Format value
@@ -286,6 +338,14 @@ class TagViewerDialog(QDialog):
                     
                     # Don't truncate in separate window - show full value
                     tag_item.setText(3, value_str)
+                    
+                    # Set background color for edited tags
+                    if is_edited:
+                        # Use dark purple background (works well with white text in dark mode)
+                        edited_color = QColor(80, 50, 120)  # Dark purple
+                        for col in range(4):
+                            tag_item.setBackground(col, edited_color)
+                    
                     tag_item.setData(0, Qt.ItemDataRole.UserRole, tag_str)
                     tag_item.setData(0, Qt.ItemDataRole.UserRole + 1, tag_data)
                     
@@ -426,6 +486,8 @@ class TagViewerDialog(QDialog):
                         )
                         return
                 
+                # Emit signal
+                self.tag_edited.emit(tag_str, new_value)
                 # Refresh the tree view
                 search_text = self.search_edit.text()
                 self._populate_tags(search_text)
@@ -455,6 +517,22 @@ class TagViewerDialog(QDialog):
         edit_action = QAction("Edit Tag", self)
         edit_action.triggered.connect(lambda: self._edit_tag_item(item))
         menu.addAction(edit_action)
+        
+        menu.addSeparator()
+        
+        # Undo action
+        undo_action = QAction("Undo", self)
+        can_undo = self.can_undo_callback() if self.can_undo_callback else False
+        undo_action.setEnabled(can_undo)
+        undo_action.triggered.connect(self._undo_tag_edit)
+        menu.addAction(undo_action)
+        
+        # Redo action
+        redo_action = QAction("Redo", self)
+        can_redo = self.can_redo_callback() if self.can_redo_callback else False
+        redo_action.setEnabled(can_redo)
+        redo_action.triggered.connect(self._redo_tag_edit)
+        menu.addAction(redo_action)
         
         menu.addSeparator()
         
