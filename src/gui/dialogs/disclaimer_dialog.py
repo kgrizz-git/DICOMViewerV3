@@ -15,7 +15,7 @@ Requirements:
 """
 
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QCheckBox,
-                                QPushButton)
+                                QPushButton, QMessageBox, QApplication)
 from PySide6.QtCore import Qt
 from typing import Optional
 
@@ -46,6 +46,8 @@ class DisclaimerDialog(QDialog):
         self.config_manager = config_manager
         self.force_show = force_show
         self.dont_show_again = False
+        # Store initial config state to detect if user changed it
+        self.initial_config_state = config_manager.get_disclaimer_accepted()
         
         self.setWindowTitle("Disclaimer")
         self.setModal(True)
@@ -93,7 +95,7 @@ class DisclaimerDialog(QDialog):
         
         # Exit button (right)
         self.exit_button = QPushButton("Exit")
-        self.exit_button.clicked.connect(self.reject)
+        self.exit_button.clicked.connect(self._on_exit)
         button_layout.addWidget(self.exit_button)
         
         layout.addLayout(button_layout)
@@ -106,6 +108,36 @@ class DisclaimerDialog(QDialog):
             checked: True if checkbox is checked, False otherwise
         """
         self.config_manager.set_disclaimer_accepted(checked)
+    
+    def _on_exit(self) -> None:
+        """Handle exit button click - clear config and exit."""
+        # If opened from Help menu (force_show=True), show confirmation dialog
+        if self.force_show:
+            # Show confirmation dialog
+            reply = QMessageBox.question(
+                self,
+                "Exit Application",
+                "Are you sure? Application will exit. You may lose unsaved changes.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
+            )
+            
+            if reply == QMessageBox.StandardButton.Yes:
+                # User confirmed exit - clear flag and exit application
+                self.config_manager.set_disclaimer_accepted(False)
+                # Exit the application
+                app = QApplication.instance()
+                if app:
+                    app.quit()
+            else:
+                # User cancelled (No) - return to disclaimer dialog (don't close it)
+                return
+        else:
+            # Normal startup disclaimer - clear flag and reject (which will exit app)
+            # Always clear the "do not show" flag when user clicks Exit
+            # This ensures the disclaimer will always show at next launch
+            self.config_manager.set_disclaimer_accepted(False)
+            self.reject()
     
     def _on_accept(self) -> None:
         """Handle accept button click."""

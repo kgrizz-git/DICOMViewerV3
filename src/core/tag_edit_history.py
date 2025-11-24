@@ -17,7 +17,7 @@ Requirements:
     - pydicom for dataset operations
 """
 
-from typing import List, Optional, Any, Union, Tuple
+from typing import List, Optional, Any, Union, Tuple, Dict, Set
 from abc import ABC, abstractmethod
 from pydicom.dataset import Dataset
 from pydicom.tag import Tag
@@ -222,6 +222,8 @@ class TagEditHistoryManager:
         self.max_history = max_history
         # Dictionary mapping dataset id to history stacks
         self.histories: dict = {}  # dataset_id -> {"undo": [], "redo": []}
+        # Dictionary mapping dataset id to set of edited tag strings
+        self.edited_tags: Dict[int, Set[str]] = {}  # dataset_id -> set of tag strings
     
     def _get_dataset_id(self, dataset: Dataset) -> int:
         """
@@ -265,9 +267,76 @@ class TagEditHistoryManager:
         # Clear redo stack when new command is executed
         history["redo"].clear()
         
+        # Mark tag as edited
+        tag_str = self._get_tag_string(command)
+        if tag_str:
+            self.mark_tag_edited(command.dataset, tag_str)
+        
         # Limit history size
         if len(history["undo"]) > self.max_history:
             history["undo"].pop(0)
+    
+    def _get_tag_string(self, command: TagEditCommand) -> Optional[str]:
+        """
+        Get tag string from command.
+        
+        Args:
+            command: TagEditCommand
+            
+        Returns:
+            Tag string in format "(GGGG,EEEE)" or None
+        """
+        if isinstance(command, EditTagCommand):
+            if hasattr(command, 'tag') and command.tag is not None:
+                return f"({command.tag.group:04X},{command.tag.element:04X})"
+            elif isinstance(command.tag_identifier, str):
+                return command.tag_identifier
+            elif isinstance(command.tag_identifier, tuple) and len(command.tag_identifier) == 2:
+                return f"({command.tag_identifier[0]:04X},{command.tag_identifier[1]:04X})"
+        return None
+    
+    def mark_tag_edited(self, dataset: Dataset, tag_str: str) -> None:
+        """
+        Mark a tag as edited.
+        
+        Args:
+            dataset: DICOM dataset
+            tag_str: Tag string in format "(GGGG,EEEE)"
+        """
+        dataset_id = self._get_dataset_id(dataset)
+        if dataset_id not in self.edited_tags:
+            self.edited_tags[dataset_id] = set()
+        self.edited_tags[dataset_id].add(tag_str)
+    
+    def is_tag_edited(self, dataset: Dataset, tag_str: str) -> bool:
+        """
+        Check if a tag has been edited.
+        
+        Args:
+            dataset: DICOM dataset
+            tag_str: Tag string in format "(GGGG,EEEE)"
+            
+        Returns:
+            True if tag has been edited
+        """
+        dataset_id = self._get_dataset_id(dataset)
+        if dataset_id not in self.edited_tags:
+            return False
+        return tag_str in self.edited_tags[dataset_id]
+    
+    def clear_edited_tags(self, dataset: Optional[Dataset] = None) -> None:
+        """
+        Clear edited tags for a dataset or all datasets.
+        
+        Args:
+            dataset: Optional DICOM dataset. If None, clears all edited tags.
+        """
+        if dataset is None:
+            self.edited_tags.clear()
+        else:
+            dataset_id = self._get_dataset_id(dataset)
+            if dataset_id in self.edited_tags:
+                del self.edited_tags[dataset_id]
     
     def undo(self, dataset: Dataset) -> bool:
         """
@@ -286,6 +355,12 @@ class TagEditHistoryManager:
         command = history["undo"].pop()
         command.undo()
         history["redo"].append(command)
+        
+        # Update edited tags - check if tag is still edited (has commands in undo stack)
+        tag_str = self._get_tag_string(command)
+        if tag_str:
+            self._update_edited_tags(dataset, tag_str)
+        
         return True
     
     def redo(self, dataset: Dataset) -> bool:
@@ -305,7 +380,34 @@ class TagEditHistoryManager:
         command = history["redo"].pop()
         command.execute()
         history["undo"].append(command)
+        
+        # Mark tag as edited again
+        tag_str = self._get_tag_string(command)
+        if tag_str:
+            self.mark_tag_edited(dataset, tag_str)
+        
         return True
+    
+    def _update_edited_tags(self, dataset: Dataset, tag_str: str) -> None:
+        """
+        Update edited tags set - remove tag if no commands in undo stack affect it.
+        
+        Args:
+            dataset: DICOM dataset
+            tag_str: Tag string to check
+        """
+        history = self._get_history(dataset)
+        # Check if any command in undo stack affects this tag
+        tag_still_edited = False
+        for cmd in history["undo"]:
+            cmd_tag_str = self._get_tag_string(cmd)
+            if cmd_tag_str == tag_str:
+                tag_still_edited = True
+                break
+        
+        dataset_id = self._get_dataset_id(dataset)
+        if not tag_still_edited and dataset_id in self.edited_tags:
+            self.edited_tags[dataset_id].discard(tag_str)
     
     def can_undo(self, dataset: Dataset) -> bool:
         """
@@ -342,8 +444,11 @@ class TagEditHistoryManager:
         """
         if dataset is None:
             self.histories.clear()
+            self.edited_tags.clear()
         else:
             dataset_id = self._get_dataset_id(dataset)
             if dataset_id in self.histories:
                 del self.histories[dataset_id]
+            if dataset_id in self.edited_tags:
+                del self.edited_tags[dataset_id]
 

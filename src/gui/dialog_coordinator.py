@@ -85,6 +85,7 @@ class DialogCoordinator:
         self.overlay_config_applied_callback = overlay_config_applied_callback
         self.annotation_options_applied_callback = None  # Will be set from main.py
         self.tag_edit_history = tag_edit_history
+        self.tag_edited_callback = None  # Will be set from main.py to handle tag edits
         
         # Store callbacks for histogram dialog
         self.get_current_dataset = get_current_dataset
@@ -126,6 +127,13 @@ class DialogCoordinator:
             # Set history manager if available
             if self.tag_edit_history is not None:
                 self.tag_viewer_dialog.set_history_manager(self.tag_edit_history)
+            # Connect tag_edited signal if callback is available
+            if self.tag_edited_callback is not None:
+                self.tag_viewer_dialog.tag_edited.connect(self.tag_edited_callback)
+            # Set undo/redo callbacks if callback is available
+            if hasattr(self, 'undo_redo_callbacks') and self.undo_redo_callbacks is not None:
+                undo_cb, redo_cb, can_undo_cb, can_redo_cb = self.undo_redo_callbacks
+                self.tag_viewer_dialog.set_undo_redo_callbacks(undo_cb, redo_cb, can_undo_cb, can_redo_cb)
         
         # Set privacy mode
         self.tag_viewer_dialog.set_privacy_mode(privacy_mode)
