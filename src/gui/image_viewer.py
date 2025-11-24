@@ -855,8 +855,8 @@ class ImageViewer(QGraphicsView):
                 
                 if is_empty_space and not (is_roi_item or is_measurement_item or is_handle or is_measurement_text or is_measurement_child):
                     # Clicking on empty space - deselect everything
-                    print(f"[DEBUG-DESELECT] Empty space click detected in Select mode")
-                    print(f"[DEBUG-DESELECT]   is_empty_space: {is_empty_space}, is_roi_item: {is_roi_item}, is_measurement_item: {is_measurement_item}")
+                    # print(f"[DEBUG-DESELECT] Empty space click detected in Select mode")
+                    # print(f"[DEBUG-DESELECT]   is_empty_space: {is_empty_space}, is_roi_item: {is_roi_item}, is_measurement_item: {is_measurement_item}")
                     
                     if self.scene is not None:
                         # First, explicitly deselect all measurements and their text labels
@@ -866,16 +866,16 @@ class ImageViewer(QGraphicsView):
                         
                         # Clear scene selection (this will visually deselect ROIs)
                         selected_before = [item for item in self.scene.selectedItems()]
-                        print(f"[DEBUG-DESELECT]   Selected items in scene before clear: {len(selected_before)}")
-                        for item in selected_before:
-                            print(f"[DEBUG-DESELECT]     Item: {type(item).__name__}, isSelected: {item.isSelected()}")
+                        # print(f"[DEBUG-DESELECT]   Selected items in scene before clear: {len(selected_before)}")
+                        # for item in selected_before:
+                        #     print(f"[DEBUG-DESELECT]     Item: {type(item).__name__}, isSelected: {item.isSelected()}")
                         self.scene.clearSelection()
                         selected_after = [item for item in self.scene.selectedItems()]
-                        print(f"[DEBUG-DESELECT]   Selected items in scene after clear: {len(selected_after)}")
+                        # print(f"[DEBUG-DESELECT]   Selected items in scene after clear: {len(selected_after)}")
                     
                     # Emit signal to clear ROI selection - this is critical for proper ROI deselection
                     # This must happen BEFORE calling super() to prevent Qt's default behavior from interfering
-                    print(f"[DEBUG-DESELECT]   Emitting image_clicked_no_roi signal")
+                    # print(f"[DEBUG-DESELECT]   Emitting image_clicked_no_roi signal")
                     self.image_clicked_no_roi.emit()
                     
                     # Accept the event to prevent further processing

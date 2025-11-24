@@ -201,9 +201,9 @@ class ROIListPanel(QWidget):
         Args:
             roi: ROI item to select, or None to deselect
         """
-        print(f"[DEBUG-DESELECT] select_roi_in_list: roi={id(roi) if roi else None}")
+        # print(f"[DEBUG-DESELECT] select_roi_in_list: roi={id(roi) if roi else None}")
         current_item = self.roi_list.currentItem()
-        print(f"[DEBUG-DESELECT]   Current list item before: {current_item.text() if current_item else None}")
+        # print(f"[DEBUG-DESELECT]   Current list item before: {current_item.text() if current_item else None}")
         
         if roi is None:
             # Block signals to prevent itemSelectionChanged from firing
@@ -213,7 +213,7 @@ class ROIListPanel(QWidget):
             self.roi_list.setCurrentItem(None)
             self.roi_list.blockSignals(False)
             current_item_after = self.roi_list.currentItem()
-            print(f"[DEBUG-DESELECT]   Current list item after clearSelection: {current_item_after.text() if current_item_after else None}")
+            # print(f"[DEBUG-DESELECT]   Current list item after clearSelection: {current_item_after.text() if current_item_after else None}")
             return
         
         # Find item for this ROI
@@ -224,10 +224,10 @@ class ROIListPanel(QWidget):
                 # Block signals to prevent itemSelectionChanged from firing if item is already current
                 if self.roi_list.currentItem() == item:
                     # Already selected, don't trigger signal
-                    print(f"[DEBUG-DESELECT]   Item {i} already current, skipping setCurrentItem")
+                    # print(f"[DEBUG-DESELECT]   Item {i} already current, skipping setCurrentItem")
                     return
                 self.roi_list.setCurrentItem(item)
-                print(f"[DEBUG-DESELECT]   Selected item {i} in list")
+                # print(f"[DEBUG-DESELECT]   Selected item {i} in list")
                 break
     
     def contextMenuEvent(self, event: QContextMenuEvent) -> None:

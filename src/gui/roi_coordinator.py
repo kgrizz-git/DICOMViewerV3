@@ -114,61 +114,108 @@ class ROICoordinator:
         """
         current_dataset = self.get_current_dataset()
         if current_dataset is None:
+            print("[DEBUG-ROI-STATS] _get_pixel_array_for_statistics: current_dataset is None")
             return None
         
         # Check if projection is enabled
-        if (self.get_projection_enabled is None or 
-            not self.get_projection_enabled()):
+        projection_enabled = False
+        if self.get_projection_enabled is not None:
+            try:
+                projection_enabled = self.get_projection_enabled()
+                print(f"[DEBUG-ROI-STATS] _get_pixel_array_for_statistics: projection_enabled={projection_enabled}, "
+                      f"callback={id(self.get_projection_enabled)}")
+                
+                # Debug: Try to inspect what the callback is accessing
+                if hasattr(self.get_projection_enabled, '__closure__') and self.get_projection_enabled.__closure__:
+                    closure_info = []
+                    for i, cell in enumerate(self.get_projection_enabled.__closure__):
+                        try:
+                            cell_contents = cell.cell_contents
+                            if isinstance(cell_contents, dict) and 'slice_display_manager' in cell_contents:
+                                # This is the managers dict - extract the manager
+                                manager_from_closure = cell_contents['slice_display_manager']
+                                closure_info.append(f"cell[{i}]: managers dict {id(cell_contents)}, "
+                                                   f"manager object {id(manager_from_closure)}, "
+                                                   f"projection_enabled={manager_from_closure.projection_enabled}")
+                            elif hasattr(cell_contents, 'projection_enabled'):
+                                closure_info.append(f"cell[{i}]: manager object {id(cell_contents)}, projection_enabled={cell_contents.projection_enabled}")
+                            else:
+                                closure_info.append(f"cell[{i}]: {type(cell_contents).__name__} {id(cell_contents)}")
+                        except Exception as e:
+                            closure_info.append(f"cell[{i}]: <unable to inspect: {e}>")
+                    if closure_info:
+                        print(f"[DEBUG-ROI-STATS] _get_pixel_array_for_statistics: Callback closure info: {closure_info}")
+            except Exception as e:
+                print(f"[DEBUG-ROI-STATS] _get_pixel_array_for_statistics: Error getting projection_enabled: {e}")
+                import traceback
+                traceback.print_exc()
+                projection_enabled = False
+        
+        if not projection_enabled:
             # Projection not enabled, return original slice array
+            print("[DEBUG-ROI-STATS] _get_pixel_array_for_statistics: Projection disabled, returning original slice")
             return self.dicom_processor.get_pixel_array(current_dataset)
         
         # Projection is enabled, create projection array
+        print("[DEBUG-ROI-STATS] _get_pixel_array_for_statistics: Projection enabled, creating projection array")
         try:
             # Get projection parameters
             projection_type = "aip"  # default
             if self.get_projection_type is not None:
-                projection_type = self.get_projection_type()
+                try:
+                    projection_type = self.get_projection_type()
+                    print(f"[DEBUG-ROI-STATS] _get_pixel_array_for_statistics: projection_type={projection_type}")
+                except Exception as e:
+                    print(f"[DEBUG-ROI-STATS] _get_pixel_array_for_statistics: Error getting projection_type: {e}")
             
             projection_slice_count = 4  # default
             if self.get_projection_slice_count is not None:
-                projection_slice_count = self.get_projection_slice_count()
+                try:
+                    projection_slice_count = self.get_projection_slice_count()
+                    print(f"[DEBUG-ROI-STATS] _get_pixel_array_for_statistics: projection_slice_count={projection_slice_count}")
+                except Exception as e:
+                    print(f"[DEBUG-ROI-STATS] _get_pixel_array_for_statistics: Error getting projection_slice_count: {e}")
             
             # Get current studies dictionary
             if self.get_current_studies is None:
-                # Fall back to original if we can't get studies
+                print("[DEBUG-ROI-STATS] _get_pixel_array_for_statistics: get_current_studies is None, falling back to original")
                 return self.dicom_processor.get_pixel_array(current_dataset)
             
             current_studies = self.get_current_studies()
             if not current_studies:
-                # Fall back to original if studies is empty
+                print("[DEBUG-ROI-STATS] _get_pixel_array_for_statistics: current_studies is empty, falling back to original")
                 return self.dicom_processor.get_pixel_array(current_dataset)
             
             # Extract DICOM identifiers
             study_uid = getattr(current_dataset, 'StudyInstanceUID', '')
             series_uid = get_composite_series_key(current_dataset)
             current_slice_index = self.get_current_slice_index()
+            print(f"[DEBUG-ROI-STATS] _get_pixel_array_for_statistics: study_uid={study_uid[:20] if study_uid else 'None'}..., "
+                  f"series_uid={series_uid[:20] if series_uid else 'None'}..., slice_index={current_slice_index}")
             
             # Get series datasets
             if (not study_uid or not series_uid or 
                 study_uid not in current_studies or 
                 series_uid not in current_studies[study_uid]):
-                # Fall back to original if series not found
+                print(f"[DEBUG-ROI-STATS] _get_pixel_array_for_statistics: Series not found in studies, falling back to original")
                 return self.dicom_processor.get_pixel_array(current_dataset)
             
             series_datasets = current_studies[study_uid][series_uid]
             total_slices = len(series_datasets)
+            print(f"[DEBUG-ROI-STATS] _get_pixel_array_for_statistics: total_slices={total_slices}")
             
             if total_slices < 2:
-                # Not enough slices for projection, fall back to original
+                print(f"[DEBUG-ROI-STATS] _get_pixel_array_for_statistics: Not enough slices ({total_slices}), falling back to original")
                 return self.dicom_processor.get_pixel_array(current_dataset)
             
             # Calculate slice range
             start_slice = max(0, current_slice_index)
             end_slice = min(total_slices - 1, current_slice_index + projection_slice_count - 1)
+            print(f"[DEBUG-ROI-STATS] _get_pixel_array_for_statistics: slice range: {start_slice} to {end_slice}")
             
             # Ensure we have at least 2 slices
             if end_slice - start_slice + 1 < 2:
-                # Not enough slices available, fall back to original
+                print(f"[DEBUG-ROI-STATS] _get_pixel_array_for_statistics: Slice range too small, falling back to original")
                 return self.dicom_processor.get_pixel_array(current_dataset)
             
             # Gather slices for projection
@@ -177,8 +224,10 @@ class ROICoordinator:
                 if 0 <= i < total_slices:
                     projection_slices.append(series_datasets[i])
             
+            print(f"[DEBUG-ROI-STATS] _get_pixel_array_for_statistics: Gathered {len(projection_slices)} slices for projection")
+            
             if len(projection_slices) < 2:
-                # Not enough slices gathered, fall back to original
+                print(f"[DEBUG-ROI-STATS] _get_pixel_array_for_statistics: Not enough slices gathered, falling back to original")
                 return self.dicom_processor.get_pixel_array(current_dataset)
             
             # Calculate projection based on type
@@ -191,13 +240,17 @@ class ROICoordinator:
                 projection_array = self.dicom_processor.minimum_intensity_projection(projection_slices)
             
             if projection_array is None:
-                # Projection calculation failed, fall back to original
+                print(f"[DEBUG-ROI-STATS] _get_pixel_array_for_statistics: Projection calculation failed, falling back to original")
                 return self.dicom_processor.get_pixel_array(current_dataset)
             
+            print(f"[DEBUG-ROI-STATS] _get_pixel_array_for_statistics: Successfully created projection array, shape={projection_array.shape}, dtype={projection_array.dtype}")
             # Return projection array (rescale will be applied in calculate_statistics if needed)
             return projection_array
             
-        except Exception:
+        except Exception as e:
+            print(f"[DEBUG-ROI-STATS] _get_pixel_array_for_statistics: Exception during projection: {e}")
+            import traceback
+            traceback.print_exc()
             # Any error during projection, fall back to original
             return self.dicom_processor.get_pixel_array(current_dataset)
     
@@ -340,9 +393,9 @@ class ROICoordinator:
     
     def handle_image_clicked_no_roi(self) -> None:
         """Handle image click when not on an ROI - deselect current ROI."""
-        print(f"[DEBUG-DESELECT] handle_image_clicked_no_roi: Called")
-        print(f"[DEBUG-DESELECT]   Current selected ROI: {id(self.roi_manager.get_selected_roi()) if self.roi_manager.get_selected_roi() else None}")
-        print(f"[DEBUG-DESELECT]   Scene: {id(self.image_viewer.scene) if self.image_viewer.scene else None}")
+        # print(f"[DEBUG-DESELECT] handle_image_clicked_no_roi: Called")
+        # print(f"[DEBUG-DESELECT]   Current selected ROI: {id(self.roi_manager.get_selected_roi()) if self.roi_manager.get_selected_roi() else None}")
+        # print(f"[DEBUG-DESELECT]   Scene: {id(self.image_viewer.scene) if self.image_viewer.scene else None}")
         
         # Deselect ROI
         self.roi_manager.select_roi(None)
@@ -350,23 +403,23 @@ class ROICoordinator:
         # Clear scene selection to prevent Qt's default mouse release behavior from re-selecting the ROI
         if self.image_viewer.scene is not None:
             selected_items = [item for item in self.image_viewer.scene.selectedItems()]
-            print(f"[DEBUG-DESELECT]   Selected items in scene before clear: {len(selected_items)}")
-            for item in selected_items:
-                print(f"[DEBUG-DESELECT]     Item: {type(item).__name__}, isSelected: {item.isSelected()}")
+            # print(f"[DEBUG-DESELECT]   Selected items in scene before clear: {len(selected_items)}")
+            # for item in selected_items:
+            #     print(f"[DEBUG-DESELECT]     Item: {type(item).__name__}, isSelected: {item.isSelected()}")
             self.image_viewer.scene.clearSelection()
             selected_items_after = [item for item in self.image_viewer.scene.selectedItems()]
-            print(f"[DEBUG-DESELECT]   Selected items in scene after clear: {len(selected_items_after)}")
+            # print(f"[DEBUG-DESELECT]   Selected items in scene after clear: {len(selected_items_after)}")
         
         # Clear ROI list selection
         current_list_item = self.roi_list_panel.roi_list.currentItem()
-        print(f"[DEBUG-DESELECT]   ROI list current item before clear: {current_list_item.text() if current_list_item else None}")
+        # print(f"[DEBUG-DESELECT]   ROI list current item before clear: {current_list_item.text() if current_list_item else None}")
         self.roi_list_panel.select_roi_in_list(None)
         current_list_item_after = self.roi_list_panel.roi_list.currentItem()
-        print(f"[DEBUG-DESELECT]   ROI list current item after clear: {current_list_item_after.text() if current_list_item_after else None}")
+        # print(f"[DEBUG-DESELECT]   ROI list current item after clear: {current_list_item_after.text() if current_list_item_after else None}")
         
         # Clear ROI statistics panel
         self.roi_statistics_panel.clear_statistics()
-        print(f"[DEBUG-DESELECT]   Finished handle_image_clicked_no_roi")
+        # print(f"[DEBUG-DESELECT]   Finished handle_image_clicked_no_roi")
     
     def handle_roi_selected(self, roi) -> None:
         """
@@ -485,13 +538,15 @@ class ROICoordinator:
             roi: ROI item
         """
         if roi is None:
+            print("[DEBUG-ROI-STATS] update_roi_statistics: roi is None")
             return
         
         current_dataset = self.get_current_dataset()
         if current_dataset is None:
+            print("[DEBUG-ROI-STATS] update_roi_statistics: current_dataset is None")
             return
         
-        print(f"[DEBUG-OVERLAY] update_roi_statistics: Called for ROI {id(roi)}, "
+        print(f"[DEBUG-ROI-STATS] update_roi_statistics: Called for ROI {id(roi)}, "
               f"roi_manager={id(self.roi_manager)}, scene={id(self.image_viewer.scene) if self.image_viewer.scene else None}")
         
         # Check if ROI belongs to this manager
@@ -502,7 +557,7 @@ class ROICoordinator:
                 break
         
         if not roi_belongs_to_manager:
-            print(f"[DEBUG-OVERLAY]   WARNING: ROI {id(roi)} does NOT belong to manager {id(self.roi_manager)}!")
+            print(f"[DEBUG-ROI-STATS]   WARNING: ROI {id(roi)} does NOT belong to manager {id(self.roi_manager)}!")
             import traceback
             traceback.print_stack()
             return
@@ -514,11 +569,14 @@ class ROICoordinator:
             # Use current slice index as instance identifier (array position)
             instance_identifier = self.get_current_slice_index()
             
+            print(f"[DEBUG-ROI-STATS] update_roi_statistics: study_uid={study_uid[:20] if study_uid else 'None'}..., "
+                  f"series_uid={series_uid[:20] if series_uid else 'None'}..., slice_index={instance_identifier}")
+            
             # Get ROI identifier (e.g., "ROI 1 (rectangle)")
             roi_identifier = None
             rois = self.roi_manager.get_rois_for_slice(study_uid, series_uid, instance_identifier)
             roi_in_current_slice = roi in rois
-            print(f"[DEBUG-OVERLAY]   ROI {id(roi)} in current slice: {roi_in_current_slice}, "
+            print(f"[DEBUG-ROI-STATS]   ROI {id(roi)} in current slice: {roi_in_current_slice}, "
                   f"slice={instance_identifier}, total ROIs in slice={len(rois)}")
             
             for i, r in enumerate(rois):
@@ -528,11 +586,17 @@ class ROICoordinator:
             
             pixel_array = self._get_pixel_array_for_statistics()
             if pixel_array is not None:
+                print(f"[DEBUG-ROI-STATS] update_roi_statistics: Got pixel_array, shape={pixel_array.shape}, dtype={pixel_array.dtype}, "
+                      f"min={pixel_array.min()}, max={pixel_array.max()}, mean={pixel_array.mean():.2f}")
+                
                 # Extract pixel spacing for area calculation
                 pixel_spacing = get_pixel_spacing(current_dataset)
+                print(f"[DEBUG-ROI-STATS] update_roi_statistics: pixel_spacing={pixel_spacing}")
                 
                 # Get rescale parameters
                 rescale_slope, rescale_intercept, rescale_type, use_rescaled = self.get_rescale_params()
+                print(f"[DEBUG-ROI-STATS] update_roi_statistics: rescale params: slope={rescale_slope}, intercept={rescale_intercept}, "
+                      f"type={rescale_type}, use_rescaled={use_rescaled}")
                 
                 # Pass rescale parameters if using rescaled values
                 # Note: For projections, rescale is not applied in helper, so we pass params here
@@ -542,6 +606,12 @@ class ROICoordinator:
                     rescale_intercept=rescale_intercept if use_rescaled else None,
                     pixel_spacing=pixel_spacing
                 )
+                
+                print(f"[DEBUG-ROI-STATS] update_roi_statistics: Calculated stats: mean={stats.get('mean', 0):.2f}, "
+                      f"min={stats.get('min', 0):.2f}, max={stats.get('max', 0):.2f}, std={stats.get('std', 0):.2f}, "
+                      f"count={stats.get('count', 0)}, area_pixels={stats.get('area_pixels', 0):.2f}, "
+                      f"area_mm2={stats.get('area_mm2', None)}")
+                
                 # Pass rescale_type for display
                 display_rescale_type = rescale_type if use_rescaled else None
                 self.roi_statistics_panel.update_statistics(stats, roi_identifier, rescale_type=display_rescale_type)
@@ -554,8 +624,12 @@ class ROICoordinator:
                         font_size=None, font_color=None,  # None = use config values
                         rescale_type=display_rescale_type
                     )
+            else:
+                print("[DEBUG-ROI-STATS] update_roi_statistics: pixel_array is None, cannot calculate statistics")
         except Exception as e:
-            print(f"Error calculating ROI statistics: {e}")
+            print(f"[DEBUG-ROI-STATS] Error calculating ROI statistics: {e}")
+            import traceback
+            traceback.print_exc()
     
     def handle_scene_selection_changed(self) -> None:
         """Handle scene selection change (e.g., when ROI is moved)."""
