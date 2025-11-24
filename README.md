@@ -63,6 +63,17 @@ This application provides comprehensive DICOM image viewing capabilities with ad
   - Choose which tags to export
   - Export from multiple slices or entire series
 
+### Privacy and Anonymization
+- **Privacy View**: Toggle privacy mode to mask patient-related DICOM tags in the UI
+  - Patient tags (Patient Name, Patient ID, Patient Date of Birth, etc.) display as "PRIVACY MODE"
+  - Applies to metadata panel, tag viewer, and image overlays
+  - Display-only feature - underlying data unchanged
+  - Access via View menu, context menu, or Cmd+P/Ctrl+P shortcut
+- **Anonymization on Export**: Option to anonymize patient information when exporting to DICOM format
+  - Text-valued patient tags replaced with "ANONYMIZED"
+  - Date/time patient tags removed
+  - Available in export dialog when exporting to DICOM format
+
 ### Analysis Tools
 - Draw elliptical or rectangular regions of interest (ROIs)
 - Calculate statistics (mean, standard deviation, min, max, area) within ROIs
@@ -70,8 +81,12 @@ This application provides comprehensive DICOM image viewing capabilities with ad
 - **Intensity Projections**: Combine multiple slices (2, 3, 4, 6, or 8) to create Average (AIP), Maximum (MIP), or Minimum (MinIP) intensity projections
   - Scroll through projections one underlying slice at a time
   - Access via right panel widget or context menu → "Combine..."
-- Histogram display for whole slice or selected ROI (Not yet implemented)
-- Window width and level indication overlaid on histogram (Not yet implemented)
+- **Histogram Display**: View pixel value distribution for the currently focused image
+  - Press <code>H</code> key to open histogram dialog
+  - Shows histogram with window/level box overlay (red dashed box indicating current window center and width)
+  - Toggle between linear and logarithmic y-axis scaling
+  - Automatically tracks focused subwindow and updates on focus/slice/window-level changes
+  - Reflects raw or rescaled pixel values based on current setting
 - Display RT STRUCT overlays (Not yet implemented)
 
 ### Data Management
@@ -101,9 +116,12 @@ This application provides comprehensive DICOM image viewing capabilities with ad
 - **W**: Window/Level ROI mode (auto-adjust from ROI)
 - **C**: Clear all measurements on current slice
 - **D**: Delete all ROIs on current slice
-- **V**: Reset view (restore initial zoom, pan, and window/level)
+- **V**: Reset view (restore initial zoom, pan, and window/level for focused subwindow)
+- **A**: Reset all views (reset zoom, pan, and window/level for all subwindows)
+- **H**: Open histogram dialog (shows pixel value distribution with window/level overlay)
 - **N**: Toggle series navigator bar visibility
 - **Spacebar**: Toggle overlay visibility (cycles through 3 states)
+- **Cmd+P / Ctrl+P**: Toggle Privacy View (masks patient-related tags in display)
 - **Arrow Keys**: Navigate slices (Up/Down) and series (Left/Right)
 - **Delete**: Delete selected ROI or measurement
 - **I**: Invert image colors

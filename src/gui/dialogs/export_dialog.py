@@ -97,6 +97,7 @@ class ExportDialog(QDialog):
         self.window_level_option = "current"  # "current" or "dataset"
         self.include_overlays = True
         self.export_at_display_resolution = True
+        self.anonymize_enabled = False
         
         # Get last export path from config if available
         if config_manager:
@@ -136,6 +137,13 @@ class ExportDialog(QDialog):
         
         format_group.setLayout(format_layout)
         layout.addWidget(format_group)
+        
+        # Anonymize option (only for DICOM)
+        self.anonymize_checkbox = QCheckBox("Anonymize patient information (DICOM only)")
+        self.anonymize_checkbox.setEnabled(False)  # Initially disabled (only enabled for DICOM)
+        self.anonymize_checkbox.setChecked(False)
+        self.anonymize_checkbox.toggled.connect(lambda checked: setattr(self, 'anonymize_enabled', checked))
+        layout.addWidget(self.anonymize_checkbox)
         
         # Window/Level options (only for PNG/JPG)
         self.window_level_group = QGroupBox("Window/Level (for PNG/JPG)")
@@ -249,9 +257,12 @@ class ExportDialog(QDialog):
     def _on_format_changed(self) -> None:
         """Handle format selection change."""
         is_image_format = self.png_radio.isChecked() or self.jpg_radio.isChecked()
+        is_dicom_format = self.dicom_radio.isChecked()
+        
         self.window_level_group.setEnabled(is_image_format)
         self.overlay_checkbox.setEnabled(is_image_format)
         self.display_res_checkbox.setEnabled(is_image_format)
+        self.anonymize_checkbox.setEnabled(is_dicom_format)
         
         if not is_image_format:
             # DICOM format - disable overlay and display resolution options
@@ -259,6 +270,10 @@ class ExportDialog(QDialog):
             self.include_overlays = False
             self.display_res_checkbox.setChecked(False)
             self.export_at_display_resolution = False
+        else:
+            # Image format - disable anonymize option
+            self.anonymize_checkbox.setChecked(False)
+            self.anonymize_enabled = False
     
     def _populate_tree(self) -> None:
         """Populate the tree with studies, series, and slices."""
@@ -483,6 +498,9 @@ class ExportDialog(QDialog):
         else:
             self.export_format = "DICOM"
         
+        # Get anonymize state (only for DICOM format)
+        anonymize = self.anonymize_enabled and self.export_format == "DICOM"
+        
         # Perform export
         try:
             manager = ExportManager()
@@ -501,7 +519,8 @@ class ExportDialog(QDialog):
                 self.config_manager,
                 self.studies,
                 self.export_at_display_resolution,
-                self.current_zoom
+                self.current_zoom,
+                anonymize=anonymize
             )
             
             # Save export path to config for next time
@@ -658,7 +677,8 @@ class ExportManager:
         config_manager=None,
         studies: Optional[Dict[str, Dict[str, List[Dataset]]]] = None,
         export_at_display_resolution: bool = False,
-        current_zoom: Optional[float] = None
+        current_zoom: Optional[float] = None,
+        anonymize: bool = False
     ) -> int:
         """
         Export selected items based on hierarchical selection.
@@ -793,7 +813,8 @@ class ExportManager:
                         slice_index,
                         total_slices,
                         export_at_display_resolution,
-                        current_zoom
+                        current_zoom,
+                        anonymize=anonymize
                     ):
                         exported += 1
                     
@@ -825,7 +846,8 @@ class ExportManager:
         slice_index: Optional[int] = None,
         total_slices: Optional[int] = None,
         export_at_display_resolution: bool = False,
-        current_zoom: Optional[float] = None
+        current_zoom: Optional[float] = None,
+        anonymize: bool = False
     ) -> bool:
         """
         Export a single slice.
@@ -855,8 +877,16 @@ class ExportManager:
         """
         try:
             if format == "DICOM":
-                # Export as DICOM - always preserve original data
-                dataset.save_as(output_path)
+                # Export as DICOM
+                if anonymize:
+                    # Apply anonymization
+                    from utils.dicom_anonymizer import DICOMAnonymizer
+                    anonymizer = DICOMAnonymizer()
+                    anonymized_dataset = anonymizer.anonymize_dataset(dataset)
+                    anonymized_dataset.save_as(output_path)
+                else:
+                    # Export original data without anonymization
+                    dataset.save_as(output_path)
             else:
                 # Export as image (PNG or JPG)
                 window_center = None

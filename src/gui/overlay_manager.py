@@ -27,6 +27,7 @@ from pydicom.dataset import Dataset
 
 from core.dicom_parser import DICOMParser
 from core.multiframe_handler import is_multiframe, get_frame_count
+from utils.dicom_utils import get_patient_tag_keywords
 
 
 class ViewportOverlayWidget(QWidget):
@@ -227,6 +228,7 @@ class OverlayManager:
         self.font_color = font_color
         self.config_manager = config_manager
         self.use_widget_overlays = use_widget_overlays  # Flag to switch between approaches
+        self.privacy_mode: bool = False
         
         # Store current parser and scene for updating positions
         self.current_parser: Optional[DICOMParser] = None
@@ -335,6 +337,15 @@ class OverlayManager:
         """
         self.font_color = (r, g, b)
     
+    def set_privacy_mode(self, enabled: bool) -> None:
+        """
+        Set privacy mode for masking patient tags in overlays.
+        
+        Args:
+            enabled: True to enable privacy mode, False to disable
+        """
+        self.privacy_mode = enabled
+    
     def get_overlay_text(self, parser: DICOMParser) -> str:
         """
         Get overlay text for a dataset.
@@ -431,6 +442,10 @@ class OverlayManager:
                     value_str = ", ".join(str(v) for v in value)
                 else:
                     value_str = str(value)
+                
+                # Apply privacy mode masking for patient tags
+                if self.privacy_mode and tag in get_patient_tag_keywords():
+                    value_str = "PRIVACY MODE"
                 
                 # Special formatting for InstanceNumber: show as "Slice X/Y" if total_slices is provided
                 if tag == "InstanceNumber" and total_slices is not None:

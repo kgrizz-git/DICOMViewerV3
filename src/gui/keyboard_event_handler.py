@@ -55,7 +55,9 @@ class KeyboardEventHandler:
         toggle_series_navigator_callback: Optional[Callable[[], None]] = None,
         invert_image_callback: Optional[Callable[[], None]] = None,
         open_histogram_callback: Optional[Callable[[], None]] = None,
-        reset_all_views_callback: Optional[Callable[[], None]] = None
+        reset_all_views_callback: Optional[Callable[[], None]] = None,
+        toggle_privacy_view_callback: Optional[Callable[[bool], None]] = None,
+        get_privacy_view_state_callback: Optional[Callable[[], bool]] = None
     ):
         """
         Initialize the keyboard event handler.
@@ -80,6 +82,8 @@ class KeyboardEventHandler:
             invert_image_callback: Optional callback to invert image
             open_histogram_callback: Optional callback to open histogram dialog
             reset_all_views_callback: Optional callback to reset all views
+            toggle_privacy_view_callback: Optional callback to toggle privacy view (takes enabled bool)
+            get_privacy_view_state_callback: Optional callback to get current privacy view state (returns bool)
         """
         self.roi_manager = roi_manager
         self.measurement_tool = measurement_tool
@@ -100,6 +104,8 @@ class KeyboardEventHandler:
         self.invert_image_callback = invert_image_callback
         self.open_histogram_callback = open_histogram_callback
         self.reset_all_views_callback = reset_all_views_callback
+        self.toggle_privacy_view_callback = toggle_privacy_view_callback
+        self.get_privacy_view_state_callback = get_privacy_view_state_callback
     
     def handle_key_event(self, event: QKeyEvent) -> bool:
         """
@@ -221,6 +227,14 @@ class KeyboardEventHandler:
         elif event.key() == Qt.Key.Key_H:
             if self.open_histogram_callback:
                 self.open_histogram_callback()
+            return True
+        
+        # Ctrl+P (Cmd+P on Mac) for Privacy View toggle
+        elif event.key() == Qt.Key.Key_P and (event.modifiers() & Qt.KeyboardModifier.ControlModifier):
+            if self.toggle_privacy_view_callback and self.get_privacy_view_state_callback:
+                # Get current state and toggle it
+                current_state = self.get_privacy_view_state_callback()
+                self.toggle_privacy_view_callback(not current_state)
             return True
         
         # A key for Reset All Views

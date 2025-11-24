@@ -23,6 +23,8 @@ from pydicom.dataset import Dataset
 from pydicom.tag import Tag
 import numpy as np
 
+from utils.dicom_utils import is_patient_tag
+
 
 class DICOMParser:
     """
@@ -55,12 +57,13 @@ class DICOMParser:
         self.dataset = dataset
         self._tag_cache.clear()
     
-    def get_all_tags(self, include_private: bool = True) -> Dict[str, Any]:
+    def get_all_tags(self, include_private: bool = True, privacy_mode: bool = False) -> Dict[str, Any]:
         """
         Get all tags from the dataset with caching.
         
         Args:
             include_private: If True, include private tags
+            privacy_mode: If True, replace patient-related tag values with "PRIVACY MODE" for display
             
         Returns:
             Dictionary mapping tag strings to values
@@ -68,8 +71,8 @@ class DICOMParser:
         if self.dataset is None:
             return {}
         
-        # Check cache first
-        cache_key = f"{id(self.dataset)}_{include_private}"
+        # Check cache first (include privacy_mode in cache key)
+        cache_key = f"{id(self.dataset)}_{include_private}_{privacy_mode}"
         if cache_key in self._tag_cache:
             return self._tag_cache[cache_key]
         
@@ -91,6 +94,10 @@ class DICOMParser:
                     value = [str(v) for v in value]
                 elif not isinstance(value, (str, int, float)):
                     value = str(value)
+                
+                # Apply privacy mode masking for patient tags (display only)
+                if privacy_mode and is_patient_tag(tag_str):
+                    value = "PRIVACY MODE"
                 
                 tags[tag_str] = {
                     "tag": tag_str,

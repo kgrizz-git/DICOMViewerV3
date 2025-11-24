@@ -118,6 +118,7 @@ class MetadataPanel(QWidget):
         self.parser: Optional[DICOMParser] = None
         self.dataset: Optional[Dataset] = None
         self.show_private_tags = True
+        self.privacy_mode: bool = False
         self.editor: Optional[DICOMEditor] = None
         self.history_manager: Optional[TagEditHistoryManager] = None
         self.config_manager: Optional[ConfigManager] = config_manager
@@ -144,6 +145,21 @@ class MetadataPanel(QWidget):
             history_manager: TagEditHistoryManager instance
         """
         self.history_manager = history_manager
+    
+    def set_privacy_mode(self, enabled: bool) -> None:
+        """
+        Set privacy mode for masking patient tags.
+        
+        Args:
+            enabled: True to enable privacy mode, False to disable
+        """
+        self.privacy_mode = enabled
+        # Clear cache to force refresh
+        self._cached_tags = None
+        # Refresh display if parser is available
+        if self.parser is not None:
+            search_text = self.search_edit.text()
+            self._populate_tags(search_text)
     
     def _create_ui(self) -> None:
         """Create the UI components."""
@@ -296,7 +312,7 @@ class MetadataPanel(QWidget):
         
         if need_reload:
             # Reload tags from parser (will use parser's cache)
-            tags = self.parser.get_all_tags(include_private=self.show_private_tags)
+            tags = self.parser.get_all_tags(include_private=self.show_private_tags, privacy_mode=self.privacy_mode)
             self._cached_tags = tags
             self._cached_include_private = self.show_private_tags
         else:
