@@ -974,8 +974,8 @@ class SliceDisplayManager:
         
         # Get all ROIs for this slice using composite key
         rois = self.roi_manager.get_rois_for_slice(study_uid, series_uid, instance_identifier)
-        print(f"[DEBUG-OVERLAY] display_rois_for_slice: scene={id(self.image_viewer.scene)}, "
-              f"roi_manager={id(self.roi_manager)}, found {len(rois)} ROIs for slice {instance_identifier}")
+        # print(f"[DEBUG-OVERLAY] display_rois_for_slice: scene={id(self.image_viewer.scene)}, "
+        #       f"roi_manager={id(self.roi_manager)}, found {len(rois)} ROIs for slice {instance_identifier}")
         
         # Remove ROIs from other slices from the scene
         # (but keep them in the manager's storage)
@@ -1025,7 +1025,7 @@ class SliceDisplayManager:
         
         # Update ROI statistics overlays
         if self.update_roi_statistics_overlays_callback is not None:
-            print(f"[DEBUG-OVERLAY] display_rois_for_slice: Calling update_roi_statistics_overlays_callback")
+            # print(f"[DEBUG-OVERLAY] display_rois_for_slice: Calling update_roi_statistics_overlays_callback")
             self.update_roi_statistics_overlays_callback()
         
         # Check selected ROI and update/clear statistics

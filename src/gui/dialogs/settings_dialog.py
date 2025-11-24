@@ -56,7 +56,14 @@ class SettingsDialog(QDialog):
         layout = QVBoxLayout(self)
         
         # Placeholder message
-        message_label = QLabel("Settings dialog.\n\nOverlay settings are available via View → Overlay Settings.")
+        message_label = QLabel(
+            "Settings dialog.\n\n"
+            "Overlay preferences are available via View → Overlay Settings.\n"
+            "Additional options are available via:\n"
+            "• View → Annotation Options\n"
+            "• View → Privacy Mode\n"
+            "• View → Overlay Configuration"
+        )
         message_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(message_label)
         
