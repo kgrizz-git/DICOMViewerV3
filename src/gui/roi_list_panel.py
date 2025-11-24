@@ -124,11 +124,15 @@ class ROIListPanel(QWidget):
         self.current_series_uid = series_uid
         self.current_instance_identifier = instance_identifier
         
-        # Store current selection
+        # Store current selection - get ROI object, not just text
         current_item = self.roi_list.currentItem()
+        selected_roi = current_item.data(Qt.ItemDataRole.UserRole) if current_item else None
         selected_text = current_item.text() if current_item else None
         
+        # Block signals while clearing to prevent triggering selection change
+        self.roi_list.blockSignals(True)
         self.roi_list.clear()
+        self.roi_list.blockSignals(False)
         
         if self.roi_manager is None:
             return
@@ -142,10 +146,15 @@ class ROIListPanel(QWidget):
             item = QListWidgetItem(item_text)
             item.setData(Qt.ItemDataRole.UserRole, roi)
             self.roi_list.addItem(item)
-            
-            # Restore selection if it was this item
-            if selected_text == item_text:
-                self.roi_list.setCurrentItem(item)
+        
+        # Restore selection if ROI object matches (not just text)
+        if selected_roi is not None:
+            for i, roi in enumerate(rois):
+                if roi == selected_roi:  # Object identity check
+                    item = self.roi_list.item(i)
+                    if item:
+                        self.roi_list.setCurrentItem(item)
+                    break
     
     def _on_list_selection_changed(self) -> None:
         """Handle list selection change."""
@@ -192,8 +201,19 @@ class ROIListPanel(QWidget):
         Args:
             roi: ROI item to select, or None to deselect
         """
+        print(f"[DEBUG-DESELECT] select_roi_in_list: roi={id(roi) if roi else None}")
+        current_item = self.roi_list.currentItem()
+        print(f"[DEBUG-DESELECT]   Current list item before: {current_item.text() if current_item else None}")
+        
         if roi is None:
+            # Block signals to prevent itemSelectionChanged from firing
+            self.roi_list.blockSignals(True)
             self.roi_list.clearSelection()
+            # Also clear the current item - clearSelection() doesn't do this
+            self.roi_list.setCurrentItem(None)
+            self.roi_list.blockSignals(False)
+            current_item_after = self.roi_list.currentItem()
+            print(f"[DEBUG-DESELECT]   Current list item after clearSelection: {current_item_after.text() if current_item_after else None}")
             return
         
         # Find item for this ROI
@@ -201,7 +221,13 @@ class ROIListPanel(QWidget):
             item = self.roi_list.item(i)
             item_roi = item.data(Qt.ItemDataRole.UserRole)
             if item_roi == roi:
+                # Block signals to prevent itemSelectionChanged from firing if item is already current
+                if self.roi_list.currentItem() == item:
+                    # Already selected, don't trigger signal
+                    print(f"[DEBUG-DESELECT]   Item {i} already current, skipping setCurrentItem")
+                    return
                 self.roi_list.setCurrentItem(item)
+                print(f"[DEBUG-DESELECT]   Selected item {i} in list")
                 break
     
     def contextMenuEvent(self, event: QContextMenuEvent) -> None:
