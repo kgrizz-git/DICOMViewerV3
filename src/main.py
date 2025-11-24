@@ -371,9 +371,9 @@ class DICOMViewerApp(QObject):
                 get_current_slice_index=lambda idx=idx: self._get_subwindow_slice_index(idx),
                 get_rescale_params=self._get_rescale_params,
                 set_mouse_mode_callback=self._set_mouse_mode_via_handler,
-                get_projection_enabled=lambda idx=idx: managers['slice_display_manager'].projection_enabled,
-                get_projection_type=lambda idx=idx: managers['slice_display_manager'].projection_type,
-                get_projection_slice_count=lambda idx=idx: managers['slice_display_manager'].projection_slice_count,
+                get_projection_enabled=lambda idx=idx: (self._get_subwindow_slice_display_manager(idx).projection_enabled if self._get_subwindow_slice_display_manager(idx) else False),
+                get_projection_type=lambda idx=idx: (self._get_subwindow_slice_display_manager(idx).projection_type if self._get_subwindow_slice_display_manager(idx) else "aip"),
+                get_projection_slice_count=lambda idx=idx: (self._get_subwindow_slice_display_manager(idx).projection_slice_count if self._get_subwindow_slice_display_manager(idx) else 4),
                 get_current_studies=lambda: self.current_studies
             )
             
@@ -520,12 +520,12 @@ class DICOMViewerApp(QObject):
             self.main_window,
             get_current_dataset=lambda idx=idx: self._get_subwindow_dataset(idx),
             get_current_slice_index=lambda idx=idx: self._get_subwindow_slice_index(idx),
-            get_rescale_params=self._get_rescale_params,
-            set_mouse_mode_callback=self._set_mouse_mode_via_handler,
-            get_projection_enabled=lambda idx=idx: managers['slice_display_manager'].projection_enabled,
-            get_projection_type=lambda idx=idx: managers['slice_display_manager'].projection_type,
-            get_projection_slice_count=lambda idx=idx: managers['slice_display_manager'].projection_slice_count,
-            get_current_studies=lambda: self.current_studies
+                get_rescale_params=self._get_rescale_params,
+                set_mouse_mode_callback=self._set_mouse_mode_via_handler,
+                get_projection_enabled=lambda idx=idx: (self._get_subwindow_slice_display_manager(idx).projection_enabled if self._get_subwindow_slice_display_manager(idx) else False),
+                get_projection_type=lambda idx=idx: (self._get_subwindow_slice_display_manager(idx).projection_type if self._get_subwindow_slice_display_manager(idx) else "aip"),
+                get_projection_slice_count=lambda idx=idx: (self._get_subwindow_slice_display_manager(idx).projection_slice_count if self._get_subwindow_slice_display_manager(idx) else 4),
+                get_current_studies=lambda: self.current_studies
         )
         
         # Measurement Coordinator
@@ -600,6 +600,12 @@ class DICOMViewerApp(QObject):
         if idx in self.subwindow_data:
             return self.subwindow_data[idx].get('current_slice_index', 0)
         return 0
+    
+    def _get_subwindow_slice_display_manager(self, idx: int):
+        """Get slice display manager for a subwindow."""
+        if idx in self.subwindow_managers:
+            return self.subwindow_managers[idx].get('slice_display_manager')
+        return None
     
     def _get_subwindow_study_uid(self, idx: int) -> str:
         """Get current study UID for a subwindow."""
@@ -2636,6 +2642,10 @@ class DICOMViewerApp(QObject):
                 preserve_view_override=preserve_view_override
             )
             
+            # Update ROI statistics panel after slice is displayed
+            # This ensures statistics are recalculated when projection state changes
+            self._display_rois_for_slice(dataset)
+            
             # Store initial view state if this is the first image
             if self.view_state_manager.initial_zoom is None:
                 # Wait a bit for view to settle, then store initial state
@@ -2680,8 +2690,9 @@ class DICOMViewerApp(QObject):
         Args:
             dataset: pydicom Dataset for the current slice
         """
-        print(f"[DEBUG-OVERLAY] _display_rois_for_slice: roi_manager={id(self.roi_manager)}, "
-              f"roi_coordinator={id(self.roi_coordinator)}, scene={id(self.image_viewer.scene) if self.image_viewer.scene else None}")
+        print(f"[DEBUG-ROI-STATS] _display_rois_for_slice: roi_manager={id(self.roi_manager)}, "
+              f"roi_coordinator={id(self.roi_coordinator)}, scene={id(self.image_viewer.scene) if self.image_viewer.scene else None}, "
+              f"projection_enabled={self.slice_display_manager.projection_enabled if hasattr(self, 'slice_display_manager') else 'unknown'}")
         self.slice_display_manager.display_rois_for_slice(dataset)
         # Check if there's a selected ROI for this slice and restore UI state
         study_uid = getattr(dataset, 'StudyInstanceUID', '')
@@ -2690,17 +2701,19 @@ class DICOMViewerApp(QObject):
         instance_identifier = self.current_slice_index
         rois = self.roi_manager.get_rois_for_slice(study_uid, series_uid, instance_identifier)
         selected_roi = self.roi_manager.get_selected_roi()
-        print(f"[DEBUG-OVERLAY]   Found {len(rois)} ROIs for slice, selected_roi={id(selected_roi) if selected_roi else None}")
+        print(f"[DEBUG-ROI-STATS] _display_rois_for_slice: Found {len(rois)} ROIs for slice, selected_roi={id(selected_roi) if selected_roi else None}")
         if selected_roi is not None:
             selected_in_slice = selected_roi in rois
-            print(f"[DEBUG-OVERLAY]   Selected ROI in current slice: {selected_in_slice}")
+            print(f"[DEBUG-ROI-STATS] _display_rois_for_slice: Selected ROI in current slice: {selected_in_slice}")
             if selected_in_slice:
                 self.roi_list_panel.select_roi_in_list(selected_roi)
+                print(f"[DEBUG-ROI-STATS] _display_rois_for_slice: Calling update_roi_statistics for selected ROI")
                 self.roi_coordinator.update_roi_statistics(selected_roi)
             else:
-                print(f"[DEBUG-OVERLAY]   Selected ROI not in current slice, clearing statistics")
+                print(f"[DEBUG-ROI-STATS] _display_rois_for_slice: Selected ROI not in current slice, clearing statistics")
                 self.roi_statistics_panel.clear_statistics()
         else:
+            print(f"[DEBUG-ROI-STATS] _display_rois_for_slice: No selected ROI, clearing statistics")
             self.roi_statistics_panel.clear_statistics()
     
     def _display_measurements_for_slice(self, dataset) -> None:
@@ -2723,36 +2736,95 @@ class DICOMViewerApp(QObject):
         Args:
             enabled: True if projection mode enabled, False otherwise
         """
-        # print(f"[DEBUG _on_projection_enabled_changed] Called from enabled_changed signal: enabled={enabled}, _resetting_projection_state={self._resetting_projection_state}")
-        # import traceback
-        # print(f"[DEBUG _on_projection_enabled_changed] Call stack:\n{''.join(traceback.format_stack()[-5:-1])}")
+        print(f"[DEBUG-PROJECTION] _on_projection_enabled_changed: enabled={enabled}, "
+              f"_resetting_projection_state={self._resetting_projection_state}")
         
         # Check current states BEFORE updating manager
         current_widget_state = self.intensity_projection_controls_widget.get_enabled()
         current_manager_state = self.slice_display_manager.projection_enabled
         checkbox_visual_state = self.intensity_projection_controls_widget.enable_checkbox.isChecked()
-        # print(f"[DEBUG _on_projection_enabled_changed] Current widget state={current_widget_state}, checkbox visual state={checkbox_visual_state}, manager state={current_manager_state}, signal enabled={enabled}")
+        print(f"[DEBUG-PROJECTION] _on_projection_enabled_changed: Current widget state={current_widget_state}, "
+              f"checkbox visual state={checkbox_visual_state}, manager state={current_manager_state}, signal enabled={enabled}")
         
         # If we're resetting and signal doesn't match manager state, sync widget to manager (ignore signal)
         if self._resetting_projection_state and current_manager_state != enabled:
-            # print(f"[DEBUG _on_projection_enabled_changed] Reset in progress: ignoring signal ({enabled}), syncing widget to manager ({current_manager_state})")
+            print(f"[DEBUG-PROJECTION] _on_projection_enabled_changed: Reset in progress: ignoring signal ({enabled}), "
+                  f"syncing widget to manager ({current_manager_state})")
             self.intensity_projection_controls_widget.set_enabled(current_manager_state)
         else:
             # Normal case: update manager state to match the signal (user's intent)
-            # print(f"[DEBUG _on_projection_enabled_changed] Updating manager state to match signal ({enabled})")
+            print(f"[DEBUG-PROJECTION] _on_projection_enabled_changed: Updating manager state to match signal ({enabled})")
             self.slice_display_manager.set_projection_enabled(enabled)
+            
+            # Verify the update took effect
+            updated_state = self.slice_display_manager.projection_enabled
+            print(f"[DEBUG-PROJECTION] _on_projection_enabled_changed: Manager state after update: {updated_state}, "
+                  f"manager object ID: {id(self.slice_display_manager)}")
+            
+            # Verify ROI coordinator is using the same manager
+            if hasattr(self, 'roi_coordinator') and self.roi_coordinator is not None:
+                if self.roi_coordinator.get_projection_enabled is not None:
+                    try:
+                        # Check what the callback returns
+                        callback_result = self.roi_coordinator.get_projection_enabled()
+                        print(f"[DEBUG-PROJECTION] _on_projection_enabled_changed: ROI coordinator callback returns: {callback_result}")
+                        
+                        # Try to inspect the closure to see what manager it references
+                        if hasattr(self.roi_coordinator.get_projection_enabled, '__closure__') and self.roi_coordinator.get_projection_enabled.__closure__:
+                            # The closure should contain the managers dict
+                            closure_vars = [cell.cell_contents for cell in self.roi_coordinator.get_projection_enabled.__closure__]
+                            print(f"[DEBUG-PROJECTION] _on_projection_enabled_changed: ROI coordinator callback closure vars: {[type(v).__name__ for v in closure_vars]}")
+                            
+                            # Check if the manager in the closure is the same as self.slice_display_manager
+                            for var in closure_vars:
+                                if isinstance(var, dict) and 'slice_display_manager' in var:
+                                    manager_from_closure = var['slice_display_manager']
+                                    print(f"[DEBUG-PROJECTION] _on_projection_enabled_changed: Manager from closure ID: {id(manager_from_closure)}, "
+                                          f"self.slice_display_manager ID: {id(self.slice_display_manager)}, "
+                                          f"same object: {manager_from_closure is self.slice_display_manager}, "
+                                          f"closure manager projection_enabled: {manager_from_closure.projection_enabled}, "
+                                          f"self.slice_display_manager projection_enabled: {self.slice_display_manager.projection_enabled}")
+                                    if manager_from_closure is not self.slice_display_manager:
+                                        print(f"[DEBUG-PROJECTION] _on_projection_enabled_changed: WARNING - Manager objects are different! "
+                                              f"This could cause synchronization issues.")
+                                    break
+                    except Exception as e:
+                        print(f"[DEBUG-PROJECTION] _on_projection_enabled_changed: Error checking ROI coordinator callback: {e}")
+                        import traceback
+                        traceback.print_exc()
             
             # Widget state should already match signal, but verify and sync if needed
             if current_widget_state != enabled:
-                # print(f"[DEBUG _on_projection_enabled_changed] Widget state ({current_widget_state}) != signal ({enabled}), syncing widget")
+                print(f"[DEBUG-PROJECTION] _on_projection_enabled_changed: Widget state ({current_widget_state}) != signal ({enabled}), syncing widget")
                 self.intensity_projection_controls_widget.set_enabled(enabled)
             else:
-                # print(f"[DEBUG _on_projection_enabled_changed] Widget state ({current_widget_state}) matches signal ({enabled}), no widget update needed")
-                pass
+                print(f"[DEBUG-PROJECTION] _on_projection_enabled_changed: Widget state ({current_widget_state}) matches signal ({enabled}), no widget update needed")
         
         # Redisplay current slice with new projection state
         if self.current_dataset is not None:
+            print(f"[DEBUG-PROJECTION] _on_projection_enabled_changed: Redisplaying slice, current_dataset exists, "
+                  f"selected_roi={id(self.roi_manager.get_selected_roi()) if self.roi_manager.get_selected_roi() else None}, "
+                  f"projection_enabled={self.slice_display_manager.projection_enabled}")
+            
+            # Verify ROI coordinator callback sees the updated state before redisplaying
+            if hasattr(self, 'roi_coordinator') and self.roi_coordinator is not None:
+                if self.roi_coordinator.get_projection_enabled is not None:
+                    callback_state = self.roi_coordinator.get_projection_enabled()
+                    print(f"[DEBUG-PROJECTION] _on_projection_enabled_changed: ROI coordinator callback state before redisplay: {callback_state}, "
+                          f"manager state: {self.slice_display_manager.projection_enabled}")
+                    if callback_state != self.slice_display_manager.projection_enabled:
+                        print(f"[DEBUG-PROJECTION] _on_projection_enabled_changed: WARNING - Callback state mismatch! "
+                              f"Callback={callback_state}, Manager={self.slice_display_manager.projection_enabled}")
+            
             self._display_slice(self.current_dataset)
+            
+            # After redisplay, ensure statistics are updated if there's a selected ROI
+            # The _display_rois_for_slice should handle this, but we'll verify
+            selected_roi = self.roi_manager.get_selected_roi()
+            if selected_roi is not None:
+                print(f"[DEBUG-PROJECTION] _on_projection_enabled_changed: Selected ROI exists, statistics should be updated by _display_rois_for_slice")
+        else:
+            print(f"[DEBUG-PROJECTION] _on_projection_enabled_changed: current_dataset is None, cannot redisplay")
     
     def _on_projection_type_changed(self, projection_type: str) -> None:
         """
@@ -2761,11 +2833,14 @@ class DICOMViewerApp(QObject):
         Args:
             projection_type: "aip", "mip", or "minip"
         """
+        print(f"[DEBUG-PROJECTION] _on_projection_type_changed: projection_type={projection_type}, "
+              f"projection_enabled={self.slice_display_manager.projection_enabled}")
         self.slice_display_manager.set_projection_type(projection_type)
         # Update widget state
         self.intensity_projection_controls_widget.set_projection_type(projection_type)
         # Redisplay current slice with new projection type
         if self.current_dataset is not None and self.slice_display_manager.projection_enabled:
+            print(f"[DEBUG-PROJECTION] _on_projection_type_changed: Redisplaying slice")
             self._display_slice(self.current_dataset)
     
     def _on_projection_slice_count_changed(self, count: int) -> None:
@@ -2775,11 +2850,14 @@ class DICOMViewerApp(QObject):
         Args:
             count: Number of slices to combine (2, 3, 4, 6, or 8)
         """
+        print(f"[DEBUG-PROJECTION] _on_projection_slice_count_changed: count={count}, "
+              f"projection_enabled={self.slice_display_manager.projection_enabled}")
         self.slice_display_manager.set_projection_slice_count(count)
         # Update widget state
         self.intensity_projection_controls_widget.set_slice_count(count)
         # Redisplay current slice with new slice count
         if self.current_dataset is not None and self.slice_display_manager.projection_enabled:
+            print(f"[DEBUG-PROJECTION] _on_projection_slice_count_changed: Redisplaying slice")
             self._display_slice(self.current_dataset)
     
     def _open_settings(self) -> None:

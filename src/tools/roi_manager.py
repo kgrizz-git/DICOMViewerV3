@@ -477,22 +477,22 @@ class ROIManager:
         """
         # Deselect previous ROI
         if self.selected_roi is not None:
-            print(f"[DEBUG-DESELECT] select_roi: Deselecting ROI {id(self.selected_roi)}")
-            print(f"[DEBUG-DESELECT]   ROI item: {id(self.selected_roi.item) if self.selected_roi.item else None}")
-            print(f"[DEBUG-DESELECT]   ROI item isSelected before: {self.selected_roi.item.isSelected() if self.selected_roi.item else None}")
+            # print(f"[DEBUG-DESELECT] select_roi: Deselecting ROI {id(self.selected_roi)}")
+            # print(f"[DEBUG-DESELECT]   ROI item: {id(self.selected_roi.item) if self.selected_roi.item else None}")
+            # print(f"[DEBUG-DESELECT]   ROI item isSelected before: {self.selected_roi.item.isSelected() if self.selected_roi.item else None}")
             # Ensure the ROI item is properly deselected even if it's in a different scene
             if self.selected_roi.item is not None:
                 self.selected_roi.item.setSelected(False)
-                print(f"[DEBUG-DESELECT]   ROI item isSelected after setSelected(False): {self.selected_roi.item.isSelected()}")
+                # print(f"[DEBUG-DESELECT]   ROI item isSelected after setSelected(False): {self.selected_roi.item.isSelected()}")
                 # Also clear selection in the item's scene if it exists
                 roi_scene = self.selected_roi.item.scene()
                 if roi_scene is not None:
-                    print(f"[DEBUG-DESELECT]   Clearing selection in ROI's scene {id(roi_scene)}")
+                    # print(f"[DEBUG-DESELECT]   Clearing selection in ROI's scene {id(roi_scene)}")
                     selected_before = [item for item in roi_scene.selectedItems()]
-                    print(f"[DEBUG-DESELECT]   Selected items in ROI's scene before clear: {len(selected_before)}")
+                    # print(f"[DEBUG-DESELECT]   Selected items in ROI's scene before clear: {len(selected_before)}")
                     roi_scene.clearSelection()
                     selected_after = [item for item in roi_scene.selectedItems()]
-                    print(f"[DEBUG-DESELECT]   Selected items in ROI's scene after clear: {len(selected_after)}")
+                    # print(f"[DEBUG-DESELECT]   Selected items in ROI's scene after clear: {len(selected_after)}")
         
         # Select new ROI
         print(f"[DEBUG-OVERLAY] select_roi: roi_manager={id(self)}, selecting ROI {id(roi) if roi else None}")
@@ -502,7 +502,8 @@ class ROIManager:
             roi_scene = roi.item.scene() if roi.item else None
             print(f"[DEBUG-OVERLAY]   Selected ROI's item is in scene: {id(roi_scene) if roi_scene else None}")
         else:
-            print(f"[DEBUG-DESELECT] select_roi: No ROI selected (deselected)")
+            # print(f"[DEBUG-DESELECT] select_roi: No ROI selected (deselected)")
+            pass
     
     def get_selected_roi(self) -> Optional[ROIItem]:
         """
