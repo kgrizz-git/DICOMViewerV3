@@ -1034,7 +1034,7 @@ class OverlayManager:
         
         # Verify this view is associated with the scene
         if view.scene != scene:
-            print(f"[DEBUG-OVERLAY] WARNING: View's scene doesn't match! view.scene={view.scene}, scene={scene}")
+            # print(f"[DEBUG-OVERLAY] WARNING: View's scene doesn't match! view.scene={view.scene}, scene={scene}")
             # Try to find the correct view
             views = scene.views()
             if views:
@@ -1226,7 +1226,7 @@ class OverlayManager:
                             # Re-apply flag if needed (shouldn't be necessary, but ensure it's set)
                             if not has_flag_before:
                                 item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations, True)
-                                print(f"[DEBUG-OVERLAY] WARNING: {corner_key} item {line_idx} lost ItemIgnoresTransformations flag, re-applied")
+                                # print(f"[DEBUG-OVERLAY] WARNING: {corner_key} item {line_idx} lost ItemIgnoresTransformations flag, re-applied")
                             
                             # Invalidate new position area after moving
                             new_rect = item.boundingRect().translated(item.pos())
@@ -1280,7 +1280,7 @@ class OverlayManager:
                         # Re-apply flag if needed (shouldn't be necessary, but ensure it's set)
                         if not has_flag_before:
                             item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations, True)
-                            print(f"[DEBUG-OVERLAY] WARNING: {corner_key} item lost ItemIgnoresTransformations flag, re-applied")
+                            # print(f"[DEBUG-OVERLAY] WARNING: {corner_key} item lost ItemIgnoresTransformations flag, re-applied")
                         
                         # Invalidate new position area after moving
                         new_rect = item.boundingRect().translated(item.pos())

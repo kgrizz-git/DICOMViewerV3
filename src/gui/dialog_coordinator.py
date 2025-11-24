@@ -26,6 +26,7 @@ from gui.dialogs.tag_export_dialog import TagExportDialog
 from gui.dialogs.export_dialog import ExportDialog
 from gui.dialogs.quick_start_guide_dialog import QuickStartGuideDialog
 from gui.dialogs.histogram_dialog import HistogramDialog
+from gui.dialogs.about_this_file_dialog import AboutThisFileDialog
 from gui.main_window import MainWindow
 from utils.config_manager import ConfigManager
 from PySide6.QtWidgets import QMessageBox
@@ -99,6 +100,8 @@ class DialogCoordinator:
         self.tag_viewer_dialog: Optional[TagViewerDialog] = None
         # Histogram dialog (persistent)
         self.histogram_dialog: Optional[HistogramDialog] = None
+        # About this File dialog (persistent)
+        self.about_this_file_dialog: Optional[AboutThisFileDialog] = None
     
     def open_settings(self) -> None:
         """Handle settings dialog request."""
@@ -275,4 +278,34 @@ class DialogCoordinator:
         self.histogram_dialog.show()
         self.histogram_dialog.raise_()
         self.histogram_dialog.activateWindow()
+    
+    def open_about_this_file(self, current_dataset: Optional[Dataset] = None, file_path: Optional[str] = None) -> None:
+        """
+        Handle About This File dialog request.
+        
+        Args:
+            current_dataset: Optional current DICOM dataset
+            file_path: Optional path to the DICOM file
+        """
+        if self.about_this_file_dialog is None:
+            self.about_this_file_dialog = AboutThisFileDialog(self.main_window)
+        
+        # Update dialog with current information
+        self.about_this_file_dialog.update_file_info(current_dataset, file_path)
+        
+        # Show dialog
+        self.about_this_file_dialog.show()
+        self.about_this_file_dialog.raise_()
+        self.about_this_file_dialog.activateWindow()
+    
+    def update_about_this_file(self, current_dataset: Optional[Dataset] = None, file_path: Optional[str] = None) -> None:
+        """
+        Update About This File dialog with new dataset/file path.
+        
+        Args:
+            current_dataset: Optional current DICOM dataset
+            file_path: Optional path to the DICOM file
+        """
+        if self.about_this_file_dialog is not None and self.about_this_file_dialog.isVisible():
+            self.about_this_file_dialog.update_file_info(current_dataset, file_path)
 

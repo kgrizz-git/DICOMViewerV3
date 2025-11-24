@@ -1462,6 +1462,9 @@ class DICOMViewerApp(QObject):
         # Privacy view toggle (shared)
         self.main_window.privacy_view_toggled.connect(self._on_privacy_view_toggled)
         
+        # About this File (shared)
+        self.main_window.about_this_file_requested.connect(self._open_about_this_file)
+        
         # Connect signals for all subwindows
         self._connect_subwindow_signals()
         
@@ -1472,7 +1475,7 @@ class DICOMViewerApp(QObject):
         """Handle focused subwindow change."""
         subwindows = self.multi_window_layout.get_all_subwindows()
         focused_idx = subwindows.index(subwindow) if subwindow in subwindows else -1
-        print(f"[DEBUG-OVERLAY] ===== FOCUS CHANGED to subwindow {focused_idx} =====")
+        # print(f"[DEBUG-OVERLAY] ===== FOCUS CHANGED to subwindow {focused_idx} =====")
         # Disconnect signals from previous focused subwindow
         self._disconnect_focused_subwindow_signals()
         
@@ -1484,8 +1487,8 @@ class DICOMViewerApp(QObject):
             managers = self.subwindow_managers[focused_idx]
             roi_manager = managers.get('roi_manager')
             roi_coordinator = managers.get('roi_coordinator')
-            print(f"[DEBUG-OVERLAY] Focus changed: Using roi_manager={id(roi_manager)}, "
-                  f"roi_coordinator={id(roi_coordinator)}, scene={id(self.image_viewer.scene) if self.image_viewer else None}")
+            # print(f"[DEBUG-OVERLAY] Focus changed: Using roi_manager={id(roi_manager)}, "
+            #       f"roi_coordinator={id(roi_coordinator)}, scene={id(self.image_viewer.scene) if self.image_viewer else None}")
         
         # Connect signals for new focused subwindow
         self._connect_focused_subwindow_signals()
@@ -1516,21 +1519,25 @@ class DICOMViewerApp(QObject):
                         roi_belongs = True
                         break
                 
-                print(f"[DEBUG-OVERLAY] Focus changed: Selected ROI is {id(selected_roi)}")
-                print(f"[DEBUG-OVERLAY]   Selected ROI belongs to manager: {roi_belongs}")
+                # print(f"[DEBUG-OVERLAY] Focus changed: Selected ROI is {id(selected_roi)}")
+                # print(f"[DEBUG-OVERLAY]   Selected ROI belongs to manager: {roi_belongs}")
                 
                 if not roi_belongs:
                     # Clear the selection - it belongs to a different manager
-                    print(f"[DEBUG-OVERLAY] Clearing selected ROI {id(selected_roi)} - doesn't belong to manager {id(self.roi_manager)}")
+                    # print(f"[DEBUG-OVERLAY] Clearing selected ROI {id(selected_roi)} - doesn't belong to manager {id(self.roi_manager)}")
                     self.roi_manager.select_roi(None)
             else:
-                print(f"[DEBUG-OVERLAY] Focus changed: No ROI selected")
+                # print(f"[DEBUG-OVERLAY] Focus changed: No ROI selected")
+                pass
         
         # Update right panel
         self._update_right_panel_for_focused_subwindow()
         
         # Update series navigator highlighting
         self._update_series_navigator_highlighting()
+        
+        # Update About This File dialog if open
+        self._update_about_this_file_dialog()
     
     def _update_series_navigator_highlighting(self) -> None:
         """Update series navigator highlighting based on focused subwindow's series."""
@@ -1726,6 +1733,7 @@ class DICOMViewerApp(QObject):
                 
                 # Connect privacy view toggle from context menu
                 image_viewer.privacy_view_toggled.connect(self._on_privacy_view_toggled)
+                image_viewer.about_this_file_requested.connect(self._open_about_this_file)
                 
                 # Connect assign series request
                 subwindow.assign_series_requested.connect(self._on_assign_series_requested)
@@ -2690,9 +2698,9 @@ class DICOMViewerApp(QObject):
         Args:
             dataset: pydicom Dataset for the current slice
         """
-        print(f"[DEBUG-ROI-STATS] _display_rois_for_slice: roi_manager={id(self.roi_manager)}, "
-              f"roi_coordinator={id(self.roi_coordinator)}, scene={id(self.image_viewer.scene) if self.image_viewer.scene else None}, "
-              f"projection_enabled={self.slice_display_manager.projection_enabled if hasattr(self, 'slice_display_manager') else 'unknown'}")
+        # print(f"[DEBUG-ROI-STATS] _display_rois_for_slice: roi_manager={id(self.roi_manager)}, "
+        #       f"roi_coordinator={id(self.roi_coordinator)}, scene={id(self.image_viewer.scene) if self.image_viewer.scene else None}, "
+        #       f"projection_enabled={self.slice_display_manager.projection_enabled if hasattr(self, 'slice_display_manager') else 'unknown'}")
         self.slice_display_manager.display_rois_for_slice(dataset)
         # Check if there's a selected ROI for this slice and restore UI state
         study_uid = getattr(dataset, 'StudyInstanceUID', '')
@@ -2701,19 +2709,19 @@ class DICOMViewerApp(QObject):
         instance_identifier = self.current_slice_index
         rois = self.roi_manager.get_rois_for_slice(study_uid, series_uid, instance_identifier)
         selected_roi = self.roi_manager.get_selected_roi()
-        print(f"[DEBUG-ROI-STATS] _display_rois_for_slice: Found {len(rois)} ROIs for slice, selected_roi={id(selected_roi) if selected_roi else None}")
+        # print(f"[DEBUG-ROI-STATS] _display_rois_for_slice: Found {len(rois)} ROIs for slice, selected_roi={id(selected_roi) if selected_roi else None}")
         if selected_roi is not None:
             selected_in_slice = selected_roi in rois
-            print(f"[DEBUG-ROI-STATS] _display_rois_for_slice: Selected ROI in current slice: {selected_in_slice}")
+            # print(f"[DEBUG-ROI-STATS] _display_rois_for_slice: Selected ROI in current slice: {selected_in_slice}")
             if selected_in_slice:
                 self.roi_list_panel.select_roi_in_list(selected_roi)
-                print(f"[DEBUG-ROI-STATS] _display_rois_for_slice: Calling update_roi_statistics for selected ROI")
+                # print(f"[DEBUG-ROI-STATS] _display_rois_for_slice: Calling update_roi_statistics for selected ROI")
                 self.roi_coordinator.update_roi_statistics(selected_roi)
             else:
-                print(f"[DEBUG-ROI-STATS] _display_rois_for_slice: Selected ROI not in current slice, clearing statistics")
+                # print(f"[DEBUG-ROI-STATS] _display_rois_for_slice: Selected ROI not in current slice, clearing statistics")
                 self.roi_statistics_panel.clear_statistics()
         else:
-            print(f"[DEBUG-ROI-STATS] _display_rois_for_slice: No selected ROI, clearing statistics")
+            # print(f"[DEBUG-ROI-STATS] _display_rois_for_slice: No selected ROI, clearing statistics")
             self.roi_statistics_panel.clear_statistics()
     
     def _display_measurements_for_slice(self, dataset) -> None:
@@ -2867,6 +2875,96 @@ class DICOMViewerApp(QObject):
     def _open_overlay_settings(self) -> None:
         """Handle Overlay Settings dialog request."""
         self.dialog_coordinator.open_overlay_settings()
+    
+    def _open_about_this_file(self) -> None:
+        """Handle About This File dialog request."""
+        # Get current dataset and file path from focused subwindow
+        focused_idx = self.focused_subwindow_index
+        current_dataset = None
+        file_path = None
+        
+        if focused_idx in self.subwindow_data:
+            current_dataset = self.subwindow_data[focused_idx].get('current_dataset')
+            if current_dataset:
+                file_path = self._get_file_path_for_dataset(
+                    current_dataset,
+                    self.subwindow_data[focused_idx].get('current_study_uid', ''),
+                    self.subwindow_data[focused_idx].get('current_series_uid', ''),
+                    self.subwindow_data[focused_idx].get('current_slice_index', 0)
+                )
+        
+        self.dialog_coordinator.open_about_this_file(current_dataset, file_path)
+    
+    def _get_file_path_for_dataset(self, dataset, study_uid: str, series_uid: str, slice_index: int) -> Optional[str]:
+        """
+        Get file path for a dataset.
+        
+        Args:
+            dataset: DICOM dataset
+            study_uid: Study Instance UID
+            series_uid: Series UID (composite key)
+            slice_index: Slice index
+            
+        Returns:
+            File path if found, None otherwise
+        """
+        if not dataset or not study_uid or not series_uid:
+            return None
+        
+        # First, check if dataset has filename attribute (pydicom sometimes stores this)
+        if hasattr(dataset, 'filename') and dataset.filename:
+            return dataset.filename
+        
+        # Try to get instance number from dataset
+        instance_num = None
+        if hasattr(dataset, 'InstanceNumber'):
+            try:
+                instance_num = int(getattr(dataset, 'InstanceNumber'))
+            except (ValueError, TypeError):
+                pass
+        
+        # If we have instance_num, try that first
+        if instance_num is not None:
+            key = (study_uid, series_uid, instance_num)
+            if key in self.dicom_organizer.file_paths:
+                return self.dicom_organizer.file_paths[key]
+        
+        # Try with slice_index as instance_num
+        key = (study_uid, series_uid, slice_index)
+        if key in self.dicom_organizer.file_paths:
+            return self.dicom_organizer.file_paths[key]
+        
+        # If still not found, try to find by iterating through file_paths
+        # This handles cases where instance_num calculation doesn't match
+        for (s_uid, ser_uid, inst_num), path in self.dicom_organizer.file_paths.items():
+            if s_uid == study_uid and ser_uid == series_uid:
+                # Check if this might be the right file by comparing dataset
+                # We'll use the first match for this series, or try to match by instance
+                if instance_num is not None and inst_num == instance_num:
+                    return path
+                # If no instance match, return first file in series (better than nothing)
+                if instance_num is None:
+                    return path
+        
+        return None
+    
+    def _update_about_this_file_dialog(self) -> None:
+        """Update About This File dialog with current dataset and file path."""
+        focused_idx = self.focused_subwindow_index
+        current_dataset = None
+        file_path = None
+        
+        if focused_idx in self.subwindow_data:
+            current_dataset = self.subwindow_data[focused_idx].get('current_dataset')
+            if current_dataset:
+                file_path = self._get_file_path_for_dataset(
+                    current_dataset,
+                    self.subwindow_data[focused_idx].get('current_study_uid', ''),
+                    self.subwindow_data[focused_idx].get('current_series_uid', ''),
+                    self.subwindow_data[focused_idx].get('current_slice_index', 0)
+                )
+        
+        self.dialog_coordinator.update_about_this_file(current_dataset, file_path)
     
     def _on_privacy_view_toggled(self, enabled: bool) -> None:
         """
@@ -3522,6 +3620,9 @@ class DICOMViewerApp(QObject):
                 series_uid,
                 slice_index
             )
+            
+            # Update About This File dialog if open
+            self._update_about_this_file_dialog()
             
             # Update frame slider position
             total_slices = len(series_datasets)

@@ -495,12 +495,12 @@ class ROIManager:
                     # print(f"[DEBUG-DESELECT]   Selected items in ROI's scene after clear: {len(selected_after)}")
         
         # Select new ROI
-        print(f"[DEBUG-OVERLAY] select_roi: roi_manager={id(self)}, selecting ROI {id(roi) if roi else None}")
+        # print(f"[DEBUG-OVERLAY] select_roi: roi_manager={id(self)}, selecting ROI {id(roi) if roi else None}")
         self.selected_roi = roi
         if roi is not None:
             roi.item.setSelected(True)
             roi_scene = roi.item.scene() if roi.item else None
-            print(f"[DEBUG-OVERLAY]   Selected ROI's item is in scene: {id(roi_scene) if roi_scene else None}")
+            # print(f"[DEBUG-OVERLAY]   Selected ROI's item is in scene: {id(roi_scene) if roi_scene else None}")
         else:
             # print(f"[DEBUG-DESELECT] select_roi: No ROI selected (deselected)")
             pass
@@ -834,15 +834,15 @@ class ROIManager:
         text_item = roi.statistics_overlay_item
         if text_item is None:
             text_item = DraggableStatisticsOverlay(roi, update_offset)
-            print(f"[DEBUG-OVERLAY] create_statistics_overlay: Created NEW overlay for ROI {id(roi)} in scene {id(scene)}")
+            # print(f"[DEBUG-OVERLAY] create_statistics_overlay: Created NEW overlay for ROI {id(roi)} in scene {id(scene)}")
         else:
             # Reuse existing overlay item, but ensure it's removed from any other scene first
             # This prevents overlays from appearing in multiple subwindows
             old_scene = text_item.scene()
-            print(f"[DEBUG-OVERLAY] create_statistics_overlay: REUSING overlay for ROI {id(roi)}, "
-                  f"old_scene={id(old_scene) if old_scene else None}, new_scene={id(scene)}")
+            # print(f"[DEBUG-OVERLAY] create_statistics_overlay: REUSING overlay for ROI {id(roi)}, "
+            #       f"old_scene={id(old_scene) if old_scene else None}, new_scene={id(scene)}")
             if old_scene is not None and old_scene != scene:
-                print(f"[DEBUG-OVERLAY]   WARNING: Overlay is in different scene! Removing from old scene {id(old_scene)}")
+                # print(f"[DEBUG-OVERLAY]   WARNING: Overlay is in different scene! Removing from old scene {id(old_scene)}")
                 old_scene.removeItem(text_item)
             text_item.roi = roi
             text_item.offset_update_callback = update_offset
@@ -909,20 +909,21 @@ class ROIManager:
             # This prevents overlays from appearing in multiple subwindows
             current_scene = text_item.scene()
             if current_scene is not None and current_scene != scene:
-                print(f"[DEBUG-OVERLAY]   Removing overlay from scene {id(current_scene)} before adding to scene {id(scene)}")
+                # print(f"[DEBUG-OVERLAY]   Removing overlay from scene {id(current_scene)} before adding to scene {id(scene)}")
                 current_scene.removeItem(text_item)
             # Now safe to add to new scene
             if text_item.scene() != scene:
-                print(f"[DEBUG-OVERLAY]   Adding overlay to scene {id(scene)}")
+                # print(f"[DEBUG-OVERLAY]   Adding overlay to scene {id(scene)}")
                 scene.addItem(text_item)
             else:
-                print(f"[DEBUG-OVERLAY]   Overlay already in scene {id(scene)}")
+                # print(f"[DEBUG-OVERLAY]   Overlay already in scene {id(scene)}")
+                pass
             text_item.show()
         else:
             text_item.hide()
         
         roi.statistics_overlay_item = text_item
-        print(f"[DEBUG-OVERLAY]   Final state: overlay.scene()={id(text_item.scene()) if text_item.scene() else None}")
+        # print(f"[DEBUG-OVERLAY]   Final state: overlay.scene()={id(text_item.scene()) if text_item.scene() else None}")
     
     def update_statistics_overlay(self, roi: ROIItem, statistics: Dict[str, float],
                                  scene, font_size: int = 6, font_color: Tuple[int, int, int] = (255, 255, 0),
@@ -1047,7 +1048,7 @@ class ROIManager:
         if scene is None:
             return
         
-        print(f"[DEBUG-OVERLAY] remove_all_statistics_overlays_from_scene: scene={id(scene)}, roi_manager={id(self)}")
+        # print(f"[DEBUG-OVERLAY] remove_all_statistics_overlays_from_scene: scene={id(scene)}, roi_manager={id(self)}")
         
         # First, clear references in our own ROIs to prevent dangling references
         cleared_count = 0
@@ -1066,9 +1067,10 @@ class ROIManager:
                             overlay_item.mark_deleted()
                         cleared_count += 1
                     else:
-                        print(f"  Keeping reference for ROI {id(roi)} overlay (overlay in different scene {id(overlay_scene)})")
+                        # print(f"  Keeping reference for ROI {id(roi)} overlay (overlay in different scene {id(overlay_scene)})")
+                        pass
                     roi.statistics_overlay_item = None
-        print(f"  Cleared {cleared_count} overlay references from ROIs in this manager")
+        # print(f"  Cleared {cleared_count} overlay references from ROIs in this manager")
         
         # Remove ALL statistics overlay items from the scene, regardless of which manager's ROIs they belong to
         # This is critical to prevent overlays from one subwindow appearing in another
@@ -1081,7 +1083,7 @@ class ROIManager:
                     item.flags() & QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations):
                     items_to_remove.append(item)
         
-        print(f"  Found {len(items_to_remove)} statistics overlay items in scene to remove")
+        # print(f"  Found {len(items_to_remove)} statistics overlay items in scene to remove")
         
         # Remove all statistics overlay items found in the scene
         for item in items_to_remove:
@@ -1097,7 +1099,7 @@ class ROIManager:
             scene.removeItem(item)
 
         scene.update()
-        print(f"[DEBUG-OVERLAY] Finished removing overlays from scene {id(scene)}")
+        # print(f"[DEBUG-OVERLAY] Finished removing overlays from scene {id(scene)}")
     
     def hide_all_statistics_overlays(self, scene, hide: bool) -> None:
         """

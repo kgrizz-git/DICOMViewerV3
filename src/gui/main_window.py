@@ -80,6 +80,7 @@ class MainWindow(QMainWindow):
     open_files_from_paths_requested = Signal(list)  # Emitted when files/folders are dropped (list of paths)
     layout_changed = Signal(str)  # Emitted when layout mode changes ("1x1", "1x2", "2x1", "2x2")
     privacy_view_toggled = Signal(bool)  # Emitted when privacy view is toggled (True = enabled)
+    about_this_file_requested = Signal()  # Emitted when About this File is requested
     # Note: Cine control signals moved to CineControlsWidget
     # Keeping these signals for backward compatibility but they're not used anymore
     
@@ -277,6 +278,13 @@ class MainWindow(QMainWindow):
         tag_export_action.triggered.connect(self.tag_export_requested.emit)
         tools_menu.addAction(tag_export_action)
         
+        # About this File action
+        about_this_file_action = QAction("About this File...", self)
+        about_this_file_action.setMenuRole(QAction.MenuRole.NoRole)  # Prevent macOS from moving to app menu
+        about_this_file_action.setShortcut(QKeySequence("Ctrl+A"))
+        about_this_file_action.triggered.connect(self.about_this_file_requested.emit)
+        tools_menu.addAction(about_this_file_action)
+        
         # Help menu
         help_menu = menubar.addMenu("&Help")
         
@@ -354,10 +362,18 @@ class MainWindow(QMainWindow):
         
         toolbar.addSeparator()
         
-        # Clear Measurements button
-        self.clear_measurements_action = QAction("Clear Measurements", self)
-        self.clear_measurements_action.triggered.connect(self.clear_measurements_requested.emit)
-        toolbar.addAction(self.clear_measurements_action)
+        # Privacy Mode button
+        self.privacy_mode_action = QAction("Privacy is OFF", self)
+        self.privacy_mode_action.setCheckable(True)
+        # Initialize from config - when privacy is OFF, button should be highlighted (checked)
+        privacy_enabled = self.config_manager.get_privacy_view()
+        self.privacy_mode_action.setChecked(not privacy_enabled)  # Checked when privacy is OFF
+        self.privacy_mode_action.triggered.connect(self._on_privacy_mode_button_clicked)
+        toolbar.addAction(self.privacy_mode_action)
+        # Store toolbar reference for styling
+        self.main_toolbar = toolbar
+        # Update button appearance
+        self._update_privacy_mode_button()
         
         toolbar.addSeparator()
         
@@ -1369,6 +1385,47 @@ class MainWindow(QMainWindow):
         self.config_manager.set_privacy_view(checked)
         # Emit signal to notify other components
         self.privacy_view_toggled.emit(checked)
+        # Update toolbar button appearance
+        self._update_privacy_mode_button()
+    
+    def _on_privacy_mode_button_clicked(self) -> None:
+        """Handle privacy mode button click - toggle privacy mode."""
+        # Get current state from config
+        current_state = self.config_manager.get_privacy_view()
+        # Toggle it
+        new_state = not current_state
+        # Update via the existing handler
+        self._on_privacy_view_toggled(new_state)
+    
+    def _update_privacy_mode_button(self) -> None:
+        """Update privacy mode button text and appearance based on current state."""
+        if not hasattr(self, 'privacy_mode_action'):
+            return
+        
+        privacy_enabled = self.config_manager.get_privacy_view()
+        
+        if privacy_enabled:
+            # Privacy is ON - button should say "Privacy is ON" and not be highlighted
+            self.privacy_mode_action.setText("Privacy is ON")
+            self.privacy_mode_action.setChecked(False)
+            # Remove red highlighting
+            if hasattr(self, 'main_toolbar'):
+                widgets = self.main_toolbar.findChildren(QWidget)
+                for widget in widgets:
+                    if hasattr(widget, 'defaultAction') and widget.defaultAction() == self.privacy_mode_action:
+                        widget.setStyleSheet("")
+                        break
+        else:
+            # Privacy is OFF - button should say "Privacy is OFF" and be highlighted in red
+            self.privacy_mode_action.setText("Privacy is OFF")
+            self.privacy_mode_action.setChecked(True)
+            # Apply red background highlighting
+            if hasattr(self, 'main_toolbar'):
+                widgets = self.main_toolbar.findChildren(QWidget)
+                for widget in widgets:
+                    if hasattr(widget, 'defaultAction') and widget.defaultAction() == self.privacy_mode_action:
+                        widget.setStyleSheet("background-color: #ff0000; font-weight: bold;")
+                        break
     
     def _show_disclaimer(self) -> None:
         """Show the disclaimer dialog."""

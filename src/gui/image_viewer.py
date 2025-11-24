@@ -78,6 +78,7 @@ class ImageViewer(QGraphicsView):
     toggle_overlay_requested = Signal()  # Emitted when toggle overlay is requested
     privacy_view_toggled = Signal(bool)  # Emitted when privacy view is toggled from context menu (True = enabled)
     annotation_options_requested = Signal()  # Emitted when annotation options dialog is requested
+    about_this_file_requested = Signal()  # Emitted when About this File is requested from context menu
     assign_series_requested = Signal(str)  # Emitted when series assignment is requested (series_uid)
     pixel_info_changed = Signal(str, int, int, int)  # Emitted when pixel info changes (pixel_value_str, x, y, z)
     files_dropped = Signal(list)  # Emitted when files/folders are dropped (list of paths)
@@ -1558,6 +1559,12 @@ class ImageViewer(QGraphicsView):
                         use_rescaled_action.triggered.connect(
                             lambda: self.context_menu_rescale_toggle_changed.emit(True)
                         )
+                        
+                        context_menu.addSeparator()
+                        
+                        # About this File action (at the bottom)
+                        about_this_file_action = context_menu.addAction("About this File...")
+                        about_this_file_action.triggered.connect(self.about_this_file_requested.emit)
                         
                         context_menu.exec(event.globalPosition().toPoint())
             
