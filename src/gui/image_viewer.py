@@ -823,12 +823,22 @@ class ImageViewer(QGraphicsView):
                 item = self.scene.itemAt(scene_pos, self.transform())
                 
                 # Check if clicking on empty space (image item or None)
-                # Also exclude ROI items, measurement items, handles, and text
                 from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsEllipseItem
                 from tools.measurement_tool import MeasurementItem, MeasurementHandle, DraggableMeasurementText
                 
                 is_empty_space = (item is None or item == self.image_item)
-                is_roi_item = isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem)) and item != self.image_item
+                
+                # Check if item is an ROI - use ROI manager callback for accurate detection
+                is_roi_item = False
+                if item is not None and hasattr(self, 'get_roi_from_item_callback') and self.get_roi_from_item_callback:
+                    roi = self.get_roi_from_item_callback(item)
+                    if roi is not None:
+                        is_roi_item = True
+                
+                # Fallback: check by type if callback not available
+                if not is_roi_item:
+                    is_roi_item = isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem)) and item != self.image_item
+                
                 is_measurement_item = isinstance(item, MeasurementItem)
                 is_handle = isinstance(item, MeasurementHandle)
                 is_measurement_text = isinstance(item, DraggableMeasurementText)
@@ -844,11 +854,32 @@ class ImageViewer(QGraphicsView):
                         parent = parent.parentItem()
                 
                 if is_empty_space and not (is_roi_item or is_measurement_item or is_handle or is_measurement_text or is_measurement_child):
-                    # Clicking on empty space - clear all selections
+                    # Clicking on empty space - deselect everything
+                    print(f"[DEBUG-DESELECT] Empty space click detected in Select mode")
+                    print(f"[DEBUG-DESELECT]   is_empty_space: {is_empty_space}, is_roi_item: {is_roi_item}, is_measurement_item: {is_measurement_item}")
+                    
                     if self.scene is not None:
+                        # First, explicitly deselect all measurements and their text labels
+                        for scene_item in self.scene.items():
+                            if isinstance(scene_item, (MeasurementItem, DraggableMeasurementText)):
+                                scene_item.setSelected(False)
+                        
+                        # Clear scene selection (this will visually deselect ROIs)
+                        selected_before = [item for item in self.scene.selectedItems()]
+                        print(f"[DEBUG-DESELECT]   Selected items in scene before clear: {len(selected_before)}")
+                        for item in selected_before:
+                            print(f"[DEBUG-DESELECT]     Item: {type(item).__name__}, isSelected: {item.isSelected()}")
                         self.scene.clearSelection()
-                    # Emit signal to clear ROI selection
+                        selected_after = [item for item in self.scene.selectedItems()]
+                        print(f"[DEBUG-DESELECT]   Selected items in scene after clear: {len(selected_after)}")
+                    
+                    # Emit signal to clear ROI selection - this is critical for proper ROI deselection
+                    # This must happen BEFORE calling super() to prevent Qt's default behavior from interfering
+                    print(f"[DEBUG-DESELECT]   Emitting image_clicked_no_roi signal")
                     self.image_clicked_no_roi.emit()
+                    
+                    # Accept the event to prevent further processing
+                    event.accept()
                     return
                 
                 # Let Qt handle selection of ROIs and measurements

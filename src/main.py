@@ -1419,12 +1419,22 @@ class DICOMViewerApp(QObject):
     
     def _on_focused_subwindow_changed(self, subwindow: SubWindowContainer) -> None:
         """Handle focused subwindow change."""
-        # print(f"[DEBUG-FOCUS] DICOMViewerApp._on_focused_subwindow_changed: Called with subwindow={subwindow}")
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        focused_idx = subwindows.index(subwindow) if subwindow in subwindows else -1
+        print(f"[DEBUG-OVERLAY] ===== FOCUS CHANGED to subwindow {focused_idx} =====")
         # Disconnect signals from previous focused subwindow
         self._disconnect_focused_subwindow_signals()
         
         # Update references
         self._update_focused_subwindow_references()
+        
+        # Log which managers we're now using
+        if focused_idx >= 0 and focused_idx in self.subwindow_managers:
+            managers = self.subwindow_managers[focused_idx]
+            roi_manager = managers.get('roi_manager')
+            roi_coordinator = managers.get('roi_coordinator')
+            print(f"[DEBUG-OVERLAY] Focus changed: Using roi_manager={id(roi_manager)}, "
+                  f"roi_coordinator={id(roi_coordinator)}, scene={id(self.image_viewer.scene) if self.image_viewer else None}")
         
         # Connect signals for new focused subwindow
         self._connect_focused_subwindow_signals()
@@ -1443,6 +1453,27 @@ class DICOMViewerApp(QObject):
                 # Use current_slice_index as instance identifier (same as display_rois_for_slice)
                 instance_identifier = self.current_slice_index
                 self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
+        
+        # Clear selected ROI if it doesn't belong to the new manager
+        if self.roi_manager:
+            selected_roi = self.roi_manager.get_selected_roi()
+            if selected_roi:
+                # Verify the selected ROI belongs to this manager
+                roi_belongs = False
+                for roi_list in self.roi_manager.rois.values():
+                    if selected_roi in roi_list:
+                        roi_belongs = True
+                        break
+                
+                print(f"[DEBUG-OVERLAY] Focus changed: Selected ROI is {id(selected_roi)}")
+                print(f"[DEBUG-OVERLAY]   Selected ROI belongs to manager: {roi_belongs}")
+                
+                if not roi_belongs:
+                    # Clear the selection - it belongs to a different manager
+                    print(f"[DEBUG-OVERLAY] Clearing selected ROI {id(selected_roi)} - doesn't belong to manager {id(self.roi_manager)}")
+                    self.roi_manager.select_roi(None)
+            else:
+                print(f"[DEBUG-OVERLAY] Focus changed: No ROI selected")
         
         # Update right panel
         self._update_right_panel_for_focused_subwindow()
@@ -2604,6 +2635,8 @@ class DICOMViewerApp(QObject):
         Args:
             dataset: pydicom Dataset for the current slice
         """
+        print(f"[DEBUG-OVERLAY] _display_rois_for_slice: roi_manager={id(self.roi_manager)}, "
+              f"roi_coordinator={id(self.roi_coordinator)}, scene={id(self.image_viewer.scene) if self.image_viewer.scene else None}")
         self.slice_display_manager.display_rois_for_slice(dataset)
         # Check if there's a selected ROI for this slice and restore UI state
         study_uid = getattr(dataset, 'StudyInstanceUID', '')
@@ -2612,9 +2645,16 @@ class DICOMViewerApp(QObject):
         instance_identifier = self.current_slice_index
         rois = self.roi_manager.get_rois_for_slice(study_uid, series_uid, instance_identifier)
         selected_roi = self.roi_manager.get_selected_roi()
-        if selected_roi is not None and selected_roi in rois:
-            self.roi_list_panel.select_roi_in_list(selected_roi)
-            self.roi_coordinator.update_roi_statistics(selected_roi)
+        print(f"[DEBUG-OVERLAY]   Found {len(rois)} ROIs for slice, selected_roi={id(selected_roi) if selected_roi else None}")
+        if selected_roi is not None:
+            selected_in_slice = selected_roi in rois
+            print(f"[DEBUG-OVERLAY]   Selected ROI in current slice: {selected_in_slice}")
+            if selected_in_slice:
+                self.roi_list_panel.select_roi_in_list(selected_roi)
+                self.roi_coordinator.update_roi_statistics(selected_roi)
+            else:
+                print(f"[DEBUG-OVERLAY]   Selected ROI not in current slice, clearing statistics")
+                self.roi_statistics_panel.clear_statistics()
         else:
             self.roi_statistics_panel.clear_statistics()
     

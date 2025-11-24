@@ -340,15 +340,33 @@ class ROICoordinator:
     
     def handle_image_clicked_no_roi(self) -> None:
         """Handle image click when not on an ROI - deselect current ROI."""
+        print(f"[DEBUG-DESELECT] handle_image_clicked_no_roi: Called")
+        print(f"[DEBUG-DESELECT]   Current selected ROI: {id(self.roi_manager.get_selected_roi()) if self.roi_manager.get_selected_roi() else None}")
+        print(f"[DEBUG-DESELECT]   Scene: {id(self.image_viewer.scene) if self.image_viewer.scene else None}")
+        
         # Deselect ROI
         self.roi_manager.select_roi(None)
+        
         # Clear scene selection to prevent Qt's default mouse release behavior from re-selecting the ROI
         if self.image_viewer.scene is not None:
+            selected_items = [item for item in self.image_viewer.scene.selectedItems()]
+            print(f"[DEBUG-DESELECT]   Selected items in scene before clear: {len(selected_items)}")
+            for item in selected_items:
+                print(f"[DEBUG-DESELECT]     Item: {type(item).__name__}, isSelected: {item.isSelected()}")
             self.image_viewer.scene.clearSelection()
+            selected_items_after = [item for item in self.image_viewer.scene.selectedItems()]
+            print(f"[DEBUG-DESELECT]   Selected items in scene after clear: {len(selected_items_after)}")
+        
         # Clear ROI list selection
+        current_list_item = self.roi_list_panel.roi_list.currentItem()
+        print(f"[DEBUG-DESELECT]   ROI list current item before clear: {current_list_item.text() if current_list_item else None}")
         self.roi_list_panel.select_roi_in_list(None)
+        current_list_item_after = self.roi_list_panel.roi_list.currentItem()
+        print(f"[DEBUG-DESELECT]   ROI list current item after clear: {current_list_item_after.text() if current_list_item_after else None}")
+        
         # Clear ROI statistics panel
         self.roi_statistics_panel.clear_statistics()
+        print(f"[DEBUG-DESELECT]   Finished handle_image_clicked_no_roi")
     
     def handle_roi_selected(self, roi) -> None:
         """
@@ -357,6 +375,18 @@ class ROICoordinator:
         Args:
             roi: Selected ROI item
         """
+        # Validate ROI belongs to this manager
+        if roi is not None:
+            roi_belongs = False
+            for roi_list in self.roi_manager.rois.values():
+                if roi in roi_list:
+                    roi_belongs = True
+                    break
+            
+            if not roi_belongs:
+                print(f"[DEBUG-OVERLAY] handle_roi_selected: ROI {id(roi)} doesn't belong to manager {id(self.roi_manager)}, ignoring")
+                return
+        
         self.update_roi_statistics(roi)
     
     def handle_roi_delete_requested(self, item) -> None:
@@ -461,6 +491,22 @@ class ROICoordinator:
         if current_dataset is None:
             return
         
+        print(f"[DEBUG-OVERLAY] update_roi_statistics: Called for ROI {id(roi)}, "
+              f"roi_manager={id(self.roi_manager)}, scene={id(self.image_viewer.scene) if self.image_viewer.scene else None}")
+        
+        # Check if ROI belongs to this manager
+        roi_belongs_to_manager = False
+        for roi_list in self.roi_manager.rois.values():
+            if roi in roi_list:
+                roi_belongs_to_manager = True
+                break
+        
+        if not roi_belongs_to_manager:
+            print(f"[DEBUG-OVERLAY]   WARNING: ROI {id(roi)} does NOT belong to manager {id(self.roi_manager)}!")
+            import traceback
+            traceback.print_stack()
+            return
+        
         try:
             # Extract DICOM identifiers
             study_uid = getattr(current_dataset, 'StudyInstanceUID', '')
@@ -471,6 +517,10 @@ class ROICoordinator:
             # Get ROI identifier (e.g., "ROI 1 (rectangle)")
             roi_identifier = None
             rois = self.roi_manager.get_rois_for_slice(study_uid, series_uid, instance_identifier)
+            roi_in_current_slice = roi in rois
+            print(f"[DEBUG-OVERLAY]   ROI {id(roi)} in current slice: {roi_in_current_slice}, "
+                  f"slice={instance_identifier}, total ROIs in slice={len(rois)}")
+            
             for i, r in enumerate(rois):
                 if r == roi:
                     roi_identifier = f"ROI {i+1} ({roi.shape_type})"
@@ -576,6 +626,15 @@ class ROICoordinator:
         # Get all ROIs for current slice
         rois = self.roi_manager.get_rois_for_slice(study_uid, series_uid, instance_identifier)
         
+        # DEBUG: Log which ROIs we're processing and which scene
+        print(f"[DEBUG-OVERLAY] update_roi_statistics_overlays: scene={id(self.image_viewer.scene)}, "
+              f"roi_manager={id(self.roi_manager)}, found {len(rois)} ROIs for slice {instance_identifier}")
+        for i, roi in enumerate(rois):
+            roi_scene = roi.item.scene() if roi.item else None
+            overlay_scene = roi.statistics_overlay_item.scene() if roi.statistics_overlay_item else None
+            print(f"  ROI {i}: id={id(roi)}, roi.item.scene()={id(roi_scene)}, "
+                  f"overlay.scene()={id(overlay_scene) if overlay_scene else None}")
+        
         # Get pixel array (projection if enabled, otherwise original)
         pixel_array = self._get_pixel_array_for_statistics()
         if pixel_array is None:
@@ -588,6 +647,7 @@ class ROICoordinator:
         
         # Remove all statistics overlays from scene before creating new ones
         # This ensures orphaned overlays from previous slices are removed
+        print(f"[DEBUG-OVERLAY] Removing all overlays from scene {id(self.image_viewer.scene)}")
         self.roi_manager.remove_all_statistics_overlays_from_scene(self.image_viewer.scene)
         
         # Font size and color will be retrieved from config in create_statistics_overlay
@@ -608,6 +668,7 @@ class ROICoordinator:
             )
             
             if stats and roi.statistics_overlay_visible:
+                print(f"[DEBUG-OVERLAY] Creating overlay for ROI {id(roi)} in scene {id(self.image_viewer.scene)}")
                 self.roi_manager.create_statistics_overlay(
                     roi,
                     stats,

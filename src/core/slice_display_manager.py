@@ -974,7 +974,8 @@ class SliceDisplayManager:
         
         # Get all ROIs for this slice using composite key
         rois = self.roi_manager.get_rois_for_slice(study_uid, series_uid, instance_identifier)
-        # print(f"[ROI DEBUG] Found {len(rois)} ROIs for slice {instance_identifier}")
+        print(f"[DEBUG-OVERLAY] display_rois_for_slice: scene={id(self.image_viewer.scene)}, "
+              f"roi_manager={id(self.roi_manager)}, found {len(rois)} ROIs for slice {instance_identifier}")
         
         # Remove ROIs from other slices from the scene
         # (but keep them in the manager's storage)
@@ -1004,13 +1005,16 @@ class SliceDisplayManager:
         
         # Add ROIs for current slice to scene if not already there
         # Force refresh to ensure visibility after image changes
-        for roi in rois:
-            if roi.item.scene() == self.image_viewer.scene:
+        for i, roi in enumerate(rois):
+            roi_scene = roi.item.scene() if roi.item else None
+            if roi_scene == self.image_viewer.scene:
                 # Already in scene, but ensure it's visible and has correct Z-value
                 roi.item.setZValue(100)  # Above image but below overlay
                 roi.item.show()  # Ensure visible
+                print(f"  ROI {i} already in scene {id(self.image_viewer.scene)}")
             else:
                 # Not in scene, add it
+                print(f"  ROI {i} not in scene, adding to scene {id(self.image_viewer.scene)} (was in {id(roi_scene)})")
                 self.image_viewer.scene.addItem(roi.item)
                 # Ensure ROI is visible (set appropriate Z-value)
                 roi.item.setZValue(100)  # Above image but below overlay
@@ -1021,6 +1025,7 @@ class SliceDisplayManager:
         
         # Update ROI statistics overlays
         if self.update_roi_statistics_overlays_callback is not None:
+            print(f"[DEBUG-OVERLAY] display_rois_for_slice: Calling update_roi_statistics_overlays_callback")
             self.update_roi_statistics_overlays_callback()
         
         # Check selected ROI and update/clear statistics
