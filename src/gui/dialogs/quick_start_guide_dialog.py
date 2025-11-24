@@ -502,6 +502,14 @@ class QuickStartGuideDialog(QDialog):
             </li>
             <li><strong>Metadata Panel (Left Side):</strong> Quick access to DICOM tags without opening the full tag viewer
                 <ul>
+                    <li><strong>Edit Tags:</strong> Double-click on a tag's value column to edit it, or right-click on a tag item and select "Edit Tag"</li>
+                    <li><strong>Edited Tag Indication:</strong> Tags that have been edited are indicated with:
+                        <ul>
+                            <li>An asterisk (*) appended to the tag name</li>
+                            <li>Dark purple highlighting on the entire row</li>
+                        </ul>
+                    </li>
+                    <li><strong>Undo/Redo:</strong> Use the Edit menu or right-click context menu to undo/redo tag edits</li>
                     <li><strong>Expand/Collapse Groups:</strong> Double-click on group headers (e.g., "Group 0008") to expand or collapse tag groups</li>
                     <li><strong>Context Menu:</strong> Right-click on a group header or tag item → "Expand" or "Collapse" to toggle group visibility</li>
                     <li><strong>Reorder Columns:</strong> Drag column headers horizontally to reorder columns (Tag, Name, VR, Value)</li>
