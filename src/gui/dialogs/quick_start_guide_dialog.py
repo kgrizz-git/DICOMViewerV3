@@ -19,7 +19,7 @@ Requirements:
     - PySide6 for dialog components
 """
 
-from PySide6.QtWidgets import (QDialog, QVBoxLayout, QTextEdit, QDialogButtonBox)
+from PySide6.QtWidgets import (QDialog, QVBoxLayout, QTextBrowser, QDialogButtonBox, QLineEdit, QLabel, QHBoxLayout, QPushButton)
 from PySide6.QtCore import Qt
 from typing import Optional
 
@@ -72,13 +72,45 @@ class QuickStartGuideDialog(QDialog):
             # Light theme - use default or white
             self.setStyleSheet("QDialog { background-color: #ffffff; }")
         
-        # Text edit for guide content
-        self.text_edit = QTextEdit()
+        # Search bar with Prev/Next buttons
+        search_layout = QHBoxLayout()
+        search_label = QLabel("Search:")
+        self.search_edit = QLineEdit()
+        self.search_edit.setPlaceholderText("Search in guide...")
+        self.search_edit.textChanged.connect(self._on_search_text_changed)
+        # Prevent Enter key from closing dialog (it triggers default button)
+        self.search_edit.returnPressed.connect(lambda: None)  # Do nothing on Enter
+        
+        # Prev/Next buttons
+        self.prev_button = QPushButton("◀ Prev")
+        self.prev_button.setEnabled(False)
+        self.prev_button.clicked.connect(self._on_prev_match)
+        
+        self.next_button = QPushButton("Next ▶")
+        self.next_button.setEnabled(False)
+        self.next_button.clicked.connect(self._on_next_match)
+        
+        search_layout.addWidget(search_label)
+        search_layout.addWidget(self.search_edit)
+        search_layout.addWidget(self.prev_button)
+        search_layout.addWidget(self.next_button)
+        layout.addLayout(search_layout)
+        
+        # Text edit for guide content - use QTextBrowser for anchor link support
+        self.text_edit = QTextBrowser()
+        self.text_edit.setOpenExternalLinks(False)  # Don't open external links in browser
         self.text_edit.setReadOnly(True)
-        # Set QTextEdit background to match metadata panel in dark theme
+        # Set QTextBrowser background to match metadata panel in dark theme
         if theme == "dark":
-            self.text_edit.setStyleSheet("QTextEdit { background-color: #1e1e1e; }")
-        self.text_edit.setHtml(self._get_guide_content())
+            self.text_edit.setStyleSheet("QTextBrowser { background-color: #1e1e1e; }")
+        
+        # Store full content and set initial content
+        self._full_content = self._get_guide_content()
+        self.text_edit.setHtml(self._full_content)
+        
+        # Search navigation state
+        self._search_match_positions = []  # List of cursor positions for matches
+        self._current_match_index = -1  # Current match index (-1 = no match selected)
         layout.addWidget(self.text_edit)
         
         # Close button
@@ -142,7 +174,28 @@ class QuickStartGuideDialog(QDialog):
         <body>
             <h1>DICOM Viewer V3 - Quick Start Guide</h1>
             
-            <h2>Controls Overview</h2>
+            <h2>Table of Contents</h2>
+            <ul>
+                <li><a href="#controls-overview">Controls Overview</a></li>
+                <li><a href="#navigation">Navigation</a></li>
+                <li><a href="#cine-playback">Cine Playback</a></li>
+                <li><a href="#zoom-pan">Zoom and Pan</a></li>
+                <li><a href="#histogram">Histogram Display</a></li>
+                <li><a href="#measurements">Measurements</a></li>
+                <li><a href="#rois">ROIs (Regions of Interest)</a></li>
+                <li><a href="#intensity-projections">Intensity Projections (Combine Slices)</a></li>
+                <li><a href="#image-inversion">Image Inversion</a></li>
+                <li><a href="#window-level">Window/Level Adjustment</a></li>
+                <li><a href="#mouse-modes">Mouse Modes</a></li>
+                <li><a href="#scroll-wheel-modes">Scroll Wheel Modes</a></li>
+                <li><a href="#keyboard-shortcuts">Keyboard Shortcuts</a></li>
+                <li><a href="#customization">Customization</a></li>
+                <li><a href="#additional-tips">Additional Tips</a></li>
+                <li><a href="#exporting">Exporting Images</a></li>
+                <li><a href="#metadata-tags">Metadata and Tags</a></li>
+            </ul>
+            
+            <h2 id="controls-overview">Controls Overview</h2>
             <p>The application provides several ways to interact with DICOM images:</p>
             <ul>
                 <li><strong>Toolbar:</strong> Quick access to common functions (Open, Reset View, etc.)</li>
@@ -151,7 +204,7 @@ class QuickStartGuideDialog(QDialog):
                 <li><strong>Keyboard Shortcuts:</strong> Arrow keys for navigation, Delete key for removing items</li>
             </ul>
             
-            <h2>Navigation</h2>
+            <h2 id="navigation">Navigation</h2>
             <h3>Slice Navigation</h3>
             <ul>
                 <li><strong>Arrow Keys:</strong> <code>↑</code> (Up) for next slice, <code>↓</code> (Down) for previous slice</li>
@@ -164,7 +217,7 @@ class QuickStartGuideDialog(QDialog):
                 <li><strong>Context Menu:</strong> Right-click and select "Prev Series" or "Next Series"</li>
             </ul>
             
-            <h2>Cine Playback</h2>
+            <h2 id="cine-playback">Cine Playback</h2>
             <p>For multi-frame DICOM series, use the cine controls widget to play through frames automatically:</p>
             <ul>
                 <li><strong>Play:</strong> Start automatic playback through all frames</li>
@@ -180,7 +233,7 @@ class QuickStartGuideDialog(QDialog):
             </ul>
             <p><strong>Note:</strong> Cine controls are only available for multi-frame DICOM series. Manual slice navigation pauses playback automatically.</p>
             
-            <h2>Zoom and Pan</h2>
+            <h2 id="zoom-pan">Zoom and Pan</h2>
             <ul>
                 <li><strong>Zoom:</strong> 
                     <ul>
@@ -195,10 +248,33 @@ class QuickStartGuideDialog(QDialog):
                         <li>Scrollbars: Use horizontal/vertical scrollbars when image is larger than viewport</li>
                     </ul>
                 </li>
-                <li><strong>Reset View:</strong> Press <code>V</code> key or right-click context menu → "Reset View (V)" to restore initial zoom and position</li>
+                <li><strong>Reset View:</strong> Press <code>V</code> key or right-click context menu → "Reset View (V)" to restore initial zoom and position for the focused subwindow</li>
+                <li><strong>Reset All Views:</strong> Press <code>A</code> key or right-click context menu → "Reset All Views (A)" to reset zoom, pan, and window/level for all subwindows simultaneously</li>
             </ul>
             
-            <h2>Measurements</h2>
+            <h2 id="histogram">Histogram Display</h2>
+            <p>View pixel value distribution for the currently focused image:</p>
+            <ul>
+                <li><strong>Open Histogram:</strong> Press <code>H</code> key to open the histogram dialog</li>
+                <li><strong>Features:</strong>
+                    <ul>
+                        <li>Shows pixel value distribution as a histogram</li>
+                        <li>Displays a red dashed box overlay indicating the current window center and width</li>
+                        <li>Automatically tracks the focused subwindow and updates when:
+                            <ul>
+                                <li>Focus changes to a different subwindow</li>
+                                <li>Slice changes in the focused subwindow</li>
+                                <li>Window/level settings change</li>
+                            </ul>
+                        </li>
+                        <li>Reflects whether raw or rescaled pixel values are being used</li>
+                    </ul>
+                </li>
+                <li><strong>Scale Toggle:</strong> Use the "Linear Scale" / "Log Scale" button to switch between linear and logarithmic y-axis scaling</li>
+                <li><strong>Window/Level Indicator:</strong> The red dashed box shows the current window center (box center) and window width (box width)</li>
+            </ul>
+            
+            <h2 id="measurements">Measurements</h2>
             <h3>Creating Measurements</h3>
             <ul>
                 <li>Set mouse mode to <strong>"Measure"</strong> (toolbar, context menu, or menu bar)</li>
@@ -217,7 +293,7 @@ class QuickStartGuideDialog(QDialog):
                 <li>Right-click on image → "Clear Measurements" to remove all measurements</li>
             </ul>
             
-            <h2>ROIs (Regions of Interest)</h2>
+            <h2 id="rois">ROIs (Regions of Interest)</h2>
             <h3>Creating ROIs</h3>
             <ul>
                 <li><strong>Ellipse ROI:</strong> Set mode to "Ellipse ROI", then left-click and drag to draw an ellipse</li>
@@ -233,7 +309,7 @@ class QuickStartGuideDialog(QDialog):
                 <li>Or right-click on ROI → "Delete ROI"</li>
             </ul>
             
-            <h2>Intensity Projections (Combine Slices)</h2>
+            <h2 id="intensity-projections">Intensity Projections (Combine Slices)</h2>
             <p>Combine multiple slices to create intensity projections:</p>
             <ul>
                 <li><strong>Access:</strong> Use the "Combine Slices" widget in the right panel, or right-click on image → "Combine..."</li>
@@ -260,14 +336,14 @@ class QuickStartGuideDialog(QDialog):
                 </li>
             </ul>
             
-            <h2>Image Inversion</h2>
+            <h2 id="image-inversion">Image Inversion</h2>
             <ul>
                 <li><strong>Toggle Inversion:</strong> Press <code>I</code> key or right-click → "Invert Image (I)"</li>
                 <li>Inverts image colors (grayscale or RGB)</li>
                 <li>Inversion state is preserved per series</li>
             </ul>
             
-            <h2>Window/Level Adjustment</h2>
+            <h2 id="window-level">Window/Level Adjustment</h2>
             <h3>Window/Level Presets</h3>
             <ul>
                 <li>DICOM files may contain multiple window/level presets (WindowWidth and WindowCenter arrays)</li>
@@ -300,7 +376,7 @@ class QuickStartGuideDialog(QDialog):
                 <li>Toggle between Raw Pixel Values and Rescaled Values as needed</li>
             </ul>
             
-            <h2>Mouse Modes</h2>
+            <h2 id="mouse-modes">Mouse Modes</h2>
             <p>Change mouse mode via toolbar, menu bar, or context menu:</p>
             <ul>
                 <li><strong>Select:</strong> Click to select ROIs and measurements for deletion</li>
@@ -312,14 +388,14 @@ class QuickStartGuideDialog(QDialog):
                 <li><strong>Window/Level ROI:</strong> Draw ROI to auto-adjust window/level</li>
             </ul>
             
-            <h2>Scroll Wheel Modes</h2>
+            <h2 id="scroll-wheel-modes">Scroll Wheel Modes</h2>
             <p>Change via context menu → "Scroll Wheel Mode":</p>
             <ul>
                 <li><strong>Slice:</strong> Scroll wheel navigates through slices (default)</li>
                 <li><strong>Zoom:</strong> Scroll wheel zooms in/out on the image</li>
             </ul>
             
-            <h2>Keyboard Shortcuts</h2>
+            <h2 id="keyboard-shortcuts">Keyboard Shortcuts</h2>
             <p>Quick access to modes and functions:</p>
             <ul>
                 <li><strong><code>P</code>:</strong> Pan mode (move the image around)</li>
@@ -331,7 +407,9 @@ class QuickStartGuideDialog(QDialog):
                 <li><strong><code>W</code>:</strong> Window/Level ROI mode (auto-adjust from ROI)</li>
                 <li><strong><code>C</code>:</strong> Clear all measurements on current slice</li>
                 <li><strong><code>D</code>:</strong> Delete all ROIs on current slice</li>
-                <li><strong><code>V</code>:</strong> Reset view (restore initial zoom, pan, and window/level)</li>
+                <li><strong><code>V</code>:</strong> Reset view (restore initial zoom, pan, and window/level for focused subwindow)</li>
+                <li><strong><code>A</code>:</strong> Reset all views (reset zoom, pan, and window/level for all subwindows)</li>
+                <li><strong><code>H</code>:</strong> Open histogram dialog (shows pixel value distribution with window/level overlay)</li>
                 <li><strong><code>N</code>:</strong> Toggle series navigator bar visibility</li>
                 <li><strong><code>I</code>:</strong> Invert image colors</li>
                 <li><strong><code>Spacebar</code>:</strong> Toggle overlay visibility
@@ -348,7 +426,7 @@ class QuickStartGuideDialog(QDialog):
                 <li><strong><code>Shift+Ctrl+T</code>:</strong> Export DICOM Tags</li>
             </ul>
             
-            <h2>Customization</h2>
+            <h2 id="customization">Customization</h2>
             <h3>ROI and Measurement Appearance</h3>
             <p>Customize the appearance of ROIs and measurements via <strong>View → Annotation Options</strong>:</p>
             <ul>
@@ -358,7 +436,7 @@ class QuickStartGuideDialog(QDialog):
                 <li>Your preferences are saved and remembered between sessions</li>
             </ul>
             
-            <h2>Additional Tips</h2>
+            <h2 id="additional-tips">Additional Tips</h2>
             <ul>
                 <li>All measurements and ROIs are preserved when navigating between slices in the same series</li>
                 <li>Use the context menu (right-click) for quick access to common functions</li>
@@ -370,7 +448,7 @@ class QuickStartGuideDialog(QDialog):
                 <li><strong>Annotations:</strong> The viewer automatically displays DICOM annotations including Presentation States, Key Object Selection Documents, and embedded overlays/graphic annotations</li>
             </ul>
             
-            <h2>Exporting Images</h2>
+            <h2 id="exporting">Exporting Images</h2>
             <p>Export DICOM images to common formats:</p>
             <ul>
                 <li>Access via <strong>File → Export</strong> menu</li>
@@ -399,7 +477,7 @@ class QuickStartGuideDialog(QDialog):
             <li>The application remembers your last export directory</li>
         </ul>
         
-        <h2>DICOM Tag Editing</h2>
+        <h2 id="metadata-tags">Metadata and Tags</h2>
         <p>View and edit DICOM metadata tags, including private tags:</p>
         <ul>
             <li><strong>View/Edit Tags:</strong> Access via <strong>Tools → View/Edit DICOM Tags</strong> or press <code>Ctrl+T</code>
@@ -438,7 +516,21 @@ class QuickStartGuideDialog(QDialog):
                     <li>Export tags from multiple slices or entire series</li>
                 </ul>
             </li>
-            <li><strong>Tag Changes:</strong> All tag edits are saved to the DICOM file when you save the dataset</li>
+            <li><strong>Tag Changes:</strong> Tag edits are preserved in memory and can be exported when exporting to DICOM format</li>
+            <li><strong>Privacy View:</strong> Toggle privacy mode to mask patient-related DICOM tags
+                <ul>
+                    <li>Access via <strong>View → Privacy View</strong> menu, right-click context menu → "Privacy View (Cmd+P)", or press <code>Cmd+P</code> (Mac) / <code>Ctrl+P</code> (Windows/Linux)</li>
+                    <li>When enabled, patient-related tags (Patient Name, Patient ID, Patient Date of Birth, etc.) are displayed as "PRIVACY MODE" in:
+                        <ul>
+                            <li>Metadata panel (left side)</li>
+                            <li>Tag viewer dialog</li>
+                            <li>Image overlays</li>
+                        </ul>
+                    </li>
+                    <li>Privacy view only affects display - the underlying DICOM data remains unchanged</li>
+                    <li>Privacy view state persists across application restarts</li>
+                </ul>
+            </li>
         </ul>
         </body>
         </html>
@@ -447,3 +539,99 @@ class QuickStartGuideDialog(QDialog):
         # Cache the content for this theme
         QuickStartGuideDialog._content_cache[theme] = content
         return content
+    
+    def _on_search_text_changed(self, text: str) -> None:
+        """
+        Handle search text changes and filter guide content.
+        
+        Args:
+            text: Search text entered by user
+        """
+        if not text.strip():
+            # If search is empty, show full content
+            self.text_edit.setHtml(self._full_content)
+            # Scroll to top
+            self.text_edit.moveCursor(self.text_edit.textCursor().Start)
+            self._search_match_positions = []
+            self._current_match_index = -1
+            self._update_navigation_buttons()
+            return
+        
+        # Use QTextEdit's find functionality to search and highlight
+        # First, set the full content
+        self.text_edit.setHtml(self._full_content)
+        
+        # Find and highlight all occurrences (case-insensitive)
+        cursor = self.text_edit.textCursor()
+        cursor.movePosition(cursor.MoveOperation.Start)
+        
+        # Clear previous selection
+        cursor.clearSelection()
+        self.text_edit.setTextCursor(cursor)
+        
+        # Find all matches and store positions
+        self._search_match_positions = []
+        while self.text_edit.find(text):
+            match_cursor = self.text_edit.textCursor()
+            # Store the start position of each match
+            self._search_match_positions.append(match_cursor.selectionStart())
+        
+        # If matches found, go to first match
+        if self._search_match_positions:
+            self._current_match_index = 0
+            cursor.setPosition(self._search_match_positions[0])
+            self.text_edit.setTextCursor(cursor)
+            # Highlight the first match
+            cursor.setPosition(self._search_match_positions[0])
+            cursor.movePosition(cursor.MoveOperation.Right, cursor.MoveMode.KeepAnchor, len(text))
+            self.text_edit.setTextCursor(cursor)
+        else:
+            # No matches found, scroll to top
+            cursor.movePosition(cursor.MoveOperation.Start)
+            self.text_edit.setTextCursor(cursor)
+            self._current_match_index = -1
+        
+        self._update_navigation_buttons()
+    
+    def _on_prev_match(self) -> None:
+        """Navigate to previous search match."""
+        if not self._search_match_positions or self._current_match_index <= 0:
+            return
+        
+        self._current_match_index -= 1
+        cursor = self.text_edit.textCursor()
+        cursor.setPosition(self._search_match_positions[self._current_match_index])
+        self.text_edit.setTextCursor(cursor)
+        # Highlight the match
+        search_text = self.search_edit.text()
+        cursor.setPosition(self._search_match_positions[self._current_match_index])
+        cursor.movePosition(cursor.MoveOperation.Right, cursor.MoveMode.KeepAnchor, len(search_text))
+        self.text_edit.setTextCursor(cursor)
+        self._update_navigation_buttons()
+    
+    def _on_next_match(self) -> None:
+        """Navigate to next search match."""
+        if not self._search_match_positions:
+            return
+        
+        if self._current_match_index < len(self._search_match_positions) - 1:
+            self._current_match_index += 1
+        else:
+            # Wrap around to first match
+            self._current_match_index = 0
+        
+        cursor = self.text_edit.textCursor()
+        cursor.setPosition(self._search_match_positions[self._current_match_index])
+        self.text_edit.setTextCursor(cursor)
+        # Highlight the match
+        search_text = self.search_edit.text()
+        cursor.setPosition(self._search_match_positions[self._current_match_index])
+        cursor.movePosition(cursor.MoveOperation.Right, cursor.MoveMode.KeepAnchor, len(search_text))
+        self.text_edit.setTextCursor(cursor)
+        self._update_navigation_buttons()
+    
+    def _update_navigation_buttons(self) -> None:
+        """Update Prev/Next button states based on current match."""
+        has_matches = len(self._search_match_positions) > 0
+        self.prev_button.setEnabled(has_matches and self._current_match_index > 0)
+        self.next_button.setEnabled(has_matches)

@@ -76,6 +76,7 @@ class ImageViewer(QGraphicsView):
     measurement_delete_requested = Signal(object)  # Emitted when measurement deletion is requested (MeasurementItem)
     clear_measurements_requested = Signal()  # Emitted when clear measurements is requested
     toggle_overlay_requested = Signal()  # Emitted when toggle overlay is requested
+    privacy_view_toggled = Signal(bool)  # Emitted when privacy view is toggled from context menu (True = enabled)
     annotation_options_requested = Signal()  # Emitted when annotation options dialog is requested
     assign_series_requested = Signal(str)  # Emitted when series assignment is requested (series_uid)
     pixel_info_changed = Signal(str, int, int, int)  # Emitted when pixel info changes (pixel_value_str, x, y, z)
@@ -175,6 +176,9 @@ class ImageViewer(QGraphicsView):
         self.right_mouse_drag_start_width: Optional[float] = None
         self.right_mouse_context_menu_shown = False  # Track if context menu was shown
         self.cine_controls_enabled = False  # Track if cine controls should be enabled in context menu
+        
+        # Privacy view state (for context menu synchronization)
+        self._privacy_view_enabled: bool = False
         
         # Callbacks for window/level presets (set from main.py)
         self.get_window_level_presets_callback: Optional[Callable[[], List[Tuple[float, float, bool, Optional[str]]]]] = None
@@ -692,6 +696,15 @@ class ImageViewer(QGraphicsView):
         """
         self.cine_controls_enabled = enabled
     
+    def set_privacy_view_state(self, enabled: bool) -> None:
+        """
+        Set the privacy view state (for context menu synchronization).
+        
+        Args:
+            enabled: True if privacy view is enabled, False otherwise
+        """
+        self._privacy_view_enabled = enabled
+    
     def wheelEvent(self, event: QWheelEvent) -> None:
         """
         Handle mouse wheel events for zooming or slice navigation.
@@ -1084,6 +1097,30 @@ class ImageViewer(QGraphicsView):
         # This should happen in all mouse modes, regardless of tool selection
         self._update_pixel_info(event)
         
+        # Check for right mouse drag FIRST, before any mode-specific checks
+        # This allows window/level adjustment to work in all modes (Select, Pan, etc.)
+        if event.buttons() & Qt.MouseButton.RightButton and self.right_mouse_drag_start_pos is not None:
+            # Right mouse drag for window/level adjustment
+            # Only if we have initial window/level values and context menu wasn't shown
+            if (self.right_mouse_drag_start_center is not None and 
+                self.right_mouse_drag_start_width is not None and
+                not self.right_mouse_context_menu_shown):
+                
+                current_pos = event.position()
+                start_pos = self.right_mouse_drag_start_pos
+                
+                # Calculate deltas (in viewport pixels)
+                delta_x = current_pos.x() - start_pos.x()  # Horizontal: positive = right (wider), negative = left (narrower)
+                delta_y = start_pos.y() - current_pos.y()  # Vertical: positive = up (higher center), negative = down (lower center)
+                
+                # Convert to window/level units using sensitivity
+                center_delta = delta_y * self.window_center_sensitivity
+                width_delta = delta_x * self.window_width_sensitivity
+                
+                # Emit signal with deltas
+                self.window_level_drag_changed.emit(center_delta, width_delta)
+                return  # Return early to prevent other mode handling
+        
         # In select mode, allow default Qt behavior (selection dragging, etc.)
         if self.mouse_mode == "select":
             super().mouseMoveEvent(event)
@@ -1142,26 +1179,6 @@ class ImageViewer(QGraphicsView):
             # Pan mode - ensure ScrollHandDrag is enabled (it may have been disabled by other operations)
             if self.dragMode() != QGraphicsView.DragMode.ScrollHandDrag:
                 self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
-        elif event.buttons() & Qt.MouseButton.RightButton and self.right_mouse_drag_start_pos is not None:
-            # Right mouse drag for window/level adjustment
-            # Only if we have initial window/level values and context menu wasn't shown
-            if (self.right_mouse_drag_start_center is not None and 
-                self.right_mouse_drag_start_width is not None and
-                not self.right_mouse_context_menu_shown):
-                
-                current_pos = event.position()
-                start_pos = self.right_mouse_drag_start_pos
-                
-                # Calculate deltas (in viewport pixels)
-                delta_x = current_pos.x() - start_pos.x()  # Horizontal: positive = right (wider), negative = left (narrower)
-                delta_y = start_pos.y() - current_pos.y()  # Vertical: positive = up (higher center), negative = down (lower center)
-                
-                # Convert to window/level units using sensitivity
-                center_delta = delta_y * self.window_center_sensitivity
-                width_delta = delta_x * self.window_width_sensitivity
-                
-                # Emit signal with deltas
-                self.window_level_drag_changed.emit(center_delta, width_delta)
         # Pan mode is handled automatically by ScrollHandDrag, no manual code needed
         # But we need to emit transform_changed signal when panning occurs
         # This is handled by connecting to scrollbar valueChanged signals
@@ -1256,6 +1273,12 @@ class ImageViewer(QGraphicsView):
                         # Toggle Overlay action
                         toggle_overlay_action = context_menu.addAction("Toggle Overlay (Spacebar)")
                         toggle_overlay_action.triggered.connect(self.toggle_overlay_requested.emit)
+                        
+                        # Privacy View action
+                        privacy_view_action = context_menu.addAction("Privacy View (Cmd+P)")
+                        privacy_view_action.setCheckable(True)
+                        privacy_view_action.setChecked(self._privacy_view_enabled)
+                        privacy_view_action.triggered.connect(lambda checked: self.privacy_view_toggled.emit(checked))
                         
                         context_menu.addSeparator()
                         

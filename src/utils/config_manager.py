@@ -100,6 +100,7 @@ class ConfigManager:
             "roi_default_visible_statistics": ["mean", "std", "min", "max", "count", "area"],  # Default visible statistics for new ROIs
             "multi_window_layout": "1x1",  # Multi-window layout mode: "1x1", "1x2", "2x1", "2x2"
             "disclaimer_accepted": False,  # Whether user has accepted disclaimer and chosen not to see it again
+            "privacy_view_enabled": False,  # Whether privacy view mode is enabled (masks patient tags in display)
         }
         
         # Load configuration
@@ -721,5 +722,24 @@ class ConfigManager:
             accepted: True if user accepted and chose not to see it again, False otherwise
         """
         self.config["disclaimer_accepted"] = accepted
+        self.save_config()
+    
+    def get_privacy_view(self) -> bool:
+        """
+        Get whether privacy view mode is enabled.
+        
+        Returns:
+            True if privacy view is enabled, False otherwise
+        """
+        return self.config.get("privacy_view_enabled", False)
+    
+    def set_privacy_view(self, enabled: bool) -> None:
+        """
+        Set whether privacy view mode is enabled.
+        
+        Args:
+            enabled: True to enable privacy view, False to disable
+        """
+        self.config["privacy_view_enabled"] = enabled
         self.save_config()
 

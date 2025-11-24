@@ -20,7 +20,7 @@ Requirements:
 from PySide6.QtWidgets import (QMainWindow, QMenuBar, QToolBar, QStatusBar,
                                 QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
                                 QMessageBox, QComboBox, QLabel, QSizePolicy, QColorDialog,
-                                QApplication, QDialog, QTextEdit, QPushButton, QDialogButtonBox, QMenu)
+                                QApplication, QDialog, QTextBrowser, QPushButton, QDialogButtonBox, QMenu)
 from PySide6.QtCore import Qt, Signal, QEvent
 from PySide6.QtGui import QAction, QIcon, QKeySequence, QColor, QDragEnterEvent, QDropEvent
 from typing import Optional, TYPE_CHECKING
@@ -79,6 +79,7 @@ class MainWindow(QMainWindow):
     redo_tag_edit_requested = Signal()  # Emitted when redo tag edit is requested
     open_files_from_paths_requested = Signal(list)  # Emitted when files/folders are dropped (list of paths)
     layout_changed = Signal(str)  # Emitted when layout mode changes ("1x1", "1x2", "2x1", "2x2")
+    privacy_view_toggled = Signal(bool)  # Emitted when privacy view is toggled (True = enabled)
     # Note: Cine control signals moved to CineControlsWidget
     # Keeping these signals for backward compatibility but they're not used anymore
     
@@ -201,6 +202,16 @@ class MainWindow(QMainWindow):
         self.dark_theme_action.setChecked(self.config_manager.get_theme() == "dark")
         self.dark_theme_action.triggered.connect(lambda: self._set_theme("dark"))
         theme_menu.addAction(self.dark_theme_action)
+        
+        view_menu.addSeparator()
+        
+        # Privacy View action
+        self.privacy_view_action = QAction("&Privacy View", self)
+        self.privacy_view_action.setCheckable(True)
+        self.privacy_view_action.setChecked(self.config_manager.get_privacy_view())
+        self.privacy_view_action.setShortcut(QKeySequence("Ctrl+P"))  # Works on all platforms (Cmd+P on Mac, Ctrl+P on Windows/Linux)
+        self.privacy_view_action.triggered.connect(self._on_privacy_view_toggled)
+        view_menu.addAction(self.privacy_view_action)
         
         view_menu.addSeparator()
         
@@ -1346,10 +1357,32 @@ class MainWindow(QMainWindow):
         self.config_manager.set_theme(theme)
         self._apply_theme()
     
+    def _on_privacy_view_toggled(self, checked: bool) -> None:
+        """
+        Handle privacy view toggle.
+        
+        Args:
+            checked: True if privacy view is enabled, False otherwise
+        """
+        # Save to config
+        self.config_manager.set_privacy_view(checked)
+        # Emit signal to notify other components
+        self.privacy_view_toggled.emit(checked)
+    
     def _show_disclaimer(self) -> None:
         """Show the disclaimer dialog."""
         from gui.dialogs.disclaimer_dialog import DisclaimerDialog
         DisclaimerDialog.show_disclaimer(self.config_manager, self, force_show=True)
+    
+    def _on_about_disclaimer_clicked(self, url) -> None:
+        """
+        Handle disclaimer link click in About dialog.
+        
+        Args:
+            url: QUrl of the clicked link
+        """
+        if url.scheme() == "disclaimer":
+            self._show_disclaimer()
     
     def _show_about(self) -> None:
         """Show the about dialog with scrollable content."""
@@ -1369,12 +1402,13 @@ class MainWindow(QMainWindow):
         
         layout = QVBoxLayout(dialog)
         
-        # Create scrollable text area
-        text_edit = QTextEdit()
+        # Create scrollable text area - use QTextBrowser for anchor link support
+        text_edit = QTextBrowser()
+        text_edit.setOpenExternalLinks(False)  # Don't open external links in browser
         text_edit.setReadOnly(True)
-        # Set QTextEdit background to match metadata panel in dark theme
+        # Set QTextBrowser background to match metadata panel in dark theme
         if theme == "dark":
-            text_edit.setStyleSheet("QTextEdit { background-color: #1e1e1e; }")
+            text_edit.setStyleSheet("QTextBrowser { background-color: #1e1e1e; }")
         
         # Create HTML content with theme-based link styling
         if theme == "dark":
@@ -1413,12 +1447,14 @@ class MainWindow(QMainWindow):
     <li>Reset view to fit viewport</li>
     <li>Intensity projections: Combine slices (AIP, MIP, MinIP)</li>
     <li>Image inversion (I key)</li>
+    <li>Cine Playback: Automatic frame-by-frame playback for multi-frame DICOM series with play/pause/stop controls, adjustable speed, and loop option</li>
     </ul>
     <h4>Analysis Tools:</h4>
     <ul>
     <li>Draw elliptical and rectangular ROIs</li>
     <li>ROI statistics (mean, std dev, min, max, area)</li>
     <li>Distance measurements (pixels, mm, cm)</li>
+    <li>Histogram display: View pixel value distribution with window/level overlay (H key)</li>
     <li>Undo/redo functionality</li>
     </ul>
     <h4>Metadata and Overlays:</h4>
@@ -1429,6 +1465,8 @@ class MainWindow(QMainWindow):
     <li>Tag filtering/search functionality</li>
     <li>Expand/collapse tag groups in metadata panel</li>
     <li>Reorder columns in metadata panel</li>
+    <li>Privacy View: Toggle to mask patient-related tags in display (View menu, context menu, or Cmd+P/Ctrl+P)</li>
+    <li>Anonymization on Export: Option to anonymize patient information when exporting to DICOM</li>
     <li>Export selected tags to Excel/CSV</li>
     <li>Annotations support: Presentation States, Key Objects, embedded overlays</li>
     </ul>
@@ -1448,13 +1486,16 @@ class MainWindow(QMainWindow):
     </ul>
     <h4>Planned Features (Not yet implemented):</h4>
     <ul>
-    <li>Histogram display</li>
     <li>RT STRUCT overlays</li>
     </ul>
+    <hr>
+    <p><a href="disclaimer://show">View Disclaimer</a></p>
 </body>
 </html>"""
         
         text_edit.setHtml(html_content)
+        # Handle disclaimer link click
+        text_edit.anchorClicked.connect(self._on_about_disclaimer_clicked)
         layout.addWidget(text_edit)
         
         # Add OK button

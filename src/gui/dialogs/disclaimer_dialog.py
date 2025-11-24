@@ -72,6 +72,13 @@ class DisclaimerDialog(QDialog):
         
         # "Do not show in the future" checkbox
         self.dont_show_checkbox = QCheckBox("Do not show in the future")
+        # Initialize checkbox state from config when force_show is True
+        if self.force_show:
+            self.dont_show_checkbox.setChecked(self.config_manager.get_disclaimer_accepted())
+        else:
+            self.dont_show_checkbox.setChecked(False)
+        # Connect checkbox to update config in real-time
+        self.dont_show_checkbox.toggled.connect(self._on_checkbox_toggled)
         layout.addWidget(self.dont_show_checkbox)
         
         # Buttons in horizontal layout to control order
@@ -91,9 +98,23 @@ class DisclaimerDialog(QDialog):
         
         layout.addLayout(button_layout)
     
+    def _on_checkbox_toggled(self, checked: bool) -> None:
+        """
+        Handle checkbox toggle - update config immediately.
+        
+        Args:
+            checked: True if checkbox is checked, False otherwise
+        """
+        self.config_manager.set_disclaimer_accepted(checked)
+    
     def _on_accept(self) -> None:
         """Handle accept button click."""
         self.dont_show_again = self.dont_show_checkbox.isChecked()
+        # Config is already updated via checkbox signal, but ensure it's saved
+        if self.dont_show_again:
+            self.config_manager.set_disclaimer_accepted(True)
+        else:
+            self.config_manager.set_disclaimer_accepted(False)
         self.accept()
     
     def should_show(self) -> bool:

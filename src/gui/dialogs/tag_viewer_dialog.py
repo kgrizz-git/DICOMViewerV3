@@ -60,6 +60,7 @@ class TagViewerDialog(QDialog):
         self.parser: Optional[DICOMParser] = None
         self.dataset: Optional[Dataset] = None
         self.show_private_tags = True
+        self.privacy_mode: bool = False
         self.all_tag_items: list = []  # Store all items for filtering
         self.editor: Optional[DICOMEditor] = None
         self.history_manager: Optional[TagEditHistoryManager] = None
@@ -68,6 +69,7 @@ class TagViewerDialog(QDialog):
         self._cached_tags: Optional[Dict[str, Any]] = None
         self._cached_search_text: str = ""
         self._cached_include_private: bool = True
+        self._cached_privacy_mode: bool = False
         
         # Search debouncing timer
         self._search_timer = QTimer()
@@ -86,6 +88,21 @@ class TagViewerDialog(QDialog):
             history_manager: TagEditHistoryManager instance
         """
         self.history_manager = history_manager
+    
+    def set_privacy_mode(self, enabled: bool) -> None:
+        """
+        Set privacy mode for masking patient tags.
+        
+        Args:
+            enabled: True to enable privacy mode, False to disable
+        """
+        self.privacy_mode = enabled
+        # Clear cache to force refresh
+        self._cached_tags = None
+        # Refresh display if parser is available
+        if self.parser is not None:
+            search_text = self.search_edit.text()
+            self._populate_tags(search_text)
     
     def _create_ui(self) -> None:
         """Create the UI components."""
@@ -194,15 +211,17 @@ class TagViewerDialog(QDialog):
         if self.parser is None:
             return
         
-        # Check if tags need to be reloaded (dataset changed or private tags setting changed)
+        # Check if tags need to be reloaded (dataset changed, private tags setting changed, or privacy mode changed)
         need_reload = (self._cached_tags is None or 
-                      self.show_private_tags != self._cached_include_private)
+                      self.show_private_tags != self._cached_include_private or
+                      self.privacy_mode != getattr(self, '_cached_privacy_mode', False))
         
         if need_reload:
             # Reload tags from parser (will use parser's cache)
-            tags = self.parser.get_all_tags(include_private=self.show_private_tags)
+            tags = self.parser.get_all_tags(include_private=self.show_private_tags, privacy_mode=self.privacy_mode)
             self._cached_tags = tags
             self._cached_include_private = self.show_private_tags
+            self._cached_privacy_mode = self.privacy_mode
         else:
             # Use cached tags
             tags = self._cached_tags

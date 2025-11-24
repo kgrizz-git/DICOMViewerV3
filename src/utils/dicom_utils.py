@@ -21,7 +21,7 @@ Requirements:
     - numpy for calculations
 """
 
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 import numpy as np
 import pydicom
 from pydicom.dataset import Dataset
@@ -334,4 +334,37 @@ def get_composite_series_key(dataset: Dataset) -> str:
     
     # Fall back to just SeriesInstanceUID if SeriesNumber is missing or empty
     return series_uid
+
+
+def is_patient_tag(tag_str: str) -> bool:
+    """
+    Check if a DICOM tag string belongs to the Patient Information group (0010).
+    
+    Args:
+        tag_str: Tag string in format "(0010,0010)" or similar
+        
+    Returns:
+        True if tag is in Patient Information group (0010), False otherwise
+    """
+    if not tag_str or not isinstance(tag_str, str):
+        return False
+    
+    # Check if tag string starts with "(0010," (Patient Information group)
+    return tag_str.strip().startswith("(0010,")
+
+
+def get_patient_tag_keywords() -> List[str]:
+    """
+    Get list of patient-related DICOM tag keywords.
+    
+    Returns:
+        List of patient-related tag keywords from group 0010
+    """
+    return [
+        "PatientName",
+        "PatientID",
+        "PatientBirthDate",
+        "PatientSex",
+        "PatientAge",
+    ]
 

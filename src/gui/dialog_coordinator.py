@@ -113,18 +113,22 @@ class DialogCoordinator:
             dialog.settings_applied.connect(self.settings_applied_callback)
         dialog.exec()
     
-    def open_tag_viewer(self, current_dataset=None) -> None:
+    def open_tag_viewer(self, current_dataset=None, privacy_mode: bool = False) -> None:
         """
         Handle tag viewer dialog request.
         
         Args:
             current_dataset: Optional current dataset to display
+            privacy_mode: Whether privacy mode is enabled
         """
         if self.tag_viewer_dialog is None:
             self.tag_viewer_dialog = TagViewerDialog(self.main_window)
             # Set history manager if available
             if self.tag_edit_history is not None:
                 self.tag_viewer_dialog.set_history_manager(self.tag_edit_history)
+        
+        # Set privacy mode
+        self.tag_viewer_dialog.set_privacy_mode(privacy_mode)
         
         # Update with current dataset if available
         if current_dataset is not None:
