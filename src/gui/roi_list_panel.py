@@ -79,14 +79,18 @@ class ROIListPanel(QWidget):
         self.roi_list.itemSelectionChanged.connect(self._on_list_selection_changed)
         self.roi_list.itemDoubleClicked.connect(self._on_item_double_clicked)
         
-        # Calculate maximum height to show 4 ROIs (reduced to make room for zoom display)
+        # Set minimum height to show at least 2 ROIs, but allow expansion
         # Use typical row height for QListWidget (approximately 25px per row)
-        # Calculate height: (row height * 4 rows) + some padding
         row_height = 25  # Typical row height for QListWidget
-        max_list_height = (row_height * 4) + 10  # 10px padding
-        self.roi_list.setMaximumHeight(max_list_height)
+        min_list_height = (row_height * 2) + 10  # 2 rows minimum + padding
+        self.roi_list.setMinimumHeight(min_list_height)
         
-        layout.addWidget(self.roi_list)
+        # Allow the list to expand vertically (no maximum height constraint)
+        # The list will grow/shrink based on available space
+        from PySide6.QtWidgets import QSizePolicy
+        self.roi_list.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        
+        layout.addWidget(self.roi_list, 1)  # Add with stretch factor 1 to allow resizing
         
         # Buttons
         button_layout = QHBoxLayout()
