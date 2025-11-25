@@ -1410,6 +1410,11 @@ class DICOMViewerApp(QObject):
         right_layout.addWidget(self.window_level_controls)
         right_layout.addWidget(self.zoom_display_widget)
         right_layout.addWidget(self.intensity_projection_controls_widget)
+        
+        # Add stretch to push ROI sections to bottom
+        right_layout.addStretch()
+        
+        # ROI list panel (positioned just above ROI Statistics)
         right_layout.addWidget(self.roi_list_panel)
         right_layout.addWidget(self.roi_statistics_panel)
         
