@@ -301,6 +301,81 @@ def get_image_orientation(dataset: Dataset) -> Optional[Tuple[np.ndarray, np.nda
     return None
 
 
+def pixel_to_patient_coordinates(
+    dataset: Dataset,
+    pixel_x: int,
+    pixel_y: int,
+    slice_index: int = 0
+) -> Optional[Tuple[float, float, float]]:
+    """
+    Convert pixel coordinates to patient space coordinates.
+    
+    Uses DICOM tags:
+    - ImagePositionPatient: Position of top-left pixel (0,0) in patient space
+    - ImageOrientationPatient: Direction cosines for row and column
+    - PixelSpacing: Physical spacing between pixels (row, column)
+    - SliceThickness or SpacingBetweenSlices: Slice spacing
+    
+    Args:
+        dataset: pydicom Dataset
+        pixel_x: Column index (X in image)
+        pixel_y: Row index (Y in image)
+        slice_index: Slice index (Z)
+        
+    Returns:
+        Tuple of (X, Y, Z) patient coordinates in mm, or None if calculation fails
+    """
+    try:
+        # Get ImagePositionPatient (position of pixel 0,0)
+        img_pos = get_image_position(dataset)
+        if img_pos is None:
+            return None
+        
+        # Get ImageOrientationPatient (direction cosines)
+        orientation = get_image_orientation(dataset)
+        if orientation is None:
+            return None
+        row_cosine, col_cosine = orientation
+        
+        # Get PixelSpacing
+        pixel_spacing = get_pixel_spacing(dataset)
+        if pixel_spacing is None:
+            return None
+        row_spacing, col_spacing = pixel_spacing
+        
+        # Calculate slice spacing
+        slice_spacing = None
+        if hasattr(dataset, 'SpacingBetweenSlices'):
+            try:
+                slice_spacing = float(dataset.SpacingBetweenSlices)
+            except:
+                pass
+        
+        if slice_spacing is None:
+            slice_spacing = get_slice_thickness(dataset)
+        
+        if slice_spacing is None:
+            slice_spacing = 0.0  # Assume no spacing if not available
+        
+        # Calculate slice normal (cross product of row and column cosines)
+        slice_normal = np.cross(row_cosine, col_cosine)
+        
+        # Calculate patient coordinates
+        # Position = ImagePositionPatient + (pixel_y * row_spacing * row_cosine) + (pixel_x * col_spacing * col_cosine) + (slice_index * slice_spacing * slice_normal)
+        patient_pos = (
+            img_pos +
+            pixel_y * row_spacing * row_cosine +
+            pixel_x * col_spacing * col_cosine +
+            slice_index * slice_spacing * slice_normal
+        )
+        
+        return (float(patient_pos[0]), float(patient_pos[1]), float(patient_pos[2]))
+        
+    except Exception as e:
+        print(f"[DEBUG-PATIENT-COORDS] Error calculating patient coordinates: {e}")
+        return None
+
+
 def get_composite_series_key(dataset: Dataset) -> str:
     """
     Generate composite series key from SeriesInstanceUID and SeriesNumber.

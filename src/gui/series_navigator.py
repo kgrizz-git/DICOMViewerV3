@@ -21,13 +21,14 @@ Requirements:
 
 from PySide6.QtWidgets import (QWidget, QHBoxLayout, QScrollArea, QVBoxLayout,
                                 QLabel, QFrame)
-from PySide6.QtCore import Qt, Signal, QSize, QPoint, QMimeData
-from PySide6.QtGui import QPixmap, QImage, QPainter, QFont, QColor, QDrag, QMouseEvent
+from PySide6.QtCore import Qt, Signal, QSize, QPoint, QMimeData, QTimer
+from PySide6.QtGui import QPixmap, QImage, QPainter, QFont, QColor, QDrag, QMouseEvent, QKeyEvent
 from typing import Optional, Dict
 from pydicom.dataset import Dataset
 from core.dicom_processor import DICOMProcessor
 from PIL import Image
 import numpy as np
+import time
 
 
 class SeriesThumbnail(QFrame):
@@ -253,6 +254,7 @@ class SeriesNavigator(QWidget):
     """
     
     series_selected = Signal(str)  # Emitted with series_uid when thumbnail is clicked
+    series_navigation_requested = Signal(int)  # Emitted when arrow keys are pressed (-1 for prev, 1 for next)
     
     def __init__(self, dicom_processor: DICOMProcessor, parent=None):
         """
@@ -271,6 +273,9 @@ class SeriesNavigator(QWidget):
         
         # Thumbnail cache: (study_uid, series_uid) -> PIL Image
         self.thumbnail_cache: Dict[tuple, Image.Image] = {}
+        
+        # Enable keyboard focus so we can receive key events
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         
         self._create_ui()
     
@@ -518,4 +523,45 @@ class SeriesNavigator(QWidget):
             thumbnail.deleteLater()
         self.thumbnails.clear()
         self.thumbnail_cache.clear()
+    
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        """
+        Handle key press events for series navigation.
+        
+        Args:
+            event: Key event
+        """
+        # Ignore key repeat events to prevent rapid navigation
+        if event.isAutoRepeat():
+            event.accept()
+            return
+        
+        if event.key() == Qt.Key.Key_Left:
+            # Left arrow: previous series
+            timestamp = time.time()
+            print(f"[DEBUG-NAV] [{timestamp:.6f}] SeriesNavigator.keyPressEvent: LEFT arrow pressed, hasFocus={self.hasFocus()}")
+            print(f"[DEBUG-NAV] [{timestamp:.6f}] SeriesNavigator: Emitting series_navigation_requested(-1)")
+            self.series_navigation_requested.emit(-1)
+            event.accept()
+        elif event.key() == Qt.Key.Key_Right:
+            # Right arrow: next series
+            timestamp = time.time()
+            print(f"[DEBUG-NAV] [{timestamp:.6f}] SeriesNavigator.keyPressEvent: RIGHT arrow pressed, hasFocus={self.hasFocus()}")
+            print(f"[DEBUG-NAV] [{timestamp:.6f}] SeriesNavigator: Emitting series_navigation_requested(1)")
+            self.series_navigation_requested.emit(1)
+            event.accept()
+        else:
+            super().keyPressEvent(event)
+    
+    
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        """
+        Handle mouse press to set focus so keyboard events work.
+        
+        Args:
+            event: Mouse event
+        """
+        # Set focus when clicked so keyboard events are received
+        self.setFocus()
+        super().mousePressEvent(event)
 

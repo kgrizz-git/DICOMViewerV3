@@ -162,57 +162,103 @@ class KeyboardEventHandler:
         
         # P key for Pan mode
         elif event.key() == Qt.Key.Key_P:
+            # Don't intercept if Cmd/Ctrl is pressed (for standard shortcuts)
+            if event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier):
+                return False  # Let Qt handle Cmd+P / Ctrl+P
             self.set_mouse_mode("pan")
             return True
         
         # Z key for Zoom mode
         elif event.key() == Qt.Key.Key_Z:
+            # Don't intercept if Cmd/Ctrl is pressed (for standard shortcuts)
+            if event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier):
+                return False  # Let Qt handle Cmd+Z / Ctrl+Z
             self.set_mouse_mode("zoom")
+            return True
+        
+        # G key for Magnifier mode
+        elif event.key() == Qt.Key.Key_G:
+            self.set_mouse_mode("magnifier")
             return True
         
         # M key for Measure mode
         elif event.key() == Qt.Key.Key_M:
+            # Don't intercept if Cmd/Ctrl is pressed (for standard shortcuts)
+            if event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier):
+                return False  # Let Qt handle Cmd+M / Ctrl+M
             self.set_mouse_mode("measure")
             return True
         
         # S key for Select mode
         elif event.key() == Qt.Key.Key_S:
+            # Don't intercept if Cmd/Ctrl is pressed (for standard shortcuts)
+            if event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier):
+                return False  # Let Qt handle Cmd+S / Ctrl+S
             self.set_mouse_mode("select")
             return True
         
         # W key for Window/Level ROI mode
         elif event.key() == Qt.Key.Key_W:
+            # Don't intercept if Cmd/Ctrl is pressed (for standard shortcuts)
+            if event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier):
+                return False  # Let Qt handle Cmd+W / Ctrl+W
             self.set_mouse_mode("auto_window_level")
             return True
         
         # R key for Rectangle ROI mode
         elif event.key() == Qt.Key.Key_R:
+            # Don't intercept if Cmd/Ctrl is pressed (for standard shortcuts)
+            if event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier):
+                return False  # Let Qt handle Cmd+R / Ctrl+R
             self.set_mouse_mode("roi_rectangle")
             return True
         
         # E key for Ellipse ROI mode
         elif event.key() == Qt.Key.Key_E:
+            # Don't intercept if Cmd/Ctrl is pressed (for standard shortcuts)
+            if event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier):
+                return False  # Let Qt handle Cmd+E / Ctrl+E
             self.set_mouse_mode("roi_ellipse")
+            return True
+        
+        # H key for Crosshair mode
+        elif event.key() == Qt.Key.Key_H:
+            # Don't intercept if Cmd/Ctrl is pressed (for standard shortcuts)
+            if event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier):
+                return False  # Let Qt handle Cmd+H / Ctrl+H
+            self.set_mouse_mode("crosshair")
             return True
         
         # C key for Clear measurements
         elif event.key() == Qt.Key.Key_C:
+            # Don't intercept if Cmd/Ctrl is pressed (for standard shortcuts)
+            if event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier):
+                return False  # Let Qt handle Cmd+C / Ctrl+C
             self.clear_measurements_callback()
             return True
         
         # D key for Delete All ROIs on current slice
         elif event.key() == Qt.Key.Key_D:
+            # Don't intercept if Cmd/Ctrl is pressed (for standard shortcuts)
+            if event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier):
+                return False  # Let Qt handle Cmd+D / Ctrl+D
             self.delete_all_rois_callback()
             return True
         
         # V key for Reset View
         elif event.key() == Qt.Key.Key_V:
+            # Don't intercept if Cmd/Ctrl is pressed (for standard shortcuts)
+            if event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier):
+                return False  # Let Qt handle Cmd+V / Ctrl+V
             if self.reset_view_callback:
                 self.reset_view_callback()
             return True
         
         # N key for Toggle Series Navigator
         elif event.key() == Qt.Key.Key_N:
+            # Don't intercept if Cmd/Ctrl is pressed (for standard shortcuts)
+            if event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier):
+                return False  # Let Qt handle Cmd+N / Ctrl+N
             if self.toggle_series_navigator_callback:
                 self.toggle_series_navigator_callback()
             return True

@@ -1,0 +1,16 @@
+# Build Requirements for DICOM Viewer V3
+# 
+# This file lists build tools required for creating executables.
+# 
+# Installation: pip install -r requirements-build.txt
+#
+# Note: These are only needed if you plan to build executables.
+# Regular users running the application do not need these.
+#
+# Usage:
+#   1. Install build requirements: pip install -r requirements-build.txt
+#   2. Build executable: pyinstaller DICOMViewerV3.spec
+#   3. See docs/BUILDING_EXECUTABLES.md for detailed instructions
+
+pyinstaller>=6.0.0
+

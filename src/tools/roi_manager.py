@@ -238,6 +238,10 @@ class ROIItem:
         # Store callback for when ROI is moved
         self.on_moved_callback = None
         
+        # Position tracking for move operations
+        self._move_start_position: Optional[QPointF] = None
+        self._is_being_moved: bool = False
+        
         # Statistics overlay properties
         self.statistics_overlay_visible = True  # Default: show overlay
         if default_visible_statistics is not None:
@@ -254,8 +258,22 @@ class ROIItem:
     
     def _on_item_moved(self) -> None:
         """Handle ROI item movement - call callback if set."""
+        # Store initial position on first movement if not already set
+        if self._move_start_position is None and self.item is not None:
+            self._move_start_position = self.item.pos()
+        self._is_being_moved = True
+        
         if self.on_moved_callback:
             self.on_moved_callback()
+    
+    def get_move_start_position(self) -> Optional[QPointF]:
+        """Get the position where movement started."""
+        return self._move_start_position
+    
+    def clear_move_tracking(self) -> None:
+        """Clear move tracking state."""
+        self._move_start_position = None
+        self._is_being_moved = False
     
     def get_bounds(self) -> QRectF:
         """
@@ -1060,7 +1078,7 @@ class ROIManager:
                     # Only clear the reference if the overlay is in the target scene
                     # This prevents clearing references to overlays in other scenes
                     if overlay_scene == scene:
-                        print(f"  Clearing reference for ROI {id(roi)} overlay (overlay in target scene)")
+                        # print(f"  Clearing reference for ROI {id(roi)} overlay (overlay in target scene)")
                         if hasattr(overlay_item, 'roi'):
                             overlay_item.roi = None
                         if hasattr(overlay_item, 'mark_deleted'):
@@ -1091,7 +1109,7 @@ class ROIManager:
             roi_id = None
             if hasattr(item, 'roi') and item.roi:
                 roi_id = id(item.roi)
-            print(f"  Removing overlay item {id(item)} (associated with ROI {roi_id})")
+            # print(f"  Removing overlay item {id(item)} (associated with ROI {roi_id})")
             if hasattr(item, 'roi'):
                 item.roi = None
             if hasattr(item, 'mark_deleted'):

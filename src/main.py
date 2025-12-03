@@ -22,6 +22,8 @@ Requirements:
 
 import sys
 import os
+import time
+import inspect
 from pathlib import Path
 
 # Add src directory to path
@@ -48,6 +50,7 @@ from gui.metadata_panel import MetadataPanel
 from gui.window_level_controls import WindowLevelControls
 from gui.roi_statistics_panel import ROIStatisticsPanel
 from gui.roi_list_panel import ROIListPanel
+from utils.undo_redo import UndoRedoManager
 from gui.slice_navigator import SliceNavigator
 from gui.series_navigator import SeriesNavigator
 from gui.zoom_display_widget import ZoomDisplayWidget
@@ -63,6 +66,7 @@ from utils.config_manager import ConfigManager
 from utils.dicom_utils import get_composite_series_key
 from tools.roi_manager import ROIManager
 from tools.measurement_tool import MeasurementTool
+from tools.crosshair_manager import CrosshairManager
 from tools.annotation_manager import AnnotationManager
 from tools.histogram_widget import HistogramWidget
 from gui.overlay_manager import OverlayManager
@@ -73,6 +77,7 @@ from core.file_operations_handler import FileOperationsHandler
 from core.slice_display_manager import SliceDisplayManager
 from gui.roi_coordinator import ROICoordinator
 from gui.measurement_coordinator import MeasurementCoordinator
+from gui.crosshair_coordinator import CrosshairCoordinator
 from gui.overlay_coordinator import OverlayCoordinator
 from gui.dialog_coordinator import DialogCoordinator
 from gui.mouse_mode_handler import MouseModeHandler
@@ -104,6 +109,7 @@ class DICOMViewerApp(QObject):
         self.dicom_organizer = DICOMOrganizer()
         self.dicom_processor = DICOMProcessor()
         self.tag_edit_history = TagEditHistoryManager(max_history=50)
+        self.undo_redo_manager = UndoRedoManager(max_history=100)
         
         # Privacy view state
         self.privacy_view_enabled: bool = self.config_manager.get_privacy_view()
@@ -163,6 +169,8 @@ class DICOMViewerApp(QObject):
         
         # Flag to track if we're in the middle of a reset operation
         self._resetting_projection_state = False
+        # Flag to prevent concurrent series navigation operations
+        self._series_navigation_in_progress = False
         self.roi_list_panel.set_roi_manager(self.roi_manager)
         self.series_navigator = SeriesNavigator(self.dicom_processor)
         self.cine_controls_widget = CineControlsWidget()
@@ -235,9 +243,11 @@ class DICOMViewerApp(QObject):
                 self.slice_display_manager = managers['slice_display_manager']
                 self.roi_coordinator = managers['roi_coordinator']
                 self.measurement_coordinator = managers['measurement_coordinator']
+                self.crosshair_coordinator = managers['crosshair_coordinator']
                 self.overlay_coordinator = managers['overlay_coordinator']
                 self.roi_manager = managers['roi_manager']
                 self.measurement_tool = managers['measurement_tool']
+                self.crosshair_manager = managers['crosshair_manager']
                 self.overlay_manager = managers['overlay_manager']
                 if subwindows[0]:
                     self.image_viewer = subwindows[0].image_viewer
@@ -314,6 +324,10 @@ class DICOMViewerApp(QObject):
             # Measurement Tool
             managers['measurement_tool'] = MeasurementTool(config_manager=self.config_manager)
             
+            # Crosshair Manager
+            managers['crosshair_manager'] = CrosshairManager(config_manager=self.config_manager)
+            managers['crosshair_manager'].set_privacy_mode(self.privacy_view_enabled)
+            
             # Overlay Manager (shared config, but per-window items)
             font_size = self.config_manager.get_overlay_font_size()
             font_color = self.config_manager.get_overlay_font_color()
@@ -359,6 +373,17 @@ class DICOMViewerApp(QObject):
             )
             
             # ROI Coordinator
+            # Crosshair Coordinator (created before ROI coordinator so it can be passed)
+            managers['crosshair_coordinator'] = CrosshairCoordinator(
+                managers['crosshair_manager'],
+                image_viewer,
+                get_current_dataset=lambda idx=idx: self._get_subwindow_dataset(idx),
+                get_current_slice_index=lambda idx=idx: self._get_subwindow_slice_index(idx),
+                undo_redo_manager=self.undo_redo_manager,
+                update_undo_redo_state_callback=self._update_undo_redo_state,
+                get_use_rescaled_values=lambda idx=idx: (managers['view_state_manager'].use_rescaled_values if managers['view_state_manager'] else False)
+            )
+            
             managers['roi_coordinator'] = ROICoordinator(
                 managers['roi_manager'],
                 self.roi_list_panel,  # Shared, will be updated per focus
@@ -374,7 +399,10 @@ class DICOMViewerApp(QObject):
                 get_projection_enabled=lambda idx=idx: (self._get_subwindow_slice_display_manager(idx).projection_enabled if self._get_subwindow_slice_display_manager(idx) else False),
                 get_projection_type=lambda idx=idx: (self._get_subwindow_slice_display_manager(idx).projection_type if self._get_subwindow_slice_display_manager(idx) else "aip"),
                 get_projection_slice_count=lambda idx=idx: (self._get_subwindow_slice_display_manager(idx).projection_slice_count if self._get_subwindow_slice_display_manager(idx) else 4),
-                get_current_studies=lambda: self.current_studies
+                get_current_studies=lambda: self.current_studies,
+                undo_redo_manager=self.undo_redo_manager,
+                update_undo_redo_state_callback=self._update_undo_redo_state,
+                crosshair_coordinator=managers['crosshair_coordinator']
             )
             
             # Measurement Coordinator
@@ -382,7 +410,9 @@ class DICOMViewerApp(QObject):
                 managers['measurement_tool'],
                 image_viewer,
                 get_current_dataset=lambda idx=idx: self._get_subwindow_dataset(idx),
-                get_current_slice_index=lambda idx=idx: self._get_subwindow_slice_index(idx)
+                get_current_slice_index=lambda idx=idx: self._get_subwindow_slice_index(idx),
+                undo_redo_manager=self.undo_redo_manager,
+                update_undo_redo_state_callback=self._update_undo_redo_state
             )
             
             # Overlay Coordinator
@@ -525,7 +555,9 @@ class DICOMViewerApp(QObject):
                 get_projection_enabled=lambda idx=idx: (self._get_subwindow_slice_display_manager(idx).projection_enabled if self._get_subwindow_slice_display_manager(idx) else False),
                 get_projection_type=lambda idx=idx: (self._get_subwindow_slice_display_manager(idx).projection_type if self._get_subwindow_slice_display_manager(idx) else "aip"),
                 get_projection_slice_count=lambda idx=idx: (self._get_subwindow_slice_display_manager(idx).projection_slice_count if self._get_subwindow_slice_display_manager(idx) else 4),
-                get_current_studies=lambda: self.current_studies
+                get_current_studies=lambda: self.current_studies,
+                undo_redo_manager=self.undo_redo_manager,
+                crosshair_coordinator=managers.get('crosshair_coordinator')  # May not exist in this code path
         )
         
         # Measurement Coordinator
@@ -533,7 +565,8 @@ class DICOMViewerApp(QObject):
             managers['measurement_tool'],
             image_viewer,
             get_current_dataset=lambda idx=idx: self._get_subwindow_dataset(idx),
-            get_current_slice_index=lambda idx=idx: self._get_subwindow_slice_index(idx)
+            get_current_slice_index=lambda idx=idx: self._get_subwindow_slice_index(idx),
+            undo_redo_manager=self.undo_redo_manager
         )
         
         # Overlay Coordinator
@@ -639,9 +672,11 @@ class DICOMViewerApp(QObject):
             self.slice_display_manager = managers['slice_display_manager']
             self.roi_coordinator = managers['roi_coordinator']
             self.measurement_coordinator = managers['measurement_coordinator']
+            self.crosshair_coordinator = managers.get('crosshair_coordinator')
             self.overlay_coordinator = managers['overlay_coordinator']
             self.roi_manager = managers['roi_manager']
             self.measurement_tool = managers['measurement_tool']
+            self.crosshair_manager = managers.get('crosshair_manager')
             self.overlay_manager = managers['overlay_manager']
         
         # Store previous image_viewer to disconnect signal
@@ -840,9 +875,11 @@ class DICOMViewerApp(QObject):
                 self.slice_display_manager = managers['slice_display_manager']
                 self.roi_coordinator = managers['roi_coordinator']
                 self.measurement_coordinator = managers['measurement_coordinator']
+                self.crosshair_coordinator = managers['crosshair_coordinator']
                 self.overlay_coordinator = managers['overlay_coordinator']
                 self.roi_manager = managers['roi_manager']
                 self.measurement_tool = managers['measurement_tool']
+                self.crosshair_manager = managers['crosshair_manager']
                 self.overlay_manager = managers['overlay_manager']
                 if subwindows[0]:
                     self.image_viewer = subwindows[0].image_viewer
@@ -1328,12 +1365,18 @@ class DICOMViewerApp(QObject):
         # Refresh metadata panel
         search_text = self.metadata_panel.search_edit.text()
         self.metadata_panel._cached_tags = None
+        # Clear parser cache so it re-reads from updated dataset
+        if self.metadata_panel.parser is not None:
+            self.metadata_panel.parser._tag_cache.clear()
         self.metadata_panel._populate_tags(search_text)
         
         # Refresh tag viewer dialog if open
         if self.dialog_coordinator.tag_viewer_dialog:
             search_text = self.dialog_coordinator.tag_viewer_dialog.search_edit.text()
             self.dialog_coordinator.tag_viewer_dialog._cached_tags = None
+            # Clear parser cache so it re-reads from updated dataset
+            if self.dialog_coordinator.tag_viewer_dialog.parser is not None:
+                self.dialog_coordinator.tag_viewer_dialog.parser._tag_cache.clear()
             self.dialog_coordinator.tag_viewer_dialog._populate_tags(search_text)
         
         # Update undo/redo state
@@ -1345,9 +1388,14 @@ class DICOMViewerApp(QObject):
             success = self.tag_edit_history.undo(self.current_dataset)
             if success:
                 # Refresh metadata panel and tag viewer
+                # Clear parser caches so they re-read from updated dataset
+                if self.metadata_panel.parser is not None:
+                    self.metadata_panel.parser._tag_cache.clear()
                 self.metadata_panel._populate_tags()
                 if self.dialog_coordinator.tag_viewer_dialog:
                     search_text = self.dialog_coordinator.tag_viewer_dialog.search_edit.text()
+                    if self.dialog_coordinator.tag_viewer_dialog.parser is not None:
+                        self.dialog_coordinator.tag_viewer_dialog.parser._tag_cache.clear()
                     self.dialog_coordinator.tag_viewer_dialog._populate_tags(search_text)
                 # Update undo/redo state
                 self._update_undo_redo_state()
@@ -1358,21 +1406,72 @@ class DICOMViewerApp(QObject):
             success = self.tag_edit_history.redo(self.current_dataset)
             if success:
                 # Refresh metadata panel and tag viewer
+                # Clear parser caches so they re-read from updated dataset
+                if self.metadata_panel.parser is not None:
+                    self.metadata_panel.parser._tag_cache.clear()
                 self.metadata_panel._populate_tags()
                 if self.dialog_coordinator.tag_viewer_dialog:
                     search_text = self.dialog_coordinator.tag_viewer_dialog.search_edit.text()
+                    if self.dialog_coordinator.tag_viewer_dialog.parser is not None:
+                        self.dialog_coordinator.tag_viewer_dialog.parser._tag_cache.clear()
                     self.dialog_coordinator.tag_viewer_dialog._populate_tags(search_text)
                 # Update undo/redo state
                 self._update_undo_redo_state()
     
     def _update_undo_redo_state(self) -> None:
         """Update undo/redo menu item states."""
+        # Check both tag edit history and annotation undo/redo
+        tag_can_undo = False
+        tag_can_redo = False
         if self.current_dataset is not None and self.tag_edit_history:
-            can_undo = self.tag_edit_history.can_undo(self.current_dataset)
-            can_redo = self.tag_edit_history.can_redo(self.current_dataset)
-            self.main_window.update_undo_redo_state(can_undo, can_redo)
-        else:
-            self.main_window.update_undo_redo_state(False, False)
+            tag_can_undo = self.tag_edit_history.can_undo(self.current_dataset)
+            tag_can_redo = self.tag_edit_history.can_redo(self.current_dataset)
+        
+        # Check annotation undo/redo
+        annotation_can_undo = self.undo_redo_manager.can_undo() if self.undo_redo_manager else False
+        annotation_can_redo = self.undo_redo_manager.can_redo() if self.undo_redo_manager else False
+        
+        # Enable if either tag edits or annotations can be undone/redone
+        can_undo = tag_can_undo or annotation_can_undo
+        can_redo = tag_can_redo or annotation_can_redo
+        
+        self.main_window.update_undo_redo_state(can_undo, can_redo)
+    
+    def _on_undo_requested(self) -> None:
+        """Handle undo request (for both tag edits and annotations)."""
+        # Try annotation undo first (most recent operations)
+        if self.undo_redo_manager and self.undo_redo_manager.can_undo():
+            success = self.undo_redo_manager.undo()
+            if success:
+                # Update UI after undo
+                self._update_undo_redo_state()
+                # Refresh ROI list and statistics
+                self._update_roi_list()
+                # Update crosshair visibility if needed
+                if hasattr(self, 'crosshair_coordinator') and self.crosshair_coordinator:
+                    self.crosshair_coordinator.update_crosshairs_for_slice()
+                return
+        
+        # Fall back to tag edit undo
+        self._undo_tag_edit()
+    
+    def _on_redo_requested(self) -> None:
+        """Handle redo request (for both tag edits and annotations)."""
+        # Try annotation redo first (most recent operations)
+        if self.undo_redo_manager and self.undo_redo_manager.can_redo():
+            success = self.undo_redo_manager.redo()
+            if success:
+                # Update UI after redo
+                self._update_undo_redo_state()
+                # Refresh ROI list and statistics
+                self._update_roi_list()
+                # Update crosshair visibility if needed
+                if hasattr(self, 'crosshair_coordinator') and self.crosshair_coordinator:
+                    self.crosshair_coordinator.update_crosshairs_for_slice()
+                return
+        
+        # Fall back to tag edit redo
+        self._redo_tag_edit()
     
     def _update_roi_list(self) -> None:
         """Update ROI list panel."""
@@ -1461,8 +1560,9 @@ class DICOMViewerApp(QObject):
         self.main_window.export_requested.connect(self._open_export)
         
         # Undo/Redo tag edits (shared)
-        self.main_window.undo_tag_edit_requested.connect(self._undo_tag_edit)
-        self.main_window.redo_tag_edit_requested.connect(self._redo_tag_edit)
+        # Undo/redo signals (for both tag edits and annotations)
+        self.main_window.undo_tag_edit_requested.connect(self._on_undo_requested)
+        self.main_window.redo_tag_edit_requested.connect(self._on_redo_requested)
         
         # Privacy view toggle (shared)
         self.main_window.privacy_view_toggled.connect(self._on_privacy_view_toggled)
@@ -2001,6 +2101,14 @@ class DICOMViewerApp(QObject):
             pass
         
         try:
+            # Crosshair signals
+            if hasattr(self, 'image_viewer') and self.image_viewer:
+                self.image_viewer.crosshair_clicked.disconnect()
+                self.image_viewer.crosshair_delete_requested.disconnect()
+        except (TypeError, RuntimeError, AttributeError):
+            pass
+        
+        try:
             # Slice navigator signals
             self.slice_navigator.slice_changed.disconnect()
         except (TypeError, RuntimeError, AttributeError):
@@ -2086,6 +2194,10 @@ class DICOMViewerApp(QObject):
         self.image_viewer.measurement_updated.connect(self.measurement_coordinator.handle_measurement_updated)
         self.image_viewer.measurement_finished.connect(self.measurement_coordinator.handle_measurement_finished)
         
+        # Crosshair signals
+        if hasattr(self, 'crosshair_coordinator') and self.crosshair_coordinator is not None:
+            self.image_viewer.crosshair_clicked.connect(self.crosshair_coordinator.handle_crosshair_clicked)
+        
         # ROI click signal
         self.image_viewer.roi_clicked.connect(self.roi_coordinator.handle_roi_clicked)
         self.image_viewer.image_clicked_no_roi.connect(self.roi_coordinator.handle_image_clicked_no_roi)
@@ -2093,6 +2205,8 @@ class DICOMViewerApp(QObject):
         # ROI delete signal (from right-click context menu)
         self.image_viewer.roi_delete_requested.connect(self.roi_coordinator.handle_roi_delete_requested)
         self.image_viewer.measurement_delete_requested.connect(self.measurement_coordinator.handle_measurement_delete_requested)
+        if hasattr(self, 'crosshair_coordinator') and self.crosshair_coordinator is not None:
+            self.image_viewer.crosshair_delete_requested.connect(self.crosshair_coordinator.handle_crosshair_delete_requested)
         
         # ROI statistics overlay signals
         self.image_viewer.roi_statistics_overlay_toggle_requested.connect(self.roi_coordinator.handle_roi_statistics_overlay_toggle)
@@ -2255,6 +2369,10 @@ class DICOMViewerApp(QObject):
         # Series navigation
         self.image_viewer.series_navigation_requested.connect(self._on_series_navigation_requested)
         self.main_window.series_navigation_requested.connect(self._on_series_navigation_requested)
+        self.series_navigator.series_navigation_requested.connect(
+            self._on_series_navigation_requested,
+            Qt.ConnectionType.UniqueConnection
+        )
         
         # Overlay font size and color changes (will be handled by _on_overlay_font_size_changed and _on_overlay_font_color_changed)
         self.main_window.overlay_font_size_changed.connect(self._on_overlay_font_size_changed)
@@ -2375,56 +2493,74 @@ class DICOMViewerApp(QObject):
         Args:
             direction: -1 for left/previous series, 1 for right/next series
         """
-        # Get focused subwindow's data
-        focused_idx = self.focused_subwindow_index
-        if focused_idx not in self.subwindow_data:
-            print(f"[DEBUG] Series navigation: subwindow {focused_idx} not in subwindow_data")
+        timestamp = time.time()
+        # Try to determine signal source by checking call stack
+        frame = inspect.currentframe()
+        caller_frame = frame.f_back if frame else None
+        caller_name = caller_frame.f_code.co_name if caller_frame else "unknown"
+        caller_file = caller_frame.f_code.co_filename.split('/')[-1] if caller_frame else "unknown"
+        print(f"[DEBUG-NAV] [{timestamp:.6f}] _on_series_navigation_requested: direction={direction}, caller={caller_name} in {caller_file}, lock={self._series_navigation_in_progress}")
+        
+        # Prevent concurrent navigation operations
+        if self._series_navigation_in_progress:
+            print(f"[DEBUG-NAV] [{timestamp:.6f}] Series navigation: Navigation already in progress, ignoring request")
             return
         
-        data = self.subwindow_data[focused_idx]
-        focused_study_uid = data.get('current_study_uid', '')
-        focused_series_uid = data.get('current_series_uid', '')
-        focused_slice_index = data.get('current_slice_index', 0)
+        # Set navigation lock
+        self._series_navigation_in_progress = True
+        print(f"[DEBUG-NAV] [{timestamp:.6f}] Series navigation: Lock acquired")
         
-        # CRITICAL FIX: Extract actual composite series key from currently displayed dataset
-        # This ensures we navigate from what's actually shown, not what's stored
-        displayed_dataset = data.get('current_dataset')
-        if displayed_dataset:
-            extracted_series_uid = get_composite_series_key(displayed_dataset)
-            extracted_study_uid = getattr(displayed_dataset, 'StudyInstanceUID', '')
+        try:
+            # Get focused subwindow's data
+            focused_idx = self.focused_subwindow_index
+            if focused_idx not in self.subwindow_data:
+                print(f"[DEBUG] Series navigation: subwindow {focused_idx} not in subwindow_data")
+                return
             
-            if extracted_series_uid and extracted_series_uid != focused_series_uid:
-                print(f"[DEBUG] Series navigation: MISMATCH at start! Stored={focused_series_uid}, Extracted={extracted_series_uid}")
-                print(f"[DEBUG]   Full stored UID: {focused_series_uid}")
-                print(f"[DEBUG]   Full extracted UID: {extracted_series_uid}")
-                print(f"[DEBUG]   Using extracted UID for navigation")
-                # Use the extracted UID - this is what's actually displayed
-                focused_series_uid = extracted_series_uid
-                focused_study_uid = extracted_study_uid
-                # Update subwindow_data immediately to fix the mismatch
-                data['current_series_uid'] = extracted_series_uid
-                data['current_study_uid'] = extracted_study_uid
-        elif not focused_series_uid:
-            print(f"[DEBUG] Series navigation: No dataset and no stored series_uid, cannot navigate")
-            return
-        
-        print(f"[DEBUG] Series navigation: subwindow {focused_idx}, study={focused_study_uid[:20] if focused_study_uid else 'None'}..., "
-              f"series={focused_series_uid[:20] if focused_series_uid else 'None'}..., direction={direction}")
-        
-        # Ensure we have valid study UID and that the study exists in current_studies
-        if not focused_study_uid or focused_study_uid not in self.current_studies:
-            print(f"[DEBUG] Series navigation: Invalid study UID or study not in current_studies")
-            return
-        
-        # Validate that the series_uid exists in the study (critical fix for skipping)
-        study_series = self.current_studies[focused_study_uid]
-        if focused_series_uid and focused_series_uid not in study_series:
-            # Series doesn't exist - might be stale data
-            # Use first series in study as fallback
-            print(f"[DEBUG] Series navigation: Series {focused_series_uid[:20] if focused_series_uid else 'None'}... not found in study. "
-                  f"Available series: {list(study_series.keys())[:3]}... (showing first 3)")
-            if study_series:
-                # Get first series (sorted by SeriesNumber if available)
+            data = self.subwindow_data[focused_idx]
+            focused_study_uid = data.get('current_study_uid', '')
+            focused_series_uid = data.get('current_series_uid', '')
+            focused_slice_index = data.get('current_slice_index', 0)
+            
+            # CRITICAL FIX: Extract actual composite series key from currently displayed dataset
+            # This ensures we navigate from what's actually shown, not what's stored
+            displayed_dataset = data.get('current_dataset')
+            if displayed_dataset:
+                extracted_series_uid = get_composite_series_key(displayed_dataset)
+                extracted_study_uid = getattr(displayed_dataset, 'StudyInstanceUID', '')
+                
+                if extracted_series_uid and extracted_series_uid != focused_series_uid:
+                    print(f"[DEBUG] Series navigation: MISMATCH at start! Stored={focused_series_uid}, Extracted={extracted_series_uid}")
+                    print(f"[DEBUG]   Full stored UID: {focused_series_uid}")
+                    print(f"[DEBUG]   Full extracted UID: {extracted_series_uid}")
+                    print(f"[DEBUG]   Using extracted UID for navigation")
+                    # Use the extracted UID - this is what's actually displayed
+                    focused_series_uid = extracted_series_uid
+                    focused_study_uid = extracted_study_uid
+                    # Update subwindow_data immediately to fix the mismatch
+                    data['current_series_uid'] = extracted_series_uid
+                    data['current_study_uid'] = extracted_study_uid
+            elif not focused_series_uid:
+                # No series loaded - load first series (right arrow) or last series (left arrow)
+                print(f"[DEBUG] Series navigation: No series loaded, attempting to load {'first' if direction > 0 else 'last'} series")
+                
+                # Need to get study_uid from somewhere - try to get it from current_studies
+                if not self.current_studies:
+                    print(f"[DEBUG] Series navigation: No studies loaded, cannot navigate")
+                    return
+                
+                # Use the first study (or could use focused_study_uid if available)
+                if not focused_study_uid:
+                    # Get first study
+                    focused_study_uid = list(self.current_studies.keys())[0]
+                    data['current_study_uid'] = focused_study_uid
+                
+                study_series = self.current_studies.get(focused_study_uid, {})
+                if not study_series:
+                    print(f"[DEBUG] Series navigation: Study has no series, cannot navigate")
+                    return
+                
+                # Build sorted list of series
                 series_list = []
                 for series_uid, datasets in study_series.items():
                     if datasets:
@@ -2435,151 +2571,273 @@ class DICOMViewerApp(QObject):
                         except (ValueError, TypeError):
                             series_num = 0
                         series_list.append((series_num, series_uid, datasets))
+                
                 series_list.sort(key=lambda x: x[0])
                 
-                if series_list:
-                    _, first_series_uid, first_datasets = series_list[0]
-                    focused_series_uid = first_series_uid
-                    # Update subwindow_data with correct series
-                    self.subwindow_data[focused_idx]['current_series_uid'] = first_series_uid
-                    self.subwindow_data[focused_idx]['current_dataset'] = first_datasets[0]
-                    self.subwindow_data[focused_idx]['current_slice_index'] = 0
-                    focused_slice_index = 0
-                    print(f"[DEBUG] Series navigation: Using fallback series {first_series_uid[:20]}...")
-                else:
+                if not series_list:
                     print(f"[DEBUG] Series navigation: No valid series in study, cannot navigate")
                     return
-            else:
-                print(f"[DEBUG] Series navigation: Study has no series, cannot navigate")
-                return
+                
+                # Load first series for right arrow, last series for left arrow
+                if direction > 0:
+                    # Right arrow: load first series
+                    _, target_series_uid, target_datasets = series_list[0]
+                    print(f"[DEBUG] Series navigation: Loading first series {target_series_uid[:20]}...")
+                else:
+                    # Left arrow: load last series
+                    _, target_series_uid, target_datasets = series_list[-1]
+                    print(f"[DEBUG] Series navigation: Loading last series {target_series_uid[:20]}...")
+                
+                # Update subwindow_data
+                data['current_series_uid'] = target_series_uid
+                data['current_study_uid'] = focused_study_uid
+                data['current_dataset'] = target_datasets[0]
+                data['current_slice_index'] = 0
+                
+                # Update legacy references
+                self.current_series_uid = target_series_uid
+                self.current_slice_index = 0
+                self.current_dataset = target_datasets[0]
+                self.current_study_uid = focused_study_uid
+                
+                # Set context
+                self.slice_display_manager.set_current_data_context(
+                    self.current_studies,
+                    focused_study_uid,
+                    target_series_uid,
+                    0
+                )
+                
+                # Display the series
+                self.slice_display_manager.display_slice(
+                    target_datasets[0],
+                    self.current_studies,
+                    focused_study_uid,
+                    target_series_uid,
+                    0
+                )
+                
+                # Extract actual composite series key from the dataset that was displayed
+                extracted_series_uid = get_composite_series_key(target_datasets[0])
+                extracted_study_uid = getattr(target_datasets[0], 'StudyInstanceUID', '')
+                
+                # Sync subwindow_data with actual displayed data
+                self.subwindow_data[focused_idx]['current_series_uid'] = extracted_series_uid
+                self.subwindow_data[focused_idx]['current_study_uid'] = extracted_study_uid
+                self.subwindow_data[focused_idx]['current_dataset'] = target_datasets[0]
+                self.subwindow_data[focused_idx]['current_slice_index'] = 0
+                
+                # Update legacy references to match
+                self.current_series_uid = extracted_series_uid
+                self.current_study_uid = extracted_study_uid
+                self.current_slice_index = 0
+                self.current_dataset = target_datasets[0]
+                
+                # Update slice display manager context with extracted UIDs
+                self.slice_display_manager.set_current_data_context(
+                    self.current_studies,
+                    extracted_study_uid,
+                    extracted_series_uid,
+                    0
+                )
+                
+                # Update undo/redo state when dataset changes
+                self._update_undo_redo_state()
+                
+                # Update slice navigator
+                if self.current_studies and self.current_study_uid and self.current_series_uid:
+                    datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
+                    self.slice_navigator.set_total_slices(len(datasets))
+                    self.slice_navigator.set_current_slice(0)
+                
+                # Update series navigator highlighting
+                available_thumbnails = list(self.series_navigator.thumbnails.keys())
+                if self.current_series_uid not in available_thumbnails:
+                    pass
+                self.series_navigator.set_current_series(self.current_series_uid)
+                
+                # Update cine player context
+                self._update_cine_player_context()
+                
+                return  # Early return since we've handled the navigation
         
-        # Set context to match focused subwindow's data BEFORE navigation
-        # This is critical - the slice_display_manager needs the correct context
-        self.slice_display_manager.set_current_data_context(
+            print(f"[DEBUG] Series navigation: subwindow {focused_idx}, study={focused_study_uid[:20] if focused_study_uid else 'None'}..., "
+                  f"series={focused_series_uid[:20] if focused_series_uid else 'None'}..., direction={direction}")
+            
+            # Ensure we have valid study UID and that the study exists in current_studies
+            if not focused_study_uid or focused_study_uid not in self.current_studies:
+                print(f"[DEBUG] Series navigation: Invalid study UID or study not in current_studies")
+                return
+            
+            # Validate that the series_uid exists in the study (critical fix for skipping)
+            study_series = self.current_studies[focused_study_uid]
+            if focused_series_uid and focused_series_uid not in study_series:
+                # Series doesn't exist - might be stale data
+                # Use first series in study as fallback
+                print(f"[DEBUG] Series navigation: Series {focused_series_uid[:20] if focused_series_uid else 'None'}... not found in study. "
+                      f"Available series: {list(study_series.keys())[:3]}... (showing first 3)")
+                if study_series:
+                    # Get first series (sorted by SeriesNumber if available)
+                    series_list = []
+                    for series_uid, datasets in study_series.items():
+                        if datasets:
+                            first_dataset = datasets[0]
+                            series_number = getattr(first_dataset, 'SeriesNumber', None)
+                            try:
+                                series_num = int(series_number) if series_number is not None else 0
+                            except (ValueError, TypeError):
+                                series_num = 0
+                            series_list.append((series_num, series_uid, datasets))
+                    series_list.sort(key=lambda x: x[0])
+                    
+                    if series_list:
+                        _, first_series_uid, first_datasets = series_list[0]
+                        focused_series_uid = first_series_uid
+                        # Update subwindow_data with correct series
+                        self.subwindow_data[focused_idx]['current_series_uid'] = first_series_uid
+                        self.subwindow_data[focused_idx]['current_dataset'] = first_datasets[0]
+                        self.subwindow_data[focused_idx]['current_slice_index'] = 0
+                        focused_slice_index = 0
+                        print(f"[DEBUG] Series navigation: Using fallback series {first_series_uid[:20]}...")
+                    else:
+                        print(f"[DEBUG] Series navigation: No valid series in study, cannot navigate")
+                        return
+                else:
+                    print(f"[DEBUG] Series navigation: Study has no series, cannot navigate")
+                    return
+            
+            # Set context to match focused subwindow's data BEFORE navigation
+            # This is critical - the slice_display_manager needs the correct context
+            self.slice_display_manager.set_current_data_context(
             self.current_studies,
             focused_study_uid,
-            focused_series_uid,
-            focused_slice_index
-        )
-        
-        # Verify context was set correctly (debug check)
-        # Ensure the slice_display_manager's internal state matches what we set
-        if (self.slice_display_manager.current_study_uid != focused_study_uid or 
-            self.slice_display_manager.current_series_uid != focused_series_uid):
-            print(f"[DEBUG] Series navigation: Context mismatch detected. "
-                  f"Expected study={focused_study_uid[:20]}..., series={focused_series_uid[:20]}..., "
-                  f"Got study={self.slice_display_manager.current_study_uid[:20] if self.slice_display_manager.current_study_uid else 'None'}..., "
-                  f"series={self.slice_display_manager.current_series_uid[:20] if self.slice_display_manager.current_series_uid else 'None'}...")
-            # Context didn't update correctly, force it again
-            self.slice_display_manager.set_current_data_context(
-                self.current_studies,
-                focused_study_uid,
                 focused_series_uid,
                 focused_slice_index
             )
-        
-        # Navigate series for focused subwindow
-        new_series_uid, slice_index, dataset = self.slice_display_manager.handle_series_navigation(direction)
-        
-        if new_series_uid is None:
-            print(f"[DEBUG] Series navigation: handle_series_navigation returned None (navigation failed)")
-        else:
-            print(f"[DEBUG] Series navigation: Successfully navigated to series {new_series_uid[:20]}..., slice_index={slice_index}")
-        if new_series_uid is not None and dataset is not None:
-            # Update focused subwindow's data
-            self.subwindow_data[focused_idx]['current_series_uid'] = new_series_uid
-            self.subwindow_data[focused_idx]['current_slice_index'] = slice_index
-            self.subwindow_data[focused_idx]['current_dataset'] = dataset
             
-            # Update legacy references (point to focused subwindow)
-            self.current_series_uid = new_series_uid
-            self.current_slice_index = slice_index
-            self.current_dataset = dataset
-            self.current_study_uid = focused_study_uid  # Ensure study_uid matches
+            # Verify context was set correctly (debug check)
+            # Ensure the slice_display_manager's internal state matches what we set
+            if (self.slice_display_manager.current_study_uid != focused_study_uid or 
+                self.slice_display_manager.current_series_uid != focused_series_uid):
+                print(f"[DEBUG] Series navigation: Context mismatch detected. "
+                      f"Expected study={focused_study_uid[:20]}..., series={focused_series_uid[:20]}..., "
+                      f"Got study={self.slice_display_manager.current_study_uid[:20] if self.slice_display_manager.current_study_uid else 'None'}..., "
+                      f"series={self.slice_display_manager.current_series_uid[:20] if self.slice_display_manager.current_series_uid else 'None'}...")
+                # Context didn't update correctly, force it again
+                self.slice_display_manager.set_current_data_context(
+                    self.current_studies,
+                    focused_study_uid,
+                    focused_series_uid,
+                    focused_slice_index
+                )
             
-            # Reset projection state when switching series
-            self.slice_display_manager.reset_projection_state()
-            # Update widget to match reset state
-            self.intensity_projection_controls_widget.set_enabled(False)
-            self.intensity_projection_controls_widget.set_projection_type("aip")
-            self.intensity_projection_controls_widget.set_slice_count(4)
+            # Navigate series for focused subwindow
+            new_series_uid, slice_index, dataset = self.slice_display_manager.handle_series_navigation(direction)
             
-            # Display slice
-            self.slice_display_manager.display_slice(
-                dataset,
-                self.current_studies,
-                focused_study_uid,  # Use focused subwindow's study_uid
-                new_series_uid,
-                slice_index
-            )
-            
-            # Extract actual composite series key from the dataset that was displayed
-            # This ensures subwindow_data always reflects what's actually shown
-            extracted_series_uid = get_composite_series_key(dataset)
-            extracted_study_uid = getattr(dataset, 'StudyInstanceUID', '')
-            
-            # Get stored values for comparison
-            stored_series_uid = new_series_uid
-            stored_study_uid = focused_study_uid
-            
-            # Log the sync with FULL UIDs (not truncated) to diagnose mismatches
-            if extracted_series_uid != stored_series_uid:
-                print(f"[DEBUG] Syncing subwindow_data after navigation: MISMATCH detected!")
-                print(f"[DEBUG]   Extracted series_uid from dataset: {extracted_series_uid}")
-                print(f"[DEBUG]   Stored series_uid (from navigation): {stored_series_uid}")
-                print(f"[DEBUG]   Series UID match: False - updating stored value to match dataset")
+            if new_series_uid is None:
+                print(f"[DEBUG] Series navigation: handle_series_navigation returned None (navigation failed)")
             else:
-                print(f"[DEBUG] Syncing subwindow_data after navigation: series_uid matches")
-                print(f"[DEBUG]   Series UID: {extracted_series_uid}")
-            
-            if extracted_study_uid != stored_study_uid:
-                print(f"[DEBUG]   Extracted study_uid from dataset: {extracted_study_uid}")
-                print(f"[DEBUG]   Stored study_uid: {stored_study_uid}")
-                print(f"[DEBUG]   Study UID match: False - updating stored value to match dataset")
-            
-            # Update subwindow_data with extracted UIDs from dataset
-            # This ensures navigation always starts from the correct series that's actually displayed
-            self.subwindow_data[focused_idx]['current_series_uid'] = extracted_series_uid
-            self.subwindow_data[focused_idx]['current_study_uid'] = extracted_study_uid
-            self.subwindow_data[focused_idx]['current_dataset'] = dataset
-            self.subwindow_data[focused_idx]['current_slice_index'] = slice_index
-            
-            # Update legacy references to match
-            self.current_series_uid = extracted_series_uid
-            self.current_study_uid = extracted_study_uid
-            self.current_slice_index = slice_index
-            self.current_dataset = dataset
-            
-            # Update slice display manager context with extracted UIDs (after sync)
-            # This ensures the manager's context matches what's actually displayed
-            self.slice_display_manager.set_current_data_context(
-                self.current_studies,
-                extracted_study_uid,  # Use extracted UID
-                extracted_series_uid,  # Use extracted UID
-                slice_index
-            )
-            
-            # Update undo/redo state when dataset changes
-            self._update_undo_redo_state()
-            
-            # Update slice navigator (shared, shows focused subwindow's slice)
-            if self.current_studies and self.current_study_uid and self.current_series_uid:
-                datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
-                self.slice_navigator.set_total_slices(len(datasets))
-                self.slice_navigator.set_current_slice(slice_index)
-            
-            # Update series navigator highlighting
-            # print(f"[DEBUG] Updating series navigator: setting current_series_uid={self.current_series_uid}")
-            # print(f"[DEBUG]   Full UID: {self.current_series_uid}")
-            available_thumbnails = list(self.series_navigator.thumbnails.keys())
-            # print(f"[DEBUG]   Available thumbnails ({len(available_thumbnails)}): {[uid[:30] + '...' if len(uid) > 30 else uid for uid in available_thumbnails[:5]]}")
-            if self.current_series_uid not in available_thumbnails:
-                # print(f"[DEBUG]   WARNING: series_uid not found in thumbnails! This will cause highlighting to fail.")
-                pass
-            self.series_navigator.set_current_series(self.current_series_uid)
-            
-            # Update cine player context and check if series is cine-capable
-            self._update_cine_player_context()
+                print(f"[DEBUG] Series navigation: Successfully navigated to series {new_series_uid[:20]}..., slice_index={slice_index}")
+            if new_series_uid is not None and dataset is not None:
+                # Update focused subwindow's data
+                self.subwindow_data[focused_idx]['current_series_uid'] = new_series_uid
+                self.subwindow_data[focused_idx]['current_slice_index'] = slice_index
+                self.subwindow_data[focused_idx]['current_dataset'] = dataset
+                
+                # Update legacy references (point to focused subwindow)
+                self.current_series_uid = new_series_uid
+                self.current_slice_index = slice_index
+                self.current_dataset = dataset
+                self.current_study_uid = focused_study_uid  # Ensure study_uid matches
+                
+                # Reset projection state when switching series
+                self.slice_display_manager.reset_projection_state()
+                # Update widget to match reset state
+                self.intensity_projection_controls_widget.set_enabled(False)
+                self.intensity_projection_controls_widget.set_projection_type("aip")
+                self.intensity_projection_controls_widget.set_slice_count(4)
+                
+                # Display slice
+                self.slice_display_manager.display_slice(
+                    dataset,
+                    self.current_studies,
+                    focused_study_uid,  # Use focused subwindow's study_uid
+                    new_series_uid,
+                    slice_index
+                )
+                
+                # Extract actual composite series key from the dataset that was displayed
+                # This ensures subwindow_data always reflects what's actually shown
+                extracted_series_uid = get_composite_series_key(dataset)
+                extracted_study_uid = getattr(dataset, 'StudyInstanceUID', '')
+                
+                # Get stored values for comparison
+                stored_series_uid = new_series_uid
+                stored_study_uid = focused_study_uid
+                
+                # Log the sync with FULL UIDs (not truncated) to diagnose mismatches
+                if extracted_series_uid != stored_series_uid:
+                    print(f"[DEBUG] Syncing subwindow_data after navigation: MISMATCH detected!")
+                    print(f"[DEBUG]   Extracted series_uid from dataset: {extracted_series_uid}")
+                    print(f"[DEBUG]   Stored series_uid (from navigation): {stored_series_uid}")
+                    print(f"[DEBUG]   Series UID match: False - updating stored value to match dataset")
+                else:
+                    print(f"[DEBUG] Syncing subwindow_data after navigation: series_uid matches")
+                    print(f"[DEBUG]   Series UID: {extracted_series_uid}")
+                
+                if extracted_study_uid != stored_study_uid:
+                    print(f"[DEBUG]   Extracted study_uid from dataset: {extracted_study_uid}")
+                    print(f"[DEBUG]   Stored study_uid: {stored_study_uid}")
+                    print(f"[DEBUG]   Study UID match: False - updating stored value to match dataset")
+                
+                # Update subwindow_data with extracted UIDs from dataset
+                # This ensures navigation always starts from the correct series that's actually displayed
+                self.subwindow_data[focused_idx]['current_series_uid'] = extracted_series_uid
+                self.subwindow_data[focused_idx]['current_study_uid'] = extracted_study_uid
+                self.subwindow_data[focused_idx]['current_dataset'] = dataset
+                self.subwindow_data[focused_idx]['current_slice_index'] = slice_index
+                
+                # Update legacy references to match
+                self.current_series_uid = extracted_series_uid
+                self.current_study_uid = extracted_study_uid
+                self.current_slice_index = slice_index
+                self.current_dataset = dataset
+                
+                # Update slice display manager context with extracted UIDs (after sync)
+                # This ensures the manager's context matches what's actually displayed
+                self.slice_display_manager.set_current_data_context(
+                    self.current_studies,
+                    extracted_study_uid,  # Use extracted UID
+                    extracted_series_uid,  # Use extracted UID
+                    slice_index
+                )
+                
+                # Update undo/redo state when dataset changes
+                self._update_undo_redo_state()
+                
+                # Update slice navigator (shared, shows focused subwindow's slice)
+                if self.current_studies and self.current_study_uid and self.current_series_uid:
+                    datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
+                    self.slice_navigator.set_total_slices(len(datasets))
+                    self.slice_navigator.set_current_slice(slice_index)
+                
+                # Update series navigator highlighting
+                # print(f"[DEBUG] Updating series navigator: setting current_series_uid={self.current_series_uid}")
+                # print(f"[DEBUG]   Full UID: {self.current_series_uid}")
+                available_thumbnails = list(self.series_navigator.thumbnails.keys())
+                # print(f"[DEBUG]   Available thumbnails ({len(available_thumbnails)}): {[uid[:30] + '...' if len(uid) > 30 else uid for uid in available_thumbnails[:5]]}")
+                if self.current_series_uid not in available_thumbnails:
+                    # print(f"[DEBUG]   WARNING: series_uid not found in thumbnails! This will cause highlighting to fail.")
+                    pass
+                self.series_navigator.set_current_series(self.current_series_uid)
+                
+                # Update cine player context and check if series is cine-capable
+                self._update_cine_player_context()
+        finally:
+            # Always clear navigation lock, even if an error occurred
+            timestamp = time.time()
+            print(f"[DEBUG-NAV] [{timestamp:.6f}] Series navigation: Lock released")
+            self._series_navigation_in_progress = False
     
     def _on_series_navigator_selected(self, series_uid: str) -> None:
         """
@@ -2811,20 +3069,21 @@ class DICOMViewerApp(QObject):
                 print(f"[DEBUG-PROJECTION] _on_projection_enabled_changed: Widget state ({current_widget_state}) != signal ({enabled}), syncing widget")
                 self.intensity_projection_controls_widget.set_enabled(enabled)
             else:
-                print(f"[DEBUG-PROJECTION] _on_projection_enabled_changed: Widget state ({current_widget_state}) matches signal ({enabled}), no widget update needed")
+                # print(f"[DEBUG-PROJECTION] _on_projection_enabled_changed: Widget state ({current_widget_state}) matches signal ({enabled}), no widget update needed")
+                pass
         
         # Redisplay current slice with new projection state
         if self.current_dataset is not None:
-            print(f"[DEBUG-PROJECTION] _on_projection_enabled_changed: Redisplaying slice, current_dataset exists, "
-                  f"selected_roi={id(self.roi_manager.get_selected_roi()) if self.roi_manager.get_selected_roi() else None}, "
-                  f"projection_enabled={self.slice_display_manager.projection_enabled}")
+            # print(f"[DEBUG-PROJECTION] _on_projection_enabled_changed: Redisplaying slice, current_dataset exists, "
+            #       f"selected_roi={id(self.roi_manager.get_selected_roi()) if self.roi_manager.get_selected_roi() else None}, "
+            #       f"projection_enabled={self.slice_display_manager.projection_enabled}")
             
             # Verify ROI coordinator callback sees the updated state before redisplaying
             if hasattr(self, 'roi_coordinator') and self.roi_coordinator is not None:
                 if self.roi_coordinator.get_projection_enabled is not None:
                     callback_state = self.roi_coordinator.get_projection_enabled()
-                    print(f"[DEBUG-PROJECTION] _on_projection_enabled_changed: ROI coordinator callback state before redisplay: {callback_state}, "
-                          f"manager state: {self.slice_display_manager.projection_enabled}")
+                    # print(f"[DEBUG-PROJECTION] _on_projection_enabled_changed: ROI coordinator callback state before redisplay: {callback_state}, "
+                    #       f"manager state: {self.slice_display_manager.projection_enabled}")
                     if callback_state != self.slice_display_manager.projection_enabled:
                         print(f"[DEBUG-PROJECTION] _on_projection_enabled_changed: WARNING - Callback state mismatch! "
                               f"Callback={callback_state}, Manager={self.slice_display_manager.projection_enabled}")
@@ -2846,14 +3105,14 @@ class DICOMViewerApp(QObject):
         Args:
             projection_type: "aip", "mip", or "minip"
         """
-        print(f"[DEBUG-PROJECTION] _on_projection_type_changed: projection_type={projection_type}, "
-              f"projection_enabled={self.slice_display_manager.projection_enabled}")
+        # print(f"[DEBUG-PROJECTION] _on_projection_type_changed: projection_type={projection_type}, "
+        #       f"projection_enabled={self.slice_display_manager.projection_enabled}")
         self.slice_display_manager.set_projection_type(projection_type)
         # Update widget state
         self.intensity_projection_controls_widget.set_projection_type(projection_type)
         # Redisplay current slice with new projection type
         if self.current_dataset is not None and self.slice_display_manager.projection_enabled:
-            print(f"[DEBUG-PROJECTION] _on_projection_type_changed: Redisplaying slice")
+            # print(f"[DEBUG-PROJECTION] _on_projection_type_changed: Redisplaying slice")
             self._display_slice(self.current_dataset)
     
     def _on_projection_slice_count_changed(self, count: int) -> None:
@@ -2995,6 +3254,8 @@ class DICOMViewerApp(QObject):
         for subwindow_idx, managers in self.subwindow_managers.items():
             if 'overlay_manager' in managers and managers['overlay_manager']:
                 managers['overlay_manager'].set_privacy_mode(enabled)
+            if 'crosshair_manager' in managers and managers['crosshair_manager']:
+                managers['crosshair_manager'].set_privacy_mode(enabled)
         
         # Update privacy view state on all image viewers (for context menu synchronization)
         subwindows = self.multi_window_layout.get_all_subwindows()
@@ -3272,9 +3533,12 @@ class DICOMViewerApp(QObject):
     
     def _delete_all_rois_current_slice(self) -> None:
         """
-        Delete all ROIs on the current slice.
+        Delete all ROIs and crosshairs on the current slice.
         """
         self.roi_coordinator.delete_all_rois_current_slice()
+        # Also delete all crosshairs
+        if hasattr(self, 'crosshair_coordinator') and self.crosshair_coordinator:
+            self.crosshair_coordinator.handle_clear_crosshairs()
     
     def _on_scroll_wheel_mode_changed(self, mode: str) -> None:
         """
@@ -3629,6 +3893,10 @@ class DICOMViewerApp(QObject):
             # Update About This File dialog if open
             self._update_about_this_file_dialog()
             
+            # Update crosshairs for new slice
+            if 'crosshair_coordinator' in managers and managers['crosshair_coordinator']:
+                managers['crosshair_coordinator'].update_crosshairs_for_slice()
+            
             # Update frame slider position
             total_slices = len(series_datasets)
             if total_slices > 0:
@@ -3866,7 +4134,13 @@ class DICOMViewerApp(QObject):
             True if event was handled, False otherwise
         """
         from PySide6.QtGui import QKeyEvent
+        from PySide6.QtCore import Qt
         if isinstance(event, QKeyEvent):
+            # Don't intercept standard shortcuts - let menu system handle them
+            if event.key() == Qt.Key.Key_Z:
+                if event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier):
+                    # Cmd+Z or Ctrl+Z - let menu handle it
+                    return False
             return self.keyboard_event_handler.handle_key_event(event)
         return super().eventFilter(obj, event)
     

@@ -1,0 +1,104 @@
+name: Build Executables
+
+# This workflow builds executables for Windows, macOS, and Linux
+# It runs when you push a version tag (e.g., v1.0.0) or manually trigger it
+
+on:
+  push:
+    tags:
+      - 'v*'  # Triggers on version tags like v1.0.0, v2.1.3, etc.
+  workflow_dispatch:  # Allows manual triggering from GitHub Actions tab
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+        include:
+          - os: windows-latest
+            artifact_name: DICOMViewerV3-Windows
+            executable_path: dist/DICOMViewerV3.exe
+          - os: macos-latest
+            artifact_name: DICOMViewerV3-macOS
+            executable_path: dist/DICOMViewerV3.app
+          - os: ubuntu-latest
+            artifact_name: DICOMViewerV3-Linux
+            executable_path: dist/DICOMViewerV3
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install system dependencies (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-glx libegl1-mesa libxrandr2 libxss1 libxcursor1 libxcomposite1 libasound2 libxi6 libxtst6
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-build.txt
+
+      - name: Remove typing package if present (PyInstaller compatibility)
+        run: |
+          python -m pip uninstall -y typing || true
+
+      - name: Build executable
+        run: |
+          pyinstaller DICOMViewerV3.spec --clean --noconfirm
+
+      - name: Verify executable exists
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" == "windows-latest" ]; then
+            if [ ! -f "dist/DICOMViewerV3.exe" ]; then
+              echo "Error: DICOMViewerV3.exe not found"
+              exit 1
+            fi
+            ls -lh dist/DICOMViewerV3.exe
+          elif [ "${{ matrix.os }}" == "macos-latest" ]; then
+            if [ ! -d "dist/DICOMViewerV3.app" ]; then
+              echo "Error: DICOMViewerV3.app not found"
+              exit 1
+            fi
+            ls -lh dist/DICOMViewerV3.app
+          else
+            if [ ! -f "dist/DICOMViewerV3" ]; then
+              echo "Error: DICOMViewerV3 executable not found"
+              exit 1
+            fi
+            ls -lh dist/DICOMViewerV3
+          fi
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: |
+            dist/DICOMViewerV3*
+            build/
+          retention-days: 90
+
+      - name: Create Release (on tag push)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dist/DICOMViewerV3*
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
