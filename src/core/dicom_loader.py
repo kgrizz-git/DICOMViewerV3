@@ -79,7 +79,7 @@ class DICOMLoader:
             # These files use PerFrameFunctionalGroupsSequence and store pixel data
             # differently - they cannot be validated using stop_before_pixels
             if hasattr(ds, 'PerFrameFunctionalGroupsSequence'):
-                print(f"[VALIDATION] Skipping validation for Enhanced Multi-frame DICOM: {os.path.basename(file_path)}")
+                # print(f"[VALIDATION] Skipping validation for Enhanced Multi-frame DICOM: {os.path.basename(file_path)}")
                 return True, None
             
             # Check for multi-frame

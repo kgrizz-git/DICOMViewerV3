@@ -363,6 +363,13 @@ class MeasurementHandle(QGraphicsEllipseItem):
                         # print(f"[Handle {self.is_start}] Updated end point to {scene_pos}, start point: {self.parent_measurement.start_point}")
                 finally:
                     self.parent_measurement._updating_handles = False
+                
+                # Trigger measurement move callback after handle drag
+                if self.parent_measurement.on_moved_callback:
+                    try:
+                        self.parent_measurement.on_moved_callback()
+                    except Exception:
+                        pass
         
         return super().itemChange(change, value)
 
@@ -454,6 +461,11 @@ class MeasurementItem(QGraphicsItemGroup):
         self._dragging_handle: Optional[MeasurementHandle] = None
         # Track position during drag to update handles when line is moved
         self._last_drag_pos: Optional[QPointF] = None
+        
+        # Callback for when measurement is moved
+        self.on_moved_callback: Optional[Callable[[], None]] = None
+        # Callback for when mouse is released (for immediate move finalization)
+        self.on_mouse_release_callback: Optional[Callable[[], None]] = None
         
         # Calculate initial distance
         self.update_distance()
@@ -927,10 +939,10 @@ class MeasurementItem(QGraphicsItemGroup):
                 self.line_item.update()
                 self.update()
                 
-                # Update text position (relative to group)
-                mid_point_relative = QPointF(
-                    self.end_relative.x() / 2.0,
-                    self.end_relative.y() / 2.0
+                # Calculate midpoint in scene coordinates (text item is not a child of group)
+                mid_point_scene = QPointF(
+                    (self.start_point.x() + self.end_point.x()) / 2.0,
+                    (self.start_point.y() + self.end_point.y()) / 2.0
                 )
                 
                 # Convert viewport pixel offset to scene coordinates
@@ -950,14 +962,15 @@ class MeasurementItem(QGraphicsItemGroup):
                     self.text_offset_viewport.y() * viewport_to_scene_scale
                 )
                 
-                # Use converted offset
-                text_pos = mid_point_relative + self.text_offset
+                # Calculate text position in scene coordinates (text is not a child of group)
+                text_pos_scene = mid_point_scene + self.text_offset
                 
                 # Set updating flag if it's a draggable text item
                 if isinstance(self.text_item, DraggableMeasurementText):
                     self.text_item._updating_position = True
                 
-                self.text_item.setPos(text_pos)
+                # Position text in scene coordinates (not relative to group)
+                self.text_item.setPos(text_pos_scene)
                 
                 # Clear updating flag
                 if isinstance(self.text_item, DraggableMeasurementText):
@@ -987,6 +1000,15 @@ class MeasurementItem(QGraphicsItemGroup):
             # print(f"[MeasurementItem] Ignoring mouseReleaseEvent - handle {self._dragging_handle.is_start} is being dragged")
             # Note: Don't clear _dragging_handle here - let the handle do it in its mouseReleaseEvent
             return
+        
+        # Finalize move immediately on mouse release (before clearing drag tracking)
+        # This ensures undo command is created right away, fixing the issue where
+        # pressing undo before the timer fires would undo the wrong operation
+        if self.on_mouse_release_callback:
+            try:
+                self.on_mouse_release_callback()
+            except Exception:
+                pass
         
         # Clear drag tracking when drag ends
         self._last_drag_pos = None
@@ -1135,6 +1157,13 @@ class MeasurementItem(QGraphicsItemGroup):
             return self.start_point
         
         elif change == QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged:
+            # Call movement callback if set
+            if self.on_moved_callback:
+                try:
+                    self.on_moved_callback()
+                except Exception:
+                    pass
+            
             # Backup handler for position changes (in case ItemPositionChange isn't triggered)
             # Only process if we're not currently tracking via mouseMoveEvent
             if self._last_drag_pos is None:

@@ -490,6 +490,10 @@ class TagViewerDialog(QDialog):
                 self.tag_edited.emit(tag_str, new_value)
                 # Refresh the tree view
                 search_text = self.search_edit.text()
+                # Clear parser cache so it re-reads from updated dataset
+                if self.parser is not None:
+                    self.parser._tag_cache.clear()
+                self._cached_tags = None
                 self._populate_tags(search_text)
     
     def _show_context_menu(self, position) -> None:

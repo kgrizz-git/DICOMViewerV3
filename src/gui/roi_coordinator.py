@@ -21,13 +21,17 @@ Requirements:
     - DICOMProcessor for pixel array operations
 """
 
-from PySide6.QtCore import QPointF
-from typing import Optional, Callable
+from PySide6.QtCore import QPointF, QTimer
+from typing import Optional, Callable, TYPE_CHECKING, Dict
 from pydicom.dataset import Dataset
 import numpy as np
 from tools.roi_manager import ROIManager
 from gui.roi_list_panel import ROIListPanel
 from gui.roi_statistics_panel import ROIStatisticsPanel
+
+if TYPE_CHECKING:
+    from utils.undo_redo import UndoRedoManager, ROICommand, ROIMoveCommand
+    from gui.crosshair_coordinator import CrosshairCoordinator
 from gui.image_viewer import ImageViewer
 from core.dicom_processor import DICOMProcessor
 from gui.window_level_controls import WindowLevelControls
@@ -64,7 +68,10 @@ class ROICoordinator:
         get_projection_enabled: Optional[Callable[[], bool]] = None,
         get_projection_type: Optional[Callable[[], str]] = None,
         get_projection_slice_count: Optional[Callable[[], int]] = None,
-        get_current_studies: Optional[Callable[[], dict]] = None
+        get_current_studies: Optional[Callable[[], dict]] = None,
+        undo_redo_manager: Optional['UndoRedoManager'] = None,
+        update_undo_redo_state_callback: Optional[Callable[[], None]] = None,
+        crosshair_coordinator: Optional['CrosshairCoordinator'] = None
     ):
         """
         Initialize the ROI coordinator.
@@ -101,6 +108,13 @@ class ROICoordinator:
         self.get_projection_type = get_projection_type
         self.get_projection_slice_count = get_projection_slice_count
         self.get_current_studies = get_current_studies
+        self.undo_redo_manager = undo_redo_manager
+        self.update_undo_redo_state_callback = update_undo_redo_state_callback
+        self.crosshair_coordinator = crosshair_coordinator
+        
+        # ROI move tracking with batching
+        self._roi_move_tracking: Dict[object, Dict] = {}  # Tracks ongoing moves
+        self._move_batch_timer: Optional[QTimer] = None  # Timer for debouncing
     
     def _get_pixel_array_for_statistics(self) -> Optional[np.ndarray]:
         """
@@ -369,6 +383,24 @@ class ROICoordinator:
             return
         
         # Normal ROI drawing finish (not auto window/level)
+        # Create undo/redo command for ROI addition
+        if roi_item is not None and self.undo_redo_manager and self.image_viewer.scene:
+            from utils.undo_redo import ROICommand
+            command = ROICommand(
+                self.roi_manager,
+                "add",
+                roi_item,
+                self.image_viewer.scene,
+                study_uid,
+                series_uid,
+                instance_identifier,
+                update_statistics_callback=self.update_roi_statistics_overlays
+            )
+            self.undo_redo_manager.execute_command(command)
+            # Update undo/redo state after command execution
+            if self.update_undo_redo_state_callback:
+                self.update_undo_redo_state_callback()
+        
         # Update ROI list
         self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
         
@@ -454,16 +486,40 @@ class ROICoordinator:
         """
         roi = self.roi_manager.find_roi_by_item(item)
         if roi:
-            self.roi_manager.delete_roi(roi, self.image_viewer.scene)
-            # Explicitly handle deletion to ensure overlay is removed
-            self.handle_roi_deleted(roi)
-            # Update ROI list panel - extract identifiers from current dataset
+            # Get identifiers before deletion
             current_dataset = self.get_current_dataset()
+            study_uid = ""
+            series_uid = ""
+            instance_identifier = self.get_current_slice_index()
             if current_dataset is not None:
                 study_uid = getattr(current_dataset, 'StudyInstanceUID', '')
                 series_uid = get_composite_series_key(current_dataset)
-                # Use current slice index as instance identifier (array position)
-                instance_identifier = self.get_current_slice_index()
+            
+            # Create undo/redo command for ROI deletion
+            if self.undo_redo_manager and self.image_viewer.scene:
+                from utils.undo_redo import ROICommand
+                command = ROICommand(
+                    self.roi_manager,
+                    "remove",
+                    roi,
+                    self.image_viewer.scene,
+                    study_uid,
+                    series_uid,
+                    instance_identifier,
+                    update_statistics_callback=self.update_roi_statistics_overlays
+                )
+                self.undo_redo_manager.execute_command(command)
+                # Update undo/redo state after command execution
+                if self.update_undo_redo_state_callback:
+                    self.update_undo_redo_state_callback()
+            else:
+                # Fallback to direct deletion if undo/redo not available
+                self.roi_manager.delete_roi(roi, self.image_viewer.scene)
+            
+            # Explicitly handle deletion to ensure overlay is removed
+            self.handle_roi_deleted(roi)
+            # Update ROI list panel
+            if current_dataset is not None:
                 self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
             if self.roi_manager.get_selected_roi() is None:
                 self.roi_statistics_panel.clear_statistics()
@@ -506,7 +562,7 @@ class ROICoordinator:
     
     def delete_all_rois_current_slice(self) -> None:
         """
-        Delete all ROIs on the current slice.
+        Delete all ROIs and crosshairs on the current slice.
         
         Called by D key keyboard shortcut and Delete All button in ROI list panel.
         """
@@ -524,8 +580,65 @@ class ROICoordinator:
         # Use current slice index as instance identifier (array position)
         instance_identifier = self.get_current_slice_index()
         
-        # Clear all ROIs for this slice
-        self.roi_manager.clear_slice_rois(study_uid, series_uid, instance_identifier, self.image_viewer.scene)
+        # Get all ROIs for this slice before deletion
+        key = (study_uid, series_uid, instance_identifier)
+        rois_to_delete = []
+        if key in self.roi_manager.rois:
+            rois_to_delete = list(self.roi_manager.rois[key])
+        
+        # Get all crosshairs for this slice before deletion
+        crosshairs_to_delete = []
+        if self.crosshair_coordinator and self.crosshair_coordinator.crosshair_manager:
+            if key in self.crosshair_coordinator.crosshair_manager.crosshairs:
+                crosshairs_to_delete = list(self.crosshair_coordinator.crosshair_manager.crosshairs[key])
+        
+        if not rois_to_delete and not crosshairs_to_delete:
+            return  # Nothing to delete
+        
+        # Create a composite command for deleting all ROIs and crosshairs together
+        if self.undo_redo_manager and self.image_viewer.scene:
+            from utils.undo_redo import CompositeCommand, ROICommand, CrosshairCommand
+            commands = []
+            
+            # Add ROI deletion commands
+            for roi_item in rois_to_delete:
+                command = ROICommand(
+                    self.roi_manager,
+                    "remove",
+                    roi_item,
+                    self.image_viewer.scene,
+                    study_uid,
+                    series_uid,
+                    instance_identifier,
+                    update_statistics_callback=self.update_roi_statistics_overlays
+                )
+                commands.append(command)
+            
+            # Add crosshair deletion commands
+            if self.crosshair_coordinator and crosshairs_to_delete:
+                for crosshair_item in crosshairs_to_delete:
+                    command = CrosshairCommand(
+                        self.crosshair_coordinator.crosshair_manager,
+                        "remove",
+                        crosshair_item,
+                        self.image_viewer.scene,
+                        study_uid,
+                        series_uid,
+                        instance_identifier
+                    )
+                    commands.append(command)
+            
+            if commands:
+                composite_command = CompositeCommand(commands)
+                self.undo_redo_manager.execute_command(composite_command)
+                if self.update_undo_redo_state_callback:
+                    self.update_undo_redo_state_callback()
+        else:
+            # Fallback to direct deletion
+            if rois_to_delete:
+                self.roi_manager.clear_slice_rois(study_uid, series_uid, instance_identifier, self.image_viewer.scene)
+            if self.crosshair_coordinator and crosshairs_to_delete:
+                self.crosshair_coordinator.handle_clear_crosshairs()
         
         # Update ROI list panel
         self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
@@ -804,36 +917,79 @@ class ROICoordinator:
     
     def _on_roi_moved(self, roi) -> None:
         """
-        Handle ROI movement - recalculate statistics and update overlays.
+        Handle ROI movement - track for undo/redo with batching and update statistics.
         
         Args:
             roi: ROI item that was moved
         """
-        # print(f"[DEBUG-ROI] _on_roi_moved called for ROI {id(roi)}")
         try:
             # Check if ROI is still valid
             if roi is None or not hasattr(roi, 'item') or roi.item is None:
-                # print(f"[DEBUG-ROI] ROI is invalid, skipping movement handling")
                 return
             
+            # Get current position
+            current_pos = roi.item.pos()
+            
+            # Check if ROI is being tracked for movement
+            if roi not in self._roi_move_tracking:
+                # Store initial position and start tracking
+                self._roi_move_tracking[roi] = {
+                    'initial_pos': current_pos,
+                    'current_pos': current_pos
+                }
+            else:
+                # Update current position (don't create command yet)
+                self._roi_move_tracking[roi]['current_pos'] = current_pos
+            
+            # Start/restart batch timer (200ms delay)
+            if self._move_batch_timer is not None:
+                self._move_batch_timer.stop()
+            
+            self._move_batch_timer = QTimer()
+            self._move_batch_timer.setSingleShot(True)
+            self._move_batch_timer.timeout.connect(lambda: self._finalize_roi_move(roi))
+            self._move_batch_timer.start(200)  # 200ms delay
+            
             # Recalculate statistics for the moved ROI
-            # print(f"[DEBUG-ROI] Recalculating statistics for moved ROI")
             self.update_roi_statistics(roi)
             
             # Update overlay position
             if hasattr(roi, 'statistics_overlay_item') and roi.statistics_overlay_item is not None:
                 if hasattr(roi, 'statistics_overlay_visible') and roi.statistics_overlay_visible:
                     if self.image_viewer.scene is not None:
-                        # print(f"[DEBUG-ROI] Updating overlay position for moved ROI")
                         self.roi_manager.update_statistics_overlay_position(roi, self.image_viewer.scene)
             
             # Update ROI statistics panel if this ROI is selected
             if self.roi_manager.get_selected_roi() == roi:
                 # Statistics panel will be updated by update_roi_statistics
-                # print(f"[DEBUG-ROI] ROI is selected, statistics panel updated")
                 pass
         except Exception as e:
-            # print(f"[DEBUG-ROI] Error in _on_roi_moved: {e}")
             import traceback
             traceback.print_exc()
+    
+    def _finalize_roi_move(self, roi) -> None:
+        """
+        Finalize ROI move by creating undo/redo command.
+        
+        Args:
+            roi: ROI item that was moved
+        """
+        if roi not in self._roi_move_tracking:
+            return
+        
+        tracking = self._roi_move_tracking[roi]
+        initial_pos = tracking['initial_pos']
+        final_pos = tracking['current_pos']
+        
+        # Only create command if position actually changed
+        if initial_pos != final_pos and self.undo_redo_manager and self.image_viewer.scene:
+            from utils.undo_redo import ROIMoveCommand
+            command = ROIMoveCommand(roi, initial_pos, final_pos, self.image_viewer.scene)
+            self.undo_redo_manager.execute_command(command)
+            # Update undo/redo state after command execution
+            if self.update_undo_redo_state_callback:
+                self.update_undo_redo_state_callback()
+        
+        # Clear tracking
+        del self._roi_move_tracking[roi]
 

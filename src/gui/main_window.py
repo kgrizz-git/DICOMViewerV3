@@ -175,14 +175,14 @@ class MainWindow(QMainWindow):
         # Edit menu
         edit_menu = menubar.addMenu("&Edit")
         
-        # Undo/Redo actions for tag edits
-        self.undo_tag_edit_action = QAction("&Undo Tag Edit", self)
+        # Undo/Redo actions (for both tag edits and annotations)
+        self.undo_tag_edit_action = QAction("&Undo", self)
         self.undo_tag_edit_action.setShortcut(QKeySequence.Undo)
         self.undo_tag_edit_action.setEnabled(False)
         self.undo_tag_edit_action.triggered.connect(self.undo_tag_edit_requested.emit)
         edit_menu.addAction(self.undo_tag_edit_action)
         
-        self.redo_tag_edit_action = QAction("&Redo Tag Edit", self)
+        self.redo_tag_edit_action = QAction("&Redo", self)
         self.redo_tag_edit_action.setShortcut(QKeySequence.Redo)
         self.redo_tag_edit_action.setEnabled(False)
         self.redo_tag_edit_action.triggered.connect(self.redo_tag_edit_requested.emit)
@@ -330,12 +330,26 @@ class MainWindow(QMainWindow):
         )
         toolbar.addAction(self.mouse_mode_measure_action)
         
+        self.mouse_mode_crosshair_action = QAction("Crosshair", self)
+        self.mouse_mode_crosshair_action.setCheckable(True)
+        self.mouse_mode_crosshair_action.triggered.connect(
+            lambda: self._on_mouse_mode_changed("crosshair")
+        )
+        toolbar.addAction(self.mouse_mode_crosshair_action)
+        
         self.mouse_mode_zoom_action = QAction("Zoom", self)
         self.mouse_mode_zoom_action.setCheckable(True)
         self.mouse_mode_zoom_action.triggered.connect(
             lambda: self._on_mouse_mode_changed("zoom")
         )
         toolbar.addAction(self.mouse_mode_zoom_action)
+        
+        self.mouse_mode_magnifier_action = QAction("Magnifier", self)
+        self.mouse_mode_magnifier_action.setCheckable(True)
+        self.mouse_mode_magnifier_action.triggered.connect(
+            lambda: self._on_mouse_mode_changed("magnifier")
+        )
+        toolbar.addAction(self.mouse_mode_magnifier_action)
         
         self.mouse_mode_pan_action = QAction("Pan", self)
         self.mouse_mode_pan_action.setCheckable(True)
@@ -1568,7 +1582,7 @@ class MainWindow(QMainWindow):
         Handle mouse mode change to ensure exclusivity.
         
         Args:
-            mode: Mouse mode ("select", "roi_ellipse", "roi_rectangle", "measure", "zoom", "pan", "auto_window_level")
+            mode: Mouse mode ("select", "roi_ellipse", "roi_rectangle", "measure", "zoom", "magnifier", "pan", "auto_window_level")
         """
         # Uncheck all actions first
         all_actions = [
@@ -1599,8 +1613,12 @@ class MainWindow(QMainWindow):
             self.mouse_mode_rectangle_roi_action.setChecked(True)
         elif mode == "measure":
             self.mouse_mode_measure_action.setChecked(True)
+        elif mode == "crosshair":
+            self.mouse_mode_crosshair_action.setChecked(True)
         elif mode == "zoom":
             self.mouse_mode_zoom_action.setChecked(True)
+        elif mode == "magnifier":
+            self.mouse_mode_magnifier_action.setChecked(True)
         elif mode == "pan":
             self.mouse_mode_pan_action.setChecked(True)
         elif mode == "auto_window_level":
@@ -1628,8 +1646,12 @@ class MainWindow(QMainWindow):
             return "roi_rectangle"
         elif self.mouse_mode_measure_action.isChecked():
             return "measure"
+        elif self.mouse_mode_crosshair_action.isChecked():
+            return "crosshair"
         elif self.mouse_mode_zoom_action.isChecked():
             return "zoom"
+        elif self.mouse_mode_magnifier_action.isChecked():
+            return "magnifier"
         elif self.mouse_mode_auto_window_level_action.isChecked():
             return "auto_window_level"
         else:  # pan is default
@@ -1643,7 +1665,7 @@ class MainWindow(QMainWindow):
         and we only need to update the toolbar UI without triggering signal emissions.
         
         Args:
-            mode: Mouse mode ("select", "roi_ellipse", "roi_rectangle", "measure", "zoom", "pan", "auto_window_level")
+            mode: Mouse mode ("select", "roi_ellipse", "roi_rectangle", "measure", "zoom", "magnifier", "pan", "auto_window_level")
         """
         # All mouse mode actions
         all_actions = [
@@ -1651,7 +1673,9 @@ class MainWindow(QMainWindow):
             self.mouse_mode_ellipse_roi_action,
             self.mouse_mode_rectangle_roi_action,
             self.mouse_mode_measure_action,
+            self.mouse_mode_crosshair_action,
             self.mouse_mode_zoom_action,
+            self.mouse_mode_magnifier_action,
             self.mouse_mode_pan_action,
             self.mouse_mode_auto_window_level_action
         ]
@@ -1673,8 +1697,12 @@ class MainWindow(QMainWindow):
             self.mouse_mode_rectangle_roi_action.setChecked(True)
         elif mode == "measure":
             self.mouse_mode_measure_action.setChecked(True)
+        elif mode == "crosshair":
+            self.mouse_mode_crosshair_action.setChecked(True)
         elif mode == "zoom":
             self.mouse_mode_zoom_action.setChecked(True)
+        elif mode == "magnifier":
+            self.mouse_mode_magnifier_action.setChecked(True)
         elif mode == "pan":
             self.mouse_mode_pan_action.setChecked(True)
         elif mode == "auto_window_level":

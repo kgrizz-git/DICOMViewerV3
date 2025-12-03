@@ -255,7 +255,7 @@ class QuickStartGuideDialog(QDialog):
             <h2 id="histogram">Histogram Display</h2>
             <p>View pixel value distribution for the currently focused image:</p>
             <ul>
-                <li><strong>Open Histogram:</strong> Press <code>H</code> key to open the histogram dialog</li>
+                <li><strong>Open Histogram:</strong> Press <code>H</code> key (when not in crosshair mode) or use the menu to open the histogram dialog</li>
                 <li><strong>Features:</strong>
                     <ul>
                         <li>Shows pixel value distribution as a histogram</li>
@@ -293,12 +293,20 @@ class QuickStartGuideDialog(QDialog):
                 <li>Right-click on image → "Clear Measurements" to remove all measurements</li>
             </ul>
             
+            <h3>Undo/Redo for Measurements</h3>
+            <ul>
+                <li>All measurement operations support undo/redo: creating, moving, and deleting measurements</li>
+                <li>Press <code>Cmd+Z</code> (Mac) or <code>Ctrl+Z</code> (Windows/Linux) to undo the last operation</li>
+                <li>Press <code>Cmd+Shift+Z</code> (Mac) or <code>Ctrl+Shift+Z</code> (Windows/Linux) to redo the last undone operation</li>
+            </ul>
+            
             <h2 id="rois">ROIs (Regions of Interest)</h2>
             <h3>Creating ROIs</h3>
             <ul>
                 <li><strong>Ellipse ROI:</strong> Set mode to "Ellipse ROI", then left-click and drag to draw an ellipse</li>
                 <li><strong>Rectangle ROI:</strong> Set mode to "Rectangle ROI", then left-click and drag to draw a rectangle</li>
                 <li><strong>Window/Level ROI:</strong> Set mode to "Window/Level ROI", draw ROI to automatically adjust window/level based on ROI pixel values</li>
+                <li><strong>Crosshair ROI:</strong> Set mode to "Crosshair" (press <code>H</code> key), then left-click on the image to place a crosshair. Crosshairs display pixel values and coordinates at the clicked point</li>
             </ul>
             
             <h3>Selecting and Deleting ROIs</h3>
@@ -307,6 +315,14 @@ class QuickStartGuideDialog(QDialog):
                 <li>Left-click on an ROI to select it (highlighted in yellow)</li>
                 <li>Press <code>Delete</code> key to delete selected ROI</li>
                 <li>Or right-click on ROI → "Delete ROI"</li>
+                <li>Press <code>D</code> key to delete all ROIs on current slice (including crosshairs)</li>
+            </ul>
+            
+            <h3>Undo/Redo for ROIs</h3>
+            <ul>
+                <li>All ROI operations support undo/redo: creating, moving, and deleting ROIs</li>
+                <li>Press <code>Cmd+Z</code> (Mac) or <code>Ctrl+Z</code> (Windows/Linux) to undo the last operation</li>
+                <li>Press <code>Cmd+Shift+Z</code> (Mac) or <code>Ctrl+Shift+Z</code> (Windows/Linux) to redo the last undone operation</li>
             </ul>
             
             <h2 id="intensity-projections">Intensity Projections (Combine Slices)</h2>
@@ -386,6 +402,7 @@ class QuickStartGuideDialog(QDialog):
                 <li><strong>Zoom:</strong> Left-click and drag vertically to zoom in/out</li>
                 <li><strong>Pan:</strong> Left-click and drag to move the image around</li>
                 <li><strong>Window/Level ROI:</strong> Draw ROI to auto-adjust window/level</li>
+                <li><strong>Crosshair:</strong> Click to place crosshairs that display pixel values and coordinates</li>
             </ul>
             
             <h2 id="scroll-wheel-modes">Scroll Wheel Modes</h2>
@@ -406,12 +423,14 @@ class QuickStartGuideDialog(QDialog):
                 <li><strong><code>S</code>:</strong> Select mode (select ROIs and measurements)</li>
                 <li><strong><code>W</code>:</strong> Window/Level ROI mode (auto-adjust from ROI)</li>
                 <li><strong><code>C</code>:</strong> Clear all measurements on current slice</li>
-                <li><strong><code>D</code>:</strong> Delete all ROIs on current slice</li>
+                <li><strong><code>D</code>:</strong> Delete all ROIs on current slice (including crosshairs)</li>
                 <li><strong><code>V</code>:</strong> Reset view (restore initial zoom, pan, and window/level for focused subwindow)</li>
                 <li><strong><code>A</code>:</strong> Reset all views (reset zoom, pan, and window/level for all subwindows)</li>
-                <li><strong><code>H</code>:</strong> Open histogram dialog (shows pixel value distribution with window/level overlay)</li>
+                <li><strong><code>H</code>:</strong> Crosshair mode (draw crosshairs to display pixel values and coordinates)</li>
                 <li><strong><code>N</code>:</strong> Toggle series navigator bar visibility</li>
                 <li><strong><code>I</code>:</strong> Invert image colors</li>
+                <li><strong><code>Cmd+Z / Ctrl+Z</code>:</strong> Undo last operation (ROI/measurement creation, move, or deletion)</li>
+                <li><strong><code>Cmd+Shift+Z / Ctrl+Shift+Z</code>:</strong> Redo last undone operation</li>
                 <li><strong><code>Spacebar</code>:</strong> Toggle overlay visibility
                     <ul>
                         <li>First press: Hides corner text overlays</li>

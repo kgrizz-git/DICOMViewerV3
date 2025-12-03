@@ -1011,10 +1011,10 @@ class SliceDisplayManager:
                 # Already in scene, but ensure it's visible and has correct Z-value
                 roi.item.setZValue(100)  # Above image but below overlay
                 roi.item.show()  # Ensure visible
-                print(f"  ROI {i} already in scene {id(self.image_viewer.scene)}")
+                # print(f"  ROI {i} already in scene {id(self.image_viewer.scene)}")
             else:
                 # Not in scene, add it
-                print(f"  ROI {i} not in scene, adding to scene {id(self.image_viewer.scene)} (was in {id(roi_scene)})")
+                # print(f"  ROI {i} not in scene, adding to scene {id(self.image_viewer.scene)} (was in {id(roi_scene)})")
                 self.image_viewer.scene.addItem(roi.item)
                 # Ensure ROI is visible (set appropriate Z-value)
                 roi.item.setZValue(100)  # Above image but below overlay

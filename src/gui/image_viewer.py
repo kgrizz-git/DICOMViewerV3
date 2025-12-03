@@ -20,13 +20,14 @@ Requirements:
 """
 
 from PySide6.QtWidgets import (QGraphicsView, QGraphicsScene, QGraphicsPixmapItem,
-                                QWidget, QVBoxLayout, QMenu)
+                                QWidget, QVBoxLayout, QMenu, QApplication)
 from PySide6.QtCore import Qt, QRectF, Signal, QPointF, QTimer, QEvent
 from PySide6.QtGui import (QPixmap, QImage, QWheelEvent, QKeyEvent, QMouseEvent,
                           QPainter, QColor, QTransform, QDragEnterEvent, QDropEvent)
 from PIL import Image
 import numpy as np
 import os
+import time
 from typing import Optional, Callable, Any, List, Tuple
 
 
@@ -74,10 +75,12 @@ class ImageViewer(QGraphicsView):
     measurement_updated = Signal(QPointF)  # Emitted when measurement is updated (current position)
     measurement_finished = Signal()  # Emitted when measurement is finished
     measurement_delete_requested = Signal(object)  # Emitted when measurement deletion is requested (MeasurementItem)
+    crosshair_delete_requested = Signal(object)  # Emitted when crosshair deletion is requested (CrosshairItem)
     clear_measurements_requested = Signal()  # Emitted when clear measurements is requested
     toggle_overlay_requested = Signal()  # Emitted when toggle overlay is requested
     privacy_view_toggled = Signal(bool)  # Emitted when privacy view is toggled from context menu (True = enabled)
     annotation_options_requested = Signal()  # Emitted when annotation options dialog is requested
+    crosshair_clicked = Signal(QPointF, str, int, int, int)  # Emitted when crosshair tool is clicked (pos, pixel_value_str, x, y, z)
     about_this_file_requested = Signal()  # Emitted when About this File is requested from context menu
     assign_series_requested = Signal(str)  # Emitted when series assignment is requested (series_uid)
     pixel_info_changed = Signal(str, int, int, int)  # Emitted when pixel info changes (pixel_value_str, x, y, z)
@@ -150,6 +153,12 @@ class ImageViewer(QGraphicsView):
         self.zoom_start_pos: Optional[QPointF] = None
         self.zoom_start_zoom: Optional[float] = None
         self.zoom_mouse_moved = False  # Track if mouse actually moved during zoom drag
+        
+        # Magnifier state
+        from gui.magnifier_widget import MagnifierWidget
+        self.magnifier_widget: Optional[MagnifierWidget] = None
+        self.magnifier_active: bool = False
+        # Note: magnifier zoom is calculated dynamically as 1.5 * current_zoom
         
         # Scroll wheel mode
         self.scroll_wheel_mode = "slice"  # "slice" or "zoom"
@@ -767,6 +776,19 @@ class ImageViewer(QGraphicsView):
             self.setCursor(Qt.CursorShape.PointingHandCursor)
             # Store zoom start position for click-to-zoom
             self.zoom_start_pos: Optional[QPointF] = None
+        elif mode == "magnifier":
+            self.roi_drawing_mode = None
+            self.setDragMode(QGraphicsView.DragMode.NoDrag)
+            # Use cross cursor for magnifier mode
+            self.setCursor(Qt.CursorShape.CrossCursor)
+            # Reset magnifier state when switching to magnifier mode
+            if self.magnifier_widget is not None:
+                self.magnifier_widget.hide()
+            self.magnifier_active = False
+        elif mode == "crosshair":
+            self.roi_drawing_mode = None
+            self.setDragMode(QGraphicsView.DragMode.NoDrag)
+            self.setCursor(Qt.CursorShape.CrossCursor)
         else:  # pan
             self.roi_drawing_mode = None
             # Use ScrollHandDrag for panning - this works even when image fits viewport
@@ -948,6 +970,60 @@ class ImageViewer(QGraphicsView):
                         self.measuring = False
                         self.measurement_start_pos = None
                         self.measurement_finished.emit()
+                elif self.mouse_mode == "magnifier":
+                    # Magnifier mode - activate magnifier
+                    if not self.magnifier_active:
+                        # Create magnifier widget if it doesn't exist
+                        if self.magnifier_widget is None:
+                            from gui.magnifier_widget import MagnifierWidget
+                            self.magnifier_widget = MagnifierWidget()
+                        
+                        self.magnifier_active = True
+                        # Hide cursor when magnifier is active
+                        self.setCursor(Qt.CursorShape.BlankCursor)
+                        # Extract and show magnified region
+                        # Get current zoom from view transform (most accurate)
+                        current_zoom = self.transform().m11()
+                        # Magnifier zoom is 2.0x the current view zoom
+                        magnifier_zoom = 2.0 * current_zoom
+                        # Extract region size calculation for 2.0x zoom
+                        # To achieve true 2.0x zoom: we want final pixmap to be 200px (widget size)
+                        # After scaling by magnifier_zoom, we need: region_size * magnifier_zoom = 200
+                        # So: region_size = 200 / magnifier_zoom = 200 / (2.0 * current_zoom)
+                        # This ensures the extracted region, when scaled, fills the 200px widget at 2.0x zoom
+                        adjusted_region_size = 200.0 / (2.0 * current_zoom) if current_zoom > 0 else 200.0 / 2.0
+                        print(f"[DEBUG-MAGNIFIER] Press: current_zoom={current_zoom:.3f}, magnifier_zoom={magnifier_zoom:.3f}, adjusted_region_size={adjusted_region_size:.3f}")
+                        magnified_pixmap = self._extract_image_region(
+                            scene_pos.x(), scene_pos.y(), adjusted_region_size, magnifier_zoom
+                        )
+                        if magnified_pixmap is not None:
+                            print(f"[DEBUG-MAGNIFIER] Press: extracted_region_size=({int(adjusted_region_size):d}x{int(adjusted_region_size):d}), scaled_pixmap_size=({magnified_pixmap.width()}x{magnified_pixmap.height()})")
+                        if magnified_pixmap is not None:
+                            self.magnifier_widget.update_magnified_region(magnified_pixmap)
+                            # Position magnifier centered on cursor
+                            global_pos = self.mapToGlobal(event.position().toPoint())
+                            self.magnifier_widget.show_at_position(global_pos)
+                elif self.mouse_mode == "crosshair":
+                    # Crosshair mode - get pixel value and coordinates, emit signal
+                    if self.get_current_dataset_callback:
+                        dataset = self.get_current_dataset_callback()
+                        if dataset is not None:
+                            # Convert scene position to image coordinates
+                            x = int(scene_pos.x())
+                            y = int(scene_pos.y())
+                            z = 0
+                            if self.get_current_slice_index_callback:
+                                z = self.get_current_slice_index_callback()
+                            
+                            # Get pixel value
+                            use_rescaled = False
+                            if self.get_use_rescaled_values_callback:
+                                use_rescaled = self.get_use_rescaled_values_callback()
+                            
+                            pixel_value_str = self._get_pixel_value_at_coords(dataset, x, y, z, use_rescaled)
+                            
+                            # Emit signal with crosshair information
+                            self.crosshair_clicked.emit(scene_pos, pixel_value_str, x, y, z)
                 elif self.roi_drawing_mode:
                     # Start ROI drawing
                     self.roi_drawing_start = scene_pos
@@ -1086,6 +1162,24 @@ class ImageViewer(QGraphicsView):
                 # Annotation Options action
                 annotation_options_action = context_menu.addAction("Annotation Options...")
                 annotation_options_action.triggered.connect(self.annotation_options_requested.emit)
+            
+            # Check if clicking on crosshair item
+            from tools.crosshair_manager import CrosshairItem
+            is_crosshair_item = (item is not None and 
+                               item != self.image_item and
+                               isinstance(item, CrosshairItem))
+            
+            if is_crosshair_item:
+                # Show context menu for crosshair immediately
+                context_menu = QMenu(self)
+                delete_action = context_menu.addAction("Delete Crosshair")
+                delete_action.triggered.connect(lambda: self.crosshair_delete_requested.emit(item))
+                
+                context_menu.addSeparator()
+                
+                # Annotation Options action
+                annotation_options_action = context_menu.addAction("Annotation Options...")
+                annotation_options_action.triggered.connect(self.annotation_options_requested.emit)
                 
                 context_menu.exec(event.globalPosition().toPoint())
                 self.right_mouse_context_menu_shown = True
@@ -1207,6 +1301,34 @@ class ImageViewer(QGraphicsView):
             if event.buttons() & Qt.MouseButton.LeftButton:
                 scene_pos = self.mapToScene(event.position().toPoint())
                 self.roi_drawing_updated.emit(scene_pos)
+        elif self.mouse_mode == "magnifier" and self.magnifier_active:
+            # Magnifier mode - update magnifier position and content
+            if event.buttons() & Qt.MouseButton.LeftButton:
+                # Ensure cursor stays hidden
+                if self.cursor().shape() != Qt.CursorShape.BlankCursor:
+                    self.setCursor(Qt.CursorShape.BlankCursor)
+                scene_pos = self.mapToScene(event.position().toPoint())
+                # Extract and update magnified region
+                # Get current zoom from view transform (most accurate)
+                current_zoom = self.transform().m11()
+                # Magnifier zoom is 2.0x the current view zoom
+                magnifier_zoom = 2.0 * current_zoom
+                # Extract region size calculation for 2.0x zoom
+                # To achieve true 2.0x zoom: we want final pixmap to be 200px (widget size)
+                # After scaling by magnifier_zoom, we need: region_size * magnifier_zoom = 200
+                # So: region_size = 200 / magnifier_zoom = 200 / (2.0 * current_zoom)
+                # This ensures the extracted region, when scaled, fills the 200px widget at 2.0x zoom
+                adjusted_region_size = 200.0 / (2.0 * current_zoom) if current_zoom > 0 else 200.0 / 2.0
+                magnified_pixmap = self._extract_image_region(
+                    scene_pos.x(), scene_pos.y(), adjusted_region_size, magnifier_zoom
+                )
+                if magnified_pixmap is not None:
+                    print(f"[DEBUG-MAGNIFIER] Move: current_zoom={current_zoom:.3f}, magnifier_zoom={magnifier_zoom:.3f}, adjusted_region_size={adjusted_region_size:.3f}, scaled_pixmap_size=({magnified_pixmap.width()}x{magnified_pixmap.height()})")
+                if magnified_pixmap is not None and self.magnifier_widget is not None:
+                    self.magnifier_widget.update_magnified_region(magnified_pixmap)
+                    # Update magnifier position (centered on cursor)
+                    global_pos = self.mapToGlobal(event.position().toPoint())
+                    self.magnifier_widget.show_at_position(global_pos)
         elif self.mouse_mode == "pan":
             # Pan mode - ensure ScrollHandDrag is enabled (it may have been disabled by other operations)
             if self.dragMode() != QGraphicsView.DragMode.ScrollHandDrag:
@@ -1254,6 +1376,13 @@ class ImageViewer(QGraphicsView):
                 # Restore ScrollHandDrag if we're in pan mode
                 if self.mouse_mode == "pan":
                     self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+            elif self.mouse_mode == "magnifier" and self.magnifier_active:
+                # Finish magnifier - hide widget and restore cursor
+                self.magnifier_active = False
+                if self.magnifier_widget is not None:
+                    self.magnifier_widget.hide()
+                # Restore cursor visibility (cross cursor for magnifier mode)
+                self.setCursor(Qt.CursorShape.CrossCursor)
             # Pan mode is handled automatically by ScrollHandDrag, no cleanup needed
         elif event.button() == Qt.MouseButton.RightButton:
             # Right mouse release - check if we were dragging or should show context menu
@@ -1312,7 +1441,6 @@ class ImageViewer(QGraphicsView):
                         privacy_view_action.setChecked(self._privacy_view_enabled)
                         privacy_view_action.triggered.connect(lambda checked: self.privacy_view_toggled.emit(checked))
                         
-                        context_menu.addSeparator()
                         
                         # Delete all ROIs action
                         delete_all_action = context_menu.addAction("Delete all ROIs (D)")
@@ -1374,14 +1502,6 @@ class ImageViewer(QGraphicsView):
                         
                         context_menu.addSeparator()
                         
-                        # Invert Image action
-                        invert_action = context_menu.addAction("Invert Image (I)")
-                        invert_action.setCheckable(True)
-                        invert_action.setChecked(self.image_inverted)
-                        invert_action.triggered.connect(self.invert_image)
-                        
-                        context_menu.addSeparator()
-                        
                         # Annotation Options action
                         annotation_options_action = context_menu.addAction("Annotation Options...")
                         annotation_options_action.triggered.connect(self.annotation_options_requested.emit)
@@ -1407,6 +1527,12 @@ class ImageViewer(QGraphicsView):
                                     if idx == current_index:
                                         action.setChecked(True)
                                     action.triggered.connect(lambda checked, i=idx: self.window_level_preset_selected.emit(i))
+                                
+                                # Invert Image action (moved here, no separator before)
+                                invert_action = context_menu.addAction("Invert Image (I)")
+                                invert_action.setCheckable(True)
+                                invert_action.setChecked(self.image_inverted)
+                                invert_action.triggered.connect(self.invert_image)
                                 
                                 context_menu.addSeparator()
                             # else:
@@ -1441,11 +1567,13 @@ class ImageViewer(QGraphicsView):
                         # Left Mouse Button actions (moved to first level, grouped with separators)
                         left_mouse_actions = {
                             "Select (S)": "select",
-                            "Ellipse ROI (E)": "roi_ellipse",
-                            "Rectangle ROI (R)": "roi_rectangle",
-                            "Measure (M)": "measure",
                             "Zoom (Z)": "zoom",
                             "Pan (P)": "pan",
+                            "Magnifier (G)": "magnifier",
+                            "Ellipse ROI (E)": "roi_ellipse",
+                            "Rectangle ROI (R)": "roi_rectangle",
+                            "Crosshair ROI (H)": "crosshair",
+                            "Measure (M)": "measure",
                             "Window/Level ROI (W)": "auto_window_level"
                         }
                         for action_text, mode in left_mouse_actions.items():
@@ -1612,10 +1740,40 @@ class ImageViewer(QGraphicsView):
             event.accept()
         elif event.key() == Qt.Key.Key_Left:
             # Left arrow: previous series
+            timestamp = time.time()
+            focused_widget = QApplication.focusWidget()
+            focus_info = f"focused={focused_widget.objectName() if focused_widget else 'None'}"
+            print(f"[DEBUG-NAV] [{timestamp:.6f}] ImageViewer.keyPressEvent: LEFT arrow, {focus_info}")
+            # Only handle if series navigator doesn't have focus
+            if focused_widget:
+                # Check if focused widget is the series navigator or one of its children
+                widget = focused_widget
+                while widget:
+                    if widget.objectName() == "series_navigator" or widget.objectName() == "series_navigator_scroll_area" or widget.objectName() == "series_navigator_container":
+                        # Series navigator has focus, let it handle the event
+                        print(f"[DEBUG-NAV] [{timestamp:.6f}] ImageViewer: Series navigator has focus, skipping emit")
+                        return
+                    widget = widget.parent()
+            print(f"[DEBUG-NAV] [{timestamp:.6f}] ImageViewer: Emitting series_navigation_requested(-1)")
             self.series_navigation_requested.emit(-1)
             event.accept()
         elif event.key() == Qt.Key.Key_Right:
             # Right arrow: next series
+            timestamp = time.time()
+            focused_widget = QApplication.focusWidget()
+            focus_info = f"focused={focused_widget.objectName() if focused_widget else 'None'}"
+            print(f"[DEBUG-NAV] [{timestamp:.6f}] ImageViewer.keyPressEvent: RIGHT arrow, {focus_info}")
+            # Only handle if series navigator doesn't have focus
+            if focused_widget:
+                # Check if focused widget is the series navigator or one of its children
+                widget = focused_widget
+                while widget:
+                    if widget.objectName() == "series_navigator" or widget.objectName() == "series_navigator_scroll_area" or widget.objectName() == "series_navigator_container":
+                        # Series navigator has focus, let it handle the event
+                        print(f"[DEBUG-NAV] [{timestamp:.6f}] ImageViewer: Series navigator has focus, skipping emit")
+                        return
+                    widget = widget.parent()
+            print(f"[DEBUG-NAV] [{timestamp:.6f}] ImageViewer: Emitting series_navigation_requested(1)")
             self.series_navigation_requested.emit(1)
             event.accept()
         else:
@@ -1793,6 +1951,65 @@ class ImageViewer(QGraphicsView):
         
         # Emit signal with pixel info
         self.pixel_info_changed.emit(pixel_value_str, x, y, z)
+    
+    def _extract_image_region(self, center_x: float, center_y: float, size: int, zoom_factor: float) -> Optional[QPixmap]:
+        """
+        Extract a region from the displayed image for magnifier.
+        
+        Args:
+            center_x: Scene X coordinate of center point
+            center_y: Scene Y coordinate of center point
+            size: Size of region to extract (in scene coordinates before zoom)
+            zoom_factor: Magnification factor to apply
+            
+        Returns:
+            QPixmap of the extracted and magnified region, or None if extraction fails
+        """
+        if self.image_item is None:
+            return None
+        
+        # Get the pixmap from the image item
+        source_pixmap = self.image_item.pixmap()
+        if source_pixmap.isNull():
+            return None
+        
+        # Calculate region bounds in pixmap coordinates
+        # The image item is positioned at (0, 0) in scene coordinates
+        # So scene coordinates directly map to pixmap coordinates
+        half_size = size / 2.0
+        x1 = max(0, int(center_x - half_size))
+        y1 = max(0, int(center_y - half_size))
+        x2 = min(source_pixmap.width(), int(center_x + half_size))
+        y2 = min(source_pixmap.height(), int(center_y + half_size))
+        
+        # Check if region is valid
+        if x2 <= x1 or y2 <= y1:
+            return None
+        
+        # Extract region from pixmap
+        extracted_width = x2 - x1
+        extracted_height = y2 - y1
+        region = source_pixmap.copy(x1, y1, extracted_width, extracted_height)
+        
+        print(f"[DEBUG-MAGNIFIER] _extract_image_region: center=({center_x:.1f}, {center_y:.1f}), size={size:.3f}, zoom_factor={zoom_factor:.3f}")
+        print(f"[DEBUG-MAGNIFIER] _extract_image_region: extracted_region=({x1}, {y1}) to ({x2}, {y2}), dimensions=({extracted_width}x{extracted_height})")
+        
+        # Apply zoom factor
+        if zoom_factor != 1.0:
+            scaled_width = int(extracted_width * zoom_factor)
+            scaled_height = int(extracted_height * zoom_factor)
+            print(f"[DEBUG-MAGNIFIER] _extract_image_region: scaling to ({scaled_width}x{scaled_height})")
+            region = region.scaled(
+                scaled_width,
+                scaled_height,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
+            )
+            print(f"[DEBUG-MAGNIFIER] _extract_image_region: final_pixmap_size=({region.width()}x{region.height()})")
+        else:
+            print(f"[DEBUG-MAGNIFIER] _extract_image_region: no scaling, final_pixmap_size=({region.width()}x{region.height()})")
+        
+        return region
     
     def _get_pixel_value_at_coords(
         self,

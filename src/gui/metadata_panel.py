@@ -175,6 +175,9 @@ class MetadataPanel(QWidget):
             # Refresh display
             search_text = self.search_edit.text()
             self._cached_tags = None
+            # Clear parser cache so it re-reads from updated dataset
+            if self.parser is not None:
+                self.parser._tag_cache.clear()
             self._populate_tags(search_text)
     
     def _redo_tag_edit(self) -> None:
@@ -184,6 +187,9 @@ class MetadataPanel(QWidget):
             # Refresh display
             search_text = self.search_edit.text()
             self._cached_tags = None
+            # Clear parser cache so it re-reads from updated dataset
+            if self.parser is not None:
+                self.parser._tag_cache.clear()
             self._populate_tags(search_text)
     
     def set_privacy_mode(self, enabled: bool) -> None:
@@ -680,5 +686,8 @@ class MetadataPanel(QWidget):
                 search_text = self.search_edit.text()
                 # Clear cache since tag was edited
                 self._cached_tags = None
+                # Clear parser cache so it re-reads from updated dataset
+                if self.parser is not None:
+                    self.parser._tag_cache.clear()
                 self._populate_tags(search_text)
 

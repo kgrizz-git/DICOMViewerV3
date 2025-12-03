@@ -76,8 +76,10 @@ This application provides comprehensive DICOM image viewing capabilities with ad
 
 ### Analysis Tools
 - Draw elliptical or rectangular regions of interest (ROIs)
+- Draw crosshairs to display pixel values and coordinates at clicked points (crosshairs are a type of ROI)
 - Calculate statistics (mean, standard deviation, min, max, area) within ROIs
 - Measure distances (pixels, mm, or cm based on DICOM metadata)
+- Undo/redo support for ROI and measurement operations (create, move, delete) - access via Edit menu or keyboard shortcuts
 - **Intensity Projections**: Combine multiple slices (2, 3, 4, 6, or 8) to create Average (AIP), Maximum (MIP), or Minimum (MinIP) intensity projections
   - Scroll through projections one underlying slice at a time
   - Access via right panel widget or context menu → "Combine..."
@@ -90,9 +92,9 @@ This application provides comprehensive DICOM image viewing capabilities with ad
 - Display RT STRUCT overlays (Not yet implemented)
 
 ### Data Management
-- Clear ROIs from slice or whole dataset
+- Clear ROIs from slice or whole dataset (including crosshairs)
 - Clear measurements
-- Undo/redo functionality for changes
+- Undo/redo functionality for ROI and measurement operations (create, move, delete)
 - ROI list panel with selection
 - Status bar updates during file loading showing number of studies, series, and files loaded
 
@@ -114,8 +116,11 @@ This application provides comprehensive DICOM image viewing capabilities with ad
 - **M**: Measure mode (create distance measurements)
 - **S**: Select mode (select ROIs and measurements)
 - **W**: Window/Level ROI mode (auto-adjust from ROI)
+- **H**: Crosshair mode (draw crosshairs to display pixel values)
 - **C**: Clear all measurements on current slice
-- **D**: Delete all ROIs on current slice
+- **D**: Delete all ROIs on current slice (including crosshairs)
+- **Cmd+Z / Ctrl+Z**: Undo last operation
+- **Cmd+Shift+Z / Ctrl+Shift+Z**: Redo last undone operation
 - **V**: Reset view (restore initial zoom, pan, and window/level for focused subwindow)
 - **A**: Reset all views (reset zoom, pan, and window/level for all subwindows)
 - **H**: Open histogram dialog (shows pixel value distribution with window/level overlay)
@@ -138,25 +143,102 @@ DICOMViewerV3/
 └── data/          # Sample data and resources
 ```
 
-## Development Rules
-
-- Modular design: Methods and functions should do only one thing
-- File size limit: Individual files should not exceed 500-1000 lines of code
-- Extensive documentation: Comments at top of files and throughout code
-- Linting: Check for linting errors after code edits
-- User-focused: Ask for clarification rather than making assumptions
-- UI behavior: Popup windows should initially appear on top and in focus
-
 ## Technology Stack
 
 - **Language**: Python 3.9+
-- **GUI Framework**: PySide6
-- **DICOM Library**: pydicom
-- **Image Processing**: NumPy, PIL/Pillow
-- **Additional**: matplotlib (for histograms)
+- **GUI Framework**: PySide6 (>=6.6.0)
+- **DICOM Library**: pydicom (>=2.4.0)
+- **Image Processing**: NumPy (>=1.24.0), Pillow (>=10.0.0)
+- **Additional Libraries**: 
+  - matplotlib (>=3.8.0) for histogram display
+  - openpyxl (>=3.1.0) for Excel export functionality
+  - pylibjpeg, pyjpegls, pylibjpeg-libjpeg for compressed DICOM support (optional but recommended)
 
 ## Installation
 
-1. Clone the repository
-2. Install dependencies: `pip install -r requirements.txt`
-3. Run the application: `python src/main.py`
+### Downloading the Application
+
+You can download the DICOM Viewer V3 in one of two ways:
+
+#### Option 1: Download as ZIP (Recommended for beginners)
+
+1. Go to the [GitHub repository](https://github.com/kgrizz-git/DICOMViewerV3)
+2. Click the green **"Code"** button
+3. Select **"Download ZIP"**
+4. Extract the ZIP file to a location of your choice
+5. Navigate to the extracted folder (e.g., `DICOMViewerV3-main`)
+
+#### Option 2: Clone with Git (Recommended for developers)
+
+1. Open a terminal/command prompt
+2. Navigate to where you want to download the project
+3. Run:
+   ```bash
+   git clone https://github.com/kgrizz-git/DICOMViewerV3.git
+   ```
+4. Navigate into the project folder:
+   ```bash
+   cd DICOMViewerV3
+   ```
+
+### Installing Dependencies
+
+1. **Navigate to the project root directory** (the folder containing `requirements.txt` and the `src` folder)
+   - If you downloaded the ZIP, this is the extracted `DICOMViewerV3-main` or `DICOMViewerV3` folder
+   - If you cloned with Git, this is the `DICOMViewerV3` folder
+
+2. **Install Python dependencies** using one of the following methods:
+
+   **Using pip (recommended):**
+   ```bash
+   pip install -r requirements.txt
+   ```
+   
+   **If you need to specify the full path to requirements.txt:**
+   ```bash
+   pip install -r /path/to/DICOMViewerV3/requirements.txt
+   ```
+   
+   **Using a virtual environment (recommended for isolation but not required):**
+   ```bash
+   # Create virtual environment
+   python -m venv venv
+   
+   # Activate virtual environment
+   # On Windows:
+   venv\Scripts\activate
+   # On macOS/Linux:
+   source venv/bin/activate
+   
+   # Install dependencies
+   pip install -r requirements.txt
+   ```
+
+### Running the Application
+
+1. **Make sure you're in the project root directory** (the same folder where `requirements.txt` is located)
+
+2. **Run the application** using one of the following methods:
+
+   **From the project root directory:**
+   ```bash
+   python src/main.py
+   ```
+   
+   **Or using Python module syntax:**
+   ```bash
+   python -m src.main
+   ```
+   
+   **If you need to specify the full path:**
+   ```bash
+   python /path/to/DICOMViewerV3/src/main.py
+   ```
+
+3. The application window should open and you can start loading DICOM files!
+
+### Troubleshooting
+
+- **"Module not found" errors**: Make sure you've installed all dependencies with `pip install -r requirements.txt`
+- **"No such file or directory"**: Make sure you're running the command from the project root directory, or use the full path to `src/main.py`
+- **Python version issues**: Ensure you have Python 3.9 or higher installed. Check with `python --version`
