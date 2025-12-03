@@ -29,9 +29,10 @@ from pydicom.dataset import Dataset
 
 from core.dicom_parser import DICOMParser
 from core.dicom_editor import DICOMEditor
-from core.tag_edit_history import TagEditHistoryManager, EditTagCommand
+from core.tag_edit_history import TagEditHistoryManager
 from gui.dialogs.tag_edit_dialog import TagEditDialog
 from utils.config_manager import ConfigManager
+from utils.undo_redo import UndoRedoManager, TagEditCommand
 
 
 class MetadataItemDelegate(QStyledItemDelegate):
@@ -104,13 +105,15 @@ class MetadataPanel(QWidget):
     # Signals
     tag_edited = Signal(str, object)  # (tag_string, new_value)
     
-    def __init__(self, parent=None, config_manager: Optional[ConfigManager] = None):
+    def __init__(self, parent=None, config_manager: Optional[ConfigManager] = None,
+                 undo_redo_manager: Optional[UndoRedoManager] = None):
         """
         Initialize the metadata panel.
         
         Args:
             parent: Parent widget
             config_manager: Optional ConfigManager instance for saving/loading column widths
+            undo_redo_manager: Optional UndoRedoManager for unified undo/redo
         """
         super().__init__(parent)
         self.setObjectName("metadata_panel")
@@ -122,6 +125,8 @@ class MetadataPanel(QWidget):
         self.editor: Optional[DICOMEditor] = None
         self.history_manager: Optional[TagEditHistoryManager] = None
         self.config_manager: Optional[ConfigManager] = config_manager
+        self.undo_redo_manager: Optional[UndoRedoManager] = undo_redo_manager
+        self.ui_refresh_callback: Optional[Callable] = None
         
         # Undo/redo callbacks
         self.undo_callback: Optional[Callable] = None
@@ -657,18 +662,26 @@ class MetadataPanel(QWidget):
                 old_value = current_value
                 
                 # Create edit command
-                if self.history_manager and self.dataset:
-                    command = EditTagCommand(
+                # Use unified undo/redo manager if available
+                if self.undo_redo_manager and self.dataset:
+                    # Convert tag_str to tag object
+                    from pydicom.tag import Tag
+                    tag_tuple = tuple(int(x, 16) for x in tag_str.strip("()").split(","))
+                    tag = Tag(tag_tuple)
+                    
+                    command = TagEditCommand(
                         self.dataset,
-                        tag_str,
+                        tag,
                         old_value,
                         new_value,
-                        vr
+                        vr,
+                        tag_edit_history_manager=self.history_manager,
+                        ui_refresh_callback=self.ui_refresh_callback
                     )
-                    # Execute command through history manager
-                    self.history_manager.execute_command(command)
+                    # Execute command through unified undo/redo manager
+                    self.undo_redo_manager.execute_command(command)
                 else:
-                    # Fallback: update directly if no history manager
+                    # Fallback: update directly if no undo/redo manager
                     success = self.editor.update_tag(tag_str, new_value, vr)
                     if not success:
                         from PySide6.QtWidgets import QMessageBox
@@ -679,6 +692,9 @@ class MetadataPanel(QWidget):
                             "The tag may be read-only or the value may be invalid."
                         )
                         return
+                    # Still mark as edited if we have history manager
+                    if self.history_manager:
+                        self.history_manager.mark_tag_edited(self.dataset, tag_str)
                 
                 # Emit signal
                 self.tag_edited.emit(tag_str, new_value)

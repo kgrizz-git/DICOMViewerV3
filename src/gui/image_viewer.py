@@ -1441,16 +1441,6 @@ class ImageViewer(QGraphicsView):
                         privacy_view_action.setChecked(self._privacy_view_enabled)
                         privacy_view_action.triggered.connect(lambda checked: self.privacy_view_toggled.emit(checked))
                         
-                        
-                        # Delete all ROIs action
-                        delete_all_action = context_menu.addAction("Delete all ROIs (D)")
-                        if self.delete_all_rois_callback:
-                            delete_all_action.triggered.connect(self.delete_all_rois_callback)
-                        
-                        # Clear Measurements action
-                        clear_measurements_action = context_menu.addAction("Clear Measurements (C)")
-                        clear_measurements_action.triggered.connect(self.clear_measurements_requested.emit)
-                        
                         context_menu.addSeparator()
                         
                         # Series navigation actions
@@ -1585,6 +1575,17 @@ class ImageViewer(QGraphicsView):
                             action.triggered.connect(
                                 lambda checked, m=mode: self.context_menu_mouse_mode_changed.emit(m)
                             )
+                        
+                        context_menu.addSeparator()
+                        
+                        # Delete all ROIs action
+                        delete_all_action = context_menu.addAction("Delete all ROIs (D)")
+                        if self.delete_all_rois_callback:
+                            delete_all_action.triggered.connect(self.delete_all_rois_callback)
+                        
+                        # Clear Measurements action
+                        clear_measurements_action = context_menu.addAction("Clear Measurements (C)")
+                        clear_measurements_action.triggered.connect(self.clear_measurements_requested.emit)
                         
                         context_menu.addSeparator()
                         

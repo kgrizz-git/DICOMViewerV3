@@ -29,8 +29,9 @@ from pydicom.dataset import Dataset
 
 from core.dicom_parser import DICOMParser
 from core.dicom_editor import DICOMEditor
-from core.tag_edit_history import TagEditHistoryManager, EditTagCommand
+from core.tag_edit_history import TagEditHistoryManager
 from gui.dialogs.tag_edit_dialog import TagEditDialog
+from utils.undo_redo import UndoRedoManager, TagEditCommand
 
 
 class TagViewerDialog(QDialog):
@@ -47,17 +48,20 @@ class TagViewerDialog(QDialog):
     # Signals
     tag_edited = Signal(str, object)  # (tag_string, new_value)
     
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, undo_redo_manager: Optional['UndoRedoManager'] = None):
         """
         Initialize the tag viewer dialog.
         
         Args:
             parent: Parent widget
+            undo_redo_manager: Optional UndoRedoManager for unified undo/redo
         """
         super().__init__(parent)
         
         self.setWindowTitle("DICOM Tag Viewer/Editor")
         self.setModal(False)  # Non-modal so it can stay open
+        self.undo_redo_manager: Optional['UndoRedoManager'] = undo_redo_manager
+        self.ui_refresh_callback: Optional[Callable] = None
         self.resize(800, 600)
         
         self.parser: Optional[DICOMParser] = None
@@ -68,7 +72,7 @@ class TagViewerDialog(QDialog):
         self.editor: Optional[DICOMEditor] = None
         self.history_manager: Optional[TagEditHistoryManager] = None
         
-        # Undo/redo callbacks
+        # Undo/redo callbacks (for communicating with main window)
         self.undo_callback: Optional[Callable] = None
         self.redo_callback: Optional[Callable] = None
         self.can_undo_callback: Optional[Callable] = None
@@ -202,6 +206,13 @@ class TagViewerDialog(QDialog):
         # Add keyboard shortcut for copy (Ctrl+C)
         copy_shortcut = QShortcut(QKeySequence("Ctrl+C"), self)
         copy_shortcut.activated.connect(self._copy_selected_to_clipboard)
+        
+        # Add keyboard shortcuts for undo/redo (Cmd+Z / Ctrl+Z and Cmd+Shift+Z / Ctrl+Shift+Z)
+        undo_shortcut = QShortcut(QKeySequence.Undo, self)
+        undo_shortcut.activated.connect(self._on_undo_requested)
+        
+        redo_shortcut = QShortcut(QKeySequence.Redo, self)
+        redo_shortcut.activated.connect(self._on_redo_requested)
         
         # Buttons
         button_layout = QHBoxLayout()
@@ -463,19 +474,26 @@ class TagViewerDialog(QDialog):
                 # Get old value for undo/redo
                 old_value = current_value
                 
-                # Create edit command
-                if self.history_manager and self.dataset:
-                    command = EditTagCommand(
+                # Create edit command - use unified undo/redo manager if available
+                if self.undo_redo_manager and self.dataset:
+                    # Convert tag_str to tag object
+                    from pydicom.tag import Tag
+                    tag_tuple = tuple(int(x, 16) for x in tag_str.strip("()").split(","))
+                    tag = Tag(tag_tuple)
+                    
+                    command = TagEditCommand(
                         self.dataset,
-                        tag_str,
+                        tag,
                         old_value,
                         new_value,
-                        vr
+                        vr,
+                        tag_edit_history_manager=self.history_manager,
+                        ui_refresh_callback=self.ui_refresh_callback
                     )
-                    # Execute command through history manager
-                    self.history_manager.execute_command(command)
+                    # Execute command through unified undo/redo manager
+                    self.undo_redo_manager.execute_command(command)
                 else:
-                    # Fallback: update directly if no history manager
+                    # Fallback: update directly if no undo/redo manager
                     success = self.editor.update_tag(tag_str, new_value, vr)
                     if not success:
                         QMessageBox.warning(
@@ -485,6 +503,9 @@ class TagViewerDialog(QDialog):
                             "The tag may be read-only or the value may be invalid."
                         )
                         return
+                    # Still mark as edited if we have history manager
+                    if self.history_manager:
+                        self.history_manager.mark_tag_edited(self.dataset, tag_str)
                 
                 # Emit signal
                 self.tag_edited.emit(tag_str, new_value)
@@ -619,6 +640,16 @@ class TagViewerDialog(QDialog):
         else:
             # Otherwise, copy all fields
             self._copy_all_to_clipboard(current_item)
+    
+    def _on_undo_requested(self) -> None:
+        """Handle undo request via keyboard shortcut."""
+        if self.undo_callback:
+            self.undo_callback()
+    
+    def _on_redo_requested(self) -> None:
+        """Handle redo request via keyboard shortcut."""
+        if self.redo_callback:
+            self.redo_callback()
     
     def clear_filter(self) -> None:
         """

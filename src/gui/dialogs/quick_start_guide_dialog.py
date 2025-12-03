@@ -190,6 +190,7 @@ class QuickStartGuideDialog(QDialog):
                 <li><a href="#scroll-wheel-modes">Scroll Wheel Modes</a></li>
                 <li><a href="#keyboard-shortcuts">Keyboard Shortcuts</a></li>
                 <li><a href="#customization">Customization</a></li>
+                <li><a href="#export-import-customizations">Export/Import Customizations</a></li>
                 <li><a href="#additional-tips">Additional Tips</a></li>
                 <li><a href="#exporting">Exporting Images</a></li>
                 <li><a href="#metadata-tags">Metadata and Tags</a></li>
@@ -453,6 +454,34 @@ class QuickStartGuideDialog(QDialog):
                 <li><strong>Measurement Settings:</strong> Adjust font size, font color, line thickness, and line color for measurement lines and text</li>
                 <li>Changes apply immediately to all existing and new ROIs/measurements</li>
                 <li>Your preferences are saved and remembered between sessions</li>
+            </ul>
+            
+            <h2 id="export-import-customizations">Export/Import Customizations</h2>
+            <p>Save and share your customization settings as JSON files:</p>
+            <ul>
+                <li><strong>Export Customizations:</strong> Access via <strong>File → Export Customizations</strong>
+                    <ul>
+                        <li>Saves your current overlay configuration (fields, tags, font size/color)</li>
+                        <li>Saves annotation options (ROI and measurement appearance settings)</li>
+                        <li>Saves metadata panel column widths</li>
+                        <li>Saves current theme (dark/light)</li>
+                        <li>Exports to a JSON file that can be shared with others</li>
+                    </ul>
+                </li>
+                <li><strong>Import Customizations:</strong> Access via <strong>File → Import Customizations</strong>
+                    <ul>
+                        <li>Load customization settings from a JSON file</li>
+                        <li>All settings are applied immediately (overlay, annotations, metadata panel, theme)</li>
+                        <li>Use this to quickly apply saved settings or use settings shared by colleagues</li>
+                    </ul>
+                </li>
+                <li><strong>Use Cases:</strong>
+                    <ul>
+                        <li>Share standardized viewing configurations across a team</li>
+                        <li>Backup your preferred settings before trying new configurations</li>
+                        <li>Quickly switch between different viewing presets for different imaging modalities</li>
+                    </ul>
+                </li>
             </ul>
             
             <h2 id="additional-tips">Additional Tips</h2>

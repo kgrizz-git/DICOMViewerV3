@@ -81,6 +81,8 @@ class MainWindow(QMainWindow):
     layout_changed = Signal(str)  # Emitted when layout mode changes ("1x1", "1x2", "2x1", "2x2")
     privacy_view_toggled = Signal(bool)  # Emitted when privacy view is toggled (True = enabled)
     about_this_file_requested = Signal()  # Emitted when About this File is requested
+    export_customizations_requested = Signal()  # Emitted when Export Customizations is requested
+    import_customizations_requested = Signal()  # Emitted when Import Customizations is requested
     # Note: Cine control signals moved to CineControlsWidget
     # Keeping these signals for backward compatibility but they're not used anymore
     
@@ -155,6 +157,18 @@ class MainWindow(QMainWindow):
         export_action.setShortcut(QKeySequence("Ctrl+E"))
         export_action.triggered.connect(self.export_requested.emit)
         file_menu.addAction(export_action)
+        
+        file_menu.addSeparator()
+        
+        # Export Customizations action
+        export_customizations_action = QAction("Export Customizations...", self)
+        export_customizations_action.triggered.connect(self.export_customizations_requested.emit)
+        file_menu.addAction(export_customizations_action)
+        
+        # Import Customizations action
+        import_customizations_action = QAction("Import Customizations...", self)
+        import_customizations_action.triggered.connect(self.import_customizations_requested.emit)
+        file_menu.addAction(import_customizations_action)
         
         file_menu.addSeparator()
         
@@ -1555,6 +1569,7 @@ class MainWindow(QMainWindow):
     <li>Include overlays, ROIs, and measurements</li>
     <li>Export at displayed resolution option</li>
     <li>Export selected DICOM tags to Excel/CSV</li>
+    <li>Export/Import Customizations: Save and share overlay config, annotation options, metadata panel settings, and theme as JSON files</li>
     </ul>
     <h4>Planned Features (Not yet implemented):</h4>
     <ul>

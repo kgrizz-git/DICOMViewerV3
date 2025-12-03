@@ -107,6 +107,10 @@ This application provides comprehensive DICOM image viewing capabilities with ad
   - Choose window/level settings (current viewer or dataset default)
   - Organized folder structure: Patient ID / Study Date - Study Description / Series Number - Series Description
   - Remembers last export directory between sessions
+- **Export/Import Customizations**: Save and share your customization settings
+  - Export overlay configuration, annotation options, metadata panel column widths, and theme to a JSON file
+  - Import customizations from JSON file to quickly apply saved settings
+  - Access via File → Export Customizations or File → Import Customizations
 
 ### Keyboard Shortcuts
 - **P**: Pan mode (move the image around)

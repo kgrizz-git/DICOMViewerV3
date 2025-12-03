@@ -60,7 +60,9 @@ class DialogCoordinator:
         get_window_center: Optional[Callable[[], Optional[float]]] = None,
         get_window_width: Optional[Callable[[], Optional[float]]] = None,
         get_use_rescaled: Optional[Callable[[], bool]] = None,
-        get_rescale_params: Optional[Callable[[], tuple]] = None
+        get_rescale_params: Optional[Callable[[], tuple]] = None,
+        undo_redo_manager: Optional[Any] = None,
+        ui_refresh_callback: Optional[Callable[[], None]] = None
     ):
         """
         Initialize the dialog coordinator.
@@ -83,6 +85,8 @@ class DialogCoordinator:
         self.main_window = main_window
         self.get_current_studies = get_current_studies
         self.settings_applied_callback = settings_applied_callback
+        self.undo_redo_manager = undo_redo_manager
+        self.ui_refresh_callback = ui_refresh_callback
         self.overlay_config_applied_callback = overlay_config_applied_callback
         self.annotation_options_applied_callback = None  # Will be set from main.py
         self.tag_edit_history = tag_edit_history
@@ -126,10 +130,14 @@ class DialogCoordinator:
             privacy_mode: Whether privacy mode is enabled
         """
         if self.tag_viewer_dialog is None:
-            self.tag_viewer_dialog = TagViewerDialog(self.main_window)
-            # Set history manager if available
+            self.tag_viewer_dialog = TagViewerDialog(self.main_window, 
+                                                      undo_redo_manager=self.undo_redo_manager)
+            # Set history manager if available (for tracking edited tags)
             if self.tag_edit_history is not None:
                 self.tag_viewer_dialog.set_history_manager(self.tag_edit_history)
+            # Set UI refresh callback
+            if self.ui_refresh_callback is not None:
+                self.tag_viewer_dialog.ui_refresh_callback = self.ui_refresh_callback
             # Connect tag_edited signal if callback is available
             if self.tag_edited_callback is not None:
                 self.tag_viewer_dialog.tag_edited.connect(self.tag_edited_callback)
