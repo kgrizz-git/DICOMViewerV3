@@ -742,4 +742,207 @@ class ConfigManager:
         """
         self.config["privacy_view_enabled"] = enabled
         self.save_config()
+    
+    def export_customizations(self, file_path: str) -> bool:
+        """
+        Export customization settings to a JSON file.
+        
+        Exports overlay configuration, overlay font size/color, annotation options,
+        and theme. Does NOT export disclaimer_accepted or other non-customization settings.
+        
+        Args:
+            file_path: Path where the customization file should be saved
+            
+        Returns:
+            True if export was successful, False otherwise
+        """
+        try:
+            # Collect overlay settings
+            overlay_data = {
+                "mode": self.get_overlay_mode(),
+                "visibility_state": self.get_overlay_visibility_state(),
+                "custom_fields": self.get_overlay_custom_fields(),
+                "tags": self.config.get("overlay_tags", {}),
+                "font_size": self.get_overlay_font_size(),
+                "font_color": {
+                    "r": self.config.get("overlay_font_color_r", 255),
+                    "g": self.config.get("overlay_font_color_g", 255),
+                    "b": self.config.get("overlay_font_color_b", 0)
+                }
+            }
+            
+            # Collect metadata panel settings
+            metadata_panel_data = {
+                "column_widths": self.get_metadata_panel_column_widths()
+            }
+            
+            # Collect annotation settings
+            annotation_data = {
+                "roi": {
+                    "font_size": self.get_roi_font_size(),
+                    "font_color": {
+                        "r": self.config.get("roi_font_color_r", 255),
+                        "g": self.config.get("roi_font_color_g", 255),
+                        "b": self.config.get("roi_font_color_b", 0)
+                    },
+                    "line_thickness": self.get_roi_line_thickness(),
+                    "line_color": {
+                        "r": self.config.get("roi_line_color_r", 255),
+                        "g": self.config.get("roi_line_color_g", 0),
+                        "b": self.config.get("roi_line_color_b", 0)
+                    },
+                    "default_visible_statistics": self.get_roi_default_visible_statistics()
+                },
+                "measurement": {
+                    "font_size": self.get_measurement_font_size(),
+                    "font_color": {
+                        "r": self.config.get("measurement_font_color_r", 0),
+                        "g": self.config.get("measurement_font_color_g", 255),
+                        "b": self.config.get("measurement_font_color_b", 0)
+                    },
+                    "line_thickness": self.get_measurement_line_thickness(),
+                    "line_color": {
+                        "r": self.config.get("measurement_line_color_r", 0),
+                        "g": self.config.get("measurement_line_color_g", 255),
+                        "b": self.config.get("measurement_line_color_b", 0)
+                    }
+                }
+            }
+            
+            # Build export data structure
+            export_data = {
+                "version": "1.0",
+                "overlay": overlay_data,
+                "annotation": annotation_data,
+                "metadata_panel": metadata_panel_data,
+                "theme": self.get_theme()
+            }
+            
+            # Write to file
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(export_data, f, indent=4, ensure_ascii=False)
+            
+            return True
+        except (IOError, json.JSONEncodeError) as e:
+            print(f"Error exporting customizations: {e}")
+            return False
+    
+    def import_customizations(self, file_path: str) -> bool:
+        """
+        Import customization settings from a JSON file.
+        
+        Validates file structure and updates config with imported values.
+        Does NOT import disclaimer_accepted or other non-customization settings.
+        
+        Args:
+            file_path: Path to the customization file to import
+            
+        Returns:
+            True if import was successful, False otherwise
+        """
+        try:
+            # Read file
+            with open(file_path, 'r', encoding='utf-8') as f:
+                import_data = json.load(f)
+            
+            # Validate structure
+            if not isinstance(import_data, dict):
+                print("Error: Import file is not a valid JSON object")
+                return False
+            
+            # Import overlay settings
+            if "overlay" in import_data:
+                overlay = import_data["overlay"]
+                if isinstance(overlay, dict):
+                    if "mode" in overlay and overlay["mode"] in ["minimal", "detailed", "hidden"]:
+                        self.set_overlay_mode(overlay["mode"])
+                    if "visibility_state" in overlay and overlay["visibility_state"] in [0, 1, 2]:
+                        self.set_overlay_visibility_state(overlay["visibility_state"])
+                    if "custom_fields" in overlay and isinstance(overlay["custom_fields"], list):
+                        self.set_overlay_custom_fields(overlay["custom_fields"])
+                    if "tags" in overlay and isinstance(overlay["tags"], dict):
+                        # Import overlay tags for all modalities
+                        for modality, corner_tags in overlay["tags"].items():
+                            if isinstance(corner_tags, dict):
+                                self.set_overlay_tags(modality, corner_tags)
+                    if "font_size" in overlay and isinstance(overlay["font_size"], int) and overlay["font_size"] > 0:
+                        self.set_overlay_font_size(overlay["font_size"])
+                    if "font_color" in overlay and isinstance(overlay["font_color"], dict):
+                        font_color = overlay["font_color"]
+                        r = font_color.get("r", 255)
+                        g = font_color.get("g", 255)
+                        b = font_color.get("b", 0)
+                        if 0 <= r <= 255 and 0 <= g <= 255 and 0 <= b <= 255:
+                            self.set_overlay_font_color(r, g, b)
+            
+            # Import annotation settings
+            if "annotation" in import_data:
+                annotation = import_data["annotation"]
+                if isinstance(annotation, dict):
+                    # ROI settings
+                    if "roi" in annotation and isinstance(annotation["roi"], dict):
+                        roi = annotation["roi"]
+                        if "font_size" in roi and isinstance(roi["font_size"], int) and roi["font_size"] > 0:
+                            self.set_roi_font_size(roi["font_size"])
+                        if "font_color" in roi and isinstance(roi["font_color"], dict):
+                            font_color = roi["font_color"]
+                            r = font_color.get("r", 255)
+                            g = font_color.get("g", 255)
+                            b = font_color.get("b", 0)
+                            if 0 <= r <= 255 and 0 <= g <= 255 and 0 <= b <= 255:
+                                self.set_roi_font_color(r, g, b)
+                        if "line_thickness" in roi and isinstance(roi["line_thickness"], int) and roi["line_thickness"] > 0:
+                            self.set_roi_line_thickness(roi["line_thickness"])
+                        if "line_color" in roi and isinstance(roi["line_color"], dict):
+                            line_color = roi["line_color"]
+                            r = line_color.get("r", 255)
+                            g = line_color.get("g", 0)
+                            b = line_color.get("b", 0)
+                            if 0 <= r <= 255 and 0 <= g <= 255 and 0 <= b <= 255:
+                                self.set_roi_line_color(r, g, b)
+                        if "default_visible_statistics" in roi and isinstance(roi["default_visible_statistics"], list):
+                            self.set_roi_default_visible_statistics(roi["default_visible_statistics"])
+                    
+                    # Measurement settings
+                    if "measurement" in annotation and isinstance(annotation["measurement"], dict):
+                        measurement = annotation["measurement"]
+                        if "font_size" in measurement and isinstance(measurement["font_size"], int) and measurement["font_size"] > 0:
+                            self.set_measurement_font_size(measurement["font_size"])
+                        if "font_color" in measurement and isinstance(measurement["font_color"], dict):
+                            font_color = measurement["font_color"]
+                            r = font_color.get("r", 0)
+                            g = font_color.get("g", 255)
+                            b = font_color.get("b", 0)
+                            if 0 <= r <= 255 and 0 <= g <= 255 and 0 <= b <= 255:
+                                self.set_measurement_font_color(r, g, b)
+                        if "line_thickness" in measurement and isinstance(measurement["line_thickness"], int) and measurement["line_thickness"] > 0:
+                            self.set_measurement_line_thickness(measurement["line_thickness"])
+                        if "line_color" in measurement and isinstance(measurement["line_color"], dict):
+                            line_color = measurement["line_color"]
+                            r = line_color.get("r", 0)
+                            g = line_color.get("g", 255)
+                            b = line_color.get("b", 0)
+                            if 0 <= r <= 255 and 0 <= g <= 255 and 0 <= b <= 255:
+                                self.set_measurement_line_color(r, g, b)
+            
+            # Import metadata panel settings
+            if "metadata_panel" in import_data:
+                metadata_panel = import_data["metadata_panel"]
+                if isinstance(metadata_panel, dict):
+                    if "column_widths" in metadata_panel and isinstance(metadata_panel["column_widths"], list):
+                        widths = metadata_panel["column_widths"]
+                        # Validate it's a list of 4 integers
+                        if len(widths) == 4 and all(isinstance(w, int) and w > 0 for w in widths):
+                            self.set_metadata_panel_column_widths(widths)
+            
+            # Import theme
+            if "theme" in import_data:
+                theme = import_data["theme"]
+                if theme in ["light", "dark"]:
+                    self.set_theme(theme)
+            
+            return True
+        except (IOError, json.JSONDecodeError) as e:
+            print(f"Error importing customizations: {e}")
+            return False
 

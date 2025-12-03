@@ -224,6 +224,8 @@ class TagEditHistoryManager:
         self.histories: dict = {}  # dataset_id -> {"undo": [], "redo": []}
         # Dictionary mapping dataset id to set of edited tag strings
         self.edited_tags: Dict[int, Set[str]] = {}  # dataset_id -> set of tag strings
+        # Dictionary mapping dataset id to original tag values
+        self.original_values: Dict[int, Dict[str, Any]] = {}  # dataset_id -> {tag_str: original_value}
     
     def _get_dataset_id(self, dataset: Dataset) -> int:
         """
@@ -295,15 +297,58 @@ class TagEditHistoryManager:
                 return f"({command.tag_identifier[0]:04X},{command.tag_identifier[1]:04X})"
         return None
     
-    def mark_tag_edited(self, dataset: Dataset, tag_str: str) -> None:
+    def store_original_value(self, dataset: Dataset, tag_str: str, value: Any) -> None:
+        """
+        Store the original value of a tag (when first edited).
+        
+        Args:
+            dataset: DICOM dataset
+            tag_str: Tag string in format "(GGGG,EEEE)"
+            value: Original value
+        """
+        dataset_id = self._get_dataset_id(dataset)
+        if dataset_id not in self.original_values:
+            self.original_values[dataset_id] = {}
+        # Only store if not already stored (preserve the very first value)
+        if tag_str not in self.original_values[dataset_id]:
+            self.original_values[dataset_id][tag_str] = value
+    
+    def get_original_value(self, dataset: Dataset, tag_str: str) -> Optional[Any]:
+        """
+        Get the original value of a tag.
+        
+        Args:
+            dataset: DICOM dataset
+            tag_str: Tag string in format "(GGGG,EEEE)"
+            
+        Returns:
+            Original value or None if not stored
+        """
+        dataset_id = self._get_dataset_id(dataset)
+        if dataset_id not in self.original_values:
+            return None
+        return self.original_values[dataset_id].get(tag_str)
+    
+    def mark_tag_edited(self, dataset: Dataset, tag_str: str, current_value: Any = None) -> None:
         """
         Mark a tag as edited.
         
         Args:
             dataset: DICOM dataset
             tag_str: Tag string in format "(GGGG,EEEE)"
+            current_value: Current value of the tag (for comparison with original)
         """
         dataset_id = self._get_dataset_id(dataset)
+        
+        # Check if tag should be marked as edited
+        original_value = self.get_original_value(dataset, tag_str)
+        if original_value is not None and current_value == original_value:
+            # Tag is back to original value, remove from edited set
+            if dataset_id in self.edited_tags:
+                self.edited_tags[dataset_id].discard(tag_str)
+            return
+        
+        # Mark as edited
         if dataset_id not in self.edited_tags:
             self.edited_tags[dataset_id] = set()
         self.edited_tags[dataset_id].add(tag_str)
@@ -333,10 +378,13 @@ class TagEditHistoryManager:
         """
         if dataset is None:
             self.edited_tags.clear()
+            self.original_values.clear()
         else:
             dataset_id = self._get_dataset_id(dataset)
             if dataset_id in self.edited_tags:
                 del self.edited_tags[dataset_id]
+            if dataset_id in self.original_values:
+                del self.original_values[dataset_id]
     
     def undo(self, dataset: Dataset) -> bool:
         """

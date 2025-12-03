@@ -2,7 +2,7 @@
 Undo/Redo System
 
 This module implements an undo/redo system using the command pattern
-for ROI, measurement, and crosshair changes.
+for ROI, measurement, crosshair changes, and DICOM tag edits.
 
 Inputs:
     - Commands to execute
@@ -15,9 +15,10 @@ Outputs:
 Requirements:
     - Standard library only
     - PySide6.QtCore.QPointF for position tracking
+    - pydicom for DICOM tag operations
 """
 
-from typing import List, Optional, Callable, Any, Tuple
+from typing import List, Optional, Callable, Any, Tuple, Union
 from abc import ABC, abstractmethod
 
 
@@ -580,4 +581,183 @@ class CompositeCommand(Command):
         """Undo all commands in reverse order."""
         for command in reversed(self.commands):
             command.undo()
+
+
+class TagEditCommand(Command):
+    """
+    Command for DICOM tag edit operations.
+    Integrates tag edits into the unified undo/redo system.
+    """
+    
+    def __init__(self, dataset, tag, old_value: Any, new_value: Any, vr: Optional[str] = None,
+                 tag_edit_history_manager=None, ui_refresh_callback: Optional[Callable[[], None]] = None):
+        """
+        Initialize tag edit command.
+        
+        Args:
+            dataset: DICOM dataset to edit
+            tag: pydicom Tag object or tag tuple
+            old_value: Original value (None if tag didn't exist)
+            new_value: New value to set
+            vr: Value Representation (optional)
+            tag_edit_history_manager: TagEditHistoryManager for tracking edited tags
+            ui_refresh_callback: Optional callback to refresh UI after edit
+        """
+        self.dataset = dataset
+        self.tag = tag
+        self.old_value = old_value
+        self.new_value = new_value
+        self.vr = vr
+        self.tag_edit_history_manager = tag_edit_history_manager
+        self.ui_refresh_callback = ui_refresh_callback
+    
+    def get_target_dataset(self):
+        """Get the target dataset for editing (handles wrapped datasets)."""
+        if hasattr(self.dataset, '_original_dataset'):
+            return self.dataset._original_dataset
+        return self.dataset
+    
+    def get_tag_string(self) -> str:
+        """Get tag as string for tracking."""
+        if self.tag is None:
+            return ""
+        # Convert tag to string format "(GGGG,EEEE)"
+        try:
+            from pydicom.tag import Tag as PydicomTag
+            tag_obj = PydicomTag(self.tag) if not isinstance(self.tag, PydicomTag) else self.tag
+            return f"({tag_obj.group:04X},{tag_obj.element:04X})"
+        except:
+            return str(self.tag)
+    
+    def execute(self) -> None:
+        """Execute the command - set new value."""
+        if self.tag is None:
+            return
+        
+        target_dataset = self.get_target_dataset()
+        
+        try:
+            # Store original value if this is the first edit
+            if self.tag_edit_history_manager:
+                tag_str = self.get_tag_string()
+                if self.tag_edit_history_manager.get_original_value(self.dataset, tag_str) is None:
+                    # First time editing this tag, store the old value as original
+                    self.tag_edit_history_manager.store_original_value(self.dataset, tag_str, self.old_value)
+            
+            if self.new_value is None:
+                # Delete the tag
+                if self.tag in target_dataset:
+                    del target_dataset[self.tag]
+                if hasattr(self.dataset, '_original_dataset') and self.dataset is not target_dataset:
+                    if self.tag in self.dataset:
+                        del self.dataset[self.tag]
+            else:
+                # Set new value
+                if self.tag in target_dataset:
+                    target_dataset[self.tag].value = self.new_value
+                else:
+                    # Create new tag
+                    from pydicom.dataelem import DataElement
+                    if self.vr is None:
+                        try:
+                            from pydicom.datadict import dictionary_VR
+                            vr = dictionary_VR(self.tag)
+                        except (KeyError, AttributeError):
+                            vr = "LO"
+                    else:
+                        vr = self.vr
+                    new_elem = DataElement(self.tag, vr, self.new_value)
+                    target_dataset.add(new_elem)
+                
+                # Also update wrapper if applicable
+                if hasattr(self.dataset, '_original_dataset') and self.dataset is not target_dataset:
+                    if self.tag in self.dataset:
+                        self.dataset[self.tag].value = self.new_value
+                    else:
+                        from pydicom.dataelem import DataElement
+                        if self.vr is None:
+                            try:
+                                from pydicom.datadict import dictionary_VR
+                                vr = dictionary_VR(self.tag)
+                            except (KeyError, AttributeError):
+                                vr = "LO"
+                        else:
+                            vr = self.vr
+                        new_elem = DataElement(self.tag, vr, self.new_value)
+                        self.dataset.add(new_elem)
+            
+            # Mark tag as edited (compares with original value)
+            if self.tag_edit_history_manager:
+                self.tag_edit_history_manager.mark_tag_edited(self.dataset, self.get_tag_string(), self.new_value)
+            
+            # Refresh UI
+            if self.ui_refresh_callback:
+                self.ui_refresh_callback()
+                
+        except Exception as e:
+            print(f"Error executing tag edit command: {e}")
+            raise
+    
+    def undo(self) -> None:
+        """Undo the command - restore old value."""
+        if self.tag is None:
+            return
+        
+        target_dataset = self.get_target_dataset()
+        
+        try:
+            if self.old_value is None:
+                # Tag didn't exist before, delete it
+                if self.tag in target_dataset:
+                    del target_dataset[self.tag]
+                if hasattr(self.dataset, '_original_dataset') and self.dataset is not target_dataset:
+                    if self.tag in self.dataset:
+                        del self.dataset[self.tag]
+            else:
+                # Restore old value
+                if self.tag in target_dataset:
+                    target_dataset[self.tag].value = self.old_value
+                else:
+                    # Recreate tag with old value
+                    from pydicom.dataelem import DataElement
+                    if self.vr is None:
+                        try:
+                            from pydicom.datadict import dictionary_VR
+                            vr = dictionary_VR(self.tag)
+                        except (KeyError, AttributeError):
+                            vr = "LO"
+                    else:
+                        vr = self.vr
+                    new_elem = DataElement(self.tag, vr, self.old_value)
+                    target_dataset.add(new_elem)
+                
+                # Also update wrapper if applicable
+                if hasattr(self.dataset, '_original_dataset') and self.dataset is not target_dataset:
+                    if self.tag in self.dataset:
+                        self.dataset[self.tag].value = self.old_value
+                    else:
+                        from pydicom.dataelem import DataElement
+                        if self.vr is None:
+                            try:
+                                from pydicom.datadict import dictionary_VR
+                                vr = dictionary_VR(self.tag)
+                            except (KeyError, AttributeError):
+                                vr = "LO"
+                        else:
+                            vr = self.vr
+                        new_elem = DataElement(self.tag, vr, self.old_value)
+                        self.dataset.add(new_elem)
+            
+            # Update edited tags tracking after undo (compares with original value)
+            if self.tag_edit_history_manager:
+                tag_str = self.get_tag_string()
+                self.tag_edit_history_manager.mark_tag_edited(self.dataset, tag_str, self.old_value)
+            
+            # Refresh UI
+            if self.ui_refresh_callback:
+                self.ui_refresh_callback()
+                
+        except Exception as e:
+            print(f"Error undoing tag edit command: {e}")
+            raise
 

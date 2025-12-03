@@ -30,7 +30,7 @@ from pathlib import Path
 src_dir = Path(__file__).parent
 sys.path.insert(0, str(src_dir))
 
-from PySide6.QtWidgets import QApplication, QMessageBox, QStyleFactory
+from PySide6.QtWidgets import QApplication, QMessageBox, QStyleFactory, QFileDialog
 from PySide6.QtCore import Qt, QPointF, QObject, QTimer, QRectF, QSize
 from PySide6.QtGui import QKeyEvent
 from typing import Optional, Dict
@@ -147,8 +147,10 @@ class DICOMViewerApp(QObject):
         self.main_window.image_viewer = None  # Will be set after subwindows are created
         # Apply theme again to set background color
         self.main_window._apply_theme()
-        self.metadata_panel = MetadataPanel(config_manager=self.config_manager)
+        self.metadata_panel = MetadataPanel(config_manager=self.config_manager,
+                                            undo_redo_manager=self.undo_redo_manager)
         self.metadata_panel.set_history_manager(self.tag_edit_history)
+        self.metadata_panel.ui_refresh_callback = self._refresh_tag_ui
         # Set undo/redo callbacks
         self.metadata_panel.set_undo_redo_callbacks(
             lambda: self._undo_tag_edit(),
@@ -912,7 +914,9 @@ class DICOMViewerApp(QObject):
             get_window_center=lambda: self.view_state_manager.current_window_center if self.view_state_manager else None,
             get_window_width=lambda: self.view_state_manager.current_window_width if self.view_state_manager else None,
             get_use_rescaled=lambda: self.view_state_manager.use_rescaled_values if self.view_state_manager else False,
-            get_rescale_params=lambda: self.dicom_processor.get_rescale_parameters(self.current_dataset) if self.current_dataset else (None, None, None)
+            get_rescale_params=lambda: self.dicom_processor.get_rescale_parameters(self.current_dataset) if self.current_dataset else (None, None, None),
+            undo_redo_manager=self.undo_redo_manager,
+            ui_refresh_callback=self._refresh_tag_ui
         )
         # Set annotation options callback
         self.dialog_coordinator.annotation_options_applied_callback = self._on_annotation_options_applied
@@ -920,10 +924,10 @@ class DICOMViewerApp(QObject):
         self.dialog_coordinator.tag_edited_callback = self._on_tag_edited
         # Set undo/redo callbacks for tag viewer dialog
         self.dialog_coordinator.undo_redo_callbacks = (
-            lambda: self._undo_tag_edit(),
-            lambda: self._redo_tag_edit(),
-            lambda: self.tag_edit_history.can_undo(self.current_dataset) if self.current_dataset and self.tag_edit_history else False,
-            lambda: self.tag_edit_history.can_redo(self.current_dataset) if self.current_dataset and self.tag_edit_history else False
+            lambda: self._on_undo_requested(),
+            lambda: self._on_redo_requested(),
+            lambda: self.undo_redo_manager.can_undo() if self.undo_redo_manager else False,
+            lambda: self.undo_redo_manager.can_redo() if self.undo_redo_manager else False
         )
         
         # Initialize MouseModeHandler
@@ -1420,26 +1424,34 @@ class DICOMViewerApp(QObject):
     
     def _update_undo_redo_state(self) -> None:
         """Update undo/redo menu item states."""
-        # Check both tag edit history and annotation undo/redo
-        tag_can_undo = False
-        tag_can_redo = False
-        if self.current_dataset is not None and self.tag_edit_history:
-            tag_can_undo = self.tag_edit_history.can_undo(self.current_dataset)
-            tag_can_redo = self.tag_edit_history.can_redo(self.current_dataset)
-        
-        # Check annotation undo/redo
-        annotation_can_undo = self.undo_redo_manager.can_undo() if self.undo_redo_manager else False
-        annotation_can_redo = self.undo_redo_manager.can_redo() if self.undo_redo_manager else False
-        
-        # Enable if either tag edits or annotations can be undone/redone
-        can_undo = tag_can_undo or annotation_can_undo
-        can_redo = tag_can_redo or annotation_can_redo
+        # Use unified undo/redo manager for all operations
+        can_undo = self.undo_redo_manager.can_undo() if self.undo_redo_manager else False
+        can_redo = self.undo_redo_manager.can_redo() if self.undo_redo_manager else False
         
         self.main_window.update_undo_redo_state(can_undo, can_redo)
     
+    def _refresh_tag_ui(self) -> None:
+        """Refresh both metadata panel and tag viewer dialog after tag changes."""
+        # Refresh metadata panel
+        if self.metadata_panel and self.metadata_panel.dataset:
+            search_text = self.metadata_panel.search_edit.text()
+            self.metadata_panel._cached_tags = None
+            # Clear parser cache so it re-reads from updated dataset
+            if self.metadata_panel.parser is not None:
+                self.metadata_panel.parser._tag_cache.clear()
+            self.metadata_panel._populate_tags(search_text)
+        
+        # Refresh tag viewer dialog if open
+        if self.dialog_coordinator.tag_viewer_dialog:
+            search_text = self.dialog_coordinator.tag_viewer_dialog.search_edit.text()
+            self.dialog_coordinator.tag_viewer_dialog._cached_tags = None
+            # Clear parser cache so it re-reads from updated dataset
+            if self.dialog_coordinator.tag_viewer_dialog.parser is not None:
+                self.dialog_coordinator.tag_viewer_dialog.parser._tag_cache.clear()
+            self.dialog_coordinator.tag_viewer_dialog._populate_tags(search_text)
+    
     def _on_undo_requested(self) -> None:
-        """Handle undo request (for both tag edits and annotations)."""
-        # Try annotation undo first (most recent operations)
+        """Handle undo request (unified for all operations)."""
         if self.undo_redo_manager and self.undo_redo_manager.can_undo():
             success = self.undo_redo_manager.undo()
             if success:
@@ -1450,14 +1462,10 @@ class DICOMViewerApp(QObject):
                 # Update crosshair visibility if needed
                 if hasattr(self, 'crosshair_coordinator') and self.crosshair_coordinator:
                     self.crosshair_coordinator.update_crosshairs_for_slice()
-                return
-        
-        # Fall back to tag edit undo
-        self._undo_tag_edit()
+                # Tag UI refresh is handled by the TagEditCommand callback
     
     def _on_redo_requested(self) -> None:
-        """Handle redo request (for both tag edits and annotations)."""
-        # Try annotation redo first (most recent operations)
+        """Handle redo request (unified for all operations)."""
         if self.undo_redo_manager and self.undo_redo_manager.can_redo():
             success = self.undo_redo_manager.redo()
             if success:
@@ -1468,10 +1476,7 @@ class DICOMViewerApp(QObject):
                 # Update crosshair visibility if needed
                 if hasattr(self, 'crosshair_coordinator') and self.crosshair_coordinator:
                     self.crosshair_coordinator.update_crosshairs_for_slice()
-                return
-        
-        # Fall back to tag edit redo
-        self._redo_tag_edit()
+                # Tag UI refresh is handled by the TagEditCommand callback
     
     def _update_roi_list(self) -> None:
         """Update ROI list panel."""
@@ -1569,6 +1574,10 @@ class DICOMViewerApp(QObject):
         
         # About this File (shared)
         self.main_window.about_this_file_requested.connect(self._open_about_this_file)
+        
+        # Customizations export/import (shared)
+        self.main_window.export_customizations_requested.connect(self._on_export_customizations)
+        self.main_window.import_customizations_requested.connect(self._on_import_customizations)
         
         # Connect signals for all subwindows
         self._connect_subwindow_signals()
@@ -3351,6 +3360,112 @@ class DICOMViewerApp(QObject):
             overlay_manager=self.overlay_manager,
             measurement_tool=self.measurement_tool
         )
+    
+    def _on_export_customizations(self) -> None:
+        """Handle Export Customizations request."""
+        # Get last export path or use current directory
+        last_export_path = self.config_manager.get_last_export_path()
+        if not last_export_path or not os.path.exists(last_export_path):
+            last_export_path = os.getcwd()
+        
+        # If last path is a file, use its directory
+        if os.path.isfile(last_export_path):
+            last_export_path = os.path.dirname(last_export_path)
+        
+        # Default filename
+        default_filename = os.path.join(last_export_path, "dicom_viewer_customizations.json")
+        
+        # Show file save dialog
+        file_path, _ = QFileDialog.getSaveFileName(
+            self.main_window,
+            "Export Customizations",
+            default_filename,
+            "JSON Files (*.json);;All Files (*)"
+        )
+        
+        if not file_path:
+            return
+        
+        # Ensure .json extension
+        if not file_path.endswith('.json'):
+            file_path += '.json'
+        
+        # Export customizations
+        if self.config_manager.export_customizations(file_path):
+            # Update last export path
+            self.config_manager.set_last_export_path(os.path.dirname(file_path))
+            QMessageBox.information(
+                self.main_window,
+                "Export Successful",
+                f"Customizations exported successfully to:\n{file_path}"
+            )
+        else:
+            QMessageBox.warning(
+                self.main_window,
+                "Export Failed",
+                f"Failed to export customizations to:\n{file_path}\n\nPlease check file permissions and try again."
+            )
+    
+    def _on_import_customizations(self) -> None:
+        """Handle Import Customizations request."""
+        # Get last path or use current directory
+        last_path = self.config_manager.get_last_path()
+        if not last_path or not os.path.exists(last_path):
+            last_path = os.getcwd()
+        
+        # If last path is a file, use its directory
+        if os.path.isfile(last_path):
+            last_path = os.path.dirname(last_path)
+        
+        # Show file open dialog
+        file_path, _ = QFileDialog.getOpenFileName(
+            self.main_window,
+            "Import Customizations",
+            last_path,
+            "JSON Files (*.json);;All Files (*)"
+        )
+        
+        if not file_path:
+            return
+        
+        # Import customizations
+        if self.config_manager.import_customizations(file_path):
+            # Apply imported settings
+            # Update overlay manager with new settings
+            font_size = self.config_manager.get_overlay_font_size()
+            font_color = self.config_manager.get_overlay_font_color()
+            self.overlay_manager.set_font_size(font_size)
+            self.overlay_manager.set_font_color(*font_color)
+            
+            # Recreate overlay
+            self.overlay_coordinator.handle_overlay_config_applied()
+            
+            # Update annotation styles
+            self._on_annotation_options_applied()
+            
+            # Apply theme
+            theme = self.config_manager.get_theme()
+            self.main_window._set_theme(theme)
+            
+            # Update metadata panel column widths
+            widths = self.config_manager.get_metadata_panel_column_widths()
+            if len(widths) == 4:
+                self.metadata_panel.tree_widget.setColumnWidth(0, widths[0])
+                self.metadata_panel.tree_widget.setColumnWidth(1, widths[1])
+                self.metadata_panel.tree_widget.setColumnWidth(2, widths[2])
+                self.metadata_panel.tree_widget.setColumnWidth(3, widths[3])
+            
+            QMessageBox.information(
+                self.main_window,
+                "Import Successful",
+                "Customizations imported successfully.\n\nAll settings have been applied."
+            )
+        else:
+            QMessageBox.warning(
+                self.main_window,
+                "Import Failed",
+                f"Failed to import customizations from:\n{file_path}\n\nPlease check that the file is a valid customization file and try again."
+            )
     
     def _on_overlay_config_applied(self) -> None:
         """Handle overlay configuration being applied."""
