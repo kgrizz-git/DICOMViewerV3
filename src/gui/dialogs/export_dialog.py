@@ -35,6 +35,7 @@ import numpy as np
 
 from core.dicom_processor import DICOMProcessor
 from core.dicom_parser import DICOMParser
+from utils.dicom_utils import get_slice_thickness
 
 
 class ExportDialog(QDialog):
@@ -55,11 +56,15 @@ class ExportDialog(QDialog):
         current_window_center: Optional[float] = None,
         current_window_width: Optional[float] = None,
         current_zoom: Optional[float] = None,
+        initial_fit_zoom: Optional[float] = None,
         use_rescaled_values: bool = False,
         roi_manager=None,
         overlay_manager=None,
         measurement_tool=None,
         config_manager=None,
+        projection_enabled: bool = False,
+        projection_type: str = "aip",
+        projection_slice_count: int = 4,
         parent=None
     ):
         """
@@ -70,11 +75,15 @@ class ExportDialog(QDialog):
             current_window_center: Optional current window center from viewer
             current_window_width: Optional current window width from viewer
             current_zoom: Optional current zoom level from viewer
+            initial_fit_zoom: Optional initial fit-to-view zoom factor for font scaling
             use_rescaled_values: Whether to use rescaled values (matches viewer setting)
             roi_manager: Optional ROI manager for rendering ROIs
             overlay_manager: Optional overlay manager for rendering overlays
             measurement_tool: Optional measurement tool for rendering measurements
             config_manager: Optional config manager for overlay configuration
+            projection_enabled: Whether intensity projection (combine slices) is enabled
+            projection_type: Type of projection ("aip", "mip", or "minip")
+            projection_slice_count: Number of slices to combine (2, 3, 4, 6, or 8)
             parent: Parent widget
         """
         super().__init__(parent)
@@ -87,11 +96,15 @@ class ExportDialog(QDialog):
         self.current_window_center = current_window_center
         self.current_window_width = current_window_width
         self.current_zoom = current_zoom
+        self.initial_fit_zoom = initial_fit_zoom if initial_fit_zoom is not None else 1.0
         self.use_rescaled_values = use_rescaled_values
         self.roi_manager = roi_manager
         self.overlay_manager = overlay_manager
         self.measurement_tool = measurement_tool
         self.config_manager = config_manager
+        self.projection_enabled = projection_enabled
+        self.projection_type = projection_type
+        self.projection_slice_count = projection_slice_count
         
         self.export_format = "PNG"
         self.window_level_option = "current"  # "current" or "dataset"
@@ -137,6 +150,23 @@ class ExportDialog(QDialog):
         
         format_group.setLayout(format_layout)
         layout.addWidget(format_group)
+        
+        # Projection information label (if enabled)
+        if self.projection_enabled:
+            # Map projection type to display name
+            projection_name_map = {
+                "aip": "Average Intensity Projection (AIP)",
+                "mip": "Maximum Intensity Projection (MIP)",
+                "minip": "Minimum Intensity Projection (MinIP)"
+            }
+            projection_display_name = projection_name_map.get(self.projection_type, "Unknown")
+            
+            projection_info_label = QLabel(
+                f"<b>Note:</b> Combine Slices is enabled. Exports will use <b>{projection_display_name}</b> with <b>{self.projection_slice_count}</b> slices combined."
+            )
+            projection_info_label.setWordWrap(True)
+            projection_info_label.setStyleSheet("QLabel { color: #0066cc; padding: 5px; }")
+            layout.addWidget(projection_info_label)
         
         # Anonymize option (only for DICOM)
         self.anonymize_checkbox = QCheckBox("Anonymize patient information (DICOM only)")
@@ -520,7 +550,11 @@ class ExportDialog(QDialog):
                 self.studies,
                 self.export_at_display_resolution,
                 self.current_zoom,
-                anonymize=anonymize
+                self.initial_fit_zoom,
+                anonymize=anonymize,
+                projection_enabled=self.projection_enabled,
+                projection_type=self.projection_type,
+                projection_slice_count=self.projection_slice_count
             )
             
             # Save export path to config for next time
@@ -678,7 +712,11 @@ class ExportManager:
         studies: Optional[Dict[str, Dict[str, List[Dataset]]]] = None,
         export_at_display_resolution: bool = False,
         current_zoom: Optional[float] = None,
-        anonymize: bool = False
+        initial_fit_zoom: float = 1.0,
+        anonymize: bool = False,
+        projection_enabled: bool = False,
+        projection_type: str = "aip",
+        projection_slice_count: int = 4
     ) -> int:
         """
         Export selected items based on hierarchical selection.
@@ -699,6 +737,10 @@ class ExportManager:
             studies: Optional studies dictionary for calculating total_slices {study_uid: {series_uid: [datasets]}}
             export_at_display_resolution: Whether to export at displayed resolution (apply zoom)
             current_zoom: Optional current zoom level from viewer
+            anonymize: Whether to anonymize DICOM exports
+            projection_enabled: Whether intensity projection (combine slices) is enabled
+            projection_type: Type of projection ("aip", "mip", or "minip")
+            projection_slice_count: Number of slices to combine (2, 3, 4, 6, or 8)
             
         Returns:
             Number of files exported
@@ -781,12 +823,18 @@ class ExportManager:
                     # Generate filename
                     instance_num = getattr(dataset, 'InstanceNumber', slice_index + 1)
                     
+                    # Add projection info to filename if enabled
+                    projection_suffix = ""
+                    if projection_enabled:
+                        projection_type_upper = projection_type.upper()
+                        projection_suffix = f"_{projection_type_upper}_{projection_slice_count}slices"
+                    
                     if format == "DICOM":
-                        filename = f"Instance_{instance_num:04d}.dcm"
+                        filename = f"Instance_{instance_num:04d}{projection_suffix}.dcm"
                     elif format == "PNG":
-                        filename = f"Instance_{instance_num:04d}.png"
+                        filename = f"Instance_{instance_num:04d}{projection_suffix}.png"
                     else:  # JPG
-                        filename = f"Instance_{instance_num:04d}.jpg"
+                        filename = f"Instance_{instance_num:04d}{projection_suffix}.jpg"
                     
                     output_path = os.path.join(series_dir, filename)
                     
@@ -814,7 +862,12 @@ class ExportManager:
                         total_slices,
                         export_at_display_resolution,
                         current_zoom,
-                        anonymize=anonymize
+                        initial_fit_zoom,
+                        anonymize=anonymize,
+                        projection_enabled=projection_enabled,
+                        projection_type=projection_type,
+                        projection_slice_count=projection_slice_count,
+                        studies=studies
                     ):
                         exported += 1
                     
@@ -847,10 +900,15 @@ class ExportManager:
         total_slices: Optional[int] = None,
         export_at_display_resolution: bool = False,
         current_zoom: Optional[float] = None,
-        anonymize: bool = False
+        initial_fit_zoom: float = 1.0,
+        anonymize: bool = False,
+        projection_enabled: bool = False,
+        projection_type: str = "aip",
+        projection_slice_count: int = 4,
+        studies: Optional[Dict[str, Dict[str, List[Dataset]]]] = None
     ) -> bool:
         """
-        Export a single slice.
+        Export a single slice or projection image.
         
         Args:
             dataset: DICOM dataset
@@ -871,6 +929,11 @@ class ExportManager:
             total_slices: Optional total number of slices in series (for "Slice X/Y" formatting)
             export_at_display_resolution: Whether to export at displayed resolution (apply zoom)
             current_zoom: Optional current zoom level from viewer
+            anonymize: Whether to anonymize DICOM exports
+            projection_enabled: Whether intensity projection (combine slices) is enabled
+            projection_type: Type of projection ("aip", "mip", or "minip")
+            projection_slice_count: Number of slices to combine (2, 3, 4, 6, or 8)
+            studies: Optional studies dictionary for gathering slices for projection
             
         Returns:
             True if successful
@@ -878,15 +941,36 @@ class ExportManager:
         try:
             if format == "DICOM":
                 # Export as DICOM
-                if anonymize:
-                    # Apply anonymization
-                    from utils.dicom_anonymizer import DICOMAnonymizer
-                    anonymizer = DICOMAnonymizer()
-                    anonymized_dataset = anonymizer.anonymize_dataset(dataset)
-                    anonymized_dataset.save_as(output_path)
+                if projection_enabled and studies and study_uid and series_uid and slice_index is not None:
+                    # Create projection dataset for DICOM export
+                    projection_dataset = self._create_projection_dataset(
+                        dataset, studies, study_uid, series_uid, slice_index,
+                        projection_type, projection_slice_count, use_rescaled_values
+                    )
+                    if projection_dataset is None:
+                        # Fall back to single slice if projection fails
+                        projection_dataset = dataset
+                    
+                    if anonymize:
+                        # Apply anonymization
+                        from utils.dicom_anonymizer import DICOMAnonymizer
+                        anonymizer = DICOMAnonymizer()
+                        anonymized_dataset = anonymizer.anonymize_dataset(projection_dataset)
+                        anonymized_dataset.save_as(output_path)
+                    else:
+                        # Export projection dataset without anonymization
+                        projection_dataset.save_as(output_path)
                 else:
-                    # Export original data without anonymization
-                    dataset.save_as(output_path)
+                    # Export as regular DICOM (no projection)
+                    if anonymize:
+                        # Apply anonymization
+                        from utils.dicom_anonymizer import DICOMAnonymizer
+                        anonymizer = DICOMAnonymizer()
+                        anonymized_dataset = anonymizer.anonymize_dataset(dataset)
+                        anonymized_dataset.save_as(output_path)
+                    else:
+                        # Export original data without anonymization
+                        dataset.save_as(output_path)
             else:
                 # Export as image (PNG or JPG)
                 window_center = None
@@ -896,19 +980,38 @@ class ExportManager:
                     window_center = current_window_center
                     window_width = current_window_width
                 
-                # Convert to image - use apply_rescale to match viewer behavior
-                image = DICOMProcessor.dataset_to_image(
-                    dataset,
-                    window_center=window_center,
-                    window_width=window_width,
-                    apply_rescale=use_rescaled_values
-                )
+                # Check if we should create a projection image
+                if projection_enabled and studies and study_uid and series_uid and slice_index is not None:
+                    # Create projection image
+                    image = self._create_projection_for_export(
+                        dataset, studies, study_uid, series_uid, slice_index,
+                        projection_type, projection_slice_count,
+                        window_center, window_width, use_rescaled_values
+                    )
+                    if image is None:
+                        # Fall back to single slice if projection fails
+                        image = DICOMProcessor.dataset_to_image(
+                            dataset,
+                            window_center=window_center,
+                            window_width=window_width,
+                            apply_rescale=use_rescaled_values
+                        )
+                else:
+                    # Convert single slice to image - use apply_rescale to match viewer behavior
+                    image = DICOMProcessor.dataset_to_image(
+                        dataset,
+                        window_center=window_center,
+                        window_width=window_width,
+                        apply_rescale=use_rescaled_values
+                    )
                 
                 if image is None:
                     return False
                 
                 # Handle PhotometricInterpretation (MONOCHROME1 inversion, YBR conversion, etc.)
-                image = ExportManager.process_image_by_photometric_interpretation(image, dataset)
+                # Only apply for non-projection images (projections are already processed)
+                if not projection_enabled:
+                    image = ExportManager.process_image_by_photometric_interpretation(image, dataset)
                 
                 # Apply display resolution scaling BEFORE rendering overlays
                 # This ensures font size is calculated based on magnified dimensions
@@ -933,7 +1036,13 @@ class ExportManager:
                         series_uid,
                         slice_index,
                         total_slices,
-                        zoom_factor  # Pass zoom factor to scale ROI/measurement coordinates
+                        zoom_factor,  # Pass zoom factor to scale ROI/measurement coordinates
+                        projection_enabled=projection_enabled,
+                        projection_type=projection_type,
+                        projection_slice_count=projection_slice_count,
+                        studies=studies,
+                        export_at_display_resolution=export_at_display_resolution,
+                        initial_fit_zoom=initial_fit_zoom
                     )
                 
                 if format == "PNG":
@@ -945,6 +1054,350 @@ class ExportManager:
         except Exception as e:
             print(f"Error exporting slice: {e}")
             return False
+    
+    def _create_projection_for_export(
+        self,
+        dataset: Dataset,
+        studies: Dict[str, Dict[str, List[Dataset]]],
+        study_uid: str,
+        series_uid: str,
+        slice_index: int,
+        projection_type: str,
+        projection_slice_count: int,
+        window_center: Optional[float],
+        window_width: Optional[float],
+        use_rescaled_values: bool
+    ) -> Optional[Image.Image]:
+        """
+        Create a projection image for export.
+        
+        Args:
+            dataset: Current dataset (for metadata)
+            studies: Dictionary of studies
+            study_uid: Study UID
+            series_uid: Series UID
+            slice_index: Current slice index
+            projection_type: Type of projection ("aip", "mip", or "minip")
+            projection_slice_count: Number of slices to combine
+            window_center: Window center value
+            window_width: Window width value
+            use_rescaled_values: Whether to use rescaled values
+            
+        Returns:
+            PIL Image or None if projection failed
+        """
+        try:
+            # Get series datasets
+            if study_uid not in studies or series_uid not in studies[study_uid]:
+                return None
+            
+            series_datasets = studies[study_uid][series_uid]
+            total_slices = len(series_datasets)
+            
+            if total_slices < 2:
+                # Need at least 2 slices for projection
+                return None
+            
+            # Calculate slice range - match viewer behavior
+            start_slice = max(0, slice_index)
+            end_slice = min(total_slices - 1, slice_index + projection_slice_count - 1)
+            
+            # Ensure we have at least 2 slices
+            if end_slice - start_slice + 1 < 2:
+                return None
+            
+            # Gather slices for projection
+            projection_slices = []
+            for i in range(start_slice, end_slice + 1):
+                if 0 <= i < total_slices:
+                    projection_slices.append(series_datasets[i])
+            
+            if len(projection_slices) < 2:
+                return None
+            
+            # Calculate projection based on type
+            projection_array = None
+            if projection_type == "aip":
+                projection_array = DICOMProcessor.average_intensity_projection(projection_slices)
+            elif projection_type == "mip":
+                projection_array = DICOMProcessor.maximum_intensity_projection(projection_slices)
+            elif projection_type == "minip":
+                projection_array = DICOMProcessor.minimum_intensity_projection(projection_slices)
+            
+            if projection_array is None:
+                return None
+            
+            # Apply rescale if needed
+            if use_rescaled_values:
+                rescale_slope = getattr(dataset, 'RescaleSlope', None)
+                rescale_intercept = getattr(dataset, 'RescaleIntercept', None)
+                if rescale_slope is not None and rescale_intercept is not None:
+                    projection_array = projection_array.astype(np.float32) * float(rescale_slope) + float(rescale_intercept)
+            
+            # Apply window/level
+            if window_center is not None and window_width is not None:
+                processed_array = DICOMProcessor.apply_window_level(
+                    projection_array,
+                    window_center,
+                    window_width
+                )
+            else:
+                # No window/level, normalize to 0-255
+                processed_array = projection_array.astype(np.float32)
+                if processed_array.max() > processed_array.min():
+                    processed_array = ((processed_array - processed_array.min()) / 
+                                     (processed_array.max() - processed_array.min()) * 255.0)
+                processed_array = np.clip(processed_array, 0, 255).astype(np.uint8)
+            
+            # Convert to PIL Image
+            if len(processed_array.shape) == 2:
+                # Grayscale
+                image = Image.fromarray(processed_array, mode='L')
+            elif len(processed_array.shape) == 3 and processed_array.shape[2] == 3:
+                # RGB
+                image = Image.fromarray(processed_array, mode='RGB')
+            else:
+                # Fallback
+                image = Image.fromarray(processed_array)
+            
+            return image
+        except Exception as e:
+            print(f"Error creating projection for export: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
+    def _create_projection_dataset(
+        self,
+        dataset: Dataset,
+        studies: Dict[str, Dict[str, List[Dataset]]],
+        study_uid: str,
+        series_uid: str,
+        slice_index: int,
+        projection_type: str,
+        projection_slice_count: int,
+        use_rescaled_values: bool
+    ) -> Optional[Dataset]:
+        """
+        Create a projection dataset for DICOM export.
+        
+        Args:
+            dataset: Current dataset (for metadata)
+            studies: Dictionary of studies
+            study_uid: Study UID
+            series_uid: Series UID
+            slice_index: Current slice index
+            projection_type: Type of projection ("aip", "mip", or "minip")
+            projection_slice_count: Number of slices to combine
+            use_rescaled_values: Whether to use rescaled values
+            
+        Returns:
+            Modified Dataset with projection as pixel data, or None if failed
+        """
+        try:
+            # Get series datasets
+            if study_uid not in studies or series_uid not in studies[study_uid]:
+                return None
+            
+            series_datasets = studies[study_uid][series_uid]
+            total_slices = len(series_datasets)
+            
+            if total_slices < 1:
+                return None
+            
+            # Calculate slice range
+            start_slice = max(0, slice_index)
+            end_slice = min(total_slices - 1, slice_index + projection_slice_count - 1)
+            
+            # Gather slices for projection
+            projection_slices = []
+            for i in range(start_slice, end_slice + 1):
+                if 0 <= i < total_slices:
+                    projection_slices.append(series_datasets[i])
+            
+            if len(projection_slices) < 1:
+                return None
+            
+            # Create a copy of the first dataset to preserve metadata
+            import copy
+            projection_dataset = copy.deepcopy(dataset)
+            
+            # Determine if we actually compute a projection or just copy the single slice
+            is_actual_projection = len(projection_slices) >= 2
+            
+            if is_actual_projection:
+                # Calculate projection based on type
+                projection_array = None
+                if projection_type == "aip":
+                    projection_array = DICOMProcessor.average_intensity_projection(projection_slices)
+                elif projection_type == "mip":
+                    projection_array = DICOMProcessor.maximum_intensity_projection(projection_slices)
+                elif projection_type == "minip":
+                    projection_array = DICOMProcessor.minimum_intensity_projection(projection_slices)
+                
+                if projection_array is None:
+                    return None
+                
+                # Update pixel data with projection array
+                # The projection array is float32 from averaging/max/min operations
+                # Need to convert it properly to integer format for DICOM storage
+                
+                # Get original pixel characteristics
+                original_pixel_array = DICOMProcessor.get_pixel_array(dataset)
+                original_dtype = original_pixel_array.dtype
+                bits_stored = getattr(dataset, 'BitsStored', 16)
+                bits_allocated = getattr(dataset, 'BitsAllocated', 16)
+                pixel_representation = getattr(dataset, 'PixelRepresentation', 0)  # 0=unsigned, 1=signed
+                
+                # Convert projection array to appropriate integer type
+                if np.issubdtype(original_dtype, np.integer):
+                    # Original is integer type - convert projection to same type
+                    if np.issubdtype(original_dtype, np.unsignedinteger):
+                        # Unsigned integer
+                        if bits_stored <= 8:
+                            target_dtype = np.uint8
+                        elif bits_stored <= 16:
+                            target_dtype = np.uint16
+                        else:
+                            target_dtype = np.uint32
+                    else:
+                        # Signed integer
+                        if bits_stored <= 8:
+                            target_dtype = np.int8
+                        elif bits_stored <= 16:
+                            target_dtype = np.int16
+                        else:
+                            target_dtype = np.int32
+                    
+                    # Clip to valid range for the data type
+                    info = np.iinfo(target_dtype)
+                    projection_array_clipped = np.clip(projection_array, info.min, info.max)
+                    projection_array_int = projection_array_clipped.astype(target_dtype)
+                else:
+                    # Original is float - this is unusual, default to uint16
+                    target_dtype = np.uint16
+                    projection_array_clipped = np.clip(projection_array, 0, 65535)
+                    projection_array_int = projection_array_clipped.astype(target_dtype)
+                
+                # Update pixel data
+                projection_dataset.PixelData = projection_array_int.tobytes()
+                
+                # Update DICOM tags to match the pixel data
+                projection_dataset.Rows = projection_array.shape[0]
+                projection_dataset.Columns = projection_array.shape[1]
+                
+                # Ensure bits are correct
+                if target_dtype == np.uint8:
+                    projection_dataset.BitsAllocated = 8
+                    projection_dataset.BitsStored = 8
+                    projection_dataset.HighBit = 7
+                    projection_dataset.PixelRepresentation = 0
+                elif target_dtype == np.int8:
+                    projection_dataset.BitsAllocated = 8
+                    projection_dataset.BitsStored = 8
+                    projection_dataset.HighBit = 7
+                    projection_dataset.PixelRepresentation = 1
+                elif target_dtype == np.uint16:
+                    projection_dataset.BitsAllocated = 16
+                    projection_dataset.BitsStored = 16
+                    projection_dataset.HighBit = 15
+                    projection_dataset.PixelRepresentation = 0
+                elif target_dtype == np.int16:
+                    projection_dataset.BitsAllocated = 16
+                    projection_dataset.BitsStored = 16
+                    projection_dataset.HighBit = 15
+                    projection_dataset.PixelRepresentation = 1
+                elif target_dtype == np.uint32:
+                    projection_dataset.BitsAllocated = 32
+                    projection_dataset.BitsStored = 32
+                    projection_dataset.HighBit = 31
+                    projection_dataset.PixelRepresentation = 0
+                elif target_dtype == np.int32:
+                    projection_dataset.BitsAllocated = 32
+                    projection_dataset.BitsStored = 32
+                    projection_dataset.HighBit = 31
+                    projection_dataset.PixelRepresentation = 1
+            else:
+                # Single slice - keep original pixel data but modify metadata
+                # Pixel data is already in projection_dataset from deepcopy
+                # No need to modify pixel-related tags
+                pass
+            
+            # Update relevant DICOM tags (for both single and multi-slice)
+            projection_name_map = {
+                "aip": "Average Intensity Projection (AIP)",
+                "mip": "Maximum Intensity Projection (MIP)",
+                "minip": "Minimum Intensity Projection (MinIP)"
+            }
+            projection_display_name = projection_name_map.get(projection_type, "Projection")
+            
+            # Update ImageComments to indicate projection
+            existing_comments = getattr(projection_dataset, 'ImageComments', '')
+            if is_actual_projection:
+                projection_info = f"{projection_display_name} - {len(projection_slices)} slices (instances {start_slice+1} to {end_slice+1})"
+            else:
+                projection_info = f"Derived from instance {start_slice+1} (part of projection export)"
+            
+            if existing_comments:
+                projection_dataset.ImageComments = f"{existing_comments}; {projection_info}"
+            else:
+                projection_dataset.ImageComments = projection_info
+            
+            # Update SeriesDescription to indicate projection
+            existing_desc = getattr(projection_dataset, 'SeriesDescription', '')
+            if existing_desc:
+                projection_dataset.SeriesDescription = f"{existing_desc} - {projection_type.upper()}"
+            else:
+                projection_dataset.SeriesDescription = f"{projection_type.upper()}"
+            
+            # Update Slice Thickness to combined thickness (only for actual projections)
+            if is_actual_projection:
+                # Calculate total thickness from projection slices
+                total_thickness = 0.0
+                thickness_count = 0
+                for proj_slice in projection_slices:
+                    thickness = get_slice_thickness(proj_slice)
+                    if thickness is not None:
+                        total_thickness += thickness
+                        thickness_count += 1
+                
+                if thickness_count > 0:
+                    projection_dataset.SliceThickness = total_thickness
+            # else: keep original slice thickness for single slice
+            
+            # Update Image Type to indicate this is a DERIVED image
+            # Image Type is multi-valued: [ORIGINAL/DERIVED, PRIMARY/SECONDARY, additional values]
+            projection_type_map = {
+                "mip": "MAXIMUM INTENSITY PROJECTION",
+                "aip": "AVERAGE INTENSITY PROJECTION",
+                "minip": "MINIMUM INTENSITY PROJECTION"
+            }
+            projection_image_type = projection_type_map.get(projection_type, "PROJECTION")
+            projection_dataset.ImageType = ["DERIVED", "SECONDARY", projection_image_type]
+            
+            # Keep original Modality (CT, MR, PT, etc.) - do NOT change to SC
+            # The modality tag should remain as the original acquisition modality
+            
+            # Update or remove Spacing Between Slices
+            if hasattr(projection_dataset, 'SpacingBetweenSlices'):
+                # For a single projection image, this doesn't apply
+                delattr(projection_dataset, 'SpacingBetweenSlices')
+            
+            # Update Instance Number to avoid conflicts
+            # Use a high number to indicate it's derived
+            if hasattr(projection_dataset, 'InstanceNumber'):
+                projection_dataset.InstanceNumber = 9000 + slice_index
+            
+            # Update SOP Instance UID to make it unique
+            import pydicom.uid
+            projection_dataset.SOPInstanceUID = pydicom.uid.generate_uid()
+            
+            return projection_dataset
+        except Exception as e:
+            print(f"Error creating projection dataset: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
     
     def _render_overlays_and_rois(
         self,
@@ -958,7 +1411,13 @@ class ExportManager:
         series_uid: Optional[str],
         slice_index: Optional[int],
         total_slices: Optional[int] = None,
-        zoom_factor: float = 1.0
+        zoom_factor: float = 1.0,
+        projection_enabled: bool = False,
+        projection_type: str = "aip",
+        projection_slice_count: int = 4,
+        studies: Optional[Dict[str, Dict[str, List[Dataset]]]] = None,
+        export_at_display_resolution: bool = False,
+        initial_fit_zoom: float = 1.0
     ) -> Image.Image:
         """
         Render overlays, ROIs, and measurements onto a PIL Image.
@@ -975,6 +1434,10 @@ class ExportManager:
             slice_index: Slice index for ROI lookup
             total_slices: Optional total number of slices in series (for "Slice X/Y" formatting)
             zoom_factor: Factor to scale ROI/measurement coordinates by (default 1.0)
+            projection_enabled: Whether intensity projection is enabled
+            projection_type: Type of projection ("aip", "mip", or "minip")
+            projection_slice_count: Number of slices to combine
+            studies: Optional studies dictionary for calculating projection thickness
             
         Returns:
             PIL Image with overlays, ROIs, and measurements rendered
@@ -988,6 +1451,18 @@ class ExportManager:
         
         # Draw ROIs (scale coordinates by zoom_factor)
         if roi_manager and study_uid and series_uid and slice_index is not None:
+            # Get ROI colors from config
+            roi_line_color = (255, 0, 0)  # Default red
+            roi_font_color = (255, 255, 0)  # Default yellow
+            roi_line_thickness = 2
+            roi_font_size = 6
+            
+            if config_manager:
+                roi_line_color = config_manager.get_roi_line_color()
+                roi_font_color = config_manager.get_roi_font_color()
+                roi_line_thickness = config_manager.get_roi_line_thickness()
+                roi_font_size = config_manager.get_roi_font_size()
+            
             rois = roi_manager.get_rois_for_slice(study_uid, series_uid, slice_index)
             for roi in rois:
                 bounds = roi.get_bounds()
@@ -997,13 +1472,75 @@ class ExportManager:
                 x2 = int(max(0, min(bounds.right() * zoom_factor, width)))
                 y2 = int(max(0, min(bounds.bottom() * zoom_factor, height)))
                 
+                scaled_thickness = max(1, int(roi_line_thickness * zoom_factor))
+                
                 if roi.shape_type == "rectangle":
-                    draw.rectangle([x1, y1, x2, y2], outline=(255, 0, 0), width=max(1, int(zoom_factor)))
+                    draw.rectangle([x1, y1, x2, y2], outline=roi_line_color, width=scaled_thickness)
                 elif roi.shape_type == "ellipse":
-                    draw.ellipse([x1, y1, x2, y2], outline=(255, 0, 0), width=max(1, int(zoom_factor)))
+                    draw.ellipse([x1, y1, x2, y2], outline=roi_line_color, width=scaled_thickness)
+                
+                # Draw ROI statistics text if available and visible
+                if roi.statistics and roi.statistics_overlay_visible:
+                    # Try to get a font for ROI statistics
+                    roi_font = None
+                    font_paths = [
+                        "arial.ttf",
+                        "Arial.ttf",
+                        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+                        "/System/Library/Fonts/Helvetica.ttc",
+                        "C:/Windows/Fonts/arial.ttf"
+                    ]
+                    scaled_font_size = max(8, int(roi_font_size * zoom_factor))
+                    for font_path in font_paths:
+                        try:
+                            roi_font = ImageFont.truetype(font_path, scaled_font_size)
+                            break
+                        except:
+                            continue
+                    
+                    if roi_font is None:
+                        try:
+                            roi_font = ImageFont.load_default()
+                        except:
+                            pass
+                    
+                    if roi_font:
+                        # Format statistics text
+                        stats_lines = []
+                        if "mean" in roi.visible_statistics and "mean" in roi.statistics:
+                            stats_lines.append(f"Mean: {roi.statistics['mean']:.2f}")
+                        if "std" in roi.visible_statistics and "std" in roi.statistics:
+                            stats_lines.append(f"Std Dev: {roi.statistics['std']:.2f}")
+                        if "min" in roi.visible_statistics and "min" in roi.statistics:
+                            stats_lines.append(f"Min: {roi.statistics['min']:.2f}")
+                        if "max" in roi.visible_statistics and "max" in roi.statistics:
+                            stats_lines.append(f"Max: {roi.statistics['max']:.2f}")
+                        if "area" in roi.visible_statistics and "area" in roi.statistics:
+                            stats_lines.append(f"Area: {roi.statistics['area']:.2f}")
+                        if "count" in roi.visible_statistics and "count" in roi.statistics:
+                            stats_lines.append(f"Count: {int(roi.statistics['count'])}")
+                        
+                        if stats_lines:
+                            stats_text = "\n".join(stats_lines)
+                            # Position text at top-right of ROI bounds with offset
+                            text_x = int(x2 + 5 * zoom_factor)
+                            text_y = int(y1 + 5 * zoom_factor)
+                            draw.text((text_x, text_y), stats_text, fill=roi_font_color, font=roi_font)
         
         # Draw measurements (scale coordinates by zoom_factor)
         if measurement_tool and study_uid and series_uid and slice_index is not None:
+            # Get measurement colors from config
+            measurement_line_color = (0, 255, 0)  # Default green
+            measurement_font_color = (0, 255, 0)  # Default green
+            measurement_line_thickness = 2
+            measurement_font_size = 6
+            
+            if config_manager:
+                measurement_line_color = config_manager.get_measurement_line_color()
+                measurement_font_color = config_manager.get_measurement_font_color()
+                measurement_line_thickness = config_manager.get_measurement_line_thickness()
+                measurement_font_size = config_manager.get_measurement_font_size()
+            
             measurements = measurement_tool.measurements.get((study_uid, series_uid, slice_index), [])
             for measurement in measurements:
                 # Scale measurement coordinates
@@ -1012,8 +1549,9 @@ class ExportManager:
                 end_x = int((measurement.start_point.x() + measurement.end_relative.x()) * zoom_factor)
                 end_y = int((measurement.start_point.y() + measurement.end_relative.y()) * zoom_factor)
                 
-                # Draw measurement line in green
-                draw.line([(start_x, start_y), (end_x, end_y)], fill=(0, 255, 0), width=max(2, int(2 * zoom_factor)))
+                # Draw measurement line with config color and thickness
+                scaled_thickness = max(2, int(measurement_line_thickness * zoom_factor))
+                draw.line([(start_x, start_y), (end_x, end_y)], fill=measurement_line_color, width=scaled_thickness)
                 
                 # Draw text label at midpoint
                 mid_x = int((start_x + end_x) / 2)
@@ -1028,9 +1566,10 @@ class ExportManager:
                     "/System/Library/Fonts/Helvetica.ttc",
                     "C:/Windows/Fonts/arial.ttf"
                 ]
+                scaled_font_size = max(10, int(measurement_font_size * zoom_factor))
                 for font_path in font_paths:
                     try:
-                        measurement_font = ImageFont.truetype(font_path, 12)
+                        measurement_font = ImageFont.truetype(font_path, scaled_font_size)
                         break
                     except:
                         continue
@@ -1041,9 +1580,9 @@ class ExportManager:
                     except:
                         pass
                 
-                # Draw measurement text in green
+                # Draw measurement text with config color
                 if measurement_font:
-                    draw.text((mid_x, mid_y), measurement.distance_formatted, fill=(0, 255, 0), font=measurement_font)
+                    draw.text((mid_x, mid_y), measurement.distance_formatted, fill=measurement_font_color, font=measurement_font)
         
         # Draw overlay text
         if overlay_manager and config_manager:
@@ -1055,40 +1594,66 @@ class ExportManager:
             base_font_size = overlay_manager.font_size
             font_color = overlay_manager.font_color
             
-            # Scale font size based on image dimensions
-            # Use reference size of 512 pixels (typical DICOM matrix size)
-            reference_size = 512.0
-            image_min_dimension = min(width, height)
-            scale_factor = image_min_dimension / reference_size
+            # Calculate font size
+            # The viewer uses ItemIgnoresTransformations flag, which keeps font size constant
+            # regardless of zoom level. When exporting at display resolution with zoom,
+            # we scale the font by the ratio of current zoom to initial fit zoom.
             
-            # Apply scale factor to base font size
-            font_size = int(base_font_size * scale_factor)
+            # If exporting at display resolution, scale by the zoom ratio
+            if export_at_display_resolution:
+                # Scale by the ratio of current zoom to initial fit zoom
+                # This maintains the relative font size as seen in the viewer
+                zoom_ratio = zoom_factor / initial_fit_zoom if initial_fit_zoom > 0 else zoom_factor
+                base_font_with_scaling = base_font_size * zoom_ratio
+            else:
+                base_font_with_scaling = base_font_size
+            
+            # Apply minimal scaling based on ORIGINAL (unzoomed) image size for very small/large images
+            image_min_dimension = min(width, height)
+            
+            # If image was zoomed for export, use original dimensions for scaling decision
+            if zoom_factor > 1.0:
+                image_min_dimension = int(image_min_dimension / zoom_factor)
+            
+            if image_min_dimension < 256:
+                # Very small images: scale up slightly for readability
+                scale_factor = image_min_dimension / 256.0
+                font_size = max(8, int(base_font_with_scaling * scale_factor))
+            elif image_min_dimension > 2048:
+                # Very large images: scale up to maintain visibility
+                scale_factor = image_min_dimension / 1024.0
+                font_size = int(base_font_with_scaling * scale_factor)
+            else:
+                # Normal size images (256-2048): use appropriately scaled font size
+                font_size = int(base_font_with_scaling)
             
             # Clamp font size to reasonable bounds for readability
-            font_size = max(9, min(48, font_size))
+            font_size = max(8, min(72, font_size))
             
-            # Ensure text color is bright enough for visibility
-            # If font_color is too dark, use bright yellow (255, 255, 0) or white
+            # Use user's selected font color with minimal safety check
             if isinstance(font_color, (list, tuple)) and len(font_color) >= 3:
                 r, g, b = font_color[0], font_color[1], font_color[2]
-                # Calculate brightness
-                brightness = (r + g + b) / 3.0
-                # Use bright yellow if original color is too dark, otherwise use original
-                if brightness < 200:
-                    text_color = (255, 255, 0)  # Bright yellow for better visibility
+                # Only override if color is pure black (which would be invisible)
+                if r == 0 and g == 0 and b == 0:
+                    text_color = (255, 255, 255)  # Use white instead of pure black
                 else:
                     text_color = (r, g, b)
             else:
-                text_color = (255, 255, 0)  # Default to bright yellow
+                text_color = (255, 255, 0)  # Default to bright yellow only if not specified
             
             # Try to load a font, fallback to default
+            # Use bold variant to match viewer appearance (viewer uses setBold(True))
             font = None
-            # Try common font paths
+            # Try common font paths - prioritize bold variants to match viewer
             font_paths = [
-                "arial.ttf",
+                "arialbd.ttf",  # Arial Bold (Windows)
+                "Arial Bold.ttf",  # Arial Bold (macOS)
+                "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",  # Linux bold
+                "/System/Library/Fonts/Helvetica.ttc",  # macOS fallback
+                "arial.ttf",  # Regular Arial fallback
                 "Arial.ttf",
                 "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-                "/System/Library/Fonts/Helvetica.ttc",
+                "C:/Windows/Fonts/arialbd.ttf",  # Windows Arial Bold explicit path
                 "C:/Windows/Fonts/arial.ttf"
             ]
             for font_path in font_paths:
@@ -1107,6 +1672,34 @@ class ExportManager:
             
             margin = 10
             
+            # Calculate projection information for overlay rendering
+            projection_start_slice = None
+            projection_end_slice = None
+            projection_total_thickness = None
+            
+            if projection_enabled and studies and study_uid and series_uid and slice_index is not None:
+                if study_uid in studies and series_uid in studies[study_uid]:
+                    series_datasets = studies[study_uid][series_uid]
+                    total_series_slices = len(series_datasets)
+                    
+                    # Calculate projection slice range
+                    projection_start_slice = max(0, slice_index)
+                    projection_end_slice = min(total_series_slices - 1, slice_index + projection_slice_count - 1)
+                    
+                    # Calculate total slice thickness
+                    total_thickness = 0.0
+                    thickness_count = 0
+                    for i in range(projection_start_slice, projection_end_slice + 1):
+                        if 0 <= i < len(series_datasets):
+                            slice_dataset = series_datasets[i]
+                            thickness = get_slice_thickness(slice_dataset)
+                            if thickness is not None:
+                                total_thickness += thickness
+                                thickness_count += 1
+                    
+                    if thickness_count > 0:
+                        projection_total_thickness = total_thickness
+            
             # Draw text for each corner
             corners = [
                 ("upper_left", margin, margin, "left", False),
@@ -1121,8 +1714,15 @@ class ExportManager:
                     continue
                 
                 # Use overlay_manager's _get_corner_text() method for consistent formatting
-                # This handles "Slice X/Y" formatting and other edge cases
-                text = overlay_manager._get_corner_text(parser, tags, total_slices)
+                # This handles "Slice X/Y" formatting, projection info, and other edge cases
+                text = overlay_manager._get_corner_text(
+                    parser, tags, total_slices,
+                    projection_enabled=projection_enabled,
+                    projection_start_slice=projection_start_slice,
+                    projection_end_slice=projection_end_slice,
+                    projection_total_thickness=projection_total_thickness,
+                    projection_type=projection_type
+                )
                 
                 if not text:
                     continue

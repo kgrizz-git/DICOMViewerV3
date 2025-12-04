@@ -3351,14 +3351,24 @@ class DICOMViewerApp(QObject):
         window_center, window_width = self.window_level_controls.get_window_level()
         # Get current rescale state to match viewer behavior
         use_rescaled_values = self.view_state_manager.use_rescaled_values
+        # Get current projection state from slice display manager
+        projection_enabled = self.slice_display_manager.projection_enabled
+        projection_type = self.slice_display_manager.projection_type
+        projection_slice_count = self.slice_display_manager.projection_slice_count
+        # Get initial fit zoom for font scaling
+        initial_fit_zoom = self.view_state_manager.get_initial_fit_zoom()
         self.dialog_coordinator.open_export(
             current_window_center=window_center,
             current_window_width=window_width,
             current_zoom=self.image_viewer.current_zoom,
+            initial_fit_zoom=initial_fit_zoom,
             use_rescaled_values=use_rescaled_values,
             roi_manager=self.roi_manager,
             overlay_manager=self.overlay_manager,
-            measurement_tool=self.measurement_tool
+            measurement_tool=self.measurement_tool,
+            projection_enabled=projection_enabled,
+            projection_type=projection_type,
+            projection_slice_count=projection_slice_count
         )
     
     def _on_export_customizations(self) -> None:

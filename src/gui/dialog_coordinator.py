@@ -204,10 +204,14 @@ class DialogCoordinator:
         current_window_center: Optional[float] = None,
         current_window_width: Optional[float] = None,
         current_zoom: Optional[float] = None,
+        initial_fit_zoom: Optional[float] = None,
         use_rescaled_values: bool = False,
         roi_manager=None,
         overlay_manager=None,
-        measurement_tool=None
+        measurement_tool=None,
+        projection_enabled: bool = False,
+        projection_type: str = "aip",
+        projection_slice_count: int = 4
     ) -> None:
         """
         Handle Export dialog request.
@@ -216,10 +220,14 @@ class DialogCoordinator:
             current_window_center: Optional current window center from viewer
             current_window_width: Optional current window width from viewer
             current_zoom: Optional current zoom level from viewer
+            initial_fit_zoom: Optional initial fit-to-view zoom factor for font scaling
             use_rescaled_values: Whether to use rescaled values (matches viewer setting)
             roi_manager: Optional ROI manager for rendering ROIs
             overlay_manager: Optional overlay manager for rendering overlays
             measurement_tool: Optional measurement tool for rendering measurements
+            projection_enabled: Whether intensity projection (combine slices) is enabled
+            projection_type: Type of projection ("aip", "mip", or "minip")
+            projection_slice_count: Number of slices to combine (2, 3, 4, 6, or 8)
         """
         # Check if any studies are loaded
         current_studies = self.get_current_studies()
@@ -236,11 +244,15 @@ class DialogCoordinator:
             current_window_center=current_window_center,
             current_window_width=current_window_width,
             current_zoom=current_zoom,
+            initial_fit_zoom=initial_fit_zoom,
             use_rescaled_values=use_rescaled_values,
             roi_manager=roi_manager,
             overlay_manager=overlay_manager,
             measurement_tool=measurement_tool,
             config_manager=self.config_manager,
+            projection_enabled=projection_enabled,
+            projection_type=projection_type,
+            projection_slice_count=projection_slice_count,
             parent=self.main_window
         )
         dialog.exec()

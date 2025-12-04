@@ -488,7 +488,7 @@ class QuickStartGuideDialog(QDialog):
             <ul>
                 <li>All measurements and ROIs are preserved when navigating between slices in the same series</li>
                 <li>Use the context menu (right-click) for quick access to common functions</li>
-                <li>The status bar shows current slice information, window/level preset name, and loading progress</li>
+                <li>The status bar shows current slice information, window/level preset name, pixel value and cursor position, and loading progress</li>
                 <li>Status bar updates in real-time during file loading, showing number of studies, series, and files loaded</li>
                 <li>Overlay metadata can be customized and toggled on/off via View → Overlay Configuration or with the <code>Spacebar</code> key</li>
                 <li>Export selected DICOM tags to Excel or CSV via Tools → Export Tags</li>
