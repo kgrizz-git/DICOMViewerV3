@@ -95,6 +95,7 @@ class ViewStateManager:
         self.initial_scene_center: Optional[QPointF] = None  # Scene center point in scene coordinates
         self.initial_window_center: Optional[float] = None
         self.initial_window_width: Optional[float] = None
+        self.initial_fit_zoom = 1.0  # Store the fit-to-view zoom factor for export font scaling
         
         # Series defaults storage: key is series identifier (StudyInstanceUID + composite_series_key)
         # Value is dict with: window_center, window_width, zoom, h_scroll, v_scroll, scene_center, image_inverted
@@ -161,6 +162,23 @@ class ViewStateManager:
         else:
             # print(f"[DEBUG-WL]   WARNING: redisplay_slice_callback is None!")
             pass
+    
+    def get_initial_fit_zoom(self) -> float:
+        """
+        Get the initial fit-to-view zoom factor for the current series.
+        This is the zoom level that would be used when Reset View is called.
+        
+        Returns:
+            Initial fit zoom factor (default 1.0)
+        """
+        if self.current_dataset is None:
+            return 1.0
+        
+        series_identifier = self.get_series_identifier(self.current_dataset)
+        if series_identifier in self.series_defaults:
+            return self.series_defaults[series_identifier].get('initial_fit_zoom', 1.0)
+        
+        return self.initial_fit_zoom
     
     def get_series_identifier(self, dataset: Dataset) -> str:
         """

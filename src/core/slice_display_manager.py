@@ -687,12 +687,17 @@ class SliceDisplayManager:
                     stored_zoom = self.image_viewer.current_zoom
                     stored_h_scroll = self.image_viewer.horizontalScrollBar().value()
                     stored_v_scroll = self.image_viewer.verticalScrollBar().value()
+                    
+                    # Store the initial fit zoom in view state manager
+                    self.view_state_manager.initial_fit_zoom = stored_zoom
+                    
                     # Update series defaults with zoom/pan info if we have window/level already stored
                     if series_identifier in self.view_state_manager.series_defaults:
                         self.view_state_manager.series_defaults[series_identifier].update({
                             'zoom': stored_zoom,
                             'h_scroll': stored_h_scroll,
-                            'v_scroll': stored_v_scroll
+                            'v_scroll': stored_v_scroll,
+                            'initial_fit_zoom': stored_zoom  # Store for export font scaling
                         })
             
             # Update metadata panel (only for focused subwindow)
