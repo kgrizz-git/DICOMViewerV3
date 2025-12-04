@@ -405,6 +405,104 @@ class ConfigManager:
             if preset_name in self.config["tag_export_presets"]:
                 del self.config["tag_export_presets"][preset_name]
                 self.save_config()
+
+    def export_tag_export_presets(self, file_path: str) -> bool:
+        """
+        Export all tag export presets to a JSON file.
+        
+        The exported file contains only tag export presets so it can be easily
+        shared or backed up independently of other customizations.
+        
+        Args:
+            file_path: Path where the presets file should be saved.
+        
+        Returns:
+            True if export was successful, False otherwise.
+        """
+        try:
+            presets = self.get_tag_export_presets()
+            # Build export structure – simple and versioned for future changes
+            export_data = {
+                "version": "1.0",
+                "presets": presets
+            }
+            with open(file_path, "w", encoding="utf-8") as f:
+                json.dump(export_data, f, indent=4, ensure_ascii=False)
+            return True
+        except (IOError, TypeError, ValueError) as e:
+            print(f"Error exporting tag export presets: {e}")
+            return False
+
+    def import_tag_export_presets(self, file_path: str) -> Optional[Dict[str, int]]:
+        """
+        Import tag export presets from a JSON file.
+        
+        Existing presets are preserved. If an imported preset name already
+        exists, it is skipped (keeps existing value). The method returns a
+        dictionary with counts describing what happened.
+        
+        Args:
+            file_path: Path to the presets file to import.
+        
+        Returns:
+            Dictionary with:
+                - \"imported\": number of presets successfully imported
+                - \"skipped_conflicts\": number of presets skipped due to
+                  existing names
+            or None if import failed due to I/O or validation errors.
+        """
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                import_data = json.load(f)
+        except (IOError, json.JSONDecodeError) as e:
+            print(f"Error importing tag export presets: {e}")
+            return None
+
+        # Basic structure validation
+        if not isinstance(import_data, dict):
+            print("Error importing tag export presets: root JSON object must be a dict")
+            return None
+
+        presets_obj = import_data.get("presets")
+        if not isinstance(presets_obj, dict):
+            print("Error importing tag export presets: 'presets' key missing or not a dict")
+            return None
+
+        # Ensure destination structure exists
+        if "tag_export_presets" not in self.config or not isinstance(
+            self.config.get("tag_export_presets"), dict
+        ):
+            self.config["tag_export_presets"] = {}
+
+        existing_presets: Dict[str, List[str]] = self.config["tag_export_presets"]
+        imported_count = 0
+        skipped_conflicts = 0
+
+        for name, tag_list in presets_obj.items():
+            # Only accept string names and list-of-strings payloads
+            if not isinstance(name, str):
+                continue
+            if not isinstance(tag_list, list) or not all(
+                isinstance(tag, str) for tag in tag_list
+            ):
+                continue
+
+            if name in existing_presets:
+                # Skip conflicting names per design
+                skipped_conflicts += 1
+                continue
+
+            existing_presets[name] = tag_list
+            imported_count += 1
+
+        # Persist changes if we imported anything
+        if imported_count > 0:
+            self.save_config()
+
+        return {
+            "imported": imported_count,
+            "skipped_conflicts": skipped_conflicts,
+        }
     
     def get_overlay_tags(self, modality: str = "default") -> Dict[str, List[str]]:
         """

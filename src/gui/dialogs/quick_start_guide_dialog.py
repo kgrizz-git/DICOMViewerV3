@@ -528,7 +528,7 @@ class QuickStartGuideDialog(QDialog):
         <h2 id="metadata-tags">Metadata and Tags</h2>
         <p>View and edit DICOM metadata tags, including private tags:</p>
         <ul>
-            <li><strong>View/Edit Tags:</strong> Access via <strong>Tools → View/Edit DICOM Tags</strong> or press <code>Ctrl+T</code>
+        <li><strong>View/Edit Tags:</strong> Access via <strong>Tools → View/Edit DICOM Tags</strong> or press <code>Ctrl+T</code>
                 <ul>
                     <li>Browse all DICOM tags in a tree view organized by groups</li>
                     <li>Edit individual tag values (double-click or use Edit button)</li>
@@ -570,6 +570,14 @@ class QuickStartGuideDialog(QDialog):
                     <li>Export selected tags to Excel (.xlsx) or CSV format</li>
                     <li>Choose which tags to export</li>
                     <li>Export tags from multiple slices or entire series</li>
+                </ul>
+            </li>
+            <li><strong>Tag Export Presets:</strong> Save and reuse named sets of DICOM tags for export
+                <ul>
+                    <li>Use the <strong>Preset</strong> controls in the Export DICOM Tags dialog to save, load, and delete tag presets</li>
+                    <li>Export all tag export presets to JSON via <strong>File → Export Tag Presets…</strong> or the <strong>Export…</strong> button in the Export DICOM Tags dialog</li>
+                    <li>Import tag export presets from JSON via <strong>File → Import Tag Presets…</strong> or the <strong>Import…</strong> button in the Export DICOM Tags dialog</li>
+                    <li>Imported presets are merged with existing ones; presets with the same name are kept from your current configuration</li>
                 </ul>
             </li>
             <li><strong>Tag Changes:</strong> Tag edits are preserved in memory and can be exported when exporting to DICOM format</li>

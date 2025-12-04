@@ -62,6 +62,8 @@ This application provides comprehensive DICOM image viewing capabilities with ad
   - Export selected DICOM tags to Excel (.xlsx) or CSV files
   - Choose which tags to export
   - Export from multiple slices or entire series
+  - Save reusable **tag export presets** (named sets of tags) and apply them in the export dialog
+  - Export and import tag export presets as JSON files for sharing between systems
 
 ### Privacy and Anonymization
 - **Privacy View**: Toggle privacy mode to mask patient-related DICOM tags in the UI
@@ -116,6 +118,7 @@ This application provides comprehensive DICOM image viewing capabilities with ad
   - Export overlay configuration, annotation options, metadata panel column widths, and theme to a JSON file
   - Import customizations from JSON file to quickly apply saved settings
   - Access via File → Export Customizations or File → Import Customizations
+  - Use separate **Tag Preset** export/import (File → Export Tag Presets / Import Tag Presets) to back up or share just DICOM tag export presets
 
 ### Keyboard Shortcuts
 - **P**: Pan mode (move the image around)

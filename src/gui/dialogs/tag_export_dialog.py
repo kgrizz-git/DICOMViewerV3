@@ -28,6 +28,7 @@ import pydicom
 from pydicom.dataset import Dataset
 from pathlib import Path
 import csv
+import os
 
 from core.dicom_parser import DICOMParser
 
@@ -158,6 +159,15 @@ class TagExportDialog(QDialog):
             delete_preset_btn = QPushButton("Delete")
             delete_preset_btn.clicked.connect(self._delete_preset)
             preset_layout.addWidget(delete_preset_btn)
+
+            # Export/Import presets buttons (JSON)
+            export_presets_btn = QPushButton("Export...")
+            export_presets_btn.clicked.connect(self._export_presets)
+            preset_layout.addWidget(export_presets_btn)
+
+            import_presets_btn = QPushButton("Import...")
+            import_presets_btn.clicked.connect(self._import_presets)
+            preset_layout.addWidget(import_presets_btn)
             
             preset_layout.addStretch()
             layout.addLayout(preset_layout)
@@ -1181,4 +1191,125 @@ class TagExportDialog(QDialog):
             self._load_presets_list()
             QMessageBox.information(self, "Preset Deleted",
                                    f"Preset '{preset_name}' deleted successfully.")
+
+    def _export_presets(self) -> None:
+        """Export all tag export presets to a JSON file."""
+        if not self.config_manager:
+            QMessageBox.warning(
+                self,
+                "No Config Manager",
+                "Preset export is not available."
+            )
+            return
+
+        presets = self.config_manager.get_tag_export_presets()
+        if not presets:
+            QMessageBox.information(
+                self,
+                "No Tag Presets",
+                "There are no tag export presets to export."
+            )
+            return
+
+        # Determine initial directory (reuse last export path behaviour)
+        last_export_path = self.config_manager.get_last_export_path()
+        if not last_export_path or not os.path.exists(last_export_path):
+            last_export_path = os.getcwd()
+
+        if os.path.isfile(last_export_path):
+            last_export_path = os.path.dirname(last_export_path)
+
+        default_filename = str(Path(last_export_path) / "tag_export_presets.json")
+
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export Tag Presets",
+            default_filename,
+            "JSON Files (*.json);;All Files (*)"
+        )
+
+        if not file_path:
+            return
+
+        if not file_path.endswith(".json"):
+            file_path += ".json"
+
+        if self.config_manager.export_tag_export_presets(file_path):
+            # Remember export directory
+            self.config_manager.set_last_export_path(str(Path(file_path).parent))
+            QMessageBox.information(
+                self,
+                "Export Successful",
+                f"Tag export presets exported successfully to:\n{file_path}"
+            )
+        else:
+            QMessageBox.warning(
+                self,
+                "Export Failed",
+                f"Failed to export tag export presets to:\n{file_path}\n\n"
+                "Please check file permissions and try again."
+            )
+
+    def _import_presets(self) -> None:
+        """Import tag export presets from a JSON file."""
+        if not self.config_manager:
+            QMessageBox.warning(
+                self,
+                "No Config Manager",
+                "Preset import is not available."
+            )
+            return
+
+        # Use last path if available for initial directory
+        last_path = self.config_manager.get_last_path()
+        if not last_path or not os.path.exists(last_path):
+            last_path = os.getcwd()
+
+        if os.path.isfile(last_path):
+            last_path = os.path.dirname(last_path)
+
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Import Tag Presets",
+            last_path,
+            "JSON Files (*.json);;All Files (*)"
+        )
+
+        if not file_path:
+            return
+
+        result = self.config_manager.import_tag_export_presets(file_path)
+        if result is None:
+            QMessageBox.critical(
+                self,
+                "Import Failed",
+                "Failed to import tag export presets.\n\n"
+                "Please verify that the file is a valid DICOM Viewer V3 tag presets file."
+            )
+            return
+
+        imported = result.get("imported", 0)
+        skipped = result.get("skipped_conflicts", 0)
+
+        # Refresh presets list in combo box
+        self._load_presets_list()
+
+        if imported == 0 and skipped == 0:
+            QMessageBox.information(
+                self,
+                "No Presets Imported",
+                "The selected file did not contain any tag export presets."
+            )
+        else:
+            details_lines = [f"Presets imported: {imported}"]
+            if skipped > 0:
+                details_lines.append(
+                    f"Presets skipped (already exist and were not overwritten): {skipped}"
+                )
+            details = "\n".join(details_lines)
+            QMessageBox.information(
+                self,
+                "Import Complete",
+                f"Tag export presets import completed.\n\n{details}"
+            )
 
