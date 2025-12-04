@@ -113,29 +113,17 @@ class DraggableMeasurementText(QGraphicsTextItem):
         Args:
             event: Mouse event
         """
-        print(f"[TEXT-SELECT] DraggableMeasurementText.mousePressEvent called")
-        print(f"[TEXT-SELECT] Event pos: {event.pos()}, scenePos: {event.scenePos()}")
-        print(f"[TEXT-SELECT] Event accepted before: {event.isAccepted()}")
-        
         event.accept()  # Accept to prevent parent group from handling it
-        print(f"[TEXT-SELECT] Event accepted after: {event.isAccepted()}")
         
-        # Deselect parent measurement group if it's selected
-        parent = self.parentItem()
-        print(f"[TEXT-SELECT] Parent item: {parent}, is selected: {parent.isSelected() if parent else None}")
-        if parent is not None and parent.isSelected():
-            parent.setSelected(False)
-            print(f"[TEXT-SELECT] Parent deselected: True")
-        else:
-            print(f"[TEXT-SELECT] Parent deselected: False")
+        # Deselect measurement group if it's selected (text is not a child, so check via measurement reference)
+        # This prevents Qt from moving both the text and measurement together when both are selected
+        if self.measurement is not None and self.measurement.isSelected():
+            self.measurement.setSelected(False)
         
         # Select this text item
         self.setSelected(True)
-        print(f"[TEXT-SELECT] Text item selected: {self.isSelected()}")
-        print(f"[TEXT-SELECT] Text item flags: ItemIsSelectable={self.flags() & QGraphicsItem.GraphicsItemFlag.ItemIsSelectable}, ItemIsMovable={self.flags() & QGraphicsItem.GraphicsItemFlag.ItemIsMovable}")
         
         super().mousePressEvent(event)
-        print(f"[TEXT-SELECT] After super().mousePressEvent(), text selected: {self.isSelected()}")
 
 
 class MeasurementHandle(QGraphicsEllipseItem):

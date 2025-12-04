@@ -94,7 +94,12 @@ This application provides comprehensive DICOM image viewing capabilities with ad
 ### Data Management
 - Clear ROIs from slice or whole dataset (including crosshairs)
 - Clear measurements
-- Undo/redo functionality for ROI and measurement operations (create, move, delete)
+- Copy and paste annotations (ROIs, measurements, crosshairs)
+  - Select annotations and copy with Cmd+C/Ctrl+C
+  - Paste to current slice with Cmd+V/Ctrl+V
+  - Smart offset: duplicates appear offset when pasting to same slice, no offset when pasting to different slice
+  - Supports cross-slice pasting
+- Undo/redo functionality for ROI and measurement operations (create, move, delete, paste)
 - ROI list panel with selection
 - Status bar updates during file loading showing number of studies, series, and files loaded
 
@@ -123,6 +128,8 @@ This application provides comprehensive DICOM image viewing capabilities with ad
 - **H**: Crosshair mode (draw crosshairs to display pixel values)
 - **C**: Clear all measurements on current slice
 - **D**: Delete all ROIs on current slice (including crosshairs)
+- **Cmd+C / Ctrl+C**: Copy selected annotations (ROIs, measurements, crosshairs) - works in image viewer
+- **Cmd+V / Ctrl+V**: Paste annotations to current slice - works in image viewer
 - **Cmd+Z / Ctrl+Z**: Undo last operation
 - **Cmd+Shift+Z / Ctrl+Shift+Z**: Redo last undone operation
 - **V**: Reset view (restore initial zoom, pan, and window/level for focused subwindow)
@@ -134,7 +141,7 @@ This application provides comprehensive DICOM image viewing capabilities with ad
 - **Arrow Keys**: Navigate slices (Up/Down) and series (Left/Right)
 - **Delete**: Delete selected ROI or measurement
 - **I**: Invert image colors
-- **Ctrl+T**: View/Edit DICOM Tags
+- **Ctrl+T**: View/Edit DICOM Tags (copy/paste for DICOM tags works in the Tag Viewer Dialog)
 - **Shift+Ctrl+T**: Export DICOM Tags
 
 ## Project Structure

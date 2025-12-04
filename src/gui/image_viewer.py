@@ -927,7 +927,15 @@ class ImageViewer(QGraphicsView):
                     self.roi_clicked.emit(item)
                     return
                 else:
-                    # Not clicking on ROI (clicking on image item, empty space, or other items) - emit signal for deselection
+                    # Not clicking on ROI (clicking on image item, empty space, or other items) - deselect measurements and emit signal for deselection
+                    from tools.measurement_tool import MeasurementItem, DraggableMeasurementText
+                    if self.scene is not None:
+                        # Deselect all measurements and their text labels
+                        for scene_item in self.scene.items():
+                            if isinstance(scene_item, (MeasurementItem, DraggableMeasurementText)):
+                                scene_item.setSelected(False)
+                        # Also clear scene selection to ensure everything is deselected
+                        self.scene.clearSelection()
                     # Emit before calling super() to ensure signal is processed
                     self.image_clicked_no_roi.emit()
                     # This is critical: we must let Qt handle the event for ScrollHandDrag to work
@@ -941,15 +949,44 @@ class ImageViewer(QGraphicsView):
             
             # Check if it's a ROI item (QGraphicsRectItem or QGraphicsEllipseItem) but not the image item
             from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsEllipseItem
+            from tools.measurement_tool import MeasurementItem, MeasurementHandle, DraggableMeasurementText
+            
             is_roi_item = (item is not None and 
                           item != self.image_item and
                           isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem)))
             
+            # Check if clicking on measurement-related items
+            is_measurement_item = isinstance(item, MeasurementItem)
+            is_handle = isinstance(item, MeasurementHandle)
+            is_measurement_text = isinstance(item, DraggableMeasurementText)
+            
+            # Check if item is a child of a measurement
+            is_measurement_child = False
+            if item is not None:
+                parent = item.parentItem()
+                while parent is not None:
+                    if isinstance(parent, MeasurementItem):
+                        is_measurement_child = True
+                        break
+                    parent = parent.parentItem()
+            
             if is_roi_item:
                 # Clicking on existing ROI - emit signal for ROI click
                 self.roi_clicked.emit(item)
+            elif is_measurement_item or is_handle or is_measurement_text or is_measurement_child:
+                # Clicking on measurement, handle, text, or measurement child - let Qt handle it
+                # Don't deselect here - allow normal selection behavior
+                pass
             elif item is None or item == self.image_item:
-                # Clicking on empty space or image item - emit deselection signal
+                # Clicking on empty space or image item - deselect measurements and emit deselection signal
+                # This ensures measurements are deselected even after handle dragging
+                if self.scene is not None:
+                    # Deselect all measurements and their text labels
+                    for scene_item in self.scene.items():
+                        if isinstance(scene_item, (MeasurementItem, DraggableMeasurementText)):
+                            scene_item.setSelected(False)
+                    # Also clear scene selection to ensure everything is deselected
+                    self.scene.clearSelection()
                 self.image_clicked_no_roi.emit()
                 # Continue with mode-specific handling
                 if self.mouse_mode == "zoom":
@@ -1034,6 +1071,13 @@ class ImageViewer(QGraphicsView):
                 self.zoom_start_pos = event.position()
                 self.zoom_start_zoom = self.current_zoom
                 self.zoom_mouse_moved = False  # Track if mouse actually moved
+                # Deselect measurements when clicking away
+                from tools.measurement_tool import MeasurementItem, DraggableMeasurementText
+                if self.scene is not None:
+                    for scene_item in self.scene.items():
+                        if isinstance(scene_item, (MeasurementItem, DraggableMeasurementText)):
+                            scene_item.setSelected(False)
+                    self.scene.clearSelection()
                 # Emit signal for clicking on image (not ROI) to allow deselection
                 self.image_clicked_no_roi.emit()
             elif self.mouse_mode == "measure":
@@ -1053,7 +1097,15 @@ class ImageViewer(QGraphicsView):
                 self.roi_drawing_start = scene_pos
                 self.roi_drawing_started.emit(scene_pos)
             else:
-                # Clicking on other items (overlay, etc.) but not on ROI - allow deselection
+                # Clicking on other items (overlay, etc.) but not on ROI or measurement - deselect measurements and allow deselection
+                # This ensures measurements are deselected when clicking on overlays or other items after dragging handles
+                if self.scene is not None:
+                    # Deselect all measurements and their text labels
+                    for scene_item in self.scene.items():
+                        if isinstance(scene_item, (MeasurementItem, DraggableMeasurementText)):
+                            scene_item.setSelected(False)
+                    # Also clear scene selection to ensure everything is deselected
+                    self.scene.clearSelection()
                 self.image_clicked_no_roi.emit()
         elif event.button() == Qt.MouseButton.RightButton:
             # Right click - prepare for potential drag or context menu
