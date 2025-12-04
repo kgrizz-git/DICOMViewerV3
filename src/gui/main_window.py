@@ -84,6 +84,8 @@ class MainWindow(QMainWindow):
     histogram_requested = Signal()  # Emitted when Histogram dialog is requested
     export_customizations_requested = Signal()  # Emitted when Export Customizations is requested
     import_customizations_requested = Signal()  # Emitted when Import Customizations is requested
+    export_tag_presets_requested = Signal()  # Emitted when Export Tag Presets is requested
+    import_tag_presets_requested = Signal()  # Emitted when Import Tag Presets is requested
     copy_annotation_requested = Signal()  # Emitted when copy annotation is requested
     paste_annotation_requested = Signal()  # Emitted when paste annotation is requested
     # Note: Cine control signals moved to CineControlsWidget
@@ -172,6 +174,17 @@ class MainWindow(QMainWindow):
         import_customizations_action = QAction("Import Customizations...", self)
         import_customizations_action.triggered.connect(self.import_customizations_requested.emit)
         file_menu.addAction(import_customizations_action)
+
+        file_menu.addSeparator()
+
+        # Tag export presets actions
+        export_tag_presets_action = QAction("Export Tag Presets...", self)
+        export_tag_presets_action.triggered.connect(self.export_tag_presets_requested.emit)
+        file_menu.addAction(export_tag_presets_action)
+
+        import_tag_presets_action = QAction("Import Tag Presets...", self)
+        import_tag_presets_action.triggered.connect(self.import_tag_presets_requested.emit)
+        file_menu.addAction(import_tag_presets_action)
         
         file_menu.addSeparator()
         
