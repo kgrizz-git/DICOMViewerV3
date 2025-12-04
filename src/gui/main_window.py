@@ -21,8 +21,8 @@ from PySide6.QtWidgets import (QMainWindow, QMenuBar, QToolBar, QStatusBar,
                                 QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
                                 QMessageBox, QComboBox, QLabel, QSizePolicy, QColorDialog,
                                 QApplication, QDialog, QTextBrowser, QPushButton, QDialogButtonBox, QMenu)
-from PySide6.QtCore import Qt, Signal, QEvent
-from PySide6.QtGui import QAction, QIcon, QKeySequence, QColor, QDragEnterEvent, QDropEvent
+from PySide6.QtCore import Qt, Signal, QEvent, QBuffer, QByteArray, QIODevice
+from PySide6.QtGui import QAction, QIcon, QKeySequence, QColor, QDragEnterEvent, QDropEvent, QPixmap
 from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -81,6 +81,7 @@ class MainWindow(QMainWindow):
     layout_changed = Signal(str)  # Emitted when layout mode changes ("1x1", "1x2", "2x1", "2x2")
     privacy_view_toggled = Signal(bool)  # Emitted when privacy view is toggled (True = enabled)
     about_this_file_requested = Signal()  # Emitted when About this File is requested
+    histogram_requested = Signal()  # Emitted when Histogram dialog is requested
     export_customizations_requested = Signal()  # Emitted when Export Customizations is requested
     import_customizations_requested = Signal()  # Emitted when Import Customizations is requested
     copy_annotation_requested = Signal()  # Emitted when copy annotation is requested
@@ -314,6 +315,14 @@ class MainWindow(QMainWindow):
         about_this_file_action.setShortcut(QKeySequence("Ctrl+A"))
         about_this_file_action.triggered.connect(self.about_this_file_requested.emit)
         tools_menu.addAction(about_this_file_action)
+        
+        tools_menu.addSeparator()
+        
+        # Histogram action
+        histogram_action = QAction("&Histogram...", self)
+        histogram_action.setShortcut(QKeySequence("Shift+Ctrl+H"))  # Cmd+Shift+H on Mac, Ctrl+Shift+H on Windows/Linux
+        histogram_action.triggered.connect(self.histogram_requested.emit)
+        tools_menu.addAction(histogram_action)
         
         # Help menu
         help_menu = menubar.addMenu("&Help")
@@ -1512,6 +1521,20 @@ class MainWindow(QMainWindow):
         if theme == "dark":
             text_edit.setStyleSheet("QTextBrowser { background-color: #1e1e1e; }")
         
+        # Load icon and convert to base64 for HTML embedding
+        icon_html = ""
+        icon_path = Path(__file__).parent.parent.parent / 'resources' / 'icons' / 'luk40iluk40iluk4-removebg-preview.png'
+        if icon_path.exists():
+            pixmap = QPixmap(str(icon_path))
+            # Scale icon to reasonable size (96x96 pixels for inline display)
+            scaled_pixmap = pixmap.scaled(96, 96, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            # Convert to base64 for HTML embedding
+            buffer = QBuffer()
+            buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+            scaled_pixmap.save(buffer, "PNG")
+            icon_data = buffer.data().toBase64().data().decode()
+            icon_html = f'<img src="data:image/png;base64,{icon_data}" style="vertical-align: middle; margin-right: 10px;" />'
+        
         # Create HTML content with theme-based link styling
         if theme == "dark":
             link_color = "#4a9eff"  # Light blue for dark theme
@@ -1525,7 +1548,7 @@ class MainWindow(QMainWindow):
     </style>
 </head>
 <body>
-    <h2>DICOM Viewer V3</h2>
+    <h2>{icon_html}DICOM Viewer V3</h2>
     <p><b>Made by Kevin Grizzard</b><br>
     Available at <a href='https://github.com/kgrizz-git/DICOMViewerV3'>https://github.com/kgrizz-git/DICOMViewerV3</a></p>
     <hr>
@@ -1556,7 +1579,7 @@ class MainWindow(QMainWindow):
     <li>Draw elliptical and rectangular ROIs</li>
     <li>ROI statistics (mean, std dev, min, max, area)</li>
     <li>Distance measurements (pixels, mm, cm)</li>
-    <li>Histogram display: View pixel value distribution with window/level overlay (H key)</li>
+    <li>Histogram display: View pixel value distribution with window/level overlay (Cmd+Shift+H / Ctrl+Shift+H)</li>
     <li>Undo/redo functionality</li>
     </ul>
     <h4>Metadata and Overlays:</h4>
