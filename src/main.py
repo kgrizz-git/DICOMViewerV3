@@ -1563,6 +1563,9 @@ class DICOMViewerApp(QObject):
         # Tag Export (shared)
         self.main_window.tag_export_requested.connect(self._open_tag_export)
         
+        # Histogram (shared)
+        self.main_window.histogram_requested.connect(self.dialog_coordinator.open_histogram)
+        
         # Export (shared)
         self.main_window.export_requested.connect(self._open_export)
         
@@ -1854,6 +1857,7 @@ class DICOMViewerApp(QObject):
                 # Connect privacy view toggle from context menu
                 image_viewer.privacy_view_toggled.connect(self._on_privacy_view_toggled)
                 image_viewer.about_this_file_requested.connect(self._open_about_this_file)
+                image_viewer.histogram_requested.connect(self.dialog_coordinator.open_histogram)
                 
                 # Connect assign series request
                 subwindow.assign_series_requested.connect(self._on_assign_series_requested)
@@ -2411,6 +2415,9 @@ class DICOMViewerApp(QObject):
         # Clear measurements signals
         self.main_window.clear_measurements_requested.connect(self.measurement_coordinator.handle_clear_measurements)
         self.image_viewer.clear_measurements_requested.connect(self.measurement_coordinator.handle_clear_measurements)
+        
+        # Histogram signals
+        self.image_viewer.histogram_requested.connect(self.dialog_coordinator.open_histogram)
         
         # Toggle overlay signal
         self.image_viewer.toggle_overlay_requested.connect(self.overlay_coordinator.handle_toggle_overlay)

@@ -84,7 +84,7 @@ This application provides comprehensive DICOM image viewing capabilities with ad
   - Scroll through projections one underlying slice at a time
   - Access via right panel widget or context menu → "Combine..."
 - **Histogram Display**: View pixel value distribution for the currently focused image
-  - Press <code>H</code> key to open histogram dialog
+  - Press <code>Cmd+Shift+H</code> / <code>Ctrl+Shift+H</code> to open histogram dialog
   - Shows histogram with window/level box overlay (red dashed box indicating current window center and width)
   - Toggle between linear and logarithmic y-axis scaling
   - Automatically tracks focused subwindow and updates on focus/slice/window-level changes
@@ -134,7 +134,7 @@ This application provides comprehensive DICOM image viewing capabilities with ad
 - **Cmd+Shift+Z / Ctrl+Shift+Z**: Redo last undone operation
 - **V**: Reset view (restore initial zoom, pan, and window/level for focused subwindow)
 - **A**: Reset all views (reset zoom, pan, and window/level for all subwindows)
-- **H**: Open histogram dialog (shows pixel value distribution with window/level overlay)
+- **Cmd+Shift+H / Ctrl+Shift+H**: Open histogram dialog (shows pixel value distribution with window/level overlay)
 - **N**: Toggle series navigator bar visibility
 - **Spacebar**: Toggle overlay visibility (cycles through 3 states)
 - **Cmd+P / Ctrl+P**: Toggle Privacy View (masks patient-related tags in display)

@@ -256,7 +256,7 @@ class QuickStartGuideDialog(QDialog):
             <h2 id="histogram">Histogram Display</h2>
             <p>View pixel value distribution for the currently focused image:</p>
             <ul>
-                <li><strong>Open Histogram:</strong> Press <code>H</code> key (when not in crosshair mode) or use the menu to open the histogram dialog</li>
+                <li><strong>Open Histogram:</strong> Press <code>Cmd+Shift+H</code> / <code>Ctrl+Shift+H</code>, or use Tools → Histogram menu or context menu</li>
                 <li><strong>Features:</strong>
                     <ul>
                         <li>Shows pixel value distribution as a histogram</li>

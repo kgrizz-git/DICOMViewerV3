@@ -71,6 +71,7 @@ class ImageViewer(QGraphicsView):
     cine_pause_requested = Signal()  # Emitted when cine pause is requested from context menu
     cine_stop_requested = Signal()  # Emitted when cine stop is requested from context menu
     cine_loop_toggled = Signal(bool)  # Emitted when cine loop is toggled from context menu (True = enabled)
+    histogram_requested = Signal()  # Emitted when histogram dialog is requested from context menu
     measurement_started = Signal(QPointF)  # Emitted when measurement starts (start position)
     measurement_updated = Signal(QPointF)  # Emitted when measurement is updated (current position)
     measurement_finished = Signal()  # Emitted when measurement is finished
@@ -1638,6 +1639,14 @@ class ImageViewer(QGraphicsView):
                         # Clear Measurements action
                         clear_measurements_action = context_menu.addAction("Clear Measurements (C)")
                         clear_measurements_action.triggered.connect(self.clear_measurements_requested.emit)
+                        
+                        context_menu.addSeparator()
+                        
+                        # Histogram action
+                        import sys
+                        shortcut_text = "Cmd+Shift+H" if sys.platform == "darwin" else "Ctrl+Shift+H"
+                        histogram_action = context_menu.addAction(f"Histogram ({shortcut_text})")
+                        histogram_action.triggered.connect(self.histogram_requested.emit)
                         
                         context_menu.addSeparator()
                         

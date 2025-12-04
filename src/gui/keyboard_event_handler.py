@@ -269,11 +269,15 @@ class KeyboardEventHandler:
                 self.invert_image_callback()
             return True
         
-        # H key for Histogram
+        # Cmd+Shift+H / Ctrl+Shift+H for Histogram
         elif event.key() == Qt.Key.Key_H:
-            if self.open_histogram_callback:
-                self.open_histogram_callback()
-            return True
+            # Only handle if Cmd/Ctrl+Shift modifiers are pressed
+            if (event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier) and
+                event.modifiers() & Qt.KeyboardModifier.ShiftModifier):
+                if self.open_histogram_callback:
+                    self.open_histogram_callback()
+                return True
+            # Regular H key (no modifiers) is for crosshair mode - don't handle here
         
         # Ctrl+P (Cmd+P on Mac) for Privacy View toggle
         elif event.key() == Qt.Key.Key_P and (event.modifiers() & Qt.KeyboardModifier.ControlModifier):
