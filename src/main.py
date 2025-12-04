@@ -70,6 +70,7 @@ from tools.crosshair_manager import CrosshairManager
 from tools.annotation_manager import AnnotationManager
 from tools.histogram_widget import HistogramWidget
 from gui.overlay_manager import OverlayManager
+from utils.annotation_clipboard import AnnotationClipboard
 
 # Import handler classes
 from core.view_state_manager import ViewStateManager
@@ -110,6 +111,7 @@ class DICOMViewerApp(QObject):
         self.dicom_processor = DICOMProcessor()
         self.tag_edit_history = TagEditHistoryManager(max_history=50)
         self.undo_redo_manager = UndoRedoManager(max_history=100)
+        self.annotation_clipboard = AnnotationClipboard()
         
         # Privacy view state
         self.privacy_view_enabled: bool = self.config_manager.get_privacy_view()
@@ -1568,6 +1570,10 @@ class DICOMViewerApp(QObject):
         # Undo/redo signals (for both tag edits and annotations)
         self.main_window.undo_tag_edit_requested.connect(self._on_undo_requested)
         self.main_window.redo_tag_edit_requested.connect(self._on_redo_requested)
+        
+        # Annotation copy/paste (shared)
+        self.main_window.copy_annotation_requested.connect(self._copy_annotations)
+        self.main_window.paste_annotation_requested.connect(self._paste_annotations)
         
         # Privacy view toggle (shared)
         self.main_window.privacy_view_toggled.connect(self._on_privacy_view_toggled)
@@ -4246,6 +4252,495 @@ class DICOMViewerApp(QObject):
             hide: True to hide graphics, False to show them
         """
         self.overlay_coordinator.hide_roi_graphics(hide)
+    
+    def _get_focused_subwindow(self) -> Optional[SubWindowContainer]:
+        """
+        Get the currently focused subwindow.
+        
+        Returns:
+            SubWindowContainer or None if no subwindow is focused
+        """
+        return self.multi_window_layout.get_focused_subwindow()
+    
+    def _get_selected_rois(self, subwindow: SubWindowContainer) -> list:
+        """
+        Get selected ROI items from the scene.
+        
+        Args:
+            subwindow: SubWindowContainer to get ROIs from
+            
+        Returns:
+            List of selected ROIItem objects
+        """
+        selected_rois = []
+        if subwindow and subwindow.image_viewer and subwindow.image_viewer.scene:
+            try:
+                selected_items = subwindow.image_viewer.scene.selectedItems()
+                from tools.roi_manager import ROIItem
+                
+                # Get ROI manager for this subwindow
+                subwindows = self.multi_window_layout.get_all_subwindows()
+                if subwindow in subwindows:
+                    idx = subwindows.index(subwindow)
+                    if idx in self.subwindow_managers:
+                        roi_manager = self.subwindow_managers[idx]['roi_manager']
+                        # Check each selected item to see if it's an ROI graphics item
+                        for item in selected_items:
+                            # Check all ROIs to find matching graphics items
+                            key = (roi_manager.current_study_uid, 
+                                   roi_manager.current_series_uid, 
+                                   roi_manager.current_instance_identifier)
+                            if key in roi_manager.rois:
+                                for roi in roi_manager.rois[key]:
+                                    if roi.item == item:
+                                        selected_rois.append(roi)
+                                        break
+            except RuntimeError:
+                # Scene may have been deleted
+                pass
+        return selected_rois
+    
+    def _get_selected_measurements(self, subwindow: SubWindowContainer) -> list:
+        """
+        Get selected measurement items from the scene.
+        
+        Args:
+            subwindow: SubWindowContainer to get measurements from
+            
+        Returns:
+            List of selected MeasurementItem objects
+        """
+        selected_measurements = []
+        if subwindow and subwindow.image_viewer and subwindow.image_viewer.scene:
+            try:
+                selected_items = subwindow.image_viewer.scene.selectedItems()
+                from tools.measurement_tool import MeasurementItem
+                
+                for item in selected_items:
+                    if isinstance(item, MeasurementItem):
+                        selected_measurements.append(item)
+            except RuntimeError:
+                # Scene may have been deleted
+                pass
+        return selected_measurements
+    
+    def _get_selected_crosshairs(self, subwindow: SubWindowContainer) -> list:
+        """
+        Get selected crosshair items from the scene.
+        
+        Args:
+            subwindow: SubWindowContainer to get crosshairs from
+            
+        Returns:
+            List of selected CrosshairItem objects
+        """
+        selected_crosshairs = []
+        if subwindow and subwindow.image_viewer and subwindow.image_viewer.scene:
+            try:
+                selected_items = subwindow.image_viewer.scene.selectedItems()
+                from tools.crosshair_manager import CrosshairItem
+                
+                for item in selected_items:
+                    if isinstance(item, CrosshairItem):
+                        selected_crosshairs.append(item)
+            except RuntimeError:
+                # Scene may have been deleted
+                pass
+        return selected_crosshairs
+    
+    def _copy_annotations(self) -> None:
+        """
+        Copy selected annotations (ROIs, measurements, crosshairs) to clipboard.
+        
+        Only copies selected annotations. If nothing is selected, shows a status message.
+        """
+        # Get focused subwindow
+        subwindow = self._get_focused_subwindow()
+        if not subwindow:
+            return
+        
+        # Collect selected annotations
+        selected_rois = self._get_selected_rois(subwindow)
+        selected_measurements = self._get_selected_measurements(subwindow)
+        selected_crosshairs = self._get_selected_crosshairs(subwindow)
+        
+        # If nothing selected, show message and return
+        total_count = len(selected_rois) + len(selected_measurements) + len(selected_crosshairs)
+        if total_count == 0:
+            self.main_window.update_status("No annotations selected")
+            return
+        
+        # Get source slice information from the subwindow's managers
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        if subwindow in subwindows:
+            idx = subwindows.index(subwindow)
+            if idx in self.subwindow_managers:
+                roi_manager = self.subwindow_managers[idx]['roi_manager']
+                
+                # Copy to clipboard with source slice info
+                self.annotation_clipboard.copy_annotations(
+                    selected_rois,
+                    selected_measurements,
+                    selected_crosshairs,
+                    roi_manager.current_study_uid,
+                    roi_manager.current_series_uid,
+                    roi_manager.current_instance_identifier
+                )
+                
+                # Update status
+                self.main_window.update_status(f"Copied {total_count} annotation(s)")
+    
+    def _paste_annotations(self) -> None:
+        """
+        Paste annotations from clipboard to current slice.
+        
+        Applies smart offset: 10px offset if pasting to same slice, otherwise no offset.
+        """
+        # Check if clipboard has data
+        if not self.annotation_clipboard.has_data():
+            return
+        
+        data = self.annotation_clipboard.paste_annotations()
+        if not data or data.get('type') != 'dicom_viewer_annotations':
+            return
+        
+        # Get focused subwindow
+        subwindow = self._get_focused_subwindow()
+        if not subwindow:
+            return
+        
+        # Get managers for this subwindow
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        if subwindow not in subwindows:
+            return
+        
+        idx = subwindows.index(subwindow)
+        if idx not in self.subwindow_managers:
+            return
+        
+        managers = self.subwindow_managers[idx]
+        roi_manager = managers['roi_manager']
+        measurement_tool = managers['measurement_tool']
+        crosshair_manager = managers['crosshair_manager']
+        
+        # Determine offset based on whether pasting to same slice
+        current_key = (roi_manager.current_study_uid,
+                      roi_manager.current_series_uid,
+                      roi_manager.current_instance_identifier)
+        source_key = self.annotation_clipboard.get_source_slice_key()
+        
+        # Smart offset: apply offset only if pasting to same slice
+        offset = QPointF(10, 10) if current_key == source_key else QPointF(0, 0)
+        
+        # Track newly created items for selection
+        newly_created = []
+        
+        # Paste ROIs
+        for roi_data in data.get('rois', []):
+            new_roi = self._paste_roi(subwindow, managers, roi_data, offset)
+            if new_roi:
+                newly_created.append(new_roi.item)
+        
+        # Paste measurements
+        for meas_data in data.get('measurements', []):
+            new_measurement = self._paste_measurement(subwindow, managers, meas_data, offset)
+            if new_measurement:
+                newly_created.append(new_measurement)
+        
+        # Paste crosshairs
+        for cross_data in data.get('crosshairs', []):
+            new_crosshair = self._paste_crosshair(subwindow, managers, cross_data, offset)
+            if new_crosshair:
+                newly_created.append(new_crosshair)
+        
+        # Clear current selection
+        if subwindow.image_viewer and subwindow.image_viewer.scene:
+            subwindow.image_viewer.scene.clearSelection()
+        
+        # Select newly pasted items
+        for item in newly_created:
+            try:
+                item.setSelected(True)
+            except RuntimeError:
+                # Item may have been deleted
+                pass
+        
+        # Update displays
+        if hasattr(subwindow, 'update_roi_list'):
+            subwindow.update_roi_list()
+        if subwindow.image_viewer and subwindow.image_viewer.scene:
+            subwindow.image_viewer.scene.update()
+        
+        # Update status
+        total_count = len(data.get('rois', [])) + len(data.get('measurements', [])) + len(data.get('crosshairs', []))
+        self.main_window.update_status(f"Pasted {total_count} annotation(s)")
+    
+    def _paste_roi(self, subwindow: SubWindowContainer, managers: Dict, roi_data: Dict, offset: QPointF):
+        """
+        Recreate an ROI from clipboard data.
+        
+        Args:
+            subwindow: SubWindowContainer to paste into
+            managers: Dictionary of managers for this subwindow
+            roi_data: Serialized ROI data
+            offset: QPointF offset to apply
+            
+        Returns:
+            Created ROIItem or None
+        """
+        from PySide6.QtCore import QRectF
+        from PySide6.QtGui import QPen, QColor
+        from tools.roi_manager import ROIItem, ROIGraphicsEllipseItem, ROIGraphicsRectItem
+        from utils.undo_redo import ROICommand
+        
+        if not subwindow.image_viewer or not subwindow.image_viewer.scene:
+            return None
+        
+        roi_coordinator = managers['roi_coordinator']
+        roi_manager = managers['roi_manager']
+        
+        # Extract data
+        shape_type = roi_data['shape_type']
+        rect_data = roi_data['rect']
+        pos_data = roi_data['position']
+        pen_width = roi_data['pen_width']
+        pen_color = roi_data['pen_color']
+        
+        # Apply offset to position
+        new_pos = QPointF(pos_data['x'] + offset.x(), pos_data['y'] + offset.y())
+        
+        # Create rect
+        rect = QRectF(rect_data['x'], rect_data['y'], rect_data['width'], rect_data['height'])
+        
+        # Create graphics item using custom classes that detect movement
+        pen = QPen(QColor(*pen_color), pen_width)
+        pen.setCosmetic(True)
+        
+        if shape_type == "ellipse":
+            item = ROIGraphicsEllipseItem(rect)
+        else:
+            item = ROIGraphicsRectItem(rect)
+        
+        item.setPen(pen)
+        item.setPos(new_pos)
+        
+        # Get default visible statistics if available
+        default_stats = None
+        if 'visible_statistics' in roi_data:
+            default_stats = set(roi_data['visible_statistics'])
+        
+        # Create ROIItem
+        roi_item = ROIItem(shape_type, item, pen_width=pen_width, pen_color=pen_color,
+                          default_visible_statistics=default_stats)
+        
+        # Make selectable and movable
+        item.setFlag(item.GraphicsItemFlag.ItemIsSelectable, True)
+        item.setFlag(item.GraphicsItemFlag.ItemIsMovable, True)
+        
+        # Add to scene
+        subwindow.image_viewer.scene.addItem(item)
+        
+        # Add to ROI manager and undo/redo system
+        key = (roi_manager.current_study_uid,
+               roi_manager.current_series_uid,
+               roi_manager.current_instance_identifier)
+        
+        if key not in roi_manager.rois:
+            roi_manager.rois[key] = []
+        roi_manager.rois[key].append(roi_item)
+        
+        # Set up movement callback for ROI (needed for statistics overlay updates)
+        roi_item.on_moved_callback = lambda r=roi_item: roi_coordinator._on_roi_moved(r)
+        
+        # Create undo command
+        command = ROICommand(
+            roi_manager,
+            "add",
+            roi_item,
+            subwindow.image_viewer.scene,
+            roi_manager.current_study_uid,
+            roi_manager.current_series_uid,
+            roi_manager.current_instance_identifier,
+            update_statistics_callback=roi_coordinator.update_roi_statistics_overlays
+        )
+        self.undo_redo_manager.execute_command(command)
+        
+        # Create statistics overlays for the pasted ROI
+        roi_coordinator.update_roi_statistics_overlays()
+        
+        return roi_item
+    
+    def _paste_measurement(self, subwindow: SubWindowContainer, managers: Dict, meas_data: Dict, offset: QPointF):
+        """
+        Recreate a measurement from clipboard data.
+        
+        Args:
+            subwindow: SubWindowContainer to paste into
+            managers: Dictionary of managers for this subwindow
+            meas_data: Serialized measurement data
+            offset: QPointF offset to apply
+            
+        Returns:
+            Created MeasurementItem or None
+        """
+        from PySide6.QtWidgets import QGraphicsLineItem
+        from PySide6.QtGui import QPen, QColor, QFont
+        from tools.measurement_tool import MeasurementItem, DraggableMeasurementText
+        from utils.undo_redo import MeasurementCommand
+        
+        if not subwindow.image_viewer or not subwindow.image_viewer.scene:
+            return None
+        
+        measurement_coordinator = managers['measurement_coordinator']
+        measurement_tool = managers['measurement_tool']
+        
+        # Extract data and apply offset
+        start = QPointF(meas_data['start_point']['x'] + offset.x(),
+                       meas_data['start_point']['y'] + offset.y())
+        end = QPointF(meas_data['end_point']['x'] + offset.x(),
+                     meas_data['end_point']['y'] + offset.y())
+        pixel_spacing = meas_data['pixel_spacing']
+        
+        # Get settings from config
+        if self.config_manager:
+            line_thickness = self.config_manager.get_measurement_line_thickness()
+            line_color = self.config_manager.get_measurement_line_color()
+            font_size = self.config_manager.get_measurement_font_size()
+            font_color = self.config_manager.get_measurement_font_color()
+        else:
+            line_thickness = 2
+            line_color = (0, 255, 0)
+            font_size = 14
+            font_color = (255, 255, 0)
+        
+        # Create line item
+        line_pen = QPen(QColor(*line_color), line_thickness)
+        line_pen.setCosmetic(True)
+        line_item = QGraphicsLineItem(start.x(), start.y(), end.x(), end.y())
+        line_item.setPen(line_pen)
+        
+        # Create text item with proper callback signature (takes QPointF, not x, y)
+        text_item = DraggableMeasurementText(None, lambda offset: None)
+        text_item.setDefaultTextColor(QColor(*font_color))
+        font = QFont("Arial", font_size)
+        font.setBold(True)
+        text_item.setFont(font)
+        text_item.setFlag(text_item.GraphicsItemFlag.ItemIgnoresTransformations, True)
+        text_item.setFlag(text_item.GraphicsItemFlag.ItemIsMovable, True)
+        text_item.setFlag(text_item.GraphicsItemFlag.ItemSendsGeometryChanges, True)
+        text_item.setFlag(text_item.GraphicsItemFlag.ItemIsSelectable, True)
+        
+        # Create measurement item
+        measurement = MeasurementItem(start, end, line_item, text_item, pixel_spacing=pixel_spacing)
+        text_item.measurement = measurement
+        
+        # Add to scene
+        subwindow.image_viewer.scene.addItem(measurement)
+        measurement.setZValue(150)
+        text_item.setZValue(151)
+        subwindow.image_viewer.scene.addItem(text_item)
+        
+        # Update distance
+        measurement.update_distance()
+        
+        # Add to measurement tool
+        key = (measurement_tool.current_study_uid,
+               measurement_tool.current_series_uid,
+               measurement_tool.current_instance_identifier)
+        
+        if key not in measurement_tool.measurements:
+            measurement_tool.measurements[key] = []
+        measurement_tool.measurements[key].append(measurement)
+        
+        # Create undo command
+        command = MeasurementCommand(
+            measurement_tool,
+            "add",
+            measurement,
+            subwindow.image_viewer.scene,
+            measurement_tool.current_study_uid,
+            measurement_tool.current_series_uid,
+            measurement_tool.current_instance_identifier
+        )
+        self.undo_redo_manager.execute_command(command)
+        
+        return measurement
+    
+    def _paste_crosshair(self, subwindow: SubWindowContainer, managers: Dict, cross_data: Dict, offset: QPointF):
+        """
+        Recreate a crosshair from clipboard data.
+        
+        Args:
+            subwindow: SubWindowContainer to paste into
+            managers: Dictionary of managers for this subwindow
+            cross_data: Serialized crosshair data
+            offset: QPointF offset to apply
+            
+        Returns:
+            Created CrosshairItem or None
+        """
+        from tools.crosshair_manager import CrosshairItem
+        from utils.undo_redo import CrosshairCommand
+        
+        if not subwindow.image_viewer or not subwindow.image_viewer.scene:
+            return None
+        
+        crosshair_coordinator = managers['crosshair_coordinator']
+        crosshair_manager = managers['crosshair_manager']
+        
+        # Extract data and apply offset
+        pos = QPointF(cross_data['position']['x'] + offset.x(),
+                     cross_data['position']['y'] + offset.y())
+        pixel_value_str = cross_data['pixel_value_str']
+        x_coord = cross_data['x_coord']
+        y_coord = cross_data['y_coord']
+        z_coord = cross_data['z_coord']
+        text_offset_viewport = cross_data.get('text_offset_viewport', (5.0, 5.0))
+        
+        # Create crosshair item
+        crosshair = CrosshairItem(
+            pos,
+            pixel_value_str,
+            x_coord,
+            y_coord,
+            z_coord,
+            self.config_manager,
+            crosshair_manager.privacy_mode
+        )
+        
+        # Restore text offset
+        crosshair.text_offset_viewport = text_offset_viewport
+        
+        # Add to scene
+        subwindow.image_viewer.scene.addItem(crosshair)
+        if crosshair.text_item:
+            subwindow.image_viewer.scene.addItem(crosshair.text_item)
+            # Update text position
+            if subwindow.image_viewer:
+                crosshair.update_text_position(subwindow.image_viewer)
+        
+        # Add to crosshair manager
+        key = (crosshair_manager.current_study_uid,
+               crosshair_manager.current_series_uid,
+               crosshair_manager.current_instance_identifier)
+        
+        if key not in crosshair_manager.crosshairs:
+            crosshair_manager.crosshairs[key] = []
+        crosshair_manager.crosshairs[key].append(crosshair)
+        
+        # Create undo command
+        command = CrosshairCommand(
+            crosshair_manager,
+            "add",
+            crosshair,
+            subwindow.image_viewer.scene,
+            crosshair_manager.current_study_uid,
+            crosshair_manager.current_series_uid,
+            crosshair_manager.current_instance_identifier
+        )
+        self.undo_redo_manager.execute_command(command)
+        
+        return crosshair
     
     def eventFilter(self, obj, event) -> bool:
         """

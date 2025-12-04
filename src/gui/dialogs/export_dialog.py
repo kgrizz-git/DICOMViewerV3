@@ -981,6 +981,7 @@ class ExportManager:
                     window_width = current_window_width
                 
                 # Check if we should create a projection image
+                is_projection_image = False  # Track if we actually have a projection (not just enabled)
                 if projection_enabled and studies and study_uid and series_uid and slice_index is not None:
                     # Create projection image
                     image = self._create_projection_for_export(
@@ -996,6 +997,10 @@ class ExportManager:
                             window_width=window_width,
                             apply_rescale=use_rescaled_values
                         )
+                        # is_projection_image remains False - this is a fallback single slice
+                    else:
+                        # Projection was successful
+                        is_projection_image = True
                 else:
                     # Convert single slice to image - use apply_rescale to match viewer behavior
                     image = DICOMProcessor.dataset_to_image(
@@ -1010,7 +1015,8 @@ class ExportManager:
                 
                 # Handle PhotometricInterpretation (MONOCHROME1 inversion, YBR conversion, etc.)
                 # Only apply for non-projection images (projections are already processed)
-                if not projection_enabled:
+                # Note: Fallback single-slice images need photometric processing even if projection was enabled
+                if not is_projection_image:
                     image = ExportManager.process_image_by_photometric_interpretation(image, dataset)
                 
                 # Apply display resolution scaling BEFORE rendering overlays

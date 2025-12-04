@@ -83,6 +83,8 @@ class MainWindow(QMainWindow):
     about_this_file_requested = Signal()  # Emitted when About this File is requested
     export_customizations_requested = Signal()  # Emitted when Export Customizations is requested
     import_customizations_requested = Signal()  # Emitted when Import Customizations is requested
+    copy_annotation_requested = Signal()  # Emitted when copy annotation is requested
+    paste_annotation_requested = Signal()  # Emitted when paste annotation is requested
     # Note: Cine control signals moved to CineControlsWidget
     # Keeping these signals for backward compatibility but they're not used anymore
     
@@ -188,6 +190,20 @@ class MainWindow(QMainWindow):
         
         # Edit menu
         edit_menu = menubar.addMenu("&Edit")
+        
+        # Copy action (for annotations)
+        self.copy_annotation_action = QAction("&Copy", self)
+        self.copy_annotation_action.setShortcut(QKeySequence.Copy)
+        self.copy_annotation_action.triggered.connect(self.copy_annotation_requested.emit)
+        edit_menu.addAction(self.copy_annotation_action)
+        
+        # Paste action (for annotations)
+        self.paste_annotation_action = QAction("&Paste", self)
+        self.paste_annotation_action.setShortcut(QKeySequence.Paste)
+        self.paste_annotation_action.triggered.connect(self.paste_annotation_requested.emit)
+        edit_menu.addAction(self.paste_annotation_action)
+        
+        edit_menu.addSeparator()
         
         # Undo/Redo actions (for both tag edits and annotations)
         self.undo_tag_edit_action = QAction("&Undo", self)
