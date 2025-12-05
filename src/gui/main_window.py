@@ -20,7 +20,8 @@ Requirements:
 from PySide6.QtWidgets import (QMainWindow, QMenuBar, QToolBar, QStatusBar,
                                 QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
                                 QMessageBox, QComboBox, QLabel, QSizePolicy, QColorDialog,
-                                QApplication, QDialog, QTextBrowser, QPushButton, QDialogButtonBox, QMenu)
+                                QApplication, QDialog, QTextBrowser, QPushButton, QDialogButtonBox, QMenu,
+                                QScrollArea, QFrame)
 from PySide6.QtCore import Qt, Signal, QEvent, QBuffer, QByteArray, QIODevice
 from PySide6.QtGui import QAction, QIcon, QKeySequence, QColor, QDragEnterEvent, QDropEvent, QPixmap
 from typing import Optional, TYPE_CHECKING
@@ -107,6 +108,8 @@ class MainWindow(QMainWindow):
         
         # Window properties
         self.setWindowTitle("DICOM Viewer V3")
+        # Set minimum height for laptop screens
+        self.setMinimumHeight(600)
         self.setGeometry(100, 100, 
                         self.config_manager.get("window_width", 1200),
                         self.config_manager.get("window_height", 800))
@@ -559,24 +562,38 @@ class MainWindow(QMainWindow):
         self.splitter = QSplitter(Qt.Horizontal)
         main_layout.addWidget(self.splitter)
         
-        # Left panel (for metadata, series list, etc.)
+        # Left panel (for metadata, series list, etc.) - Make scrollable
+        left_scroll = QScrollArea()
+        left_scroll.setWidgetResizable(True)
+        left_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        left_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        left_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        
         self.left_panel = QWidget()
         self.left_panel.setObjectName("left_panel")
-        self.left_panel.setMaximumWidth(400)
-        self.left_panel.setMinimumWidth(200)
-        self.splitter.addWidget(self.left_panel)
+        left_scroll.setWidget(self.left_panel)
+        left_scroll.setMaximumWidth(400)
+        left_scroll.setMinimumWidth(200)
+        self.splitter.addWidget(left_scroll)
         
         # Center panel (for image viewer)
         self.center_panel = QWidget()
         self.center_panel.setObjectName("center_panel")
         self.splitter.addWidget(self.center_panel)
         
-        # Right panel (for tools, histogram, etc.)
+        # Right panel (for tools, histogram, etc.) - Make scrollable
+        right_scroll = QScrollArea()
+        right_scroll.setWidgetResizable(True)
+        right_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        right_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        right_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        
         self.right_panel = QWidget()
         self.right_panel.setObjectName("right_panel")
-        self.right_panel.setMaximumWidth(400)
-        self.right_panel.setMinimumWidth(200)
-        self.splitter.addWidget(self.right_panel)
+        right_scroll.setWidget(self.right_panel)
+        right_scroll.setMaximumWidth(400)
+        right_scroll.setMinimumWidth(200)
+        self.splitter.addWidget(right_scroll)
         
         # Set splitter proportions - use saved positions or defaults
         default_left_width = 250

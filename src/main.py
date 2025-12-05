@@ -84,6 +84,12 @@ from gui.dialog_coordinator import DialogCoordinator
 from gui.mouse_mode_handler import MouseModeHandler
 from gui.keyboard_event_handler import KeyboardEventHandler
 
+# Import fusion components
+from core.fusion_handler import FusionHandler
+from core.fusion_processor import FusionProcessor
+from gui.fusion_controls_widget import FusionControlsWidget
+from gui.fusion_coordinator import FusionCoordinator
+
 
 class DICOMViewerApp(QObject):
     """
@@ -179,6 +185,11 @@ class DICOMViewerApp(QObject):
         self.series_navigator = SeriesNavigator(self.dicom_processor)
         self.cine_controls_widget = CineControlsWidget()
         self.intensity_projection_controls_widget = IntensityProjectionControlsWidget()
+        
+        # Initialize fusion components
+        self.fusion_handler = FusionHandler()
+        self.fusion_processor = FusionProcessor()
+        self.fusion_controls_widget = FusionControlsWidget()
         
         # Initialize overlay manager with config settings
         font_size = self.config_manager.get_overlay_font_size()
@@ -434,6 +445,21 @@ class DICOMViewerApp(QObject):
                 hide_roi_statistics_overlays=managers['roi_coordinator'].hide_roi_statistics_overlays
             )
             
+            # Fusion Coordinator
+            managers['fusion_coordinator'] = FusionCoordinator(
+                self.fusion_handler,
+                self.fusion_processor,
+                self.fusion_controls_widget,
+                get_current_studies=lambda: self.current_studies,
+                get_current_study_uid=lambda: self.current_study_uid,
+                get_current_series_uid=lambda: self.current_series_uid,
+                get_current_slice_index=lambda: self.current_slice_index,
+                request_display_update=lambda idx=idx: self._redisplay_subwindow_slice(idx, preserve_view=True)
+            )
+            
+            # Update slice display manager with fusion coordinator
+            managers['slice_display_manager'].fusion_coordinator = managers['fusion_coordinator']
+            
             # Update view state manager callbacks
             managers['view_state_manager'].overlay_coordinator = managers['overlay_coordinator'].handle_overlay_config_applied
             managers['view_state_manager'].roi_coordinator = lambda dataset: managers['roi_coordinator'].update_roi_statistics(
@@ -587,6 +613,21 @@ class DICOMViewerApp(QObject):
             hide_roi_graphics=managers['roi_coordinator'].hide_roi_graphics if hasattr(managers['roi_coordinator'], 'hide_roi_graphics') else None,
             hide_roi_statistics_overlays=managers['roi_coordinator'].hide_roi_statistics_overlays
         )
+        
+        # Fusion Coordinator
+        managers['fusion_coordinator'] = FusionCoordinator(
+            self.fusion_handler,
+            self.fusion_processor,
+            self.fusion_controls_widget,
+            get_current_studies=lambda: self.current_studies,
+            get_current_study_uid=lambda: self.current_study_uid,
+            get_current_series_uid=lambda: self.current_series_uid,
+            get_current_slice_index=lambda: self.current_slice_index,
+            request_display_update=lambda idx=idx: self._redisplay_subwindow_slice(idx, preserve_view=True)
+        )
+        
+        # Update slice display manager with fusion coordinator
+        managers['slice_display_manager'].fusion_coordinator = managers['fusion_coordinator']
         
         # Update view state manager callbacks
         managers['view_state_manager'].overlay_coordinator = managers['overlay_coordinator'].handle_overlay_config_applied
@@ -800,6 +841,30 @@ class DICOMViewerApp(QObject):
             self.intensity_projection_controls_widget.set_slice_count(
                 self.slice_display_manager.projection_slice_count
             )
+        
+        # Update fusion controls with focused subwindow's series
+        print(f"[RIGHT PANEL DEBUG] Checking fusion controls update")
+        print(f"[RIGHT PANEL DEBUG] hasattr current_studies: {hasattr(self, 'current_studies')}")
+        if hasattr(self, 'current_studies'):
+            print(f"[RIGHT PANEL DEBUG] current_studies is not None: {self.current_studies is not None}")
+            if self.current_studies:
+                print(f"[RIGHT PANEL DEBUG] current_studies count: {len(self.current_studies)}")
+        if hasattr(self, 'current_studies') and self.current_studies:
+            focused_subwindow = self.multi_window_layout.get_focused_subwindow()
+            print(f"[RIGHT PANEL DEBUG] focused_subwindow: {focused_subwindow is not None}")
+            if focused_subwindow:
+                subwindows = self.multi_window_layout.get_all_subwindows()
+                focused_idx = subwindows.index(focused_subwindow) if focused_subwindow in subwindows else -1
+                print(f"[RIGHT PANEL DEBUG] focused_idx: {focused_idx}")
+                print(f"[RIGHT PANEL DEBUG] focused_idx in subwindow_managers: {focused_idx in self.subwindow_managers}")
+                if focused_idx >= 0 and focused_idx in self.subwindow_managers:
+                    fusion_coordinator = self.subwindow_managers[focused_idx].get('fusion_coordinator')
+                    print(f"[RIGHT PANEL DEBUG] fusion_coordinator: {fusion_coordinator is not None}")
+                    if fusion_coordinator:
+                        print(f"[RIGHT PANEL DEBUG] Calling update_fusion_controls_series_list()")
+                        fusion_coordinator.update_fusion_controls_series_list()
+        else:
+            print(f"[RIGHT PANEL DEBUG] Skipping - no current_studies")
         
         # Update ROI list (will be updated when slice is displayed)
         # Update ROI statistics (will be updated when ROI is selected)
@@ -1096,6 +1161,10 @@ class DICOMViewerApp(QObject):
         
         Clears edited tags for the previous dataset before loading new one.
         """
+        print(f"[LOAD DEBUG] ============================================")
+        print(f"[LOAD DEBUG] _handle_load_first_slice called with {len(studies)} study/studies")
+        print(f"[LOAD DEBUG] ============================================")
+        
         # Clear edited tags for previous dataset if it exists
         if self.current_dataset is not None and self.tag_edit_history:
             self.tag_edit_history.clear_edited_tags(self.current_dataset)
@@ -1141,6 +1210,24 @@ class DICOMViewerApp(QObject):
             self.current_study_uid = first_slice_info['study_uid']
             self.current_series_uid = first_slice_info['series_uid']
             self.current_slice_index = first_slice_info['slice_index']
+            
+            # Update fusion controls with new studies
+            print(f"[MAIN DEBUG] Checking fusion controls update after loading files")
+            focused_subwindow = self.multi_window_layout.get_focused_subwindow()
+            print(f"[MAIN DEBUG] focused_subwindow: {focused_subwindow is not None}")
+            if focused_subwindow:
+                subwindows = self.multi_window_layout.get_all_subwindows()
+                focused_idx = subwindows.index(focused_subwindow) if focused_subwindow in subwindows else -1
+                print(f"[MAIN DEBUG] focused_idx: {focused_idx}")
+                print(f"[MAIN DEBUG] focused_idx in subwindow_managers: {focused_idx in self.subwindow_managers}")
+                if focused_idx >= 0 and focused_idx in self.subwindow_managers:
+                    fusion_coordinator = self.subwindow_managers[focused_idx].get('fusion_coordinator')
+                    print(f"[MAIN DEBUG] fusion_coordinator: {fusion_coordinator is not None}")
+                    if fusion_coordinator:
+                        print(f"[MAIN DEBUG] Calling update_fusion_controls_series_list()")
+                        fusion_coordinator.update_fusion_controls_series_list()
+                else:
+                    print(f"[MAIN DEBUG] No valid subwindow manager for fusion")
             
             # Clear stale subwindow data that references series not in current_studies
             # This prevents navigation failures when subwindows have outdated series references
@@ -1516,6 +1603,7 @@ class DICOMViewerApp(QObject):
         right_layout.addWidget(self.window_level_controls)
         right_layout.addWidget(self.zoom_display_widget)
         right_layout.addWidget(self.intensity_projection_controls_widget)
+        right_layout.addWidget(self.fusion_controls_widget)
         
         # Add stretch to push ROI sections to bottom
         right_layout.addStretch()

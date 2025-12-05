@@ -71,7 +71,7 @@ class ConfigManager:
             # Default: current minimal fields go to upper-left for all modalities
             "overlay_tags": {},  # Will store {modality: {corner: [tags]}}
             "window_width": 1200,
-            "window_height": 800,
+            "window_height": 700,
             "scroll_wheel_mode": "slice",  # slice or zoom
             "window_level_default": None,
             "window_width_default": None,
