@@ -1,6 +1,6 @@
 ## Pylinac Integration for Phantom QA (ACR Focus, CatPhan Aware)
 
-This document outlines how **pylinac** could be integrated into DICOM Viewer V3 to provide **automated QA analysis of phantoms**, with a primary focus on **ACR CT/CBCT phantoms** and secondary support for **CatPhan** models.
+This document outlines how **pylinac** could be integrated into DICOM Viewer V3 to provide **automated QA analysis of phantoms**, with a primary focus on **ACR CT/CBCT and MRI phantoms** and secondary support for **CatPhan** models.
 
 The goals are:
 - **Leverage pylinac** for robust, validated phantom analysis rather than re‑implementing QA physics.
@@ -19,6 +19,9 @@ Pylinac is an open‑source Python library for **radiation therapy and imaging Q
   - ACR CT phantom (via its CT modules; ACR is explicitly supported alongside CatPhan/Quart).
   - CatPhan models: 503, 504, 600, 604, 700.
   - Quart DVT and related CT phantoms.
+- **MRI phantoms**:
+  - ACR MRI phantom (via pylinac’s MRI QA / phantom analysis modules).
+  - Similar metric families to CT ACR (geometry, uniformity, low contrast, SNR), but on MR image data and MR‑specific acquisition protocols.
 - **Automatic phantom handling**:
   - Automatic phantom localization and registration (translational + rotational).
   - Robust handling of image orientation and offsets.
@@ -70,12 +73,13 @@ Because pylinac is also Python‑based, and DICOMViewerV3 already uses **pydicom
 
 From a dependency standpoint, integration mostly means **adding pylinac + SciPy/scikit‑image** to `requirements.txt`, which is low risk.
 
-### 2.2 ACR vs. CatPhan in this project
+### 2.2 ACR (CT and MRI) vs. CatPhan in this project
 
-- **Primary target: ACR CT phantoms**
-  - Common in clinical CT QA.
-  - Pylinac provides ACR support via its CT analysis modules (ACR, CatPhan, Quart share similar metric families: HU, geometry, contrast, uniformity).
-  - Focusing on ACR first aligns with a broad user base and offers clear, well‑recognized QA outcomes (e.g., ACR criteria).
+- **Primary target: ACR CT and MRI phantoms**
+  - **ACR CT**: Common in clinical CT QA, focusing on HU linearity, geometry, noise, and low‑contrast performance.
+  - **ACR MRI**: Widely used for MRI QA, with metrics such as geometric distortion, slice thickness, image uniformity, SNR, ghosting/artefacts, and low‑contrast object visibility.
+  - Pylinac provides ACR support via its CT and MRI analysis modules, and both align with well‑recognized ACR criteria.
+  - Focusing on ACR CT and MRI first gives broad coverage of cross‑sectional imaging QA using standardized phantoms.
 
 - **Secondary target: CatPhan**
   - Widely used in CBCT and CT QA.
@@ -107,12 +111,12 @@ This section gives the **high‑level phases**; details and PoC flows are in Sec
 
 ### Phase 1 – Proof‑of‑Concept (ACR‑First, Minimal UI)
 
-**Goal:** Demonstrate end‑to‑end ACR analysis from inside DICOMViewerV3 with minimal new UI.
+**Goal:** Demonstrate end‑to‑end ACR analysis (CT and MRI) from inside DICOMViewerV3 with minimal new UI.
 
 - Add optional dependencies (`pylinac`, `scipy`, `scikit-image`).
 - Add a **Tools → ACR Phantom Analysis (pylinac)** menu action.
-- For the currently loaded **ACR CT series**, or via a simple folder picker:
-  - Run pylinac ACR analysis.
+- For the currently loaded **ACR CT or MRI phantom series**, or via a simple folder picker:
+  - Run pylinac ACR analysis for the appropriate modality (CT vs MRI).
   - Show a modal dialog summarizing key metrics and a pass/fail indication.
   - Allow the user to **export a PDF report** produced by pylinac.
 - Keep scope intentionally limited:
@@ -150,11 +154,11 @@ This section gives the **high‑level phases**; details and PoC flows are in Sec
 
 ## 4. Proof‑of‑Concept Integration (Phase 1 – Detailed)
 
-This section gives a **more concrete design** for the initial ACR‑focused PoC, plus how CatPhan can be added with minimal extra work.
+This section gives a **more concrete design** for the initial ACR‑focused PoC (CT and MRI), plus how CatPhan can be added with minimal extra work.
 
 ### 4.1 Scope and Constraints
 
-- **Primary phantom**: ACR CT phantom.
+- **Primary phantoms**: ACR CT phantom and ACR MRI phantom.
 - **Secondary phantom (optional extension)**: CatPhan (e.g., `CatPhan504`).
 - **Data source**:
   - Preferred: The current series (set of DICOM files) already loaded in DICOMViewerV3.

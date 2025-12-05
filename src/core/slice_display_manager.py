@@ -72,7 +72,8 @@ class SliceDisplayManager:
         roi_statistics_panel: Optional[ROIStatisticsPanel] = None,
         update_roi_statistics_overlays_callback: Optional[Callable] = None,
         annotation_manager: Optional[AnnotationManager] = None,
-        dicom_organizer: Optional[DICOMOrganizer] = None
+        dicom_organizer: Optional[DICOMOrganizer] = None,
+        fusion_coordinator = None
     ):
         """
         Initialize the slice display manager.
@@ -94,6 +95,7 @@ class SliceDisplayManager:
             roi_statistics_panel: Optional ROI statistics panel for updating statistics
             annotation_manager: Optional annotation manager for Presentation State and Key Object annotations
             dicom_organizer: Optional DICOM organizer for accessing Presentation States and Key Objects
+            fusion_coordinator: Optional fusion coordinator for image fusion
         """
         self.dicom_processor = dicom_processor
         self.image_viewer = image_viewer
@@ -112,6 +114,7 @@ class SliceDisplayManager:
         self.update_roi_statistics_overlays_callback = update_roi_statistics_overlays_callback
         self.annotation_manager = annotation_manager
         self.dicom_organizer = dicom_organizer
+        self.fusion_coordinator = fusion_coordinator
         
         # Current data context
         self.current_studies: dict = {}
@@ -669,6 +672,23 @@ class SliceDisplayManager:
                     apply_inversion = series_inverted
             # When preserve_view=True (scrolling), apply_inversion stays None
             # This allows set_image() to detect it's a new slice and store new original_image
+            
+            # Apply fusion if enabled
+            if self.fusion_coordinator is not None and image is not None:
+                try:
+                    # Get base datasets for current series
+                    base_datasets = current_studies.get(current_study_uid, {}).get(current_series_uid, [])
+                    if base_datasets:
+                        fused_image = self.fusion_coordinator.get_fused_image(
+                            image,
+                            base_datasets,
+                            current_slice_index
+                        )
+                        if fused_image is not None:
+                            image = fused_image
+                except Exception as e:
+                    print(f"Error applying fusion: {e}")
+                    # Continue with non-fused image
             
             # Set image in viewer - preserve zoom/pan if same series
             # print(f"[DISPLAY] About to set image in viewer...")
