@@ -18,6 +18,7 @@ Requirements:
     - numpy for array operations
 """
 
+import time
 import numpy as np
 from typing import Optional, List, Tuple, Dict
 from pydicom.dataset import Dataset
@@ -45,6 +46,11 @@ class FusionHandler:
         
         # Cache for slice locations
         self._slice_location_cache: Dict[str, List[Tuple[int, float]]] = {}
+        # Cache for spatial alignment per (base, overlay) series pair
+        self._alignment_cache: Dict[
+            Tuple[str, str],
+            Dict[str, Optional[Tuple[float, float]]]
+        ] = {}
     
     def set_base_series(self, series_uid: str) -> None:
         """
@@ -65,6 +71,48 @@ class FusionHandler:
         self.overlay_series_uid = series_uid
         # Clear cache when overlay series changes
         self._slice_location_cache.clear()
+    
+    def set_alignment(
+        self,
+        base_series_uid: Optional[str],
+        overlay_series_uid: Optional[str],
+        scale: Optional[Tuple[float, float]],
+        offset: Optional[Tuple[float, float]]
+    ) -> None:
+        """Store alignment info for a base/overlay pair."""
+        if not base_series_uid or not overlay_series_uid:
+            return
+        self._alignment_cache[(base_series_uid, overlay_series_uid)] = {
+            'scale': scale,
+            'offset': offset,
+            'timestamp': time.time(),
+        }
+    
+    def get_alignment(
+        self,
+        base_series_uid: Optional[str],
+        overlay_series_uid: Optional[str]
+    ) -> Optional[Dict[str, Optional[Tuple[float, float]]]]:
+        """Retrieve cached alignment for a base/overlay pair."""
+        if not base_series_uid or not overlay_series_uid:
+            return None
+        # Ignore self-pair cache to force recalculation for new overlays
+        if base_series_uid == overlay_series_uid:
+            return None
+        return self._alignment_cache.get((base_series_uid, overlay_series_uid))
+    
+    def clear_alignment_cache(self, series_uid: Optional[str] = None) -> None:
+        """Clear cached alignment data completely or for a specific series."""
+        if series_uid is None:
+            self._alignment_cache.clear()
+            return
+        
+        keys_to_delete = [
+            key for key in self._alignment_cache
+            if series_uid in key
+        ]
+        for key in keys_to_delete:
+            del self._alignment_cache[key]
     
     def check_frame_of_reference_match(
         self,

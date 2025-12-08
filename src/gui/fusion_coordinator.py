@@ -19,6 +19,7 @@ Requirements:
 """
 
 from typing import Optional, Callable, Dict, List, Tuple
+from collections.abc import Sequence
 import numpy as np
 from PIL import Image
 from pydicom.dataset import Dataset
@@ -79,11 +80,23 @@ class FusionCoordinator:
         
         # Track last auto-detection to avoid repeated prompts
         self._last_auto_detection_study = ""
+        self._last_base_display = ""
+    
+    def set_base_series(self, series_uid: str) -> None:
+        """Set base series programmatically (read-only in UI)."""
+        if not series_uid:
+            return
+        if self.fusion_handler.base_series_uid == series_uid:
+            return
+        self.fusion_handler.set_base_series(series_uid)
+        self._update_base_display(series_uid)
+        self.fusion_controls.reset_user_modified_offset()
+        if not self._apply_cached_alignment(reset_user_override=True):
+            self._update_spatial_alignment()
     
     def _connect_signals(self) -> None:
         """Connect fusion control signals to handlers."""
         self.fusion_controls.fusion_enabled_changed.connect(self.handle_fusion_enabled_changed)
-        self.fusion_controls.base_series_changed.connect(self.handle_base_series_changed)
         self.fusion_controls.overlay_series_changed.connect(self.handle_overlay_series_changed)
         self.fusion_controls.opacity_changed.connect(self.handle_opacity_changed)
         self.fusion_controls.threshold_changed.connect(self.handle_threshold_changed)
@@ -106,8 +119,10 @@ class FusionCoordinator:
                 self.fusion_controls.set_status("Please select base and overlay series", is_error=True)
                 return
             
-            # Update spatial alignment when first enabling fusion
-            self._update_spatial_alignment()
+            # Apply cached alignment if available, otherwise calculate now
+            applied_cached_alignment = self._apply_cached_alignment(reset_user_override=True)
+            if not applied_cached_alignment:
+                self._update_spatial_alignment()
             
             # Check Frame of Reference compatibility
             studies = self.get_current_studies()
@@ -129,22 +144,6 @@ class FusionCoordinator:
         # Request display update
         self.request_display_update()
     
-    def handle_base_series_changed(self, series_uid: str) -> None:
-        """
-        Handle base series selection change.
-        
-        Args:
-            series_uid: New base series UID
-        """
-        self.fusion_handler.set_base_series(series_uid)
-        
-        # Update spatial alignment parameters
-        self._update_spatial_alignment()
-        
-        # Re-validate if fusion is enabled
-        if self.fusion_handler.fusion_enabled:
-            self.handle_fusion_enabled_changed(True)
-    
     def handle_overlay_series_changed(self, series_uid: str) -> None:
         """
         Handle overlay series selection change.
@@ -152,7 +151,21 @@ class FusionCoordinator:
         Args:
             series_uid: New overlay series UID
         """
+        current_base_uid = self.fusion_handler.base_series_uid
+        previous_overlay_uid = self.fusion_handler.overlay_series_uid
+        
+        if current_base_uid and series_uid == current_base_uid:
+            self.fusion_controls.set_status(
+                "Overlay series must differ from base", is_error=True
+            )
+            self.fusion_controls.revert_overlay_selection(
+                preferred_uid=previous_overlay_uid,
+                exclude_uid=current_base_uid
+            )
+            return
+        
         self.fusion_handler.set_overlay_series(series_uid)
+        self.fusion_controls.reset_user_modified_offset()
         
         # Auto-set overlay window/level based on overlay series modality
         studies = self.get_current_studies()
@@ -183,22 +196,21 @@ class FusionCoordinator:
                     self.fusion_controls.set_overlay_window_level(10.0, 5.0)
                 else:
                     # Use DICOM tags or calculate from data
-                    window_center = getattr(datasets[0], 'WindowCenter', None)
-                    window_width = getattr(datasets[0], 'WindowWidth', None)
+                    window_center = self._extract_first_float(
+                        getattr(datasets[0], 'WindowCenter', None)
+                    )
+                    window_width = self._extract_first_float(
+                        getattr(datasets[0], 'WindowWidth', None)
+                    )
                     
                     if window_center is not None and window_width is not None:
-                        # Handle multiple values (take first)
-                        if isinstance(window_center, (list, tuple)):
-                            window_center = window_center[0]
-                        if isinstance(window_width, (list, tuple)):
-                            window_width = window_width[0]
-                        
                         self.fusion_controls.set_overlay_window_level(
-                            float(window_width), float(window_center)
+                            window_width, window_center
                         )
         
         # Update spatial alignment parameters
-        self._update_spatial_alignment()
+        if not self._apply_cached_alignment(reset_user_override=True):
+            self._update_spatial_alignment()
         
         # Re-validate if fusion is enabled
         if self.fusion_handler.fusion_enabled:
@@ -216,6 +228,78 @@ class FusionCoordinator:
         # Request display update if fusion is enabled
         if self.fusion_handler.fusion_enabled:
             self.request_display_update()
+    
+    def _apply_cached_alignment(self, reset_user_override: bool = False) -> bool:
+        """Apply cached scaling/offset values for current base/overlay pair."""
+        if self.fusion_handler.base_series_uid == self.fusion_handler.overlay_series_uid:
+            return False
+        
+        alignment = self.fusion_handler.get_alignment(
+            self.fusion_handler.base_series_uid,
+            self.fusion_handler.overlay_series_uid
+        )
+        if not alignment:
+            return False
+        
+        scale = alignment.get('scale')
+        offset = alignment.get('offset')
+        
+        if scale and all(value is not None for value in scale):
+            self.fusion_controls.set_scaling_factors(scale[0], scale[1])
+        
+        if reset_user_override:
+            self.fusion_controls.reset_user_modified_offset()
+        
+        if offset and not self.fusion_controls.has_user_modified_offset():
+            self.fusion_controls.set_calculated_offset(offset[0], offset[1])
+        
+        return True
+    
+    def _update_base_display(self, base_uid: str) -> None:
+        """Update the read-only base display text."""
+        display_name = "Not set"
+        if base_uid:
+            studies = self.get_current_studies()
+            study_uid = self.get_current_study_uid()
+            if study_uid in studies and base_uid in studies[study_uid]:
+                datasets = studies[study_uid][base_uid]
+                if datasets:
+                    first_ds = datasets[0]
+                    series_number = getattr(first_ds, 'SeriesNumber', None)
+                    series_desc = getattr(first_ds, 'SeriesDescription', '')
+                    modality = getattr(first_ds, 'Modality', '')
+                    parts = []
+                    if series_number is not None:
+                        parts.append(f"S{series_number}")
+                    if modality:
+                        parts.append(modality)
+                    if series_desc:
+                        parts.append(series_desc)
+                    if parts:
+                        display_name = " - ".join(parts)
+                    else:
+                        display_name = base_uid[:20]
+            else:
+                display_name = base_uid[:20]
+        
+        if display_name != self._last_base_display:
+            self.fusion_controls.set_base_display(display_name)
+            self._last_base_display = display_name
+    
+    def _extract_first_float(self, value) -> Optional[float]:
+        """Extract first numeric value from DICOM tag (handles MultiValue)."""
+        if value is None:
+            return None
+        
+        if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+            if len(value) == 0:
+                return None
+            value = value[0]
+        
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
     
     def handle_threshold_changed(self, threshold: float) -> None:
         """
@@ -402,11 +486,15 @@ class FusionCoordinator:
         print(f"  base_pixel_spacing: {base_pixel_spacing}")
         print(f"  overlay_pixel_spacing: {overlay_pixel_spacing}")
         
+        stored_scale: Optional[Tuple[float, float]] = None
+        stored_offset: Optional[Tuple[float, float]] = None
+        
         # Calculate and display scaling factors
         if base_pixel_spacing and overlay_pixel_spacing:
             scale_x = overlay_pixel_spacing[1] / base_pixel_spacing[1]  # column spacing
             scale_y = overlay_pixel_spacing[0] / base_pixel_spacing[0]  # row spacing
             print(f"  scale_x: {scale_x:.4f}, scale_y: {scale_y:.4f}")
+            stored_scale = (scale_x, scale_y)
             self.fusion_controls.set_scaling_factors(scale_x, scale_y)
         else:
             # No pixel spacing available
@@ -421,18 +509,31 @@ class FusionCoordinator:
             
             if offset:
                 offset_x, offset_y = offset
+                stored_offset = (offset_x, offset_y)
                 print(f"  calculated offset: ({offset_x:.2f}, {offset_y:.2f}) pixels")
                 print(f"  base ImagePositionPatient: {self.fusion_handler.get_image_position_patient(base_ds)}")
                 print(f"  overlay ImagePositionPatient: {self.fusion_handler.get_image_position_patient(overlay_ds)}")
+                self.fusion_controls.reset_user_modified_offset()
                 self.fusion_controls.set_calculated_offset(offset_x, offset_y)
             else:
                 print(f"  offset calculation failed - no ImagePositionPatient")
-                # No image position available
+                stored_offset = (0.0, 0.0)
+                self.fusion_controls.reset_user_modified_offset()
                 self.fusion_controls.set_calculated_offset(0.0, 0.0)
                 if not self.fusion_controls.status_label.text().startswith("Status: Warning"):
                     self.fusion_controls.set_status("Warning: Image position not available", is_error=True)
         else:
+            stored_offset = (0.0, 0.0)
+            self.fusion_controls.reset_user_modified_offset()
             self.fusion_controls.set_calculated_offset(0.0, 0.0)
+        
+        if self.fusion_handler.base_series_uid != self.fusion_handler.overlay_series_uid:
+            self.fusion_handler.set_alignment(
+                self.fusion_handler.base_series_uid,
+                self.fusion_handler.overlay_series_uid,
+                stored_scale,
+                stored_offset
+            )
     
     def update_fusion_controls_series_list(self) -> None:
         """Update fusion controls with available series."""
@@ -455,17 +556,16 @@ class FusionCoordinator:
             print(f"[FUSION DEBUG]     - {name}")
         
         # Update controls
-        current_base = self.fusion_handler.base_series_uid or ""
         current_overlay = self.fusion_handler.overlay_series_uid or ""
         
         self.fusion_controls.update_series_lists(
             series_list,
-            current_base_uid=current_base,
             current_overlay_uid=current_overlay
         )
+        self._update_base_display(self.fusion_handler.base_series_uid or "")
         
         # DEBUG
-        print(f"[FUSION DEBUG]   Dropdowns updated. Base items: {self.fusion_controls.base_series_combo.count()}, Overlay items: {self.fusion_controls.overlay_series_combo.count()}")
+        print(f"[FUSION DEBUG]   Dropdown updated. Overlay items: {self.fusion_controls.overlay_series_combo.count()}")
         
         # Auto-detect compatible series if enabled
         if study_uid != self._last_auto_detection_study:
@@ -476,7 +576,8 @@ class FusionCoordinator:
         # (This handles the case where series list is updated and selections exist)
         if self.fusion_handler.base_series_uid and self.fusion_handler.overlay_series_uid:
             print(f"[FUSION DEBUG] update_fusion_controls_series_list: Calling _update_spatial_alignment")
-            self._update_spatial_alignment()
+            if not self._apply_cached_alignment(reset_user_override=True):
+                self._update_spatial_alignment()
     
     def _auto_detect_fusion_candidates(
         self,
@@ -562,7 +663,6 @@ class FusionCoordinator:
                     self.get_current_studies(),
                     self.get_current_study_uid()
                 ),
-                current_base_uid=base_uid,
                 current_overlay_uid=overlay_uid
             )
             

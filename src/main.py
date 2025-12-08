@@ -30,7 +30,16 @@ from pathlib import Path
 src_dir = Path(__file__).parent
 sys.path.insert(0, str(src_dir))
 
-from PySide6.QtWidgets import QApplication, QMessageBox, QStyleFactory, QFileDialog
+from PySide6.QtWidgets import (
+    QApplication,
+    QMessageBox,
+    QStyleFactory,
+    QFileDialog,
+    QTabWidget,
+    QWidget,
+    QVBoxLayout,
+    QStackedWidget,
+)
 from PySide6.QtCore import Qt, QPointF, QObject, QTimer, QRectF, QSize
 from PySide6.QtGui import QKeyEvent
 from typing import Optional, Dict
@@ -187,9 +196,9 @@ class DICOMViewerApp(QObject):
         self.intensity_projection_controls_widget = IntensityProjectionControlsWidget()
         
         # Initialize fusion components
-        self.fusion_handler = FusionHandler()
         self.fusion_processor = FusionProcessor()
-        self.fusion_controls_widget = FusionControlsWidget()
+        self.fusion_controls_stack: Optional[QStackedWidget] = None
+        self.fusion_controls_widgets: Dict[int, FusionControlsWidget] = {}
         
         # Initialize overlay manager with config settings
         font_size = self.config_manager.get_overlay_font_size()
@@ -214,6 +223,15 @@ class DICOMViewerApp(QObject):
         # Initialize subwindow data structure (needed by _initialize_subwindow_managers)
         # Structure: {subwindow_index: {current_dataset, current_slice_index, current_series_uid, current_study_uid}}
         self.subwindow_data: Dict[int, Dict] = {}
+        
+        # Legacy current data (for backward compatibility, points to focused subwindow)
+        # Initialize before any methods that reference these attributes run
+        self.current_datasets: list = []
+        self.current_studies: dict = {}
+        self.current_slice_index = 0
+        self.current_series_uid = ""
+        self.current_study_uid = ""
+        self.current_dataset: Optional[Dataset] = None
         
         # Initialize per-subwindow managers for all subwindows
         self._initialize_subwindow_managers()
@@ -276,14 +294,6 @@ class DICOMViewerApp(QObject):
         if hasattr(self, 'roi_coordinator'):
             # print(f"DEBUG: roi_coordinator is None: {self.roi_coordinator is None}")
             pass
-        
-        # Legacy current data (for backward compatibility, points to focused subwindow)
-        self.current_datasets: list = []
-        self.current_studies: dict = {}
-        self.current_slice_index = 0
-        self.current_series_uid = ""
-        self.current_study_uid = ""
-        self.current_dataset: Optional[Dataset] = None
         
         # Initialize handler classes (will use focused subwindow's managers)
         self._initialize_handlers()
@@ -445,20 +455,8 @@ class DICOMViewerApp(QObject):
                 hide_roi_statistics_overlays=managers['roi_coordinator'].hide_roi_statistics_overlays
             )
             
-            # Fusion Coordinator
-            managers['fusion_coordinator'] = FusionCoordinator(
-                self.fusion_handler,
-                self.fusion_processor,
-                self.fusion_controls_widget,
-                get_current_studies=lambda: self.current_studies,
-                get_current_study_uid=lambda: self.current_study_uid,
-                get_current_series_uid=lambda: self.current_series_uid,
-                get_current_slice_index=lambda: self.current_slice_index,
-                request_display_update=lambda idx=idx: self._redisplay_subwindow_slice(idx, preserve_view=True)
-            )
-            
-            # Update slice display manager with fusion coordinator
-            managers['slice_display_manager'].fusion_coordinator = managers['fusion_coordinator']
+            # Fusion components
+            self._attach_fusion_components_to_subwindow(idx, managers)
             
             # Update view state manager callbacks
             managers['view_state_manager'].overlay_coordinator = managers['overlay_coordinator'].handle_overlay_config_applied
@@ -605,8 +603,8 @@ class DICOMViewerApp(QObject):
             image_viewer,
             get_current_dataset=lambda idx=idx: self._get_subwindow_dataset(idx),
             get_current_studies=lambda: self.current_studies,
-            get_current_study_uid=lambda idx=idx: self._get_subwindow_study_uid(idx),
-            get_current_series_uid=lambda idx=idx: self._get_subwindow_series_uid(idx),
+            get_current_study_uid=lambda idx=idx: self._get_fusion_study_uid(idx),
+            get_current_series_uid=lambda idx=idx: self._get_fusion_series_uid(idx),
             get_current_slice_index=lambda idx=idx: self._get_subwindow_slice_index(idx),
             hide_measurement_labels=managers['measurement_coordinator'].hide_measurement_labels,
             hide_measurement_graphics=managers['measurement_coordinator'].hide_measurement_graphics,
@@ -614,20 +612,8 @@ class DICOMViewerApp(QObject):
             hide_roi_statistics_overlays=managers['roi_coordinator'].hide_roi_statistics_overlays
         )
         
-        # Fusion Coordinator
-        managers['fusion_coordinator'] = FusionCoordinator(
-            self.fusion_handler,
-            self.fusion_processor,
-            self.fusion_controls_widget,
-            get_current_studies=lambda: self.current_studies,
-            get_current_study_uid=lambda: self.current_study_uid,
-            get_current_series_uid=lambda: self.current_series_uid,
-            get_current_slice_index=lambda: self.current_slice_index,
-            request_display_update=lambda idx=idx: self._redisplay_subwindow_slice(idx, preserve_view=True)
-        )
-        
-        # Update slice display manager with fusion coordinator
-        managers['slice_display_manager'].fusion_coordinator = managers['fusion_coordinator']
+        # Fusion components
+        self._attach_fusion_components_to_subwindow(idx, managers)
         
         # Update view state manager callbacks
         managers['view_state_manager'].overlay_coordinator = managers['overlay_coordinator'].handle_overlay_config_applied
@@ -666,6 +652,71 @@ class DICOMViewerApp(QObject):
         
         # Set pan mode
         image_viewer.set_mouse_mode("pan")
+    
+    def _attach_fusion_components_to_subwindow(self, idx: int, managers: Dict) -> None:
+        """Create fusion handler, controls, and coordinator for a subwindow."""
+        fusion_handler = FusionHandler()
+        fusion_controls_widget = FusionControlsWidget()
+        managers['fusion_handler'] = fusion_handler
+        managers['fusion_controls_widget'] = fusion_controls_widget
+        
+        self._register_fusion_controls_widget(idx, fusion_controls_widget)
+        
+        fusion_coordinator = FusionCoordinator(
+            fusion_handler,
+            self.fusion_processor,
+            fusion_controls_widget,
+            get_current_studies=lambda: self.current_studies,
+            get_current_study_uid=lambda idx=idx: self._get_fusion_study_uid(idx),
+            get_current_series_uid=lambda idx=idx: self._get_fusion_series_uid(idx),
+            get_current_slice_index=lambda idx=idx: self._get_subwindow_slice_index(idx),
+            request_display_update=lambda idx=idx: self._redisplay_subwindow_slice(idx, preserve_view=True)
+        )
+        managers['fusion_coordinator'] = fusion_coordinator
+        managers['slice_display_manager'].fusion_coordinator = fusion_coordinator
+    
+    def _get_fusion_study_uid(self, idx: int) -> str:
+        """Return subwindow study UID or fall back to global current_study_uid."""
+        subwindow_uid = self._get_subwindow_study_uid(idx)
+        if subwindow_uid:
+            return subwindow_uid
+        return getattr(self, 'current_study_uid', '') or ''
+    
+    def _get_fusion_series_uid(self, idx: int) -> str:
+        """Return subwindow series UID or fall back to global current_series_uid."""
+        subwindow_uid = self._get_subwindow_series_uid(idx)
+        if subwindow_uid:
+            return subwindow_uid
+        return getattr(self, 'current_series_uid', '') or ''
+    
+    def _register_fusion_controls_widget(self, idx: int, widget: FusionControlsWidget) -> None:
+        """Add a fusion controls widget to the stacked container."""
+        if self.fusion_controls_stack is None:
+            return
+        
+        existing_widget = self.fusion_controls_widgets.get(idx)
+        if existing_widget:
+            stack_index = self.fusion_controls_stack.indexOf(existing_widget)
+            if stack_index != -1:
+                self.fusion_controls_stack.removeWidget(existing_widget)
+            existing_widget.setParent(None)
+        
+        self.fusion_controls_widgets[idx] = widget
+        self.fusion_controls_stack.addWidget(widget)
+        
+        if self.focused_subwindow_index == idx or self.fusion_controls_stack.currentWidget() is None:
+            self.fusion_controls_stack.setCurrentWidget(widget)
+    
+    def _show_fusion_controls_for_index(self, idx: int) -> None:
+        """Show fusion controls widget for the specified subwindow."""
+        if self.fusion_controls_stack is None:
+            return
+        
+        widget = self.fusion_controls_widgets.get(idx)
+        if widget:
+            self.fusion_controls_stack.setCurrentWidget(widget)
+        elif self.fusion_controls_stack.count() > 0:
+            self.fusion_controls_stack.setCurrentIndex(0)
     
     def _get_subwindow_dataset(self, idx: int) -> Optional[Dataset]:
         """Get current dataset for a subwindow."""
@@ -723,6 +774,11 @@ class DICOMViewerApp(QObject):
             self.measurement_tool = managers['measurement_tool']
             self.crosshair_manager = managers.get('crosshair_manager')
             self.overlay_manager = managers['overlay_manager']
+            self._show_fusion_controls_for_index(focused_idx)
+            # Update fusion base series to match focused subwindow
+            fusion_coordinator = managers.get('fusion_coordinator')
+            if fusion_coordinator and self.current_series_uid:
+                fusion_coordinator.set_base_series(self.current_series_uid)
         
         # Store previous image_viewer to disconnect signal
         previous_image_viewer = self.image_viewer if hasattr(self, 'image_viewer') else None
@@ -799,6 +855,9 @@ class DICOMViewerApp(QObject):
             # print(f"[DEBUG-WL]   ERROR: image_viewer is None")
             return
         
+        # Ensure correct fusion controls widget is visible
+        self._show_fusion_controls_for_index(getattr(self, 'focused_subwindow_index', 0))
+        
         # Update zoom display
         self.zoom_display_widget.update_zoom(self.image_viewer.current_zoom)
         
@@ -843,28 +902,12 @@ class DICOMViewerApp(QObject):
             )
         
         # Update fusion controls with focused subwindow's series
-        print(f"[RIGHT PANEL DEBUG] Checking fusion controls update")
-        print(f"[RIGHT PANEL DEBUG] hasattr current_studies: {hasattr(self, 'current_studies')}")
-        if hasattr(self, 'current_studies'):
-            print(f"[RIGHT PANEL DEBUG] current_studies is not None: {self.current_studies is not None}")
-            if self.current_studies:
-                print(f"[RIGHT PANEL DEBUG] current_studies count: {len(self.current_studies)}")
-        if hasattr(self, 'current_studies') and self.current_studies:
-            focused_subwindow = self.multi_window_layout.get_focused_subwindow()
-            print(f"[RIGHT PANEL DEBUG] focused_subwindow: {focused_subwindow is not None}")
-            if focused_subwindow:
-                subwindows = self.multi_window_layout.get_all_subwindows()
-                focused_idx = subwindows.index(focused_subwindow) if focused_subwindow in subwindows else -1
-                print(f"[RIGHT PANEL DEBUG] focused_idx: {focused_idx}")
-                print(f"[RIGHT PANEL DEBUG] focused_idx in subwindow_managers: {focused_idx in self.subwindow_managers}")
-                if focused_idx >= 0 and focused_idx in self.subwindow_managers:
-                    fusion_coordinator = self.subwindow_managers[focused_idx].get('fusion_coordinator')
-                    print(f"[RIGHT PANEL DEBUG] fusion_coordinator: {fusion_coordinator is not None}")
-                    if fusion_coordinator:
-                        print(f"[RIGHT PANEL DEBUG] Calling update_fusion_controls_series_list()")
-                        fusion_coordinator.update_fusion_controls_series_list()
-        else:
-            print(f"[RIGHT PANEL DEBUG] Skipping - no current_studies")
+        if getattr(self, 'current_studies', None):
+            focused_idx = getattr(self, 'focused_subwindow_index', None)
+            if focused_idx is not None and focused_idx in self.subwindow_managers:
+                fusion_coordinator = self.subwindow_managers[focused_idx].get('fusion_coordinator')
+                if fusion_coordinator:
+                    fusion_coordinator.update_fusion_controls_series_list()
         
         # Update ROI list (will be updated when slice is displayed)
         # Update ROI statistics (will be updated when ROI is selected)
@@ -1206,6 +1249,8 @@ class DICOMViewerApp(QObject):
         
         first_slice_info = self.file_operations_handler.load_first_slice(studies)
         if first_slice_info:
+            if hasattr(self, 'fusion_handler'):
+                self.fusion_handler.clear_alignment_cache()
             self.current_studies = studies
             self.current_study_uid = first_slice_info['study_uid']
             self.current_series_uid = first_slice_info['series_uid']
@@ -1224,6 +1269,7 @@ class DICOMViewerApp(QObject):
                     fusion_coordinator = self.subwindow_managers[focused_idx].get('fusion_coordinator')
                     print(f"[MAIN DEBUG] fusion_coordinator: {fusion_coordinator is not None}")
                     if fusion_coordinator:
+                        fusion_coordinator.set_base_series(self.current_series_uid)
                         print(f"[MAIN DEBUG] Calling update_fusion_controls_series_list()")
                         fusion_coordinator.update_fusion_controls_series_list()
                 else:
@@ -1581,36 +1627,47 @@ class DICOMViewerApp(QObject):
         # Add multi-window layout to center panel
         center_layout = self.main_window.center_panel.layout()
         if center_layout is None:
-            from PySide6.QtWidgets import QVBoxLayout
             center_layout = QVBoxLayout(self.main_window.center_panel)
         center_layout.addWidget(self.multi_window_layout)
         
         # Add cine controls widget and metadata panel to left panel
         left_layout = self.main_window.left_panel.layout()
         if left_layout is None:
-            from PySide6.QtWidgets import QVBoxLayout
             left_layout = QVBoxLayout(self.main_window.left_panel)
         # Add cine controls widget first (above metadata panel) with stretch 0
         left_layout.addWidget(self.cine_controls_widget, 0)
         # Add metadata panel below cine controls with stretch 1 to make it ~1.5x its current height
         left_layout.addWidget(self.metadata_panel, 1)
         
-        # Add controls to right panel
+        # Add controls to right panel via tabbed layout for clarity
         right_layout = self.main_window.right_panel.layout()
         if right_layout is None:
-            from PySide6.QtWidgets import QVBoxLayout
             right_layout = QVBoxLayout(self.main_window.right_panel)
-        right_layout.addWidget(self.window_level_controls)
-        right_layout.addWidget(self.zoom_display_widget)
-        right_layout.addWidget(self.intensity_projection_controls_widget)
-        right_layout.addWidget(self.fusion_controls_widget)
+
+        self.right_panel_tabs = QTabWidget()
+        self.right_panel_tabs.setObjectName("right_panel_tabs")
+        right_layout.addWidget(self.right_panel_tabs)
+
+        # Window/Zoom/ROI tab: classic controls plus ROI panels
+        window_roi_tab = QWidget()
+        window_roi_layout = QVBoxLayout(window_roi_tab)
+        window_roi_layout.addWidget(self.window_level_controls)
+        window_roi_layout.addWidget(self.zoom_display_widget)
+        window_roi_layout.addStretch()
+        window_roi_layout.addWidget(self.roi_list_panel)
+        window_roi_layout.addWidget(self.roi_statistics_panel)
+        self.right_panel_tabs.addTab(window_roi_tab, "Window/Zoom/ROI")
+
+        # Combine/Fusion tab: combine slices + fusion widgets
+        combine_fusion_tab = QWidget()
+        combine_fusion_layout = QVBoxLayout(combine_fusion_tab)
+        combine_fusion_layout.addWidget(self.intensity_projection_controls_widget)
         
-        # Add stretch to push ROI sections to bottom
-        right_layout.addStretch()
-        
-        # ROI list panel (positioned just above ROI Statistics)
-        right_layout.addWidget(self.roi_list_panel)
-        right_layout.addWidget(self.roi_statistics_panel)
+        self.fusion_controls_stack = QStackedWidget()
+        self.fusion_controls_stack.setObjectName("fusion_controls_stack")
+        combine_fusion_layout.addWidget(self.fusion_controls_stack)
+        combine_fusion_layout.addStretch()
+        self.right_panel_tabs.addTab(combine_fusion_tab, "Combine/Fusion")
         
         # Add series navigator to main window
         self.main_window.set_series_navigator(self.series_navigator)
