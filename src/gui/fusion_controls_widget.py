@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                                 QCheckBox, QComboBox, QSlider, QGroupBox,
                                 QSpinBox, QSizePolicy)
 from PySide6.QtCore import Qt, Signal
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 
 class FusionControlsWidget(QWidget):
@@ -28,7 +28,8 @@ class FusionControlsWidget(QWidget):
     
     Features:
     - Enable/disable fusion
-    - Base and overlay series selection
+    - Read-only base series display
+    - Overlay series selection
     - Opacity control
     - Threshold control
     - Colormap selection
@@ -38,7 +39,6 @@ class FusionControlsWidget(QWidget):
     
     # Signals
     fusion_enabled_changed = Signal(bool)  # Emitted when fusion is enabled/disabled
-    base_series_changed = Signal(str)  # Emitted when base series changes (series_uid)
     overlay_series_changed = Signal(str)  # Emitted when overlay series changes (series_uid)
     opacity_changed = Signal(float)  # Emitted when opacity changes (0.0-1.0)
     threshold_changed = Signal(float)  # Emitted when threshold changes (0.0-1.0)
@@ -80,14 +80,14 @@ class FusionControlsWidget(QWidget):
         self.enable_checkbox.setChecked(False)
         group_layout.addWidget(self.enable_checkbox)
         
-        # Base series selection
+        # Base series display (read-only)
         base_label = QLabel("Base Image (Anatomical):")
         base_label.setStyleSheet("font-weight: bold;")
         group_layout.addWidget(base_label)
         
-        self.base_series_combo = QComboBox()
-        self.base_series_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        group_layout.addWidget(self.base_series_combo)
+        self.base_series_display = QLabel("Not set")
+        self.base_series_display.setStyleSheet("font-style: italic;")
+        group_layout.addWidget(self.base_series_display)
         
         # Overlay series selection
         overlay_label = QLabel("Overlay Image (Functional):")
@@ -266,7 +266,6 @@ class FusionControlsWidget(QWidget):
     def _connect_signals(self) -> None:
         """Connect internal signals."""
         self.enable_checkbox.toggled.connect(self._on_enable_toggled)
-        self.base_series_combo.currentIndexChanged.connect(self._on_base_series_changed)
         self.overlay_series_combo.currentIndexChanged.connect(self._on_overlay_series_changed)
         self.opacity_slider.valueChanged.connect(self._on_opacity_changed)
         self.threshold_slider.valueChanged.connect(self._on_threshold_changed)
@@ -281,13 +280,6 @@ class FusionControlsWidget(QWidget):
         self._set_controls_enabled(checked)
         if not self._updating:
             self.fusion_enabled_changed.emit(checked)
-    
-    def _on_base_series_changed(self, index: int) -> None:
-        """Handle base series selection change."""
-        if not self._updating and index >= 0:
-            series_uid = self.base_series_combo.currentData()
-            if series_uid:
-                self.base_series_changed.emit(series_uid)
     
     def _on_overlay_series_changed(self, index: int) -> None:
         """Handle overlay series selection change."""
@@ -353,7 +345,6 @@ class FusionControlsWidget(QWidget):
         Args:
             enabled: True to enable controls, False to disable
         """
-        self.base_series_combo.setEnabled(enabled)
         self.overlay_series_combo.setEnabled(enabled)
         self.opacity_slider.setEnabled(enabled)
         self.threshold_slider.setEnabled(enabled)
@@ -371,7 +362,6 @@ class FusionControlsWidget(QWidget):
     def update_series_lists(
         self,
         series_list: List[Tuple[str, str]],
-        current_base_uid: str = "",
         current_overlay_uid: str = ""
     ) -> None:
         """
@@ -379,7 +369,6 @@ class FusionControlsWidget(QWidget):
         
         Args:
             series_list: List of (series_uid, display_name) tuples
-            current_base_uid: Current base series UID to select
             current_overlay_uid: Current overlay series UID to select
         """
         # DEBUG
@@ -388,30 +377,17 @@ class FusionControlsWidget(QWidget):
         self._updating = True
         
         # Save current selections
-        prev_base = self.base_series_combo.currentData()
         prev_overlay = self.overlay_series_combo.currentData()
         
         # Clear existing items
-        self.base_series_combo.clear()
         self.overlay_series_combo.clear()
         
         print(f"[FUSION CONTROLS DEBUG] Cleared dropdowns, now adding {len(series_list)} items")
         
-        # Add series to both combos
+        # Add series to overlay combo
         for series_uid, display_name in series_list:
             print(f"[FUSION CONTROLS DEBUG]   Adding: {display_name}")
-            self.base_series_combo.addItem(display_name, series_uid)
             self.overlay_series_combo.addItem(display_name, series_uid)
-        
-        # Restore or set selections
-        if current_base_uid:
-            index = self.base_series_combo.findData(current_base_uid)
-            if index >= 0:
-                self.base_series_combo.setCurrentIndex(index)
-        elif prev_base:
-            index = self.base_series_combo.findData(prev_base)
-            if index >= 0:
-                self.base_series_combo.setCurrentIndex(index)
         
         if current_overlay_uid:
             index = self.overlay_series_combo.findData(current_overlay_uid)
@@ -438,9 +414,35 @@ class FusionControlsWidget(QWidget):
         else:
             self.status_label.setStyleSheet("color: green; font-style: italic; margin-top: 5px;")
     
-    def get_selected_base_series(self) -> str:
-        """Get currently selected base series UID."""
-        return self.base_series_combo.currentData() or ""
+    def revert_overlay_selection(self, preferred_uid: Optional[str], exclude_uid: Optional[str] = None) -> None:
+        """
+        Restore overlay combo to a valid selection.
+        
+        Args:
+            preferred_uid: UID to re-select if available.
+            exclude_uid: UID that must not be selected (e.g., base series).
+        """
+        self._updating = True
+        target_index = -1
+        
+        if preferred_uid:
+            idx = self.overlay_series_combo.findData(preferred_uid)
+            if idx >= 0 and (exclude_uid is None or self.overlay_series_combo.itemData(idx) != exclude_uid):
+                target_index = idx
+        
+        if target_index == -1:
+            for i in range(self.overlay_series_combo.count()):
+                data = self.overlay_series_combo.itemData(i)
+                if exclude_uid is None or data != exclude_uid:
+                    target_index = i
+                    break
+        
+        if target_index >= 0:
+            self.overlay_series_combo.setCurrentIndex(target_index)
+        else:
+            self.overlay_series_combo.setCurrentIndex(-1)
+        
+        self._updating = False
     
     def get_selected_overlay_series(self) -> str:
         """Get currently selected overlay series UID."""
@@ -460,6 +462,10 @@ class FusionControlsWidget(QWidget):
         self._updating = True
         self.enable_checkbox.setChecked(enabled)
         self._updating = False
+    
+    def set_base_display(self, display_text: str) -> None:
+        """Update read-only base series display."""
+        self.base_series_display.setText(display_text or "Not set")
     
     def get_opacity(self) -> float:
         """Get current opacity value (0.0-1.0)."""
@@ -517,6 +523,14 @@ class FusionControlsWidget(QWidget):
             print(f"[OFFSET DEBUG]   Updated spinboxes to calculated values")
         else:
             print(f"[OFFSET DEBUG]   Keeping user-modified spinbox values")
+    
+    def has_user_modified_offset(self) -> bool:
+        """Return True if user manually changed offset spinboxes."""
+        return self._user_modified_offset
+    
+    def reset_user_modified_offset(self) -> None:
+        """Clear user-modified flag so calculated offsets can overwrite spinboxes."""
+        self._user_modified_offset = False
     
     def set_scaling_factors(self, scale_x: float, scale_y: float) -> None:
         """
