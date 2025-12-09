@@ -306,6 +306,26 @@ class DICOMViewerApp(QObject):
             if subwindow:
                 subwindow.image_viewer.set_mouse_mode("pan")
     
+    def _create_empty_subwindow_data(self) -> Dict[str, object]:
+        """Create a fresh subwindow data record with fusion metadata."""
+        return {
+            'current_dataset': None,
+            'current_slice_index': 0,
+            'current_series_uid': '',
+            'current_study_uid': '',
+            'current_datasets': [],
+            'fusion_state': {
+                'base_series_uid': '',
+                'overlay_series_uid': '',
+                'fusion_enabled': False,
+            }
+        }
+    
+    def _debug_log_subwindow_series_change(self, idx: int, series_uid: str, source: str) -> None:
+        """Emit a concise debug line whenever a subwindow's series UID changes."""
+        short_uid = (series_uid[:28] + '...') if series_uid and len(series_uid) > 31 else (series_uid or 'None')
+        print(f"[FUSION DEBUG] {source}: subwindow {idx} current_series_uid -> {short_uid}")
+    
     def _initialize_subwindow_managers(self) -> None:
         """Initialize managers for each subwindow."""
         subwindows = self.multi_window_layout.get_all_subwindows()
@@ -484,13 +504,7 @@ class DICOMViewerApp(QObject):
             # print(f"DEBUG: Stored managers for subwindow {idx}")
             
             # Initialize subwindow data
-            self.subwindow_data[idx] = {
-                'current_dataset': None,
-                'current_slice_index': 0,
-                'current_series_uid': '',
-                'current_study_uid': '',
-                'current_datasets': []
-            }
+            self.subwindow_data[idx] = self._create_empty_subwindow_data()
         
         # print(f"DEBUG: _initialize_subwindow_managers complete. Total managers created: {len(self.subwindow_managers)}")
         
@@ -642,13 +656,7 @@ class DICOMViewerApp(QObject):
         
         # Initialize subwindow data if not exists
         if idx not in self.subwindow_data:
-            self.subwindow_data[idx] = {
-                'current_dataset': None,
-                'current_slice_index': 0,
-                'current_series_uid': '',
-                'current_study_uid': '',
-                'current_datasets': []
-            }
+            self.subwindow_data[idx] = self._create_empty_subwindow_data()
         
         # Set pan mode
         image_viewer.set_mouse_mode("pan")
@@ -748,8 +756,32 @@ class DICOMViewerApp(QObject):
             return self.subwindow_data[idx].get('current_series_uid', '')
         return ''
     
+    def _persist_fusion_state_for_index(self, idx: Optional[int]) -> None:
+        """Save fusion selections for the specified subwindow."""
+        if idx is None:
+            return
+        if idx not in self.subwindow_managers or idx not in self.subwindow_data:
+            return
+        fusion_coordinator = self.subwindow_managers[idx].get('fusion_coordinator')
+        if not fusion_coordinator:
+            return
+        self.subwindow_data[idx]['fusion_state'] = fusion_coordinator.export_state()
+    
+    def _restore_fusion_state_for_index(self, idx: int, fusion_coordinator) -> None:
+        """Restore fusion selections for the specified subwindow."""
+        data = self.subwindow_data.setdefault(idx, self._create_empty_subwindow_data())
+        fusion_state = data.get('fusion_state')
+        if fusion_state:
+            fusion_coordinator.restore_state(fusion_state)
+        elif self.current_series_uid:
+            fusion_coordinator.set_base_series(self.current_series_uid)
+    
     def _update_focused_subwindow_references(self) -> None:
         """Update legacy references to point to focused subwindow's managers and data."""
+        previous_idx = getattr(self, 'focused_subwindow_index', None)
+        if previous_idx is not None:
+            self._persist_fusion_state_for_index(previous_idx)
+        
         focused_subwindow = self.multi_window_layout.get_focused_subwindow()
         if not focused_subwindow:
             return
@@ -760,6 +792,19 @@ class DICOMViewerApp(QObject):
         
         focused_idx = subwindows.index(focused_subwindow)
         self.focused_subwindow_index = focused_idx
+        
+        # Ensure we have a data record for this subwindow and sync legacy references
+        if focused_idx not in self.subwindow_data:
+            self.subwindow_data[focused_idx] = self._create_empty_subwindow_data()
+        data = self.subwindow_data[focused_idx]
+        base_series_for_display = data.get('current_series_uid', '')
+        debug_base = (base_series_for_display[:28] + '...') if base_series_for_display and len(base_series_for_display) > 31 else (base_series_for_display or 'None')
+        print(f"[FUSION DEBUG] _update_focused_subwindow_references: focused_idx={focused_idx}, base_series_for_display={debug_base}")
+        self.current_dataset = data.get('current_dataset')
+        self.current_slice_index = data.get('current_slice_index', 0)
+        self.current_series_uid = base_series_for_display
+        self.current_study_uid = data.get('current_study_uid', '')
+        self.current_datasets = data.get('current_datasets', [])
         
         # Update manager references
         if focused_idx in self.subwindow_managers:
@@ -775,10 +820,9 @@ class DICOMViewerApp(QObject):
             self.crosshair_manager = managers.get('crosshair_manager')
             self.overlay_manager = managers['overlay_manager']
             self._show_fusion_controls_for_index(focused_idx)
-            # Update fusion base series to match focused subwindow
             fusion_coordinator = managers.get('fusion_coordinator')
-            if fusion_coordinator and self.current_series_uid:
-                fusion_coordinator.set_base_series(self.current_series_uid)
+            if fusion_coordinator:
+                self._restore_fusion_state_for_index(focused_idx, fusion_coordinator)
         
         # Store previous image_viewer to disconnect signal
         previous_image_viewer = self.image_viewer if hasattr(self, 'image_viewer') else None
@@ -805,31 +849,17 @@ class DICOMViewerApp(QObject):
                 get_use_rescaled=lambda: self.view_state_manager.use_rescaled_values if self.view_state_manager else False
             )
         
-        # Update current data references (point to focused subwindow's data)
-        if focused_idx in self.subwindow_data:
-            data = self.subwindow_data[focused_idx]
-            self.current_dataset = data.get('current_dataset')
-            self.current_slice_index = data.get('current_slice_index', 0)
-            self.current_series_uid = data.get('current_series_uid', '')
-            self.current_study_uid = data.get('current_study_uid', '')
-            self.current_datasets = data.get('current_datasets', [])
+        # Sync shared slice navigator with focused subwindow's slice index
+        if self.current_datasets:
+            total_slices = len(self.current_datasets)
+            self.slice_navigator.set_total_slices(total_slices)
+            if 0 <= self.current_slice_index < total_slices:
+                self.slice_navigator.blockSignals(True)
+                self.slice_navigator.current_slice_index = self.current_slice_index
+                self.slice_navigator.blockSignals(False)
         
-            # Sync shared slice navigator with focused subwindow's slice index
-            # This ensures navigation starts from the correct position
-            if self.current_datasets:
-                total_slices = len(self.current_datasets)
-                self.slice_navigator.set_total_slices(total_slices)
-                # Update current slice index without emitting signal (to avoid recursion)
-                if 0 <= self.current_slice_index < total_slices:
-                    # Temporarily block signals to prevent recursive updates
-                    self.slice_navigator.blockSignals(True)
-                    self.slice_navigator.current_slice_index = self.current_slice_index
-                    self.slice_navigator.blockSignals(False)
-        
-        # Update right panel controls to show focused subwindow's state
+        # Update right/left panels to show focused subwindow's state
         self._update_right_panel_for_focused_subwindow()
-        
-        # Update left panel controls to show focused subwindow's state
         self._update_left_panel_for_focused_subwindow()
         
         # Update keyboard event handler to use focused subwindow's image_viewer
@@ -847,6 +877,12 @@ class DICOMViewerApp(QObject):
         # Set keyboard focus to focused subwindow's ImageViewer
         if self.image_viewer:
             self.image_viewer.setFocus()
+        
+        # Ensure fusion base label mirrors focused subwindow's series
+        if base_series_for_display and focused_idx in self.subwindow_managers:
+            fusion_coordinator = self.subwindow_managers[focused_idx].get('fusion_coordinator')
+            if fusion_coordinator:
+                fusion_coordinator.update_base_display_from_series(base_series_for_display)
     
     def _update_right_panel_for_focused_subwindow(self) -> None:
         """Update right panel controls to reflect focused subwindow's state."""
@@ -1290,13 +1326,7 @@ class DICOMViewerApp(QObject):
                         print(f"[DEBUG] Clearing stale subwindow data for subwindow {idx}: "
                               f"study={study_uid[:20] if study_uid else 'None'}..., "
                               f"series={series_uid[:20] if series_uid else 'None'}...")
-                        self.subwindow_data[idx] = {
-                            'current_dataset': None,
-                            'current_slice_index': 0,
-                            'current_series_uid': '',
-                            'current_study_uid': '',
-                            'current_datasets': []
-                        }
+                        self.subwindow_data[idx] = self._create_empty_subwindow_data()
                         stale_count += 1
             if stale_count > 0:
                 print(f"[DEBUG] Cleared stale data from {stale_count} subwindow(s)")
@@ -1366,7 +1396,7 @@ class DICOMViewerApp(QObject):
             # This ensures the first subwindow can navigate and respond to controls
             focused_idx = 0
             if focused_idx not in self.subwindow_data:
-                self.subwindow_data[focused_idx] = {}
+                self.subwindow_data[focused_idx] = self._create_empty_subwindow_data()
             
             # Extract actual composite series key from the dataset that was displayed
             # This ensures subwindow_data always reflects what's actually shown
@@ -1399,6 +1429,7 @@ class DICOMViewerApp(QObject):
             self.subwindow_data[focused_idx]['current_slice_index'] = self.current_slice_index
             self.subwindow_data[focused_idx]['current_series_uid'] = extracted_series_uid
             self.subwindow_data[focused_idx]['current_study_uid'] = extracted_study_uid
+            self._debug_log_subwindow_series_change(focused_idx, extracted_series_uid, "initial_load")
             
             # Update legacy references to match
             self.current_series_uid = extracted_series_uid
@@ -2103,10 +2134,11 @@ class DICOMViewerApp(QObject):
         
         # Update subwindow data
         if idx not in self.subwindow_data:
-            self.subwindow_data[idx] = {}
+            self.subwindow_data[idx] = self._create_empty_subwindow_data()
         
         self.subwindow_data[idx]['current_study_uid'] = target_study_uid
         self.subwindow_data[idx]['current_series_uid'] = series_uid
+        self._debug_log_subwindow_series_change(idx, series_uid, "_assign_series_to_subwindow")
         self.subwindow_data[idx]['current_slice_index'] = slice_index
         self.subwindow_data[idx]['current_datasets'] = series_datasets
         self.subwindow_data[idx]['current_dataset'] = series_datasets[slice_index] if slice_index < len(series_datasets) else series_datasets[0]
@@ -2142,6 +2174,13 @@ class DICOMViewerApp(QObject):
             self.current_slice_index = slice_index
             self.current_dataset = self.subwindow_data[idx]['current_dataset']
             self._update_series_navigator_highlighting()
+            
+            # Also refresh the fusion base label immediately (even before focus changes)
+            managers = self.subwindow_managers.get(idx)
+            if managers:
+                fusion_coordinator = managers.get('fusion_coordinator')
+                if fusion_coordinator:
+                    fusion_coordinator.update_base_display_from_series(series_uid or "")
     
     def _disconnect_focused_subwindow_signals(self) -> None:
         """Disconnect signals from previously focused subwindow."""
@@ -2710,6 +2749,7 @@ class DICOMViewerApp(QObject):
                     focused_study_uid = extracted_study_uid
                     # Update subwindow_data immediately to fix the mismatch
                     data['current_series_uid'] = extracted_series_uid
+                    self._debug_log_subwindow_series_change(focused_idx, extracted_series_uid, "series_navigation_mismatch_fix")
                     data['current_study_uid'] = extracted_study_uid
             elif not focused_series_uid:
                 # No series loaded - load first series (right arrow) or last series (left arrow)
@@ -2761,6 +2801,7 @@ class DICOMViewerApp(QObject):
                 
                 # Update subwindow_data
                 data['current_series_uid'] = target_series_uid
+                self._debug_log_subwindow_series_change(focused_idx, target_series_uid, "series_navigation_load_first_last")
                 data['current_study_uid'] = focused_study_uid
                 data['current_dataset'] = target_datasets[0]
                 data['current_slice_index'] = 0
@@ -2794,6 +2835,7 @@ class DICOMViewerApp(QObject):
                 
                 # Sync subwindow_data with actual displayed data
                 self.subwindow_data[focused_idx]['current_series_uid'] = extracted_series_uid
+                self._debug_log_subwindow_series_change(focused_idx, extracted_series_uid, "series_navigation_display_sync")
                 self.subwindow_data[focused_idx]['current_study_uid'] = extracted_study_uid
                 self.subwindow_data[focused_idx]['current_dataset'] = target_datasets[0]
                 self.subwindow_data[focused_idx]['current_slice_index'] = 0
@@ -2866,6 +2908,7 @@ class DICOMViewerApp(QObject):
                         focused_series_uid = first_series_uid
                         # Update subwindow_data with correct series
                         self.subwindow_data[focused_idx]['current_series_uid'] = first_series_uid
+                        self._debug_log_subwindow_series_change(focused_idx, first_series_uid, "series_navigation_fallback")
                         self.subwindow_data[focused_idx]['current_dataset'] = first_datasets[0]
                         self.subwindow_data[focused_idx]['current_slice_index'] = 0
                         focused_slice_index = 0
@@ -2912,6 +2955,7 @@ class DICOMViewerApp(QObject):
             if new_series_uid is not None and dataset is not None:
                 # Update focused subwindow's data
                 self.subwindow_data[focused_idx]['current_series_uid'] = new_series_uid
+                self._debug_log_subwindow_series_change(focused_idx, new_series_uid, "series_navigation_step")
                 self.subwindow_data[focused_idx]['current_slice_index'] = slice_index
                 self.subwindow_data[focused_idx]['current_dataset'] = dataset
                 
@@ -2964,6 +3008,7 @@ class DICOMViewerApp(QObject):
                 # Update subwindow_data with extracted UIDs from dataset
                 # This ensures navigation always starts from the correct series that's actually displayed
                 self.subwindow_data[focused_idx]['current_series_uid'] = extracted_series_uid
+                self._debug_log_subwindow_series_change(focused_idx, extracted_series_uid, "series_navigation_dataset_sync")
                 self.subwindow_data[focused_idx]['current_study_uid'] = extracted_study_uid
                 self.subwindow_data[focused_idx]['current_dataset'] = dataset
                 self.subwindow_data[focused_idx]['current_slice_index'] = slice_index
