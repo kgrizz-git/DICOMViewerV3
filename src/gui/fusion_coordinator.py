@@ -27,7 +27,6 @@ from pydicom.dataset import Dataset
 from core.fusion_handler import FusionHandler
 from core.fusion_processor import FusionProcessor
 from gui.fusion_controls_widget import FusionControlsWidget
-from PySide6.QtWidgets import QMessageBox
 
 
 class FusionCoordinator:
@@ -91,8 +90,12 @@ class FusionCoordinator:
         self.fusion_handler.set_base_series(series_uid)
         self._update_base_display(series_uid)
         self.fusion_controls.reset_user_modified_offset()
-        if not self._apply_cached_alignment(reset_user_override=True):
-            self._update_spatial_alignment()
+        if (
+            self.fusion_handler.fusion_enabled
+            and self.fusion_handler.overlay_series_uid
+        ):
+            if not self._apply_cached_alignment(reset_user_override=True):
+                self._update_spatial_alignment()
     
     def _connect_signals(self) -> None:
         """Connect fusion control signals to handlers."""
@@ -208,9 +211,10 @@ class FusionCoordinator:
                             window_width, window_center
                         )
         
-        # Update spatial alignment parameters
-        if not self._apply_cached_alignment(reset_user_override=True):
-            self._update_spatial_alignment()
+        # Update spatial alignment parameters only when fusion is active
+        if self.fusion_handler.fusion_enabled:
+            if not self._apply_cached_alignment(reset_user_override=True):
+                self._update_spatial_alignment()
         
         # Re-validate if fusion is enabled
         if self.fusion_handler.fusion_enabled:
@@ -254,6 +258,12 @@ class FusionCoordinator:
             self.fusion_controls.set_calculated_offset(offset[0], offset[1])
         
         return True
+    
+    def update_base_display_from_series(self, series_uid: str) -> None:
+        """External hook to update base display without changing selection."""
+        short_uid = (series_uid[:28] + '...') if series_uid and len(series_uid) > 31 else (series_uid or 'None')
+        print(f"[FUSION DEBUG] FusionCoordinator.update_base_display_from_series -> {short_uid}")
+        self._update_base_display(series_uid)
     
     def _update_base_display(self, base_uid: str) -> None:
         """Update the read-only base display text."""
@@ -350,6 +360,36 @@ class FusionCoordinator:
         # Request display update if fusion is enabled
         if self.fusion_handler.fusion_enabled:
             self.request_display_update()
+    
+    def export_state(self) -> Dict[str, object]:
+        """Return a snapshot of the current fusion state."""
+        return {
+            "base_series_uid": self.fusion_handler.base_series_uid or "",
+            "overlay_series_uid": self.fusion_handler.overlay_series_uid or "",
+            "fusion_enabled": self.fusion_handler.fusion_enabled,
+        }
+    
+    def restore_state(self, state: Optional[Dict[str, object]]) -> None:
+        """Restore fusion selections and enabled state from a snapshot."""
+        if not state:
+            return
+        
+        base_uid = state.get("base_series_uid") or ""
+        overlay_uid = state.get("overlay_series_uid") or ""
+        fusion_enabled = bool(state.get("fusion_enabled", False))
+        
+        if base_uid:
+            self.fusion_handler.set_base_series(base_uid)
+            self._update_base_display(base_uid)
+        if overlay_uid:
+            self.fusion_handler.set_overlay_series(overlay_uid)
+        
+        self.fusion_handler.fusion_enabled = fusion_enabled
+        self.fusion_controls.set_fusion_enabled(fusion_enabled)
+        
+        if fusion_enabled and overlay_uid:
+            if not self._apply_cached_alignment(reset_user_override=True):
+                self._update_spatial_alignment()
     
     def get_fused_image(
         self,
@@ -562,7 +602,8 @@ class FusionCoordinator:
             series_list,
             current_overlay_uid=current_overlay
         )
-        self._update_base_display(self.fusion_handler.base_series_uid or "")
+        # NOTE: Do NOT update base display here - it should only be updated by
+        # update_base_display_from_series() when called with the focused subwindow's series
         
         # DEBUG
         print(f"[FUSION DEBUG]   Dropdown updated. Overlay items: {self.fusion_controls.overlay_series_combo.count()}")
@@ -632,7 +673,7 @@ class FusionCoordinator:
         overlay_name: str
     ) -> None:
         """
-        Suggest fusion to user with auto-detected series.
+        Pre-select compatible fusion series without auto-enabling the mode.
         
         Args:
             base_uid: Base series UID
@@ -640,36 +681,23 @@ class FusionCoordinator:
             overlay_uid: Overlay series UID
             overlay_name: Overlay series display name
         """
-        # Show message box suggesting fusion
-        reply = QMessageBox.question(
-            self.fusion_controls,
-            "Image Fusion Available",
-            f"Compatible series detected for image fusion:\n\n"
-            f"Base: {base_name}\n"
-            f"Overlay: {overlay_name}\n\n"
-            f"Would you like to enable fusion?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.Yes
+        self.fusion_handler.set_base_series(base_uid)
+        self._update_base_display(base_uid)
+        self.fusion_handler.set_overlay_series(overlay_uid)
+        self.fusion_controls.reset_user_modified_offset()
+        
+        self.fusion_controls.update_series_lists(
+            self.fusion_handler.get_available_series_for_fusion(
+                self.get_current_studies(),
+                self.get_current_study_uid()
+            ),
+            current_overlay_uid=overlay_uid
         )
         
-        if reply == QMessageBox.StandardButton.Yes:
-            # Set up fusion
-            self.fusion_handler.set_base_series(base_uid)
-            self.fusion_handler.set_overlay_series(overlay_uid)
-            
-            # Update controls
-            self.fusion_controls.update_series_lists(
-                self.fusion_handler.get_available_series_for_fusion(
-                    self.get_current_studies(),
-                    self.get_current_study_uid()
-                ),
-                current_overlay_uid=overlay_uid
-            )
-            
-            # Enable fusion
-            self.fusion_controls.set_fusion_enabled(True)
-            self.fusion_handler.fusion_enabled = True
-            
-            # Trigger validation and display update
-            self.handle_fusion_enabled_changed(True)
+        # Leave fusion disabled but inform the user that a compatible pair was found
+        self.fusion_handler.fusion_enabled = False
+        self.fusion_controls.set_fusion_enabled(False)
+        self.fusion_controls.set_status(
+            f"Fusion-ready: {base_name} + {overlay_name}. Enable to view overlay."
+        )
 

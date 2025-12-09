@@ -81,7 +81,7 @@ class FusionControlsWidget(QWidget):
         group_layout.addWidget(self.enable_checkbox)
         
         # Base series display (read-only)
-        base_label = QLabel("Base Image (Anatomical):")
+        base_label = QLabel("Base Image:")
         base_label.setStyleSheet("font-weight: bold;")
         group_layout.addWidget(base_label)
         
@@ -89,14 +89,21 @@ class FusionControlsWidget(QWidget):
         self.base_series_display.setStyleSheet("font-style: italic;")
         group_layout.addWidget(self.base_series_display)
         
-        # Overlay series selection
-        overlay_label = QLabel("Overlay Image (Functional):")
+        # Overlay series selection (wrapped for easy show/hide)
+        self.overlay_section_widget = QWidget()
+        overlay_section_layout = QVBoxLayout(self.overlay_section_widget)
+        overlay_section_layout.setContentsMargins(0, 0, 0, 0)
+        overlay_section_layout.setSpacing(3)
+        
+        overlay_label = QLabel("Overlay Image:")
         overlay_label.setStyleSheet("font-weight: bold;")
-        group_layout.addWidget(overlay_label)
+        overlay_section_layout.addWidget(overlay_label)
         
         self.overlay_series_combo = QComboBox()
         self.overlay_series_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        group_layout.addWidget(self.overlay_series_combo)
+        overlay_section_layout.addWidget(self.overlay_series_combo)
+        
+        group_layout.addWidget(self.overlay_section_widget)
         
         # Opacity control
         opacity_layout = QHBoxLayout()
@@ -354,6 +361,8 @@ class FusionControlsWidget(QWidget):
         self.x_offset_spinbox.setEnabled(enabled)
         self.y_offset_spinbox.setEnabled(enabled)
         self.reset_offset_button.setEnabled(enabled)
+        if hasattr(self, "overlay_section_widget"):
+            self.overlay_section_widget.setVisible(enabled)
         
         if not enabled:
             self.status_label.setText("Status: Disabled")

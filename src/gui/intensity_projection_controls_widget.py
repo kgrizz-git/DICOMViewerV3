@@ -64,6 +64,12 @@ class IntensityProjectionControlsWidget(QWidget):
         self.enable_checkbox.stateChanged.connect(self._on_enable_changed)
         group_layout.addWidget(self.enable_checkbox)
         
+        # Projection + slice controls section (wrapped for show/hide)
+        self.projection_section_widget = QWidget()
+        projection_section_layout = QVBoxLayout(self.projection_section_widget)
+        projection_section_layout.setContentsMargins(0, 0, 0, 0)
+        projection_section_layout.setSpacing(5)
+        
         # Projection type selector
         projection_layout = QHBoxLayout()
         projection_label = QLabel("Projection:")
@@ -76,7 +82,7 @@ class IntensityProjectionControlsWidget(QWidget):
         self.projection_combo.currentTextChanged.connect(self._on_projection_type_changed)
         projection_layout.addWidget(self.projection_combo)
         
-        group_layout.addLayout(projection_layout)
+        projection_section_layout.addLayout(projection_layout)
         
         # Slice count selector
         count_layout = QHBoxLayout()
@@ -90,7 +96,9 @@ class IntensityProjectionControlsWidget(QWidget):
         self.slice_count_combo.currentTextChanged.connect(self._on_slice_count_changed)
         count_layout.addWidget(self.slice_count_combo)
         
-        group_layout.addLayout(count_layout)
+        projection_section_layout.addLayout(count_layout)
+        
+        group_layout.addWidget(self.projection_section_widget)
         
         layout.addWidget(group_box)
     
@@ -132,6 +140,8 @@ class IntensityProjectionControlsWidget(QWidget):
         """
         self.projection_combo.setEnabled(enabled)
         self.slice_count_combo.setEnabled(enabled)
+        if hasattr(self, "projection_section_widget"):
+            self.projection_section_widget.setVisible(enabled)
     
     def set_enabled(self, enabled: bool, keep_signals_blocked: bool = False) -> None:
         """
