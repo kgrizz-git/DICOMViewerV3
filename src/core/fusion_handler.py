@@ -22,6 +22,7 @@ import time
 import numpy as np
 from typing import Optional, List, Tuple, Dict
 from pydicom.dataset import Dataset
+from core.dicom_processor import DICOMProcessor
 
 
 class FusionHandler:
@@ -43,6 +44,11 @@ class FusionHandler:
         self.opacity: float = 0.5  # 0.0 to 1.0
         self.threshold: float = 0.2  # 0.0 to 1.0
         self.colormap: str = 'hot'
+        
+        # Track whether overlay pixels are in rescaled units
+        self.overlay_uses_rescaled: bool = False
+        self._overlay_rescale_slope: Optional[float] = None
+        self._overlay_rescale_intercept: Optional[float] = None
         
         # Cache for slice locations
         self._slice_location_cache: Dict[str, List[Tuple[int, float]]] = {}
@@ -69,8 +75,28 @@ class FusionHandler:
             series_uid: Series instance UID for overlay series
         """
         self.overlay_series_uid = series_uid
+        # Reset rescale state when overlay series changes
+        self.overlay_uses_rescaled = False
+        self._overlay_rescale_slope = None
+        self._overlay_rescale_intercept = None
         # Clear cache when overlay series changes
         self._slice_location_cache.clear()
+    
+    def get_overlay_rescale_state(self) -> Tuple[bool, Optional[float], Optional[float]]:
+        """
+        Get the current rescale state for overlay pixels.
+        
+        Returns:
+            Tuple of (is_rescaled, slope, intercept)
+            - is_rescaled: True if overlay pixels are in rescaled units
+            - slope: Rescale slope if available, None otherwise
+            - intercept: Rescale intercept if available, None otherwise
+        """
+        return (
+            self.overlay_uses_rescaled,
+            self._overlay_rescale_slope,
+            self._overlay_rescale_intercept
+        )
     
     def set_alignment(
         self,
@@ -294,12 +320,25 @@ class FusionHandler:
         if idx1 is None:
             return None
         
+        # Extract rescale parameters from overlay dataset
+        overlay_ds = overlay_datasets[idx1]
+        rescale_slope, rescale_intercept, _ = DICOMProcessor.get_rescale_parameters(overlay_ds)
+        
+        # Update rescale state tracking
+        self.overlay_uses_rescaled = (rescale_slope is not None and rescale_intercept is not None)
+        self._overlay_rescale_slope = rescale_slope
+        self._overlay_rescale_intercept = rescale_intercept
+        
         # Get pixel array from first slice
         try:
             array1 = overlay_datasets[idx1].pixel_array.astype(np.float32)
         except Exception as e:
             print(f"Error getting overlay pixel array: {e}")
             return None
+        
+        # Apply rescale transformation if parameters exist
+        if self.overlay_uses_rescaled and rescale_slope is not None and rescale_intercept is not None:
+            array1 = array1 * float(rescale_slope) + float(rescale_intercept)
         
         if idx2 is None:
             # Exact match, no interpolation needed
@@ -311,6 +350,10 @@ class FusionHandler:
         except Exception as e:
             print(f"Error getting second overlay pixel array: {e}")
             return array1  # Fall back to first slice
+        
+        # Apply rescale to second array if needed
+        if self.overlay_uses_rescaled and rescale_slope is not None and rescale_intercept is not None:
+            array2 = array2 * float(rescale_slope) + float(rescale_intercept)
         
         # Check array shapes match
         if array1.shape != array2.shape:
@@ -450,14 +493,15 @@ class FusionHandler:
         base_ipp = self.get_image_position_patient(base_dataset)
         overlay_ipp = self.get_image_position_patient(overlay_dataset)
         
-        print(f"\n[OFFSET CALC DEBUG] calculate_translation_offset called")
-        print(f"  base IPP: {base_ipp}")
-        print(f"  overlay IPP: {overlay_ipp}")
-        print(f"  base_pixel_spacing: {base_pixel_spacing}")
-        print(f"  overlay_pixel_spacing: {overlay_pixel_spacing}")
+        # DEBUG - commented out
+        # print(f"\n[OFFSET CALC DEBUG] calculate_translation_offset called")
+        # print(f"  base IPP: {base_ipp}")
+        # print(f"  overlay IPP: {overlay_ipp}")
+        # print(f"  base_pixel_spacing: {base_pixel_spacing}")
+        # print(f"  overlay_pixel_spacing: {overlay_pixel_spacing}")
         
         if base_ipp is None or overlay_ipp is None:
-            print(f"  Result: None (IPP missing)")
+            # print(f"  Result: None (IPP missing)")
             return None
         
         # Calculate physical offset in mm
@@ -468,7 +512,8 @@ class FusionHandler:
         offset_mm_x = overlay_ipp[0] - base_ipp[0]
         offset_mm_y = overlay_ipp[1] - base_ipp[1]
         
-        print(f"  Physical offset (mm): X={offset_mm_x:.2f}, Y={offset_mm_y:.2f}")
+        # DEBUG - commented out
+        # print(f"  Physical offset (mm): X={offset_mm_x:.2f}, Y={offset_mm_y:.2f}")
         
         # Convert to pixel offset in base image coordinates
         # Note: Pixel spacing is [row_spacing, col_spacing] where:
@@ -477,7 +522,8 @@ class FusionHandler:
         offset_px_x = offset_mm_x / base_pixel_spacing[1]  # column spacing
         offset_px_y = offset_mm_y / base_pixel_spacing[0]  # row spacing
         
-        print(f"  Pixel offset: X={offset_px_x:.2f}, Y={offset_px_y:.2f} pixels")
+        # DEBUG - commented out
+        # print(f"  Pixel offset: X={offset_px_x:.2f}, Y={offset_px_y:.2f} pixels")
         
         return (offset_px_x, offset_px_y)
     

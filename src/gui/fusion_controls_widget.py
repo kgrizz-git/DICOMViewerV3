@@ -105,6 +105,12 @@ class FusionControlsWidget(QWidget):
         
         group_layout.addWidget(self.overlay_section_widget)
         
+        # Fusion adjustment controls (wrapped for visibility control)
+        self.fusion_adjustment_widget = QWidget()
+        fusion_adjustment_layout = QVBoxLayout(self.fusion_adjustment_widget)
+        fusion_adjustment_layout.setContentsMargins(0, 0, 0, 0)
+        fusion_adjustment_layout.setSpacing(8)
+        
         # Opacity control
         opacity_layout = QHBoxLayout()
         opacity_label = QLabel("Opacity:")
@@ -123,7 +129,7 @@ class FusionControlsWidget(QWidget):
         self.opacity_value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         opacity_layout.addWidget(self.opacity_value_label)
         
-        group_layout.addLayout(opacity_layout)
+        fusion_adjustment_layout.addLayout(opacity_layout)
         
         # Threshold control
         threshold_layout = QHBoxLayout()
@@ -143,7 +149,7 @@ class FusionControlsWidget(QWidget):
         self.threshold_value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         threshold_layout.addWidget(self.threshold_value_label)
         
-        group_layout.addLayout(threshold_layout)
+        fusion_adjustment_layout.addLayout(threshold_layout)
         
         # Colormap selection
         colormap_layout = QHBoxLayout()
@@ -164,12 +170,12 @@ class FusionControlsWidget(QWidget):
         self.colormap_combo.setCurrentText('hot')
         colormap_layout.addWidget(self.colormap_combo, 1)
         
-        group_layout.addLayout(colormap_layout)
+        fusion_adjustment_layout.addLayout(colormap_layout)
         
         # Overlay Window/Level controls
         wl_label = QLabel("Overlay Window/Level:")
         wl_label.setStyleSheet("font-weight: bold; margin-top: 5px;")
-        group_layout.addWidget(wl_label)
+        fusion_adjustment_layout.addWidget(wl_label)
         
         # Window control
         window_layout = QHBoxLayout()
@@ -183,7 +189,7 @@ class FusionControlsWidget(QWidget):
         self.overlay_window_spinbox.setSingleStep(10)
         window_layout.addWidget(self.overlay_window_spinbox, 1)
         
-        group_layout.addLayout(window_layout)
+        fusion_adjustment_layout.addLayout(window_layout)
         
         # Level control
         level_layout = QHBoxLayout()
@@ -197,7 +203,7 @@ class FusionControlsWidget(QWidget):
         self.overlay_level_spinbox.setSingleStep(10)
         level_layout.addWidget(self.overlay_level_spinbox, 1)
         
-        group_layout.addLayout(level_layout)
+        fusion_adjustment_layout.addLayout(level_layout)
         
         # Advanced section for spatial alignment
         advanced_group = QGroupBox("Advanced Spatial Alignment")
@@ -252,7 +258,9 @@ class FusionControlsWidget(QWidget):
         self.reset_offset_button.clicked.connect(self._on_reset_offset_clicked)
         advanced_layout.addWidget(self.reset_offset_button)
         
-        group_layout.addWidget(advanced_group)
+        fusion_adjustment_layout.addWidget(advanced_group)
+        
+        group_layout.addWidget(self.fusion_adjustment_widget)
         
         # Store calculated offset for reset functionality
         self._calculated_offset_x = 0.0
@@ -328,7 +336,8 @@ class FusionControlsWidget(QWidget):
             self._user_modified_offset = True
             x_offset = float(self.x_offset_spinbox.value())
             y_offset = float(self.y_offset_spinbox.value())
-            print(f"[OFFSET DEBUG] User changed offset to: X={x_offset:.1f}, Y={y_offset:.1f}")
+            # DEBUG - commented out
+            # print(f"[OFFSET DEBUG] User changed offset to: X={x_offset:.1f}, Y={y_offset:.1f}")
             self.translation_offset_changed.emit(x_offset, y_offset)
     
     def _on_reset_offset_clicked(self) -> None:
@@ -341,7 +350,8 @@ class FusionControlsWidget(QWidget):
         self.y_offset_spinbox.setValue(int(round(self._calculated_offset_y)))
         self._updating = False
         
-        print(f"[OFFSET DEBUG] Reset to calculated offset: X={self._calculated_offset_x:.1f}, Y={self._calculated_offset_y:.1f}")
+        # DEBUG - commented out
+        # print(f"[OFFSET DEBUG] Reset to calculated offset: X={self._calculated_offset_x:.1f}, Y={self._calculated_offset_y:.1f}")
         # Emit signal with calculated values
         self.translation_offset_changed.emit(self._calculated_offset_x, self._calculated_offset_y)
     
@@ -361,8 +371,12 @@ class FusionControlsWidget(QWidget):
         self.x_offset_spinbox.setEnabled(enabled)
         self.y_offset_spinbox.setEnabled(enabled)
         self.reset_offset_button.setEnabled(enabled)
+        
+        # Hide/show sections when fusion is disabled/enabled
         if hasattr(self, "overlay_section_widget"):
             self.overlay_section_widget.setVisible(enabled)
+        if hasattr(self, "fusion_adjustment_widget"):
+            self.fusion_adjustment_widget.setVisible(enabled)
         
         if not enabled:
             self.status_label.setText("Status: Disabled")
@@ -519,9 +533,10 @@ class FusionControlsWidget(QWidget):
         self._calculated_offset_y = y
         self.calculated_offset_label.setText(f"Calculated Offset: X={x:.1f}, Y={y:.1f} pixels")
         
-        print(f"[OFFSET DEBUG] set_calculated_offset called: X={x:.1f}, Y={y:.1f}")
-        print(f"[OFFSET DEBUG]   Current spinbox values: X={self.x_offset_spinbox.value()}, Y={self.y_offset_spinbox.value()}")
-        print(f"[OFFSET DEBUG]   User modified: {self._user_modified_offset}")
+        # DEBUG - commented out
+        # print(f"[OFFSET DEBUG] set_calculated_offset called: X={x:.1f}, Y={y:.1f}")
+        # print(f"[OFFSET DEBUG]   Current spinbox values: X={self.x_offset_spinbox.value()}, Y={self.y_offset_spinbox.value()}")
+        # print(f"[OFFSET DEBUG]   User modified: {self._user_modified_offset}")
         
         # Update the spinboxes only if user hasn't manually modified them
         if not self._user_modified_offset:
@@ -529,9 +544,12 @@ class FusionControlsWidget(QWidget):
             self.x_offset_spinbox.setValue(int(round(x)))
             self.y_offset_spinbox.setValue(int(round(y)))
             self._updating = False
-            print(f"[OFFSET DEBUG]   Updated spinboxes to calculated values")
+            # DEBUG - commented out
+            # print(f"[OFFSET DEBUG]   Updated spinboxes to calculated values")
         else:
-            print(f"[OFFSET DEBUG]   Keeping user-modified spinbox values")
+            # DEBUG - commented out
+            # print(f"[OFFSET DEBUG]   Keeping user-modified spinbox values")
+            pass
     
     def has_user_modified_offset(self) -> bool:
         """Return True if user manually changed offset spinboxes."""

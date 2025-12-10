@@ -849,14 +849,14 @@ class DICOMViewerApp(QObject):
                 get_use_rescaled=lambda: self.view_state_manager.use_rescaled_values if self.view_state_manager else False
             )
         
-        # Sync shared slice navigator with focused subwindow's slice index
-        if self.current_datasets:
-            total_slices = len(self.current_datasets)
-            self.slice_navigator.set_total_slices(total_slices)
-            if 0 <= self.current_slice_index < total_slices:
-                self.slice_navigator.blockSignals(True)
-                self.slice_navigator.current_slice_index = self.current_slice_index
-                self.slice_navigator.blockSignals(False)
+            # Sync shared slice navigator with focused subwindow's slice index
+            if self.current_datasets:
+                total_slices = len(self.current_datasets)
+                self.slice_navigator.set_total_slices(total_slices)
+                if 0 <= self.current_slice_index < total_slices:
+                    self.slice_navigator.blockSignals(True)
+                    self.slice_navigator.current_slice_index = self.current_slice_index
+                    self.slice_navigator.blockSignals(False)
         
         # Update right/left panels to show focused subwindow's state
         self._update_right_panel_for_focused_subwindow()
