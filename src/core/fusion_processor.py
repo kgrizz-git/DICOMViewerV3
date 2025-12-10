@@ -191,11 +191,11 @@ class FusionProcessor:
             )
             overlay_array = np.array(overlay_pil, dtype=np.float32)
             
-            # DEBUG
-            print(f"  [SCALING] scale_x: {scale_x:.4f}, scale_y: {scale_y:.4f}")
-            print(f"  [SCALING] new dimensions: {new_width} x {new_height}")
-            print(f"  [SCALING] overlay_array after resize shape: {overlay_array.shape}")
-            print(f"  [SCALING] overlay_array after resize range: [{np.min(overlay_array):.2f}, {np.max(overlay_array):.2f}]")
+            # DEBUG - commented out
+            # print(f"  [SCALING] scale_x: {scale_x:.4f}, scale_y: {scale_y:.4f}")
+            # print(f"  [SCALING] new dimensions: {new_width} x {new_height}")
+            # print(f"  [SCALING] overlay_array after resize shape: {overlay_array.shape}")
+            # print(f"  [SCALING] overlay_array after resize range: [{np.min(overlay_array):.2f}, {np.max(overlay_array):.2f}]")
         elif base_array.shape != overlay_array.shape:
             # Fallback: simple resize to match base dimensions if no spacing info
             from PIL import Image as PILImage
@@ -213,11 +213,11 @@ class FusionProcessor:
                 overlay_array, offset_x, offset_y, base_array.shape
             )
             
-            # DEBUG
-            print(f"  [TRANSLATION] offset applied: ({offset_x:.2f}, {offset_y:.2f})")
-            print(f"  [TRANSLATION] overlay_array after translation shape: {overlay_array.shape}")
-            print(f"  [TRANSLATION] overlay_array after translation range: [{np.min(overlay_array):.2f}, {np.max(overlay_array):.2f}]")
-            print(f"  [TRANSLATION] non-zero pixels: {np.count_nonzero(overlay_array)}")
+            # DEBUG - commented out
+            # print(f"  [TRANSLATION] offset applied: ({offset_x:.2f}, {offset_y:.2f})")
+            # print(f"  [TRANSLATION] overlay_array after translation shape: {overlay_array.shape}")
+            # print(f"  [TRANSLATION] overlay_array after translation range: [{np.min(overlay_array):.2f}, {np.max(overlay_array):.2f}]")
+            # print(f"  [TRANSLATION] non-zero pixels: {np.count_nonzero(overlay_array)}")
         
         # Normalize base image
         if base_wl is not None:
