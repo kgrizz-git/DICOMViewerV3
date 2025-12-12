@@ -42,6 +42,15 @@ This application provides comprehensive DICOM image viewing capabilities with ad
   - Frame slider for manual navigation
   - Real-time FPS display
   - Frame position indicator (current/total)
+- **Image Fusion** (in development, continuing to be refined):
+  - Overlay functional imaging data (e.g., PET, SPECT) on anatomical imaging data (e.g., CT, MR)
+  - Supports series with matching Frame of Reference UID
+  - Alpha blending with adjustable opacity
+  - Multiple colormap options for overlay visualization (hot, jet, viridis, plasma, inferno, rainbow, cool, spring)
+  - Threshold control for overlay display
+  - Independent window/level controls for base and overlay images
+  - Access via fusion controls widget in the right panel
+  - *Note: This feature is actively being refined and improved*
 
 ### Metadata and Overlays
 - Customizable DICOM metadata overlays on images

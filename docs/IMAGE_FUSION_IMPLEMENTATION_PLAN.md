@@ -17,20 +17,20 @@ The implementation is divided into three phases:
 Enable fusion of series that share the same Frame of Reference UID (e.g., same-scanner PET-CT) with basic alpha blending and colormap overlay.
 
 ### Prerequisites
-- [ ] Verify matplotlib is in requirements.txt (for colormaps)
-- [ ] Review current image display pipeline in `image_viewer.py`
-- [ ] Review series management in `series_navigator.py`
+- [x] Verify matplotlib is in requirements.txt (for colormaps)
+- [x] Review current image display pipeline in `image_viewer.py`
+- [x] Review series management in `series_navigator.py`
 
 ### Tasks
 
 #### 1.1 Create Fusion Data Handler
 **File**: `src/core/fusion_handler.py`
 
-- [ ] Create `FusionHandler` class to manage fusion state
-- [ ] Implement method to check Frame of Reference UID compatibility
-- [ ] Implement method to find matching slices between series by SliceLocation
-- [ ] Implement slice interpolation for non-matching slice positions
-- [ ] Add methods to get/set base and overlay series
+- [x] Create `FusionHandler` class to manage fusion state
+- [x] Implement method to check Frame of Reference UID compatibility
+- [x] Implement method to find matching slices between series by SliceLocation
+- [x] Implement slice interpolation for non-matching slice positions
+- [x] Add methods to get/set base and overlay series
 
 ```python
 # Proposed class structure
@@ -54,11 +54,11 @@ class FusionHandler:
 #### 1.2 Create Fusion Image Processor
 **File**: `src/core/fusion_processor.py`
 
-- [ ] Create `FusionProcessor` class for image blending operations
-- [ ] Implement alpha blending with colormap
-- [ ] Implement threshold-based overlay
-- [ ] Support multiple colormaps (hot, jet, viridis, etc.)
-- [ ] Handle window/level for both base and overlay independently
+- [x] Create `FusionProcessor` class for image blending operations
+- [x] Implement alpha blending with colormap
+- [x] Implement threshold-based overlay
+- [x] Support multiple colormaps (hot, jet, viridis, etc.)
+- [x] Handle window/level for both base and overlay independently
 
 ```python
 # Proposed class structure
@@ -84,57 +84,73 @@ class FusionProcessor:
 #### 1.3 Create Fusion Controls Widget
 **File**: `src/gui/fusion_controls_widget.py`
 
-- [ ] Create `FusionControlsWidget` class (QWidget)
-- [ ] Add enable/disable fusion checkbox
-- [ ] Add base series selector (QComboBox)
-- [ ] Add overlay series selector (QComboBox)
-- [ ] Add opacity slider (0-100%)
-- [ ] Add threshold slider (0-100%)
-- [ ] Add colormap selector dropdown
-- [ ] Add window/level controls for overlay (or link to existing)
-- [ ] Emit signals when settings change
+- [x] Create `FusionControlsWidget` class (QWidget)
+- [x] Add enable/disable fusion checkbox
+- [x] Add base series selector (QComboBox) - *Implemented as read-only display*
+- [x] Add overlay series selector (QComboBox)
+- [x] Add opacity slider (0-100%)
+- [x] Add threshold slider (0-100%)
+- [x] Add colormap selector dropdown
+- [x] Add window/level controls for overlay (or link to existing)
+- [x] Emit signals when settings change
 
 #### 1.4 Create Fusion Coordinator
 **File**: `src/gui/fusion_coordinator.py`
 
-- [ ] Create `FusionCoordinator` class to manage fusion state and UI
-- [ ] Connect fusion controls to image viewer
-- [ ] Handle series selection changes
-- [ ] Coordinate slice synchronization between base and overlay
-- [ ] Manage fusion settings persistence
+- [x] Create `FusionCoordinator` class to manage fusion state and UI
+- [x] Connect fusion controls to image viewer
+- [x] Handle series selection changes
+- [x] Coordinate slice synchronization between base and overlay
+- [x] Manage fusion settings persistence
 
 #### 1.5 Integrate with Image Viewer
 **File**: `src/gui/image_viewer.py` (modify)
 
-- [ ] Add `set_fusion_overlay()` method
-- [ ] Modify `set_image()` to support fusion mode
-- [ ] Handle fusion rendering in paint events
-- [ ] Support independent zoom/pan for fused view
+- [x] Add `set_fusion_overlay()` method - *Implemented via SliceDisplayManager calling fusion_coordinator.get_fused_image()*
+- [x] Modify `set_image()` to support fusion mode - *Fusion applied in SliceDisplayManager.display_slice() before setting image*
+- [x] Handle fusion rendering in paint events - *Fused image is created and passed to set_image()*
+- [x] Support independent zoom/pan for fused view - *Zoom/pan works on fused image*
 
 #### 1.6 Integrate with Main Window
 **File**: `src/main.py` (modify)
 
-- [ ] Add fusion controls to UI (collapsible panel or menu)
-- [ ] Connect fusion coordinator to main window
-- [ ] Add menu item to enable/disable fusion mode
-- [ ] Handle series changes affecting fusion
+- [x] Add fusion controls to UI (collapsible panel or menu) - *Implemented via fusion_controls_stack*
+- [x] Connect fusion coordinator to main window - *Implemented via _attach_fusion_components_to_subwindow()*
+- [x] Add menu item to enable/disable fusion mode - *Fusion enabled via checkbox in controls widget*
+- [x] Handle series changes affecting fusion - *Implemented via fusion state persistence and restoration*
 
 #### 1.7 Testing
-- [ ] Test with same-scanner PET-CT data
-- [ ] Test with different slice counts between series
-- [ ] Test opacity and threshold controls
-- [ ] Test different colormaps
-- [ ] Test series switching while fusion is active
+- [x] Test with same-scanner PET-CT data - *Testing performed and passed*
+- [x] Test with different slice counts between series - *Testing performed and passed*
+- [x] Test opacity and threshold controls - *Testing performed and passed*
+- [x] Test different colormaps - *Testing performed and passed*
+- [x] Test series switching while fusion is active - *Testing performed and passed*
 
 ---
 
 ## Phase 2: Automatic Resampling
 
 ### Goal
-Handle fusion of series with different pixel spacings, orientations, or slice thicknesses through automatic resampling.
+Enhance fusion capabilities to handle series with different pixel spacings, orientations, or slice thicknesses through automatic 3D volume resampling using SimpleITK. This extends Phase 1's basic 2D resizing to handle more complex spatial transformations.
+
+### Current Status & Implementation Approach
+
+**Phase 1 Implementation (Current)**: Phase 1 has implemented a basic 2D resampling approach using PIL that handles:
+- Different pixel spacings (resizes overlay to match physical dimensions of base)
+- Different array shapes (fallback resize to match base dimensions)
+- Translation offsets based on ImagePositionPatient
+- **Location**: `src/core/fusion_processor.py` lines 173-207
+
+**Phase 2 Enhancement (Planned)**: This phase adds robust 3D volume resampling with SimpleITK to handle:
+- Different slice thicknesses properly (e.g., 1mm CT vs 3mm PET)
+- Different orientations (axial vs sagittal vs coronal) via ImageOrientationPatient
+- Full 3D spatial transformations with proper coordinate system handling
+- Volume caching for performance (avoid re-resampling on slice navigation)
+- Multiple interpolation methods (linear, nearest, cubic, B-spline)
+- **Decision Point**: When to use 2D PIL resize (fast, current) vs 3D SimpleITK (robust, Phase 2)
 
 ### Prerequisites
-- [ ] Phase 1 complete and tested
+- [x] Phase 1 complete and tested
 - [ ] Add SimpleITK to requirements.txt
 
 ### Tasks
@@ -150,62 +166,103 @@ Handle fusion of series with different pixel spacings, orientations, or slice th
 **File**: `src/core/image_resampler.py`
 
 - [ ] Create `ImageResampler` class
-- [ ] Implement DICOM to SimpleITK volume conversion
+- [ ] Implement DICOM to SimpleITK volume conversion (with proper spatial metadata)
 - [ ] Implement SimpleITK to numpy conversion
-- [ ] Implement resampling to reference grid
-- [ ] Support different interpolation methods (linear, nearest, cubic)
+- [ ] Implement resampling to reference grid (3D volume resampling)
+- [ ] Support different interpolation methods (linear, nearest, cubic, B-spline)
 - [ ] Cache resampled volumes for performance
+- [ ] Handle ImageOrientationPatient for different slice orientations
+- [ ] Properly handle slice spacing/thickness differences
 
 ```python
 # Proposed class structure
 class ImageResampler:
     def __init__(self):
-        self._cache: Dict[str, np.ndarray] = {}
+        self._cache: Dict[Tuple[str, str], sitk.Image] = {}  # Cache key: (overlay_uid, base_uid)
+        self._cache_lock = threading.Lock()  # For thread-safe caching
     
-    def dicom_series_to_sitk(self, datasets: List[Dataset]) -> sitk.Image: ...
+    def dicom_series_to_sitk(self, datasets: List[Dataset]) -> sitk.Image:
+        """
+        Convert DICOM series to SimpleITK image with proper spatial metadata.
+        Handles ImagePositionPatient, ImageOrientationPatient, PixelSpacing, SliceThickness.
+        """
+        ...
+    
     def sitk_to_numpy(self, sitk_image: sitk.Image) -> np.ndarray: ...
+    
     def resample_to_reference(
         self, 
         moving: sitk.Image, 
         reference: sitk.Image,
         interpolator: str = 'linear'
-    ) -> sitk.Image: ...
+    ) -> sitk.Image:
+        """
+        Resample moving image to match reference image's grid.
+        Uses sitk.Resample() with proper transform.
+        """
+        ...
+    
     def get_resampled_slice(
         self,
         overlay_datasets: List[Dataset],
         reference_datasets: List[Dataset],
-        slice_idx: int
-    ) -> np.ndarray: ...
+        slice_idx: int,
+        use_cache: bool = True
+    ) -> np.ndarray:
+        """
+        Get resampled slice from overlay volume.
+        Caches full volume resampling for performance.
+        """
+        ...
+    
+    def needs_resampling(
+        self,
+        overlay_datasets: List[Dataset],
+        reference_datasets: List[Dataset]
+    ) -> Tuple[bool, str]:
+        """
+        Determine if 3D resampling is needed.
+        Returns (needs_resampling: bool, reason: str).
+        Checks: pixel spacing, slice thickness, orientation differences.
+        """
+        ...
 ```
 
 #### 2.3 Update Fusion Handler
 **File**: `src/core/fusion_handler.py` (modify)
 
-- [ ] Add resampling support when grids don't match
-- [ ] Detect when resampling is needed (different spacing/orientation)
-- [ ] Integrate `ImageResampler` for automatic alignment
+- [ ] Add resampling support when grids don't match (beyond current 2D PIL resize)
+- [ ] Detect when 3D resampling is needed (different spacing/orientation/slice thickness)
+- [ ] Integrate `ImageResampler` for automatic 3D volume alignment
 - [ ] Add progress callback for long resampling operations
+- [ ] Decide when to use 2D PIL resize (current) vs 3D SimpleITK resampling (Phase 2)
 
 #### 2.4 Update Fusion Controls
 **File**: `src/gui/fusion_controls_widget.py` (modify)
 
-- [ ] Add interpolation method selector
-- [ ] Add "Resample Now" button for manual trigger
-- [ ] Add progress indicator for resampling
-- [ ] Show resampling status/warnings
+- [ ] Add interpolation method selector (linear, nearest, cubic, B-spline)
+- [ ] Add "Resample Now" button for manual trigger (optional - auto-resample by default)
+- [ ] Add progress indicator for resampling operations
+- [ ] Show resampling status/warnings (e.g., "Resampling 3D volume...", "Different orientation detected")
+- [ ] Add option to use 2D resize (current) vs 3D resampling (Phase 2) for performance tuning
 
 #### 2.5 Performance Optimization
-- [ ] Implement background resampling thread
-- [ ] Add volume caching to avoid repeated resampling
-- [ ] Implement slice-by-slice resampling for memory efficiency
-- [ ] Add memory usage warnings for large datasets
+- [ ] Implement background resampling thread (QThread) for non-blocking UI
+- [ ] Add volume caching to avoid repeated resampling (cache key: series_uid + reference_series_uid)
+- [ ] Implement slice-by-slice resampling for memory efficiency (alternative to full volume)
+- [ ] Add memory usage warnings for large datasets (e.g., >2GB volumes)
+- [ ] Consider lazy loading: resample only when fusion is enabled
+- [ ] Add cache invalidation when series data changes
 
 #### 2.6 Testing
-- [ ] Test with different pixel spacings
-- [ ] Test with different slice thicknesses
-- [ ] Test with different orientations (axial vs sagittal)
-- [ ] Test memory usage with large datasets
-- [ ] Test caching effectiveness
+- [ ] Test with different pixel spacings (verify 3D resampling vs current 2D approach)
+- [ ] Test with different slice thicknesses (e.g., 1mm CT vs 3mm PET)
+- [ ] Test with different orientations (axial vs sagittal vs coronal)
+- [ ] Test with rotated images (ImageOrientationPatient differences)
+- [ ] Test memory usage with large datasets (e.g., whole-body PET-CT)
+- [ ] Test caching effectiveness (verify cache hits/misses)
+- [ ] Compare performance: 2D PIL resize (Phase 1) vs 3D SimpleITK resampling (Phase 2)
+- [ ] Test edge cases: missing spatial metadata, inconsistent orientations
 
 ---
 
@@ -381,12 +438,13 @@ requirements.txt         # Phase 2
 SimpleITK>=2.3.0
 ```
 
-### Already Present (verify)
+### Already Present (verified)
 ```text
-matplotlib  # For colormaps
-numpy       # For array operations
-pydicom     # For DICOM handling
-PyQt6       # For UI
+matplotlib>=3.8.0  # For colormaps (in requirements.txt)
+numpy>=1.24.0      # For array operations (in requirements.txt)
+pydicom>=2.4.0     # For DICOM handling (in requirements.txt)
+PySide6>=6.6.0     # For UI (in requirements.txt)
+Pillow>=10.0.0     # For image processing (used in Phase 1 for 2D resizing)
 ```
 
 ---
@@ -410,8 +468,9 @@ PyQt6       # For UI
    - Same slice positions
 
 2. **Different resolution datasets** (Phase 2)
-   - Different pixel spacings
-   - Different slice thicknesses
+   - Different pixel spacings (currently handled by Phase 1 2D resize, Phase 2 adds 3D)
+   - Different slice thicknesses (requires Phase 2 3D resampling)
+   - Different orientations (axial vs sagittal vs coronal) - requires Phase 2
 
 3. **Multi-scanner datasets** (Phase 3)
    - Different Frame of Reference
