@@ -1045,8 +1045,9 @@ class SliceDisplayManager:
                 roi.item.setZValue(100)  # Above image but below overlay
         
         # Update ROI list panel to show only ROIs for current slice
+        # Pass the ROI manager to ensure the panel uses the correct manager for this subwindow
         if self.roi_list_panel is not None:
-            self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
+            self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier, self.roi_manager)
         
         # Update ROI statistics overlays
         if self.update_roi_statistics_overlays_callback is not None:
