@@ -1651,7 +1651,7 @@ class DICOMViewerApp(QObject):
             series_uid = get_composite_series_key(self.current_dataset)
             # Use current slice index as instance identifier (array position)
             instance_identifier = self.current_slice_index
-            self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
+            self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier, self.roi_manager)
     
     def _setup_ui(self) -> None:
         """Set up the user interface layout."""
@@ -1809,7 +1809,7 @@ class DICOMViewerApp(QObject):
                 series_uid = get_composite_series_key(self.current_dataset)
                 # Use current_slice_index as instance identifier (same as display_rois_for_slice)
                 instance_identifier = self.current_slice_index
-                self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
+                self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier, self.roi_manager)
         
         # Clear selected ROI if it doesn't belong to the new manager
         if self.roi_manager:
