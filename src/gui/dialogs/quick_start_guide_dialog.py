@@ -185,6 +185,7 @@ class QuickStartGuideDialog(QDialog):
                 <li><a href="#rois">ROIs (Regions of Interest)</a></li>
                 <li><a href="#intensity-projections">Intensity Projections (Combine Slices)</a></li>
                 <li><a href="#image-inversion">Image Inversion</a></li>
+                <li><a href="#image-fusion">Image Fusion</a></li>
                 <li><a href="#window-level">Window/Level Adjustment</a></li>
                 <li><a href="#mouse-modes">Mouse Modes</a></li>
                 <li><a href="#scroll-wheel-modes">Scroll Wheel Modes</a></li>
@@ -358,6 +359,21 @@ class QuickStartGuideDialog(QDialog):
                 <li><strong>Toggle Inversion:</strong> Press <code>I</code> key or right-click → "Invert Image (I)"</li>
                 <li>Inverts image colors (grayscale or RGB)</li>
                 <li>Inversion state is preserved per series</li>
+            </ul>
+            
+            <h2 id="image-fusion">Image Fusion</h2>
+            <p><strong>Note:</strong> Image fusion is a feature that has been added and is continuing to be refined. Functionality may evolve with updates.</p>
+            <p>Overlay functional imaging data (e.g., PET, SPECT) on anatomical imaging data (e.g., CT, MR):</p>
+            <ul>
+                <li><strong>Access:</strong> Use the "Image Fusion" widget in the right panel</li>
+                <li><strong>Requirements:</strong> Base and overlay series must share the same Frame of Reference UID (typically from same-scanner acquisitions like PET-CT)</li>
+                <li><strong>Enable Fusion:</strong> Check "Enable Fusion" to activate overlay display</li>
+                <li><strong>Overlay Series Selection:</strong> Choose which series to overlay from the dropdown menu</li>
+                <li><strong>Opacity Control:</strong> Adjust overlay transparency (0-100%)</li>
+                <li><strong>Threshold Control:</strong> Set minimum intensity threshold for overlay display (0-100%)</li>
+                <li><strong>Colormap Selection:</strong> Choose from multiple colormaps (hot, jet, viridis, plasma, inferno, rainbow, cool, spring) for overlay visualization</li>
+                <li><strong>Overlay Window/Level:</strong> Independent window/level controls for the overlay image</li>
+                <li><strong>Translation Offset:</strong> Fine-tune overlay positioning with X and Y offset controls</li>
             </ul>
             
             <h2 id="window-level">Window/Level Adjustment</h2>
