@@ -19,15 +19,14 @@ Requirements:
 """
 
 from typing import Optional, Callable, Dict, List, Tuple
-from collections.abc import Sequence
 import numpy as np
 from PIL import Image
 from pydicom.dataset import Dataset
 
 from core.fusion_handler import FusionHandler
 from core.fusion_processor import FusionProcessor
-from core.dicom_processor import DICOMProcessor
 from gui.fusion_controls_widget import FusionControlsWidget
+from PySide6.QtWidgets import QMessageBox
 
 
 class FusionCoordinator:
@@ -83,38 +82,13 @@ class FusionCoordinator:
         self._check_notification_shown = check_notification_shown
         self._mark_notification_shown = mark_notification_shown
         
-<<<<<<< Updated upstream
-        # Track last auto-detection to avoid repeated prompts
-        self._last_auto_detection_study = ""
-        self._last_base_display = ""
-    
-    def set_base_series(self, series_uid: str) -> None:
-        """Set base series programmatically (read-only in UI)."""
-        if not series_uid:
-            return
-        if self.fusion_handler.base_series_uid == series_uid:
-            return
-        self.fusion_handler.set_base_series(series_uid)
-        self._update_base_display(series_uid)
-        self.fusion_controls.reset_user_modified_offset()
-        if (
-            self.fusion_handler.fusion_enabled
-            and self.fusion_handler.overlay_series_uid
-        ):
-            if not self._apply_cached_alignment(reset_user_override=True):
-                self._update_spatial_alignment()
-=======
         # Note: Signals are connected externally when subwindow gains focus
         # Do not auto-connect here to allow per-subwindow signal routing
->>>>>>> Stashed changes
     
     def connect_fusion_controls_signals(self) -> None:
         """Connect FusionControlsWidget signals to this coordinator."""
         self.fusion_controls.fusion_enabled_changed.connect(self.handle_fusion_enabled_changed)
-<<<<<<< Updated upstream
-=======
         # Base series is read-only display, no signal connection needed
->>>>>>> Stashed changes
         self.fusion_controls.overlay_series_changed.connect(self.handle_overlay_series_changed)
         self.fusion_controls.opacity_changed.connect(self.handle_opacity_changed)
         self.fusion_controls.threshold_changed.connect(self.handle_threshold_changed)
@@ -178,15 +152,8 @@ class FusionCoordinator:
                 self.fusion_controls.set_status("Please select base and overlay series", is_error=True)
                 return
             
-            # Refresh window/level for overlay series if it's already set
-            # This ensures correct values when enabling fusion with an existing overlay selection
-            if self.fusion_handler.overlay_series_uid:
-                self._refresh_overlay_window_level()
-            
-            # Apply cached alignment if available, otherwise calculate now
-            applied_cached_alignment = self._apply_cached_alignment(reset_user_override=True)
-            if not applied_cached_alignment:
-                self._update_spatial_alignment()
+            # Update spatial alignment when first enabling fusion
+            self._update_spatial_alignment()
             
             # Check Frame of Reference compatibility
             studies = self.get_current_studies()
@@ -212,51 +179,15 @@ class FusionCoordinator:
         # Request display update
         self.request_display_update()
     
-    def _refresh_overlay_window_level(self) -> None:
+    def handle_base_series_changed(self, series_uid: str) -> None:
         """
-<<<<<<< Updated upstream
-        Refresh window/level for the current overlay series.
-        
-        This is called when fusion is enabled to ensure window/level is correctly
-        set for the overlay series, even if it was selected before fusion was enabled.
-        """
-        overlay_series_uid = self.fusion_handler.overlay_series_uid
-        if not overlay_series_uid:
-            return
-        
-        studies = self.get_current_studies()
-        study_uid = self.get_current_study_uid()
-        
-        if study_uid not in studies or overlay_series_uid not in studies[study_uid]:
-            return
-        
-        datasets = studies[study_uid][overlay_series_uid]
-        if not datasets:
-            return
-        
-        # Use shared method with debugging and series-wide pixel ranges
-        self._setup_overlay_window_level_with_debugging(overlay_series_uid, datasets)
-    
-    def _setup_overlay_window_level_with_debugging(self, series_uid: str, datasets: List[Dataset]) -> None:
-        """
-        Setup overlay window/level with comprehensive debugging and series-wide pixel range validation.
-        
-        This method extracts window/level from DICOM tags, validates against series-wide pixel ranges,
-        and recalculates if needed. Uses entire series pixel range instead of just first slice.
-=======
         Handle base series change (programmatic only, base is read-only in UI).
->>>>>>> Stashed changes
         
         Args:
-            series_uid: Overlay series UID (for debugging output)
-            datasets: List of DICOM datasets for the overlay series
+            series_uid: New base series UID
         """
-        if not datasets:
-            return
+        self.fusion_handler.set_base_series(series_uid)
         
-<<<<<<< Updated upstream
-        first_dataset = datasets[0]
-=======
         # Update base display
         self._update_base_display(series_uid)
         
@@ -265,161 +196,10 @@ class FusionCoordinator:
         
         # Update spatial alignment parameters
         self._update_spatial_alignment()
->>>>>>> Stashed changes
         
-        # Extract rescale parameters to determine if W/L should be in rescaled units
-        rescale_slope, rescale_intercept, rescale_type = DICOMProcessor.get_rescale_parameters(first_dataset)
-        
-        # Use DICOMProcessor's standard W/L extraction logic
-        # This handles: DICOM tags first, then auto-calculates from pixel data if missing
-        window_center, window_width, is_rescaled = DICOMProcessor.get_window_level_from_dataset(
-            first_dataset,
-            rescale_slope=rescale_slope,
-            rescale_intercept=rescale_intercept
-        )
-        
-        print(f"\n[OVERLAY W/L DEBUG] Overlay series: {series_uid[:28]}...")
-        print(f"  Modality: {getattr(first_dataset, 'Modality', 'Unknown')}")
-        print(f"  Rescale params: slope={rescale_slope}, intercept={rescale_intercept}, type={rescale_type}")
-        print(f"  W/L from dataset: center={window_center}, width={window_width}, is_rescaled={is_rescaled}")
-        
-        if window_center is not None and window_width is not None:
-            # Determine if we should apply rescale transformation for display/processing
-            # Note: Pixel arrays from DICOM are always raw; rescale parameters indicate
-            # we should apply rescale transformation (raw * slope + intercept) for display
-            should_apply_rescale = (rescale_slope is not None and 
-                                   rescale_intercept is not None and 
-                                   rescale_slope != 0.0)
-            
-            final_window_width = window_width
-            final_window_center = window_center
-            
-            # Convert window/level to match the units we'll use after applying rescale (if applicable)
-            # DICOM window/level tags are typically in rescaled units when rescale parameters exist
-            if should_apply_rescale:
-                if is_rescaled:
-                    # W/L tags are in rescaled units, and we'll apply rescale, so use directly
-                    print(f"  Using W/L directly (W/L in rescaled units, will apply rescale to pixels)")
-                else:
-                    # W/L tags are in raw units, but we'll apply rescale, so convert W/L to rescaled units
-                    final_window_center, final_window_width = DICOMProcessor.convert_window_level_raw_to_rescaled(
-                        window_center, window_width, rescale_slope, rescale_intercept
-                    )
-                    print(f"  Converted W/L from raw to rescaled: ({window_center:.1f}, {window_width:.1f}) -> ({final_window_center:.1f}, {final_window_width:.1f})")
-            else:
-                if is_rescaled:
-                    # W/L tags are in rescaled units, but we won't apply rescale, so convert W/L to raw units
-                    final_window_center, final_window_width = DICOMProcessor.convert_window_level_rescaled_to_raw(
-                        window_center, window_width, rescale_slope or 1.0, rescale_intercept or 0.0
-                    )
-                    print(f"  Converted W/L from rescaled to raw: ({window_center:.1f}, {window_width:.1f}) -> ({final_window_center:.1f}, {final_window_width:.1f})")
-                else:
-                    # W/L tags are in raw units, and we won't apply rescale, so use directly
-                    print(f"  Using W/L directly (W/L in raw units, no rescale to apply)")
-            
-            # Validate window/level against series-wide pixel data
-            # Use series-wide pixel range instead of just first slice
-            series_raw_min, series_raw_max = DICOMProcessor.get_series_pixel_value_range(
-                datasets, apply_rescale=False
-            )
-            
-            if series_raw_min is not None and series_raw_max is not None:
-                series_raw_range = series_raw_max - series_raw_min
-                print(f"  [W/L VALIDATION] Raw pixel range (series-wide): [{series_raw_min:.1f}, {series_raw_max:.1f}] (range: {series_raw_range:.1f})")
-                
-                # Get rescaled series range if rescale should be applied
-                series_rescaled_min = None
-                series_rescaled_max = None
-                if should_apply_rescale and rescale_slope is not None and rescale_intercept is not None:
-                    series_rescaled_min, series_rescaled_max = DICOMProcessor.get_series_pixel_value_range(
-                        datasets, apply_rescale=True
-                    )
-                    
-                    if series_rescaled_min is not None and series_rescaled_max is not None:
-                        series_rescaled_range = series_rescaled_max - series_rescaled_min
-                        print(f"  [W/L VALIDATION] Rescaled pixel range (series-wide): [{series_rescaled_min:.1f}, {series_rescaled_max:.1f}] (range: {series_rescaled_range:.1f})")
-                        print(f"  [W/L VALIDATION] Rescale formula: raw * {rescale_slope:.6f} + {rescale_intercept:.6f}")
-                        # Verification: raw_max * slope + intercept should equal rescaled_max
-                        expected_rescaled_max = series_raw_max * float(rescale_slope) + float(rescale_intercept)
-                        print(f"  [W/L VALIDATION] Verification: raw_max * slope + intercept = {series_raw_max:.1f} * {rescale_slope:.6f} + {rescale_intercept:.6f} = {expected_rescaled_max:.1f} (matches rescaled_max {series_rescaled_max:.1f})")
-                
-                # Determine which pixel range to use for validation (rescaled if applicable, otherwise raw)
-                pixel_min = series_rescaled_min if (should_apply_rescale and series_rescaled_min is not None) else series_raw_min
-                pixel_max = series_rescaled_max if (should_apply_rescale and series_rescaled_max is not None) else series_raw_max
-                pixel_range = pixel_max - pixel_min
-                
-                # Show DICOM W/L in both units for comparison
-                print(f"  [W/L VALIDATION] DICOM W/L (from tags): center={window_center:.1f}, width={window_width:.1f}, is_rescaled={is_rescaled}")
-                if should_apply_rescale:
-                    if is_rescaled:
-                        # DICOM tags are in rescaled units, show what they'd be in raw units
-                        wl_raw = DICOMProcessor.convert_window_level_rescaled_to_raw(
-                            window_center, window_width, rescale_slope, rescale_intercept
-                        )
-                        print(f"  [W/L VALIDATION] DICOM W/L in raw units: center={wl_raw[0]:.1f}, width={wl_raw[1]:.1f}")
-                    else:
-                        # DICOM tags are in raw units, show what they'd be in rescaled units
-                        wl_rescaled = DICOMProcessor.convert_window_level_raw_to_rescaled(
-                            window_center, window_width, rescale_slope, rescale_intercept
-                        )
-                        print(f"  [W/L VALIDATION] DICOM W/L in rescaled units: center={wl_rescaled[0]:.1f}, width={wl_rescaled[1]:.1f}")
-                else:
-                    if is_rescaled:
-                        # DICOM tags are in rescaled units, show what they'd be in raw units
-                        wl_raw = DICOMProcessor.convert_window_level_rescaled_to_raw(
-                            window_center, window_width, rescale_slope or 1.0, rescale_intercept or 0.0
-                        )
-                        print(f"  [W/L VALIDATION] DICOM W/L in raw units: center={wl_raw[0]:.1f}, width={wl_raw[1]:.1f}")
-                
-                # Calculate window bounds
-                window_min = final_window_center - final_window_width / 2.0
-                window_max = final_window_center + final_window_width / 2.0
-                
-                # Show final W/L and validation checks
-                print(f"  [W/L VALIDATION] Final W/L (after conversion): center={final_window_center:.1f}, width={final_window_width:.1f}")
-                print(f"  [W/L VALIDATION] Final W/L range: [{window_min:.1f}, {window_max:.1f}]")
-                final_units = "rescaled" if should_apply_rescale else "raw"
-                print(f"  [W/L VALIDATION] Final W/L units: {final_units}")
-                
-                # Check if window/level is reasonable for the pixel range
-                # If window is way outside pixel range or width is orders of magnitude larger, recalculate
-                needs_recalculation = False
-                if pixel_range > 0:
-                    check1 = window_min > pixel_max * 1.5
-                    check2 = window_max < pixel_min * 0.5
-                    check3 = final_window_width > pixel_range * 10
-                    
-                    if check1 or check2 or check3:
-                        needs_recalculation = True
-                        print(f"  [W/L VALIDATION] WARNING: Window/level doesn't match pixel range!")
-                        print(f"  [W/L VALIDATION]   - Window min ({window_min:.1f}) > pixel max * 1.5 ({pixel_max * 1.5:.1f}): {check1}")
-                        print(f"  [W/L VALIDATION]   - Window max ({window_max:.1f}) < pixel min * 0.5 ({pixel_min * 0.5:.1f}): {check2}")
-                        print(f"  [W/L VALIDATION]   - Window width ({final_window_width:.1f}) > pixel range * 10 ({pixel_range * 10:.1f}): {check3}")
-                        print(f"  [W/L VALIDATION] Recalculating from pixel data...")
-                
-                if needs_recalculation:
-                    # Recalculate from series-wide pixel data
-                    # Use series min/max directly (no median calculation across all slices for performance)
-                    array_type = "rescaled (after transformation)" if should_apply_rescale else "raw"
-                    print(f"  [W/L VALIDATION] Recalculating from {array_type} pixel array (series-wide)...")
-                    midpoint = (pixel_min + pixel_max) / 2.0
-                    # Use midpoint directly (median across all slices would be too memory-intensive)
-                    final_window_center = midpoint
-                    final_window_width = pixel_range if pixel_range > 0 else (pixel_max - pixel_min)
-                    print(f"  [W/L VALIDATION] Recalculated W/L from pixel data: window={final_window_width:.1f}, level={final_window_center:.1f}")
-            
-                # Set window/level (whether validated or recalculated)
-                self.fusion_controls.set_overlay_window_level(final_window_width, final_window_center)
-                print(f"  Applied overlay W/L: window={final_window_width:.1f}, level={final_window_center:.1f}")
-            else:
-                # Pixel range calculation failed, but we still have W/L from DICOM tags
-                # Set it anyway (validation will happen on first display)
-                self.fusion_controls.set_overlay_window_level(final_window_width, final_window_center)
-                print(f"  Applied overlay W/L (no pixel validation): window={final_window_width:.1f}, level={final_window_center:.1f}")
-        else:
-            # Fallback if extraction failed (shouldn't happen with auto-calculation)
-            print(f"  WARNING: Could not determine W/L for overlay, using defaults")
-            self.fusion_controls.set_overlay_window_level(1000.0, 500.0)
+        # Re-validate if fusion is enabled
+        if self.fusion_handler.fusion_enabled:
+            self.handle_fusion_enabled_changed(True)
     
     def _update_base_display(self, base_uid: str) -> None:
         """
@@ -462,42 +242,18 @@ class FusionCoordinator:
         Args:
             series_uid: New overlay series UID
         """
-        current_base_uid = self.fusion_handler.base_series_uid
-        previous_overlay_uid = self.fusion_handler.overlay_series_uid
-        
-<<<<<<< Updated upstream
-        if current_base_uid and series_uid == current_base_uid:
-            self.fusion_controls.set_status(
-                "Overlay series must differ from base", is_error=True
-            )
-            self.fusion_controls.revert_overlay_selection(
-                preferred_uid=previous_overlay_uid,
-                exclude_uid=current_base_uid
-            )
-            return
-        
-        # Always update overlay series and window/level, even if series_uid hasn't changed
-        # This ensures window/level is refreshed when re-selecting the same series
         self.fusion_handler.set_overlay_series(series_uid)
-        self.fusion_controls.reset_user_modified_offset()
         
-        # Auto-set overlay window/level using DICOM tags or auto-calculation
-=======
         # Update resampling status when overlay changes
         self._update_resampling_status()
         
         # Auto-set overlay window/level: try DICOM tags first, then auto-calculate from series
->>>>>>> Stashed changes
         studies = self.get_current_studies()
         study_uid = self.get_current_study_uid()
         
         if study_uid in studies and series_uid in studies[study_uid]:
             datasets = studies[study_uid][series_uid]
             if datasets:
-<<<<<<< Updated upstream
-                print(f"\n[OVERLAY W/L DEBUG] Overlay series changed: {series_uid[:28]}...")
-                self._setup_overlay_window_level_with_debugging(series_uid, datasets)
-=======
                 from core.dicom_processor import DICOMProcessor
                 
                 # Debug: Show overlay series pixel value statistics
@@ -555,12 +311,9 @@ class FusionCoordinator:
                     self.fusion_handler.overlay_window = window_width
                     self.fusion_handler.overlay_level = window_center
                     self.fusion_controls.set_overlay_window_level(window_width, window_center)
->>>>>>> Stashed changes
         
-        # Update spatial alignment parameters only when fusion is active
-        if self.fusion_handler.fusion_enabled:
-            if not self._apply_cached_alignment(reset_user_override=True):
-                self._update_spatial_alignment()
+        # Update spatial alignment parameters
+        self._update_spatial_alignment()
         
         # Re-validate if fusion is enabled
         if self.fusion_handler.fusion_enabled:
@@ -578,84 +331,6 @@ class FusionCoordinator:
         # Request display update if fusion is enabled
         if self.fusion_handler.fusion_enabled:
             self.request_display_update()
-    
-    def _apply_cached_alignment(self, reset_user_override: bool = False) -> bool:
-        """Apply cached scaling/offset values for current base/overlay pair."""
-        if self.fusion_handler.base_series_uid == self.fusion_handler.overlay_series_uid:
-            return False
-        
-        alignment = self.fusion_handler.get_alignment(
-            self.fusion_handler.base_series_uid,
-            self.fusion_handler.overlay_series_uid
-        )
-        if not alignment:
-            return False
-        
-        scale = alignment.get('scale')
-        offset = alignment.get('offset')
-        
-        if scale and all(value is not None for value in scale):
-            self.fusion_controls.set_scaling_factors(scale[0], scale[1])
-        
-        if reset_user_override:
-            self.fusion_controls.reset_user_modified_offset()
-        
-        if offset and not self.fusion_controls.has_user_modified_offset():
-            self.fusion_controls.set_calculated_offset(offset[0], offset[1])
-        
-        return True
-    
-    def update_base_display_from_series(self, series_uid: str) -> None:
-        """External hook to update base display without changing selection."""
-        short_uid = (series_uid[:28] + '...') if series_uid and len(series_uid) > 31 else (series_uid or 'None')
-        print(f"[FUSION DEBUG] FusionCoordinator.update_base_display_from_series -> {short_uid}")
-        self._update_base_display(series_uid)
-    
-    def _update_base_display(self, base_uid: str) -> None:
-        """Update the read-only base display text."""
-        display_name = "Not set"
-        if base_uid:
-            studies = self.get_current_studies()
-            study_uid = self.get_current_study_uid()
-            if study_uid in studies and base_uid in studies[study_uid]:
-                datasets = studies[study_uid][base_uid]
-                if datasets:
-                    first_ds = datasets[0]
-                    series_number = getattr(first_ds, 'SeriesNumber', None)
-                    series_desc = getattr(first_ds, 'SeriesDescription', '')
-                    modality = getattr(first_ds, 'Modality', '')
-                    parts = []
-                    if series_number is not None:
-                        parts.append(f"S{series_number}")
-                    if modality:
-                        parts.append(modality)
-                    if series_desc:
-                        parts.append(series_desc)
-                    if parts:
-                        display_name = " - ".join(parts)
-                    else:
-                        display_name = base_uid[:20]
-            else:
-                display_name = base_uid[:20]
-        
-        if display_name != self._last_base_display:
-            self.fusion_controls.set_base_display(display_name)
-            self._last_base_display = display_name
-    
-    def _extract_first_float(self, value) -> Optional[float]:
-        """Extract first numeric value from DICOM tag (handles MultiValue)."""
-        if value is None:
-            return None
-        
-        if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
-            if len(value) == 0:
-                return None
-            value = value[0]
-        
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            return None
     
     def handle_threshold_changed(self, threshold: float) -> None:
         """
@@ -774,39 +449,6 @@ class FusionCoordinator:
         if self.fusion_handler.fusion_enabled:
             self.request_display_update()
     
-<<<<<<< Updated upstream
-    def export_state(self) -> Dict[str, object]:
-        """Return a snapshot of the current fusion state."""
-        return {
-            "base_series_uid": self.fusion_handler.base_series_uid or "",
-            "overlay_series_uid": self.fusion_handler.overlay_series_uid or "",
-            "fusion_enabled": self.fusion_handler.fusion_enabled,
-        }
-    
-    def restore_state(self, state: Optional[Dict[str, object]]) -> None:
-        """Restore fusion selections and enabled state from a snapshot."""
-        if not state:
-            return
-        
-        base_uid = state.get("base_series_uid") or ""
-        overlay_uid = state.get("overlay_series_uid") or ""
-        fusion_enabled = bool(state.get("fusion_enabled", False))
-        
-        if base_uid:
-            self.fusion_handler.set_base_series(base_uid)
-            self._update_base_display(base_uid)
-        if overlay_uid:
-            self.fusion_handler.set_overlay_series(overlay_uid)
-            # Refresh window/level for the restored overlay series
-            self._refresh_overlay_window_level()
-        
-        self.fusion_handler.fusion_enabled = fusion_enabled
-        self.fusion_controls.set_fusion_enabled(fusion_enabled)
-        
-        if fusion_enabled and overlay_uid:
-            if not self._apply_cached_alignment(reset_user_override=True):
-                self._update_spatial_alignment()
-=======
     def handle_resampling_mode_changed(self, mode: str) -> None:
         """
         Handle resampling mode change.
@@ -876,7 +518,6 @@ class FusionCoordinator:
         
         # Update UI
         self.fusion_controls.set_resampling_status(mode_display, reason, show_warning, warning_text)
->>>>>>> Stashed changes
     
     def get_fused_image(
         self,
@@ -941,12 +582,6 @@ class FusionCoordinator:
                 base_ds = base_datasets[current_slice_idx]
                 base_pixel_spacing = self.fusion_handler.get_pixel_spacing(base_ds)
                 
-<<<<<<< Updated upstream
-                # Get translation offset from controls (user's current setting)
-                translation_offset = self.fusion_controls.get_translation_offset()
-                # DEBUG - commented out
-                # print(f"[OFFSET DEBUG] get_fused_image: Using offset from spinboxes: X={translation_offset[0]:.1f}, Y={translation_offset[1]:.1f}")
-=======
                 # Find corresponding overlay dataset for offset calculation
                 overlay_idx, _ = self.fusion_handler.find_matching_slice(
                     current_slice_idx, base_datasets, overlay_datasets
@@ -966,7 +601,6 @@ class FusionCoordinator:
             # Manual fine-tuning would require a different approach (e.g., transform matrix adjustment)
             translation_offset = None
             print(f"[OFFSET DEBUG] get_fused_image (3D mode): Offset not applied - 3D resampling handles alignment")
->>>>>>> Stashed changes
         
         # Create fused image
         try:
@@ -1082,20 +716,6 @@ class FusionCoordinator:
             if offset:
                 offset_x, offset_y = offset
                 stored_offset = (offset_x, offset_y)
-<<<<<<< Updated upstream
-                # DEBUG - commented out
-                # print(f"  calculated offset: ({offset_x:.2f}, {offset_y:.2f}) pixels")
-                # print(f"  base ImagePositionPatient: {self.fusion_handler.get_image_position_patient(base_ds)}")
-                # print(f"  overlay ImagePositionPatient: {self.fusion_handler.get_image_position_patient(overlay_ds)}")
-                self.fusion_controls.reset_user_modified_offset()
-                self.fusion_controls.set_calculated_offset(offset_x, offset_y)
-            else:
-                # DEBUG - commented out
-                # print(f"  offset calculation failed - no ImagePositionPatient")
-                stored_offset = (0.0, 0.0)
-                self.fusion_controls.reset_user_modified_offset()
-                self.fusion_controls.set_calculated_offset(0.0, 0.0)
-=======
                 print(f"  calculated offset: ({offset_x:.2f}, {offset_y:.2f}) pixels")
                 print(f"  base ImagePositionPatient: {self.fusion_handler.get_image_position_patient(base_ds)}")
                 print(f"  overlay ImagePositionPatient: {self.fusion_handler.get_image_position_patient(overlay_ds)}")
@@ -1108,33 +728,22 @@ class FusionCoordinator:
                 stored_offset = (0.0, 0.0)
                 if not self.fusion_controls.has_user_modified_offset():
                     self.fusion_controls.set_calculated_offset(0.0, 0.0)
->>>>>>> Stashed changes
                 if not self.fusion_controls.status_label.text().startswith("Status: Warning"):
                     self.fusion_controls.set_status("Warning: Image position not available", is_error=True)
         else:
             stored_offset = (0.0, 0.0)
-<<<<<<< Updated upstream
-            self.fusion_controls.reset_user_modified_offset()
-            self.fusion_controls.set_calculated_offset(0.0, 0.0)
-        
-        if self.fusion_handler.base_series_uid != self.fusion_handler.overlay_series_uid:
-=======
             if not self.fusion_controls.has_user_modified_offset():
                 self.fusion_controls.set_calculated_offset(0.0, 0.0)
         
         # Store calculated values in cache
         if stored_scale is not None and stored_offset is not None:
->>>>>>> Stashed changes
             self.fusion_handler.set_alignment(
                 self.fusion_handler.base_series_uid,
                 self.fusion_handler.overlay_series_uid,
                 stored_scale,
                 stored_offset
             )
-<<<<<<< Updated upstream
-=======
             print(f"[SPATIAL ALIGNMENT] Stored in cache: scale={stored_scale}, offset={stored_offset}")
->>>>>>> Stashed changes
     
     def update_fusion_controls_series_list(self) -> None:
         """Update fusion controls with available series."""
@@ -1157,6 +766,7 @@ class FusionCoordinator:
             print(f"[FUSION DEBUG]     - {name}")
         
         # Update controls
+        current_base = self.fusion_handler.base_series_uid or ""
         current_overlay = self.fusion_handler.overlay_series_uid or ""
         
         # Auto-initialize base series to current viewing series if not set
@@ -1171,22 +781,16 @@ class FusionCoordinator:
         
         self.fusion_controls.update_series_lists(
             series_list,
+            current_base_uid=current_base,
             current_overlay_uid=current_overlay
         )
-        # NOTE: Do NOT update base display here - it should only be updated by
-        # update_base_display_from_series() when called with the focused subwindow's series
         
-<<<<<<< Updated upstream
-        # DEBUG
-        print(f"[FUSION DEBUG]   Dropdown updated. Overlay items: {self.fusion_controls.overlay_series_combo.count()}")
-=======
         # Update base display (now guaranteed to have a value if series is loaded)
         if current_base:
             self._update_base_display(current_base)
         else:
             # No series loaded, show "Not set"
             self._update_base_display("")
->>>>>>> Stashed changes
         
         # DEBUG
         print(f"[FUSION DEBUG]   Overlay dropdown updated. Overlay items: {self.fusion_controls.overlay_series_combo.count()}")
@@ -1198,8 +802,7 @@ class FusionCoordinator:
         # (This handles the case where series list is updated and selections exist)
         if self.fusion_handler.base_series_uid and self.fusion_handler.overlay_series_uid:
             print(f"[FUSION DEBUG] update_fusion_controls_series_list: Calling _update_spatial_alignment")
-            if not self._apply_cached_alignment(reset_user_override=True):
-                self._update_spatial_alignment()
+            self._update_spatial_alignment()
     
     def _auto_detect_fusion_candidates(
         self,
@@ -1263,11 +866,7 @@ class FusionCoordinator:
         overlay_name: str
     ) -> None:
         """
-<<<<<<< Updated upstream
-        Pre-select compatible fusion series without auto-enabling the mode.
-=======
         Inform user about compatible series for fusion.
->>>>>>> Stashed changes
         
         Args:
             base_uid: Base series UID
@@ -1275,35 +874,6 @@ class FusionCoordinator:
             overlay_uid: Overlay series UID
             overlay_name: Overlay series display name
         """
-<<<<<<< Updated upstream
-        self.fusion_handler.set_base_series(base_uid)
-        self._update_base_display(base_uid)
-        self.fusion_handler.set_overlay_series(overlay_uid)
-        self.fusion_controls.reset_user_modified_offset()
-        
-        # Get datasets for the overlay series and setup W/L with debugging
-        studies = self.get_current_studies()
-        study_uid = self.get_current_study_uid()
-        if study_uid in studies and overlay_uid in studies[study_uid]:
-            datasets = studies[study_uid][overlay_uid]
-            if datasets:
-                self._setup_overlay_window_level_with_debugging(overlay_uid, datasets)
-        
-        self.fusion_controls.update_series_lists(
-            self.fusion_handler.get_available_series_for_fusion(
-                self.get_current_studies(),
-                self.get_current_study_uid()
-            ),
-            current_overlay_uid=overlay_uid
-        )
-            
-        # Leave fusion disabled but inform the user that a compatible pair was found
-        self.fusion_handler.fusion_enabled = False
-        self.fusion_controls.set_fusion_enabled(False)
-        self.fusion_controls.set_status(
-            f"Fusion-ready: {base_name} + {overlay_name}. Enable to view overlay."
-        )
-=======
         # Show informational message about compatible series
         QMessageBox.information(
             self.fusion_controls,
@@ -1314,5 +884,4 @@ class FusionCoordinator:
             f"You can enable fusion from the Combine/Fuse tab."
         )
         # Note: Do not auto-enable fusion - user must manually enable it
->>>>>>> Stashed changes
 

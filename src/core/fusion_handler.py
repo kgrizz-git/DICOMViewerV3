@@ -19,11 +19,9 @@ Requirements:
     - SimpleITK for 3D resampling (Phase 2)
 """
 
-import time
 import numpy as np
 from typing import Optional, List, Tuple, Dict
 from pydicom.dataset import Dataset
-from core.dicom_processor import DICOMProcessor
 
 from core.image_resampler import ImageResampler
 from core.dicom_processor import DICOMProcessor
@@ -49,20 +47,6 @@ class FusionHandler:
         self.threshold: float = 0.2  # 0.0 to 1.0
         self.colormap: str = 'hot'
         
-<<<<<<< Updated upstream
-        # Track whether overlay pixels are in rescaled units
-        self.overlay_uses_rescaled: bool = False
-        self._overlay_rescale_slope: Optional[float] = None
-        self._overlay_rescale_intercept: Optional[float] = None
-        
-        # Cache for slice locations
-        self._slice_location_cache: Dict[str, List[Tuple[int, float]]] = {}
-        # Cache for spatial alignment per (base, overlay) series pair
-        self._alignment_cache: Dict[
-            Tuple[str, str],
-            Dict[str, Optional[Tuple[float, float]]]
-        ] = {}
-=======
         # Window/level for overlay (per-subwindow state)
         self.overlay_window: float = 1000.0
         self.overlay_level: float = 500.0
@@ -84,7 +68,6 @@ class FusionHandler:
         # Cache for alignment (offset and scaling) per base-overlay pair
         # Key: (base_series_uid, overlay_series_uid), Value: {'scale': (x, y), 'offset': (x, y)}
         self._alignment_cache: Dict[Tuple[str, str], Dict[str, Optional[Tuple[float, float]]]] = {}
->>>>>>> Stashed changes
     
     def set_base_series(self, series_uid: str) -> None:
         """
@@ -108,10 +91,6 @@ class FusionHandler:
         """
         old_overlay_uid = self.overlay_series_uid
         self.overlay_series_uid = series_uid
-        # Reset rescale state when overlay series changes
-        self.overlay_uses_rescaled = False
-        self._overlay_rescale_slope = None
-        self._overlay_rescale_intercept = None
         # Clear cache when overlay series changes
         self._slice_location_cache.clear()
         # Clear resampling decision cache
@@ -120,64 +99,6 @@ class FusionHandler:
         # Clear alignment cache entries involving old overlay
         if old_overlay_uid:
             self.clear_alignment_cache(old_overlay_uid)
-    
-    def get_overlay_rescale_state(self) -> Tuple[bool, Optional[float], Optional[float]]:
-        """
-        Get the current rescale state for overlay pixels.
-        
-        Returns:
-            Tuple of (is_rescaled, slope, intercept)
-            - is_rescaled: True if overlay pixels are in rescaled units
-            - slope: Rescale slope if available, None otherwise
-            - intercept: Rescale intercept if available, None otherwise
-        """
-        return (
-            self.overlay_uses_rescaled,
-            self._overlay_rescale_slope,
-            self._overlay_rescale_intercept
-        )
-    
-    def set_alignment(
-        self,
-        base_series_uid: Optional[str],
-        overlay_series_uid: Optional[str],
-        scale: Optional[Tuple[float, float]],
-        offset: Optional[Tuple[float, float]]
-    ) -> None:
-        """Store alignment info for a base/overlay pair."""
-        if not base_series_uid or not overlay_series_uid:
-            return
-        self._alignment_cache[(base_series_uid, overlay_series_uid)] = {
-            'scale': scale,
-            'offset': offset,
-            'timestamp': time.time(),
-        }
-    
-    def get_alignment(
-        self,
-        base_series_uid: Optional[str],
-        overlay_series_uid: Optional[str]
-    ) -> Optional[Dict[str, Optional[Tuple[float, float]]]]:
-        """Retrieve cached alignment for a base/overlay pair."""
-        if not base_series_uid or not overlay_series_uid:
-            return None
-        # Ignore self-pair cache to force recalculation for new overlays
-        if base_series_uid == overlay_series_uid:
-            return None
-        return self._alignment_cache.get((base_series_uid, overlay_series_uid))
-    
-    def clear_alignment_cache(self, series_uid: Optional[str] = None) -> None:
-        """Clear cached alignment data completely or for a specific series."""
-        if series_uid is None:
-            self._alignment_cache.clear()
-            return
-        
-        keys_to_delete = [
-            key for key in self._alignment_cache
-            if series_uid in key
-        ]
-        for key in keys_to_delete:
-            del self._alignment_cache[key]
     
     def check_frame_of_reference_match(
         self,
@@ -457,15 +378,6 @@ class FusionHandler:
         if idx1 is None:
             return None
         
-        # Extract rescale parameters from overlay dataset
-        overlay_ds = overlay_datasets[idx1]
-        rescale_slope, rescale_intercept, _ = DICOMProcessor.get_rescale_parameters(overlay_ds)
-        
-        # Update rescale state tracking
-        self.overlay_uses_rescaled = (rescale_slope is not None and rescale_intercept is not None)
-        self._overlay_rescale_slope = rescale_slope
-        self._overlay_rescale_intercept = rescale_intercept
-        
         # Get pixel array from first slice
         try:
             array1 = overlay_datasets[idx1].pixel_array.astype(np.float32)
@@ -476,10 +388,6 @@ class FusionHandler:
         except Exception as e:
             print(f"Error getting overlay pixel array: {e}")
             return None
-        
-        # Apply rescale transformation if parameters exist
-        if self.overlay_uses_rescaled and rescale_slope is not None and rescale_intercept is not None:
-            array1 = array1 * float(rescale_slope) + float(rescale_intercept)
         
         if idx2 is None:
             # Exact match, no interpolation needed
@@ -495,10 +403,6 @@ class FusionHandler:
         except Exception as e:
             print(f"Error getting second overlay pixel array: {e}")
             return array1  # Fall back to first slice
-        
-        # Apply rescale to second array if needed
-        if self.overlay_uses_rescaled and rescale_slope is not None and rescale_intercept is not None:
-            array2 = array2 * float(rescale_slope) + float(rescale_intercept)
         
         # Check array shapes match
         if array1.shape != array2.shape:
@@ -639,15 +543,14 @@ class FusionHandler:
         base_ipp = self.get_image_position_patient(base_dataset)
         overlay_ipp = self.get_image_position_patient(overlay_dataset)
         
-        # DEBUG - commented out
-        # print(f"\n[OFFSET CALC DEBUG] calculate_translation_offset called")
-        # print(f"  base IPP: {base_ipp}")
-        # print(f"  overlay IPP: {overlay_ipp}")
-        # print(f"  base_pixel_spacing: {base_pixel_spacing}")
-        # print(f"  overlay_pixel_spacing: {overlay_pixel_spacing}")
+        print(f"\n[OFFSET CALC DEBUG] calculate_translation_offset called")
+        print(f"  base IPP: {base_ipp}")
+        print(f"  overlay IPP: {overlay_ipp}")
+        print(f"  base_pixel_spacing: {base_pixel_spacing}")
+        print(f"  overlay_pixel_spacing: {overlay_pixel_spacing}")
         
         if base_ipp is None or overlay_ipp is None:
-            # print(f"  Result: None (IPP missing)")
+            print(f"  Result: None (IPP missing)")
             return None
         
         # Calculate physical offset in mm
@@ -658,8 +561,7 @@ class FusionHandler:
         offset_mm_x = overlay_ipp[0] - base_ipp[0]
         offset_mm_y = overlay_ipp[1] - base_ipp[1]
         
-        # DEBUG - commented out
-        # print(f"  Physical offset (mm): X={offset_mm_x:.2f}, Y={offset_mm_y:.2f}")
+        print(f"  Physical offset (mm): X={offset_mm_x:.2f}, Y={offset_mm_y:.2f}")
         
         # Convert to pixel offset in base image coordinates
         # Note: Pixel spacing is [row_spacing, col_spacing] where:
@@ -668,8 +570,7 @@ class FusionHandler:
         offset_px_x = offset_mm_x / base_pixel_spacing[1]  # column spacing
         offset_px_y = offset_mm_y / base_pixel_spacing[0]  # row spacing
         
-        # DEBUG - commented out
-        # print(f"  Pixel offset: X={offset_px_x:.2f}, Y={offset_px_y:.2f} pixels")
+        print(f"  Pixel offset: X={offset_px_x:.2f}, Y={offset_px_y:.2f} pixels")
         
         return (offset_px_x, offset_px_y)
     
