@@ -18,6 +18,7 @@ numpy>=1.24.0
 Pillow>=10.0.0
 matplotlib>=3.8.0
 openpyxl>=3.1.0
+SimpleITK>=2.3.0  # For 3D image resampling in image fusion (Phase 2)
 
 # Optional dependencies for compressed DICOM support
 # These are recommended for decoding JPEG-compressed DICOM files (JPEG, JPEG-LS, JPEG 2000)

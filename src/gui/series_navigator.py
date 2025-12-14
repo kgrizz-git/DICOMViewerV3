@@ -23,12 +23,88 @@ from PySide6.QtWidgets import (QWidget, QHBoxLayout, QScrollArea, QVBoxLayout,
                                 QLabel, QFrame)
 from PySide6.QtCore import Qt, Signal, QSize, QPoint, QMimeData, QTimer
 from PySide6.QtGui import QPixmap, QImage, QPainter, QFont, QColor, QDrag, QMouseEvent, QKeyEvent
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from pydicom.dataset import Dataset
 from core.dicom_processor import DICOMProcessor
 from PIL import Image
 import numpy as np
 import time
+
+
+class StudyDivider(QFrame):
+    """
+    Visual separator widget between studies in the series navigator.
+    
+    Displays a thin vertical line to separate series from different studies.
+    """
+    
+    def __init__(self, parent=None):
+        """
+        Initialize study divider.
+        
+        Args:
+            parent: Parent widget
+        """
+        super().__init__(parent)
+        # Set fixed size: thin vertical line matching thumbnail height
+        self.setFixedSize(3, 68)
+        self.setStyleSheet("QFrame { background-color: #888888; border: none; }")
+
+
+class StudyLabel(QFrame):
+    """
+    Study label widget displaying study description or UID.
+    
+    Shows StudyDescription if available, otherwise displays truncated StudyInstanceUID.
+    """
+    
+    def __init__(self, study_label_text: str, parent=None):
+        """
+        Initialize study label.
+        
+        Args:
+            study_label_text: Text to display (study description or UID)
+            parent: Parent widget
+        """
+        super().__init__(parent)
+        # Set fixed size matching thumbnail height
+        self.setFixedSize(120, 68)
+        self.setFrameStyle(QFrame.Shape.Box)
+        self.setLineWidth(1)
+        self.setStyleSheet(
+            "QFrame { "
+            "background-color: #e0e0e0; "
+            "border: 1px solid #888888; "
+            "border-radius: 2px; "
+            "}"
+        )
+        
+        # Create label for text
+        self.label = QLabel(study_label_text, self)
+        self.label.setAlignment(Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter)
+        self.label.setWordWrap(True)
+        self.label.setStyleSheet(
+            "QLabel { "
+            "color: #333333; "
+            "font-weight: bold; "
+            "font-size: 9pt; "
+            "padding: 2px; "
+            "}"
+        )
+        
+        # Layout for label
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(2, 2, 2, 2)
+        layout.addWidget(self.label)
+    
+    def set_text(self, text: str) -> None:
+        """
+        Update the label text.
+        
+        Args:
+            text: New text to display
+        """
+        self.label.setText(text)
 
 
 class SeriesThumbnail(QFrame):
@@ -271,6 +347,10 @@ class SeriesNavigator(QWidget):
         self.current_series_uid = ""
         self.thumbnails: Dict[str, SeriesThumbnail] = {}
         
+        # Store study labels and dividers for cleanup
+        self.study_labels: List[StudyLabel] = []
+        self.study_dividers: List[StudyDivider] = []
+        
         # Thumbnail cache: (study_uid, series_uid) -> PIL Image
         self.thumbnail_cache: Dict[tuple, Image.Image] = {}
         
@@ -306,9 +386,44 @@ class SeriesNavigator(QWidget):
         # Set fixed height for navigator (85% of 93px)
         self.setFixedHeight(79)
     
+    def _get_study_label(self, dataset: Dataset) -> str:
+        """
+        Extract study label from dataset.
+        
+        Returns StudyDescription if available, otherwise returns truncated StudyInstanceUID.
+        
+        Args:
+            dataset: DICOM dataset to extract study information from
+            
+        Returns:
+            Study label string (description or truncated UID)
+        """
+        # Try to get StudyDescription first
+        study_desc = getattr(dataset, 'StudyDescription', None)
+        if study_desc and str(study_desc).strip():
+            # Truncate if too long (max 30 chars)
+            desc_str = str(study_desc).strip()
+            if len(desc_str) > 30:
+                return desc_str[:27] + "..."
+            return desc_str
+        
+        # Fallback to StudyInstanceUID (truncated)
+        study_uid = getattr(dataset, 'StudyInstanceUID', None)
+        if study_uid:
+            uid_str = str(study_uid)
+            if len(uid_str) > 30:
+                return uid_str[:27] + "..."
+            return uid_str
+        
+        # Final fallback
+        return "Unknown Study"
+    
     def update_series_list(self, studies: Dict, current_study_uid: str, current_series_uid: str) -> None:
         """
-        Update the series list with thumbnails.
+        Update the series list with thumbnails from all studies.
+        
+        Displays all series from all studies in a single horizontal row,
+        with visual dividers and study labels separating different studies.
         
         Args:
             studies: Dictionary of studies {study_uid: {series_uid: [datasets]}}
@@ -318,53 +433,99 @@ class SeriesNavigator(QWidget):
         self.current_study_uid = current_study_uid
         self.current_series_uid = current_series_uid
         
-        # Clear existing thumbnails
+        # Clear existing widgets (thumbnails, labels, dividers)
         for thumbnail in self.thumbnails.values():
             self.thumbnail_layout.removeWidget(thumbnail)
             thumbnail.deleteLater()
         self.thumbnails.clear()
         
-        if not studies or current_study_uid not in studies:
+        for label in self.study_labels:
+            self.thumbnail_layout.removeWidget(label)
+            label.deleteLater()
+        self.study_labels.clear()
+        
+        for divider in self.study_dividers:
+            self.thumbnail_layout.removeWidget(divider)
+            divider.deleteLater()
+        self.study_dividers.clear()
+        
+        if not studies:
             return
         
-        # Get series for current study
-        study_series = studies[current_study_uid]
-        
-        # Build list of (series_number, series_uid, first_dataset)
-        series_list = []
-        for series_uid, datasets in study_series.items():
-            if datasets:
-                first_dataset = datasets[0]
-                series_number = getattr(first_dataset, 'SeriesNumber', None)
-                try:
-                    series_num = int(series_number) if series_number is not None else 0
-                except (ValueError, TypeError):
-                    series_num = 0
-                series_list.append((series_num, series_uid, first_dataset))
-        
-        # Sort by series number
-        series_list.sort(key=lambda x: x[0])
-        
-        # Create thumbnails
-        for series_num, series_uid, first_dataset in series_list:
-            # Check cache first
-            cache_key = (current_study_uid, series_uid)
-            if cache_key in self.thumbnail_cache:
-                thumbnail_image = self.thumbnail_cache[cache_key]
-            else:
-                # Generate thumbnail
-                thumbnail_image = self._generate_thumbnail(first_dataset)
-                if thumbnail_image:
-                    self.thumbnail_cache[cache_key] = thumbnail_image
+        # Iterate through all studies
+        first_study = True
+        for study_uid, study_series in studies.items():
+            # Skip studies with no series
+            if not study_series:
+                continue
             
-            # Create thumbnail widget
-            thumbnail = SeriesThumbnail(series_uid, series_num, thumbnail_image, self)
-            thumbnail.clicked.connect(self.series_selected.emit)
-            thumbnail.set_current(series_uid == current_series_uid)
+            # Add divider before study (except for first study)
+            if not first_study:
+                divider = StudyDivider(self)
+                self.study_dividers.append(divider)
+                self.thumbnail_layout.insertWidget(self.thumbnail_layout.count() - 1, divider)
             
-            self.thumbnails[series_uid] = thumbnail
-            # Insert before the stretch
-            self.thumbnail_layout.insertWidget(self.thumbnail_layout.count() - 1, thumbnail)
+            # Get study label from first dataset of first series
+            study_label_text = "Unknown Study"
+            first_series_uid = None
+            first_dataset = None
+            
+            # Find first series with datasets
+            for series_uid, datasets in study_series.items():
+                if datasets:
+                    first_series_uid = series_uid
+                    first_dataset = datasets[0]
+                    break
+            
+            if first_dataset:
+                study_label_text = self._get_study_label(first_dataset)
+            
+            # Add study label
+            study_label = StudyLabel(study_label_text, self)
+            self.study_labels.append(study_label)
+            self.thumbnail_layout.insertWidget(self.thumbnail_layout.count() - 1, study_label)
+            
+            # Build list of (series_number, series_uid, first_dataset) for this study
+            series_list = []
+            for series_uid, datasets in study_series.items():
+                if datasets:
+                    first_dataset = datasets[0]
+                    series_number = getattr(first_dataset, 'SeriesNumber', None)
+                    try:
+                        series_num = int(series_number) if series_number is not None else 0
+                    except (ValueError, TypeError):
+                        series_num = 0
+                    series_list.append((series_num, series_uid, first_dataset))
+            
+            # Sort by series number
+            series_list.sort(key=lambda x: x[0])
+            
+            # Create thumbnails for this study
+            for series_num, series_uid, first_dataset in series_list:
+                # Check cache first
+                cache_key = (study_uid, series_uid)
+                if cache_key in self.thumbnail_cache:
+                    thumbnail_image = self.thumbnail_cache[cache_key]
+                else:
+                    # Generate thumbnail
+                    thumbnail_image = self._generate_thumbnail(first_dataset)
+                    if thumbnail_image:
+                        self.thumbnail_cache[cache_key] = thumbnail_image
+                
+                # Create thumbnail widget
+                thumbnail = SeriesThumbnail(series_uid, series_num, thumbnail_image, self)
+                thumbnail.clicked.connect(self.series_selected.emit)
+                # Highlight if this is the current series AND current study
+                is_current = (series_uid == current_series_uid and study_uid == current_study_uid)
+                thumbnail.set_current(is_current)
+                
+                # Store thumbnail with composite key (study_uid, series_uid) for lookup
+                composite_key = f"{study_uid}:{series_uid}"
+                self.thumbnails[composite_key] = thumbnail
+                # Insert before the stretch
+                self.thumbnail_layout.insertWidget(self.thumbnail_layout.count() - 1, thumbnail)
+            
+            first_study = False
     
     def _generate_thumbnail(self, dataset: Dataset) -> Optional[Image.Image]:
         """
@@ -455,16 +616,30 @@ class SeriesNavigator(QWidget):
         
         return img
     
-    def set_current_series(self, series_uid: str) -> None:
+    def set_current_series(self, series_uid: str, study_uid: Optional[str] = None) -> None:
         """
         Update current series highlighting.
         
         Args:
             series_uid: Series UID to highlight
+            study_uid: Optional study UID. If provided, only highlights if both match.
+                      If None, uses current_study_uid.
         """
         self.current_series_uid = series_uid
-        for uid, thumbnail in self.thumbnails.items():
-            thumbnail.set_current(uid == series_uid)
+        if study_uid is not None:
+            self.current_study_uid = study_uid
+        
+        # Update highlighting for all thumbnails
+        for composite_key, thumbnail in self.thumbnails.items():
+            # Composite key format: "study_uid:series_uid"
+            if ":" in composite_key:
+                stored_study_uid, stored_series_uid = composite_key.split(":", 1)
+                is_current = (stored_series_uid == series_uid and 
+                            stored_study_uid == self.current_study_uid)
+            else:
+                # Fallback for old format (shouldn't happen with new code)
+                is_current = (composite_key == series_uid)
+            thumbnail.set_current(is_current)
     
     def regenerate_series_thumbnail(self, study_uid: str, series_uid: str, 
                                     dataset: Dataset, window_center: float, 
@@ -507,9 +682,10 @@ class SeriesNavigator(QWidget):
             # Cache the new thumbnail
             self.thumbnail_cache[cache_key] = image
             
-            # Update the thumbnail widget if it exists
-            if series_uid in self.thumbnails:
-                thumbnail_widget = self.thumbnails[series_uid]
+            # Update the thumbnail widget if it exists (use composite key)
+            composite_key = f"{study_uid}:{series_uid}"
+            if composite_key in self.thumbnails:
+                thumbnail_widget = self.thumbnails[composite_key]
                 thumbnail_widget.thumbnail_image = image
                 thumbnail_widget.update()  # Trigger repaint
                 # print(f"[DEBUG-WL] Regenerated series navigator thumbnail for series {series_uid[:20]}...")
@@ -517,11 +693,26 @@ class SeriesNavigator(QWidget):
             print(f"Error regenerating thumbnail: {e}")
     
     def clear(self) -> None:
-        """Clear all thumbnails."""
+        """Clear all thumbnails, labels, and dividers."""
+        # Clear thumbnails
         for thumbnail in self.thumbnails.values():
             self.thumbnail_layout.removeWidget(thumbnail)
             thumbnail.deleteLater()
         self.thumbnails.clear()
+        
+        # Clear study labels
+        for label in self.study_labels:
+            self.thumbnail_layout.removeWidget(label)
+            label.deleteLater()
+        self.study_labels.clear()
+        
+        # Clear study dividers
+        for divider in self.study_dividers:
+            self.thumbnail_layout.removeWidget(divider)
+            divider.deleteLater()
+        self.study_dividers.clear()
+        
+        # Clear cache
         self.thumbnail_cache.clear()
     
     def keyPressEvent(self, event: QKeyEvent) -> None:
