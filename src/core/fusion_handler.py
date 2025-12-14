@@ -16,12 +16,16 @@ Outputs:
 Requirements:
     - pydicom for DICOM tag access
     - numpy for array operations
+    - SimpleITK for 3D resampling (Phase 2)
 """
 
 import time
 import numpy as np
 from typing import Optional, List, Tuple, Dict
 from pydicom.dataset import Dataset
+from core.dicom_processor import DICOMProcessor
+
+from core.image_resampler import ImageResampler
 from core.dicom_processor import DICOMProcessor
 
 
@@ -45,6 +49,7 @@ class FusionHandler:
         self.threshold: float = 0.2  # 0.0 to 1.0
         self.colormap: str = 'hot'
         
+<<<<<<< Updated upstream
         # Track whether overlay pixels are in rescaled units
         self.overlay_uses_rescaled: bool = False
         self._overlay_rescale_slope: Optional[float] = None
@@ -57,6 +62,29 @@ class FusionHandler:
             Tuple[str, str],
             Dict[str, Optional[Tuple[float, float]]]
         ] = {}
+=======
+        # Window/level for overlay (per-subwindow state)
+        self.overlay_window: float = 1000.0
+        self.overlay_level: float = 500.0
+        
+        # Phase 2: Resampling mode and settings
+        self.resampling_mode: str = 'auto'  # 'auto', 'fast', 'high_accuracy'
+        self.interpolation_method: str = 'linear'  # 'linear', 'nearest', 'cubic', 'b-spline'
+        
+        # Phase 2: Image resampler for 3D volume resampling
+        self.image_resampler = ImageResampler()
+        
+        # Cache for slice locations
+        self._slice_location_cache: Dict[str, List[Tuple[int, float]]] = {}
+        
+        # Cache for resampling decision (to avoid repeated checks)
+        self._resampling_decision_cache: Optional[Tuple[bool, str]] = None
+        self._resampling_decision_cache_key: Optional[Tuple[str, str]] = None
+        
+        # Cache for alignment (offset and scaling) per base-overlay pair
+        # Key: (base_series_uid, overlay_series_uid), Value: {'scale': (x, y), 'offset': (x, y)}
+        self._alignment_cache: Dict[Tuple[str, str], Dict[str, Optional[Tuple[float, float]]]] = {}
+>>>>>>> Stashed changes
     
     def set_base_series(self, series_uid: str) -> None:
         """
@@ -65,7 +93,11 @@ class FusionHandler:
         Args:
             series_uid: Series instance UID for base series
         """
+        old_base_uid = self.base_series_uid
         self.base_series_uid = series_uid
+        # Clear alignment cache entries involving old base
+        if old_base_uid:
+            self.clear_alignment_cache(old_base_uid)
     
     def set_overlay_series(self, series_uid: str) -> None:
         """
@@ -74,6 +106,7 @@ class FusionHandler:
         Args:
             series_uid: Series instance UID for overlay series
         """
+        old_overlay_uid = self.overlay_series_uid
         self.overlay_series_uid = series_uid
         # Reset rescale state when overlay series changes
         self.overlay_uses_rescaled = False
@@ -81,6 +114,12 @@ class FusionHandler:
         self._overlay_rescale_intercept = None
         # Clear cache when overlay series changes
         self._slice_location_cache.clear()
+        # Clear resampling decision cache
+        self._resampling_decision_cache = None
+        self._resampling_decision_cache_key = None
+        # Clear alignment cache entries involving old overlay
+        if old_overlay_uid:
+            self.clear_alignment_cache(old_overlay_uid)
     
     def get_overlay_rescale_state(self) -> Tuple[bool, Optional[float], Optional[float]]:
         """
@@ -295,6 +334,46 @@ class FusionHandler:
         # Base location is above all overlay slices
         return (None, None)
     
+    def _should_use_3d_resampling(
+        self,
+        base_datasets: List[Dataset],
+        overlay_datasets: List[Dataset]
+    ) -> Tuple[bool, str]:
+        """
+        Determine if 3D resampling should be used based on mode and compatibility.
+        
+        Args:
+            base_datasets: List of base series datasets
+            overlay_datasets: List of overlay series datasets
+            
+        Returns:
+            Tuple of (use_3d: bool, reason: str)
+        """
+        # Check cache first
+        cache_key = (self.base_series_uid, self.overlay_series_uid)
+        if (self._resampling_decision_cache is not None and 
+            self._resampling_decision_cache_key == cache_key):
+            needs_3d, reason = self._resampling_decision_cache
+        else:
+            # Check compatibility
+            needs_3d, reason = self.image_resampler.needs_resampling(
+                overlay_datasets, base_datasets
+            )
+            # Cache the result
+            self._resampling_decision_cache = (needs_3d, reason)
+            self._resampling_decision_cache_key = cache_key
+        
+        # Apply user mode selection
+        if self.resampling_mode == 'fast':
+            # User forced 2D mode
+            return (False, "User selected Fast Mode (2D)")
+        elif self.resampling_mode == 'high_accuracy':
+            # User forced 3D mode
+            return (True, "User selected High Accuracy Mode (3D)")
+        else:
+            # Auto mode - use compatibility check
+            return (needs_3d, reason)
+    
     def interpolate_overlay_slice(
         self,
         base_slice_idx: int,
@@ -304,6 +383,8 @@ class FusionHandler:
         """
         Get overlay pixel array for base slice, with interpolation if needed.
         
+        Phase 2: Uses 3D resampling when needed, falls back to 2D interpolation otherwise.
+        
         Args:
             base_slice_idx: Index of base slice
             base_datasets: List of base series datasets
@@ -312,6 +393,62 @@ class FusionHandler:
         Returns:
             Pixel array for overlay, or None if not available
         """
+        # DEBUG: Log dataset ordering when passed to get_resampled_slice
+        if base_datasets and len(base_datasets) > 0:
+            print(f"[3D RESAMPLE DEBUG] interpolate_overlay_slice: base_datasets order check")
+            print(f"[3D RESAMPLE DEBUG]   Total base datasets: {len(base_datasets)}")
+            print(f"[3D RESAMPLE DEBUG]   Requested slice_idx: {base_slice_idx}")
+            # Log first 3 and last 3 slice locations
+            for i in [0, 1, 2] if len(base_datasets) > 2 else range(len(base_datasets)):
+                ds = base_datasets[i]
+                loc = self.get_slice_location(ds)
+                print(f"[3D RESAMPLE DEBUG]   Base dataset[{i}]: SliceLocation={loc}")
+            if len(base_datasets) > 3:
+                for i in range(max(3, len(base_datasets)-3), len(base_datasets)):
+                    ds = base_datasets[i]
+                    loc = self.get_slice_location(ds)
+                    print(f"[3D RESAMPLE DEBUG]   Base dataset[{i}]: SliceLocation={loc}")
+        
+        if overlay_datasets and len(overlay_datasets) > 0:
+            print(f"[3D RESAMPLE DEBUG] interpolate_overlay_slice: overlay_datasets order check")
+            print(f"[3D RESAMPLE DEBUG]   Total overlay datasets: {len(overlay_datasets)}")
+            # Log first 3 and last 3 slice locations
+            for i in [0, 1, 2] if len(overlay_datasets) > 2 else range(len(overlay_datasets)):
+                ds = overlay_datasets[i]
+                loc = self.get_slice_location(ds)
+                print(f"[3D RESAMPLE DEBUG]   Overlay dataset[{i}]: SliceLocation={loc}")
+            if len(overlay_datasets) > 3:
+                for i in range(max(3, len(overlay_datasets)-3), len(overlay_datasets)):
+                    ds = overlay_datasets[i]
+                    loc = self.get_slice_location(ds)
+                    print(f"[3D RESAMPLE DEBUG]   Overlay dataset[{i}]: SliceLocation={loc}")
+        
+        # Phase 2: Check if 3D resampling is needed
+        use_3d, reason = self._should_use_3d_resampling(base_datasets, overlay_datasets)
+        
+        if use_3d:
+            # Use 3D resampling
+            try:
+                resampled_slice = self.image_resampler.get_resampled_slice(
+                    overlay_datasets,
+                    base_datasets,
+                    base_slice_idx,
+                    use_cache=True,
+                    interpolator=self.interpolation_method,
+                    overlay_series_uid=self.overlay_series_uid,
+                    reference_series_uid=self.base_series_uid
+                )
+                if resampled_slice is not None:
+                    # Rescale is already applied in image_resampler.get_resampled_slice()
+                    return resampled_slice.astype(np.float32)
+                else:
+                    print(f"Warning: 3D resampling returned None, falling back to 2D")
+            except Exception as e:
+                print(f"Error in 3D resampling: {e}, falling back to 2D")
+                import traceback
+                traceback.print_exc()
+        
+        # Fall back to 2D interpolation (original Phase 1 method)
         # Find matching slice(s)
         idx1, idx2 = self.find_matching_slice(
             base_slice_idx, base_datasets, overlay_datasets
@@ -332,6 +469,10 @@ class FusionHandler:
         # Get pixel array from first slice
         try:
             array1 = overlay_datasets[idx1].pixel_array.astype(np.float32)
+            # Apply rescale if parameters exist
+            rescale_slope, rescale_intercept, _ = DICOMProcessor.get_rescale_parameters(overlay_datasets[idx1])
+            if rescale_slope is not None and rescale_intercept is not None:
+                array1 = array1.astype(np.float32) * float(rescale_slope) + float(rescale_intercept)
         except Exception as e:
             print(f"Error getting overlay pixel array: {e}")
             return None
@@ -347,6 +488,10 @@ class FusionHandler:
         # Interpolation needed
         try:
             array2 = overlay_datasets[idx2].pixel_array.astype(np.float32)
+            # Apply rescale if parameters exist
+            rescale_slope, rescale_intercept, _ = DICOMProcessor.get_rescale_parameters(overlay_datasets[idx2])
+            if rescale_slope is not None and rescale_intercept is not None:
+                array2 = array2.astype(np.float32) * float(rescale_slope) + float(rescale_intercept)
         except Exception as e:
             print(f"Error getting second overlay pixel array: {e}")
             return array1  # Fall back to first slice
@@ -377,6 +522,7 @@ class FusionHandler:
         # Linear interpolation
         interpolated = array1 * (1.0 - weight) + array2 * weight
         
+        # Note: Rescale already applied to array1 and array2, so interpolated is already rescaled
         return interpolated
     
     def get_pixel_spacing(self, dataset: Dataset) -> Optional[Tuple[float, float]]:
@@ -527,6 +673,71 @@ class FusionHandler:
         
         return (offset_px_x, offset_px_y)
     
+    def set_alignment(
+        self,
+        base_series_uid: Optional[str],
+        overlay_series_uid: Optional[str],
+        scale: Optional[Tuple[float, float]],
+        offset: Optional[Tuple[float, float]]
+    ) -> None:
+        """
+        Store alignment info (scaling and offset) for a base-overlay pair.
+        
+        Args:
+            base_series_uid: Base series UID
+            overlay_series_uid: Overlay series UID
+            scale: (scale_x, scale_y) tuple or None
+            offset: (offset_x, offset_y) tuple or None
+        """
+        if not base_series_uid or not overlay_series_uid:
+            return
+        self._alignment_cache[(base_series_uid, overlay_series_uid)] = {
+            'scale': scale,
+            'offset': offset,
+        }
+    
+    def get_alignment(
+        self,
+        base_series_uid: Optional[str],
+        overlay_series_uid: Optional[str]
+    ) -> Optional[Dict[str, Optional[Tuple[float, float]]]]:
+        """
+        Retrieve cached alignment (scaling and offset) for a base-overlay pair.
+        
+        Args:
+            base_series_uid: Base series UID
+            overlay_series_uid: Overlay series UID
+            
+        Returns:
+            Dictionary with 'scale' and 'offset' keys, or None if not cached
+        """
+        if not base_series_uid or not overlay_series_uid:
+            return None
+        # Don't return cache for self-pair (same series as base and overlay)
+        if base_series_uid == overlay_series_uid:
+            return None
+        return self._alignment_cache.get((base_series_uid, overlay_series_uid))
+    
+    def clear_alignment_cache(self, series_uid: Optional[str] = None) -> None:
+        """
+        Clear alignment cache.
+        
+        Args:
+            series_uid: If provided, clear only entries involving this series UID.
+                       If None, clear entire cache.
+        """
+        if series_uid is None:
+            self._alignment_cache.clear()
+            return
+        
+        # Remove entries where either key component matches
+        keys_to_delete = [
+            key for key in self._alignment_cache.keys()
+            if series_uid in key
+        ]
+        for key in keys_to_delete:
+            del self._alignment_cache[key]
+    
     def get_available_series_for_fusion(
         self,
         studies: Dict,
@@ -586,4 +797,40 @@ class FusionHandler:
         series_list.sort(key=get_series_num)
         
         return series_list
+    
+    def get_resampling_status(
+        self,
+        base_datasets: List[Dataset],
+        overlay_datasets: List[Dataset]
+    ) -> Tuple[str, str]:
+        """
+        Get current resampling status for UI display.
+        
+        Args:
+            base_datasets: List of base series datasets
+            overlay_datasets: List of overlay series datasets
+            
+        Returns:
+            Tuple of (mode_display: str, reason: str)
+            Examples:
+            - ("Auto (2D Fast Mode)", "Compatible: same orientation")
+            - ("Auto (3D High Accuracy)", "Different orientation detected")
+            - ("Fast Mode (2D)", "User selected Fast Mode")
+            - ("High Accuracy (3D)", "User selected High Accuracy Mode")
+        """
+        if not base_datasets or not overlay_datasets:
+            return ("Disabled", "No datasets available")
+        
+        use_3d, reason = self._should_use_3d_resampling(base_datasets, overlay_datasets)
+        
+        if self.resampling_mode == 'fast':
+            return ("Fast Mode (2D)", reason)
+        elif self.resampling_mode == 'high_accuracy':
+            return ("High Accuracy (3D)", reason)
+        else:
+            # Auto mode
+            if use_3d:
+                return ("Auto (3D High Accuracy)", reason)
+            else:
+                return ("Auto (2D Fast Mode)", reason)
 

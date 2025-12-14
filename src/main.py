@@ -131,6 +131,10 @@ class DICOMViewerApp(QObject):
         # Privacy view state
         self.privacy_view_enabled: bool = self.config_manager.get_privacy_view()
         
+        # Track which studies have already shown fusion notification
+        # Set of study UIDs that have been notified about compatible fusion series
+        self._fusion_notified_studies: set = set()
+        
         # Create main window
         self.main_window = MainWindow(self.config_manager)
         
@@ -196,6 +200,10 @@ class DICOMViewerApp(QObject):
         self.intensity_projection_controls_widget = IntensityProjectionControlsWidget()
         
         # Initialize fusion components
+<<<<<<< Updated upstream
+=======
+        # Note: FusionHandler is now created per-subwindow, not shared
+>>>>>>> Stashed changes
         self.fusion_processor = FusionProcessor()
         self.fusion_controls_stack: Optional[QStackedWidget] = None
         self.fusion_controls_widgets: Dict[int, FusionControlsWidget] = {}
@@ -475,8 +483,31 @@ class DICOMViewerApp(QObject):
                 hide_roi_statistics_overlays=managers['roi_coordinator'].hide_roi_statistics_overlays
             )
             
+<<<<<<< Updated upstream
             # Fusion components
             self._attach_fusion_components_to_subwindow(idx, managers)
+=======
+            # Fusion Handler (per-subwindow)
+            managers['fusion_handler'] = FusionHandler()
+            
+            # Fusion Coordinator
+            managers['fusion_coordinator'] = FusionCoordinator(
+                managers['fusion_handler'],
+                self.fusion_processor,
+                self.fusion_controls_widget,
+                get_current_studies=lambda: self.current_studies,
+                get_current_study_uid=lambda: self.current_study_uid,
+                get_current_series_uid=lambda: self.current_series_uid,
+                get_current_slice_index=lambda: self.current_slice_index,
+                request_display_update=lambda idx=idx: self._redisplay_subwindow_slice(idx, preserve_view=True),
+                # Add callbacks for notification tracking
+                check_notification_shown=lambda uid: self.has_shown_fusion_notification(uid),
+                mark_notification_shown=lambda uid: self.mark_fusion_notification_shown(uid)
+            )
+            
+            # Update slice display manager with fusion coordinator
+            managers['slice_display_manager'].fusion_coordinator = managers['fusion_coordinator']
+>>>>>>> Stashed changes
             
             # Update view state manager callbacks
             managers['view_state_manager'].overlay_coordinator = managers['overlay_coordinator'].handle_overlay_config_applied
@@ -626,8 +657,31 @@ class DICOMViewerApp(QObject):
             hide_roi_statistics_overlays=managers['roi_coordinator'].hide_roi_statistics_overlays
         )
         
+<<<<<<< Updated upstream
         # Fusion components
         self._attach_fusion_components_to_subwindow(idx, managers)
+=======
+        # Fusion Handler (per-subwindow)
+        managers['fusion_handler'] = FusionHandler()
+        
+        # Fusion Coordinator
+        managers['fusion_coordinator'] = FusionCoordinator(
+            managers['fusion_handler'],
+            self.fusion_processor,
+            self.fusion_controls_widget,
+            get_current_studies=lambda: self.current_studies,
+            get_current_study_uid=lambda: self.current_study_uid,
+            get_current_series_uid=lambda: self.current_series_uid,
+            get_current_slice_index=lambda: self.current_slice_index,
+            request_display_update=lambda idx=idx: self._redisplay_subwindow_slice(idx, preserve_view=True),
+            # Add callbacks for notification tracking
+            check_notification_shown=lambda uid: self.has_shown_fusion_notification(uid),
+            mark_notification_shown=lambda uid: self.mark_fusion_notification_shown(uid)
+        )
+        
+        # Update slice display manager with fusion coordinator
+        managers['slice_display_manager'].fusion_coordinator = managers['fusion_coordinator']
+>>>>>>> Stashed changes
         
         # Update view state manager callbacks
         managers['view_state_manager'].overlay_coordinator = managers['overlay_coordinator'].handle_overlay_config_applied
@@ -814,6 +868,7 @@ class DICOMViewerApp(QObject):
             self.roi_coordinator = managers['roi_coordinator']
             self.measurement_coordinator = managers['measurement_coordinator']
             self.crosshair_coordinator = managers.get('crosshair_coordinator')
+            self.fusion_coordinator = managers.get('fusion_coordinator')
             self.overlay_coordinator = managers['overlay_coordinator']
             self.roi_manager = managers['roi_manager']
             self.measurement_tool = managers['measurement_tool']
@@ -853,12 +908,40 @@ class DICOMViewerApp(QObject):
             if self.current_datasets:
                 total_slices = len(self.current_datasets)
                 self.slice_navigator.set_total_slices(total_slices)
+<<<<<<< Updated upstream
                 if 0 <= self.current_slice_index < total_slices:
+=======
+                # Use focused subwindow's slice index directly from data, not legacy reference
+                focused_slice_index = data.get('current_slice_index', 0)
+                if 0 <= focused_slice_index < total_slices:
+                    # Temporarily block signals to prevent recursive updates
+>>>>>>> Stashed changes
                     self.slice_navigator.blockSignals(True)
-                    self.slice_navigator.current_slice_index = self.current_slice_index
+                    self.slice_navigator.current_slice_index = focused_slice_index
                     self.slice_navigator.blockSignals(False)
         
+<<<<<<< Updated upstream
         # Update right/left panels to show focused subwindow's state
+=======
+        # FIX: Update unit immediately when focus changes (before _update_right_panel_for_focused_subwindow)
+        # This ensures unit is available even if display_slice hasn't been called yet
+        if self.current_dataset and self.window_level_controls:
+            from core.dicom_processor import DICOMProcessor
+            rescale_slope, rescale_intercept, rescale_type = DICOMProcessor.get_rescale_parameters(self.current_dataset)
+            # Infer rescale_type if None (e.g., for CT images)
+            inferred_type = DICOMProcessor.infer_rescale_type(
+                self.current_dataset, rescale_slope, rescale_intercept, rescale_type
+            )
+            if inferred_type:
+                print(f"[WL UNIT DEBUG] _update_focused_subwindow_references: Setting unit immediately from dataset: {inferred_type}")
+                self.window_level_controls.set_unit(inferred_type)
+            else:
+                # Clear unit if cannot be inferred
+                self.window_level_controls.set_unit(None)
+                print(f"[WL UNIT DEBUG] _update_focused_subwindow_references: Clearing unit (rescale_type=None, cannot infer)")
+        
+        # Update right panel controls to show focused subwindow's state
+>>>>>>> Stashed changes
         self._update_right_panel_for_focused_subwindow()
         self._update_left_panel_for_focused_subwindow()
         
@@ -884,8 +967,37 @@ class DICOMViewerApp(QObject):
             if fusion_coordinator:
                 fusion_coordinator.update_base_display_from_series(base_series_for_display)
     
+    def has_shown_fusion_notification(self, study_uid: str) -> bool:
+        """
+        Check if fusion notification has already been shown for a study.
+        
+        Args:
+            study_uid: Study UID to check
+            
+        Returns:
+            True if notification was already shown, False otherwise
+        """
+        return study_uid in self._fusion_notified_studies
+    
+    def mark_fusion_notification_shown(self, study_uid: str) -> None:
+        """
+        Mark that fusion notification has been shown for a study.
+        
+        Args:
+            study_uid: Study UID to mark as notified
+        """
+        if study_uid:
+            self._fusion_notified_studies.add(study_uid)
+    
     def _update_right_panel_for_focused_subwindow(self) -> None:
         """Update right panel controls to reflect focused subwindow's state."""
+        # DEBUG: Log when _update_right_panel_for_focused_subwindow is called
+        print(f"[WL UNIT DEBUG] _update_right_panel_for_focused_subwindow called")
+        print(f"[WL UNIT DEBUG]   view_state_manager: {self.view_state_manager}")
+        if self.view_state_manager:
+            print(f"[WL UNIT DEBUG]   use_rescaled_values: {self.view_state_manager.use_rescaled_values}")
+            print(f"[WL UNIT DEBUG]   rescale_type: {self.view_state_manager.rescale_type}")
+        print(f"[WL UNIT DEBUG]   current_dataset: {self.current_dataset is not None}")
         # print(f"[DEBUG-WL] _update_right_panel_for_focused_subwindow called")
         if self.image_viewer is None:
             # print(f"[DEBUG-WL]   ERROR: image_viewer is None")
@@ -899,22 +1011,46 @@ class DICOMViewerApp(QObject):
         
         # Update window/level controls with focused subwindow's current values
         if self.view_state_manager:
-            # print(f"[DEBUG-WL]   ViewStateManager values: center={self.view_state_manager.current_window_center}, width={self.view_state_manager.current_window_width}")
+            # Get unit from ViewStateManager's rescale_type if available
+            unit = None
+            if self.view_state_manager.use_rescaled_values:
+                unit = self.view_state_manager.rescale_type
+            
+            # If unit not available from ViewStateManager, try to get from current dataset
+            if not unit and self.current_dataset:
+                from core.dicom_processor import DICOMProcessor
+                rescale_slope, rescale_intercept, rescale_type = DICOMProcessor.get_rescale_parameters(self.current_dataset)
+                # Infer rescale_type if None (e.g., for CT images)
+                unit = DICOMProcessor.infer_rescale_type(
+                    self.current_dataset, rescale_slope, rescale_intercept, rescale_type
+                )
+                if unit:
+                    print(f"[WL UNIT DEBUG] _update_right_panel_for_focused_subwindow: Got unit from dataset fallback: {unit}")
+                else:
+                    print(f"[WL UNIT DEBUG] _update_right_panel_for_focused_subwindow: Cannot infer unit from dataset")
+            
+            # DEBUG: Log unit value before setting
+            print(f"[WL UNIT DEBUG] _update_right_panel_for_focused_subwindow: Setting unit to: {unit}")
+            print(f"[WL UNIT DEBUG]   view_state_manager.rescale_type: {self.view_state_manager.rescale_type}")
+            print(f"[WL UNIT DEBUG]   view_state_manager.use_rescaled_values: {self.view_state_manager.use_rescaled_values}")
+            
             if (self.view_state_manager.current_window_center is not None and 
                 self.view_state_manager.current_window_width is not None):
-                # Get current rescale state
-                unit = self.view_state_manager.rescale_type if self.view_state_manager.use_rescaled_values else None
-                # print(f"[DEBUG-WL]   Setting window_level_controls: center={self.view_state_manager.current_window_center}, width={self.view_state_manager.current_window_width}, unit={unit}")
-                # Update controls (block signals to prevent triggering changes)
+                # Update controls with unit (unit may be None, which will clear the display)
                 self.window_level_controls.set_window_level(
                     self.view_state_manager.current_window_center,
                     self.view_state_manager.current_window_width,
                     block_signals=True,
                     unit=unit
                 )
+                print(f"[WL UNIT DEBUG] _update_right_panel_for_focused_subwindow: Called set_window_level with unit={unit}")
             else:
-                # print(f"[DEBUG-WL]   WARNING: ViewStateManager window/level values are None")
-                pass
+                # Even if window/level values are None, update the unit
+                self.window_level_controls.set_unit(unit)  # unit may be None
+                if unit:
+                    print(f"[WL UNIT DEBUG] _update_right_panel_for_focused_subwindow: Called set_unit({unit})")
+                else:
+                    print(f"[WL UNIT DEBUG] _update_right_panel_for_focused_subwindow: Called set_unit(None) to clear units")
         else:
             # print(f"[DEBUG-WL]   ERROR: view_state_manager is None")
             pass
@@ -1670,10 +1806,15 @@ class DICOMViewerApp(QObject):
         # Add metadata panel below cine controls with stretch 1 to make it ~1.5x its current height
         left_layout.addWidget(self.metadata_panel, 1)
         
+<<<<<<< Updated upstream
         # Add controls to right panel via tabbed layout for clarity
+=======
+        # Add controls to right panel with tabbed interface
+>>>>>>> Stashed changes
         right_layout = self.main_window.right_panel.layout()
         if right_layout is None:
             right_layout = QVBoxLayout(self.main_window.right_panel)
+<<<<<<< Updated upstream
 
         self.right_panel_tabs = QTabWidget()
         self.right_panel_tabs.setObjectName("right_panel_tabs")
@@ -1699,6 +1840,37 @@ class DICOMViewerApp(QObject):
         combine_fusion_layout.addWidget(self.fusion_controls_stack)
         combine_fusion_layout.addStretch()
         self.right_panel_tabs.addTab(combine_fusion_tab, "Combine/Fusion")
+=======
+        
+        # Create tab widget
+        from PySide6.QtWidgets import QTabWidget, QWidget
+        tab_widget = QTabWidget()
+        tab_widget.setObjectName("right_panel_tabs")
+        
+        # Tab 1: Window/Zoom/ROI
+        tab1_widget = QWidget()
+        tab1_layout = QVBoxLayout(tab1_widget)
+        tab1_layout.setContentsMargins(0, 0, 0, 0)
+        tab1_layout.setSpacing(0)
+        tab1_layout.addWidget(self.window_level_controls)
+        tab1_layout.addWidget(self.zoom_display_widget)
+        tab1_layout.addStretch()  # Push ROI sections to bottom
+        tab1_layout.addWidget(self.roi_list_panel)
+        tab1_layout.addWidget(self.roi_statistics_panel)
+        tab_widget.addTab(tab1_widget, "Window/Zoom/ROI")
+        
+        # Tab 2: Combine/Fuse
+        tab2_widget = QWidget()
+        tab2_layout = QVBoxLayout(tab2_widget)
+        tab2_layout.setContentsMargins(0, 0, 0, 0)
+        tab2_layout.setSpacing(0)
+        tab2_layout.addWidget(self.intensity_projection_controls_widget)
+        tab2_layout.addWidget(self.fusion_controls_widget)
+        tab2_layout.addStretch()
+        tab_widget.addTab(tab2_widget, "Combine/Fuse")
+        
+        right_layout.addWidget(tab_widget)
+>>>>>>> Stashed changes
         
         # Add series navigator to main window
         self.main_window.set_series_navigator(self.series_navigator)
@@ -2163,6 +2335,15 @@ class DICOMViewerApp(QObject):
                 update_metadata=is_focused
             )
         
+        # Update slice navigator if this is the focused subwindow
+        # This ensures navigation works correctly when a series is assigned to the focused subwindow
+        if subwindow == self.multi_window_layout.get_focused_subwindow():
+            # Update slice navigator for focused subwindow
+            self.slice_navigator.set_total_slices(len(series_datasets))
+            self.slice_navigator.blockSignals(True)
+            self.slice_navigator.current_slice_index = slice_index
+            self.slice_navigator.blockSignals(False)
+        
         # Update series navigator highlighting to show the assigned series
         # This ensures highlighting updates when series are assigned via drag-and-drop or context menu
         self.series_navigator.set_current_series(series_uid)
@@ -2367,6 +2548,14 @@ class DICOMViewerApp(QObject):
         except (TypeError, RuntimeError, AttributeError):
             pass
         
+        # Disconnect fusion signals from previous focused subwindow's coordinator
+        try:
+            if hasattr(self, '_previous_fusion_coordinator') and self._previous_fusion_coordinator is not None:
+                self._previous_fusion_coordinator.disconnect_fusion_controls_signals()
+                self._previous_fusion_coordinator = None
+        except (TypeError, RuntimeError, AttributeError):
+            pass
+        
         # print("[DEBUG] Finished disconnecting signals from focused subwindow ImageViewer")
     
     def _connect_focused_subwindow_signals(self) -> None:
@@ -2522,6 +2711,14 @@ class DICOMViewerApp(QObject):
         self.intensity_projection_controls_widget.enabled_changed.connect(self._on_projection_enabled_changed)
         self.intensity_projection_controls_widget.projection_type_changed.connect(self._on_projection_type_changed)
         self.intensity_projection_controls_widget.slice_count_changed.connect(self._on_projection_slice_count_changed)
+        
+        # Fusion controls - connect to focused subwindow's coordinator
+        if self.fusion_coordinator is not None:
+            self.fusion_coordinator.connect_fusion_controls_signals()
+            # Sync UI from focused subwindow's fusion handler state
+            self.fusion_coordinator.sync_ui_from_handler_state()
+            # Store reference for disconnection on next focus change
+            self._previous_fusion_coordinator = self.fusion_coordinator
         
         # Intensity projection context menu signals
         self.image_viewer.projection_enabled_changed.connect(self._on_projection_enabled_changed)
@@ -4317,9 +4514,9 @@ class DICOMViewerApp(QObject):
             data['current_slice_index'] = slice_index
             data['current_dataset'] = series_datasets[slice_index]
             
-            # Update legacy references
-            self.current_slice_index = slice_index
-            self.current_dataset = series_datasets[slice_index]
+            # Note: Legacy references (self.current_slice_index, self.current_dataset) are NOT updated here
+            # They are maintained in _update_focused_subwindow_references() to avoid contamination
+            # when switching between subwindows
             
             # Display slice using focused subwindow's slice display manager
             slice_display_manager = managers['slice_display_manager']
