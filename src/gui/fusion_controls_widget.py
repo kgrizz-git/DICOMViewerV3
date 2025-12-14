@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                                 QCheckBox, QComboBox, QSlider, QGroupBox,
                                 QSpinBox, QSizePolicy, QRadioButton, QButtonGroup)
 from PySide6.QtCore import Qt, Signal
-from typing import List, Tuple, Optional
+from typing import List, Tuple
 
 
 class FusionControlsWidget(QWidget):
@@ -28,8 +28,7 @@ class FusionControlsWidget(QWidget):
     
     Features:
     - Enable/disable fusion
-    - Read-only base series display
-    - Overlay series selection
+    - Base and overlay series selection
     - Opacity control
     - Threshold control
     - Colormap selection
@@ -39,6 +38,7 @@ class FusionControlsWidget(QWidget):
     
     # Signals
     fusion_enabled_changed = Signal(bool)  # Emitted when fusion is enabled/disabled
+    base_series_changed = Signal(str)  # Emitted when base series changes (series_uid)
     overlay_series_changed = Signal(str)  # Emitted when overlay series changes (series_uid)
     opacity_changed = Signal(float)  # Emitted when opacity changes (0.0-1.0)
     threshold_changed = Signal(float)  # Emitted when threshold changes (0.0-1.0)
@@ -82,13 +82,8 @@ class FusionControlsWidget(QWidget):
         self.enable_checkbox.setChecked(False)
         group_layout.addWidget(self.enable_checkbox)
         
-<<<<<<< Updated upstream
-        # Base series display (read-only)
-        base_label = QLabel("Base Image:")
-=======
         # Base series display (read-only text, not dropdown)
         base_label = QLabel("Base Series:")
->>>>>>> Stashed changes
         base_label.setStyleSheet("font-weight: bold;")
         group_layout.addWidget(base_label)
         
@@ -96,29 +91,6 @@ class FusionControlsWidget(QWidget):
         self.base_series_display.setStyleSheet("font-style: italic;")
         group_layout.addWidget(self.base_series_display)
         
-<<<<<<< Updated upstream
-        # Overlay series selection (wrapped for easy show/hide)
-        self.overlay_section_widget = QWidget()
-        overlay_section_layout = QVBoxLayout(self.overlay_section_widget)
-        overlay_section_layout.setContentsMargins(0, 0, 0, 0)
-        overlay_section_layout.setSpacing(3)
-        
-        overlay_label = QLabel("Overlay Image:")
-        overlay_label.setStyleSheet("font-weight: bold;")
-        overlay_section_layout.addWidget(overlay_label)
-        
-        self.overlay_series_combo = QComboBox()
-        self.overlay_series_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        overlay_section_layout.addWidget(self.overlay_series_combo)
-        
-        group_layout.addWidget(self.overlay_section_widget)
-        
-        # Fusion adjustment controls (wrapped for visibility control)
-        self.fusion_adjustment_widget = QWidget()
-        fusion_adjustment_layout = QVBoxLayout(self.fusion_adjustment_widget)
-        fusion_adjustment_layout.setContentsMargins(0, 0, 0, 0)
-        fusion_adjustment_layout.setSpacing(8)
-=======
         # Overlay series selection (wrapped for visibility control)
         self.overlay_series_widget = QWidget()
         overlay_container_layout = QVBoxLayout(self.overlay_series_widget)
@@ -140,7 +112,6 @@ class FusionControlsWidget(QWidget):
         opacity_container_layout = QVBoxLayout(self.opacity_widget)
         opacity_container_layout.setContentsMargins(0, 0, 0, 0)
         opacity_container_layout.setSpacing(0)
->>>>>>> Stashed changes
         
         opacity_layout = QHBoxLayout()
         opacity_label = QLabel("Opacity:")
@@ -159,9 +130,6 @@ class FusionControlsWidget(QWidget):
         self.opacity_value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         opacity_layout.addWidget(self.opacity_value_label)
         
-<<<<<<< Updated upstream
-        fusion_adjustment_layout.addLayout(opacity_layout)
-=======
         opacity_container_layout.addLayout(opacity_layout)
         group_layout.addWidget(self.opacity_widget)
         
@@ -170,7 +138,6 @@ class FusionControlsWidget(QWidget):
         threshold_container_layout = QVBoxLayout(self.threshold_widget)
         threshold_container_layout.setContentsMargins(0, 0, 0, 0)
         threshold_container_layout.setSpacing(0)
->>>>>>> Stashed changes
         
         threshold_layout = QHBoxLayout()
         threshold_label = QLabel("Threshold:")
@@ -189,9 +156,6 @@ class FusionControlsWidget(QWidget):
         self.threshold_value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         threshold_layout.addWidget(self.threshold_value_label)
         
-<<<<<<< Updated upstream
-        fusion_adjustment_layout.addLayout(threshold_layout)
-=======
         threshold_container_layout.addLayout(threshold_layout)
         group_layout.addWidget(self.threshold_widget)
         
@@ -200,7 +164,6 @@ class FusionControlsWidget(QWidget):
         colormap_container_layout = QVBoxLayout(self.colormap_widget)
         colormap_container_layout.setContentsMargins(0, 0, 0, 0)
         colormap_container_layout.setSpacing(0)
->>>>>>> Stashed changes
         
         colormap_layout = QHBoxLayout()
         colormap_label = QLabel("Color Map:")
@@ -220,9 +183,6 @@ class FusionControlsWidget(QWidget):
         self.colormap_combo.setCurrentText('hot')
         colormap_layout.addWidget(self.colormap_combo, 1)
         
-<<<<<<< Updated upstream
-        fusion_adjustment_layout.addLayout(colormap_layout)
-=======
         colormap_container_layout.addLayout(colormap_layout)
         group_layout.addWidget(self.colormap_widget)
         
@@ -288,33 +248,12 @@ class FusionControlsWidget(QWidget):
         wl_container_layout = QVBoxLayout(self.window_level_widget)
         wl_container_layout.setContentsMargins(0, 0, 0, 0)
         wl_container_layout.setSpacing(0)
->>>>>>> Stashed changes
         
         wl_label = QLabel("Overlay Window/Level:")
         wl_label.setStyleSheet("font-weight: bold; margin-top: 5px;")
-<<<<<<< Updated upstream
-        fusion_adjustment_layout.addWidget(wl_label)
-        
-        # Window control
-        window_layout = QHBoxLayout()
-        window_label = QLabel("Window:")
-        window_layout.addWidget(window_label)
-        
-        self.overlay_window_spinbox = QSpinBox()
-        self.overlay_window_spinbox.setMinimum(1)
-        self.overlay_window_spinbox.setMaximum(100000)
-        self.overlay_window_spinbox.setValue(1000)
-        self.overlay_window_spinbox.setSingleStep(10)
-        window_layout.addWidget(self.overlay_window_spinbox, 1)
-        
-        fusion_adjustment_layout.addLayout(window_layout)
-        
-        # Level control
-=======
         wl_container_layout.addWidget(wl_label)
         
         # Level control (center) - appears first to match Window/Zoom/ROI tab
->>>>>>> Stashed changes
         level_layout = QHBoxLayout()
         level_label = QLabel("Level:")
         level_layout.addWidget(level_label)
@@ -326,11 +265,7 @@ class FusionControlsWidget(QWidget):
         self.overlay_level_spinbox.setSingleStep(10)
         level_layout.addWidget(self.overlay_level_spinbox, 1)
         
-<<<<<<< Updated upstream
-        fusion_adjustment_layout.addLayout(level_layout)
-=======
         wl_container_layout.addLayout(level_layout)
->>>>>>> Stashed changes
         
         # Window control (width) - appears second to match Window/Zoom/ROI tab
         window_layout = QHBoxLayout()
@@ -400,13 +335,7 @@ class FusionControlsWidget(QWidget):
         self.reset_offset_button.clicked.connect(self._on_reset_offset_clicked)
         advanced_layout.addWidget(self.reset_offset_button)
         
-<<<<<<< Updated upstream
-        fusion_adjustment_layout.addWidget(advanced_group)
-        
-        group_layout.addWidget(self.fusion_adjustment_widget)
-=======
         group_layout.addWidget(self.advanced_group)
->>>>>>> Stashed changes
         
         # Store calculated offset for reset functionality
         self._calculated_offset_x = 0.0
@@ -427,10 +356,7 @@ class FusionControlsWidget(QWidget):
     def _connect_signals(self) -> None:
         """Connect internal signals."""
         self.enable_checkbox.toggled.connect(self._on_enable_toggled)
-<<<<<<< Updated upstream
-=======
         # Base series is read-only display, no signal connection needed
->>>>>>> Stashed changes
         self.overlay_series_combo.currentIndexChanged.connect(self._on_overlay_series_changed)
         self.opacity_slider.valueChanged.connect(self._on_opacity_changed)
         self.threshold_slider.valueChanged.connect(self._on_threshold_changed)
@@ -448,12 +374,9 @@ class FusionControlsWidget(QWidget):
         if not self._updating:
             self.fusion_enabled_changed.emit(checked)
     
-<<<<<<< Updated upstream
-=======
     # Base series is read-only, so no handler needed for user changes
     # (Base is set programmatically based on current viewing series)
     
->>>>>>> Stashed changes
     def _on_overlay_series_changed(self, index: int) -> None:
         """Handle overlay series selection change."""
         if not self._updating and index >= 0:
@@ -494,8 +417,7 @@ class FusionControlsWidget(QWidget):
             self._user_modified_offset = True
             x_offset = float(self.x_offset_spinbox.value())
             y_offset = float(self.y_offset_spinbox.value())
-            # DEBUG - commented out
-            # print(f"[OFFSET DEBUG] User changed offset to: X={x_offset:.1f}, Y={y_offset:.1f}")
+            print(f"[OFFSET DEBUG] User changed offset to: X={x_offset:.1f}, Y={y_offset:.1f}")
             self.translation_offset_changed.emit(x_offset, y_offset)
     
     def _on_reset_offset_clicked(self) -> None:
@@ -508,8 +430,7 @@ class FusionControlsWidget(QWidget):
         self.y_offset_spinbox.setValue(int(round(self._calculated_offset_y)))
         self._updating = False
         
-        # DEBUG - commented out
-        # print(f"[OFFSET DEBUG] Reset to calculated offset: X={self._calculated_offset_x:.1f}, Y={self._calculated_offset_y:.1f}")
+        print(f"[OFFSET DEBUG] Reset to calculated offset: X={self._calculated_offset_x:.1f}, Y={self._calculated_offset_y:.1f}")
         # Emit signal with calculated values
         self.translation_offset_changed.emit(self._calculated_offset_x, self._calculated_offset_y)
     
@@ -541,11 +462,8 @@ class FusionControlsWidget(QWidget):
         Args:
             enabled: True to enable and show controls, False to disable and hide overlay controls
         """
-<<<<<<< Updated upstream
-=======
         # Hide/show overlay series selector when fusion is disabled
         self.overlay_series_widget.setVisible(enabled)
->>>>>>> Stashed changes
         self.overlay_series_combo.setEnabled(enabled)
         
         # Hide/show overlay controls when fusion is disabled
@@ -577,12 +495,6 @@ class FusionControlsWidget(QWidget):
         self.y_offset_spinbox.setEnabled(enabled)
         self.reset_offset_button.setEnabled(enabled)
         
-        # Hide/show sections when fusion is disabled/enabled
-        if hasattr(self, "overlay_section_widget"):
-            self.overlay_section_widget.setVisible(enabled)
-        if hasattr(self, "fusion_adjustment_widget"):
-            self.fusion_adjustment_widget.setVisible(enabled)
-        
         if not enabled:
             self.status_label.setText("Status: Disabled")
             self.status_label.setStyleSheet("color: gray; font-style: italic; margin-top: 5px;")
@@ -590,6 +502,7 @@ class FusionControlsWidget(QWidget):
     def update_series_lists(
         self,
         series_list: List[Tuple[str, str]],
+        current_base_uid: str = "",
         current_overlay_uid: str = ""
     ) -> None:
         """
@@ -598,10 +511,7 @@ class FusionControlsWidget(QWidget):
         
         Args:
             series_list: List of (series_uid, display_name) tuples
-<<<<<<< Updated upstream
-=======
             current_base_uid: Current base series UID (for display, not selection)
->>>>>>> Stashed changes
             current_overlay_uid: Current overlay series UID to select
         """
         # DEBUG
@@ -609,34 +519,20 @@ class FusionControlsWidget(QWidget):
         
         self._updating = True
         
-<<<<<<< Updated upstream
-        # Save current selections
-        prev_overlay = self.overlay_series_combo.currentData()
-        
-        # Clear existing items
-=======
         # Save current overlay selection
         prev_overlay = self.overlay_series_combo.currentData()
         
         # Clear existing items (only overlay, base is read-only)
->>>>>>> Stashed changes
         self.overlay_series_combo.clear()
         
         print(f"[FUSION CONTROLS DEBUG] Cleared overlay dropdown, now adding {len(series_list)} items")
         
-<<<<<<< Updated upstream
-        # Add series to overlay combo
-=======
         # Add series to overlay combo only
->>>>>>> Stashed changes
         for series_uid, display_name in series_list:
             print(f"[FUSION CONTROLS DEBUG]   Adding: {display_name}")
             self.overlay_series_combo.addItem(display_name, series_uid)
         
-<<<<<<< Updated upstream
-=======
         # Restore or set overlay selection
->>>>>>> Stashed changes
         if current_overlay_uid:
             index = self.overlay_series_combo.findData(current_overlay_uid)
             if index >= 0:
@@ -662,37 +558,6 @@ class FusionControlsWidget(QWidget):
         else:
             self.status_label.setStyleSheet("color: green; font-style: italic; margin-top: 5px;")
     
-<<<<<<< Updated upstream
-    def revert_overlay_selection(self, preferred_uid: Optional[str], exclude_uid: Optional[str] = None) -> None:
-        """
-        Restore overlay combo to a valid selection.
-        
-        Args:
-            preferred_uid: UID to re-select if available.
-            exclude_uid: UID that must not be selected (e.g., base series).
-        """
-        self._updating = True
-        target_index = -1
-        
-        if preferred_uid:
-            idx = self.overlay_series_combo.findData(preferred_uid)
-            if idx >= 0 and (exclude_uid is None or self.overlay_series_combo.itemData(idx) != exclude_uid):
-                target_index = idx
-        
-        if target_index == -1:
-            for i in range(self.overlay_series_combo.count()):
-                data = self.overlay_series_combo.itemData(i)
-                if exclude_uid is None or data != exclude_uid:
-                    target_index = i
-                    break
-        
-        if target_index >= 0:
-            self.overlay_series_combo.setCurrentIndex(target_index)
-        else:
-            self.overlay_series_combo.setCurrentIndex(-1)
-        
-        self._updating = False
-=======
     def get_selected_base_series(self) -> str:
         """Get currently selected base series UID (for compatibility, but base is read-only)."""
         # Base is read-only, this method kept for compatibility
@@ -712,7 +577,6 @@ class FusionControlsWidget(QWidget):
         else:
             self.base_series_display.setText("Not set")
             self.base_series_display.setStyleSheet("font-style: italic;")  # "Not set" style
->>>>>>> Stashed changes
     
     def get_selected_overlay_series(self) -> str:
         """Get currently selected overlay series UID."""
@@ -732,10 +596,6 @@ class FusionControlsWidget(QWidget):
         self._updating = True
         self.enable_checkbox.setChecked(enabled)
         self._updating = False
-    
-    def set_base_display(self, display_text: str) -> None:
-        """Update read-only base series display."""
-        self.base_series_display.setText(display_text or "Not set")
     
     def get_opacity(self) -> float:
         """Get current opacity value (0.0-1.0)."""
@@ -780,10 +640,9 @@ class FusionControlsWidget(QWidget):
         self._calculated_offset_y = y
         self.calculated_offset_label.setText(f"Calculated Offset: X={x:.1f}, Y={y:.1f} pixels")
         
-        # DEBUG - commented out
-        # print(f"[OFFSET DEBUG] set_calculated_offset called: X={x:.1f}, Y={y:.1f}")
-        # print(f"[OFFSET DEBUG]   Current spinbox values: X={self.x_offset_spinbox.value()}, Y={self.y_offset_spinbox.value()}")
-        # print(f"[OFFSET DEBUG]   User modified: {self._user_modified_offset}")
+        print(f"[OFFSET DEBUG] set_calculated_offset called: X={x:.1f}, Y={y:.1f}")
+        print(f"[OFFSET DEBUG]   Current spinbox values: X={self.x_offset_spinbox.value()}, Y={self.y_offset_spinbox.value()}")
+        print(f"[OFFSET DEBUG]   User modified: {self._user_modified_offset}")
         
         # Update the spinboxes only if user hasn't manually modified them
         if not self._user_modified_offset:
@@ -791,20 +650,9 @@ class FusionControlsWidget(QWidget):
             self.x_offset_spinbox.setValue(int(round(x)))
             self.y_offset_spinbox.setValue(int(round(y)))
             self._updating = False
-            # DEBUG - commented out
-            # print(f"[OFFSET DEBUG]   Updated spinboxes to calculated values")
+            print(f"[OFFSET DEBUG]   Updated spinboxes to calculated values")
         else:
-            # DEBUG - commented out
-            # print(f"[OFFSET DEBUG]   Keeping user-modified spinbox values")
-            pass
-    
-    def has_user_modified_offset(self) -> bool:
-        """Return True if user manually changed offset spinboxes."""
-        return self._user_modified_offset
-    
-    def reset_user_modified_offset(self) -> None:
-        """Clear user-modified flag so calculated offsets can overwrite spinboxes."""
-        self._user_modified_offset = False
+            print(f"[OFFSET DEBUG]   Keeping user-modified spinbox values")
     
     def set_scaling_factors(self, scale_x: float, scale_y: float) -> None:
         """
