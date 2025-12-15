@@ -52,7 +52,7 @@ class FusionHandler:
         self.overlay_level: float = 500.0
         
         # Phase 2: Resampling mode and settings
-        self.resampling_mode: str = 'auto'  # 'auto', 'fast', 'high_accuracy'
+        self.resampling_mode: str = 'high_accuracy'  # 'fast', 'high_accuracy'
         self.interpolation_method: str = 'linear'  # 'linear', 'nearest', 'cubic', 'b-spline'
         
         # Phase 2: Image resampler for 3D volume resampling
@@ -292,8 +292,8 @@ class FusionHandler:
             # User forced 3D mode
             return (True, "User selected High Accuracy Mode (3D)")
         else:
-            # Auto mode - use compatibility check
-            return (needs_3d, reason)
+            # Default to high_accuracy for unknown modes
+            return (True, "Defaulting to High Accuracy Mode (3D)")
     
     def interpolate_overlay_slice(
         self,
@@ -729,9 +729,6 @@ class FusionHandler:
         elif self.resampling_mode == 'high_accuracy':
             return ("High Accuracy (3D)", reason)
         else:
-            # Auto mode
-            if use_3d:
-                return ("Auto (3D High Accuracy)", reason)
-            else:
-                return ("Auto (2D Fast Mode)", reason)
+            # Default to high_accuracy for unknown modes
+            return ("High Accuracy (3D)", reason)
 
