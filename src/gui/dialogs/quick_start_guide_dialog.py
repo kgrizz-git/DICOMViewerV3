@@ -184,6 +184,7 @@ class QuickStartGuideDialog(QDialog):
                 <li><a href="#measurements">Measurements</a></li>
                 <li><a href="#rois">ROIs (Regions of Interest)</a></li>
                 <li><a href="#intensity-projections">Intensity Projections (Combine Slices)</a></li>
+                <li><a href="#image-fusion">Image Fusion</a></li>
                 <li><a href="#image-inversion">Image Inversion</a></li>
                 <li><a href="#image-fusion">Image Fusion</a></li>
                 <li><a href="#window-level">Window/Level Adjustment</a></li>
@@ -352,6 +353,43 @@ class QuickStartGuideDialog(QDialog):
                         <li>Closing files</li>
                     </ul>
                 </li>
+            </ul>
+            
+            <h2 id="image-fusion">Image Fusion</h2>
+            <p>Overlay functional imaging (PET/SPECT) on anatomical imaging (CT/MR) from different series in the same study:</p>
+            <ul>
+                <li><strong>Access:</strong> Use the "Image Fusion" widget in the right panel</li>
+                <li><strong>Enable Fusion:</strong> Check "Enable Fusion" to activate</li>
+                <li><strong>Base Series:</strong> Automatically set to the currently viewing series (anatomical imaging like CT or MR)</li>
+                <li><strong>Overlay Series:</strong> Select the functional series (PET or SPECT) from the dropdown</li>
+                <li><strong>Automatic Alignment:</strong> The system automatically aligns images using DICOM spatial metadata (ImagePositionPatient, PixelSpacing, ImageOrientationPatient)</li>
+                <li><strong>Resampling Modes:</strong>
+                    <ul>
+                        <li><strong>Fast Mode (2D):</strong> Uses 2D resize for series with compatible orientations and similar slice thicknesses (faster, suitable for same-orientation series)</li>
+                        <li><strong>High Accuracy (3D):</strong> Uses 3D volume resampling for series with different orientations or significantly different slice thicknesses (more accurate, handles complex spatial relationships)</li>
+                    </ul>
+                </li>
+                <li><strong>Interpolation Methods:</strong> For 3D resampling, choose from:
+                    <ul>
+                        <li><strong>Linear:</strong> Smooth interpolation (default, good balance of quality and speed)</li>
+                        <li><strong>Nearest:</strong> Fastest, preserves original pixel values</li>
+                        <li><strong>Cubic:</strong> Higher quality, smoother results</li>
+                        <li><strong>B-Spline:</strong> Highest quality, smoothest interpolation</li>
+                    </ul>
+                </li>
+                <li><strong>Opacity:</strong> Adjust overlay transparency (0-100%)</li>
+                <li><strong>Threshold:</strong> Set minimum overlay value to display (0-100%, in normalized space)</li>
+                <li><strong>Color Map:</strong> Choose colormap for overlay visualization (hot, jet, viridis, plasma, inferno, rainbow, cool, spring)</li>
+                <li><strong>Overlay Window/Level:</strong> Adjust window width and level for the overlay series independently from the base image</li>
+                <li><strong>Advanced Spatial Alignment:</strong>
+                    <ul>
+                        <li>View calculated offset and scaling factors based on DICOM metadata</li>
+                        <li>Manually adjust X and Y translation offset in pixels for fine-tuning</li>
+                        <li>Reset to calculated offset if manual adjustments are made</li>
+                    </ul>
+                </li>
+                <li><strong>Status Indicator:</strong> Shows alignment status (e.g., "Aligned (Frame of Reference)" or warnings)</li>
+                <li><strong>Note:</strong> Fusion works best when both series share the same Frame of Reference UID. The system will warn if Frame of Reference differs but still allow fusion.</li>
             </ul>
             
             <h2 id="image-inversion">Image Inversion</h2>

@@ -1648,6 +1648,9 @@ class DICOMViewerApp(QObject):
         # Quick Start Guide (shared)
         self.main_window.quick_start_guide_requested.connect(self._open_quick_start_guide)
         
+        # Fusion Technical Documentation (shared)
+        self.main_window.fusion_technical_doc_requested.connect(self._open_fusion_technical_doc)
+        
         # Tag Export (shared)
         self.main_window.tag_export_requested.connect(self._open_tag_export)
         
@@ -3445,6 +3448,10 @@ class DICOMViewerApp(QObject):
     def _open_quick_start_guide(self) -> None:
         """Handle Quick Start Guide dialog request."""
         self.dialog_coordinator.open_quick_start_guide()
+    
+    def _open_fusion_technical_doc(self) -> None:
+        """Handle Fusion Technical Documentation dialog request."""
+        self.dialog_coordinator.open_fusion_technical_doc()
     
     def _open_tag_export(self) -> None:
         """Handle Tag Export dialog request."""

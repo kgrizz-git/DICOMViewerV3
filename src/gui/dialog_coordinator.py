@@ -27,6 +27,7 @@ from gui.dialogs.export_dialog import ExportDialog
 from gui.dialogs.quick_start_guide_dialog import QuickStartGuideDialog
 from gui.dialogs.histogram_dialog import HistogramDialog
 from gui.dialogs.about_this_file_dialog import AboutThisFileDialog
+from gui.dialogs.fusion_technical_doc_dialog import FusionTechnicalDocDialog
 from gui.main_window import MainWindow
 from utils.config_manager import ConfigManager
 from PySide6.QtWidgets import QMessageBox
@@ -182,6 +183,11 @@ class DialogCoordinator:
     def open_quick_start_guide(self) -> None:
         """Handle Quick Start Guide dialog request."""
         dialog = QuickStartGuideDialog(self.config_manager, self.main_window)
+        dialog.exec()
+    
+    def open_fusion_technical_doc(self) -> None:
+        """Handle Fusion Technical Documentation dialog request."""
+        dialog = FusionTechnicalDocDialog(self.config_manager, self.main_window)
         dialog.exec()
     
     def open_tag_export(self) -> None:
