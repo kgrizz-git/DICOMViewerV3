@@ -277,6 +277,7 @@ class FusionTechnicalDocDialog(QDialog):
             <h2 id="2d-algorithm">2D Fusion Algorithm</h2>
             
             <h3>Algorithm Steps</h3>
+            <p>In 2D mode, the fusion system works one slice at a time. For each anatomical <em>base</em> slice, it locates the best matching functional <em>overlay</em> slice (or pair of slices) that represents the same physical position in the patient. It then scales and shifts that overlay slice so that it lines up with the base slice in pixel space before blending them together.</p>
             <ol>
                 <li><strong>Slice Matching</strong>:
                     <ul>
@@ -287,9 +288,10 @@ class FusionTechnicalDocDialog(QDialog):
                 </li>
                 <li><strong>2D Interpolation (if needed)</strong>:
                     <ul>
-                        <li>If exact match: use overlay slice directly</li>
-                        <li>If interpolation needed: linear interpolation between two adjacent slices</li>
-                        <li>Weight calculation: <code>weight = (base_location - loc1) / (loc2 - loc1)</code></li>
+                        <li>If an exact match is found, the overlay slice is used directly.</li>
+                        <li>If the base slice lies between two overlay slices, the system performs linear interpolation along the slice (through‑plane) direction to synthesize an overlay slice at the correct physical location.</li>
+                        <li>It first finds the two adjacent overlay slices that bracket the base slice, then computes a continuous weight: <code>weight = (base_location - loc1) / (loc2 - loc1)</code>.</li>
+                        <li>The interpolated slice is computed as <code>overlay = array1 × (1 - weight) + array2 × weight</code>, so the overlay values change smoothly as the base position moves between those two overlay slices.</li>
                     </ul>
                 </li>
                 <li><strong>Pixel Spacing Scaling</strong>:
@@ -376,6 +378,7 @@ class FusionTechnicalDocDialog(QDialog):
             <h2 id="3d-algorithm">3D Fusion Algorithm</h2>
             
             <h3>Algorithm Steps</h3>
+            <p>In 3D mode, the system first builds full 3D volumes for both the base and overlay series and then resamples the entire overlay volume into the base volume&rsquo;s coordinate system. Only after that resampling step does it extract individual slices for display. This captures differences in slice spacing, orientation, and position more accurately than the 2D slice‑by‑slice method.</p>
             <ol>
                 <li><strong>DICOM Series to SimpleITK Conversion</strong>:
                     <ul>
@@ -393,10 +396,10 @@ class FusionTechnicalDocDialog(QDialog):
                 </li>
                 <li><strong>3D Volume Resampling</strong>:
                     <ul>
-                        <li>Convert overlay and base series to SimpleITK images</li>
-                        <li>Use SimpleITK <code>Resample()</code> with identity transform</li>
-                        <li>Assumes same Frame of Reference UID</li>
-                        <li>Resamples overlay volume to match base volume's grid</li>
+                        <li>Convert overlay and base series to SimpleITK images.</li>
+                        <li>Use SimpleITK <code>Resample()</code> with an identity (no‑movement) transform.</li>
+                        <li>This assumes that the base and overlay series share the same DICOM <code>FrameOfReferenceUID</code> (see the Frame of Reference Assumption in the error section below).</li>
+                        <li>The overlay volume is resampled so that it shares the same origin, spacing, and direction matrix as the base volume, meaning every overlay voxel is mapped directly into the base image&rsquo;s 3D grid.</li>
                     </ul>
                 </li>
                 <li><strong>Slice Extraction</strong>:
@@ -415,6 +418,7 @@ class FusionTechnicalDocDialog(QDialog):
             </ol>
             
             <h3>Error Sources (3D Mode)</h3>
+            <p>Even with 3D resampling, several factors can introduce alignment and interpolation errors. The table below summarizes where those errors come from and how large they typically are. One particularly important assumption is that both series share the same <code>FrameOfReferenceUID</code>; if this is not true, the resampling will still produce an image, but the spatial relationship between base and overlay can be seriously wrong.</p>
             <table>
                 <tr>
                     <th>Error Source</th>
@@ -448,8 +452,8 @@ class FusionTechnicalDocDialog(QDialog):
                 </tr>
                 <tr>
                     <td>Frame of Reference Assumption</td>
-                    <td>Can be centimeters if differs</td>
-                    <td>High - significant misalignment</td>
+                    <td>Assumes same Frame of Reference UID for base and overlay series</td>
+                    <td>High - if the FrameOfReferenceUIDs differ, the identity transform is mathematically wrong, and the fused images can be misaligned by several millimeters to centimeters; the fusion status area shows a warning when the FrameOfReferenceUIDs do not match, and fusion is still allowed but should be treated as potentially inaccurate</td>
                 </tr>
             </table>
             
