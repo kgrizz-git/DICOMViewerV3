@@ -20,9 +20,9 @@ Requirements:
 """
 
 from PySide6.QtWidgets import (QWidget, QHBoxLayout, QScrollArea, QVBoxLayout,
-                                QLabel, QFrame)
+                                QLabel, QFrame, QStyleOption)
 from PySide6.QtCore import Qt, Signal, QSize, QPoint, QMimeData, QTimer
-from PySide6.QtGui import QPixmap, QImage, QPainter, QFont, QColor, QDrag, QMouseEvent, QKeyEvent
+from PySide6.QtGui import QPixmap, QImage, QPainter, QFont, QColor, QDrag, QMouseEvent, QKeyEvent, QPalette
 from typing import Optional, Dict, List
 from pydicom.dataset import Dataset
 from core.dicom_processor import DICOMProcessor
@@ -36,6 +36,7 @@ class StudyDivider(QFrame):
     Visual separator widget between studies in the series navigator.
     
     Displays a thin vertical line to separate series from different studies.
+    Spans both the label row and thumbnail row.
     """
     
     def __init__(self, parent=None):
@@ -46,9 +47,11 @@ class StudyDivider(QFrame):
             parent: Parent widget
         """
         super().__init__(parent)
-        # Set fixed size: thin vertical line matching thumbnail height
-        self.setFixedSize(3, 68)
-        self.setStyleSheet("QFrame { background-color: #888888; border: none; }")
+        # Set fixed width, height will span both rows (label + thumbnail)
+        # Height: label row (18px) + thumbnail row (68px) + border (2px) + margins = 95px
+        # Narrower divider: 2px instead of 3px, lighter color: #666666 instead of #888888
+        self.setFixedSize(2, 95)
+        self.setStyleSheet("QFrame { background-color: #666666; border: none; }")
 
 
 class StudyLabel(QFrame):
@@ -56,6 +59,7 @@ class StudyLabel(QFrame):
     Study label widget displaying study description or UID.
     
     Shows StudyDescription if available, otherwise displays truncated StudyInstanceUID.
+    Thin row above thumbnails, left-aligned, spans full width of study's thumbnails.
     """
     
     def __init__(self, study_label_text: str, parent=None):
@@ -67,34 +71,38 @@ class StudyLabel(QFrame):
             parent: Parent widget
         """
         super().__init__(parent)
-        # Set fixed size matching thumbnail height
-        self.setFixedSize(120, 68)
-        self.setFrameStyle(QFrame.Shape.Box)
-        self.setLineWidth(1)
+        # Set fixed height for thin row, width will be set dynamically
+        self.setFixedHeight(18)
+        self.setMinimumWidth(68)  # Minimum width of one thumbnail
+        # No frame style - we don't want any borders
+        self.setFrameStyle(QFrame.Shape.NoFrame)
+        # Background color is set via global stylesheet in main_window.py for theme awareness
+        # Dark theme: #2a2a2a, Light theme: #e0e0e0
+        # No borders
         self.setStyleSheet(
             "QFrame { "
-            "background-color: #e0e0e0; "
-            "border: 1px solid #888888; "
-            "border-radius: 2px; "
+            "border: none; "
+            "border-radius: 0px; "
             "}"
         )
         
         # Create label for text
         self.label = QLabel(study_label_text, self)
-        self.label.setAlignment(Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter)
-        self.label.setWordWrap(True)
+        self.label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.label.setWordWrap(False)
+        # Text color will adapt to theme via parent stylesheet
         self.label.setStyleSheet(
             "QLabel { "
-            "color: #333333; "
+            "background-color: transparent; "
             "font-weight: bold; "
             "font-size: 9pt; "
-            "padding: 2px; "
+            "padding: 2px 5px; "
             "}"
         )
         
         # Layout for label
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.label)
     
     def set_text(self, text: str) -> None:
@@ -105,6 +113,15 @@ class StudyLabel(QFrame):
             text: New text to display
         """
         self.label.setText(text)
+    
+    def set_width(self, width: int) -> None:
+        """
+        Set the width of the label to span thumbnails.
+        
+        Args:
+            width: Width in pixels
+        """
+        self.setFixedWidth(width)
 
 
 class SeriesThumbnail(QFrame):
@@ -135,8 +152,9 @@ class SeriesThumbnail(QFrame):
         # Set fixed size for thumbnails (85% of 80x80 to fit smaller navigator height)
         self.setFixedSize(68, 68)
         self.setFrameStyle(QFrame.Shape.Box)
-        self.setLineWidth(2)
-        self.setStyleSheet("QFrame { border: 2px solid gray; }")
+        self.setLineWidth(1)
+        # Darker border: #444444 instead of #555555
+        self.setStyleSheet("QFrame { border: 1px solid #444444; }")
         
         # Enable mouse tracking for hover effects
         self.setMouseTracking(True)
@@ -150,9 +168,10 @@ class SeriesThumbnail(QFrame):
         """
         self.is_current = is_current
         if is_current:
-            self.setStyleSheet("QFrame { border: 3px solid #00aaff; background-color: rgba(0, 170, 255, 0.1); }")
+            self.setStyleSheet("QFrame { border: 2px solid #00aaff; background-color: rgba(0, 170, 255, 0.1); }")
         else:
-            self.setStyleSheet("QFrame { border: 2px solid gray; }")
+            # Darker border: #444444 instead of #555555
+            self.setStyleSheet("QFrame { border: 1px solid #444444; }")
         self.update()
     
     def mousePressEvent(self, event: QMouseEvent) -> None:
@@ -360,7 +379,7 @@ class SeriesNavigator(QWidget):
         self._create_ui()
     
     def _create_ui(self) -> None:
-        """Create the UI layout."""
+        """Create the UI layout with two-row structure (label row + thumbnail row)."""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         
@@ -372,19 +391,23 @@ class SeriesNavigator(QWidget):
         scroll_area.setFrameShape(QFrame.Shape.NoFrame)
         scroll_area.setObjectName("series_navigator_scroll_area")
         
-        # Container widget for thumbnails
-        self.thumbnail_container = QWidget()
-        self.thumbnail_container.setObjectName("series_navigator_container")
-        self.thumbnail_layout = QHBoxLayout(self.thumbnail_container)
-        self.thumbnail_layout.setContentsMargins(5, 5, 5, 5)
-        self.thumbnail_layout.setSpacing(5)
-        self.thumbnail_layout.addStretch()  # Add stretch at end
+        # Main container widget for study sections
+        self.main_container = QWidget()
+        self.main_container.setObjectName("series_navigator_container")
+        self.main_layout = QHBoxLayout(self.main_container)
+        # Reduce margins to ensure thumbnails aren't cut off
+        # Top margin for spacing, left/right for padding, bottom minimal to prevent clipping
+        self.main_layout.setContentsMargins(5, 5, 5, 1)
+        self.main_layout.setSpacing(0)  # No spacing, dividers provide separation
+        self.main_layout.addStretch()  # Add stretch at end
         
-        scroll_area.setWidget(self.thumbnail_container)
+        scroll_area.setWidget(self.main_container)
         layout.addWidget(scroll_area)
         
-        # Set fixed height for navigator (85% of 93px)
-        self.setFixedHeight(79)
+        # Set fixed height for navigator: 
+        # Top margin (5px) + label row (18px) + thumbnail row (68px) + border (2px) + bottom margin (1px) = 94px
+        # Round up to 95px for safety
+        self.setFixedHeight(95)
     
     def _get_study_label(self, dataset: Dataset) -> str:
         """
@@ -422,8 +445,10 @@ class SeriesNavigator(QWidget):
         """
         Update the series list with thumbnails from all studies.
         
-        Displays all series from all studies in a single horizontal row,
-        with visual dividers and study labels separating different studies.
+        Displays all series from all studies in a two-row layout:
+        - Top row: Study labels spanning full width of their thumbnails
+        - Bottom row: Series thumbnails
+        - Vertical dividers span both rows to separate studies.
         
         Args:
             studies: Dictionary of studies {study_uid: {series_uid: [datasets]}}
@@ -433,26 +458,22 @@ class SeriesNavigator(QWidget):
         self.current_study_uid = current_study_uid
         self.current_series_uid = current_series_uid
         
-        # Clear existing widgets (thumbnails, labels, dividers)
-        for thumbnail in self.thumbnails.values():
-            self.thumbnail_layout.removeWidget(thumbnail)
-            thumbnail.deleteLater()
+        # Clear existing widgets from main layout
+        # Get all widgets from main layout and remove them
+        while self.main_layout.count() > 1:  # Keep the stretch at the end
+            item = self.main_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        
+        # Clear tracking lists
         self.thumbnails.clear()
-        
-        for label in self.study_labels:
-            self.thumbnail_layout.removeWidget(label)
-            label.deleteLater()
         self.study_labels.clear()
-        
-        for divider in self.study_dividers:
-            self.thumbnail_layout.removeWidget(divider)
-            divider.deleteLater()
         self.study_dividers.clear()
         
         if not studies:
             return
         
-        # Iterate through all studies
+        # Iterate through all studies and create study sections
         first_study = True
         for study_uid, study_series in studies.items():
             # Skip studies with no series
@@ -461,29 +482,22 @@ class SeriesNavigator(QWidget):
             
             # Add divider before study (except for first study)
             if not first_study:
-                divider = StudyDivider(self)
+                divider = StudyDivider(self.main_container)
                 self.study_dividers.append(divider)
-                self.thumbnail_layout.insertWidget(self.thumbnail_layout.count() - 1, divider)
+                self.main_layout.insertWidget(self.main_layout.count() - 1, divider)
             
             # Get study label from first dataset of first series
             study_label_text = "Unknown Study"
-            first_series_uid = None
             first_dataset = None
             
             # Find first series with datasets
             for series_uid, datasets in study_series.items():
                 if datasets:
-                    first_series_uid = series_uid
                     first_dataset = datasets[0]
                     break
             
             if first_dataset:
                 study_label_text = self._get_study_label(first_dataset)
-            
-            # Add study label
-            study_label = StudyLabel(study_label_text, self)
-            self.study_labels.append(study_label)
-            self.thumbnail_layout.insertWidget(self.thumbnail_layout.count() - 1, study_label)
             
             # Build list of (series_number, series_uid, first_dataset) for this study
             series_list = []
@@ -500,6 +514,45 @@ class SeriesNavigator(QWidget):
             # Sort by series number
             series_list.sort(key=lambda x: x[0])
             
+            # Calculate width for this study section
+            # Width = (number of thumbnails × 68px) + (spacing between thumbnails × (num - 1))
+            num_thumbnails = len(series_list)
+            thumbnail_width = 68
+            thumbnail_spacing = 5
+            if num_thumbnails > 0:
+                section_width = (num_thumbnails * thumbnail_width) + ((num_thumbnails - 1) * thumbnail_spacing)
+            else:
+                section_width = thumbnail_width  # Minimum width
+            
+            # Create study section container
+            # The global stylesheet has: QWidget[objectName="series_navigator_container"] > QWidget
+            # This should apply to child widgets, but we need WA_StyledBackground for it to work
+            study_section = QWidget(self.main_container)
+            # Enable styled background so the global stylesheet rule applies
+            study_section.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+            # Don't set local stylesheet - let the global one handle it
+            # The global stylesheet rule should match: QWidget[objectName="series_navigator_container"] > QWidget
+            
+            section_layout = QVBoxLayout(study_section)
+            section_layout.setContentsMargins(0, 0, 0, 0)
+            section_layout.setSpacing(0)
+            
+            # Add study label at top (spans full width of section)
+            study_label = StudyLabel(study_label_text, study_section)
+            study_label.set_width(section_width)
+            self.study_labels.append(study_label)
+            section_layout.addWidget(study_label)
+            
+            # Create thumbnails container
+            # The global stylesheet should apply here too via the child selector
+            thumbnails_container = QWidget(study_section)
+            # Enable styled background so the global stylesheet rule applies
+            thumbnails_container.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+            # Don't set local stylesheet - let the global one handle it
+            thumbnails_layout = QHBoxLayout(thumbnails_container)
+            thumbnails_layout.setContentsMargins(0, 0, 0, 0)
+            thumbnails_layout.setSpacing(thumbnail_spacing)
+            
             # Create thumbnails for this study
             for series_num, series_uid, first_dataset in series_list:
                 # Check cache first
@@ -513,7 +566,7 @@ class SeriesNavigator(QWidget):
                         self.thumbnail_cache[cache_key] = thumbnail_image
                 
                 # Create thumbnail widget
-                thumbnail = SeriesThumbnail(series_uid, series_num, thumbnail_image, self)
+                thumbnail = SeriesThumbnail(series_uid, series_num, thumbnail_image, thumbnails_container)
                 thumbnail.clicked.connect(self.series_selected.emit)
                 # Highlight if this is the current series AND current study
                 is_current = (series_uid == current_series_uid and study_uid == current_study_uid)
@@ -522,8 +575,13 @@ class SeriesNavigator(QWidget):
                 # Store thumbnail with composite key (study_uid, series_uid) for lookup
                 composite_key = f"{study_uid}:{series_uid}"
                 self.thumbnails[composite_key] = thumbnail
-                # Insert before the stretch
-                self.thumbnail_layout.insertWidget(self.thumbnail_layout.count() - 1, thumbnail)
+                thumbnails_layout.addWidget(thumbnail)
+            
+            # Add thumbnails container to section
+            section_layout.addWidget(thumbnails_container)
+            
+            # Add study section to main layout
+            self.main_layout.insertWidget(self.main_layout.count() - 1, study_section)
             
             first_study = False
     
@@ -693,23 +751,16 @@ class SeriesNavigator(QWidget):
             print(f"Error regenerating thumbnail: {e}")
     
     def clear(self) -> None:
-        """Clear all thumbnails, labels, and dividers."""
-        # Clear thumbnails
-        for thumbnail in self.thumbnails.values():
-            self.thumbnail_layout.removeWidget(thumbnail)
-            thumbnail.deleteLater()
+        """Clear all thumbnails, labels, dividers, and study sections."""
+        # Clear all widgets from main layout (except stretch)
+        while self.main_layout.count() > 1:  # Keep the stretch at the end
+            item = self.main_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        
+        # Clear tracking lists
         self.thumbnails.clear()
-        
-        # Clear study labels
-        for label in self.study_labels:
-            self.thumbnail_layout.removeWidget(label)
-            label.deleteLater()
         self.study_labels.clear()
-        
-        # Clear study dividers
-        for divider in self.study_dividers:
-            self.thumbnail_layout.removeWidget(divider)
-            divider.deleteLater()
         self.study_dividers.clear()
         
         # Clear cache

@@ -1025,6 +1025,18 @@ class MainWindow(QMainWindow):
                 QWidget[objectName="series_navigator_container"] {{
                     background-color: #1b1b1b;
                 }}
+                
+                /* Study sections and thumbnails containers inherit navigator background */
+                /* Match direct children and all nested QWidget descendants */
+                QWidget[objectName="series_navigator_container"] > QWidget,
+                QWidget[objectName="series_navigator_container"] QWidget {{
+                    background-color: #1b1b1b;
+                }}
+                
+                /* Study label background - slightly lighter than navigator for dark theme */
+                QWidget[objectName="series_navigator_container"] StudyLabel {{
+                    background-color: #2a2a2a;
+                }}
             """.format(white_checkmark_path=white_checkmark_path, black_checkmark_path=black_checkmark_path)
             
             # Update image viewer background color for dark theme
@@ -1399,6 +1411,18 @@ class MainWindow(QMainWindow):
                 
                 QWidget[objectName="series_navigator_container"] {{
                     background-color: #d0d0d0;
+                }}
+                
+                /* Study sections and thumbnails containers inherit navigator background */
+                /* Match direct children and all nested QWidget descendants */
+                QWidget[objectName="series_navigator_container"] > QWidget,
+                QWidget[objectName="series_navigator_container"] QWidget {{
+                    background-color: #d0d0d0;
+                }}
+                
+                /* Study label background - slightly lighter than navigator for light theme */
+                QWidget[objectName="series_navigator_container"] StudyLabel {{
+                    background-color: #e0e0e0;
                 }}
             """.format(white_checkmark_path=white_checkmark_path, black_checkmark_path=black_checkmark_path)
             
