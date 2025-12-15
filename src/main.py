@@ -2205,10 +2205,10 @@ class DICOMViewerApp(QObject):
             self.slice_navigator.current_slice_index = slice_index
             self.slice_navigator.blockSignals(False)
         
-        # Update series navigator highlighting to show the assigned series
-        # This ensures highlighting updates when series are assigned via drag-and-drop or context menu
-        # Pass both series_uid and study_uid for correct highlighting
-        self.series_navigator.set_current_series(series_uid, target_study_uid)
+        # Update series navigator highlighting only if this is the focused subwindow
+        # This ensures highlighting reflects the focused subwindow's series, not unfocused ones
+        if subwindow == self.multi_window_layout.get_focused_subwindow():
+            self.series_navigator.set_current_series(series_uid, target_study_uid)
         
         # If this subwindow is the focused one, also update legacy references and highlighting
         if subwindow == self.multi_window_layout.get_focused_subwindow():

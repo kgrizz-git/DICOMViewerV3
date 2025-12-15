@@ -45,7 +45,7 @@ class FusionControlsWidget(QWidget):
     colormap_changed = Signal(str)  # Emitted when colormap changes
     overlay_window_level_changed = Signal(float, float)  # Emitted when overlay W/L changes (window, level)
     translation_offset_changed = Signal(float, float)  # Emitted when translation offset changes (x, y)
-    resampling_mode_changed = Signal(str)  # Emitted when resampling mode changes ('auto', 'fast', 'high_accuracy')
+    resampling_mode_changed = Signal(str)  # Emitted when resampling mode changes ('fast', 'high_accuracy')
     interpolation_method_changed = Signal(str)  # Emitted when interpolation method changes
     
     def __init__(self, parent=None):
@@ -199,20 +199,15 @@ class FusionControlsWidget(QWidget):
         resampling_layout.addWidget(mode_label)
         
         self.resampling_mode_group = QButtonGroup(self)
-        self.auto_mode_radio = QRadioButton("Auto (Recommended)")
-        self.auto_mode_radio.setChecked(True)  # Default
-        self.auto_mode_radio.setToolTip("Automatically choose 2D or 3D based on compatibility")
-        self.resampling_mode_group.addButton(self.auto_mode_radio, 0)
-        resampling_layout.addWidget(self.auto_mode_radio)
-        
         self.fast_mode_radio = QRadioButton("Fast Mode (2D)")
         self.fast_mode_radio.setToolTip("Force 2D resize for speed (may be inaccurate for different orientations)")
-        self.resampling_mode_group.addButton(self.fast_mode_radio, 1)
+        self.resampling_mode_group.addButton(self.fast_mode_radio, 0)
         resampling_layout.addWidget(self.fast_mode_radio)
         
         self.high_accuracy_mode_radio = QRadioButton("High Accuracy (3D)")
+        self.high_accuracy_mode_radio.setChecked(True)  # Default - changed from auto
         self.high_accuracy_mode_radio.setToolTip("Force 3D resampling for maximum accuracy")
-        self.resampling_mode_group.addButton(self.high_accuracy_mode_radio, 2)
+        self.resampling_mode_group.addButton(self.high_accuracy_mode_radio, 1)
         resampling_layout.addWidget(self.high_accuracy_mode_radio)
         
         # Interpolation method selector
@@ -229,7 +224,7 @@ class FusionControlsWidget(QWidget):
         resampling_layout.addLayout(interpolation_layout)
         
         # Resampling status display
-        self.resampling_status_label = QLabel("Status: Auto (2D Fast Mode)")
+        self.resampling_status_label = QLabel("Status: High Accuracy (3D)")
         self.resampling_status_label.setStyleSheet("font-size: 9pt; color: #555; font-style: italic;")
         self.resampling_status_label.setWordWrap(True)
         resampling_layout.addWidget(self.resampling_status_label)
@@ -439,14 +434,12 @@ class FusionControlsWidget(QWidget):
         if self._updating:
             return
         
-        if button == self.auto_mode_radio:
-            mode = 'auto'
-        elif button == self.fast_mode_radio:
+        if button == self.fast_mode_radio:
             mode = 'fast'
         elif button == self.high_accuracy_mode_radio:
             mode = 'high_accuracy'
         else:
-            return
+            return  # Should not happen, but handle gracefully
         
         self.resampling_mode_changed.emit(mode)
     
@@ -479,7 +472,6 @@ class FusionControlsWidget(QWidget):
         
         # Phase 2: Resampling controls
         self.resampling_group.setVisible(enabled)
-        self.auto_mode_radio.setEnabled(enabled)
         self.fast_mode_radio.setEnabled(enabled)
         self.high_accuracy_mode_radio.setEnabled(enabled)
         self.interpolation_combo.setEnabled(enabled)
@@ -684,21 +676,19 @@ class FusionControlsWidget(QWidget):
         self._user_modified_offset = False
     
     def get_resampling_mode(self) -> str:
-        """Get current resampling mode ('auto', 'fast', 'high_accuracy')."""
-        if self.auto_mode_radio.isChecked():
-            return 'auto'
-        elif self.fast_mode_radio.isChecked():
+        """Get current resampling mode ('fast', 'high_accuracy')."""
+        if self.fast_mode_radio.isChecked():
             return 'fast'
         elif self.high_accuracy_mode_radio.isChecked():
             return 'high_accuracy'
-        return 'auto'
+        return 'high_accuracy'  # Default to high_accuracy instead of auto
     
     def set_resampling_mode(self, mode: str) -> None:
         """
         Set resampling mode.
         
         Args:
-            mode: 'auto', 'fast', or 'high_accuracy'
+            mode: 'fast' or 'high_accuracy'
         """
         self._updating = True
         if mode == 'fast':
@@ -706,7 +696,8 @@ class FusionControlsWidget(QWidget):
         elif mode == 'high_accuracy':
             self.high_accuracy_mode_radio.setChecked(True)
         else:
-            self.auto_mode_radio.setChecked(True)
+            # Default to high_accuracy for unknown modes
+            self.high_accuracy_mode_radio.setChecked(True)
         self._updating = False
     
     def get_interpolation_method(self) -> str:
@@ -731,7 +722,7 @@ class FusionControlsWidget(QWidget):
         Update resampling status display.
         
         Args:
-            mode_display: Mode display string (e.g., "Auto (2D Fast Mode)")
+            mode_display: Mode display string (e.g., "Fast Mode (2D)" or "High Accuracy (3D)")
             reason: Reason string (e.g., "Compatible: same orientation")
             show_warning: Whether to show warning label
             warning_text: Warning text to display

@@ -454,7 +454,7 @@ class FusionCoordinator:
         Handle resampling mode change.
         
         Args:
-            mode: 'auto', 'fast', or 'high_accuracy'
+            mode: 'fast' or 'high_accuracy'
         """
         self.fusion_handler.resampling_mode = mode
         
