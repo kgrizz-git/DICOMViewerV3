@@ -106,6 +106,8 @@ User Selection → FusionHandler → Slice Matching → Resampling Decision
 
 ### Algorithm Steps
 
+In 2D mode, the fusion system operates on one slice at a time. For each anatomical “base” slice, it tries to find the most appropriate functional “overlay” slice (or pair of slices) that represents the same physical location in the patient. Once that overlay information has been located and, if needed, interpolated, the system scales and shifts the overlay slice so that it lines up with the base image in pixel space and then blends the two images together.
+
 1. **Slice Matching**:
    - Extract slice location from base slice (SliceLocation or ImagePositionPatient[2])
    - Find matching overlay slice(s):
@@ -115,10 +117,10 @@ User Selection → FusionHandler → Slice Matching → Resampling Decision
 
 2. **2D Interpolation (if needed)**:
    - If exact match: use overlay slice directly
-   - If interpolation needed:
-     - Get two adjacent overlay slices
-     - Calculate weight: `weight = (base_location - loc1) / (loc2 - loc1)`
-     - Linear interpolation: `overlay = array1 × (1 - weight) + array2 × weight`
+   - If interpolation is needed because the base slice lies between two overlay slices:
+     - Get the two adjacent overlay slices that bracket the base slice in physical space
+     - Calculate a continuous weight: `weight = (base_location - loc1) / (loc2 - loc1)`
+     - Perform linear interpolation: `overlay = array1 × (1 - weight) + array2 × weight`, so the overlay values change smoothly as the base position moves between the two overlay slices
 
 3. **Pixel Spacing Scaling**:
    - Calculate scaling factors:
@@ -229,8 +231,8 @@ User Selection → FusionHandler → Slice Matching → Resampling Decision
    - Convert overlay series to SimpleITK image
    - Convert base series to SimpleITK image (reference grid)
    - Use SimpleITK `Resample()` with identity transform
-   - Assumes same Frame of Reference UID
-   - Resamples overlay volume to match base volume's grid (origin, spacing, direction, size)
+   - Assumes same Frame of Reference UID (see “Frame of Reference Assumption” below)
+   - Resamples the entire 3D overlay volume so that it shares the same origin, spacing, and direction matrix as the base volume, meaning every overlay voxel is mapped into the base image’s 3D grid
 
 4. **Slice Extraction**:
    - Extract requested slice from resampled volume
@@ -280,10 +282,12 @@ User Selection → FusionHandler → Slice Matching → Resampling Decision
      - **Total error**: ±0.5-0.7 mm
 
 5. **Frame of Reference Assumption**:
-   - **Source**: Assumes same Frame of Reference UID
-   - **Error**: If Frame of Reference differs, identity transform is incorrect
-   - **Impact**: Can cause significant misalignment (centimeters)
-   - **Mitigation**: System checks Frame of Reference and warns user
+   - **Source**: Assumes same Frame of Reference UID for base and overlay series.
+   - In DICOM, the `FrameOfReferenceUID` defines a patient‑fixed 3D coordinate system. Two series that share the same `FrameOfReferenceUID` (for example, the CT and PET components of a PET‑CT exam acquired on the same scanner and table position) are expected to be already registered in physical space.
+   - The 3D resampling code relies on this and uses an identity (no‑movement) transform when it resamples the overlay volume into the base volume’s grid. This is only correct if both series really do share the same frame of reference and have consistent spatial metadata.
+   - **Error**: If the Frame of Reference differs, the identity transform is mathematically incorrect: the two volumes are not actually in the same physical coordinate system, so origin, orientation, and voxel spacing no longer line up. The resampling will still run, but the resulting fused image may place functional uptake in the wrong anatomical location.
+   - **Impact**: Misalignment can be substantial—ranging from several millimeters to multiple centimeters—depending on how different the true frames of reference are (for example, different scanners, different sessions, or external registrations that are not captured in the DICOM metadata).
+   - **Mitigation and warning behaviour**: The fusion coordinator checks the `FrameOfReferenceUID` from each series. If the UIDs do not match, the fusion status area shows a clear warning that the frames of reference differ. **Fusion is still allowed in this situation** so you can visually inspect the result, but you should treat the alignment as potentially inaccurate and avoid using it for tasks that require precise registration unless you have performed and validated an external registration step.
 
 6. **Rescale Parameter Consistency**:
    - **Source**: Rescale slope/intercept may vary across slices
@@ -313,6 +317,10 @@ User Selection → FusionHandler → Slice Matching → Resampling Decision
 
 ### Automatic Alignment
 
+When you enable fusion, the viewer must decide exactly how to place the overlay pixels on top of the base image pixels. This is a spatial alignment or registration problem: the two series may have different pixel spacings, different physical starting positions in the patient, or different slice thicknesses and orientations. The fusion system uses the spatial metadata already present in the DICOM headers to compute how the overlay should be scaled and shifted relative to the base series.
+
+In 2D (fast) mode, that alignment is reduced to scale factors and in‑plane translations that are applied slice‑by‑slice. In 3D (high‑accuracy) mode, the same spatial information is used to build a full 3D resampling grid, so the overlay volume is warped directly into the base volume’s coordinate system before any slice is displayed.
+
 The system automatically calculates spatial alignment using DICOM metadata:
 
 1. **Scaling Factors**:
@@ -333,11 +341,13 @@ The system automatically calculates spatial alignment using DICOM metadata:
 
 ### Manual Adjustment
 
+Even when the DICOM metadata is correct, small residual misalignments can occur because of positioning differences, table movement, or interpolation effects. For that reason, the right‑panel fusion controls expose the calculated translation as editable X and Y offsets so that you can fine‑tune the overlay placement visually.
+
 Users can manually adjust translation offset:
-- Range: -500 to +500 pixels
+- Range: -500 to +500 pixels in each direction
 - Step: 1 pixel
-- Reset to calculated offset available
-- Useful for fine-tuning when automatic alignment is slightly off
+- A “Reset to Calculated” control restores the automatically computed offset
+- This manual adjustment is most useful when the automatic alignment is close but not perfect, for example when aligning PET and CT from the same scanner with slightly different breathing or positioning between scans
 
 ### Alignment Accuracy
 
