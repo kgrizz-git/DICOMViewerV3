@@ -33,7 +33,7 @@ sys.path.insert(0, str(src_dir))
 from PySide6.QtWidgets import QApplication, QMessageBox, QStyleFactory, QFileDialog
 from PySide6.QtCore import Qt, QPointF, QObject, QTimer, QRectF, QSize
 from PySide6.QtGui import QKeyEvent
-from typing import Optional, Dict
+from typing import Optional, Dict, List, Tuple
 import pydicom
 from pydicom.dataset import Dataset
 
@@ -1822,6 +1822,14 @@ class DICOMViewerApp(QObject):
         if self.roi_list_panel and self.roi_manager:
             self.roi_list_panel.set_roi_manager(self.roi_manager)
             # Update ROI list for current slice of focused subwindow
+        
+        # Update series navigator highlighting to reflect focused subwindow's series
+        if focused_idx >= 0 and focused_idx in self.subwindow_data:
+            data = self.subwindow_data[focused_idx]
+            focused_series_uid = data.get('current_series_uid', '')
+            focused_study_uid = data.get('current_study_uid', '')
+            if focused_series_uid and focused_study_uid and self.series_navigator:
+                self.series_navigator.set_current_series(focused_series_uid, focused_study_uid)
             if self.current_dataset is not None:
                 study_uid = getattr(self.current_dataset, 'StudyInstanceUID', '')
                 series_uid = get_composite_series_key(self.current_dataset)
@@ -1862,8 +1870,16 @@ class DICOMViewerApp(QObject):
     
     def _update_series_navigator_highlighting(self) -> None:
         """Update series navigator highlighting based on focused subwindow's series."""
-        if self.current_series_uid:
-            self.series_navigator.set_current_series(self.current_series_uid)
+        # Get focused subwindow's series and study UID for highlighting
+        focused_idx = self.focused_subwindow_index
+        if focused_idx in self.subwindow_data:
+            data = self.subwindow_data[focused_idx]
+            focused_series_uid = data.get('current_series_uid', '')
+            focused_study_uid = data.get('current_study_uid', '')
+            if focused_series_uid and focused_study_uid:
+                self.series_navigator.set_current_series(focused_series_uid, focused_study_uid)
+            elif focused_series_uid:
+                self.series_navigator.set_current_series(focused_series_uid)
     
     def _on_layout_changed(self, layout_mode: str) -> None:
         """Handle layout mode change from multi-window layout."""
@@ -2191,7 +2207,8 @@ class DICOMViewerApp(QObject):
         
         # Update series navigator highlighting to show the assigned series
         # This ensures highlighting updates when series are assigned via drag-and-drop or context menu
-        self.series_navigator.set_current_series(series_uid)
+        # Pass both series_uid and study_uid for correct highlighting
+        self.series_navigator.set_current_series(series_uid, target_study_uid)
         
         # If this subwindow is the focused one, also update legacy references and highlighting
         if subwindow == self.multi_window_layout.get_focused_subwindow():
@@ -2895,11 +2912,14 @@ class DICOMViewerApp(QObject):
                     self.slice_navigator.set_total_slices(len(datasets))
                     self.slice_navigator.set_current_slice(0)
                 
-                # Update series navigator highlighting
-                available_thumbnails = list(self.series_navigator.thumbnails.keys())
-                if self.current_series_uid not in available_thumbnails:
-                    pass
-                self.series_navigator.set_current_series(self.current_series_uid)
+                # Update series navigator highlighting using focused subwindow's data
+                focused_idx = self.focused_subwindow_index
+                if focused_idx in self.subwindow_data:
+                    data = self.subwindow_data[focused_idx]
+                    focused_series_uid = data.get('current_series_uid', '')
+                    focused_study_uid = data.get('current_study_uid', '')
+                    if focused_series_uid and focused_study_uid:
+                        self.series_navigator.set_current_series(focused_series_uid, focused_study_uid)
                 
                 # Update cine player context
                 self._update_cine_player_context()
@@ -2976,16 +2996,64 @@ class DICOMViewerApp(QObject):
                     focused_slice_index
                 )
             
-            # Navigate series for focused subwindow
-            new_series_uid, slice_index, dataset = self.slice_display_manager.handle_series_navigation(direction)
+            # Build flat list of all series from all studies in navigator order
+            flat_series_list = self._build_flat_series_list(self.current_studies)
             
-            if new_series_uid is None:
-                print(f"[DEBUG] Series navigation: handle_series_navigation returned None (navigation failed)")
-            else:
-                print(f"[DEBUG] Series navigation: Successfully navigated to series {new_series_uid[:20]}..., slice_index={slice_index}")
+            if not flat_series_list:
+                print(f"[DEBUG] Series navigation: No series found in any study")
+                return
+            
+            # Find current series in flat list by matching both study_uid and series_uid
+            current_index = None
+            for idx, (_, study_uid, series_uid, _) in enumerate(flat_series_list):
+                if study_uid == focused_study_uid and series_uid == focused_series_uid:
+                    current_index = idx
+                    break
+            
+            if current_index is None:
+                print(f"[DEBUG] Series navigation: Current series not found in flat list. "
+                      f"Looking for study={focused_study_uid[:20] if focused_study_uid else 'None'}..., "
+                      f"series={focused_series_uid[:20] if focused_series_uid else 'None'}...")
+                return
+            
+            # Calculate new index
+            new_index = current_index + direction
+            
+            # Check if new index is valid
+            if new_index < 0 or new_index >= len(flat_series_list):
+                print(f"[DEBUG] Series navigation: New index {new_index} out of range [0, {len(flat_series_list)}). "
+                      f"Already at {'first' if new_index < 0 else 'last'} series.")
+                return
+            
+            # Get target series from flat list
+            _, target_study_uid, target_series_uid, target_first_dataset = flat_series_list[new_index]
+            
+            # Get full datasets list for the target series
+            if target_study_uid not in self.current_studies:
+                print(f"[DEBUG] Series navigation: Target study {target_study_uid[:20]}... not found in current_studies")
+                return
+            
+            if target_series_uid not in self.current_studies[target_study_uid]:
+                print(f"[DEBUG] Series navigation: Target series {target_series_uid[:20]}... not found in study")
+                return
+            
+            target_datasets = self.current_studies[target_study_uid][target_series_uid]
+            if not target_datasets:
+                print(f"[DEBUG] Series navigation: Target series has no datasets")
+                return
+            
+            # Set new series information
+            new_series_uid = target_series_uid
+            slice_index = 0  # Always start at first slice when navigating to new series
+            dataset = target_datasets[0]
+            
+            print(f"[DEBUG] Series navigation: Successfully navigating from index {current_index} to {new_index}, "
+                  f"new_series_uid={new_series_uid[:20]}..., new_study_uid={target_study_uid[:20]}...")
+            
             if new_series_uid is not None and dataset is not None:
                 # Update focused subwindow's data
                 self.subwindow_data[focused_idx]['current_series_uid'] = new_series_uid
+                self.subwindow_data[focused_idx]['current_study_uid'] = target_study_uid
                 self.subwindow_data[focused_idx]['current_slice_index'] = slice_index
                 self.subwindow_data[focused_idx]['current_dataset'] = dataset
                 
@@ -2993,7 +3061,7 @@ class DICOMViewerApp(QObject):
                 self.current_series_uid = new_series_uid
                 self.current_slice_index = slice_index
                 self.current_dataset = dataset
-                self.current_study_uid = focused_study_uid  # Ensure study_uid matches
+                self.current_study_uid = target_study_uid  # Use target study UID
                 
                 # Reset projection state when switching series
                 self.slice_display_manager.reset_projection_state()
@@ -3006,7 +3074,7 @@ class DICOMViewerApp(QObject):
                 self.slice_display_manager.display_slice(
                     dataset,
                     self.current_studies,
-                    focused_study_uid,  # Use focused subwindow's study_uid
+                    target_study_uid,  # Use target study UID from navigation
                     new_series_uid,
                     slice_index
                 )
@@ -3018,7 +3086,7 @@ class DICOMViewerApp(QObject):
                 
                 # Get stored values for comparison
                 stored_series_uid = new_series_uid
-                stored_study_uid = focused_study_uid
+                stored_study_uid = target_study_uid
                 
                 # Log the sync with FULL UIDs (not truncated) to diagnose mismatches
                 if extracted_series_uid != stored_series_uid:
@@ -3066,15 +3134,14 @@ class DICOMViewerApp(QObject):
                     self.slice_navigator.set_total_slices(len(datasets))
                     self.slice_navigator.set_current_slice(slice_index)
                 
-                # Update series navigator highlighting
-                # print(f"[DEBUG] Updating series navigator: setting current_series_uid={self.current_series_uid}")
-                # print(f"[DEBUG]   Full UID: {self.current_series_uid}")
-                available_thumbnails = list(self.series_navigator.thumbnails.keys())
-                # print(f"[DEBUG]   Available thumbnails ({len(available_thumbnails)}): {[uid[:30] + '...' if len(uid) > 30 else uid for uid in available_thumbnails[:5]]}")
-                if self.current_series_uid not in available_thumbnails:
-                    # print(f"[DEBUG]   WARNING: series_uid not found in thumbnails! This will cause highlighting to fail.")
-                    pass
-                self.series_navigator.set_current_series(self.current_series_uid)
+                # Update series navigator highlighting using focused subwindow's data
+                # Get focused subwindow's series and study UID for highlighting
+                if focused_idx in self.subwindow_data:
+                    data = self.subwindow_data[focused_idx]
+                    focused_series_uid = data.get('current_series_uid', '')
+                    focused_study_uid = data.get('current_study_uid', '')
+                    if focused_series_uid and focused_study_uid:
+                        self.series_navigator.set_current_series(focused_series_uid, focused_study_uid)
                 
                 # Update cine player context and check if series is cine-capable
                 self._update_cine_player_context()
@@ -3083,6 +3150,39 @@ class DICOMViewerApp(QObject):
             timestamp = time.time()
             print(f"[DEBUG-NAV] [{timestamp:.6f}] Series navigation: Lock released")
             self._series_navigation_in_progress = False
+    
+    def _build_flat_series_list(self, studies: Dict) -> List[Tuple[int, str, str, Dataset]]:
+        """
+        Build flat list of all series from all studies in navigator display order.
+        
+        This method creates a flat list that matches the order in which series appear
+        in the series navigator. Studies are iterated in dict order, and series within
+        each study are sorted by SeriesNumber (ascending).
+        
+        Args:
+            studies: Dictionary of studies {study_uid: {series_uid: [datasets]}}
+            
+        Returns:
+            List of tuples: [(series_num, study_uid, series_uid, first_dataset), ...]
+        """
+        flat_list = []
+        for study_uid, study_series in studies.items():
+            # Build series list for this study
+            series_list = []
+            for series_uid, datasets in study_series.items():
+                if datasets:
+                    first_dataset = datasets[0]
+                    series_number = getattr(first_dataset, 'SeriesNumber', None)
+                    try:
+                        series_num = int(series_number) if series_number is not None else 0
+                    except (ValueError, TypeError):
+                        series_num = 0
+                    series_list.append((series_num, study_uid, series_uid, first_dataset))
+            # Sort by SeriesNumber (ascending)
+            series_list.sort(key=lambda x: x[0])
+            # Add to flat list
+            flat_list.extend(series_list)
+        return flat_list
     
     def _on_series_navigator_selected(self, series_uid: str) -> None:
         """
