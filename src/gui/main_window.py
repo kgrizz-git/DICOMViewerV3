@@ -74,6 +74,7 @@ class MainWindow(QMainWindow):
     rescale_toggle_changed = Signal(bool)  # Emitted when rescale toggle changes (True = use rescaled values)
     clear_measurements_requested = Signal()  # Emitted when clear measurements is requested
     quick_start_guide_requested = Signal()  # Emitted when Quick Start Guide is requested
+    fusion_technical_doc_requested = Signal()  # Emitted when Fusion Technical Documentation is requested
     tag_export_requested = Signal()  # Emitted when tag export is requested
     series_navigator_visibility_changed = Signal(bool)  # Emitted when series navigator visibility changes
     undo_tag_edit_requested = Signal()  # Emitted when undo tag edit is requested
@@ -346,6 +347,10 @@ class MainWindow(QMainWindow):
         quick_start_action = QAction("&Quick Start Guide", self)
         quick_start_action.triggered.connect(self.quick_start_guide_requested.emit)
         help_menu.addAction(quick_start_action)
+        
+        fusion_tech_doc_action = QAction("Fusion &Technical Documentation", self)
+        fusion_tech_doc_action.triggered.connect(self.fusion_technical_doc_requested.emit)
+        help_menu.addAction(fusion_tech_doc_action)
         
         disclaimer_action = QAction("&Disclaimer", self)
         disclaimer_action.triggered.connect(self._show_disclaimer)
@@ -1603,6 +1608,7 @@ class MainWindow(QMainWindow):
     <li>Intensity projections: Combine slices (AIP, MIP, MinIP)</li>
     <li>Image inversion (I key)</li>
     <li>Cine Playback: Automatic frame-by-frame playback for multi-frame DICOM series with play/pause/stop controls, adjustable speed, and loop option</li>
+    <li>Image Fusion: Overlay functional imaging (PET/SPECT) on anatomical imaging (CT/MR) with automatic spatial alignment, adjustable opacity/threshold/colormap, and 2D/3D resampling modes</li>
     </ul>
     <h4>Analysis Tools:</h4>
     <ul>
