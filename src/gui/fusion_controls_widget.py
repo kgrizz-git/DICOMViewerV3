@@ -17,7 +17,7 @@ Requirements:
 
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                                 QCheckBox, QComboBox, QSlider, QGroupBox,
-                                QSpinBox, QSizePolicy)
+                                QSpinBox, QSizePolicy, QRadioButton, QButtonGroup)
 from PySide6.QtCore import Qt, Signal
 from typing import List, Tuple
 
@@ -45,6 +45,8 @@ class FusionControlsWidget(QWidget):
     colormap_changed = Signal(str)  # Emitted when colormap changes
     overlay_window_level_changed = Signal(float, float)  # Emitted when overlay W/L changes (window, level)
     translation_offset_changed = Signal(float, float)  # Emitted when translation offset changes (x, y)
+    resampling_mode_changed = Signal(str)  # Emitted when resampling mode changes ('fast', 'high_accuracy')
+    interpolation_method_changed = Signal(str)  # Emitted when interpolation method changes
     
     def __init__(self, parent=None):
         """
@@ -80,25 +82,37 @@ class FusionControlsWidget(QWidget):
         self.enable_checkbox.setChecked(False)
         group_layout.addWidget(self.enable_checkbox)
         
-        # Base series selection
-        base_label = QLabel("Base Image (Anatomical):")
+        # Base series display (read-only text, not dropdown)
+        base_label = QLabel("Base Series:")
         base_label.setStyleSheet("font-weight: bold;")
         group_layout.addWidget(base_label)
         
-        self.base_series_combo = QComboBox()
-        self.base_series_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        group_layout.addWidget(self.base_series_combo)
+        self.base_series_display = QLabel("Not set")
+        self.base_series_display.setStyleSheet("font-style: italic;")
+        group_layout.addWidget(self.base_series_display)
         
-        # Overlay series selection
-        overlay_label = QLabel("Overlay Image (Functional):")
+        # Overlay series selection (wrapped for visibility control)
+        self.overlay_series_widget = QWidget()
+        overlay_container_layout = QVBoxLayout(self.overlay_series_widget)
+        overlay_container_layout.setContentsMargins(0, 0, 0, 0)
+        overlay_container_layout.setSpacing(0)
+        
+        overlay_label = QLabel("Overlay Series:")
         overlay_label.setStyleSheet("font-weight: bold;")
-        group_layout.addWidget(overlay_label)
+        overlay_container_layout.addWidget(overlay_label)
         
         self.overlay_series_combo = QComboBox()
         self.overlay_series_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        group_layout.addWidget(self.overlay_series_combo)
+        overlay_container_layout.addWidget(self.overlay_series_combo)
         
-        # Opacity control
+        group_layout.addWidget(self.overlay_series_widget)
+        
+        # Opacity control (wrapped for visibility control)
+        self.opacity_widget = QWidget()
+        opacity_container_layout = QVBoxLayout(self.opacity_widget)
+        opacity_container_layout.setContentsMargins(0, 0, 0, 0)
+        opacity_container_layout.setSpacing(0)
+        
         opacity_layout = QHBoxLayout()
         opacity_label = QLabel("Opacity:")
         opacity_layout.addWidget(opacity_label)
@@ -116,9 +130,15 @@ class FusionControlsWidget(QWidget):
         self.opacity_value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         opacity_layout.addWidget(self.opacity_value_label)
         
-        group_layout.addLayout(opacity_layout)
+        opacity_container_layout.addLayout(opacity_layout)
+        group_layout.addWidget(self.opacity_widget)
         
-        # Threshold control
+        # Threshold control (wrapped for visibility control)
+        self.threshold_widget = QWidget()
+        threshold_container_layout = QVBoxLayout(self.threshold_widget)
+        threshold_container_layout.setContentsMargins(0, 0, 0, 0)
+        threshold_container_layout.setSpacing(0)
+        
         threshold_layout = QHBoxLayout()
         threshold_label = QLabel("Threshold:")
         threshold_layout.addWidget(threshold_label)
@@ -136,9 +156,15 @@ class FusionControlsWidget(QWidget):
         self.threshold_value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         threshold_layout.addWidget(self.threshold_value_label)
         
-        group_layout.addLayout(threshold_layout)
+        threshold_container_layout.addLayout(threshold_layout)
+        group_layout.addWidget(self.threshold_widget)
         
-        # Colormap selection
+        # Colormap selection (wrapped for visibility control)
+        self.colormap_widget = QWidget()
+        colormap_container_layout = QVBoxLayout(self.colormap_widget)
+        colormap_container_layout.setContentsMargins(0, 0, 0, 0)
+        colormap_container_layout.setSpacing(0)
+        
         colormap_layout = QHBoxLayout()
         colormap_label = QLabel("Color Map:")
         colormap_layout.addWidget(colormap_label)
@@ -157,28 +183,72 @@ class FusionControlsWidget(QWidget):
         self.colormap_combo.setCurrentText('hot')
         colormap_layout.addWidget(self.colormap_combo, 1)
         
-        group_layout.addLayout(colormap_layout)
+        colormap_container_layout.addLayout(colormap_layout)
+        group_layout.addWidget(self.colormap_widget)
         
-        # Overlay Window/Level controls
+        # Phase 2: Resampling controls (wrapped for visibility control)
+        self.resampling_group = QGroupBox("Resampling (Phase 2)")
+        self.resampling_group.setCheckable(False)
+        resampling_layout = QVBoxLayout(self.resampling_group)
+        resampling_layout.setContentsMargins(5, 10, 5, 5)
+        resampling_layout.setSpacing(8)
+        
+        # Resampling mode selector (radio buttons)
+        mode_label = QLabel("Resampling Mode:")
+        mode_label.setStyleSheet("font-weight: bold;")
+        resampling_layout.addWidget(mode_label)
+        
+        self.resampling_mode_group = QButtonGroup(self)
+        self.fast_mode_radio = QRadioButton("Fast Mode (2D)")
+        self.fast_mode_radio.setToolTip("Force 2D resize for speed (may be inaccurate for different orientations)")
+        self.resampling_mode_group.addButton(self.fast_mode_radio, 0)
+        resampling_layout.addWidget(self.fast_mode_radio)
+        
+        self.high_accuracy_mode_radio = QRadioButton("High Accuracy (3D)")
+        self.high_accuracy_mode_radio.setChecked(True)  # Default - changed from auto
+        self.high_accuracy_mode_radio.setToolTip("Force 3D resampling for maximum accuracy")
+        self.resampling_mode_group.addButton(self.high_accuracy_mode_radio, 1)
+        resampling_layout.addWidget(self.high_accuracy_mode_radio)
+        
+        # Interpolation method selector
+        interpolation_layout = QHBoxLayout()
+        interpolation_label = QLabel("Interpolation:")
+        interpolation_layout.addWidget(interpolation_label)
+        
+        self.interpolation_combo = QComboBox()
+        self.interpolation_combo.addItems(['linear', 'nearest', 'cubic', 'b-spline'])
+        self.interpolation_combo.setCurrentText('linear')
+        self.interpolation_combo.setToolTip("Interpolation method for 3D resampling")
+        interpolation_layout.addWidget(self.interpolation_combo, 1)
+        
+        resampling_layout.addLayout(interpolation_layout)
+        
+        # Resampling status display
+        self.resampling_status_label = QLabel("Status: High Accuracy (3D)")
+        self.resampling_status_label.setStyleSheet("font-size: 9pt; color: #555; font-style: italic;")
+        self.resampling_status_label.setWordWrap(True)
+        resampling_layout.addWidget(self.resampling_status_label)
+        
+        # Warning label (shown when 2D is selected but 3D is recommended)
+        self.resampling_warning_label = QLabel("")
+        self.resampling_warning_label.setStyleSheet("font-size: 9pt; color: orange; font-style: italic;")
+        self.resampling_warning_label.setWordWrap(True)
+        self.resampling_warning_label.setVisible(False)
+        resampling_layout.addWidget(self.resampling_warning_label)
+        
+        group_layout.addWidget(self.resampling_group)
+        
+        # Overlay Window/Level controls (wrapped for visibility control)
+        self.window_level_widget = QWidget()
+        wl_container_layout = QVBoxLayout(self.window_level_widget)
+        wl_container_layout.setContentsMargins(0, 0, 0, 0)
+        wl_container_layout.setSpacing(0)
+        
         wl_label = QLabel("Overlay Window/Level:")
         wl_label.setStyleSheet("font-weight: bold; margin-top: 5px;")
-        group_layout.addWidget(wl_label)
+        wl_container_layout.addWidget(wl_label)
         
-        # Window control
-        window_layout = QHBoxLayout()
-        window_label = QLabel("Window:")
-        window_layout.addWidget(window_label)
-        
-        self.overlay_window_spinbox = QSpinBox()
-        self.overlay_window_spinbox.setMinimum(1)
-        self.overlay_window_spinbox.setMaximum(100000)
-        self.overlay_window_spinbox.setValue(1000)
-        self.overlay_window_spinbox.setSingleStep(10)
-        window_layout.addWidget(self.overlay_window_spinbox, 1)
-        
-        group_layout.addLayout(window_layout)
-        
-        # Level control
+        # Level control (center) - appears first to match Window/Zoom/ROI tab
         level_layout = QHBoxLayout()
         level_label = QLabel("Level:")
         level_layout.addWidget(level_label)
@@ -190,12 +260,27 @@ class FusionControlsWidget(QWidget):
         self.overlay_level_spinbox.setSingleStep(10)
         level_layout.addWidget(self.overlay_level_spinbox, 1)
         
-        group_layout.addLayout(level_layout)
+        wl_container_layout.addLayout(level_layout)
         
-        # Advanced section for spatial alignment
-        advanced_group = QGroupBox("Advanced Spatial Alignment")
-        advanced_group.setCheckable(False)
-        advanced_layout = QVBoxLayout(advanced_group)
+        # Window control (width) - appears second to match Window/Zoom/ROI tab
+        window_layout = QHBoxLayout()
+        window_label = QLabel("Window:")
+        window_layout.addWidget(window_label)
+        
+        self.overlay_window_spinbox = QSpinBox()
+        self.overlay_window_spinbox.setMinimum(1)
+        self.overlay_window_spinbox.setMaximum(100000)
+        self.overlay_window_spinbox.setValue(1000)
+        self.overlay_window_spinbox.setSingleStep(10)
+        window_layout.addWidget(self.overlay_window_spinbox, 1)
+        
+        wl_container_layout.addLayout(window_layout)
+        group_layout.addWidget(self.window_level_widget)
+        
+        # Advanced section for spatial alignment (wrapped for visibility control)
+        self.advanced_group = QGroupBox("Advanced Spatial Alignment")
+        self.advanced_group.setCheckable(False)
+        advanced_layout = QVBoxLayout(self.advanced_group)
         advanced_layout.setContentsMargins(5, 10, 5, 5)
         advanced_layout.setSpacing(8)
         
@@ -245,7 +330,7 @@ class FusionControlsWidget(QWidget):
         self.reset_offset_button.clicked.connect(self._on_reset_offset_clicked)
         advanced_layout.addWidget(self.reset_offset_button)
         
-        group_layout.addWidget(advanced_group)
+        group_layout.addWidget(self.advanced_group)
         
         # Store calculated offset for reset functionality
         self._calculated_offset_x = 0.0
@@ -266,7 +351,7 @@ class FusionControlsWidget(QWidget):
     def _connect_signals(self) -> None:
         """Connect internal signals."""
         self.enable_checkbox.toggled.connect(self._on_enable_toggled)
-        self.base_series_combo.currentIndexChanged.connect(self._on_base_series_changed)
+        # Base series is read-only display, no signal connection needed
         self.overlay_series_combo.currentIndexChanged.connect(self._on_overlay_series_changed)
         self.opacity_slider.valueChanged.connect(self._on_opacity_changed)
         self.threshold_slider.valueChanged.connect(self._on_threshold_changed)
@@ -275,6 +360,8 @@ class FusionControlsWidget(QWidget):
         self.overlay_level_spinbox.valueChanged.connect(self._on_overlay_wl_changed)
         self.x_offset_spinbox.valueChanged.connect(self._on_translation_offset_changed)
         self.y_offset_spinbox.valueChanged.connect(self._on_translation_offset_changed)
+        self.resampling_mode_group.buttonClicked.connect(self._on_resampling_mode_changed)
+        self.interpolation_combo.currentTextChanged.connect(self._on_interpolation_method_changed)
     
     def _on_enable_toggled(self, checked: bool) -> None:
         """Handle enable checkbox toggle."""
@@ -282,12 +369,8 @@ class FusionControlsWidget(QWidget):
         if not self._updating:
             self.fusion_enabled_changed.emit(checked)
     
-    def _on_base_series_changed(self, index: int) -> None:
-        """Handle base series selection change."""
-        if not self._updating and index >= 0:
-            series_uid = self.base_series_combo.currentData()
-            if series_uid:
-                self.base_series_changed.emit(series_uid)
+    # Base series is read-only, so no handler needed for user changes
+    # (Base is set programmatically based on current viewing series)
     
     def _on_overlay_series_changed(self, index: int) -> None:
         """Handle overlay series selection change."""
@@ -346,20 +429,60 @@ class FusionControlsWidget(QWidget):
         # Emit signal with calculated values
         self.translation_offset_changed.emit(self._calculated_offset_x, self._calculated_offset_y)
     
+    def _on_resampling_mode_changed(self, button: QRadioButton) -> None:
+        """Handle resampling mode change."""
+        if self._updating:
+            return
+        
+        if button == self.fast_mode_radio:
+            mode = 'fast'
+        elif button == self.high_accuracy_mode_radio:
+            mode = 'high_accuracy'
+        else:
+            return  # Should not happen, but handle gracefully
+        
+        self.resampling_mode_changed.emit(mode)
+    
+    def _on_interpolation_method_changed(self, method: str) -> None:
+        """Handle interpolation method change."""
+        if not self._updating:
+            self.interpolation_method_changed.emit(method)
+    
     def _set_controls_enabled(self, enabled: bool) -> None:
         """
-        Enable or disable fusion controls.
+        Enable or disable fusion controls, and hide/show overlay controls.
         
         Args:
-            enabled: True to enable controls, False to disable
+            enabled: True to enable and show controls, False to disable and hide overlay controls
         """
-        self.base_series_combo.setEnabled(enabled)
+        # Hide/show overlay series selector when fusion is disabled
+        self.overlay_series_widget.setVisible(enabled)
         self.overlay_series_combo.setEnabled(enabled)
+        
+        # Hide/show overlay controls when fusion is disabled
+        # Opacity, threshold, colormap
+        self.opacity_widget.setVisible(enabled)
         self.opacity_slider.setEnabled(enabled)
+        
+        self.threshold_widget.setVisible(enabled)
         self.threshold_slider.setEnabled(enabled)
+        
+        self.colormap_widget.setVisible(enabled)
         self.colormap_combo.setEnabled(enabled)
+        
+        # Phase 2: Resampling controls
+        self.resampling_group.setVisible(enabled)
+        self.fast_mode_radio.setEnabled(enabled)
+        self.high_accuracy_mode_radio.setEnabled(enabled)
+        self.interpolation_combo.setEnabled(enabled)
+        
+        # Overlay Window/Level controls
+        self.window_level_widget.setVisible(enabled)
         self.overlay_window_spinbox.setEnabled(enabled)
         self.overlay_level_spinbox.setEnabled(enabled)
+        
+        # Advanced Spatial Alignment
+        self.advanced_group.setVisible(enabled)
         self.x_offset_spinbox.setEnabled(enabled)
         self.y_offset_spinbox.setEnabled(enabled)
         self.reset_offset_button.setEnabled(enabled)
@@ -375,11 +498,12 @@ class FusionControlsWidget(QWidget):
         current_overlay_uid: str = ""
     ) -> None:
         """
-        Update the series dropdown lists.
+        Update the overlay series dropdown list.
+        Base series is read-only display, updated via set_base_display().
         
         Args:
             series_list: List of (series_uid, display_name) tuples
-            current_base_uid: Current base series UID to select
+            current_base_uid: Current base series UID (for display, not selection)
             current_overlay_uid: Current overlay series UID to select
         """
         # DEBUG
@@ -387,32 +511,20 @@ class FusionControlsWidget(QWidget):
         
         self._updating = True
         
-        # Save current selections
-        prev_base = self.base_series_combo.currentData()
+        # Save current overlay selection
         prev_overlay = self.overlay_series_combo.currentData()
         
-        # Clear existing items
-        self.base_series_combo.clear()
+        # Clear existing items (only overlay, base is read-only)
         self.overlay_series_combo.clear()
         
-        print(f"[FUSION CONTROLS DEBUG] Cleared dropdowns, now adding {len(series_list)} items")
+        print(f"[FUSION CONTROLS DEBUG] Cleared overlay dropdown, now adding {len(series_list)} items")
         
-        # Add series to both combos
+        # Add series to overlay combo only
         for series_uid, display_name in series_list:
             print(f"[FUSION CONTROLS DEBUG]   Adding: {display_name}")
-            self.base_series_combo.addItem(display_name, series_uid)
             self.overlay_series_combo.addItem(display_name, series_uid)
         
-        # Restore or set selections
-        if current_base_uid:
-            index = self.base_series_combo.findData(current_base_uid)
-            if index >= 0:
-                self.base_series_combo.setCurrentIndex(index)
-        elif prev_base:
-            index = self.base_series_combo.findData(prev_base)
-            if index >= 0:
-                self.base_series_combo.setCurrentIndex(index)
-        
+        # Restore or set overlay selection
         if current_overlay_uid:
             index = self.overlay_series_combo.findData(current_overlay_uid)
             if index >= 0:
@@ -439,8 +551,24 @@ class FusionControlsWidget(QWidget):
             self.status_label.setStyleSheet("color: green; font-style: italic; margin-top: 5px;")
     
     def get_selected_base_series(self) -> str:
-        """Get currently selected base series UID."""
-        return self.base_series_combo.currentData() or ""
+        """Get currently selected base series UID (for compatibility, but base is read-only)."""
+        # Base is read-only, this method kept for compatibility
+        # Base UID should be tracked externally
+        return ""
+    
+    def set_base_display(self, display_text: str) -> None:
+        """
+        Update read-only base series display.
+        
+        Args:
+            display_text: Text to display (series name or "Not set")
+        """
+        if display_text:
+            self.base_series_display.setText(display_text)
+            self.base_series_display.setStyleSheet("")  # Normal style
+        else:
+            self.base_series_display.setText("Not set")
+            self.base_series_display.setStyleSheet("font-style: italic;")  # "Not set" style
     
     def get_selected_overlay_series(self) -> str:
         """Get currently selected overlay series UID."""
@@ -538,4 +666,76 @@ class FusionControlsWidget(QWidget):
         x_offset = float(self.x_offset_spinbox.value())
         y_offset = float(self.y_offset_spinbox.value())
         return (x_offset, y_offset)
+    
+    def has_user_modified_offset(self) -> bool:
+        """Return True if user manually changed offset spinboxes."""
+        return self._user_modified_offset
+    
+    def reset_user_modified_offset(self) -> None:
+        """Clear user-modified flag so calculated offsets can overwrite spinboxes."""
+        self._user_modified_offset = False
+    
+    def get_resampling_mode(self) -> str:
+        """Get current resampling mode ('fast', 'high_accuracy')."""
+        if self.fast_mode_radio.isChecked():
+            return 'fast'
+        elif self.high_accuracy_mode_radio.isChecked():
+            return 'high_accuracy'
+        return 'high_accuracy'  # Default to high_accuracy instead of auto
+    
+    def set_resampling_mode(self, mode: str) -> None:
+        """
+        Set resampling mode.
+        
+        Args:
+            mode: 'fast' or 'high_accuracy'
+        """
+        self._updating = True
+        if mode == 'fast':
+            self.fast_mode_radio.setChecked(True)
+        elif mode == 'high_accuracy':
+            self.high_accuracy_mode_radio.setChecked(True)
+        else:
+            # Default to high_accuracy for unknown modes
+            self.high_accuracy_mode_radio.setChecked(True)
+        self._updating = False
+    
+    def get_interpolation_method(self) -> str:
+        """Get current interpolation method."""
+        return self.interpolation_combo.currentText()
+    
+    def set_interpolation_method(self, method: str) -> None:
+        """
+        Set interpolation method.
+        
+        Args:
+            method: 'linear', 'nearest', 'cubic', or 'b-spline'
+        """
+        self._updating = True
+        index = self.interpolation_combo.findText(method)
+        if index >= 0:
+            self.interpolation_combo.setCurrentIndex(index)
+        self._updating = False
+    
+    def set_resampling_status(self, mode_display: str, reason: str, show_warning: bool = False, warning_text: str = "") -> None:
+        """
+        Update resampling status display.
+        
+        Args:
+            mode_display: Mode display string (e.g., "Fast Mode (2D)" or "High Accuracy (3D)")
+            reason: Reason string (e.g., "Compatible: same orientation")
+            show_warning: Whether to show warning label
+            warning_text: Warning text to display
+        """
+        status_text = f"Using: {mode_display}"
+        if reason:
+            status_text += f" - {reason}"
+        self.resampling_status_label.setText(status_text)
+        
+        # Show/hide warning
+        if show_warning and warning_text:
+            self.resampling_warning_label.setText(warning_text)
+            self.resampling_warning_label.setVisible(True)
+        else:
+            self.resampling_warning_label.setVisible(False)
 

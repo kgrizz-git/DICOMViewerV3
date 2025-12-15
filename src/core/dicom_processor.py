@@ -101,6 +101,47 @@ class DICOMProcessor:
             return None, None, None
     
     @staticmethod
+    def infer_rescale_type(
+        dataset: Dataset,
+        rescale_slope: Optional[float],
+        rescale_intercept: Optional[float],
+        rescale_type: Optional[str]
+    ) -> Optional[str]:
+        """
+        Infer rescale type when RescaleType tag is missing.
+        
+        For CT images, infers "HU" when rescale parameters match CT pattern.
+        
+        Args:
+            dataset: pydicom Dataset
+            rescale_slope: Rescale slope value
+            rescale_intercept: Rescale intercept value
+            rescale_type: Original rescale type from dataset (may be None)
+            
+        Returns:
+            Inferred rescale type (e.g., "HU") or original rescale_type
+        """
+        # If rescale_type is already set, return it
+        if rescale_type:
+            return rescale_type
+        
+        # Check if Modality is CT
+        modality = getattr(dataset, 'Modality', None)
+        if modality and str(modality).upper() == 'CT':
+            # Check if rescale parameters match CT pattern
+            # CT typically has slope=1.0 and intercept=-1024.0 (or close values)
+            if rescale_slope is not None and rescale_intercept is not None:
+                # Allow small tolerance for floating point comparison
+                slope_match = abs(rescale_slope - 1.0) < 0.001
+                intercept_match = abs(rescale_intercept - (-1024.0)) < 0.1
+                
+                if slope_match and intercept_match:
+                    return "HU"
+        
+        # Cannot infer, return None
+        return None
+    
+    @staticmethod
     def is_color_image(dataset: Dataset) -> Tuple[bool, Optional[str]]:
         """
         Detect if a DICOM image is a color image.

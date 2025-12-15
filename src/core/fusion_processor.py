@@ -134,7 +134,8 @@ class FusionProcessor:
         overlay_wl: Optional[Tuple[float, float]] = None,
         base_pixel_spacing: Optional[Tuple[float, float]] = None,
         overlay_pixel_spacing: Optional[Tuple[float, float]] = None,
-        translation_offset: Optional[Tuple[float, float]] = None
+        translation_offset: Optional[Tuple[float, float]] = None,
+        skip_2d_resize: bool = False
     ) -> np.ndarray:
         """
         Create fused image by blending base and overlay with colormap.
@@ -150,6 +151,7 @@ class FusionProcessor:
             base_pixel_spacing: Optional (row_spacing, col_spacing) in mm for base image
             overlay_pixel_spacing: Optional (row_spacing, col_spacing) in mm for overlay image
             translation_offset: Optional (x_offset, y_offset) in pixels for overlay positioning
+            skip_2d_resize: If True, skip 2D resize (overlay already resampled via 3D, e.g., SimpleITK)
             
         Returns:
             Fused RGB array (0-255, uint8)
@@ -169,44 +171,62 @@ class FusionProcessor:
         print(f"  overlay_pixel_spacing: {overlay_pixel_spacing}")
         print(f"  translation_offset: {translation_offset}")
         print(f"  overlay_wl: {overlay_wl}")
+        print(f"  skip_2d_resize: {skip_2d_resize}")
         
-        # Apply pixel spacing-based scaling if both spacings are provided
-        if base_pixel_spacing is not None and overlay_pixel_spacing is not None:
-            # Calculate scaling factors
-            # scale_x is for columns (width), scale_y is for rows (height)
-            scale_x = overlay_pixel_spacing[1] / base_pixel_spacing[1]  # column spacing ratio
-            scale_y = overlay_pixel_spacing[0] / base_pixel_spacing[0]  # row spacing ratio
-            
-            # Calculate new dimensions to match physical size
-            # If overlay pixels are larger (scale > 1), we need MORE pixels to cover the same physical distance
-            new_width = int(overlay_array.shape[1] * scale_x)
-            new_height = int(overlay_array.shape[0] * scale_y)
-            
-            # Resize overlay to match physical dimensions
-            from PIL import Image as PILImage
-            overlay_pil = PILImage.fromarray(overlay_array)
-            overlay_pil = overlay_pil.resize(
-                (new_width, new_height),
-                PILImage.Resampling.BILINEAR
-            )
-            overlay_array = np.array(overlay_pil, dtype=np.float32)
-            
-            # DEBUG
-            print(f"  [SCALING] scale_x: {scale_x:.4f}, scale_y: {scale_y:.4f}")
-            print(f"  [SCALING] new dimensions: {new_width} x {new_height}")
-            print(f"  [SCALING] overlay_array after resize shape: {overlay_array.shape}")
-            print(f"  [SCALING] overlay_array after resize range: [{np.min(overlay_array):.2f}, {np.max(overlay_array):.2f}]")
-        elif base_array.shape != overlay_array.shape:
-            # Fallback: simple resize to match base dimensions if no spacing info
-            from PIL import Image as PILImage
-            overlay_pil = PILImage.fromarray(overlay_array)
-            overlay_pil = overlay_pil.resize(
-                (base_array.shape[1], base_array.shape[0]),
-                PILImage.Resampling.BILINEAR
-            )
-            overlay_array = np.array(overlay_pil, dtype=np.float32)
+        # Phase 2: Skip 2D resize if 3D resampling was already applied
+        if not skip_2d_resize:
+            # Apply pixel spacing-based scaling if both spacings are provided
+            if base_pixel_spacing is not None and overlay_pixel_spacing is not None:
+                # Calculate scaling factors
+                # scale_x is for columns (width), scale_y is for rows (height)
+                scale_x = overlay_pixel_spacing[1] / base_pixel_spacing[1]  # column spacing ratio
+                scale_y = overlay_pixel_spacing[0] / base_pixel_spacing[0]  # row spacing ratio
+                
+                # Calculate new dimensions to match physical size
+                # If overlay pixels are larger (scale > 1), we need MORE pixels to cover the same physical distance
+                new_width = int(overlay_array.shape[1] * scale_x)
+                new_height = int(overlay_array.shape[0] * scale_y)
+                
+                # Resize overlay to match physical dimensions
+                from PIL import Image as PILImage
+                overlay_pil = PILImage.fromarray(overlay_array)
+                overlay_pil = overlay_pil.resize(
+                    (new_width, new_height),
+                    PILImage.Resampling.BILINEAR
+                )
+                overlay_array = np.array(overlay_pil, dtype=np.float32)
+                
+                # DEBUG
+                print(f"  [SCALING] scale_x: {scale_x:.4f}, scale_y: {scale_y:.4f}")
+                print(f"  [SCALING] new dimensions: {new_width} x {new_height}")
+                print(f"  [SCALING] overlay_array after resize shape: {overlay_array.shape}")
+                print(f"  [SCALING] overlay_array after resize range: [{np.min(overlay_array):.2f}, {np.max(overlay_array):.2f}]")
+            elif base_array.shape != overlay_array.shape:
+                # Fallback: simple resize to match base dimensions if no spacing info
+                from PIL import Image as PILImage
+                overlay_pil = PILImage.fromarray(overlay_array)
+                overlay_pil = overlay_pil.resize(
+                    (base_array.shape[1], base_array.shape[0]),
+                    PILImage.Resampling.BILINEAR
+                )
+                overlay_array = np.array(overlay_pil, dtype=np.float32)
+        else:
+            # Phase 2: 3D resampling was used, overlay should already match base dimensions
+            # Just verify shapes match
+            if overlay_array.shape[:2] != base_array.shape[:2]:
+                print(f"Warning: 3D resampled overlay shape {overlay_array.shape[:2]} doesn't match base {base_array.shape[:2]}")
+                # Fallback: resize to match
+                from PIL import Image as PILImage
+                overlay_pil = PILImage.fromarray(overlay_array)
+                overlay_pil = overlay_pil.resize(
+                    (base_array.shape[1], base_array.shape[0]),
+                    PILImage.Resampling.BILINEAR
+                )
+                overlay_array = np.array(overlay_pil, dtype=np.float32)
         
-        # Apply translation offset if provided
+        # Apply translation offset if provided (ONLY for 2D mode)
+        # 3D resampling handles spatial alignment automatically through the resampling grid
+        # For 3D mode, translation_offset should be None
         if translation_offset is not None:
             offset_x, offset_y = translation_offset
             overlay_array = FusionProcessor._apply_translation_offset(
@@ -214,7 +234,7 @@ class FusionProcessor:
             )
             
             # DEBUG
-            print(f"  [TRANSLATION] offset applied: ({offset_x:.2f}, {offset_y:.2f})")
+            print(f"  [TRANSLATION] offset applied (2D mode): ({offset_x:.2f}, {offset_y:.2f})")
             print(f"  [TRANSLATION] overlay_array after translation shape: {overlay_array.shape}")
             print(f"  [TRANSLATION] overlay_array after translation range: [{np.min(overlay_array):.2f}, {np.max(overlay_array):.2f}]")
             print(f"  [TRANSLATION] non-zero pixels: {np.count_nonzero(overlay_array)}")

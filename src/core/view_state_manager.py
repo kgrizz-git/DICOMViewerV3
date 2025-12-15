@@ -792,8 +792,9 @@ class ViewStateManager:
                 self.window_level_controls.set_ranges(center_range, width_range)
             
             # Update window/level unit labels
+            # Note: rescale_type in view_state_manager should already be inferred (from display_slice)
             unit = self.rescale_type if (self.use_rescaled_values and self.rescale_type) else None
-            self.window_level_controls.set_unit(unit)
+            self.window_level_controls.set_unit(unit)  # unit may be None to clear display
             
             # Update window/level controls with converted values
             if current_center is not None and current_width is not None:
@@ -979,6 +980,9 @@ class ViewStateManager:
         self.series_defaults.clear()
     
     def set_rescale_parameters(self, slope: Optional[float], intercept: Optional[float], rescale_type: Optional[str]) -> None:
+        # DEBUG: Log when rescale_type is set
+        print(f"[WL UNIT DEBUG] set_rescale_parameters called")
+        print(f"[WL UNIT DEBUG]   slope: {slope}, intercept: {intercept}, rescale_type: {rescale_type}")
         """
         Set rescale parameters from dataset.
         

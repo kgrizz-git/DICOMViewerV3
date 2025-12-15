@@ -141,38 +141,38 @@ Enhance fusion capabilities to handle series with different pixel spacings, orie
 - Translation offsets based on ImagePositionPatient
 - **Location**: `src/core/fusion_processor.py` lines 173-207
 
-**Phase 2 Enhancement (Planned)**: This phase adds robust 3D volume resampling with SimpleITK to handle:
-- Different slice thicknesses properly (e.g., 1mm CT vs 3mm PET)
-- Different orientations (axial vs sagittal vs coronal) via ImageOrientationPatient
-- Full 3D spatial transformations with proper coordinate system handling
-- Volume caching for performance (avoid re-resampling on slice navigation)
-- Multiple interpolation methods (linear, nearest, cubic, B-spline)
-- **Decision Point**: When to use 2D PIL resize (fast, current) vs 3D SimpleITK (robust, Phase 2)
+**Phase 2 Enhancement (Implemented)**: This phase adds robust 3D volume resampling with SimpleITK to handle:
+- ✅ Different slice thicknesses properly (e.g., 1mm CT vs 3mm PET) - *Implemented*
+- ✅ Different orientations (axial vs sagittal vs coronal) via ImageOrientationPatient - *Implemented*
+- ✅ Full 3D spatial transformations with proper coordinate system handling - *Implemented*
+- ✅ Volume caching for performance (avoid re-resampling on slice navigation) - *Implemented*
+- ✅ Multiple interpolation methods (linear, nearest, cubic, B-spline) - *Implemented*
+- ✅ **Decision Point**: When to use 2D PIL resize (fast, current) vs 3D SimpleITK (robust, Phase 2) - *Implemented with automatic detection and user override*
 
 ### Prerequisites
 - [x] Phase 1 complete and tested
-- [ ] Add SimpleITK to requirements.txt
+- [x] Add SimpleITK to requirements.txt
 
 ### Tasks
 
 #### 2.1 Add SimpleITK Dependency
 **File**: `requirements.txt` (modify)
 
-- [ ] Add `SimpleITK>=2.3.0`
+- [x] Add `SimpleITK>=2.3.0`
 - [ ] Test installation on all target platforms
 - [ ] Update build documentation if needed
 
 #### 2.2 Create Resampling Module
 **File**: `src/core/image_resampler.py`
 
-- [ ] Create `ImageResampler` class
-- [ ] Implement DICOM to SimpleITK volume conversion (with proper spatial metadata)
-- [ ] Implement SimpleITK to numpy conversion
-- [ ] Implement resampling to reference grid (3D volume resampling)
-- [ ] Support different interpolation methods (linear, nearest, cubic, B-spline)
-- [ ] Cache resampled volumes for performance
-- [ ] Handle ImageOrientationPatient for different slice orientations
-- [ ] Properly handle slice spacing/thickness differences
+- [x] Create `ImageResampler` class
+- [x] Implement DICOM to SimpleITK volume conversion (with proper spatial metadata)
+- [x] Implement SimpleITK to numpy conversion
+- [x] Implement resampling to reference grid (3D volume resampling)
+- [x] Support different interpolation methods (linear, nearest, cubic, B-spline)
+- [x] Cache resampled volumes for performance
+- [x] Handle ImageOrientationPatient for different slice orientations
+- [x] Properly handle slice spacing/thickness differences
 
 ```python
 # Proposed class structure
@@ -223,7 +223,17 @@ class ImageResampler:
         """
         Determine if 3D resampling is needed.
         Returns (needs_resampling: bool, reason: str).
-        Checks: pixel spacing, slice thickness, orientation differences.
+        
+        Checks:
+        - ImageOrientationPatient differences (direction cosine difference ≥0.1)
+        - Slice thickness ratio (≥2:1 requires 3D)
+        - Pixel spacing differences (handled by 2D if orientations match)
+        - Missing spatial metadata (requires 3D for robustness)
+        
+        Examples:
+        - (False, "Compatible: same orientation, similar thickness") -> Use 2D
+        - (True, "Different orientation: axial vs sagittal") -> Use 3D
+        - (True, "Slice thickness ratio 3:1 (1mm vs 3mm)") -> Use 3D
         """
         ...
 ```
@@ -231,28 +241,56 @@ class ImageResampler:
 #### 2.3 Update Fusion Handler
 **File**: `src/core/fusion_handler.py` (modify)
 
-- [ ] Add resampling support when grids don't match (beyond current 2D PIL resize)
-- [ ] Detect when 3D resampling is needed (different spacing/orientation/slice thickness)
-- [ ] Integrate `ImageResampler` for automatic 3D volume alignment
-- [ ] Add progress callback for long resampling operations
-- [ ] Decide when to use 2D PIL resize (current) vs 3D SimpleITK resampling (Phase 2)
+- [x] Add resampling support when grids don't match (beyond current 2D PIL resize)
+- [x] Detect when 3D resampling is needed (different spacing/orientation/slice thickness)
+- [x] Integrate `ImageResampler` for automatic 3D volume alignment
+- [ ] Add progress callback for long resampling operations (deferred - can be added later if needed)
+- [x] Implement decision logic for 2D PIL resize vs 3D SimpleITK resampling
+
+**Decision Logic for 2D vs 3D Resampling:**
+
+The system should automatically choose the appropriate method based on spatial compatibility:
+
+**Use 2D PIL Resize (Fast Mode) When:**
+- ✅ Same ImageOrientationPatient (direction cosines differ by <0.1)
+- ✅ Only pixel spacing differences (no orientation/rotation issues)
+- ✅ Similar slice thicknesses (thickness ratio < 2:1, e.g., 1mm vs 1.5mm is acceptable)
+- ✅ Same Frame of Reference UID (already required in Phase 1)
+- ✅ User explicitly selects "Fast Mode" for performance (overrides auto-detection)
+
+**Use 3D SimpleITK Resampling (High Accuracy Mode) When:**
+- ❌ Different ImageOrientationPatient detected (direction cosines differ by ≥0.1)
+- ❌ Significantly different slice thicknesses (thickness ratio ≥ 2:1, e.g., 1mm vs 3mm)
+- ❌ Missing or inconsistent spatial metadata (fallback to robust method)
+- ❌ Any in-plane rotation detected between series
+- ❌ User explicitly selects "High Accuracy Mode"
+- ❌ `needs_resampling()` returns `True` for any reason
+
+**Implementation Notes:**
+- ✅ Default to automatic detection using `ImageResampler.needs_resampling()` - *Implemented*
+- ✅ Allow user override via UI controls (Task 2.4) - *Implemented with radio buttons*
+- ✅ Show status message indicating which method is being used - *Implemented in resampling_status_label*
+- ✅ Warn user if 2D mode is selected but 3D is recommended - *Implemented with warning label*
+- ⚠️ Improve 2D translation calculation to account for ImageOrientationPatient when 2D mode is used - *Deferred (3D resampling handles this automatically, 2D mode translation remains as-is)*
 
 #### 2.4 Update Fusion Controls
 **File**: `src/gui/fusion_controls_widget.py` (modify)
 
-- [ ] Add interpolation method selector (linear, nearest, cubic, B-spline)
-- [ ] Add "Resample Now" button for manual trigger (optional - auto-resample by default)
-- [ ] Add progress indicator for resampling operations
-- [ ] Show resampling status/warnings (e.g., "Resampling 3D volume...", "Different orientation detected")
-- [ ] Add option to use 2D resize (current) vs 3D resampling (Phase 2) for performance tuning
+- [x] Add interpolation method selector (linear, nearest, cubic, B-spline)
+- [ ] Add "Resample Now" button for manual trigger (optional - auto-resample by default, deferred)
+- [ ] Add progress indicator for resampling operations (deferred - can be added later if needed)
+- [x] Show resampling status/warnings (e.g., "Resampling 3D volume...", "Different orientation detected")
+- [x] Add option to use 2D resize (current) vs 3D resampling (Phase 2) for performance tuning
+- [x] Show which method is currently active (e.g., "Using: 2D Fast Mode" or "Using: 3D High Accuracy")
+- [x] Warn user if 2D mode is selected but 3D is recommended (e.g., "Warning: Different orientations detected. 3D resampling recommended for accuracy.")
 
 #### 2.5 Performance Optimization
-- [ ] Implement background resampling thread (QThread) for non-blocking UI
-- [ ] Add volume caching to avoid repeated resampling (cache key: series_uid + reference_series_uid)
-- [ ] Implement slice-by-slice resampling for memory efficiency (alternative to full volume)
-- [ ] Add memory usage warnings for large datasets (e.g., >2GB volumes)
-- [ ] Consider lazy loading: resample only when fusion is enabled
-- [ ] Add cache invalidation when series data changes
+- [ ] Implement background resampling thread (QThread) for non-blocking UI (deferred - can be added later if performance issues arise)
+- [x] Add volume caching to avoid repeated resampling (cache key: series_uid + reference_series_uid)
+- [ ] Implement slice-by-slice resampling for memory efficiency (alternative to full volume) - *Currently uses full volume caching for performance*
+- [ ] Add memory usage warnings for large datasets (e.g., >2GB volumes) (deferred)
+- [x] Consider lazy loading: resample only when fusion is enabled - *Implemented via caching and on-demand resampling*
+- [x] Add cache invalidation when series data changes - *Implemented via clear_cache() method*
 
 #### 2.6 Testing
 - [ ] Test with different pixel spacings (verify 3D resampling vs current 2D approach)
@@ -263,6 +301,31 @@ class ImageResampler:
 - [ ] Test caching effectiveness (verify cache hits/misses)
 - [ ] Compare performance: 2D PIL resize (Phase 1) vs 3D SimpleITK resampling (Phase 2)
 - [ ] Test edge cases: missing spatial metadata, inconsistent orientations
+
+### Phase 2 Implementation Summary
+
+**Status**: ✅ Core implementation complete
+
+**Completed:**
+- ✅ SimpleITK dependency added to requirements.txt
+- ✅ ImageResampler class created with full 3D resampling capabilities
+- ✅ FusionHandler integrated with ImageResampler and decision logic
+- ✅ FusionControlsWidget updated with resampling mode selector and status display
+- ✅ FusionCoordinator updated to handle 3D resampling path and mode changes
+- ✅ FusionProcessor updated to skip 2D resize when 3D resampling is used
+- ✅ Automatic detection of when 3D resampling is needed
+- ✅ User override options (Auto/Fast/High Accuracy modes)
+- ✅ Volume caching for performance
+- ✅ Status display and warnings
+
+**Deferred (can be added later if needed):**
+- Background threading for resampling (current implementation is synchronous)
+- Progress indicators for long resampling operations
+- Memory usage warnings for large datasets
+- "Resample Now" manual trigger button (auto-resample works well)
+
+**Ready for Testing:**
+- All core functionality is implemented and ready for testing with real DICOM data
 
 ---
 
@@ -371,9 +434,9 @@ class ImageRegistration:
 ```
 src/
 ├── core/
-│   ├── fusion_handler.py        # Phase 1
-│   ├── fusion_processor.py      # Phase 1
-│   ├── image_resampler.py       # Phase 2
+│   ├── fusion_handler.py        # Phase 1 ✅
+│   ├── fusion_processor.py      # Phase 1 ✅
+│   ├── image_resampler.py       # Phase 2 ✅
 │   └── image_registration.py    # Phase 3
 ├── gui/
 │   ├── fusion_controls_widget.py    # Phase 1
@@ -388,9 +451,12 @@ src/
 src/
 ├── main.py              # All phases
 ├── gui/
-│   ├── image_viewer.py      # Phase 1
+│   ├── image_viewer.py      # Phase 1 ✅
 │   └── series_navigator.py  # Phase 1 (optional)
-requirements.txt         # Phase 2
+├── core/
+│   ├── fusion_handler.py    # Phase 1 ✅, Phase 2 ✅ (updated)
+│   ├── fusion_processor.py  # Phase 1 ✅, Phase 2 ✅ (updated)
+requirements.txt         # Phase 2 ✅ (updated)
 ```
 
 ---

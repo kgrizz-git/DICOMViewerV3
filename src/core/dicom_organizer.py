@@ -177,6 +177,24 @@ class DICOMOrganizer:
                 # Sort slices by InstanceNumber or SliceLocation
                 sorted_slices = self._sort_slices(slice_list)
                 
+                # DEBUG: Log dataset ordering when stored in current_studies
+                if sorted_slices and len(sorted_slices) > 0:
+                    print(f"[3D RESAMPLE DEBUG] dicom_organizer: Storing datasets in current_studies")
+                    print(f"[3D RESAMPLE DEBUG]   Series: {composite_series_key[:30]}...")
+                    print(f"[3D RESAMPLE DEBUG]   Total slices: {len(sorted_slices)}")
+                    # Log first 3 and last 3 slice locations
+                    for i in [0, 1, 2] if len(sorted_slices) > 2 else range(len(sorted_slices)):
+                        ds, _ = sorted_slices[i]
+                        slice_loc = getattr(ds, 'SliceLocation', None)
+                        instance_num = getattr(ds, 'InstanceNumber', None)
+                        print(f"[3D RESAMPLE DEBUG]   Sorted slice[{i}]: InstanceNumber={instance_num}, SliceLocation={slice_loc}")
+                    if len(sorted_slices) > 3:
+                        for i in range(max(3, len(sorted_slices)-3), len(sorted_slices)):
+                            ds, _ = sorted_slices[i]
+                            slice_loc = getattr(ds, 'SliceLocation', None)
+                            instance_num = getattr(ds, 'InstanceNumber', None)
+                            print(f"[3D RESAMPLE DEBUG]   Sorted slice[{i}]: InstanceNumber={instance_num}, SliceLocation={slice_loc}")
+                
                 # Store datasets using composite series key
                 self.studies[study_uid][composite_series_key] = [ds for ds, _ in sorted_slices]
                 

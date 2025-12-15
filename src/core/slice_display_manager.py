@@ -290,6 +290,11 @@ class SliceDisplayManager:
         update_controls: bool = True,
         update_metadata: bool = True
     ) -> None:
+        # DEBUG: Log when display_slice is called
+        print(f"[WL UNIT DEBUG] display_slice called")
+        print(f"[WL UNIT DEBUG]   current_slice_index: {current_slice_index}")
+        if self.view_state_manager:
+            print(f"[WL UNIT DEBUG]   view_state_manager.rescale_type (before): {self.view_state_manager.rescale_type}")
         """
         Display a DICOM slice.
         
@@ -322,7 +327,13 @@ class SliceDisplayManager:
             
             # Extract and store rescale parameters from dataset
             rescale_slope, rescale_intercept, rescale_type = self.dicom_processor.get_rescale_parameters(dataset)
+            # Infer rescale_type if None (e.g., for CT images)
+            rescale_type = self.dicom_processor.infer_rescale_type(
+                dataset, rescale_slope, rescale_intercept, rescale_type
+            )
             self.view_state_manager.set_rescale_parameters(rescale_slope, rescale_intercept, rescale_type)
+            # DEBUG: Log rescale_type after setting
+            print(f"[WL UNIT DEBUG] display_slice: After set_rescale_parameters, rescale_type: {self.view_state_manager.rescale_type}")
             
             # Get composite series key from dataset to check if we're in the same series
             new_series_uid = get_composite_series_key(dataset)
@@ -757,9 +768,10 @@ class SliceDisplayManager:
                 # Continue without setting ranges - controls will use defaults
             
             # Update window/level controls unit label
+            # Use inferred rescale_type (already inferred above and stored in view_state_manager)
             unit = rescale_type if (use_rescaled_values and rescale_type) else None
             if update_controls:
-                self.window_level_controls.set_unit(unit)
+                self.window_level_controls.set_unit(unit)  # unit may be None to clear display
             
             # Update window/level controls with current values
             # Validate window/level values are within current dataset's pixel range
