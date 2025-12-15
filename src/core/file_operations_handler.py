@@ -22,6 +22,7 @@ Requirements:
 """
 
 import os
+import gc
 from typing import Callable, Optional
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import QTimer
@@ -234,7 +235,11 @@ class FileOperationsHandler:
             # Create progress callback
             def progress_callback(current: int, total: int, filename: str) -> None:
                 if filename:
-                    if total == 1:
+                    # Check if this is a defer message
+                    if filename.startswith("Deferring"):
+                        # Display defer message directly in status bar
+                        self.update_status_callback(filename)
+                    elif total == 1:
                         # Single file: update animated loading base message
                         base_msg = filename.rstrip('.')
                         self._loading_base_message = base_msg
@@ -307,9 +312,24 @@ class FileOperationsHandler:
                 
                 self.file_dialog.show_warning(self.main_window, "Loading Warnings", warning_msg)
             
+            # Check if we have a large number of datasets and suggest memory management
+            if len(datasets) > 100:
+                # Force garbage collection before expensive organize step
+                import time
+                gc_start = time.time()
+                gc.collect()
+                gc_time = time.time() - gc_start
+                print(f"[ORGANIZE DEBUG] Pre-organize GC: {gc_time:.3f}s")
+                QApplication.processEvents()
+            
             # Organize into studies/series
             try:
+                import time
+                organize_start = time.time()
+                print(f"[ORGANIZE DEBUG] Starting organize of {len(datasets)} datasets...")
                 studies = self.dicom_organizer.organize(datasets, file_paths)
+                organize_time = time.time() - organize_start
+                print(f"[ORGANIZE DEBUG] Organize completed in {organize_time:.2f}s")
             except MemoryError as e:
                 self.file_dialog.show_error(
                     self.main_window,
@@ -463,6 +483,12 @@ class FileOperationsHandler:
             if failed:
                 warning_msg = f"Warning: {len(failed)} file(s) could not be loaded."
                 self.file_dialog.show_warning(self.main_window, "Loading Warnings", warning_msg)
+            
+            # Check if we have a large number of datasets and suggest memory management
+            if len(datasets) > 100:
+                # Force garbage collection before expensive organize step
+                gc.collect()
+                QApplication.processEvents()
             
             # Organize
             try:
@@ -621,6 +647,12 @@ class FileOperationsHandler:
                     )
                     return None, None
                 
+                # Check if we have a large number of datasets and suggest memory management
+                if len(datasets) > 100:
+                    # Force garbage collection before expensive organize step
+                    gc.collect()
+                    QApplication.processEvents()
+                
                 # Organize into studies/series
                 try:
                     studies = self.dicom_organizer.organize(datasets, [file_path])
@@ -738,9 +770,24 @@ class FileOperationsHandler:
                     )
                     return None, None
                 
+                # Check if we have a large number of datasets and suggest memory management
+                if len(datasets) > 100:
+                    # Force garbage collection before expensive organize step
+                    import time
+                    gc_start = time.time()
+                    gc.collect()
+                    gc_time = time.time() - gc_start
+                    print(f"[ORGANIZE DEBUG] Pre-organize GC: {gc_time:.3f}s")
+                    QApplication.processEvents()
+                
                 # Organize
                 try:
+                    import time
+                    organize_start = time.time()
+                    print(f"[ORGANIZE DEBUG] Starting organize of {len(datasets)} datasets...")
                     studies = self.dicom_organizer.organize(datasets)
+                    organize_time = time.time() - organize_start
+                    print(f"[ORGANIZE DEBUG] Organize completed in {organize_time:.2f}s")
                 except MemoryError as e:
                     self.file_dialog.show_error(
                         self.main_window,
@@ -1048,6 +1095,12 @@ class FileOperationsHandler:
                         warning_msg += f"\n... and {len(failed) - 5} more"
                     
                     self.file_dialog.show_warning(self.main_window, "Loading Warnings", warning_msg)
+                
+                # Check if we have a large number of datasets and suggest memory management
+                if len(datasets) > 100:
+                    # Force garbage collection before expensive organize step
+                    gc.collect()
+                    QApplication.processEvents()
                 
                 # Organize into studies/series
                 try:
