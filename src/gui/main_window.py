@@ -987,6 +987,12 @@ class MainWindow(QMainWindow):
                     border: 1px solid #6a6a6a;
                 }}
                 
+                QComboBox:disabled {{
+                    background-color: #2b2b2b;
+                    color: #7f7f7f;
+                    border: 1px solid #3a3a3a;
+                }}
+                
                 /* QComboBox::drop-down - COMMENTED OUT to preserve native arrow */
                 /*
                 QComboBox::drop-down {{
@@ -1375,6 +1381,12 @@ class MainWindow(QMainWindow):
                     border: 1px solid #a0a0a0;
                 }}
                 
+                QComboBox:disabled {{
+                    background-color: #f0f0f0;
+                    color: #a0a0a0;
+                    border: 1px solid #d0d0d0;
+                }}
+                
                 /* QComboBox::drop-down - COMMENTED OUT to preserve native arrow */
                 /*
                 QComboBox::drop-down {{
@@ -1582,7 +1594,7 @@ class MainWindow(QMainWindow):
         
         # Load icon and convert to base64 for HTML embedding
         icon_html = ""
-        icon_path = Path(__file__).parent.parent.parent / 'resources' / 'icons' / 'luk40iluk40iluk4-removebg-preview.png'
+        icon_path = Path(__file__).parent.parent.parent / 'resources' / 'images' / 'Gemini_Generated_Image_dvv6ldvv6ldvv6ld_edit-removebg-preview.png'
         if icon_path.exists():
             pixmap = QPixmap(str(icon_path))
             # Scale icon to reasonable size (96x96 pixels for inline display)
@@ -1607,7 +1619,7 @@ class MainWindow(QMainWindow):
     </style>
 </head>
 <body>
-    <h2>{icon_html}DICOM Viewer V3</h2>
+    <h2>{icon_html}Medical Physics DICOM Viewer</h2>
     <p><b>Made by Kevin Grizzard</b><br>
     Available at <a href='https://github.com/kgrizz-git/DICOMViewerV3'>https://github.com/kgrizz-git/DICOMViewerV3</a></p>
     <hr>
@@ -1669,10 +1681,6 @@ class MainWindow(QMainWindow):
     <li>Export at displayed resolution option</li>
     <li>Export selected DICOM tags to Excel/CSV</li>
     <li>Export/Import Customizations: Save and share overlay config, annotation options, metadata panel settings, and theme as JSON files</li>
-    </ul>
-    <h4>Planned Features (Not yet implemented):</h4>
-    <ul>
-    <li>RT STRUCT overlays</li>
     </ul>
     <hr>
     <p><a href="disclaimer://show">View Disclaimer</a></p>

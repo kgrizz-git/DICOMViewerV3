@@ -449,6 +449,61 @@ class FusionHandler:
                 pass
         
         return None
+
+    def get_pixel_spacing_with_source(
+        self, dataset: Dataset
+    ) -> Tuple[Optional[Tuple[float, float]], Optional[str]]:
+        """
+        Extract pixel spacing from dataset along with information about the source.
+
+        Priority:
+        1) PixelSpacing / ImagerPixelSpacing (true DICOM spacing)
+        2) Heuristic estimates based on ReconstructionDiameter and matrix size
+
+        Returns:
+            ((row_spacing, col_spacing) in mm, source_string) or (None, None)
+        """
+        # 1) True DICOM spacing from PixelSpacing
+        pixel_spacing = getattr(dataset, "PixelSpacing", None)
+        if pixel_spacing is not None and len(pixel_spacing) >= 2:
+            try:
+                row_spacing = float(pixel_spacing[0])
+                col_spacing = float(pixel_spacing[1])
+                return (row_spacing, col_spacing), "pixel_spacing"
+            except (ValueError, TypeError, IndexError):
+                pass
+
+        # 1b) ImagerPixelSpacing as a fallback when PixelSpacing is missing
+        imager_spacing = getattr(dataset, "ImagerPixelSpacing", None)
+        if imager_spacing is not None and len(imager_spacing) >= 2:
+            try:
+                row_spacing = float(imager_spacing[0])
+                col_spacing = float(imager_spacing[1])
+                return (row_spacing, col_spacing), "pixel_spacing"
+            except (ValueError, TypeError, IndexError):
+                pass
+
+        # 2) Heuristic: ReconstructionDiameter / matrix size
+        # Many CT scanners provide ReconstructionDiameter as the in-plane FOV.
+        recon_diameter = getattr(dataset, "ReconstructionDiameter", None)
+        rows = getattr(dataset, "Rows", None)
+        cols = getattr(dataset, "Columns", None)
+
+        if recon_diameter is not None and rows is not None and cols is not None:
+            try:
+                recon_diameter_mm = float(recon_diameter)
+                rows_int = int(rows)
+                cols_int = int(cols)
+                if rows_int > 0 and cols_int > 0:
+                    # Approximate symmetric spacing in X/Y from the reconstruction FOV.
+                    col_spacing = recon_diameter_mm / float(cols_int)
+                    row_spacing = recon_diameter_mm / float(rows_int)
+                    return (row_spacing, col_spacing), "reconDiameter_cols"
+            except (ValueError, TypeError, ZeroDivisionError):
+                pass
+
+        # No reliable spacing information available
+        return None, None
     
     def get_image_position_patient(self, dataset: Dataset) -> Optional[Tuple[float, float, float]]:
         """

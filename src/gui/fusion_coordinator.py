@@ -82,6 +82,12 @@ class FusionCoordinator:
         self._check_notification_shown = check_notification_shown
         self._mark_notification_shown = mark_notification_shown
         
+        # Per-subwindow fusion status history. Each FusionCoordinator instance
+        # owns its own log so that the shared FusionControlsWidget can display
+        # messages specific to the currently focused subwindow only.
+        # Stored as list of (message, is_error) tuples.
+        self._status_history: List[Tuple[str, bool]] = []
+        
         # Note: Signals are connected externally when subwindow gains focus
         # Do not auto-connect here to allow per-subwindow signal routing
     
@@ -97,6 +103,45 @@ class FusionCoordinator:
         self.fusion_controls.translation_offset_changed.connect(self.handle_translation_offset_changed)
         self.fusion_controls.resampling_mode_changed.connect(self.handle_resampling_mode_changed)
         self.fusion_controls.interpolation_method_changed.connect(self.handle_interpolation_method_changed)
+
+        # When connecting to a (newly) focused subwindow, refresh the controls
+        # status area from this coordinator's history so only this subwindow's
+        # messages are shown.
+        self._restore_status_history_to_controls()
+
+    def _append_status(self, message: str, is_error: bool = False) -> None:
+        """
+        Append a status message to this coordinator's history and update the
+        shared FusionControlsWidget.
+
+        This ensures each FusionCoordinator (one per subwindow) retains its own
+        status log, while the visible widget always reflects the currently
+        focused subwindow only.
+        """
+        self._status_history.append((message, is_error))
+        # Update the shared controls widget (which currently belongs to the
+        # focused subwindow when this coordinator is connected).
+        if self.fusion_controls is not None:
+            self.fusion_controls.set_status(message, is_error=is_error)
+
+    def _restore_status_history_to_controls(self) -> None:
+        """
+        Restore this coordinator's status history into the shared
+        FusionControlsWidget.
+
+        Called whenever this coordinator is (re)connected for the newly focused
+        subwindow so the status box appears per-subwindow.
+        """
+        if self.fusion_controls is None:
+            return
+
+        # Clear the current log for the shared controls, then replay this
+        # coordinator's history so the status box reflects only this subwindow.
+        if hasattr(self.fusion_controls, "status_text_edit"):
+            self.fusion_controls.status_text_edit.clear()
+        
+        for msg, is_err in self._status_history:
+            self.fusion_controls.set_status(msg, is_error=is_err)
     
     def disconnect_fusion_controls_signals(self) -> None:
         """Disconnect FusionControlsWidget signals from this coordinator."""
@@ -147,9 +192,10 @@ class FusionCoordinator:
         self.fusion_handler.fusion_enabled = enabled
         
         if enabled:
-            # Validate series selection
+            # Validate series selection. Treat missing overlay as an
+            # informational prompt rather than an error in the status box.
             if not self.fusion_handler.base_series_uid or not self.fusion_handler.overlay_series_uid:
-                self.fusion_controls.set_status("Please select base and overlay series", is_error=True)
+                self._append_status("Please select overlay series", is_error=False)
                 return
             
             # Update spatial alignment when first enabling fusion
@@ -165,16 +211,16 @@ class FusionCoordinator:
                 
                 if base_datasets and overlay_datasets:
                     if self.fusion_handler.check_frame_of_reference_match(base_datasets, overlay_datasets):
-                        self.fusion_controls.set_status("Aligned (Frame of Reference)")
+                        self._append_status("Aligned (Frame of Reference)", is_error=False)
                         # Update resampling status
                         self._update_resampling_status()
                     else:
-                        self.fusion_controls.set_status("Warning: Different Frame of Reference", is_error=True)
+                        self._append_status("Warning: Different Frame of Reference", is_error=True)
                         # Note: Still allow fusion, but warn user
                         # Update resampling status
                         self._update_resampling_status()
         else:
-            self.fusion_controls.set_status("Disabled")
+            self._append_status("Disabled", is_error=False)
         
         # Request display update
         self.request_display_update()
@@ -504,6 +550,17 @@ class FusionCoordinator:
         # Get status from handler
         mode_display, reason = self.fusion_handler.get_resampling_status(base_datasets, overlay_datasets)
         
+        # Check if 3D resampling will actually be used
+        use_3d, _ = self.fusion_handler._should_use_3d_resampling(base_datasets, overlay_datasets)
+        
+        # Disable offset controls when 3D resampling is active (offset is not applied in 3D mode)
+        if hasattr(self.fusion_controls, "set_offset_controls_enabled"):
+            self.fusion_controls.set_offset_controls_enabled(not use_3d)
+        
+        # Update offset status text to indicate how alignment is determined
+        if hasattr(self.fusion_controls, "set_offset_status_text"):
+            self.fusion_controls.set_offset_status_text(use_3d)
+        
         # Check if warning should be shown (2D selected but 3D recommended)
         show_warning = False
         warning_text = ""
@@ -516,7 +573,9 @@ class FusionCoordinator:
                 show_warning = True
                 warning_text = "Warning: 3D resampling recommended for accuracy. Current mode may produce misalignment."
         
-        # Update UI
+        # Update inline warning label in the resampling group only. We intentionally
+        # do not log the \"Using: ...\" informational message in the fusion status
+        # box to avoid unnecessary noise there.
         self.fusion_controls.set_resampling_status(mode_display, reason, show_warning, warning_text)
     
     def get_fused_image(
@@ -660,6 +719,9 @@ class FusionCoordinator:
                     print(f"[SPATIAL ALIGNMENT] Restored from cache: scale={scale}, offset={offset}")
                 else:
                     print(f"[SPATIAL ALIGNMENT] Cache exists but user modified offset, keeping user values")
+            
+            # Still need to update resampling status to ensure offset controls are enabled/disabled correctly
+            self._update_resampling_status()
             return  # Skip calculation
         
         # No cache, calculate fresh values
@@ -680,9 +742,32 @@ class FusionCoordinator:
         base_ds = base_datasets[0]
         overlay_ds = overlay_datasets[0]
         
-        # Get pixel spacings
-        base_pixel_spacing = self.fusion_handler.get_pixel_spacing(base_ds)
-        overlay_pixel_spacing = self.fusion_handler.get_pixel_spacing(overlay_ds)
+        # Get pixel spacings (with source metadata)
+        base_spacing, base_source = self.fusion_handler.get_pixel_spacing_with_source(base_ds)
+        overlay_spacing, overlay_source = self.fusion_handler.get_pixel_spacing_with_source(overlay_ds)
+
+        base_pixel_spacing = base_spacing
+        overlay_pixel_spacing = overlay_spacing
+        
+        # Decide which spacing to expose to the controls for mm/px conversion.
+        # IMPORTANT: Offset is calculated in base pixel coordinates, so we MUST use
+        # base pixel spacing for offset conversion, not overlay spacing.
+        row_spacing_mm = None
+        col_spacing_mm = None
+        spacing_source = None
+        if base_spacing is not None:
+            # Use base spacing for offset conversion (offset is in base pixel coordinates)
+            row_spacing_mm, col_spacing_mm = base_spacing
+            spacing_source = base_source
+        elif overlay_spacing is not None:
+            # Fallback to overlay spacing if base spacing not available
+            row_spacing_mm, col_spacing_mm = overlay_spacing
+            spacing_source = overlay_source
+
+        # Push spacing information into controls so the unit toggle and inline
+        # spacing description beneath Spatial Alignment stay in sync.
+        if hasattr(self.fusion_controls, "set_pixel_spacing"):
+            self.fusion_controls.set_pixel_spacing(row_spacing_mm, col_spacing_mm, spacing_source)
         
         # DEBUG
         print(f"\n[SPATIAL ALIGNMENT DEBUG]")
@@ -705,7 +790,7 @@ class FusionCoordinator:
             # No pixel spacing available
             stored_scale = (1.0, 1.0)
             self.fusion_controls.set_scaling_factors(1.0, 1.0)
-            self.fusion_controls.set_status("Warning: Pixel spacing not available", is_error=True)
+            self._append_status("Warning: Pixel spacing not available", is_error=True)
         
         # Calculate and display translation offset
         if base_pixel_spacing and overlay_pixel_spacing:
@@ -729,7 +814,7 @@ class FusionCoordinator:
                 if not self.fusion_controls.has_user_modified_offset():
                     self.fusion_controls.set_calculated_offset(0.0, 0.0)
                 if not self.fusion_controls.status_label.text().startswith("Status: Warning"):
-                    self.fusion_controls.set_status("Warning: Image position not available", is_error=True)
+                    self._append_status("Warning: Image position not available", is_error=True)
         else:
             stored_offset = (0.0, 0.0)
             if not self.fusion_controls.has_user_modified_offset():
@@ -744,6 +829,9 @@ class FusionCoordinator:
                 stored_offset
             )
             print(f"[SPATIAL ALIGNMENT] Stored in cache: scale={stored_scale}, offset={stored_offset}")
+        
+        # Update resampling status to ensure offset controls are enabled/disabled correctly
+        self._update_resampling_status()
     
     def update_fusion_controls_series_list(self) -> None:
         """Update fusion controls with available series."""

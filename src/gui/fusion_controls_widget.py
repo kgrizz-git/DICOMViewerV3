@@ -15,10 +15,24 @@ Requirements:
     - PySide6 for GUI components
 """
 
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-                                QCheckBox, QComboBox, QSlider, QGroupBox,
-                                QSpinBox, QSizePolicy, QRadioButton, QButtonGroup)
+from PySide6.QtWidgets import (
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QCheckBox,
+    QComboBox,
+    QSlider,
+    QGroupBox,
+    QSpinBox,
+    QSizePolicy,
+    QRadioButton,
+    QButtonGroup,
+    QPlainTextEdit,
+    QSpacerItem,
+)
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QTextCursor, QTextCharFormat, QColor, QFont
 from typing import List, Tuple
 
 
@@ -60,6 +74,17 @@ class FusionControlsWidget(QWidget):
         
         # Track if we're updating controls programmatically
         self._updating = False
+
+        # Offset unit/spacing state (for Spatial Alignment)
+        # Offsets are always stored internally in pixels; the unit toggle only
+        # affects how values are displayed and what users type into the
+        # spinboxes.
+        self._offset_unit = "mm"  # "mm" or "px"
+        self._row_spacing_mm = None  # Y spacing (row direction)
+        self._col_spacing_mm = None  # X spacing (column direction)
+        self._spacing_source = None  # e.g. "pixel_spacing", "reconDiameter_cols", ...
+        self._can_use_mm = False
+        self._use_3d_mode = False  # Track if 3D resampling mode is active
         
         self._create_ui()
         self._connect_signals()
@@ -91,7 +116,10 @@ class FusionControlsWidget(QWidget):
         self.base_series_display.setStyleSheet("font-style: italic;")
         group_layout.addWidget(self.base_series_display)
         
-        # Overlay series selection (wrapped for visibility control)
+        # Overlay series selection (wrapped for visibility control). The fusion
+        # status log is displayed directly beneath the overlay series dropdown
+        # so that fusion-related messages are visually tied to the selected
+        # overlay.
         self.overlay_series_widget = QWidget()
         overlay_container_layout = QVBoxLayout(self.overlay_series_widget)
         overlay_container_layout.setContentsMargins(0, 0, 0, 0)
@@ -102,8 +130,44 @@ class FusionControlsWidget(QWidget):
         overlay_container_layout.addWidget(overlay_label)
         
         self.overlay_series_combo = QComboBox()
-        self.overlay_series_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.overlay_series_combo.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
         overlay_container_layout.addWidget(self.overlay_series_combo)
+
+        # Fusion status area (fixed-height, scrollable log) placed directly
+        # beneath the overlay series dropdown.
+        self.status_container_widget = QWidget()
+        status_container_layout = QVBoxLayout(self.status_container_widget)
+        status_container_layout.setContentsMargins(0, 4, 0, 0)
+        status_container_layout.setSpacing(2)
+
+        # Use the same base font as the rest of the controls so the status box
+        # text matches the application font size. The heading is bold; the log
+        # text is regular weight.
+        base_font = self.font()
+
+        self.status_heading_label = QLabel("Fusion Status:")
+        heading_font = QFont(base_font)
+        heading_font.setBold(True)
+        self.status_heading_label.setFont(heading_font)
+        self.status_heading_label.setStyleSheet("margin-top: 2px;")
+        status_container_layout.addWidget(self.status_heading_label)
+
+        self.status_text_edit = QPlainTextEdit()
+        self.status_text_edit.setReadOnly(True)
+        self.status_text_edit.setLineWrapMode(QPlainTextEdit.LineWrapMode.WidgetWidth)
+        self.status_text_edit.setMaximumBlockCount(200)
+        # Fixed height sized for ~2 lines of text, with scrollbar for overflow.
+        # Colors are taken from the application palette so the widget respects
+        # light/dark themes (white/black background with contrasting text).
+        log_font = QFont(base_font)
+        log_font.setBold(False)
+        self.status_text_edit.setFont(log_font)
+        self.status_text_edit.setFixedHeight(48)
+        status_container_layout.addWidget(self.status_text_edit)
+
+        overlay_container_layout.addWidget(self.status_container_widget)
         
         group_layout.addWidget(self.overlay_series_widget)
         
@@ -223,12 +287,6 @@ class FusionControlsWidget(QWidget):
         
         resampling_layout.addLayout(interpolation_layout)
         
-        # Resampling status display
-        self.resampling_status_label = QLabel("Status: High Accuracy (3D)")
-        self.resampling_status_label.setStyleSheet("font-size: 9pt; color: #555; font-style: italic;")
-        self.resampling_status_label.setWordWrap(True)
-        resampling_layout.addWidget(self.resampling_status_label)
-        
         # Warning label (shown when 2D is selected but 3D is recommended)
         self.resampling_warning_label = QLabel("")
         self.resampling_warning_label.setStyleSheet("font-size: 9pt; color: orange; font-style: italic;")
@@ -277,26 +335,19 @@ class FusionControlsWidget(QWidget):
         wl_container_layout.addLayout(window_layout)
         group_layout.addWidget(self.window_level_widget)
         
-        # Advanced section for spatial alignment (wrapped for visibility control)
-        self.advanced_group = QGroupBox("Advanced Spatial Alignment")
+        # Spatial Alignment section (manual offsets + derived info)
+        self.advanced_group = QGroupBox("Spatial Alignment")
         self.advanced_group.setCheckable(False)
         advanced_layout = QVBoxLayout(self.advanced_group)
         advanced_layout.setContentsMargins(5, 10, 5, 5)
         advanced_layout.setSpacing(8)
         
-        # Calculated offset display
-        self.calculated_offset_label = QLabel("Calculated Offset: X=0.0, Y=0.0 pixels")
-        self.calculated_offset_label.setStyleSheet("font-size: 10pt; color: #555;")
-        advanced_layout.addWidget(self.calculated_offset_label)
-        
-        # Scaling factors display
-        self.scaling_factors_label = QLabel("Scaling: X=1.00, Y=1.00")
-        self.scaling_factors_label.setStyleSheet("font-size: 10pt; color: #555;")
-        advanced_layout.addWidget(self.scaling_factors_label)
-        
         # X offset adjustment
         x_offset_layout = QHBoxLayout()
+        x_offset_layout.setSpacing(5)  # Explicit spacing
         x_offset_label = QLabel("X Offset:")
+        # Set fixed width for label so Y label aligns beneath it
+        x_offset_label.setFixedWidth(70)
         x_offset_layout.addWidget(x_offset_label)
         
         self.x_offset_spinbox = QSpinBox()
@@ -304,14 +355,29 @@ class FusionControlsWidget(QWidget):
         self.x_offset_spinbox.setMaximum(500)
         self.x_offset_spinbox.setValue(0)
         self.x_offset_spinbox.setSingleStep(1)
-        self.x_offset_spinbox.setSuffix(" px")
+        # No unit suffix; the combo box indicates current unit.
         x_offset_layout.addWidget(self.x_offset_spinbox, 1)
+
+        # Shared unit selector for X/Y offsets (mm or pixels). This controls how
+        # the spinbox values are interpreted and displayed; internal storage is
+        # always in pixels.
+        self.offset_unit_combo = QComboBox()
+        self.offset_unit_combo.addItems(["mm", "px"])
+        self.offset_unit_combo.setCurrentText("mm")
+        # Keep the combo visually compact next to the spinbox. Use fixed width
+        # so we can match it exactly with a placeholder widget in the Y row.
+        combo_width = 70
+        self.offset_unit_combo.setFixedWidth(combo_width)
+        x_offset_layout.addWidget(self.offset_unit_combo)
         
         advanced_layout.addLayout(x_offset_layout)
         
         # Y offset adjustment
         y_offset_layout = QHBoxLayout()
+        y_offset_layout.setSpacing(5)  # Match X layout spacing
         y_offset_label = QLabel("Y Offset:")
+        # Match X label width so spinboxes align vertically
+        y_offset_label.setFixedWidth(70)
         y_offset_layout.addWidget(y_offset_label)
         
         self.y_offset_spinbox = QSpinBox()
@@ -319,9 +385,22 @@ class FusionControlsWidget(QWidget):
         self.y_offset_spinbox.setMaximum(500)
         self.y_offset_spinbox.setValue(0)
         self.y_offset_spinbox.setSingleStep(1)
-        self.y_offset_spinbox.setSuffix(" px")
+        # Match X spinbox width so the numeric fields align vertically.
         y_offset_layout.addWidget(self.y_offset_spinbox, 1)
         
+        # Add placeholder widget to match the combo box width exactly so Y spinbox aligns with X spinbox
+        placeholder = QWidget()
+        placeholder.setFixedWidth(combo_width)
+        y_offset_layout.addWidget(placeholder)
+
+        # Ensure X/Y spinboxes share the same width for a clean layout.
+        spinbox_width = max(
+            self.x_offset_spinbox.sizeHint().width(),
+            self.y_offset_spinbox.sizeHint().width(),
+        )
+        self.x_offset_spinbox.setFixedWidth(spinbox_width)
+        self.y_offset_spinbox.setFixedWidth(spinbox_width)
+
         advanced_layout.addLayout(y_offset_layout)
         
         # Reset button
@@ -329,21 +408,31 @@ class FusionControlsWidget(QWidget):
         self.reset_offset_button = QPushButton("Reset to Calculated")
         self.reset_offset_button.clicked.connect(self._on_reset_offset_clicked)
         advanced_layout.addWidget(self.reset_offset_button)
+
+        # Calculated offset display (always reported in pixels)
+        self.calculated_offset_label = QLabel("2D Calculated Offset: X=0.0, Y=0.0 pixels")
+        self.calculated_offset_label.setStyleSheet("font-size: 10pt; color: #555;")
+        advanced_layout.addWidget(self.calculated_offset_label)
+        
+        # Scaling factors display
+        self.scaling_factors_label = QLabel("2D Calculated Scaling: X=1.00, Y=1.00")
+        self.scaling_factors_label.setStyleSheet("font-size: 10pt; color: #555;")
+        advanced_layout.addWidget(self.scaling_factors_label)
+
+        # Spacing / conversion info (small text at very bottom of the fusion widget)
+        self.spacing_info_label = QLabel("")
+        self.spacing_info_label.setStyleSheet("font-size: 9pt; color: #777;")
+        self.spacing_info_label.setWordWrap(True)
+        advanced_layout.addWidget(self.spacing_info_label)
         
         group_layout.addWidget(self.advanced_group)
         
-        # Store calculated offset for reset functionality
+        # Store calculated offset for reset functionality (always in pixels)
         self._calculated_offset_x = 0.0
         self._calculated_offset_y = 0.0
         
         # Track if user manually modified the offset
         self._user_modified_offset = False
-        
-        # Status indicator
-        self.status_label = QLabel("Status: Disabled")
-        self.status_label.setStyleSheet("color: gray; font-style: italic; margin-top: 5px;")
-        self.status_label.setWordWrap(True)
-        group_layout.addWidget(self.status_label)
         
         layout.addWidget(group_box)
         layout.addStretch()
@@ -360,6 +449,8 @@ class FusionControlsWidget(QWidget):
         self.overlay_level_spinbox.valueChanged.connect(self._on_overlay_wl_changed)
         self.x_offset_spinbox.valueChanged.connect(self._on_translation_offset_changed)
         self.y_offset_spinbox.valueChanged.connect(self._on_translation_offset_changed)
+        if hasattr(self, "offset_unit_combo"):
+            self.offset_unit_combo.currentTextChanged.connect(self._on_offset_unit_changed)
         self.resampling_mode_group.buttonClicked.connect(self._on_resampling_mode_changed)
         self.interpolation_combo.currentTextChanged.connect(self._on_interpolation_method_changed)
     
@@ -407,27 +498,39 @@ class FusionControlsWidget(QWidget):
     
     def _on_translation_offset_changed(self) -> None:
         """Handle translation offset change."""
-        if not self._updating:
-            # Mark that user has manually modified the offset
-            self._user_modified_offset = True
-            x_offset = float(self.x_offset_spinbox.value())
-            y_offset = float(self.y_offset_spinbox.value())
-            print(f"[OFFSET DEBUG] User changed offset to: X={x_offset:.1f}, Y={y_offset:.1f}")
-            self.translation_offset_changed.emit(x_offset, y_offset)
+        if self._updating:
+            return
+
+        # Mark that user has manually modified the offset
+        display_x = float(self.x_offset_spinbox.value())
+        display_y = float(self.y_offset_spinbox.value())
+
+        if self._offset_unit == "mm" and self._can_use_mm:
+            x_px, y_px = self._mm_to_pixels(display_x, display_y)
+        else:
+            x_px, y_px = display_x, display_y
+
+        self._user_modified_offset = True
+        self._calculated_offset_x = x_px
+        self._calculated_offset_y = y_px
+        print(f"[OFFSET DEBUG] User changed offset to: X={x_px:.1f}px, Y={y_px:.1f}px")
+        self.translation_offset_changed.emit(x_px, y_px)
     
     def _on_reset_offset_clicked(self) -> None:
         """Handle reset offset button click."""
         # Reset the user-modified flag since we're resetting to calculated
         self._user_modified_offset = False
-        
-        self._updating = True
-        self.x_offset_spinbox.setValue(int(round(self._calculated_offset_x)))
-        self.y_offset_spinbox.setValue(int(round(self._calculated_offset_y)))
-        self._updating = False
-        
-        print(f"[OFFSET DEBUG] Reset to calculated offset: X={self._calculated_offset_x:.1f}, Y={self._calculated_offset_y:.1f}")
-        # Emit signal with calculated values
-        self.translation_offset_changed.emit(self._calculated_offset_x, self._calculated_offset_y)
+
+        # Ensure internal offsets remain the stored calculated pixel offsets
+        x_px = float(self._calculated_offset_x)
+        y_px = float(self._calculated_offset_y)
+
+        # Update spinboxes from internal pixel offsets according to current unit
+        self._update_offset_spinboxes_from_pixels()
+
+        print(f"[OFFSET DEBUG] Reset to calculated offset: X={x_px:.1f}px, Y={y_px:.1f}px")
+        # Emit signal with calculated values (always in pixels)
+        self.translation_offset_changed.emit(x_px, y_px)
     
     def _on_resampling_mode_changed(self, button: QRadioButton) -> None:
         """Handle resampling mode change."""
@@ -481,15 +584,46 @@ class FusionControlsWidget(QWidget):
         self.overlay_window_spinbox.setEnabled(enabled)
         self.overlay_level_spinbox.setEnabled(enabled)
         
-        # Advanced Spatial Alignment
+        # Spatial Alignment
         self.advanced_group.setVisible(enabled)
         self.x_offset_spinbox.setEnabled(enabled)
         self.y_offset_spinbox.setEnabled(enabled)
         self.reset_offset_button.setEnabled(enabled)
+        if hasattr(self, "offset_unit_combo"):
+            # Unit combo is only meaningful when mm spacing is available AND not in 3D mode
+            self.offset_unit_combo.setEnabled(enabled and self._can_use_mm and not self._use_3d_mode)
+    
+    def set_offset_controls_enabled(self, enabled: bool) -> None:
+        """
+        Enable or disable offset controls independently of fusion enable state.
+        
+        Used to disable offset controls when 3D resampling is active (since 3D
+        resampling handles alignment automatically and offset is not applied).
+        
+        Args:
+            enabled: True to enable offset controls, False to disable
+        """
+        if not hasattr(self, "x_offset_spinbox"):
+            return
+        
+        # Only disable if fusion is enabled (if fusion is disabled, _on_enable_toggled handles it)
+        if self.enable_checkbox.isChecked():
+            self.x_offset_spinbox.setEnabled(enabled)
+            self.y_offset_spinbox.setEnabled(enabled)
+            self.reset_offset_button.setEnabled(enabled)
+            if hasattr(self, "offset_unit_combo"):
+                # When disabled (3D mode), explicitly disable the dropdown regardless of _can_use_mm
+                # When enabled (2D mode), enable based on mm availability
+                if enabled:
+                    self.offset_unit_combo.setEnabled(self._can_use_mm)
+                else:
+                    # Explicitly disable in 3D mode
+                    self.offset_unit_combo.setEnabled(False)
         
         if not enabled:
-            self.status_label.setText("Status: Disabled")
-            self.status_label.setStyleSheet("color: gray; font-style: italic; margin-top: 5px;")
+            # When fusion is disabled, record this in the scrollable status log
+            # so the user can see when fusion was turned off.
+            self.set_status("Disabled", is_error=False)
     
     def update_series_lists(
         self,
@@ -519,6 +653,12 @@ class FusionControlsWidget(QWidget):
         
         print(f"[FUSION CONTROLS DEBUG] Cleared overlay dropdown, now adding {len(series_list)} items")
         
+        # Insert placeholder when there is no current or previous overlay
+        placeholder_index = -1
+        if not current_overlay_uid and not prev_overlay:
+            self.overlay_series_combo.addItem("Empty - Please Select", "")
+            placeholder_index = 0
+        
         # Add series to overlay combo only
         for series_uid, display_name in series_list:
             print(f"[FUSION CONTROLS DEBUG]   Adding: {display_name}")
@@ -533,22 +673,60 @@ class FusionControlsWidget(QWidget):
             index = self.overlay_series_combo.findData(prev_overlay)
             if index >= 0:
                 self.overlay_series_combo.setCurrentIndex(index)
+        elif placeholder_index >= 0:
+            self.overlay_series_combo.setCurrentIndex(placeholder_index)
         
         self._updating = False
     
     def set_status(self, status_text: str, is_error: bool = False) -> None:
         """
-        Update status label.
+        Update fusion status display.
+        
+        This appends the message to the scrollable status log that lives
+        directly beneath the overlay series dropdown. All fusion status
+        messages (info/warning/error) should flow through this method.
         
         Args:
             status_text: Status text to display
             is_error: True if this is an error status
         """
-        self.status_label.setText(f"Status: {status_text}")
-        if is_error:
-            self.status_label.setStyleSheet("color: red; font-style: italic; margin-top: 5px;")
-        else:
-            self.status_label.setStyleSheet("color: green; font-style: italic; margin-top: 5px;")
+        # Append message to scrollable log, tagging severity. Normal messages
+        # use a theme-aware text color (black on light backgrounds, white on
+        # dark backgrounds), while errors are rendered in red.
+        if self.status_text_edit is not None:
+            prefix = "[ERROR] " if is_error else "[INFO] "
+            # Move cursor to end and insert formatted text
+            cursor = self.status_text_edit.textCursor()
+            cursor.movePosition(QTextCursor.MoveOperation.End)
+
+            # Add a newline if there is already content
+            if self.status_text_edit.toPlainText():
+                cursor.insertText("\n")
+
+            char_format = QTextCharFormat()
+            if is_error:
+                # Errors: always use a distinct red so they stand out.
+                char_format.setForeground(QColor(220, 0, 0))
+            else:
+                # Info/warning: choose black or white based on background
+                palette = self.status_text_edit.palette()
+                # Prefer viewport background role; fall back to Base.
+                bg = palette.color(self.status_text_edit.viewport().backgroundRole())
+                if not bg.isValid():
+                    from PySide6.QtGui import QPalette
+                    bg = palette.color(QPalette.ColorRole.Base)
+                # Simple light/dark heuristic
+                if bg.lightness() > 128:
+                    text_color = QColor(0, 0, 0)
+                else:
+                    text_color = QColor(255, 255, 255)
+                char_format.setForeground(text_color)
+
+            cursor.insertText(f"{prefix}{status_text}", char_format)
+
+            # Auto-scroll to the newest message
+            self.status_text_edit.setTextCursor(cursor)
+            self.status_text_edit.ensureCursorVisible()
     
     def get_selected_base_series(self) -> str:
         """Get currently selected base series UID (for compatibility, but base is read-only)."""
@@ -628,9 +806,10 @@ class FusionControlsWidget(QWidget):
             x: Calculated X offset in pixels
             y: Calculated Y offset in pixels
         """
+        # Store calculated offset internally in pixels
         self._calculated_offset_x = x
         self._calculated_offset_y = y
-        self.calculated_offset_label.setText(f"Calculated Offset: X={x:.1f}, Y={y:.1f} pixels")
+        self.calculated_offset_label.setText(f"2D Calculated Offset: X={x:.1f}, Y={y:.1f} pixels")
         
         print(f"[OFFSET DEBUG] set_calculated_offset called: X={x:.1f}, Y={y:.1f}")
         print(f"[OFFSET DEBUG]   Current spinbox values: X={self.x_offset_spinbox.value()}, Y={self.y_offset_spinbox.value()}")
@@ -638,11 +817,8 @@ class FusionControlsWidget(QWidget):
         
         # Update the spinboxes only if user hasn't manually modified them
         if not self._user_modified_offset:
-            self._updating = True
-            self.x_offset_spinbox.setValue(int(round(x)))
-            self.y_offset_spinbox.setValue(int(round(y)))
-            self._updating = False
-            print(f"[OFFSET DEBUG]   Updated spinboxes to calculated values")
+            self._update_offset_spinboxes_from_pixels()
+            print(f"[OFFSET DEBUG]   Updated spinboxes to calculated values (unit={self._offset_unit}, can_use_mm={self._can_use_mm})")
         else:
             print(f"[OFFSET DEBUG]   Keeping user-modified spinbox values")
     
@@ -654,18 +830,22 @@ class FusionControlsWidget(QWidget):
             scale_x: Scaling factor in X direction
             scale_y: Scaling factor in Y direction
         """
-        self.scaling_factors_label.setText(f"Scaling: X={scale_x:.2f}, Y={scale_y:.2f}")
+        self.scaling_factors_label.setText(f"2D Calculated Scaling: X={scale_x:.2f}, Y={scale_y:.2f}")
     
     def get_translation_offset(self) -> Tuple[float, float]:
         """
         Get current translation offset from spinboxes.
         
         Returns:
-            Tuple of (x_offset, y_offset) in pixels
+            Tuple of (x_offset, y_offset) in pixels (internal representation)
         """
-        x_offset = float(self.x_offset_spinbox.value())
-        y_offset = float(self.y_offset_spinbox.value())
-        return (x_offset, y_offset)
+        display_x = float(self.x_offset_spinbox.value())
+        display_y = float(self.y_offset_spinbox.value())
+
+        if self._offset_unit == "mm" and self._can_use_mm:
+            return self._mm_to_pixels(display_x, display_y)
+
+        return (display_x, display_y)
     
     def has_user_modified_offset(self) -> bool:
         """Return True if user manually changed offset spinboxes."""
@@ -674,6 +854,114 @@ class FusionControlsWidget(QWidget):
     def reset_user_modified_offset(self) -> None:
         """Clear user-modified flag so calculated offsets can overwrite spinboxes."""
         self._user_modified_offset = False
+
+    # --- Offset spacing/unit helpers -------------------------------------------------
+
+    def set_pixel_spacing(self, row_spacing_mm, col_spacing_mm, source: str | None) -> None:
+        """
+        Set pixel spacing information used for mm/px conversions.
+
+        Args:
+            row_spacing_mm: Row spacing (Y direction) in mm or None
+            col_spacing_mm: Column spacing (X direction) in mm or None
+            source: String describing spacing source (e.g. "pixel_spacing",
+                    "fov_rows", "reconDiameter_cols"), or None
+        """
+        self._row_spacing_mm = row_spacing_mm
+        self._col_spacing_mm = col_spacing_mm
+        self._spacing_source = source
+        self._can_use_mm = (
+            self._row_spacing_mm is not None and self._col_spacing_mm is not None
+        )
+
+        # Enable/disable unit combo based on whether we can reliably convert to mm.
+        # Also check if 3D mode is active (if so, keep it disabled)
+        if hasattr(self, "offset_unit_combo"):
+            # Only enable if mm is available AND 3D mode is not active
+            self.offset_unit_combo.setEnabled(self._can_use_mm and not self._use_3d_mode)
+
+            # If mm is no longer available, force display back to pixels.
+            if not self._can_use_mm and self._offset_unit == "mm":
+                self._offset_unit = "px"
+                self.offset_unit_combo.setCurrentText("px")
+                self._update_offset_spinboxes_from_pixels()
+
+        # Update inline spacing/conversion description beneath Spatial Alignment.
+        # Only update if not in 3D mode (3D mode message is set separately)
+        if hasattr(self, "spacing_info_label") and not self._use_3d_mode:
+            if self._can_use_mm and self._row_spacing_mm is not None and self._col_spacing_mm is not None:
+                # Brief but explicit about what is being used.
+                source_text = source or "unknown spacing source"
+                self.spacing_info_label.setText(
+                    f"Offset units: mm (row={self._row_spacing_mm:.3f} mm, "
+                    f"col={self._col_spacing_mm:.3f} mm; source: {source_text})."
+                )
+            else:
+                self.spacing_info_label.setText(
+                    "Offset units: pixels only (no spacing available for mm)."
+                )
+
+    def _pixels_to_mm(self, x_px: float, y_px: float) -> Tuple[float, float]:
+        """
+        Convert pixel offsets (internal representation) to mm for display.
+        """
+        if not self._can_use_mm:
+            return (x_px, y_px)
+
+        col_spacing = self._col_spacing_mm or 1.0
+        row_spacing = self._row_spacing_mm or 1.0
+        x_mm = x_px * col_spacing
+        y_mm = y_px * row_spacing
+        return (x_mm, y_mm)
+
+    def _mm_to_pixels(self, x_mm: float, y_mm: float) -> Tuple[float, float]:
+        """
+        Convert mm offsets (from UI) back to pixels (internal representation).
+        """
+        if not self._can_use_mm:
+            return (x_mm, y_mm)
+
+        col_spacing = self._col_spacing_mm or 1.0
+        row_spacing = self._row_spacing_mm or 1.0
+        x_px = x_mm / col_spacing
+        y_px = y_mm / row_spacing
+        return (x_px, y_px)
+
+    def _on_offset_unit_changed(self, unit: str) -> None:
+        """
+        Handle change of offset display unit between mm and pixels.
+        """
+        if unit not in ("mm", "px"):
+            return
+
+        self._offset_unit = unit
+
+        # Re-interpret current internal pixel offsets into the newly selected unit.
+        self._update_offset_spinboxes_from_pixels()
+
+    def _update_offset_spinboxes_from_pixels(self) -> None:
+        """
+        Update X/Y spinboxes from internal pixel offsets using current unit.
+        """
+        if not hasattr(self, "x_offset_spinbox") or not hasattr(self, "y_offset_spinbox"):
+            return
+
+        self._updating = True
+        try:
+            x_px = float(self._calculated_offset_x)
+            y_px = float(self._calculated_offset_y)
+
+            if self._offset_unit == "mm" and self._can_use_mm:
+                x_mm, y_mm = self._pixels_to_mm(x_px, y_px)
+                # One decimal place for mm display
+                self.x_offset_spinbox.setValue(round(x_mm * 10) / 10.0)
+                self.y_offset_spinbox.setValue(round(y_mm * 10) / 10.0)
+            else:
+                # Display in integer pixels
+                self.x_offset_spinbox.setValue(int(round(x_px)))
+                self.y_offset_spinbox.setValue(int(round(y_px)))
+        finally:
+            self._updating = False
     
     def get_resampling_mode(self) -> str:
         """Get current resampling mode ('fast', 'high_accuracy')."""
@@ -719,7 +1007,7 @@ class FusionControlsWidget(QWidget):
     
     def set_resampling_status(self, mode_display: str, reason: str, show_warning: bool = False, warning_text: str = "") -> None:
         """
-        Update resampling status display.
+        Update resampling warning display.
         
         Args:
             mode_display: Mode display string (e.g., "Fast Mode (2D)" or "High Accuracy (3D)")
@@ -727,15 +1015,51 @@ class FusionControlsWidget(QWidget):
             show_warning: Whether to show warning label
             warning_text: Warning text to display
         """
-        status_text = f"Using: {mode_display}"
-        if reason:
-            status_text += f" - {reason}"
-        self.resampling_status_label.setText(status_text)
-        
-        # Show/hide warning
+        # Show/hide warning only; summary text is handled by the main status log.
         if show_warning and warning_text:
             self.resampling_warning_label.setText(warning_text)
             self.resampling_warning_label.setVisible(True)
         else:
+            self.resampling_warning_label.clear()
             self.resampling_warning_label.setVisible(False)
+    
+    def set_offset_status_text(self, use_3d_mode: bool) -> None:
+        """
+        Update the offset status text at the bottom of the fusion controls.
+        
+        Args:
+            use_3d_mode: True if 3D resampling mode is active, False if 2D mode
+        """
+        if not hasattr(self, "spacing_info_label"):
+            return
+        
+        # Track 3D mode state
+        self._use_3d_mode = use_3d_mode
+        
+        # Update dropdown state based on 3D mode (must happen after _use_3d_mode is set)
+        if hasattr(self, "offset_unit_combo"):
+            if use_3d_mode:
+                # Explicitly disable in 3D mode
+                self.offset_unit_combo.setEnabled(False)
+            else:
+                # Enable based on mm availability in 2D mode
+                self.offset_unit_combo.setEnabled(self._can_use_mm)
+        
+        if use_3d_mode:
+            # 3D mode: alignment is automatic via DICOM metadata and SimpleITK resampling
+            self.spacing_info_label.setText(
+                "3D Fusion enabled - offsets and scaling determined by the SimpleITK resampling algorithm from ImagePositionPatient and pixel spacing metadata"
+            )
+        else:
+            # 2D mode: show normal offset unit information
+            if self._can_use_mm and self._row_spacing_mm is not None and self._col_spacing_mm is not None:
+                source_text = self._spacing_source or "unknown spacing source"
+                self.spacing_info_label.setText(
+                    f"Offset units: mm (row={self._row_spacing_mm:.3f} mm, "
+                    f"col={self._col_spacing_mm:.3f} mm; source: {source_text})."
+                )
+            else:
+                self.spacing_info_label.setText(
+                    "Offset units: pixels only (no spacing available for mm)."
+                )
 

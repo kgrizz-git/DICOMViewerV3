@@ -318,62 +318,66 @@ class FusionTechnicalDocDialog(QDialog):
             </ol>
             
             <h3>Error Sources (2D Mode)</h3>
+            <p>There are two broad classes of error sources in 2D fusion: (1) <strong>algorithm‑intrinsic</strong> errors from interpolation, resampling, and rounding even when DICOM metadata is correct, and (2) <strong>metadata/input errors</strong> when tags like <code>SliceLocation</code>, <code>ImagePositionPatient</code>, or <code>ImageOrientationPatient</code> are wrong or missing.</p>
             <table>
                 <tr>
                     <th>Error Source</th>
-                    <th>Error Magnitude</th>
-                    <th>Impact</th>
+                    <th>Error Magnitude (pixels/voxels and mm)</th>
+                    <th>Impact / Origin</th>
                 </tr>
                 <tr>
                     <td>Slice Location Extraction</td>
-                    <td>±0.01 mm (tolerance)</td>
-                    <td>Low - may select wrong slice if location is inaccurate</td>
+                    <td>Unbounded (can be many slices/voxels off)</td>
+                    <td>Metadata: wrong/missing <code>SliceLocation</code>/<code>ImagePositionPatient</code> can cause the wrong overlay slice to be matched to the base slice, regardless of algorithm accuracy</td>
                 </tr>
                 <tr>
                     <td>2D Interpolation</td>
-                    <td>±0.5-1.5 mm (depends on slice spacing)</td>
-                    <td>Medium - minor blurring in Z-direction</td>
+                    <td>≈±0.5 overlay slices (±0.5 voxels in Z); ≈±0.5 mm at 1 mm slice spacing, ≈±1.5 mm at 3 mm slice spacing</td>
+                    <td>Algorithmic: minor through‑plane blurring when interpolating between slices; in‑plane position remains aligned</td>
                 </tr>
                 <tr>
                     <td>Pixel Spacing Scaling</td>
-                    <td>±0.5 pixels (sub-pixel interpolation)</td>
-                    <td>Low-Medium - slight blurring, especially at edges</td>
+                    <td>≈±0.5 pixels in x/y; ≈±0.5 mm at 1 mm pixels, ≈±0.25 mm at 0.5 mm pixels</td>
+                    <td>Algorithmic: slight blurring/softening at edges from 2D resampling; geometry stays on the base pixel grid</td>
                 </tr>
                 <tr>
                     <td>Translation Offset</td>
-                    <td>±0.5 pixels (rounding to integer)</td>
-                    <td>Low - sub-pixel misalignment</td>
+                    <td>±0.5 pixels in x/y (rounding); ≈±0.5 mm at 1 mm pixels, ≈±0.25 mm at 0.5 mm pixels</td>
+                    <td>Algorithmic: sub‑pixel misalignment from rounding mm offsets to integer pixel indices</td>
                 </tr>
                 <tr>
                     <td>Orientation Mismatch</td>
-                    <td>Can be large (several pixels to centimeters)</td>
-                    <td>High - severe misalignment, fusion may be unusable</td>
+                    <td>Can be many pixels (or entire FOV) off; several mm to cm in physical space</td>
+                    <td>Metadata: different <code>ImageOrientationPatient</code> (e.g., axial vs sagittal) cannot be corrected by 2D scaling/translation alone; 3D resampling is required for accurate alignment</td>
                 </tr>
             </table>
             
             <h3>Accuracy Estimates (2D Mode)</h3>
+            <p>The ranges below assume that DICOM spatial metadata is correct and internally consistent. Under that assumption, only the algorithm‑intrinsic interpolation and rounding errors described above contribute to misalignment.</p>
             <ul>
-                <li><strong>Best Case</strong> (same orientation, same pixel spacing, exact slice match):
+                <li><strong>Best Case</strong> (same orientation, same pixel spacing, no interpolation needed):
                     <ul>
-                        <li>Spatial accuracy: ±0.5 pixels (±0.5 mm for 1 mm spacing)</li>
-                        <li>Interpolation error: 0 mm (exact match)</li>
-                        <li><strong>Total error: ±0.5-1.0 mm</strong></li>
+                        <li>Spatial accuracy (native): ≈±0.5 pixels in x/y from scaling and translation rounding, ≈0 voxels in Z.</li>
+                        <li>Physical equivalent: ≈±0.5 mm at 1 mm spacing, ≈±0.25 mm at 0.5 mm spacing.</li>
+                        <li><strong>Total algorithmic error:</strong> on the order of ±0.5–1.0 pixels (≈±0.5–1.0 mm at 1 mm spacing).</li>
                     </ul>
                 </li>
-                <li><strong>Typical Case</strong> (same orientation, different pixel spacing, interpolation needed):
+                <li><strong>Typical Case</strong> (same orientation, different pixel spacing, interpolation between reasonably spaced slices):
                     <ul>
-                        <li>Spatial accuracy: ±0.5-1.0 pixels</li>
-                        <li>Interpolation error: ±0.5-1.5 mm (depending on slice spacing)</li>
-                        <li><strong>Total error: ±1.0-2.5 mm</strong></li>
+                        <li>Spatial accuracy (native): ≈±0.5–1.0 pixels in x/y and up to ±0.5 overlay slices in Z.</li>
+                        <li>Physical equivalent: ≈±0.5–1.5 mm total, depending on slice spacing (e.g., ±1.5 mm at 3 mm slices).</li>
+                        <li><strong>Total algorithmic error:</strong> typically ±1.0–2.5 mm.</li>
                     </ul>
                 </li>
-                <li><strong>Worst Case</strong> (orientation mismatch, forced 2D mode):
+                <li><strong>Worst Case (algorithm‑only)</strong> (still assuming correct metadata, but with very thick/sparse slices where 2D is used instead of 3D):
                     <ul>
-                        <li>Spatial accuracy: Can be centimeters</li>
-                        <li><strong>Total error: Unpredictable, may be unusable</strong></li>
+                        <li>Spatial accuracy: several pixels of combined in‑ and through‑plane interpolation error.</li>
+                        <li>Physical equivalent: several millimetres, especially with thick slices.</li>
+                        <li><strong>Total algorithmic error:</strong> may be large enough that 3D resampling is strongly recommended.</li>
                     </ul>
                 </li>
             </ul>
+            <p><em>Metadata error scenarios</em> (e.g., wrong <code>SliceLocation</code> or <code>ImageOrientationPatient</code>) are not bounded by these ranges; in those cases, pixel‑level misalignment can be arbitrarily large, and the fusion result should be regarded as qualitatively wrong regardless of the algorithm&rsquo;s nominal accuracy.</p>
             
             <h2 id="3d-algorithm">3D Fusion Algorithm</h2>
             
@@ -412,74 +416,74 @@ class FusionTechnicalDocDialog(QDialog):
                 <li><strong>Normalization and Blending</strong>:
                     <ul>
                         <li>Same as 2D mode (normalize, colormap, threshold, alpha blend)</li>
-                        <li>Skip 2D resize and translation (already handled by 3D resampling)</li>
+                        <li>Skip 2D resize and translation (already handled by 3D interpolation/resampling on the full volume)</li>
                     </ul>
                 </li>
             </ol>
             
             <h3>Error Sources (3D Mode)</h3>
-            <p>Even with 3D resampling, several factors can introduce alignment and interpolation errors. The table below summarizes where those errors come from and how large they typically are. One particularly important assumption is that both series share the same <code>FrameOfReferenceUID</code>; if this is not true, the resampling will still produce an image, but the spatial relationship between base and overlay can be seriously wrong.</p>
+            <p>As with 2D mode, 3D fusion errors come from both <strong>algorithm‑intrinsic</strong> effects (e.g., interpolation) and <strong>metadata/input</strong> problems (e.g., incorrect Positions or FrameOfReferenceUIDs). The table below summarizes typical magnitudes for each category.</p>
             <table>
                 <tr>
                     <th>Error Source</th>
-                    <th>Error Magnitude</th>
-                    <th>Impact</th>
-                </tr>
-                <tr>
-                    <td>Slice Location Sorting</td>
-                    <td>Datasets without valid location filtered out</td>
-                    <td>Missing slices in volume, potential gaps</td>
-                </tr>
-                <tr>
-                    <td>Slice Spacing Calculation</td>
-                    <td>±0.1-0.5 mm (depends on IOP accuracy)</td>
-                    <td>Low-Medium - affects volume reconstruction</td>
-                </tr>
-                <tr>
-                    <td>Direction Matrix Construction</td>
-                    <td>Typically < 0.001 (rounding errors)</td>
-                    <td>Low - minor orientation errors</td>
+                    <th>Error Magnitude (voxels and mm)</th>
+                    <th>Impact / Origin</th>
                 </tr>
                 <tr>
                     <td>3D Resampling Interpolation (Linear)</td>
-                    <td>±0.87 mm (sub-voxel accuracy)</td>
-                    <td>Low-Medium - interpolation artifacts</td>
+                    <td>≈±0.5 voxels per axis; ≈±0.87 voxels in 3D magnitude (≈±0.5–0.9 mm at 1 mm voxels)</td>
+                    <td>Algorithmic: sub‑voxel smoothing/blurring when mapping overlay into the base grid</td>
                 </tr>
                 <tr>
                     <td>3D Resampling Interpolation (Cubic/B-spline)</td>
-                    <td>±0.5-0.7 mm</td>
-                    <td>Low - better accuracy than linear</td>
+                    <td>≈±0.3–0.4 voxels per axis; ≈±0.5–0.7 voxels total (≈±0.5–0.7 mm at 1 mm voxels)</td>
+                    <td>Algorithmic: higher‑order interpolation with reduced artifacts and smaller voxel‑scale error</td>
+                </tr>
+                <tr>
+                    <td>Slice Location Sorting</td>
+                    <td>Unbounded; slices without valid locations may be dropped, mis‑ordered, or unevenly spaced</td>
+                    <td>Metadata: missing/incorrect <code>SliceLocation</code>/<code>ImagePositionPatient</code> can distort or truncate the 3D volume</td>
+                </tr>
+                <tr>
+                    <td>Slice Spacing Calculation</td>
+                    <td>Typically ±0.1–0.5 mm with good metadata; can be overestimated by 10–30% or more with oblique slices and poor metadata</td>
+                    <td>Metadata: errors in position/orientation or reliance on simple 3D distances change apparent slice spacing</td>
+                </tr>
+                <tr>
+                    <td>Direction Matrix Construction</td>
+                    <td>Orientation errors usually &lt;0.1° for well‑formed DICOM (<0.001 differences in direction cosines)</td>
+                    <td>Metadata: minor rounding/non‑orthogonality in <code>ImageOrientationPatient</code>; geometric impact is typically negligible</td>
                 </tr>
                 <tr>
                     <td>Frame of Reference Assumption</td>
-                    <td>Assumes same Frame of Reference UID for base and overlay series</td>
-                    <td>High - if the FrameOfReferenceUIDs differ, the identity transform is mathematically wrong, and the fused images can be misaligned by several millimeters to centimeters; the fusion status area shows a warning when the FrameOfReferenceUIDs do not match, and fusion is still allowed but should be treated as potentially inaccurate</td>
+                    <td>Can be many voxels off in x/y/z; several millimetres to centimetres in physical space</td>
+                    <td>Metadata: if <code>FrameOfReferenceUID</code> differs, the identity transform is wrong and the fusion can be grossly misregistered; the status label warns when UIDs differ, fusion remains allowed but should be treated as potentially inaccurate</td>
                 </tr>
             </table>
             
             <h3>Accuracy Estimates (3D Mode)</h3>
+            <p>These ranges assume that all spatial DICOM metadata (FrameOfReferenceUID, ImageOrientationPatient, ImagePositionPatient, PixelSpacing, SliceThickness) is correct and consistent. Under that assumption, 3D interpolation and numerical effects dominate the residual geometric error.</p>
             <ul>
                 <li><strong>Best Case</strong> (accurate spatial metadata, linear interpolation, same Frame of Reference):
                     <ul>
-                        <li>Spatial accuracy: ±0.5-0.87 mm (sub-voxel interpolation)</li>
-                        <li>Slice spacing error: ±0.1 mm</li>
-                        <li><strong>Total error: ±0.6-1.0 mm</strong></li>
+                        <li>Spatial accuracy (native): sub‑voxel in all three dimensions, typically ≈±0.5–0.87 voxels total.</li>
+                        <li>Physical equivalent (1 mm isotropic voxels): ≈±0.6–1.0 mm total positional error.</li>
                     </ul>
                 </li>
                 <li><strong>Typical Case</strong> (good spatial metadata, linear interpolation):
                     <ul>
-                        <li>Spatial accuracy: ±0.87 mm</li>
-                        <li>Slice spacing error: ±0.2-0.5 mm</li>
-                        <li><strong>Total error: ±1.0-1.5 mm</strong></li>
+                        <li>Spatial accuracy: ≈±0.87 voxels from interpolation plus small spacing/orientation uncertainties.</li>
+                        <li>Physical equivalent: ≈±1.0–1.5 mm for most CT/PET volumes.</li>
                     </ul>
                 </li>
-                <li><strong>Worst Case</strong> (inaccurate metadata, oblique slices, different Frame of Reference):
+                <li><strong>Worst Case (algorithm‑only)</strong> (still assuming correct metadata, but aggressive resampling between very different grids/orientations):
                     <ul>
-                        <li>Spatial accuracy: Can be several millimeters to centimeters</li>
-                        <li><strong>Total error: Unpredictable, may require manual adjustment</strong></li>
+                        <li>Spatial accuracy: a few voxels of total 3D error in extreme edge cases.</li>
+                        <li>Physical equivalent: several millimetres, particularly with very thick slices.</li>
                     </ul>
                 </li>
             </ul>
+            <p><em>Metadata error scenarios</em> (e.g., mismatched FrameOfReferenceUIDs, mis‑encoded positions or spacings) are not bounded by these values. In those cases, voxel‑level misalignment can be arbitrarily large and the fused images should be interpreted with extreme caution unless the metadata has been corrected or explicit registration has been applied.</p>
             
             <h2 id="spatial-alignment">Spatial Alignment</h2>
             
@@ -521,60 +525,77 @@ class FusionTechnicalDocDialog(QDialog):
             <h2 id="error-analysis">Error Sources and Accuracy Analysis</h2>
             
             <h3>Summary of Error Sources</h3>
+            <p>The tables below summarize key error sources across 2D and 3D fusion, grouped into algorithm‑intrinsic effects and DICOM metadata/input‑driven effects.</p>
+            <h4>Algorithm‑intrinsic error sources (with correct metadata)</h4>
             <table>
                 <tr>
                     <th>Error Source</th>
-                    <th>2D Mode Error</th>
-                    <th>3D Mode Error</th>
-                    <th>Impact</th>
-                </tr>
-                <tr>
-                    <td>Slice location extraction</td>
-                    <td>±0.01 mm</td>
-                    <td>±0.01 mm</td>
-                    <td>Low</td>
+                    <th>2D Mode Error (pixels/voxels &amp; mm)</th>
+                    <th>3D Mode Error (voxels &amp; mm)</th>
+                    <th>Notes</th>
                 </tr>
                 <tr>
                     <td>Slice interpolation</td>
-                    <td>±0.5-1.5 mm</td>
-                    <td>N/A (handled by 3D)</td>
-                    <td>Medium</td>
+                    <td>≈±0.5 overlay slices (±0.5 voxels in Z); ≈±0.5 mm at 1 mm spacing, ≈±1.5 mm at 3 mm spacing</td>
+                    <td>N/A (effect is handled by 3D interpolation/resampling instead of explicit 2D per‑slice interpolation)</td>
+                    <td>Through‑plane interpolation when the base slice lies between overlay slices</td>
                 </tr>
                 <tr>
                     <td>Pixel spacing scaling</td>
-                    <td>±0.5 pixels</td>
-                    <td>N/A (handled by 3D)</td>
-                    <td>Low-Medium</td>
+                    <td>≈±0.5 pixels in x/y; ≈±0.5 mm at 1 mm pixels, ≈±0.25 mm at 0.5 mm pixels</td>
+                    <td>N/A (3D resampling handles in‑plane scaling)</td>
+                    <td>2D resize of overlay to match base field of view; slight blurring at edges</td>
                 </tr>
                 <tr>
-                    <td>Translation offset</td>
-                    <td>±0.5 pixels</td>
-                    <td>N/A (handled by 3D)</td>
-                    <td>Low</td>
-                </tr>
-                <tr>
-                    <td>Orientation mismatch</td>
-                    <td>Can be large</td>
-                    <td>±0.87 mm (interpolation)</td>
-                    <td>High (2D), Low (3D)</td>
-                </tr>
-                <tr>
-                    <td>Slice spacing calculation</td>
-                    <td>N/A</td>
-                    <td>±0.1-0.5 mm</td>
-                    <td>Low-Medium</td>
+                    <td>Translation offset (rounding)</td>
+                    <td>±0.5 pixels in x/y; ≈±0.5 mm at 1 mm pixels, ≈±0.25 mm at 0.5 mm pixels</td>
+                    <td>N/A (3D translation handled in world coordinates)</td>
+                    <td>Rounding mm offsets to integer pixel indices in 2D mode</td>
                 </tr>
                 <tr>
                     <td>3D resampling interpolation</td>
                     <td>N/A</td>
-                    <td>±0.5-0.87 mm</td>
-                    <td>Low-Medium</td>
+                    <td>≈±0.5–0.87 voxels (linear); ≈±0.3–0.7 voxels (cubic/B‑spline); ≈±0.5–0.9 mm at 1 mm voxels</td>
+                    <td>Unavoidable sub‑voxel error from mapping overlay into the base volume grid</td>
+                </tr>
+            </table>
+            <h4>Metadata / input‑driven error sources</h4>
+            <table>
+                <tr>
+                    <th>Error Source</th>
+                    <th>2D Mode Error (pixels/voxels &amp; mm)</th>
+                    <th>3D Mode Error (voxels &amp; mm)</th>
+                    <th>Notes</th>
+                </tr>
+                <tr>
+                    <td>Slice location extraction</td>
+                    <td>Unbounded; can mis‑match slices by many indices (tens of voxels) if tags are wrong</td>
+                    <td>Same: mis‑ordering/dropping slices can distort the volume</td>
+                    <td>Incorrect/missing <code>SliceLocation</code>/<code>ImagePositionPatient</code> affects which slices are fused, not the interpolation math</td>
+                </tr>
+                <tr>
+                    <td>Orientation mismatch</td>
+                    <td>Can be many pixels (or entire FOV) off; several mm–cm in physical space</td>
+                    <td>Reduced to sub‑voxel interpolation error if metadata is correct and 3D resampling is used</td>
+                    <td>Different <code>ImageOrientationPatient</code>; 2D mode cannot fully correct this, 3D mode relies on accurate direction cosines</td>
+                </tr>
+                <tr>
+                    <td>Slice spacing calculation</td>
+                    <td>N/A</td>
+                    <td>Typically ±0.1–0.5 mm with good metadata; larger % errors if derived from oblique positions</td>
+                    <td>Depends on positions and thickness; algorithm follows reported geometry</td>
                 </tr>
                 <tr>
                     <td>Frame of Reference mismatch</td>
-                    <td>Can be large</td>
-                    <td>Can be large</td>
-                    <td>High</td>
+                    <td>Can be very large (entire organs shifted)</td>
+                    <td>Same: misregistration can be many voxels; several mm–cm physically</td>
+                    <td>Wrong/different <code>FrameOfReferenceUID</code>; identity transform is wrong, and fusion is only qualitatively valid unless separate registration is applied</td>
+                </tr>
+                <tr>
+                    <td>Rescale parameter inconsistency</td>
+                    <td>Low (intensity only)</td>
+                    <td>Low (intensity only)</td>
+                    <td>Per‑slice differences in rescale slope/intercept cause value, not geometric, errors if a single global pair is used</td>
                 </tr>
             </table>
             

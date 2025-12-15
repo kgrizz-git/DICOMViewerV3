@@ -175,11 +175,11 @@ class SeriesThumbnail(QFrame):
         self.update()
     
     def mousePressEvent(self, event: QMouseEvent) -> None:
-        """Handle mouse click to start drag operation."""
+        """Handle mouse press and start possible drag operation."""
         if event.button() == Qt.MouseButton.LeftButton:
-            # Store press position for drag detection
+            # Store press position for drag detection and reset drag flag
             self.drag_start_position = event.pos()
-            # Single-click loading disabled - series can be loaded via context menu, drag-and-drop, or arrow keys
+            self._drag_started = False
         super().mousePressEvent(event)
     
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
@@ -194,6 +194,9 @@ class SeriesThumbnail(QFrame):
         if (event.pos() - self.drag_start_position).manhattanLength() < 10:
             return  # Not enough movement
         
+        # We are starting a drag, so later mouseRelease should not count as a click.
+        self._drag_started = True
+
         # Create drag object
         drag = QDrag(self)
         mime_data = QMimeData()
@@ -214,6 +217,13 @@ class SeriesThumbnail(QFrame):
         
         # Execute drag
         drag.exec(Qt.DropAction.CopyAction)
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        """Emit clicked only if this was not part of a drag."""
+        if event.button() == Qt.MouseButton.LeftButton:
+            if not getattr(self, "_drag_started", False):
+                self.clicked.emit(self.series_uid)
+        super().mouseReleaseEvent(event)
     
     def _thumbnail_to_qimage(self, pil_image) -> QImage:
         """Convert PIL Image to QImage for drag pixmap."""

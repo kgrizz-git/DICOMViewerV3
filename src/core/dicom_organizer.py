@@ -59,6 +59,9 @@ class DICOMOrganizer:
             Dictionary structure: {StudyInstanceUID: {composite_series_key: [sorted_datasets]}}
             where composite_series_key is "SeriesInstanceUID_SeriesNumber" or "SeriesInstanceUID"
         """
+        import time
+        organize_start = time.time()
+        
         self.studies = {}
         self.file_paths = {}
         self.presentation_states = {}
@@ -78,6 +81,10 @@ class DICOMOrganizer:
         sop_class_counts = {}
         ps_count = 0
         ko_count = 0
+        
+        grouping_start = time.time()
+        multiframe_count = 0
+        total_frames_created = 0
         
         for idx, dataset in enumerate(datasets):
             # Check SOP Class UID to identify file type
@@ -151,6 +158,8 @@ class DICOMOrganizer:
             if is_multiframe(dataset):
                 # Split multi-frame file into individual frames
                 num_frames = get_frame_count(dataset)
+                multiframe_count += 1
+                total_frames_created += num_frames
                 # print(f"[ORGANIZE] Splitting multi-frame file into {num_frames} frames...")
                 
                 for frame_index in range(num_frames):
@@ -168,6 +177,9 @@ class DICOMOrganizer:
             else:
                 # Single-frame file - add as-is using composite key
                 study_dict[study_uid][composite_series_key].append((dataset, file_path))
+        
+        grouping_time = time.time() - grouping_start
+        sorting_start = time.time()
         
         # Sort slices within each series and organize
         for study_uid, series_dict in study_dict.items():
@@ -213,6 +225,25 @@ class DICOMOrganizer:
                         else:
                             instance_num = self._get_tag_value(ds, "InstanceNumber", idx)
                         self.file_paths[(study_uid, composite_series_key, instance_num)] = path
+        
+        sorting_time = time.time() - sorting_start
+        total_time = time.time() - organize_start
+        
+        # Debug summary
+        total_series = sum(len(series_dict) for series_dict in self.studies.values())
+        total_slices = sum(len(slices) for study_dict in self.studies.values() for slices in study_dict.values())
+        
+        print(f"[ORGANIZE DEBUG] ===== Organize Summary =====")
+        print(f"[ORGANIZE DEBUG] Input datasets: {len(datasets)}")
+        print(f"[ORGANIZE DEBUG] Multi-frame files: {multiframe_count}")
+        print(f"[ORGANIZE DEBUG] Total frames created: {total_frames_created}")
+        print(f"[ORGANIZE DEBUG] Output studies: {len(self.studies)}")
+        print(f"[ORGANIZE DEBUG] Output series: {total_series}")
+        print(f"[ORGANIZE DEBUG] Total slices: {total_slices}")
+        print(f"[ORGANIZE DEBUG] Grouping time: {grouping_time:.2f}s")
+        print(f"[ORGANIZE DEBUG] Sorting time: {sorting_time:.2f}s")
+        print(f"[ORGANIZE DEBUG] Total time: {total_time:.2f}s")
+        print(f"[ORGANIZE DEBUG] ===========================")
         
         # Print summary of detected annotation files
         # print(f"[ANNOTATIONS] Organization complete: {ps_count} Presentation State(s), {ko_count} Key Object(s)")

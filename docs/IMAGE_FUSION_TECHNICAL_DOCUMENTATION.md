@@ -148,59 +148,86 @@ In 2D mode, the fusion system operates on one slice at a time. For each anatomic
 
 ### Error Sources (2D Mode)
 
-1. **Slice Location Extraction**:
-   - **Source**: Missing or inaccurate SliceLocation tag
-   - **Fallback**: Uses ImagePositionPatient[2] (Z coordinate)
-   - **Error**: ±0.01 mm (exact match tolerance)
-   - **Impact**: May select wrong slice if location is inaccurate
+There are two broad classes of error sources in 2D fusion:
 
-2. **2D Interpolation**:
-   - **Source**: Base slice location between two overlay slices
-   - **Method**: Linear interpolation along Z-axis
-   - **Error**: Depends on slice spacing
-     - For 1 mm slice spacing: interpolation error ≈ 0.5 mm (half slice spacing)
-     - For 3 mm slice spacing: interpolation error ≈ 1.5 mm
-   - **Impact**: Minor blurring in Z-direction, typically < 1 pixel equivalent
+- **Algorithm‑intrinsic errors**: limits of interpolation, rounding and resampling, even when the DICOM metadata is perfectly correct.
+- **Metadata / input errors**: problems caused by missing or incorrect DICOM tags (e.g., bad `SliceLocation`, `ImagePositionPatient`, or `ImageOrientationPatient`). In these cases the algorithm behaves “correctly” given its inputs, but the inputs themselves are wrong.
 
-3. **Pixel Spacing Scaling**:
-   - **Source**: Different pixel spacings between base and overlay
-   - **Method**: Bilinear resampling
-   - **Error**: 
-     - Resampling introduces sub-pixel interpolation errors
-     - Typical error: ±0.5 pixels (half pixel size)
-     - For 1 mm pixel spacing: ±0.5 mm
-     - For 0.5 mm pixel spacing: ±0.25 mm
-   - **Impact**: Slight blurring, especially at edges
+#### Algorithm‑intrinsic error sources (assuming correct DICOM metadata)
 
-4. **Translation Offset**:
-   - **Source**: ImagePositionPatient accuracy and pixel spacing conversion
+1. **2D Interpolation**:
+   - **Source (algorithmic)**: Base slice location lies between two overlay slices, so the overlay must be interpolated between them along the slice (through‑plane) direction.
+   - **Method**: Linear interpolation along the Z‑axis between the two bracketing slices.
+   - **Error (native units)**: Typically up to about **±0.5 overlay slices** (±0.5 voxels along Z) in the worst case, because the true signal may not be exactly linear between slices.
+   - **Derived physical error**:
+     - For 1.0 mm slice spacing: ±0.5 slices ≈ **±0.5 mm**.
+     - For 3.0 mm slice spacing: ±0.5 slices ≈ **±1.5 mm**.
+   - **Impact**: Minor blurring in the through‑plane direction; in‑plane (x/y) placement of structures remains aligned to the base grid.
+
+2. **Pixel Spacing Scaling**:
+   - **Source (algorithmic)**: Different in‑plane pixel spacings between base and overlay require scaling the overlay in x/y to match the base’s physical FOV.
+   - **Method**: 2D resize of the overlay image using bilinear interpolation.
+   - **Error (native units)**:
+     - Resampling introduces sub‑pixel interpolation errors in x and y.
+     - Typical local error: about **±0.5 pixels** (half of one output pixel) at edges or high‑contrast boundaries.
+   - **Derived physical error**:
+     - For 1.0 mm pixel spacing: ±0.5 pixels ≈ **±0.5 mm**.
+     - For 0.5 mm pixel spacing: ±0.5 pixels ≈ **±0.25 mm**.
+   - **Impact**: Slight softening of edges and fine detail; geometric alignment to the base pixel grid is preserved.
+
+3. **Translation Offset Rounding**:
+   - **Source (algorithmic)**: Translation offsets are computed in mm from `ImagePositionPatient` and then converted to pixels; final array indices must be integers.
+   - **Method**: Offsets are rounded to the nearest pixel when placing the overlay on a base‑sized canvas.
+   - **Error (native units)**:
+     - Rounding to integer indices introduces up to **±0.5 pixels** of error in x and y.
+   - **Derived physical error**:
+     - For 1.0 mm pixel spacing: ±0.5 pixels ≈ **±0.5 mm**.
+     - For 0.5 mm pixel spacing: ±0.5 pixels ≈ **±0.25 mm**.
+   - **Impact**: Sub‑pixel misalignment; typically not visually obvious, but relevant if you are doing very precise measurements.
+
+#### Metadata / input‑driven error sources
+
+4. **Slice Location Extraction**:
+   - **Source (metadata)**: Missing or inaccurate `SliceLocation` or `ImagePositionPatient` tags for either series.
+   - **Behaviour**: The algorithm falls back from `SliceLocation` to `ImagePositionPatient[2]`, but if these tags are wrong or inconsistent, the base and overlay slices will be matched using incorrect physical positions.
+   - **Error**: There is no fixed bound in pixels or mm; errors can range from fraction‑of‑slice offsets up to many slices (tens or hundreds of voxels) if slice positions are mis‑encoded.
+   - **Impact**: The overlay slice chosen for fusion may not correspond to the same anatomical location as the base slice (e.g., fusing the wrong axial level), regardless of how accurate the interpolation algorithm is.
+
+5. **Orientation Mismatch** (2D path cannot handle fully):
+   - **Source (metadata)**: Different `ImageOrientationPatient` between base and overlay (e.g., axial vs sagittal, or rotated acquisitions).
+   - **Behaviour**: 2D mode assumes that in‑plane axes line up; if orientations differ, no amount of in‑plane scaling/translation will fully correct the mis‑registration.
    - **Error**:
-     - Rounding to integer pixels: ±0.5 pixels
-     - For 1 mm pixel spacing: ±0.5 mm
-     - For 0.5 mm pixel spacing: ±0.25 mm
-   - **Impact**: Sub-pixel misalignment
-
-5. **Orientation Mismatch** (2D cannot handle):
-   - **Source**: Different ImageOrientationPatient
-   - **Error**: Can be significant (several pixels to centimeters)
-   - **Impact**: Severe misalignment, fusion may be unusable
-   - **Mitigation**: System recommends 3D mode when orientation difference ≥ 0.1
+     - In‑plane offsets can be several pixels to tens of pixels, depending on the degree of rotation or tilt.
+     - In physical units this can correspond to **several millimetres up to centimetres**, especially in larger FOVs.
+   - **Impact**: Potentially severe misalignment (organs or lesions appearing in the wrong place) that cannot be fixed by the 2D algorithm alone.
+   - **Mitigation**: The system recommends 3D mode when orientation differences are detected (direction cosine difference ≥ 0.1), and you should treat any 2D fusion in such cases as qualitative at best.
 
 ### Accuracy Estimates (2D Mode)
 
-- **Best Case** (same orientation, same pixel spacing, exact slice match):
-  - Spatial accuracy: ±0.5 pixels (±0.5 mm for 1 mm spacing)
-  - Interpolation error: 0 mm (exact match)
-  - **Total error**: ±0.5-1.0 mm
+The estimates below assume that the DICOM spatial metadata (`PixelSpacing`, `ImagePositionPatient`, `ImageOrientationPatient`, etc.) is internally consistent and correctly describes how the pixels relate to the patient. Under that assumption, only the algorithm‑intrinsic errors described above contribute to misalignment.
 
-- **Typical Case** (same orientation, different pixel spacing, interpolation needed):
-  - Spatial accuracy: ±0.5-1.0 pixels
-  - Interpolation error: ±0.5-1.5 mm (depending on slice spacing)
-  - **Total error**: ±1.0-2.5 mm
+- **Best Case** (same orientation, same pixel spacing, exact slice match; interpolation not needed):
+  - Spatial accuracy (native): about **±0.5 pixels** in x/y from scaling and translation rounding, and ≈0 pixels through‑plane.
+  - Derived physical accuracy:
+    - At 1.0 mm spacing: ≈ **±0.5 mm** in‑plane.
+    - At 0.5 mm spacing: ≈ **±0.25 mm** in‑plane.
+  - **Total error** (algorithm‑only): on the order of **±0.5–1.0 pixels** (≈±0.5–1.0 mm for 1.0 mm spacing).
 
-- **Worst Case** (orientation mismatch, forced 2D mode):
-  - Spatial accuracy: Can be centimeters
-  - **Total error**: Unpredictable, may be unusable
+- **Typical Case** (same orientation, different pixel spacing, interpolation needed between reasonably spaced slices):
+  - Spatial accuracy (native):
+    - In‑plane: **±0.5–1.0 pixels** from scaling and rounding.
+    - Through‑plane: up to **±0.5 overlay slices** from 2D interpolation.
+  - Derived physical accuracy:
+    - At 1.0 mm spacing: ≈ **±0.5–1.5 mm** combined in‑ and through‑plane.
+    - At 3.0 mm slice spacing: through‑plane component can reach **±1.5 mm** (±0.5 slices).
+  - **Total error** (algorithm‑only): typically **±1.0–2.5 mm** depending on slice spacing and contrast structure.
+
+- **Worst Case (algorithm‑only)** (still assuming correct metadata, but using 2D mode where 3D would be better, e.g., very thick slices and sparse sampling):
+  - Spatial accuracy (native): several pixels of combined in‑plane and through‑plane interpolation error.
+  - Derived physical error: can reach multiple millimetres, especially with thick slices.
+  - **Total error** (algorithm‑only): may become large enough that 3D resampling is strongly recommended.
+
+> **Metadata error scenarios** (e.g., wrong `SliceLocation` or `ImageOrientationPatient`) are not bounded by the ranges above. In those cases, pixel‑level misalignments can be arbitrarily large (multiple slices or strong rotations), and the fusion result should be treated as qualitatively wrong regardless of the algorithm’s nominal accuracy.
 
 ---
 
@@ -241,75 +268,98 @@ In 2D mode, the fusion system operates on one slice at a time. For each anatomic
 
 5. **Normalization and Blending**:
    - Same as 2D mode (normalize, colormap, threshold, alpha blend)
-   - Skip 2D resize and translation (already handled by 3D resampling)
+   - Skip 2D resize and translation (already handled by 3D interpolation/resampling on the full volume)
 
 ### Error Sources (3D Mode)
 
-1. **Slice Location Sorting**:
-   - **Source**: Missing or inaccurate SliceLocation/ImagePositionPatient
-   - **Error**: Datasets without valid location are filtered out
-   - **Impact**: Missing slices in volume, potential gaps
+As with 2D mode, 3D fusion errors fall into **algorithm‑intrinsic** and **metadata / input‑driven** categories.
 
-2. **Slice Spacing Calculation**:
-   - **Source**: Inaccurate ImagePositionPatient or ImageOrientationPatient
-   - **Method**: Component along slice normal (most accurate)
+#### Algorithm‑intrinsic error sources (assuming correct DICOM metadata)
+
+1. **3D Resampling Interpolation**:
+   - **Source (algorithmic)**: Interpolating voxel values when mapping the overlay volume into the base volume’s grid.
+   - **Linear interpolation error (native units)**:
+     - Sub‑voxel accuracy: typically up to about **±0.5 voxels** in each dimension (x, y, z) near sharp edges.
+     - Combined 3D interpolation error magnitude: √(0.5² + 0.5² + 0.5²) ≈ **±0.87 voxels** in the worst case.
+   - **Derived physical error** (for isotropic 1.0 mm voxels):
+     - ±0.5 voxels per axis ≈ **±0.5 mm** per axis.
+     - Combined 3D magnitude ≈ **±0.87 mm**.
+   - **Higher‑order interpolation (cubic / B‑spline)**:
+     - Typical interpolation error: about **±0.3–0.4 voxels** per axis.
+     - Combined 3D magnitude ≈ **±0.5–0.7 voxels** (≈±0.5–0.7 mm for 1.0 mm spacing).
+   - **Nearest‑neighbor interpolation**:
+     - Can deviate by up to **±0.5 voxels** in each dimension (choosing the nearest existing sample).
+     - Similar voxel‑scale error magnitude to linear, but with blockier appearance.
+   - **Impact**: Slight blurring or stair‑step artifacts at boundaries; geometry remains correctly positioned on the base grid.
+
+2. **Rescale Parameter Consistency (when metadata is correct but non‑uniform)**:
+   - **Source (algorithmic/metadata interaction)**: If rescale slope/intercept vary across slices in a series, but the implementation applies a single set of parameters taken from the first slice.
+   - **Behaviour**: All resampled voxels are converted using one global `(slope, intercept)` pair.
+   - **Error**: Differences in per‑slice rescale parameters will appear as per‑slice intensity scaling errors, not geometric misalignment:
+     - Pixel intensities may be off by a factor proportional to the slope/intercept differences.
+   - **Impact**: Quantitative values in the overlay (e.g., SUV) may be slightly wrong from slice to slice, but spatial placement remains determined by the volume resampling grid.
+
+#### Metadata / input‑driven error sources
+
+3. **Slice Location Sorting**:
+   - **Source (metadata)**: Missing or inaccurate `SliceLocation` / `ImagePositionPatient` used to order slices into a volume.
+   - **Behaviour**: The resampler sorts slices by their reported locations; slices without valid locations may be dropped, and mis‑ordered slices will produce a volume with discontinuities or overlaps.
+   - **Error**: Not easily bounded in voxels or mm; errors can range from minor ordering noise up to gross mis‑ordering of slices or missing chunks of the volume.
+   - **Impact**: Distorted or incomplete 3D overlay volume, so fused slices may show incorrect anatomy for a given Z index, even if interpolation itself is mathematically correct.
+
+4. **Slice Spacing Calculation**:
+   - **Source (metadata)**: Inaccurate `ImagePositionPatient`, `ImageOrientationPatient`, or `SliceThickness`.
+   - **Method**: The ideal spacing is computed by projecting position differences onto the slice normal; fallbacks may use 3D Euclidean distance or `SliceThickness` alone.
    - **Error**:
-     - If using slice normal: ±0.1-0.5 mm (depends on IOP accuracy)
-     - If using 3D distance: Overestimates for oblique slices
-       - For 30° oblique: error ≈ distance × (1 - cos(30°)) ≈ 13% overestimate
-       - For 45° oblique: error ≈ distance × (1 - cos(45°)) ≈ 29% overestimate
-   - **Impact**: Incorrect slice spacing affects volume reconstruction
+     - With correct metadata, spacing error is typically **±0.1–0.5 mm**.
+     - With oblique slices and only 3D distance, spacing can be overestimated:
+       - For 30° oblique: spacing error ≈ **13%** of the true spacing.
+       - For 45° oblique: spacing error ≈ **29%** of the true spacing.
+   - **Impact**: Incorrect spacing distorts the Z‑axis scale of the volume; overlay voxels may appear too close together or too far apart in the through‑plane dimension.
 
-3. **Direction Matrix Construction**:
-   - **Source**: ImageOrientationPatient accuracy
-   - **Error**: 
-     - IOP cosines should be unit vectors (normalized)
-     - Rounding errors: typically < 0.001
-     - Non-orthogonal row/col vectors: system normalizes slice normal
-   - **Impact**: Minor orientation errors, typically < 0.1° for well-formed DICOM
+5. **Direction Matrix Construction**:
+   - **Source (metadata)**: `ImageOrientationPatient` encodes row/column direction cosines; small rounding or non‑orthogonality can occur.
+   - **Behaviour**: The resampler normalizes these vectors and computes a slice normal; tiny numerical differences change the direction matrix.
+   - **Error**:
+     - For well‑formed DICOM, rounding errors are usually < **0.001** in cosine components.
+     - This corresponds to orientation errors typically < **0.1°**.
+   - **Impact**: Very small rotations of the resampled volume relative to the true orientation; in practice this is negligible compared to voxel size.
 
-4. **3D Resampling Interpolation**:
-   - **Source**: Interpolation method and grid mismatch
-   - **Linear interpolation error**:
-     - Sub-voxel accuracy: ±0.5 voxels in each dimension
-     - For 1 mm spacing: ±0.5 mm per dimension
-     - 3D error: √(0.5² + 0.5² + 0.5²) ≈ ±0.87 mm
-   - **Nearest neighbor error**:
-     - Up to ±0.5 voxels per dimension
-     - **Total error**: ±0.87 mm (same as linear for worst case)
-   - **Cubic/B-spline error**:
-     - Better accuracy: ±0.3-0.4 voxels
-     - **Total error**: ±0.5-0.7 mm
+6. **Frame of Reference Assumption**:
+   - **Source (metadata)**: Assumes same `FrameOfReferenceUID` for base and overlay series.
+   - In DICOM, `FrameOfReferenceUID` defines a patient‑fixed 3D coordinate system. Two series that share the same UID (for example, CT and PET from a hybrid PET‑CT acquisition) are expected to be already registered in physical space.
+   - The 3D resampling code uses an identity (no‑movement) transform when it resamples the overlay volume into the base volume’s grid. This is only correct if both series really do share the same frame of reference and have consistent spatial metadata.
+   - **Error**: If the Frame of Reference differs, the identity transform is mathematically incorrect: the volumes are not actually in the same coordinate system, so origin, orientation, and voxel spacing no longer correspond. The resampling will still produce an image, but voxels will be mapped to the wrong anatomical locations.
+   - **Impact (native units)**: Misalignment can be many voxels in x, y, and z, depending on the underlying registration error between the frames.
+   - **Derived physical impact**: Misalignments often range from several millimetres up to centimetres (e.g., entire organs shifted), especially across different scanners or sessions.
+   - **Mitigation and warning behaviour**: The fusion coordinator checks the `FrameOfReferenceUID` from each series. If the UIDs do not match, the fusion status area shows a clear warning that the frames of reference differ. **Fusion is still allowed in this situation**, but the result should be treated as potentially inaccurate and not used for precise quantitative work without external registration and validation.
 
-5. **Frame of Reference Assumption**:
-   - **Source**: Assumes same Frame of Reference UID for base and overlay series.
-   - In DICOM, the `FrameOfReferenceUID` defines a patient‑fixed 3D coordinate system. Two series that share the same `FrameOfReferenceUID` (for example, the CT and PET components of a PET‑CT exam acquired on the same scanner and table position) are expected to be already registered in physical space.
-   - The 3D resampling code relies on this and uses an identity (no‑movement) transform when it resamples the overlay volume into the base volume’s grid. This is only correct if both series really do share the same frame of reference and have consistent spatial metadata.
-   - **Error**: If the Frame of Reference differs, the identity transform is mathematically incorrect: the two volumes are not actually in the same physical coordinate system, so origin, orientation, and voxel spacing no longer line up. The resampling will still run, but the resulting fused image may place functional uptake in the wrong anatomical location.
-   - **Impact**: Misalignment can be substantial—ranging from several millimeters to multiple centimeters—depending on how different the true frames of reference are (for example, different scanners, different sessions, or external registrations that are not captured in the DICOM metadata).
-   - **Mitigation and warning behaviour**: The fusion coordinator checks the `FrameOfReferenceUID` from each series. If the UIDs do not match, the fusion status area shows a clear warning that the frames of reference differ. **Fusion is still allowed in this situation** so you can visually inspect the result, but you should treat the alignment as potentially inaccurate and avoid using it for tasks that require precise registration unless you have performed and validated an external registration step.
-
-6. **Rescale Parameter Consistency**:
-   - **Source**: Rescale slope/intercept may vary across slices
-   - **Error**: System uses first slice's rescale parameters for entire volume
-   - **Impact**: If parameters vary, some slices may have incorrect pixel values
-   - **Typical**: Most DICOM series have consistent rescale parameters
+7. **Rescale Parameter Inconsistency (metadata)**:
+   - **Source (metadata)**: Rescale slope/intercept tags differ between slices within a series.
+   - **Behaviour**: If not handled per‑slice, using one set of parameters for the whole volume will mis‑scale some slices’ intensities.
+   - **Error**: Intensity (value) errors, not geometric misalignments; magnitude depends on how different the per‑slice parameters are.
+   - **Impact**: Can affect quantitative interpretation of overlay values (e.g., SUV), but geometry remains anchored by the resampling grid and frame of reference.
 
 ### Accuracy Estimates (3D Mode)
 
+These estimates assume that spatial DICOM metadata is correct and consistent (including `FrameOfReferenceUID`, `ImageOrientationPatient`, `ImagePositionPatient`, `PixelSpacing`, and `SliceThickness`). Under that assumption, only the interpolation and numerical effects described in the algorithm‑intrinsic section contribute to geometric error.
+
 - **Best Case** (accurate spatial metadata, linear interpolation, same Frame of Reference):
-  - Spatial accuracy: ±0.5-0.87 mm (sub-voxel interpolation)
-  - Slice spacing error: ±0.1 mm
-  - **Total error**: ±0.6-1.0 mm
+  - Spatial accuracy (native): sub‑voxel in all three dimensions, typically **±0.5–0.87 voxels** in combined 3D magnitude.
+  - Derived physical accuracy (for 1.0 mm isotropic voxels): about **±0.6–1.0 mm** total positional error.
+  - Slice spacing error (from normal‑based calculation): typically within **±0.1 mm** if metadata is clean.
 
 - **Typical Case** (good spatial metadata, linear interpolation):
-  - Spatial accuracy: ±0.87 mm
-  - Slice spacing error: ±0.2-0.5 mm
-  - **Total error**: ±1.0-1.5 mm
+  - Spatial accuracy (native): combined interpolation error around **±0.87 voxels**, plus small spacing and orientation uncertainties.
+  - Derived physical accuracy: **±1.0–1.5 mm** in most clinical CT/PET settings.
+  - Slice spacing error: **±0.2–0.5 mm** depending on acquisition geometry and obliquity.
 
-- **Worst Case** (inaccurate metadata, oblique slices, different Frame of Reference):
-  - Spatial accuracy: Can be several millimeters to centimeters
-  - **Total error**: Unpredictable, may require manual adjustment
+- **Worst Case (algorithm‑only)** (still assuming correct metadata, but with aggressive resampling between very dissimilar grids and orientations):
+  - Spatial accuracy (native): a few voxels of total 3D error in extreme cases.
+  - Derived physical error: several millimetres, especially with thick slices or large rotations.
+  - **Total error** (algorithm‑only): may become large enough that further refinement (e.g., higher‑order interpolation or dedicated registration) is desirable.
+
+> **Metadata error scenarios** (e.g., wrong `FrameOfReferenceUID`, incorrect slice ordering, or bad `PixelSpacing`) are not captured by the ranges above. In those cases, voxel‑level misalignments can be arbitrarily large, and the fused images should be regarded as qualitatively misleading unless the metadata is corrected or an explicit registration step is applied.
 
 ---
 
@@ -368,17 +418,26 @@ Users can manually adjust translation offset:
 
 ### Summary of Error Sources
 
-| Error Source | 2D Mode Error | 3D Mode Error | Impact |
-|-------------|---------------|---------------|---------|
-| Slice location extraction | ±0.01 mm | ±0.01 mm | Low |
-| Slice interpolation | ±0.5-1.5 mm | N/A (handled by 3D) | Medium |
-| Pixel spacing scaling | ±0.5 pixels | N/A (handled by 3D) | Low-Medium |
-| Translation offset | ±0.5 pixels | N/A (handled by 3D) | Low |
-| Orientation mismatch | Can be large | ±0.87 mm (interpolation) | High (2D), Low (3D) |
-| Slice spacing calculation | N/A | ±0.1-0.5 mm | Low-Medium |
-| 3D resampling interpolation | N/A | ±0.5-0.87 mm | Low-Medium |
-| Frame of Reference mismatch | Can be large | Can be large | High |
-| Rescale parameter inconsistency | Low | Low | Low |
+The tables below summarize the main error sources across 2D and 3D fusion, grouped by **algorithm‑intrinsic** vs **DICOM metadata/input‑driven** origins.
+
+#### Algorithm‑intrinsic error sources (with correct metadata)
+
+| Error Source | 2D Mode Error (pixels/voxels & mm) | 3D Mode Error (voxels & mm) | Notes |
+|-------------|--------------------------------------|------------------------------|-------|
+| Slice interpolation | Up to ≈±0.5 overlay slices (±0.5 voxels in Z); ≈±0.5 mm at 1 mm spacing, ≈±1.5 mm at 3 mm spacing | N/A (effect is handled by 3D interpolation/resampling instead of 2D per‑slice interpolation) | Through‑plane interpolation when the base slice lies between overlay slices |
+| Pixel spacing scaling | ≈±0.5 pixels in x/y; ≈±0.5 mm at 1 mm pixels, ≈±0.25 mm at 0.5 mm pixels | N/A (3D resampling handles in‑plane scaling in voxel space) | 2D resize of overlay to match base FOV; slight blurring at edges |
+| Translation offset (rounding) | ±0.5 pixels in x/y; ≈±0.5 mm at 1 mm pixels, ≈±0.25 mm at 0.5 mm pixels | N/A (3D translation handled in continuous world space by resampler) | Rounding mm offsets to integer pixel indices in 2D mode |
+| 3D resampling interpolation | N/A | ≈±0.5–0.87 voxels (linear); ≈±0.3–0.7 voxels (cubic/B‑spline); ≈±0.5–0.9 mm for 1 mm voxels | Unavoidable sub‑voxel error from mapping overlay into base grid |
+
+#### Metadata / input‑driven error sources
+
+| Error Source | 2D Mode Error (pixels/voxels & mm) | 3D Mode Error (voxels & mm) | Notes |
+|-------------|--------------------------------------|------------------------------|-------|
+| Slice location extraction | Unbounded; can mis‑match slices by many indices (tens of voxels) if tags are wrong | Same: can mis‑order or drop slices when building volume | Incorrect/missing `SliceLocation` / `ImagePositionPatient` affects which slices are fused, not the interpolation math |
+| Orientation mismatch | Can be many pixels (or entire FOV) off; several mm–cm in physical space | Reduced to interpolation‑scale error (≈sub‑voxel) if metadata is correct and 3D resampling is used | Different `ImageOrientationPatient`; 2D mode cannot fully correct this, 3D mode relies on accurate direction cosines |
+| Slice spacing calculation | N/A | Typically ±0.1–0.5 mm with good metadata; larger % errors (10–30%+) if spacing derived from oblique positions | Depends on `ImagePositionPatient`, `SliceThickness`, and orientation; algorithm follows reported geometry |
+| Frame of Reference mismatch | Can be very large (entire organs shifted) when fusing across frames | Same: misregistration can be many voxels; often several mm–cm | Wrong or differing `FrameOfReferenceUID`; algorithm assumes identity transform and cannot correct this automatically |
+| Rescale parameter inconsistency | Low (intensity only) | Low (intensity only) | Per‑slice differences in rescale slope/intercept cause value, not geometric, errors if a single global pair is used |
 
 ### Overall Accuracy Estimates
 

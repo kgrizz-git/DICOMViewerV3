@@ -24,6 +24,7 @@ import sys
 import os
 import time
 import inspect
+import warnings
 from pathlib import Path
 
 # Add src directory to path
@@ -1193,6 +1194,20 @@ class DICOMViewerApp(QObject):
                     # Fallback: just clear the items list if scene not available
                     overlay_manager.overlay_items.clear()
         
+        # Clear fusion caches for all subwindows (frees large 3D resampled volumes)
+        for idx in self.subwindow_managers:
+            managers = self.subwindow_managers[idx]
+            fusion_handler = managers.get('fusion_handler')
+            if fusion_handler:
+                # Clear all fusion caches
+                fusion_handler._slice_location_cache.clear()
+                fusion_handler._resampling_decision_cache = None
+                fusion_handler._resampling_decision_cache_key = None
+                fusion_handler.clear_alignment_cache()  # Clears all alignment cache entries
+                # Clear 3D resampling volume cache (this is the big one!)
+                if hasattr(fusion_handler, 'image_resampler') and fusion_handler.image_resampler:
+                    fusion_handler.image_resampler.clear_cache()  # Clears all cached volumes
+        
         # Clear metadata panel (shared)
         self.metadata_panel.set_dataset(None)
         
@@ -1215,6 +1230,15 @@ class DICOMViewerApp(QObject):
         # Clear all subwindow data structures
         self.subwindow_data.clear()
         
+        # Clear cached pixel arrays from datasets to free memory (before clearing studies dict)
+        if self.current_studies:
+            for study_uid, series_dict in self.current_studies.items():
+                for series_uid, datasets in series_dict.items():
+                    for dataset in datasets:
+                        # Remove cached pixel arrays if they exist
+                        if hasattr(dataset, '_cached_pixel_array'):
+                            delattr(dataset, '_cached_pixel_array')
+        
         # Clear current dataset references (legacy, points to focused subwindow)
         self.current_dataset = None
         self.current_studies = {}
@@ -1235,6 +1259,10 @@ class DICOMViewerApp(QObject):
         
         # Reset undo/redo state
         self._update_undo_redo_state()
+        
+        # Stop cine player if active (prevents timer leaks)
+        if hasattr(self, 'cine_player') and self.cine_player:
+            self.cine_player.stop_playback()
         
         # Clear tag viewer filter
         if self.dialog_coordinator:
@@ -1266,6 +1294,18 @@ class DICOMViewerApp(QObject):
                 subwindow.image_viewer.image_item = None
                 # Force viewport update
                 subwindow.image_viewer.viewport().update()
+        
+        # Clear fusion caches before loading new files (prevents memory accumulation)
+        for idx in self.subwindow_managers:
+            managers = self.subwindow_managers[idx]
+            fusion_handler = managers.get('fusion_handler')
+            if fusion_handler:
+                fusion_handler._slice_location_cache.clear()
+                fusion_handler._resampling_decision_cache = None
+                fusion_handler._resampling_decision_cache_key = None
+                fusion_handler.clear_alignment_cache()
+                if hasattr(fusion_handler, 'image_resampler') and fusion_handler.image_resampler:
+                    fusion_handler.image_resampler.clear_cache()
         
         # Clear overlay items for all subwindows (including viewport corner overlays)
         for idx in self.subwindow_managers:
@@ -2098,14 +2138,16 @@ class DICOMViewerApp(QObject):
                     # Note: For focused subwindow, _connect_focused_subwindow_signals() will also connect
                     # additional handlers (like zoom_display_widget), but we want the ViewStateManager
                     # connection for all subwindows to ensure overlays update correctly
-                    try:
-                        image_viewer.transform_changed.disconnect(view_state_manager.handle_transform_changed)
-                    except (TypeError, RuntimeError):
-                        pass
-                    try:
-                        image_viewer.zoom_changed.disconnect(view_state_manager.handle_zoom_changed)
-                    except (TypeError, RuntimeError):
-                        pass
+                    with warnings.catch_warnings():
+                        warnings.filterwarnings('ignore', category=RuntimeWarning, message='.*Failed to disconnect.*')
+                        try:
+                            image_viewer.transform_changed.disconnect(view_state_manager.handle_transform_changed)
+                        except (TypeError, RuntimeError):
+                            pass
+                        try:
+                            image_viewer.zoom_changed.disconnect(view_state_manager.handle_zoom_changed)
+                        except (TypeError, RuntimeError):
+                            pass
                     
                     # Connect to this subwindow's ViewStateManager
                     image_viewer.transform_changed.connect(view_state_manager.handle_transform_changed)
@@ -2226,185 +2268,189 @@ class DICOMViewerApp(QObject):
         if self.image_viewer is None:
             return
         
-        # print("[DEBUG] Disconnecting signals from focused subwindow ImageViewer")
-        
-        try:
-            # Annotation options
-            self.image_viewer.annotation_options_requested.disconnect()
-        except (TypeError, RuntimeError):
-            pass  # Signal not connected or object deleted
-        
-        try:
-            # ROI drawing signals
-            self.image_viewer.roi_drawing_started.disconnect()
-            self.image_viewer.roi_drawing_updated.disconnect()
-            self.image_viewer.roi_drawing_finished.disconnect()
-        except (TypeError, RuntimeError):
-            pass
-        
-        try:
-            # Measurement signals
-            self.image_viewer.measurement_started.disconnect()
-            self.image_viewer.measurement_updated.disconnect()
-            self.image_viewer.measurement_finished.disconnect()
-        except (TypeError, RuntimeError):
-            pass
-        
-        try:
-            # ROI click signals
-            self.image_viewer.roi_clicked.disconnect()
-            self.image_viewer.image_clicked_no_roi.disconnect()
-        except (TypeError, RuntimeError):
-            pass
-        
-        try:
-            # ROI delete signals
-            self.image_viewer.roi_delete_requested.disconnect()
-            self.image_viewer.measurement_delete_requested.disconnect()
-        except (TypeError, RuntimeError):
-            pass
-        
-        try:
-            # ROI statistics signals
-            self.image_viewer.roi_statistics_overlay_toggle_requested.disconnect()
-            self.image_viewer.roi_statistics_selection_changed.disconnect()
-        except (TypeError, RuntimeError):
-            pass
-        
-        try:
-            # Scene selection changed
-            if self.image_viewer.scene is not None:
-                self.image_viewer.scene.selectionChanged.disconnect()
-        except (TypeError, RuntimeError, AttributeError):
-            pass
-        
-        try:
-            # Scroll wheel for slice navigation
-            self.image_viewer.wheel_event_for_slice.disconnect()
-        except (TypeError, RuntimeError):
-            pass
-        
-        try:
-            # Pixel info
-            self.image_viewer.pixel_info_changed.disconnect()
-        except (TypeError, RuntimeError):
-            pass
-        
-        try:
-            # Window/Level preset selection
-            self.image_viewer.window_level_preset_selected.disconnect()
-        except (TypeError, RuntimeError):
-            pass
-        
-        try:
-            # Intensity projection context menu signals
-            self.image_viewer.projection_enabled_changed.disconnect()
-            self.image_viewer.projection_type_changed.disconnect()
-            self.image_viewer.projection_slice_count_changed.disconnect()
-        except (TypeError, RuntimeError):
-            pass
-        
-        try:
-            # Context menu changes
-            self.image_viewer.context_menu_mouse_mode_changed.disconnect()
-            self.image_viewer.context_menu_scroll_wheel_mode_changed.disconnect()
-            self.image_viewer.context_menu_rescale_toggle_changed.disconnect()
-        except (TypeError, RuntimeError):
-            pass
-        
-        try:
-            # Zoom and transform changes
-            self.image_viewer.zoom_changed.disconnect()
-            self.image_viewer.transform_changed.disconnect()
-        except (TypeError, RuntimeError):
-            pass
-        
-        try:
-            # Arrow key navigation
-            self.image_viewer.arrow_key_pressed.disconnect()
-        except (TypeError, RuntimeError):
-            pass
-        
-        try:
-            # Right mouse drag for window/level
-            self.image_viewer.right_mouse_press_for_drag.disconnect()
-            self.image_viewer.window_level_drag_changed.disconnect()
-        except (TypeError, RuntimeError):
-            pass
-        
-        try:
-            # Series navigation (CRITICAL - this is causing the double navigation)
-            self.image_viewer.series_navigation_requested.disconnect()
-        except (TypeError, RuntimeError):
-            pass
-        
-        try:
-            # ROI list panel signals
-            self.roi_list_panel.roi_selected.disconnect()
-            self.roi_list_panel.roi_deleted.disconnect()
-            self.roi_list_panel.delete_all_requested.disconnect()
-        except (TypeError, RuntimeError, AttributeError):
-            pass
-        
-        try:
-            # Crosshair signals
-            if hasattr(self, 'image_viewer') and self.image_viewer:
-                self.image_viewer.crosshair_clicked.disconnect()
-                self.image_viewer.crosshair_delete_requested.disconnect()
-        except (TypeError, RuntimeError, AttributeError):
-            pass
-        
-        try:
-            # Slice navigator signals
-            self.slice_navigator.slice_changed.disconnect()
-        except (TypeError, RuntimeError, AttributeError):
-            pass
-        
-        try:
-            # Window/level controls
-            self.window_level_controls.window_changed.disconnect()
-        except (TypeError, RuntimeError, AttributeError):
-            pass
-        
-        try:
-            # Intensity projection controls
-            self.intensity_projection_controls_widget.enabled_changed.disconnect()
-            self.intensity_projection_controls_widget.projection_type_changed.disconnect()
-            self.intensity_projection_controls_widget.slice_count_changed.disconnect()
-        except (TypeError, RuntimeError, AttributeError):
-            pass
-        
-        try:
-            # Mouse mode and scroll wheel mode changes
-            self.main_window.mouse_mode_changed.disconnect()
-            self.main_window.scroll_wheel_mode_changed.disconnect()
-        except (TypeError, RuntimeError, AttributeError):
-            pass
-        
-        try:
-            # Rescale toggle from toolbar
-            self.main_window.rescale_toggle_changed.disconnect()
-        except (TypeError, RuntimeError, AttributeError):
-            pass
-        
-        try:
-            # Series navigation from main window
-            self.main_window.series_navigation_requested.disconnect()
-        except (TypeError, RuntimeError, AttributeError):
-            pass
-        
-        try:
-            # Overlay font size and color changes
-            self.main_window.overlay_font_size_changed.disconnect()
-            self.main_window.overlay_font_color_changed.disconnect()
-        except (TypeError, RuntimeError, AttributeError):
-            pass
-        
-        try:
-            # Zoom display widget
-            self.zoom_display_widget.zoom_changed.disconnect()
-        except (TypeError, RuntimeError, AttributeError):
-            pass
+        # Suppress RuntimeWarning about failed signal disconnects
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', category=RuntimeWarning, message='.*Failed to disconnect.*')
+            
+            # print("[DEBUG] Disconnecting signals from focused subwindow ImageViewer")
+            
+            try:
+                # Annotation options
+                self.image_viewer.annotation_options_requested.disconnect()
+            except (TypeError, RuntimeError):
+                pass  # Signal not connected or object deleted
+            
+            try:
+                # ROI drawing signals
+                self.image_viewer.roi_drawing_started.disconnect()
+                self.image_viewer.roi_drawing_updated.disconnect()
+                self.image_viewer.roi_drawing_finished.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+            
+            try:
+                # Measurement signals
+                self.image_viewer.measurement_started.disconnect()
+                self.image_viewer.measurement_updated.disconnect()
+                self.image_viewer.measurement_finished.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+            
+            try:
+                # ROI click signals
+                self.image_viewer.roi_clicked.disconnect()
+                self.image_viewer.image_clicked_no_roi.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+            
+            try:
+                # ROI delete signals
+                self.image_viewer.roi_delete_requested.disconnect()
+                self.image_viewer.measurement_delete_requested.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+            
+            try:
+                # ROI statistics signals
+                self.image_viewer.roi_statistics_overlay_toggle_requested.disconnect()
+                self.image_viewer.roi_statistics_selection_changed.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+            
+            try:
+                # Scene selection changed
+                if self.image_viewer.scene is not None:
+                    self.image_viewer.scene.selectionChanged.disconnect()
+            except (TypeError, RuntimeError, AttributeError):
+                pass
+            
+            try:
+                # Scroll wheel for slice navigation
+                self.image_viewer.wheel_event_for_slice.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+            
+            try:
+                # Pixel info
+                self.image_viewer.pixel_info_changed.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+            
+            try:
+                # Window/Level preset selection
+                self.image_viewer.window_level_preset_selected.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+            
+            try:
+                # Intensity projection context menu signals
+                self.image_viewer.projection_enabled_changed.disconnect()
+                self.image_viewer.projection_type_changed.disconnect()
+                self.image_viewer.projection_slice_count_changed.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+            
+            try:
+                # Context menu changes
+                self.image_viewer.context_menu_mouse_mode_changed.disconnect()
+                self.image_viewer.context_menu_scroll_wheel_mode_changed.disconnect()
+                self.image_viewer.context_menu_rescale_toggle_changed.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+            
+            try:
+                # Zoom and transform changes
+                self.image_viewer.zoom_changed.disconnect()
+                self.image_viewer.transform_changed.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+            
+            try:
+                # Arrow key navigation
+                self.image_viewer.arrow_key_pressed.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+            
+            try:
+                # Right mouse drag for window/level
+                self.image_viewer.right_mouse_press_for_drag.disconnect()
+                self.image_viewer.window_level_drag_changed.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+            
+            try:
+                # Series navigation (CRITICAL - this is causing the double navigation)
+                self.image_viewer.series_navigation_requested.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+            
+            try:
+                # ROI list panel signals
+                self.roi_list_panel.roi_selected.disconnect()
+                self.roi_list_panel.roi_deleted.disconnect()
+                self.roi_list_panel.delete_all_requested.disconnect()
+            except (TypeError, RuntimeError, AttributeError):
+                pass
+            
+            try:
+                # Crosshair signals
+                if hasattr(self, 'image_viewer') and self.image_viewer:
+                    self.image_viewer.crosshair_clicked.disconnect()
+                    self.image_viewer.crosshair_delete_requested.disconnect()
+            except (TypeError, RuntimeError, AttributeError):
+                pass
+            
+            try:
+                # Slice navigator signals
+                self.slice_navigator.slice_changed.disconnect()
+            except (TypeError, RuntimeError, AttributeError):
+                pass
+            
+            try:
+                # Window/level controls
+                self.window_level_controls.window_changed.disconnect()
+            except (TypeError, RuntimeError, AttributeError):
+                pass
+            
+            try:
+                # Intensity projection controls
+                self.intensity_projection_controls_widget.enabled_changed.disconnect()
+                self.intensity_projection_controls_widget.projection_type_changed.disconnect()
+                self.intensity_projection_controls_widget.slice_count_changed.disconnect()
+            except (TypeError, RuntimeError, AttributeError):
+                pass
+            
+            try:
+                # Mouse mode and scroll wheel mode changes
+                self.main_window.mouse_mode_changed.disconnect()
+                self.main_window.scroll_wheel_mode_changed.disconnect()
+            except (TypeError, RuntimeError, AttributeError):
+                pass
+            
+            try:
+                # Rescale toggle from toolbar
+                self.main_window.rescale_toggle_changed.disconnect()
+            except (TypeError, RuntimeError, AttributeError):
+                pass
+            
+            try:
+                # Series navigation from main window
+                self.main_window.series_navigation_requested.disconnect()
+            except (TypeError, RuntimeError, AttributeError):
+                pass
+            
+            try:
+                # Overlay font size and color changes
+                self.main_window.overlay_font_size_changed.disconnect()
+                self.main_window.overlay_font_color_changed.disconnect()
+            except (TypeError, RuntimeError, AttributeError):
+                pass
+            
+            try:
+                # Zoom display widget
+                self.zoom_display_widget.zoom_changed.disconnect()
+            except (TypeError, RuntimeError, AttributeError):
+                pass
         
         # Disconnect fusion signals from previous focused subwindow's coordinator
         try:
