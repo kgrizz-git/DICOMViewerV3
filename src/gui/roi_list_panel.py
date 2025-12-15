@@ -115,7 +115,7 @@ class ROIListPanel(QWidget):
         """
         self.roi_manager = roi_manager
     
-    def update_roi_list(self, study_uid: str, series_uid: str, instance_identifier: int) -> None:
+    def update_roi_list(self, study_uid: str, series_uid: str, instance_identifier: int, roi_manager: Optional[ROIManager] = None) -> None:
         """
         Update the ROI list for a slice using composite key.
         
@@ -123,6 +123,7 @@ class ROIListPanel(QWidget):
             study_uid: StudyInstanceUID
             series_uid: SeriesInstanceUID
             instance_identifier: InstanceNumber from DICOM or slice_index as fallback
+            roi_manager: Optional ROI manager to use. If not provided, uses the panel's stored ROI manager.
         """
         self.current_study_uid = study_uid
         self.current_series_uid = series_uid
@@ -138,11 +139,19 @@ class ROIListPanel(QWidget):
         self.roi_list.clear()
         self.roi_list.blockSignals(False)
         
-        if self.roi_manager is None:
+        # Use provided ROI manager if available, otherwise fall back to stored reference
+        manager_to_use = roi_manager if roi_manager is not None else self.roi_manager
+        
+        if manager_to_use is None:
             return
         
+        # Update stored ROI manager reference if a manager was provided
+        # This ensures selection and other operations use the correct manager
+        if roi_manager is not None:
+            self.roi_manager = roi_manager
+        
         # Get ROIs for current slice using composite key
-        rois = self.roi_manager.get_rois_for_slice(study_uid, series_uid, instance_identifier)
+        rois = manager_to_use.get_rois_for_slice(study_uid, series_uid, instance_identifier)
         
         # Add to list
         for i, roi in enumerate(rois):

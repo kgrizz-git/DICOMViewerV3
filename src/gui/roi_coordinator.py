@@ -353,7 +353,7 @@ class ROICoordinator:
                             self.roi_statistics_panel.clear_statistics()
                             
                             # Update ROI list panel
-                            self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
+                            self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier, self.roi_manager)
                             
                             # Switch back to pan mode
                             if self.set_mouse_mode_callback:
@@ -373,7 +373,7 @@ class ROICoordinator:
                     self.roi_manager.delete_roi(roi_item, self.image_viewer.scene)
                     # Clear statistics panel since ROI was deleted
                     self.roi_statistics_panel.clear_statistics()
-                    self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
+                    self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier, self.roi_manager)
                 if self.set_mouse_mode_callback:
                     self.set_mouse_mode_callback("pan")
                 else:
@@ -402,7 +402,7 @@ class ROICoordinator:
                 self.update_undo_redo_state_callback()
         
         # Update ROI list
-        self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
+        self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier, self.roi_manager)
         
         # Auto-select the newly drawn ROI: highlight in list and show statistics
         if roi_item is not None:
@@ -520,7 +520,7 @@ class ROICoordinator:
             self.handle_roi_deleted(roi)
             # Update ROI list panel
             if current_dataset is not None:
-                self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
+                self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier, self.roi_manager)
             if self.roi_manager.get_selected_roi() is None:
                 self.roi_statistics_panel.clear_statistics()
     
@@ -641,7 +641,7 @@ class ROICoordinator:
                 self.crosshair_coordinator.handle_clear_crosshairs()
         
         # Update ROI list panel
-        self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
+        self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier, self.roi_manager)
         
         # Clear ROI statistics panel
         self.roi_statistics_panel.clear_statistics()
