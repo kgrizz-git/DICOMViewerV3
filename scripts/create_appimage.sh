@@ -112,7 +112,9 @@ fi
 print_info "Step 2: Creating AppDir structure..."
 mkdir -p "${APPDIR}/usr/bin"
 mkdir -p "${APPDIR}/usr/share/applications"
+mkdir -p "${APPDIR}/usr/share/icons/hicolor/128x128/apps"
 mkdir -p "${APPDIR}/usr/share/icons/hicolor/256x256/apps"
+mkdir -p "${APPDIR}/usr/share/icons/hicolor/512x512/apps"
 mkdir -p "${APPDIR}/usr/share/icons/hicolor/scalable/apps"
 
 # Step 4: Copy PyInstaller build
@@ -147,7 +149,12 @@ print_info "Desktop entry created"
 
 # Step 6: Copy icon
 print_info "Step 5: Copying application icon..."
+# Copy icon to multiple sizes for better desktop environment compatibility
+cp "${ICON_SOURCE}" "${APPDIR}/usr/share/icons/hicolor/128x128/apps/${APP_NAME}.png"
 cp "${ICON_SOURCE}" "${APPDIR}/usr/share/icons/hicolor/256x256/apps/${APP_NAME}.png"
+cp "${ICON_SOURCE}" "${APPDIR}/usr/share/icons/hicolor/512x512/apps/${APP_NAME}.png"
+# Also add to scalable directory (desktop environments can scale as needed)
+cp "${ICON_SOURCE}" "${APPDIR}/usr/share/icons/hicolor/scalable/apps/${APP_NAME}.png"
 
 # Check if icon was copied
 if [ ! -f "${APPDIR}/usr/share/icons/hicolor/256x256/apps/${APP_NAME}.png" ]; then
@@ -155,7 +162,7 @@ if [ ! -f "${APPDIR}/usr/share/icons/hicolor/256x256/apps/${APP_NAME}.png" ]; th
     exit 1
 fi
 
-print_info "Icon copied successfully"
+print_info "Icon copied successfully (multiple sizes)"
 
 # Step 7: Create AppRun script
 print_info "Step 6: Creating AppRun script..."
