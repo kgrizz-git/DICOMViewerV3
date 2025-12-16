@@ -61,7 +61,7 @@ class MouseModeHandler:
         Handle mouse mode change from toolbar.
         
         Args:
-            mode: Mouse mode ("select", "roi_ellipse", "roi_rectangle", "measure", "zoom", "pan", "auto_window_level")
+            mode: Mouse mode ("select", "roi_ellipse", "roi_rectangle", "measure", "zoom", "pan", "auto_window_level", "text_annotation", "arrow_annotation")
         """
         self.image_viewer.set_mouse_mode(mode)
     
@@ -74,7 +74,7 @@ class MouseModeHandler:
         where we need to update both the viewer and toolbar without triggering signals.
         
         Args:
-            mode: Mouse mode ("select", "roi_ellipse", "roi_rectangle", "measure", "zoom", "pan", "auto_window_level")
+            mode: Mouse mode ("select", "roi_ellipse", "roi_rectangle", "measure", "zoom", "pan", "auto_window_level", "text_annotation", "arrow_annotation")
         """
         # Update image viewer mouse mode
         self.image_viewer.set_mouse_mode(mode)

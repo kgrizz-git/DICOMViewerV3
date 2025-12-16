@@ -263,11 +263,15 @@ class DICOMViewerApp(QObject):
                 self.slice_display_manager = managers['slice_display_manager']
                 self.roi_coordinator = managers['roi_coordinator']
                 self.measurement_coordinator = managers['measurement_coordinator']
-                self.crosshair_coordinator = managers['crosshair_coordinator']
+                self.text_annotation_coordinator = managers.get('text_annotation_coordinator')
+                self.arrow_annotation_coordinator = managers.get('arrow_annotation_coordinator')
+                self.crosshair_coordinator = managers.get('crosshair_coordinator')
                 self.overlay_coordinator = managers['overlay_coordinator']
                 self.roi_manager = managers['roi_manager']
                 self.measurement_tool = managers['measurement_tool']
-                self.crosshair_manager = managers['crosshair_manager']
+                self.text_annotation_tool = managers.get('text_annotation_tool')
+                self.arrow_annotation_tool = managers.get('arrow_annotation_tool')
+                self.crosshair_manager = managers.get('crosshair_manager')
                 self.overlay_manager = managers['overlay_manager']
                 if subwindows[0]:
                     self.image_viewer = subwindows[0].image_viewer
@@ -344,6 +348,14 @@ class DICOMViewerApp(QObject):
             # Measurement Tool
             managers['measurement_tool'] = MeasurementTool(config_manager=self.config_manager)
             
+            # Text Annotation Tool
+            from tools.text_annotation_tool import TextAnnotationTool
+            managers['text_annotation_tool'] = TextAnnotationTool(config_manager=self.config_manager)
+            
+            # Arrow Annotation Tool
+            from tools.arrow_annotation_tool import ArrowAnnotationTool
+            managers['arrow_annotation_tool'] = ArrowAnnotationTool(config_manager=self.config_manager)
+            
             # Crosshair Manager
             managers['crosshair_manager'] = CrosshairManager(config_manager=self.config_manager)
             managers['crosshair_manager'].set_privacy_mode(self.privacy_view_enabled)
@@ -380,8 +392,10 @@ class DICOMViewerApp(QObject):
                 self.window_level_controls,  # Will be coordinated per subwindow
                 managers['roi_manager'],
                 managers['measurement_tool'],
-                managers['overlay_manager'],
-                managers['view_state_manager'],
+                overlay_manager=managers['overlay_manager'],
+                view_state_manager=managers['view_state_manager'],
+                text_annotation_tool=managers.get('text_annotation_tool'),
+                arrow_annotation_tool=managers.get('arrow_annotation_tool'),
                 update_tag_viewer_callback=self._update_tag_viewer,
                 display_rois_callback=None,
                 display_measurements_callback=None,
@@ -428,6 +442,28 @@ class DICOMViewerApp(QObject):
             # Measurement Coordinator
             managers['measurement_coordinator'] = MeasurementCoordinator(
                 managers['measurement_tool'],
+                image_viewer,
+                get_current_dataset=lambda idx=idx: self._get_subwindow_dataset(idx),
+                get_current_slice_index=lambda idx=idx: self._get_subwindow_slice_index(idx),
+                undo_redo_manager=self.undo_redo_manager,
+                update_undo_redo_state_callback=self._update_undo_redo_state
+            )
+            
+            # Text Annotation Coordinator
+            from gui.text_annotation_coordinator import TextAnnotationCoordinator
+            managers['text_annotation_coordinator'] = TextAnnotationCoordinator(
+                managers['text_annotation_tool'],
+                image_viewer,
+                get_current_dataset=lambda idx=idx: self._get_subwindow_dataset(idx),
+                get_current_slice_index=lambda idx=idx: self._get_subwindow_slice_index(idx),
+                undo_redo_manager=self.undo_redo_manager,
+                update_undo_redo_state_callback=self._update_undo_redo_state
+            )
+            
+            # Arrow Annotation Coordinator
+            from gui.arrow_annotation_coordinator import ArrowAnnotationCoordinator
+            managers['arrow_annotation_coordinator'] = ArrowAnnotationCoordinator(
+                managers['arrow_annotation_tool'],
                 image_viewer,
                 get_current_dataset=lambda idx=idx: self._get_subwindow_dataset(idx),
                 get_current_slice_index=lambda idx=idx: self._get_subwindow_slice_index(idx),
@@ -536,6 +572,14 @@ class DICOMViewerApp(QObject):
         # Measurement Tool
         managers['measurement_tool'] = MeasurementTool(config_manager=self.config_manager)
         
+        # Text Annotation Tool
+        from tools.text_annotation_tool import TextAnnotationTool
+        managers['text_annotation_tool'] = TextAnnotationTool(config_manager=self.config_manager)
+        
+        # Arrow Annotation Tool
+        from tools.arrow_annotation_tool import ArrowAnnotationTool
+        managers['arrow_annotation_tool'] = ArrowAnnotationTool(config_manager=self.config_manager)
+        
         # Overlay Manager (shared config, but per-window items)
         font_size = self.config_manager.get_overlay_font_size()
         font_color = self.config_manager.get_overlay_font_color()
@@ -568,8 +612,10 @@ class DICOMViewerApp(QObject):
             self.window_level_controls,
             managers['roi_manager'],
             managers['measurement_tool'],
-            managers['overlay_manager'],
-            managers['view_state_manager'],
+            overlay_manager=managers['overlay_manager'],
+            view_state_manager=managers['view_state_manager'],
+            text_annotation_tool=managers.get('text_annotation_tool'),
+            arrow_annotation_tool=managers.get('arrow_annotation_tool'),
             update_tag_viewer_callback=self._update_tag_viewer,
             display_rois_callback=None,
             display_measurements_callback=None,
@@ -607,7 +653,30 @@ class DICOMViewerApp(QObject):
             image_viewer,
             get_current_dataset=lambda idx=idx: self._get_subwindow_dataset(idx),
             get_current_slice_index=lambda idx=idx: self._get_subwindow_slice_index(idx),
-            undo_redo_manager=self.undo_redo_manager
+            undo_redo_manager=self.undo_redo_manager,
+            update_undo_redo_state_callback=self._update_undo_redo_state
+        )
+        
+        # Text Annotation Coordinator
+        from gui.text_annotation_coordinator import TextAnnotationCoordinator
+        managers['text_annotation_coordinator'] = TextAnnotationCoordinator(
+            managers['text_annotation_tool'],
+            image_viewer,
+            get_current_dataset=lambda idx=idx: self._get_subwindow_dataset(idx),
+            get_current_slice_index=lambda idx=idx: self._get_subwindow_slice_index(idx),
+            undo_redo_manager=self.undo_redo_manager,
+            update_undo_redo_state_callback=self._update_undo_redo_state
+        )
+        
+        # Arrow Annotation Coordinator
+        from gui.arrow_annotation_coordinator import ArrowAnnotationCoordinator
+        managers['arrow_annotation_coordinator'] = ArrowAnnotationCoordinator(
+            managers['arrow_annotation_tool'],
+            image_viewer,
+            get_current_dataset=lambda idx=idx: self._get_subwindow_dataset(idx),
+            get_current_slice_index=lambda idx=idx: self._get_subwindow_slice_index(idx),
+            undo_redo_manager=self.undo_redo_manager,
+            update_undo_redo_state_callback=self._update_undo_redo_state
         )
         
         # Overlay Coordinator
@@ -734,11 +803,15 @@ class DICOMViewerApp(QObject):
             self.slice_display_manager = managers['slice_display_manager']
             self.roi_coordinator = managers['roi_coordinator']
             self.measurement_coordinator = managers['measurement_coordinator']
+            self.text_annotation_coordinator = managers.get('text_annotation_coordinator')
+            self.arrow_annotation_coordinator = managers.get('arrow_annotation_coordinator')
             self.crosshair_coordinator = managers.get('crosshair_coordinator')
             self.fusion_coordinator = managers.get('fusion_coordinator')
             self.overlay_coordinator = managers['overlay_coordinator']
             self.roi_manager = managers['roi_manager']
             self.measurement_tool = managers['measurement_tool']
+            self.text_annotation_tool = managers.get('text_annotation_tool')
+            self.arrow_annotation_tool = managers.get('arrow_annotation_tool')
             self.crosshair_manager = managers.get('crosshair_manager')
             self.overlay_manager = managers['overlay_manager']
         
@@ -1033,11 +1106,15 @@ class DICOMViewerApp(QObject):
                 self.slice_display_manager = managers['slice_display_manager']
                 self.roi_coordinator = managers['roi_coordinator']
                 self.measurement_coordinator = managers['measurement_coordinator']
-                self.crosshair_coordinator = managers['crosshair_coordinator']
+                self.text_annotation_coordinator = managers.get('text_annotation_coordinator')
+                self.arrow_annotation_coordinator = managers.get('arrow_annotation_coordinator')
+                self.crosshair_coordinator = managers.get('crosshair_coordinator')
                 self.overlay_coordinator = managers['overlay_coordinator']
                 self.roi_manager = managers['roi_manager']
                 self.measurement_tool = managers['measurement_tool']
-                self.crosshair_manager = managers['crosshair_manager']
+                self.text_annotation_tool = managers.get('text_annotation_tool')
+                self.arrow_annotation_tool = managers.get('arrow_annotation_tool')
+                self.crosshair_manager = managers.get('crosshair_manager')
                 self.overlay_manager = managers['overlay_manager']
                 if subwindows[0]:
                     self.image_viewer = subwindows[0].image_viewer
@@ -1142,7 +1219,9 @@ class DICOMViewerApp(QObject):
             open_histogram_callback=self.dialog_coordinator.open_histogram,
             reset_all_views_callback=self._on_reset_all_views,
             toggle_privacy_view_callback=lambda enabled: self._on_privacy_view_toggled(enabled),
-            get_privacy_view_state_callback=lambda: self.privacy_view_enabled
+            get_privacy_view_state_callback=lambda: self.privacy_view_enabled,
+            delete_text_annotation_callback=None,  # Will be set when coordinators are available
+            delete_arrow_annotation_callback=None  # Will be set when coordinators are available
         )
     
     def _clear_data(self) -> None:
@@ -1156,10 +1235,16 @@ class DICOMViewerApp(QObject):
                     managers = self.subwindow_managers[idx]
                     roi_manager = managers.get('roi_manager')
                     measurement_tool = managers.get('measurement_tool')
+                    text_annotation_tool = managers.get('text_annotation_tool')
+                    arrow_annotation_tool = managers.get('arrow_annotation_tool')
                     if roi_manager:
                         roi_manager.clear_all_rois(subwindow.image_viewer.scene)
                     if measurement_tool:
                         measurement_tool.clear_measurements(subwindow.image_viewer.scene)
+                    if text_annotation_tool:
+                        text_annotation_tool.clear_annotations(subwindow.image_viewer.scene)
+                    if arrow_annotation_tool:
+                        arrow_annotation_tool.clear_arrows(subwindow.image_viewer.scene)
         
         # Update shared panels (these show focused subwindow's data)
         self.roi_list_panel.update_roi_list("", "", 0)  # Clear list
@@ -2494,6 +2579,17 @@ class DICOMViewerApp(QObject):
         self.image_viewer.measurement_updated.connect(self.measurement_coordinator.handle_measurement_updated)
         self.image_viewer.measurement_finished.connect(self.measurement_coordinator.handle_measurement_finished)
         
+        # Text annotation signals
+        if hasattr(self, 'text_annotation_coordinator') and self.text_annotation_coordinator is not None:
+            self.image_viewer.text_annotation_started.connect(self.text_annotation_coordinator.handle_text_annotation_started)
+            self.image_viewer.text_annotation_finished.connect(self.text_annotation_coordinator.handle_text_annotation_finished)
+        
+        # Arrow annotation signals
+        if hasattr(self, 'arrow_annotation_coordinator') and self.arrow_annotation_coordinator is not None:
+            self.image_viewer.arrow_annotation_started.connect(self.arrow_annotation_coordinator.handle_arrow_annotation_started)
+            self.image_viewer.arrow_annotation_updated.connect(self.arrow_annotation_coordinator.handle_arrow_annotation_updated)
+            self.image_viewer.arrow_annotation_finished.connect(self.arrow_annotation_coordinator.handle_arrow_annotation_finished)
+        
         # Crosshair signals
         if hasattr(self, 'crosshair_coordinator') and self.crosshair_coordinator is not None:
             self.image_viewer.crosshair_clicked.connect(self.crosshair_coordinator.handle_crosshair_clicked)
@@ -2505,6 +2601,10 @@ class DICOMViewerApp(QObject):
         # ROI delete signal (from right-click context menu)
         self.image_viewer.roi_delete_requested.connect(self.roi_coordinator.handle_roi_delete_requested)
         self.image_viewer.measurement_delete_requested.connect(self.measurement_coordinator.handle_measurement_delete_requested)
+        if hasattr(self, 'text_annotation_coordinator') and self.text_annotation_coordinator is not None:
+            self.image_viewer.text_annotation_delete_requested.connect(self.text_annotation_coordinator.handle_text_annotation_delete_requested)
+        if hasattr(self, 'arrow_annotation_coordinator') and self.arrow_annotation_coordinator is not None:
+            self.image_viewer.arrow_annotation_delete_requested.connect(self.arrow_annotation_coordinator.handle_arrow_annotation_delete_requested)
         if hasattr(self, 'crosshair_coordinator') and self.crosshair_coordinator is not None:
             self.image_viewer.crosshair_delete_requested.connect(self.crosshair_coordinator.handle_crosshair_delete_requested)
         
@@ -2596,6 +2696,10 @@ class DICOMViewerApp(QObject):
         if self.keyboard_event_handler:
             self.keyboard_event_handler.delete_all_rois_callback = self.roi_coordinator.delete_all_rois_current_slice
             self.keyboard_event_handler.invert_image_callback = self.image_viewer.invert_image
+            if hasattr(self, 'text_annotation_coordinator') and self.text_annotation_coordinator:
+                self.keyboard_event_handler.delete_text_annotation_callback = self.text_annotation_coordinator.handle_text_annotation_delete_requested
+            if hasattr(self, 'arrow_annotation_coordinator') and self.arrow_annotation_coordinator:
+                self.keyboard_event_handler.delete_arrow_annotation_callback = self.arrow_annotation_coordinator.handle_arrow_annotation_delete_requested
         
         # Window/level
         self.window_level_controls.window_changed.connect(self.view_state_manager.handle_window_changed)

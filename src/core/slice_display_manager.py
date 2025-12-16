@@ -65,6 +65,8 @@ class SliceDisplayManager:
         measurement_tool: MeasurementTool,
         overlay_manager: OverlayManager,
         view_state_manager,
+        text_annotation_tool=None,
+        arrow_annotation_tool=None,
         update_tag_viewer_callback: Optional[Callable] = None,
         display_rois_callback: Optional[Callable] = None,
         display_measurements_callback: Optional[Callable] = None,
@@ -104,6 +106,8 @@ class SliceDisplayManager:
         self.window_level_controls = window_level_controls
         self.roi_manager = roi_manager
         self.measurement_tool = measurement_tool
+        self.text_annotation_tool = text_annotation_tool
+        self.arrow_annotation_tool = arrow_annotation_tool
         self.overlay_manager = overlay_manager
         self.view_state_manager = view_state_manager
         self.update_tag_viewer_callback = update_tag_viewer_callback
@@ -917,10 +921,18 @@ class SliceDisplayManager:
             # Update ROI manager's current slice context
             self.roi_manager.set_current_slice(study_uid, series_uid, instance_identifier)
             self.measurement_tool.set_current_slice(study_uid, series_uid, instance_identifier)
+            if self.text_annotation_tool:
+                self.text_annotation_tool.set_current_slice(study_uid, series_uid, instance_identifier)
+            if self.arrow_annotation_tool:
+                self.arrow_annotation_tool.set_current_slice(study_uid, series_uid, instance_identifier)
             
-            # Clear measurements when switching to new series (not when switching slices)
+            # Clear measurements, text annotations, and arrow annotations when switching to new series (not when switching slices)
             if is_new_study_series:
                 self.measurement_tool.clear_measurements(self.image_viewer.scene)
+                if self.text_annotation_tool:
+                    self.text_annotation_tool.clear_annotations(self.image_viewer.scene)
+                if self.arrow_annotation_tool:
+                    self.arrow_annotation_tool.clear_arrows(self.image_viewer.scene)
             
             # Display ROIs for current slice
             if self.display_rois_callback:
@@ -933,6 +945,14 @@ class SliceDisplayManager:
                 self.display_measurements_callback(dataset)
             else:
                 self.display_measurements_for_slice(dataset)
+            
+            # Display text annotations for current slice
+            if self.text_annotation_tool:
+                self.display_text_annotations_for_slice(dataset)
+            
+            # Display arrow annotations for current slice
+            if self.arrow_annotation_tool:
+                self.display_arrow_annotations_for_slice(dataset)
             
             # Display Presentation State and Key Object annotations
             if self.annotation_manager and self.dicom_organizer:
@@ -1106,6 +1126,64 @@ class SliceDisplayManager:
         
         # Display measurements for this slice
         self.measurement_tool.display_measurements_for_slice(
+            study_uid, series_uid, instance_identifier, self.image_viewer.scene
+        )
+    
+    def display_text_annotations_for_slice(self, dataset: Dataset) -> None:
+        """
+        Display text annotations for a slice.
+        
+        Ensures all text annotations for the current slice are visible in the scene.
+        Removes text annotations from other slices before displaying current slice annotations.
+        
+        Args:
+            dataset: pydicom Dataset for the current slice
+        """
+        if not self.text_annotation_tool:
+            return
+        
+        # Extract DICOM identifiers
+        study_uid = getattr(dataset, 'StudyInstanceUID', '')
+        series_uid = get_composite_series_key(dataset)
+        # Use current_slice_index as instance identifier (array position)
+        instance_identifier = self.current_slice_index
+        
+        # Clear annotations from other slices first
+        self.text_annotation_tool.clear_annotations_from_other_slices(
+            study_uid, series_uid, instance_identifier, self.image_viewer.scene
+        )
+        
+        # Display annotations for this slice
+        self.text_annotation_tool.display_annotations_for_slice(
+            study_uid, series_uid, instance_identifier, self.image_viewer.scene
+        )
+    
+    def display_arrow_annotations_for_slice(self, dataset: Dataset) -> None:
+        """
+        Display arrow annotations for a slice.
+        
+        Ensures all arrow annotations for the current slice are visible in the scene.
+        Removes arrow annotations from other slices before displaying current slice annotations.
+        
+        Args:
+            dataset: pydicom Dataset for the current slice
+        """
+        if not self.arrow_annotation_tool:
+            return
+        
+        # Extract DICOM identifiers
+        study_uid = getattr(dataset, 'StudyInstanceUID', '')
+        series_uid = get_composite_series_key(dataset)
+        # Use current_slice_index as instance identifier (array position)
+        instance_identifier = self.current_slice_index
+        
+        # Clear arrows from other slices first
+        self.arrow_annotation_tool.clear_arrows_from_other_slices(
+            study_uid, series_uid, instance_identifier, self.image_viewer.scene
+        )
+        
+        # Display arrows for this slice
+        self.arrow_annotation_tool.display_arrows_for_slice(
             study_uid, series_uid, instance_identifier, self.image_viewer.scene
         )
     
