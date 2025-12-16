@@ -58,6 +58,85 @@ jobs:
         run: |
           pyinstaller DICOMViewerV3.spec --clean --noconfirm
 
+      - name: Download AppImageTool
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool-x86_64.AppImage
+          sudo mv appimagetool-x86_64.AppImage /usr/local/bin/appimagetool
+
+      - name: Create AppDir structure
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/share/applications
+          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+
+      - name: Copy PyInstaller build to AppDir
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          cp -r dist/DICOMViewerV3/* AppDir/usr/bin/
+          chmod +x AppDir/usr/bin/DICOMViewerV3
+
+      - name: Create desktop entry
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          cat > AppDir/usr/share/applications/DICOMViewerV3.desktop << 'EOF'
+          [Desktop Entry]
+          Type=Application
+          Name=DICOM Viewer V3
+          Comment=Medical imaging DICOM viewer application
+          Exec=DICOMViewerV3
+          Icon=DICOMViewerV3
+          Categories=Graphics;MedicalSoftware;Viewer;
+          Terminal=false
+          StartupNotify=true
+          MimeType=application/dicom;
+          EOF
+
+      - name: Copy icon
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          cp resources/icons/dvv6ldvv6ldvv6ld_edit-removebg-preview.png \
+             AppDir/usr/share/icons/hicolor/256x256/apps/DICOMViewerV3.png
+
+      - name: Create AppRun script
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          cat > AppDir/AppRun << 'EOF'
+          #!/bin/bash
+          HERE="$(dirname "$(readlink -f "${0}")")"
+          exec "${HERE}/usr/bin/DICOMViewerV3" "$@"
+          EOF
+          chmod +x AppDir/AppRun
+
+      - name: Build AppImage
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          # Extract version from tag if available, otherwise use "latest"
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION=$(echo "${{ github.ref }}" | sed 's/refs\/tags\/v//')
+          else
+            VERSION="latest"
+          fi
+          appimagetool AppDir DICOMViewerV3-${VERSION}-x86_64.AppImage
+          chmod +x DICOMViewerV3-${VERSION}-x86_64.AppImage
+          ls -lh DICOMViewerV3-${VERSION}-x86_64.AppImage
+
+      - name: Verify AppImage exists
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION=$(echo "${{ github.ref }}" | sed 's/refs\/tags\/v//')
+          else
+            VERSION="latest"
+          fi
+          if [ ! -f "DICOMViewerV3-${VERSION}-x86_64.AppImage" ]; then
+            echo "Error: AppImage not created"
+            exit 1
+          fi
+          file DICOMViewerV3-${VERSION}-x86_64.AppImage
+
       - name: Verify executable exists
         shell: bash
         run: |
@@ -87,6 +166,7 @@ jobs:
           name: ${{ matrix.artifact_name }}
           path: |
             dist/DICOMViewerV3*
+            DICOMViewerV3-*-x86_64.AppImage
             build/
           retention-days: 90
 
@@ -96,6 +176,7 @@ jobs:
         with:
           files: |
             dist/DICOMViewerV3*
+            DICOMViewerV3-*-x86_64.AppImage
           draft: false
           prerelease: false
           generate_release_notes: true
