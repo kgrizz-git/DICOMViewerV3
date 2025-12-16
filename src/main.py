@@ -2803,6 +2803,7 @@ class DICOMViewerApp(QObject):
         
         self.main_window.reset_view_requested.connect(handle_reset_view)
         self.image_viewer.reset_view_requested.connect(handle_reset_view)
+        self.main_window.reset_all_views_requested.connect(self._on_reset_all_views)
         self.image_viewer.reset_all_views_requested.connect(self._on_reset_all_views)
         
         # Clear measurements signals
@@ -4097,6 +4098,24 @@ class DICOMViewerApp(QObject):
         # Update styles for all existing ROIs and measurements
         self.roi_manager.update_all_roi_styles(self.config_manager)
         self.measurement_tool.update_all_measurement_styles(self.config_manager)
+        
+        # Update styles for text and arrow annotations
+        if hasattr(self, 'text_annotation_tool') and self.text_annotation_tool:
+            self.text_annotation_tool.update_all_annotation_styles(self.config_manager)
+        if hasattr(self, 'arrow_annotation_tool') and self.arrow_annotation_tool:
+            self.arrow_annotation_tool.update_all_arrow_styles(self.config_manager)
+        
+        # Also update for all subwindows
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        for idx, subwindow in enumerate(subwindows):
+            if idx in self.subwindow_managers:
+                managers = self.subwindow_managers[idx]
+                text_tool = managers.get('text_annotation_tool')
+                arrow_tool = managers.get('arrow_annotation_tool')
+                if text_tool:
+                    text_tool.update_all_annotation_styles(self.config_manager)
+                if arrow_tool:
+                    arrow_tool.update_all_arrow_styles(self.config_manager)
         
         # Update ROI statistics overlays (this will also refresh with new font settings)
         if self.current_dataset is not None:

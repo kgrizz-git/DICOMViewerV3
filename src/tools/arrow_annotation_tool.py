@@ -308,8 +308,8 @@ class ArrowAnnotationTool:
         pen_width = 2  # Default
         pen_color = (255, 255, 0)  # Default yellow
         if self.config_manager:
-            pen_width = self.config_manager.get_measurement_line_thickness()
-            pen_color = self.config_manager.get_measurement_line_color()
+            pen_width = self.config_manager.get_measurement_line_thickness()  # Use measurement line thickness for now
+            pen_color = self.config_manager.get_arrow_annotation_color()  # Use arrow-specific color
         
         color = QColor(*pen_color)
         
@@ -521,9 +521,9 @@ class ArrowAnnotationTool:
         if config_manager is None:
             return
         
-        # Get new settings from config
-        pen_width = config_manager.get_measurement_line_thickness()
-        pen_color = config_manager.get_measurement_line_color()
+        # Get new settings from config (arrow-specific color, measurement line thickness for now)
+        pen_width = config_manager.get_measurement_line_thickness()  # Use measurement line thickness for now
+        pen_color = config_manager.get_arrow_annotation_color()  # Use arrow-specific color
         
         color = QColor(*pen_color)
         pen = QPen(color, pen_width)
