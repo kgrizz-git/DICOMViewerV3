@@ -57,7 +57,9 @@ class KeyboardEventHandler:
         open_histogram_callback: Optional[Callable[[], None]] = None,
         reset_all_views_callback: Optional[Callable[[], None]] = None,
         toggle_privacy_view_callback: Optional[Callable[[bool], None]] = None,
-        get_privacy_view_state_callback: Optional[Callable[[], bool]] = None
+        get_privacy_view_state_callback: Optional[Callable[[], bool]] = None,
+        delete_text_annotation_callback: Optional[Callable[[object], None]] = None,
+        delete_arrow_annotation_callback: Optional[Callable[[object], None]] = None
     ):
         """
         Initialize the keyboard event handler.
@@ -106,6 +108,8 @@ class KeyboardEventHandler:
         self.reset_all_views_callback = reset_all_views_callback
         self.toggle_privacy_view_callback = toggle_privacy_view_callback
         self.get_privacy_view_state_callback = get_privacy_view_state_callback
+        self.delete_text_annotation_callback = delete_text_annotation_callback
+        self.delete_arrow_annotation_callback = delete_arrow_annotation_callback
     
     def handle_key_event(self, event: QKeyEvent) -> bool:
         """
@@ -132,15 +136,27 @@ class KeyboardEventHandler:
                     self.clear_roi_statistics_callback()
                 return True
             
-            # Check for selected measurement
+            # Check for selected measurement, text annotation, or arrow annotation
             if self.image_viewer.scene is not None:
                 try:
                     selected_items = self.image_viewer.scene.selectedItems()
                     from tools.measurement_tool import MeasurementItem
+                    from tools.text_annotation_tool import TextAnnotationItem
+                    from tools.arrow_annotation_tool import ArrowAnnotationItem
                     for item in selected_items:
                         if isinstance(item, MeasurementItem):
                             self.delete_measurement_callback(item)
                             return True
+                        elif isinstance(item, TextAnnotationItem):
+                            # Delete text annotation if callback is available
+                            if hasattr(self, 'delete_text_annotation_callback') and self.delete_text_annotation_callback:
+                                self.delete_text_annotation_callback(item)
+                                return True
+                        elif isinstance(item, ArrowAnnotationItem):
+                            # Delete arrow annotation if callback is available
+                            if hasattr(self, 'delete_arrow_annotation_callback') and self.delete_arrow_annotation_callback:
+                                self.delete_arrow_annotation_callback(item)
+                                return True
                 except RuntimeError:
                     # Scene may have been deleted, ignore
                     pass
@@ -245,14 +261,19 @@ class KeyboardEventHandler:
             self.delete_all_rois_callback()
             return True
         
-        # V key for Reset View
+        # V key - available (Shift+V for Reset View)
         elif event.key() == Qt.Key.Key_V:
-            # Don't intercept if Cmd/Ctrl is pressed (for standard shortcuts)
+            # Check for Shift modifier for Reset View
+            if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+                # Shift+V: Reset View
+                if self.reset_view_callback:
+                    self.reset_view_callback()
+                return True
+            # Don't intercept if Cmd/Ctrl is pressed (for standard shortcuts like Ctrl+V)
             if event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier):
                 return False  # Let Qt handle Cmd+V / Ctrl+V
-            if self.reset_view_callback:
-                self.reset_view_callback()
-            return True
+            # Single V key is available (not used)
+            return False
         
         # N key for Toggle Series Navigator
         elif event.key() == Qt.Key.Key_N:
@@ -287,10 +308,27 @@ class KeyboardEventHandler:
                 self.toggle_privacy_view_callback(not current_state)
             return True
         
-        # A key for Reset All Views
+        # A key for Arrow Annotation mode (Shift+A for Reset All Views)
         elif event.key() == Qt.Key.Key_A:
-            if self.reset_all_views_callback:
-                self.reset_all_views_callback()
+            # Check for Shift modifier for Reset All Views
+            if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+                # Shift+A: Reset All Views
+                if self.reset_all_views_callback:
+                    self.reset_all_views_callback()
+                return True
+            # Don't intercept if Cmd/Ctrl is pressed (for standard shortcuts like Ctrl+A)
+            if event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier):
+                return False  # Let Qt handle Cmd+A / Ctrl+A
+            # Single A key: Arrow Annotation mode
+            self.set_mouse_mode("arrow_annotation")
+            return True
+        
+        # T key for Text Annotation mode
+        elif event.key() == Qt.Key.Key_T:
+            # Don't intercept if Cmd/Ctrl is pressed (for standard shortcuts like Ctrl+T)
+            if event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier):
+                return False  # Let Qt handle Cmd+T / Ctrl+T
+            self.set_mouse_mode("text_annotation")
             return True
         
         return False

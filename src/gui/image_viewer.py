@@ -76,6 +76,13 @@ class ImageViewer(QGraphicsView):
     measurement_updated = Signal(QPointF)  # Emitted when measurement is updated (current position)
     measurement_finished = Signal()  # Emitted when measurement is finished
     measurement_delete_requested = Signal(object)  # Emitted when measurement deletion is requested (MeasurementItem)
+    text_annotation_started = Signal(QPointF)  # Emitted when text annotation starts (position)
+    text_annotation_finished = Signal()  # Emitted when text annotation is finished
+    arrow_annotation_started = Signal(QPointF)  # Emitted when arrow annotation starts (start position)
+    arrow_annotation_updated = Signal(QPointF)  # Emitted when arrow annotation is updated (current position)
+    arrow_annotation_finished = Signal()  # Emitted when arrow annotation is finished
+    text_annotation_delete_requested = Signal(object)  # Emitted when text annotation deletion is requested (TextAnnotationItem)
+    arrow_annotation_delete_requested = Signal(object)  # Emitted when arrow annotation deletion is requested (ArrowAnnotationItem)
     crosshair_delete_requested = Signal(object)  # Emitted when crosshair deletion is requested (CrosshairItem)
     clear_measurements_requested = Signal()  # Emitted when clear measurements is requested
     toggle_overlay_requested = Signal()  # Emitted when toggle overlay is requested
@@ -149,6 +156,14 @@ class ImageViewer(QGraphicsView):
         # Measurement state
         self.measuring = False
         self.measurement_start_pos: Optional[QPointF] = None
+        
+        # Text annotation state
+        self.text_annotating = False
+        self.text_annotation_start_pos: Optional[QPointF] = None
+        
+        # Arrow annotation state
+        self.arrow_annotating = False
+        self.arrow_annotation_start_pos: Optional[QPointF] = None
         
         # Zoom mode state
         self.zoom_start_pos: Optional[QPointF] = None
@@ -790,6 +805,20 @@ class ImageViewer(QGraphicsView):
             self.roi_drawing_mode = None
             self.setDragMode(QGraphicsView.DragMode.NoDrag)
             self.setCursor(Qt.CursorShape.CrossCursor)
+        elif mode == "text_annotation":
+            self.roi_drawing_mode = None
+            self.setDragMode(QGraphicsView.DragMode.NoDrag)
+            self.setCursor(Qt.CursorShape.IBeamCursor)  # Text cursor for text annotation
+            # Reset text annotation state when switching to text annotation mode
+            self.text_annotating = False
+            self.text_annotation_start_pos = None
+        elif mode == "arrow_annotation":
+            self.roi_drawing_mode = None
+            self.setDragMode(QGraphicsView.DragMode.NoDrag)
+            self.setCursor(Qt.CursorShape.CrossCursor)  # Cross cursor for arrow annotation
+            # Reset arrow annotation state when switching to arrow annotation mode
+            self.arrow_annotating = False
+            self.arrow_annotation_start_pos = None
         else:  # pan
             self.roi_drawing_mode = None
             # Use ScrollHandDrag for panning - this works even when image fits viewport
@@ -867,6 +896,12 @@ class ImageViewer(QGraphicsView):
                 is_handle = isinstance(item, MeasurementHandle)
                 is_measurement_text = isinstance(item, DraggableMeasurementText)
                 
+                # Check for text and arrow annotation items
+                from tools.text_annotation_tool import TextAnnotationItem
+                from tools.arrow_annotation_tool import ArrowAnnotationItem
+                is_text_annotation_item = isinstance(item, TextAnnotationItem)
+                is_arrow_annotation_item = isinstance(item, ArrowAnnotationItem)
+                
                 # Check if item is a child of a measurement (line or text)
                 is_measurement_child = False
                 if item is not None:
@@ -877,15 +912,17 @@ class ImageViewer(QGraphicsView):
                             break
                         parent = parent.parentItem()
                 
-                if is_empty_space and not (is_roi_item or is_measurement_item or is_handle or is_measurement_text or is_measurement_child):
+                if is_empty_space and not (is_roi_item or is_measurement_item or is_handle or is_measurement_text or is_measurement_child or is_text_annotation_item or is_arrow_annotation_item):
                     # Clicking on empty space - deselect everything
                     # print(f"[DEBUG-DESELECT] Empty space click detected in Select mode")
                     # print(f"[DEBUG-DESELECT]   is_empty_space: {is_empty_space}, is_roi_item: {is_roi_item}, is_measurement_item: {is_measurement_item}")
                     
                     if self.scene is not None:
-                        # First, explicitly deselect all measurements and their text labels
+                        # First, explicitly deselect all measurements, text annotations, arrow annotations, and their text labels
+                        from tools.text_annotation_tool import TextAnnotationItem
+                        from tools.arrow_annotation_tool import ArrowAnnotationItem
                         for scene_item in self.scene.items():
-                            if isinstance(scene_item, (MeasurementItem, DraggableMeasurementText)):
+                            if isinstance(scene_item, (MeasurementItem, DraggableMeasurementText, TextAnnotationItem, ArrowAnnotationItem)):
                                 scene_item.setSelected(False)
                         
                         # Clear scene selection (this will visually deselect ROIs)
@@ -930,10 +967,12 @@ class ImageViewer(QGraphicsView):
                 else:
                     # Not clicking on ROI (clicking on image item, empty space, or other items) - deselect measurements and emit signal for deselection
                     from tools.measurement_tool import MeasurementItem, DraggableMeasurementText
+                    from tools.text_annotation_tool import TextAnnotationItem
+                    from tools.arrow_annotation_tool import ArrowAnnotationItem
                     if self.scene is not None:
-                        # Deselect all measurements and their text labels
+                        # Deselect all measurements, text annotations, arrow annotations, and their text labels
                         for scene_item in self.scene.items():
-                            if isinstance(scene_item, (MeasurementItem, DraggableMeasurementText)):
+                            if isinstance(scene_item, (MeasurementItem, DraggableMeasurementText, TextAnnotationItem, ArrowAnnotationItem)):
                                 scene_item.setSelected(False)
                         # Also clear scene selection to ensure everything is deselected
                         self.scene.clearSelection()
@@ -961,6 +1000,12 @@ class ImageViewer(QGraphicsView):
             is_handle = isinstance(item, MeasurementHandle)
             is_measurement_text = isinstance(item, DraggableMeasurementText)
             
+            # Check for text and arrow annotation items
+            from tools.text_annotation_tool import TextAnnotationItem
+            from tools.arrow_annotation_tool import ArrowAnnotationItem
+            is_text_annotation_item = isinstance(item, TextAnnotationItem)
+            is_arrow_annotation_item = isinstance(item, ArrowAnnotationItem)
+            
             # Check if item is a child of a measurement
             is_measurement_child = False
             if item is not None:
@@ -978,13 +1023,19 @@ class ImageViewer(QGraphicsView):
                 # Clicking on measurement, handle, text, or measurement child - let Qt handle it
                 # Don't deselect here - allow normal selection behavior
                 pass
+            elif is_text_annotation_item or is_arrow_annotation_item:
+                # Clicking on text or arrow annotation - let Qt handle it for selection
+                # Don't start new annotation if clicking on existing one
+                pass
             elif item is None or item == self.image_item:
                 # Clicking on empty space or image item - deselect measurements and emit deselection signal
                 # This ensures measurements are deselected even after handle dragging
+                from tools.text_annotation_tool import TextAnnotationItem
+                from tools.arrow_annotation_tool import ArrowAnnotationItem
                 if self.scene is not None:
-                    # Deselect all measurements and their text labels
+                    # Deselect all measurements, text annotations, arrow annotations, and their text labels
                     for scene_item in self.scene.items():
-                        if isinstance(scene_item, (MeasurementItem, DraggableMeasurementText)):
+                        if isinstance(scene_item, (MeasurementItem, DraggableMeasurementText, TextAnnotationItem, ArrowAnnotationItem)):
                             scene_item.setSelected(False)
                     # Also clear scene selection to ensure everything is deselected
                     self.scene.clearSelection()
@@ -1062,6 +1113,30 @@ class ImageViewer(QGraphicsView):
                             
                             # Emit signal with crosshair information
                             self.crosshair_clicked.emit(scene_pos, pixel_value_str, x, y, z)
+                elif self.mouse_mode == "text_annotation":
+                    # Text annotation mode - start text annotation (if not clicking on existing annotation)
+                    if not is_text_annotation_item:
+                        # Finish any current annotation first (if editing)
+                        if self.text_annotating:
+                            # Cancel current annotation if it exists
+                            self.text_annotation_finished.emit()
+                        # Start new annotation
+                        self.text_annotating = True
+                        self.text_annotation_start_pos = scene_pos
+                        self.text_annotation_started.emit(scene_pos)
+                    else:
+                        # Clicking on existing text annotation - let it handle the event (for selection/editing)
+                        pass
+                elif self.mouse_mode == "arrow_annotation":
+                    # Arrow annotation mode - start arrow annotation (if not clicking on existing annotation)
+                    if not is_arrow_annotation_item:
+                        # Cancel any current arrow first
+                        if self.arrow_annotating:
+                            self.arrow_annotation_finished.emit()
+                        # Start new arrow
+                        self.arrow_annotating = True
+                        self.arrow_annotation_start_pos = scene_pos
+                        self.arrow_annotation_started.emit(scene_pos)
                 elif self.roi_drawing_mode:
                     # Start ROI drawing
                     self.roi_drawing_start = scene_pos
@@ -1100,10 +1175,12 @@ class ImageViewer(QGraphicsView):
             else:
                 # Clicking on other items (overlay, etc.) but not on ROI or measurement - deselect measurements and allow deselection
                 # This ensures measurements are deselected when clicking on overlays or other items after dragging handles
+                from tools.text_annotation_tool import TextAnnotationItem
+                from tools.arrow_annotation_tool import ArrowAnnotationItem
                 if self.scene is not None:
-                    # Deselect all measurements and their text labels
+                    # Deselect all measurements, text annotations, arrow annotations, and their text labels
                     for scene_item in self.scene.items():
-                        if isinstance(scene_item, (MeasurementItem, DraggableMeasurementText)):
+                        if isinstance(scene_item, (MeasurementItem, DraggableMeasurementText, TextAnnotationItem, ArrowAnnotationItem)):
                             scene_item.setSelected(False)
                     # Also clear scene selection to ensure everything is deselected
                     self.scene.clearSelection()
@@ -1215,6 +1292,46 @@ class ImageViewer(QGraphicsView):
                 # Annotation Options action
                 annotation_options_action = context_menu.addAction("Annotation Options...")
                 annotation_options_action.triggered.connect(self.annotation_options_requested.emit)
+            
+            # Check if clicking on text annotation item
+            from tools.text_annotation_tool import TextAnnotationItem
+            is_text_annotation_item = isinstance(item, TextAnnotationItem)
+            
+            if is_text_annotation_item:
+                # Show context menu for text annotation immediately
+                context_menu = QMenu(self)
+                delete_action = context_menu.addAction("Delete Text Annotation")
+                delete_action.triggered.connect(lambda: self.text_annotation_delete_requested.emit(item))
+                
+                context_menu.addSeparator()
+                
+                # Annotation Options action
+                annotation_options_action = context_menu.addAction("Annotation Options...")
+                annotation_options_action.triggered.connect(self.annotation_options_requested.emit)
+                
+                context_menu.exec(event.globalPosition().toPoint())
+                self.right_mouse_context_menu_shown = True
+                return
+            
+            # Check if clicking on arrow annotation item
+            from tools.arrow_annotation_tool import ArrowAnnotationItem
+            is_arrow_annotation_item = isinstance(item, ArrowAnnotationItem)
+            
+            if is_arrow_annotation_item:
+                # Show context menu for arrow annotation immediately
+                context_menu = QMenu(self)
+                delete_action = context_menu.addAction("Delete Arrow Annotation")
+                delete_action.triggered.connect(lambda: self.arrow_annotation_delete_requested.emit(item))
+                
+                context_menu.addSeparator()
+                
+                # Annotation Options action
+                annotation_options_action = context_menu.addAction("Annotation Options...")
+                annotation_options_action.triggered.connect(self.annotation_options_requested.emit)
+                
+                context_menu.exec(event.globalPosition().toPoint())
+                self.right_mouse_context_menu_shown = True
+                return
             
             # Check if clicking on crosshair item
             from tools.crosshair_manager import CrosshairItem
@@ -1346,6 +1463,14 @@ class ImageViewer(QGraphicsView):
             if event.buttons() & Qt.MouseButton.LeftButton:
                 scene_pos = self.mapToScene(event.position().toPoint())
                 self.measurement_updated.emit(scene_pos)
+        elif self.mouse_mode == "arrow_annotation" and self.arrow_annotating and self.arrow_annotation_start_pos is not None:
+            # Arrow annotation mode - update arrow while dragging
+            if self.dragMode() == QGraphicsView.DragMode.ScrollHandDrag:
+                self.setDragMode(QGraphicsView.DragMode.NoDrag)
+            
+            if event.buttons() & Qt.MouseButton.LeftButton:
+                scene_pos = self.mapToScene(event.position().toPoint())
+                self.arrow_annotation_updated.emit(scene_pos)
         elif self.roi_drawing_mode and self.roi_drawing_start is not None:
             # ROI drawing mode - ensure ScrollHandDrag is disabled
             if self.dragMode() == QGraphicsView.DragMode.ScrollHandDrag:
@@ -1422,6 +1547,17 @@ class ImageViewer(QGraphicsView):
                 self.measuring = False
                 self.measurement_start_pos = None
                 self.measurement_finished.emit()
+            elif self.mouse_mode == "text_annotation" and self.text_annotating:
+                # Text annotation finishing is handled by the text item's editing callback
+                # Don't emit signal here - it will be emitted when editing finishes
+                # Just clear the state
+                # Note: The text item will call its callback when editing finishes
+                pass
+            elif self.mouse_mode == "arrow_annotation" and self.arrow_annotating:
+                # Finish arrow annotation
+                self.arrow_annotating = False
+                self.arrow_annotation_start_pos = None
+                self.arrow_annotation_finished.emit()
             elif self.roi_drawing_mode and self.roi_drawing_start is not None:
                 # Finish ROI drawing
                 self.roi_drawing_finished.emit()

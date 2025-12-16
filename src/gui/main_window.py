@@ -68,6 +68,7 @@ class MainWindow(QMainWindow):
     overlay_font_size_changed = Signal(int)  # Emitted when overlay font size changes
     overlay_font_color_changed = Signal(int, int, int)  # Emitted when overlay font color changes (r, g, b)
     reset_view_requested = Signal()  # Emitted when reset view is requested
+    reset_all_views_requested = Signal()  # Emitted when reset all views is requested
     viewport_resized = Signal()  # Emitted when splitter moves and viewport size changes
     viewport_resizing = Signal()  # Emitted when splitter starts moving (before resize completes)
     series_navigation_requested = Signal(int)  # Emitted when series navigation is requested (-1 for prev, 1 for next)
@@ -390,6 +391,24 @@ class MainWindow(QMainWindow):
         )
         toolbar.addAction(self.mouse_mode_measure_action)
         
+        # Text Annotation tool
+        self.mouse_mode_text_annotation_action = QAction("Text", self)
+        self.mouse_mode_text_annotation_action.setCheckable(True)
+        self.mouse_mode_text_annotation_action.setShortcut(QKeySequence("T"))
+        self.mouse_mode_text_annotation_action.triggered.connect(
+            lambda: self._on_mouse_mode_changed("text_annotation")
+        )
+        toolbar.addAction(self.mouse_mode_text_annotation_action)
+        
+        # Arrow Annotation tool
+        self.mouse_mode_arrow_annotation_action = QAction("Arrow", self)
+        self.mouse_mode_arrow_annotation_action.setCheckable(True)
+        self.mouse_mode_arrow_annotation_action.setShortcut(QKeySequence("A"))
+        self.mouse_mode_arrow_annotation_action.triggered.connect(
+            lambda: self._on_mouse_mode_changed("arrow_annotation")
+        )
+        toolbar.addAction(self.mouse_mode_arrow_annotation_action)
+        
         self.mouse_mode_crosshair_action = QAction("Crosshair", self)
         self.mouse_mode_crosshair_action.setCheckable(True)
         self.mouse_mode_crosshair_action.triggered.connect(
@@ -454,8 +473,16 @@ class MainWindow(QMainWindow):
         # Reset View button
         reset_view_action = QAction("Reset View", self)
         reset_view_action.setToolTip("Reset zoom, pan, window center and level to initial values")
+        reset_view_action.setShortcut(QKeySequence("Shift+V"))
         reset_view_action.triggered.connect(self.reset_view_requested.emit)
         toolbar.addAction(reset_view_action)
+        
+        # Reset All Views button
+        reset_all_views_action = QAction("Reset All Views", self)
+        reset_all_views_action.setToolTip("Reset zoom, pan, window center and level for all subwindows")
+        reset_all_views_action.setShortcut(QKeySequence("Shift+A"))
+        reset_all_views_action.triggered.connect(self.reset_all_views_requested.emit)
+        toolbar.addAction(reset_all_views_action)
         
         toolbar.addSeparator()
         
@@ -1712,6 +1739,8 @@ class MainWindow(QMainWindow):
             self.mouse_mode_ellipse_roi_action,
             self.mouse_mode_rectangle_roi_action,
             self.mouse_mode_measure_action,
+            self.mouse_mode_text_annotation_action,
+            self.mouse_mode_arrow_annotation_action,
             self.mouse_mode_zoom_action,
             self.mouse_mode_pan_action,
             self.mouse_mode_auto_window_level_action
@@ -1758,7 +1787,7 @@ class MainWindow(QMainWindow):
         Get the current mouse mode from toolbar.
         
         Returns:
-            Current mouse mode string ("select", "roi_ellipse", "roi_rectangle", "measure", "zoom", "pan", "auto_window_level")
+            Current mouse mode string ("select", "roi_ellipse", "roi_rectangle", "measure", "text_annotation", "arrow_annotation", "zoom", "pan", "auto_window_level")
         """
         if self.mouse_mode_select_action.isChecked():
             return "select"
@@ -1768,6 +1797,10 @@ class MainWindow(QMainWindow):
             return "roi_rectangle"
         elif self.mouse_mode_measure_action.isChecked():
             return "measure"
+        elif self.mouse_mode_text_annotation_action.isChecked():
+            return "text_annotation"
+        elif self.mouse_mode_arrow_annotation_action.isChecked():
+            return "arrow_annotation"
         elif self.mouse_mode_crosshair_action.isChecked():
             return "crosshair"
         elif self.mouse_mode_zoom_action.isChecked():
@@ -1795,6 +1828,8 @@ class MainWindow(QMainWindow):
             self.mouse_mode_ellipse_roi_action,
             self.mouse_mode_rectangle_roi_action,
             self.mouse_mode_measure_action,
+            self.mouse_mode_text_annotation_action,
+            self.mouse_mode_arrow_annotation_action,
             self.mouse_mode_crosshair_action,
             self.mouse_mode_zoom_action,
             self.mouse_mode_magnifier_action,
@@ -1819,6 +1854,10 @@ class MainWindow(QMainWindow):
             self.mouse_mode_rectangle_roi_action.setChecked(True)
         elif mode == "measure":
             self.mouse_mode_measure_action.setChecked(True)
+        elif mode == "text_annotation":
+            self.mouse_mode_text_annotation_action.setChecked(True)
+        elif mode == "arrow_annotation":
+            self.mouse_mode_arrow_annotation_action.setChecked(True)
         elif mode == "crosshair":
             self.mouse_mode_crosshair_action.setChecked(True)
         elif mode == "zoom":
