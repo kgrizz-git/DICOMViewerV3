@@ -1594,7 +1594,7 @@ class MainWindow(QMainWindow):
         
         # Load icon and convert to base64 for HTML embedding
         icon_html = ""
-        icon_path = Path(__file__).parent.parent.parent / 'resources' / 'images' / 'Gemini_Generated_Image_dvv6ldvv6ldvv6ld_edit-removebg-preview.png'
+        icon_path = Path(__file__).parent.parent.parent / 'resources' / 'icons' / 'dvv6ldvv6ldvv6ld_edit-removebg-preview.png'
         if icon_path.exists():
             pixmap = QPixmap(str(icon_path))
             # Scale icon to reasonable size (96x96 pixels for inline display)

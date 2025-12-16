@@ -107,6 +107,14 @@ a = Analysis(
         # Core DICOM libraries
         'pydicom',
         'pydicom.encoders',
+        'pydicom.tag',
+        'pydicom.datadict',
+        'pydicom.dataelem',
+        'pydicom.uid',
+        'pydicom.multival',
+        'pydicom.pixels',
+        'pydicom.errors',
+        'pydicom.dataset',
         # Note: pydicom.decoders doesn't exist as a separate module
         # Note: pydicom.encoders.gdcm requires GDCM system libraries (not installed)
         # Note: pydicom.encoders.pylibjpeg doesn't exist - pylibjpeg is used via pydicom's plugin system
@@ -169,7 +177,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='resources/icons/luk40iluk40iluk4-removebg-preview.ico',  # Windows icon
+    icon='resources/icons/dvv6ldvv6ldvv6ld_edit-removebg-preview.ico',  # Windows icon
 )
 
 coll = COLLECT(
@@ -189,7 +197,7 @@ coll = COLLECT(
 app = BUNDLE(
     coll,
     name='DICOMViewerV3.app',
-    icon='resources/icons/luk40iluk40iluk4-removebg-preview.icns',  # macOS icon
+    icon='resources/icons/dvv6ldvv6ldvv6ld_edit-removebg-preview.icns',  # macOS icon
     bundle_identifier='com.dicomviewer.v3',
     info_plist={
         'NSPrincipalClass': 'NSApplication',
