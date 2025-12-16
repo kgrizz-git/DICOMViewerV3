@@ -30,10 +30,10 @@ class AnnotationOptionsDialog(QDialog):
     Dialog for customizing annotation appearance settings.
     
     Provides:
-    - ROI font size and color customization
-    - ROI line thickness and color customization
-    - Measurement font size and color customization
-    - Measurement line thickness and color customization
+    - ROI font size, line thickness, and color customization (unified color for font and line)
+    - Measurement font size, line thickness, and color customization (unified color for font and line)
+    - Text annotation font size and color customization
+    - Arrow annotation color customization
     """
     
     # Signal emitted when settings are applied
@@ -70,6 +70,9 @@ class AnnotationOptionsDialog(QDialog):
         self.original_measurement_font_color = self.config_manager.get_measurement_font_color()
         self.original_measurement_line_thickness = self.config_manager.get_measurement_line_thickness()
         self.original_measurement_line_color = self.config_manager.get_measurement_line_color()
+        self.original_text_annotation_color = self.config_manager.get_text_annotation_color()
+        self.original_text_annotation_font_size = self.config_manager.get_text_annotation_font_size()
+        self.original_arrow_annotation_color = self.config_manager.get_arrow_annotation_color()
     
     def _create_ui(self) -> None:
         """Create the UI components."""
@@ -101,22 +104,6 @@ class AnnotationOptionsDialog(QDialog):
         
         roi_layout.addRow("Font Size:", roi_font_size_layout)
         
-        # ROI Font Color
-        roi_font_color_layout = QHBoxLayout()
-        self.roi_font_color_label = QLabel()
-        self.roi_font_color_label.setMinimumSize(50, 30)
-        self.roi_font_color_label.setStyleSheet("background-color: rgb(255, 255, 0); border: 1px solid black;")
-        self.roi_font_color_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        
-        roi_font_color_button = QPushButton("Choose Color...")
-        roi_font_color_button.clicked.connect(lambda: self._choose_color("roi_font"))
-        
-        roi_font_color_layout.addWidget(self.roi_font_color_label)
-        roi_font_color_layout.addWidget(roi_font_color_button)
-        roi_font_color_layout.addStretch()
-        
-        roi_layout.addRow("Font Color:", roi_font_color_layout)
-        
         # ROI Line Thickness with +/- buttons
         roi_line_thickness_layout = QHBoxLayout()
         roi_line_thickness_decrease_button = QPushButton("−")
@@ -139,21 +126,21 @@ class AnnotationOptionsDialog(QDialog):
         
         roi_layout.addRow("Line Thickness:", roi_line_thickness_layout)
         
-        # ROI Line Color
-        roi_line_color_layout = QHBoxLayout()
-        self.roi_line_color_label = QLabel()
-        self.roi_line_color_label.setMinimumSize(50, 30)
-        self.roi_line_color_label.setStyleSheet("background-color: rgb(255, 0, 0); border: 1px solid black;")
-        self.roi_line_color_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # ROI Color (unified for both font and line)
+        roi_color_layout = QHBoxLayout()
+        self.roi_color_label = QLabel()
+        self.roi_color_label.setMinimumSize(50, 30)
+        self.roi_color_label.setStyleSheet("background-color: rgb(255, 0, 0); border: 1px solid black;")
+        self.roi_color_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
-        roi_line_color_button = QPushButton("Choose Color...")
-        roi_line_color_button.clicked.connect(lambda: self._choose_color("roi_line"))
+        roi_color_button = QPushButton("Choose Color...")
+        roi_color_button.clicked.connect(lambda: self._choose_color("roi"))
         
-        roi_line_color_layout.addWidget(self.roi_line_color_label)
-        roi_line_color_layout.addWidget(roi_line_color_button)
-        roi_line_color_layout.addStretch()
+        roi_color_layout.addWidget(self.roi_color_label)
+        roi_color_layout.addWidget(roi_color_button)
+        roi_color_layout.addStretch()
         
-        roi_layout.addRow("Line Color:", roi_line_color_layout)
+        roi_layout.addRow("Color:", roi_color_layout)
         
         roi_group.setLayout(roi_layout)
         layout.addWidget(roi_group)
@@ -206,22 +193,6 @@ class AnnotationOptionsDialog(QDialog):
         
         measurement_layout.addRow("Font Size:", measurement_font_size_layout)
         
-        # Measurement Font Color
-        measurement_font_color_layout = QHBoxLayout()
-        self.measurement_font_color_label = QLabel()
-        self.measurement_font_color_label.setMinimumSize(50, 30)
-        self.measurement_font_color_label.setStyleSheet("background-color: rgb(0, 255, 0); border: 1px solid black;")
-        self.measurement_font_color_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        
-        measurement_font_color_button = QPushButton("Choose Color...")
-        measurement_font_color_button.clicked.connect(lambda: self._choose_color("measurement_font"))
-        
-        measurement_font_color_layout.addWidget(self.measurement_font_color_label)
-        measurement_font_color_layout.addWidget(measurement_font_color_button)
-        measurement_font_color_layout.addStretch()
-        
-        measurement_layout.addRow("Font Color:", measurement_font_color_layout)
-        
         # Measurement Line Thickness with +/- buttons
         measurement_line_thickness_layout = QHBoxLayout()
         measurement_line_thickness_decrease_button = QPushButton("−")
@@ -244,24 +215,92 @@ class AnnotationOptionsDialog(QDialog):
         
         measurement_layout.addRow("Line Thickness:", measurement_line_thickness_layout)
         
-        # Measurement Line Color
-        measurement_line_color_layout = QHBoxLayout()
-        self.measurement_line_color_label = QLabel()
-        self.measurement_line_color_label.setMinimumSize(50, 30)
-        self.measurement_line_color_label.setStyleSheet("background-color: rgb(0, 255, 0); border: 1px solid black;")
-        self.measurement_line_color_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # Measurement Color (unified for both font and line)
+        measurement_color_layout = QHBoxLayout()
+        self.measurement_color_label = QLabel()
+        self.measurement_color_label.setMinimumSize(50, 30)
+        self.measurement_color_label.setStyleSheet("background-color: rgb(0, 255, 0); border: 1px solid black;")
+        self.measurement_color_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
-        measurement_line_color_button = QPushButton("Choose Color...")
-        measurement_line_color_button.clicked.connect(lambda: self._choose_color("measurement_line"))
+        measurement_color_button = QPushButton("Choose Color...")
+        measurement_color_button.clicked.connect(lambda: self._choose_color("measurement"))
         
-        measurement_line_color_layout.addWidget(self.measurement_line_color_label)
-        measurement_line_color_layout.addWidget(measurement_line_color_button)
-        measurement_line_color_layout.addStretch()
+        measurement_color_layout.addWidget(self.measurement_color_label)
+        measurement_color_layout.addWidget(measurement_color_button)
+        measurement_color_layout.addStretch()
         
-        measurement_layout.addRow("Line Color:", measurement_line_color_layout)
+        measurement_layout.addRow("Color:", measurement_color_layout)
         
         measurement_group.setLayout(measurement_layout)
         layout.addWidget(measurement_group)
+        
+        # Text Annotation Settings Group
+        text_group = QGroupBox("Text Annotation Settings")
+        text_layout = QFormLayout()
+        
+        # Text Annotation Font Size with +/- buttons
+        text_font_size_layout = QHBoxLayout()
+        text_font_size_decrease_button = QPushButton("−")
+        text_font_size_decrease_button.setMaximumWidth(30)
+        text_font_size_decrease_button.clicked.connect(lambda: self.text_font_size_spinbox.setValue(max(4, self.text_font_size_spinbox.value() - 1)))
+        
+        self.text_font_size_spinbox = QSpinBox()
+        self.text_font_size_spinbox.setRange(4, 24)
+        self.text_font_size_spinbox.setValue(12)
+        self.text_font_size_spinbox.setSuffix(" pt")
+        
+        text_font_size_increase_button = QPushButton("+")
+        text_font_size_increase_button.setMaximumWidth(30)
+        text_font_size_increase_button.clicked.connect(lambda: self.text_font_size_spinbox.setValue(min(24, self.text_font_size_spinbox.value() + 1)))
+        
+        text_font_size_layout.addWidget(text_font_size_decrease_button)
+        text_font_size_layout.addWidget(self.text_font_size_spinbox)
+        text_font_size_layout.addWidget(text_font_size_increase_button)
+        text_font_size_layout.addStretch()
+        
+        text_layout.addRow("Font Size:", text_font_size_layout)
+        
+        # Text Annotation Color
+        text_color_layout = QHBoxLayout()
+        self.text_color_label = QLabel()
+        self.text_color_label.setMinimumSize(50, 30)
+        self.text_color_label.setStyleSheet("background-color: rgb(255, 255, 0); border: 1px solid black;")
+        self.text_color_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        text_color_button = QPushButton("Choose Color...")
+        text_color_button.clicked.connect(lambda: self._choose_color("text"))
+        
+        text_color_layout.addWidget(self.text_color_label)
+        text_color_layout.addWidget(text_color_button)
+        text_color_layout.addStretch()
+        
+        text_layout.addRow("Color:", text_color_layout)
+        
+        text_group.setLayout(text_layout)
+        layout.addWidget(text_group)
+        
+        # Arrow Annotation Settings Group
+        arrow_group = QGroupBox("Arrow Annotation Settings")
+        arrow_layout = QFormLayout()
+        
+        # Arrow Annotation Color
+        arrow_color_layout = QHBoxLayout()
+        self.arrow_color_label = QLabel()
+        self.arrow_color_label.setMinimumSize(50, 30)
+        self.arrow_color_label.setStyleSheet("background-color: rgb(255, 255, 0); border: 1px solid black;")
+        self.arrow_color_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        arrow_color_button = QPushButton("Choose Color...")
+        arrow_color_button.clicked.connect(lambda: self._choose_color("arrow"))
+        
+        arrow_color_layout.addWidget(self.arrow_color_label)
+        arrow_color_layout.addWidget(arrow_color_button)
+        arrow_color_layout.addStretch()
+        
+        arrow_layout.addRow("Color:", arrow_color_layout)
+        
+        arrow_group.setLayout(arrow_layout)
+        layout.addWidget(arrow_group)
         
         layout.addStretch()
         
@@ -279,31 +318,54 @@ class AnnotationOptionsDialog(QDialog):
         roi_font_size = self.config_manager.get_roi_font_size()
         self.roi_font_size_spinbox.setValue(roi_font_size)
         
-        roi_font_color = self.config_manager.get_roi_font_color()
-        self._update_color_display("roi_font", *roi_font_color)
-        self.roi_font_color = roi_font_color
-        
         roi_line_thickness = self.config_manager.get_roi_line_thickness()
         self.roi_line_thickness_spinbox.setValue(roi_line_thickness)
         
+        # ROI color: prefer line color, fallback to font color
         roi_line_color = self.config_manager.get_roi_line_color()
-        self._update_color_display("roi_line", *roi_line_color)
-        self.roi_line_color = roi_line_color
+        roi_font_color = self.config_manager.get_roi_font_color()
+        # Use line color (prefer it), fallback to font color if they differ
+        # If they're the same, use line color. If different, prefer line unless it's default
+        if roi_line_color == roi_font_color:
+            roi_color = roi_line_color
+        else:
+            # They differ - prefer line color (as per plan)
+            roi_color = roi_line_color
+        self._update_color_display("roi", *roi_color)
+        self.roi_color = roi_color
         
         # Measurement settings
         measurement_font_size = self.config_manager.get_measurement_font_size()
         self.measurement_font_size_spinbox.setValue(measurement_font_size)
         
-        measurement_font_color = self.config_manager.get_measurement_font_color()
-        self._update_color_display("measurement_font", *measurement_font_color)
-        self.measurement_font_color = measurement_font_color
-        
         measurement_line_thickness = self.config_manager.get_measurement_line_thickness()
         self.measurement_line_thickness_spinbox.setValue(measurement_line_thickness)
         
+        # Measurement color: prefer line color, fallback to font color
         measurement_line_color = self.config_manager.get_measurement_line_color()
-        self._update_color_display("measurement_line", *measurement_line_color)
-        self.measurement_line_color = measurement_line_color
+        measurement_font_color = self.config_manager.get_measurement_font_color()
+        # Use line color (prefer it), fallback to font color if they differ
+        # If they're the same, use line color. If different, prefer line
+        if measurement_line_color == measurement_font_color:
+            measurement_color = measurement_line_color
+        else:
+            # They differ - prefer line color (as per plan)
+            measurement_color = measurement_line_color
+        self._update_color_display("measurement", *measurement_color)
+        self.measurement_color = measurement_color
+        
+        # Text annotation settings
+        text_font_size = self.config_manager.get_text_annotation_font_size()
+        self.text_font_size_spinbox.setValue(text_font_size)
+        
+        text_color = self.config_manager.get_text_annotation_color()
+        self._update_color_display("text", *text_color)
+        self.text_color = text_color
+        
+        # Arrow annotation settings
+        arrow_color = self.config_manager.get_arrow_annotation_color()
+        self._update_color_display("arrow", *arrow_color)
+        self.arrow_color = arrow_color
         
         # ROI statistics visibility settings
         default_stats = self.config_manager.get_roi_default_visible_statistics()
@@ -319,25 +381,25 @@ class AnnotationOptionsDialog(QDialog):
         Update the color display label.
         
         Args:
-            color_type: Type of color ("roi_font", "roi_line", "measurement_font", "measurement_line")
+            color_type: Type of color ("roi", "measurement", "text", "arrow")
             r: Red component
             g: Green component
             b: Blue component
         """
-        if color_type == "roi_font":
-            self.roi_font_color_label.setStyleSheet(
+        if color_type == "roi":
+            self.roi_color_label.setStyleSheet(
                 f"background-color: rgb({r}, {g}, {b}); border: 1px solid black;"
             )
-        elif color_type == "roi_line":
-            self.roi_line_color_label.setStyleSheet(
+        elif color_type == "measurement":
+            self.measurement_color_label.setStyleSheet(
                 f"background-color: rgb({r}, {g}, {b}); border: 1px solid black;"
             )
-        elif color_type == "measurement_font":
-            self.measurement_font_color_label.setStyleSheet(
+        elif color_type == "text":
+            self.text_color_label.setStyleSheet(
                 f"background-color: rgb({r}, {g}, {b}); border: 1px solid black;"
             )
-        elif color_type == "measurement_line":
-            self.measurement_line_color_label.setStyleSheet(
+        elif color_type == "arrow":
+            self.arrow_color_label.setStyleSheet(
                 f"background-color: rgb({r}, {g}, {b}); border: 1px solid black;"
             )
     
@@ -346,20 +408,20 @@ class AnnotationOptionsDialog(QDialog):
         Open color picker dialog.
         
         Args:
-            color_type: Type of color to choose ("roi_font", "roi_line", "measurement_font", "measurement_line")
+            color_type: Type of color to choose ("roi", "measurement", "text", "arrow")
         """
-        if color_type == "roi_font":
-            r, g, b = self.roi_font_color
-            title = "Choose ROI Font Color"
-        elif color_type == "roi_line":
-            r, g, b = self.roi_line_color
-            title = "Choose ROI Line Color"
-        elif color_type == "measurement_font":
-            r, g, b = self.measurement_font_color
-            title = "Choose Measurement Font Color"
-        elif color_type == "measurement_line":
-            r, g, b = self.measurement_line_color
-            title = "Choose Measurement Line Color"
+        if color_type == "roi":
+            r, g, b = self.roi_color
+            title = "Choose ROI Color"
+        elif color_type == "measurement":
+            r, g, b = self.measurement_color
+            title = "Choose Measurement Color"
+        elif color_type == "text":
+            r, g, b = self.text_color
+            title = "Choose Text Annotation Color"
+        elif color_type == "arrow":
+            r, g, b = self.arrow_color
+            title = "Choose Arrow Annotation Color"
         else:
             return
         
@@ -367,29 +429,38 @@ class AnnotationOptionsDialog(QDialog):
         
         if color.isValid():
             new_color = (color.red(), color.green(), color.blue())
-            if color_type == "roi_font":
-                self.roi_font_color = new_color
-            elif color_type == "roi_line":
-                self.roi_line_color = new_color
-            elif color_type == "measurement_font":
-                self.measurement_font_color = new_color
-            elif color_type == "measurement_line":
-                self.measurement_line_color = new_color
+            if color_type == "roi":
+                self.roi_color = new_color
+            elif color_type == "measurement":
+                self.measurement_color = new_color
+            elif color_type == "text":
+                self.text_color = new_color
+            elif color_type == "arrow":
+                self.arrow_color = new_color
             self._update_color_display(color_type, *new_color)
     
     def _apply_settings(self) -> None:
         """Apply settings and close dialog."""
         # Save ROI settings
         self.config_manager.set_roi_font_size(self.roi_font_size_spinbox.value())
-        self.config_manager.set_roi_font_color(*self.roi_font_color)
         self.config_manager.set_roi_line_thickness(self.roi_line_thickness_spinbox.value())
-        self.config_manager.set_roi_line_color(*self.roi_line_color)
+        # Set both font and line colors to the unified color
+        self.config_manager.set_roi_font_color(*self.roi_color)
+        self.config_manager.set_roi_line_color(*self.roi_color)
         
         # Save measurement settings
         self.config_manager.set_measurement_font_size(self.measurement_font_size_spinbox.value())
-        self.config_manager.set_measurement_font_color(*self.measurement_font_color)
         self.config_manager.set_measurement_line_thickness(self.measurement_line_thickness_spinbox.value())
-        self.config_manager.set_measurement_line_color(*self.measurement_line_color)
+        # Set both font and line colors to the unified color
+        self.config_manager.set_measurement_font_color(*self.measurement_color)
+        self.config_manager.set_measurement_line_color(*self.measurement_color)
+        
+        # Save text annotation settings
+        self.config_manager.set_text_annotation_font_size(self.text_font_size_spinbox.value())
+        self.config_manager.set_text_annotation_color(*self.text_color)
+        
+        # Save arrow annotation settings
+        self.config_manager.set_arrow_annotation_color(*self.arrow_color)
         
         # Save ROI statistics visibility settings
         selected_stats = []

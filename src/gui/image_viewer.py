@@ -1320,7 +1320,7 @@ class ImageViewer(QGraphicsView):
             if is_arrow_annotation_item:
                 # Show context menu for arrow annotation immediately
                 context_menu = QMenu(self)
-                delete_action = context_menu.addAction("Delete Arrow Annotation")
+                delete_action = context_menu.addAction("Delete Arrow")
                 delete_action.triggered.connect(lambda: self.arrow_annotation_delete_requested.emit(item))
                 
                 context_menu.addSeparator()

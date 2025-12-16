@@ -49,9 +49,9 @@ class TextAnnotationItem(QGraphicsTextItem):
         font_size = 12  # Default
         font_color = (255, 255, 0)  # Default yellow
         if self.config_manager:
-            # Use measurement font settings as default (or add text-specific settings later)
-            font_size = self.config_manager.get_measurement_font_size()
-            font_color = self.config_manager.get_measurement_font_color()
+            # Use text annotation specific settings
+            font_size = self.config_manager.get_text_annotation_font_size()
+            font_color = self.config_manager.get_text_annotation_color()
         
         # Set font
         font = QFont("Arial", font_size)
@@ -405,9 +405,9 @@ class TextAnnotationTool:
         if config_manager is None:
             return
         
-        # Get new settings from config
-        font_size = config_manager.get_measurement_font_size()
-        font_color = config_manager.get_measurement_font_color()
+        # Get new settings from config (text annotation specific)
+        font_size = config_manager.get_text_annotation_font_size()
+        font_color = config_manager.get_text_annotation_color()
         
         # Update all annotations
         for key, annotation_list in self.annotations.items():
