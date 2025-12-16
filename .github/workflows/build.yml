@@ -70,7 +70,10 @@ jobs:
         run: |
           mkdir -p AppDir/usr/bin
           mkdir -p AppDir/usr/share/applications
+          mkdir -p AppDir/usr/share/icons/hicolor/128x128/apps
           mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+          mkdir -p AppDir/usr/share/icons/hicolor/512x512/apps
+          mkdir -p AppDir/usr/share/icons/hicolor/scalable/apps
 
       - name: Copy PyInstaller build to AppDir
         if: matrix.os == 'ubuntu-latest'
@@ -97,8 +100,17 @@ jobs:
       - name: Copy icon
         if: matrix.os == 'ubuntu-latest'
         run: |
+          # Copy icon to multiple sizes for better desktop environment compatibility
+          # Desktop environments will use the appropriate size
+          cp resources/icons/dvv6ldvv6ldvv6ld_edit-removebg-preview.png \
+             AppDir/usr/share/icons/hicolor/128x128/apps/DICOMViewerV3.png
           cp resources/icons/dvv6ldvv6ldvv6ld_edit-removebg-preview.png \
              AppDir/usr/share/icons/hicolor/256x256/apps/DICOMViewerV3.png
+          cp resources/icons/dvv6ldvv6ldvv6ld_edit-removebg-preview.png \
+             AppDir/usr/share/icons/hicolor/512x512/apps/DICOMViewerV3.png
+          # Also add to scalable directory (desktop environments can scale as needed)
+          cp resources/icons/dvv6ldvv6ldvv6ld_edit-removebg-preview.png \
+             AppDir/usr/share/icons/hicolor/scalable/apps/DICOMViewerV3.png
 
       - name: Create AppRun script
         if: matrix.os == 'ubuntu-latest'
