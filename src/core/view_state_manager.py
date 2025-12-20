@@ -981,8 +981,8 @@ class ViewStateManager:
     
     def set_rescale_parameters(self, slope: Optional[float], intercept: Optional[float], rescale_type: Optional[str]) -> None:
         # DEBUG: Log when rescale_type is set
-        print(f"[WL UNIT DEBUG] set_rescale_parameters called")
-        print(f"[WL UNIT DEBUG]   slope: {slope}, intercept: {intercept}, rescale_type: {rescale_type}")
+        # print(f"[WL UNIT DEBUG] set_rescale_parameters called")
+        # print(f"[WL UNIT DEBUG]   slope: {slope}, intercept: {intercept}, rescale_type: {rescale_type}")
         """
         Set rescale parameters from dataset.
         

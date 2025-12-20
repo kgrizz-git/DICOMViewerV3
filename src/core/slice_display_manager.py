@@ -295,10 +295,10 @@ class SliceDisplayManager:
         update_metadata: bool = True
     ) -> None:
         # DEBUG: Log when display_slice is called
-        print(f"[WL UNIT DEBUG] display_slice called")
-        print(f"[WL UNIT DEBUG]   current_slice_index: {current_slice_index}")
-        if self.view_state_manager:
-            print(f"[WL UNIT DEBUG]   view_state_manager.rescale_type (before): {self.view_state_manager.rescale_type}")
+        # print(f"[WL UNIT DEBUG] display_slice called")
+        # print(f"[WL UNIT DEBUG]   current_slice_index: {current_slice_index}")
+        # if self.view_state_manager:
+        #     print(f"[WL UNIT DEBUG]   view_state_manager.rescale_type (before): {self.view_state_manager.rescale_type}")
         """
         Display a DICOM slice.
         
@@ -337,7 +337,7 @@ class SliceDisplayManager:
             )
             self.view_state_manager.set_rescale_parameters(rescale_slope, rescale_intercept, rescale_type)
             # DEBUG: Log rescale_type after setting
-            print(f"[WL UNIT DEBUG] display_slice: After set_rescale_parameters, rescale_type: {self.view_state_manager.rescale_type}")
+            # print(f"[WL UNIT DEBUG] display_slice: After set_rescale_parameters, rescale_type: {self.view_state_manager.rescale_type}")
             
             # Get composite series key from dataset to check if we're in the same series
             new_series_uid = get_composite_series_key(dataset)

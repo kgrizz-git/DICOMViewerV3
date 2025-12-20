@@ -303,6 +303,51 @@ class QuickStartGuideDialog(QDialog):
                 <li>Press <code>Cmd+Shift+Z</code> (Mac) or <code>Ctrl+Shift+Z</code> (Windows/Linux) to redo the last undone operation</li>
             </ul>
             
+            <h2 id="text-arrow-annotations">Text and Arrow Annotations</h2>
+            <h3>Creating Text Annotations</h3>
+            <ul>
+                <li>Set mouse mode to <strong>"Text"</strong> (toolbar, context menu, or press <code>T</code> key)</li>
+                <li>Left-click on the image to place a text annotation</li>
+                <li>Text editing starts immediately - type your text</li>
+                <li>Press <code>Enter</code> to finish editing, or <code>Escape</code> to cancel</li>
+                <li>Click elsewhere or press <code>Tab</code> to finish editing</li>
+            </ul>
+            
+            <h3>Editing Text Annotations</h3>
+            <ul>
+                <li>Double-click on an existing text annotation to edit it inline</li>
+                <li>Press <code>Enter</code> to save changes, or <code>Escape</code> to cancel</li>
+            </ul>
+            
+            <h3>Creating Arrow Annotations</h3>
+            <ul>
+                <li>Set mouse mode to <strong>"Arrow"</strong> (toolbar, context menu, or press <code>A</code> key)</li>
+                <li>Left-click and drag to draw an arrow</li>
+                <li>Release mouse button to finish the arrow</li>
+            </ul>
+            
+            <h3>Selecting and Deleting Text and Arrow Annotations</h3>
+            <ul>
+                <li>Set mouse mode to <strong>"Select"</strong></li>
+                <li>Left-click on a text or arrow annotation to select it (highlighted in yellow)</li>
+                <li>Press <code>Delete</code> key to delete selected annotation</li>
+                <li>Or right-click on annotation → "Delete Text Annotation" or "Delete Arrow"</li>
+            </ul>
+            
+            <h3>Undo/Redo for Text and Arrow Annotations</h3>
+            <ul>
+                <li>All text and arrow annotation operations support undo/redo: creating, moving, and deleting annotations</li>
+                <li>Press <code>Cmd+Z</code> (Mac) or <code>Ctrl+Z</code> (Windows/Linux) to undo the last operation</li>
+                <li>Press <code>Cmd+Shift+Z</code> (Mac) or <code>Ctrl+Shift+Z</code> (Windows/Linux) to redo the last undone operation</li>
+            </ul>
+            
+            <h3>Copy/Paste for Text and Arrow Annotations</h3>
+            <ul>
+                <li>Select text or arrow annotations and press <code>Cmd+C</code> / <code>Ctrl+C</code> to copy</li>
+                <li>Press <code>Cmd+V</code> / <code>Ctrl+V</code> to paste to current slice</li>
+                <li>Smart offset: duplicates appear offset when pasting to same slice, no offset when pasting to different slice</li>
+            </ul>
+            
             <h2 id="rois">ROIs (Regions of Interest)</h2>
             <h3>Creating ROIs</h3>
             <ul>
@@ -450,10 +495,12 @@ class QuickStartGuideDialog(QDialog):
             <h2 id="mouse-modes">Mouse Modes</h2>
             <p>Change mouse mode via toolbar, menu bar, or context menu:</p>
             <ul>
-                <li><strong>Select:</strong> Click to select ROIs and measurements for deletion</li>
+                <li><strong>Select:</strong> Click to select ROIs, measurements, text annotations, and arrow annotations for deletion</li>
                 <li><strong>Ellipse ROI:</strong> Draw elliptical regions of interest</li>
                 <li><strong>Rectangle ROI:</strong> Draw rectangular regions of interest</li>
                 <li><strong>Measure:</strong> Create distance measurements between two points</li>
+                <li><strong>Text:</strong> Click to place and edit text annotations</li>
+                <li><strong>Arrow:</strong> Click and drag to draw arrow annotations</li>
                 <li><strong>Zoom:</strong> Left-click and drag vertically to zoom in/out</li>
                 <li><strong>Pan:</strong> Left-click and drag to move the image around</li>
                 <li><strong>Window/Level ROI:</strong> Draw ROI to auto-adjust window/level</li>
@@ -475,17 +522,22 @@ class QuickStartGuideDialog(QDialog):
                 <li><strong><code>R</code>:</strong> Rectangle ROI mode (draw rectangular regions of interest)</li>
                 <li><strong><code>E</code>:</strong> Ellipse ROI mode (draw elliptical regions of interest)</li>
                 <li><strong><code>M</code>:</strong> Measure mode (create distance measurements)</li>
-                <li><strong><code>S</code>:</strong> Select mode (select ROIs and measurements)</li>
+                <li><strong><code>S</code>:</strong> Select mode (select ROIs, measurements, text annotations, and arrow annotations)</li>
                 <li><strong><code>W</code>:</strong> Window/Level ROI mode (auto-adjust from ROI)</li>
+                <li><strong><code>T</code>:</strong> Text annotation mode (click to place and edit text labels)</li>
+                <li><strong><code>A</code>:</strong> Arrow annotation mode (click and drag to draw arrows)</li>
                 <li><strong><code>C</code>:</strong> Clear all measurements on current slice</li>
                 <li><strong><code>D</code>:</strong> Delete all ROIs on current slice (including crosshairs)</li>
                 <li><strong><code>V</code>:</strong> Reset view (restore initial zoom, pan, and window/level for focused subwindow)</li>
-                <li><strong><code>A</code>:</strong> Reset all views (reset zoom, pan, and window/level for all subwindows)</li>
+                <li><strong><code>Shift+V</code>:</strong> Reset view (same as <code>V</code>)</li>
+                <li><strong><code>Shift+A</code>:</strong> Reset all views (reset zoom, pan, and window/level for all subwindows)</li>
                 <li><strong><code>H</code>:</strong> Crosshair mode (draw crosshairs to display pixel values and coordinates)</li>
                 <li><strong><code>N</code>:</strong> Toggle series navigator bar visibility</li>
                 <li><strong><code>I</code>:</strong> Invert image colors</li>
-                <li><strong><code>Cmd+Z / Ctrl+Z</code>:</strong> Undo last operation (ROI/measurement creation, move, or deletion)</li>
+                <li><strong><code>Cmd+Z / Ctrl+Z</code>:</strong> Undo last operation (ROI/measurement/text/arrow annotation creation, move, or deletion)</li>
                 <li><strong><code>Cmd+Shift+Z / Ctrl+Shift+Z</code>:</strong> Redo last undone operation</li>
+                <li><strong><code>Cmd+C / Ctrl+C</code>:</strong> Copy selected annotations (ROIs, measurements, crosshairs, text annotations, arrow annotations)</li>
+                <li><strong><code>Cmd+V / Ctrl+V</code>:</strong> Paste annotations to current slice</li>
                 <li><strong><code>Spacebar</code>:</strong> Toggle overlay visibility
                     <ul>
                         <li>First press: Hides corner text overlays</li>
@@ -501,12 +553,14 @@ class QuickStartGuideDialog(QDialog):
             </ul>
             
             <h2 id="customization">Customization</h2>
-            <h3>ROI and Measurement Appearance</h3>
-            <p>Customize the appearance of ROIs and measurements via <strong>View → Annotation Options</strong>:</p>
+            <h3>Annotation Appearance</h3>
+            <p>Customize the appearance of annotations via <strong>View → Annotation Options</strong>:</p>
             <ul>
-                <li><strong>ROI Settings:</strong> Adjust font size, font color, line thickness, and line color for ROI statistics overlays</li>
-                <li><strong>Measurement Settings:</strong> Adjust font size, font color, line thickness, and line color for measurement lines and text</li>
-                <li>Changes apply immediately to all existing and new ROIs/measurements</li>
+                <li><strong>ROI Settings:</strong> Adjust font size, line thickness, and color for ROI statistics overlays (unified color for both font and line)</li>
+                <li><strong>Measurement Settings:</strong> Adjust font size, line thickness, and color for measurement lines and text (unified color for both font and line)</li>
+                <li><strong>Text Annotation Settings:</strong> Adjust font size and color for text annotations</li>
+                <li><strong>Arrow Annotation Settings:</strong> Adjust color for arrow annotations</li>
+                <li>Changes apply immediately to all existing and new annotations</li>
                 <li>Your preferences are saved and remembered between sessions</li>
             </ul>
             

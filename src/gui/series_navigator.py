@@ -788,6 +788,36 @@ class SeriesNavigator(QWidget):
             event.accept()
             return
         
+        # Check if any text annotation is being edited - if so, don't process arrow keys for navigation
+        if event.key() == Qt.Key.Key_Left or event.key() == Qt.Key.Key_Right:
+            # Check if the focused widget is a TextAnnotationItem or if any text annotation is being edited
+            from PySide6.QtWidgets import QApplication
+            from tools.text_annotation_tool import TextAnnotationItem, is_any_text_annotation_editing
+            
+            focused_widget = QApplication.focusWidget()
+            # Check if focused widget is a TextAnnotationItem that's being edited
+            if isinstance(focused_widget, TextAnnotationItem) and getattr(focused_widget, '_editing', False):
+                # Let the text editor handle arrow keys for cursor movement
+                super().keyPressEvent(event)
+                return
+            
+            # Also check the scene if we can find it
+            scene = None
+            parent = self.parent()
+            while parent:
+                if hasattr(parent, 'scene'):
+                    scene = parent.scene
+                    break
+                elif hasattr(parent, 'image_viewer') and hasattr(parent.image_viewer, 'scene'):
+                    scene = parent.image_viewer.scene
+                    break
+                parent = parent.parent()
+            
+            if scene is not None and is_any_text_annotation_editing(scene):
+                # Let the text editor handle arrow keys for cursor movement
+                super().keyPressEvent(event)
+                return
+        
         if event.key() == Qt.Key.Key_Left:
             # Left arrow: previous series
             timestamp = time.time()

@@ -44,6 +44,8 @@ class TextAnnotationItem(QGraphicsTextItem):
         self._editing = False
         self._original_text = text
         self.on_editing_finished = on_editing_finished
+        self._is_new_annotation = False  # Flag to distinguish new vs existing annotations
+        self._ignore_focus_loss_until = None  # Timestamp to ignore focus loss until (for preventing premature focus loss)
         
         # Get font settings from config
         font_size = 12  # Default
@@ -70,8 +72,24 @@ class TextAnnotationItem(QGraphicsTextItem):
         # Set z-value above measurements but below overlays
         self.setZValue(160)
         
-        # Enable text interaction for editing
-        self.setTextInteractionFlags(Qt.TextInteractionFlag.TextEditorInteraction)
+        # Text interaction will be enabled only when editing starts
+        # Start with no text interaction to prevent accidental editing on mouseover
+        self.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
+        
+        # Enable undo/redo for text editing
+        self.document().setUndoRedoEnabled(True)
+        
+        # Install event filter to catch Enter key before text editor processes it
+        self.installEventFilter(self)
+        
+        # Connect to document's contents change to detect newlines
+        self.document().contentsChange.connect(self._on_contents_changed)
+        
+        # Move tracking callback (set by coordinator)
+        self.on_moved_callback = None
+        # Text edit finished callback (set by coordinator for existing annotations)
+        # Callback signature: (text_item, old_text: str, new_text: str) -> None
+        self.on_text_edit_finished = None
     
     def mouseDoubleClickEvent(self, event: QGraphicsSceneMouseEvent) -> None:
         """
@@ -86,8 +104,18 @@ class TextAnnotationItem(QGraphicsTextItem):
     
     def start_editing(self) -> None:
         """Start inline editing mode."""
+        import time
         self._editing = True
         self._original_text = self.toPlainText()
+        # If editing existing annotation (no callback), clear the new annotation flag
+        if self.on_editing_finished is None:
+            self._is_new_annotation = False
+        # Set timestamp to ignore focus loss for 200ms after starting (prevents premature focus loss)
+        if self._is_new_annotation:
+            self._ignore_focus_loss_until = time.time() + 0.2  # 200ms grace period
+        print(f"[ANNOTATION DEBUG] TextAnnotationItem.start_editing: _is_new_annotation={self._is_new_annotation}, callback={'exists' if self.on_editing_finished is not None else 'None'}, ignore_focus_loss_until={self._ignore_focus_loss_until}")
+        # Enable text interaction for editing
+        self.setTextInteractionFlags(Qt.TextInteractionFlag.TextEditorInteraction)
         # Set focus to enable text editing
         self.setFocus()
         # Select all text for easy replacement using text cursor
@@ -103,22 +131,55 @@ class TextAnnotationItem(QGraphicsTextItem):
         Args:
             accept: If True, keep changes; if False, revert to original text
         """
+        print(f"[ANNOTATION DEBUG] TextAnnotationItem.finish_editing: called, _editing={self._editing}, accept={accept}, _is_new_annotation={self._is_new_annotation}, callback={'exists' if self.on_editing_finished is not None else 'None'}, text={repr(self.toPlainText())}")
+        
         if not self._editing:
+            print(f"[ANNOTATION DEBUG] TextAnnotationItem.finish_editing: early return (not editing)")
             return
         
         if not accept:
             self.setPlainText(self._original_text)
+            print(f"[ANNOTATION DEBUG] TextAnnotationItem.finish_editing: reverted to original text")
+        
+        # Store current text before clearing state
+        current_text = self.toPlainText()
+        current_is_new = self._is_new_annotation
+        has_callback = self.on_editing_finished is not None
         
         self._editing = False
+        self._is_new_annotation = False  # Clear flag after finishing
+        print(f"[ANNOTATION DEBUG] TextAnnotationItem.finish_editing: state cleared, _is_new_annotation={self._is_new_annotation}, text={repr(current_text)}")
+        
+        # Disable text interaction to prevent accidental editing on mouseover
+        self.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
+        
         self.clearFocus()
         # Clear selection
         text_cursor = self.textCursor()
         text_cursor.clearSelection()
         self.setTextCursor(text_cursor)
         
-        # Call callback if provided
-        if self.on_editing_finished:
+        # Check if text changed for existing annotation (not new annotation)
+        # has_callback means it's a new annotation being created, not an existing one being edited
+        print(f"[ANNOTATION DEBUG] TextAnnotationItem.finish_editing: checking edit callback - has_callback={has_callback}, on_text_edit_finished={'exists' if self.on_text_edit_finished is not None else 'None'}, original_text='{self._original_text}', current_text='{current_text}'")
+        if not has_callback and self.on_text_edit_finished is not None:
+            # Existing annotation was edited - check if text changed
+            if current_text != self._original_text:
+                print(f"[ANNOTATION DEBUG] TextAnnotationItem.finish_editing: text changed for existing annotation, old='{self._original_text}', new='{current_text}', calling on_text_edit_finished")
+                self.on_text_edit_finished(self, self._original_text, current_text)
+                print(f"[ANNOTATION DEBUG] TextAnnotationItem.finish_editing: on_text_edit_finished returned")
+            else:
+                print(f"[ANNOTATION DEBUG] TextAnnotationItem.finish_editing: text unchanged for existing annotation, not creating edit command")
+        elif not has_callback and self.on_text_edit_finished is None:
+            print(f"[ANNOTATION DEBUG] TextAnnotationItem.finish_editing: existing annotation edited but on_text_edit_finished is None - callback not set up!")
+        
+        # Call callback if provided (for new annotations)
+        if has_callback:
+            print(f"[ANNOTATION DEBUG] TextAnnotationItem.finish_editing: calling callback with accept={accept}")
             self.on_editing_finished(accept)
+            print(f"[ANNOTATION DEBUG] TextAnnotationItem.finish_editing: callback returned")
+        else:
+            print(f"[ANNOTATION DEBUG] TextAnnotationItem.finish_editing: no callback to call")
     
     def keyPressEvent(self, event: QKeyEvent) -> None:
         """
@@ -128,29 +189,243 @@ class TextAnnotationItem(QGraphicsTextItem):
             event: Key event
         """
         if self._editing:
-            if event.key() == Qt.Key.Key_Return or event.key() == Qt.Key.Key_Enter:
-                # Finish editing on Enter
+            # Handle Cmd+Z / Ctrl+Z for text editing undo
+            if (event.key() == Qt.Key.Key_Z and 
+                (event.modifiers() & Qt.KeyboardModifier.ControlModifier or 
+                 event.modifiers() & Qt.KeyboardModifier.MetaModifier)):
+                if self.document().isUndoAvailable():
+                    self.document().undo()
+                    event.accept()
+                    return
+            # Handle Cmd+Shift+Z / Ctrl+Shift+Z for text editing redo
+            elif (event.key() == Qt.Key.Key_Z and 
+                  (event.modifiers() & Qt.KeyboardModifier.ControlModifier or 
+                   event.modifiers() & Qt.KeyboardModifier.MetaModifier) and
+                  event.modifiers() & Qt.KeyboardModifier.ShiftModifier):
+                if self.document().isRedoAvailable():
+                    self.document().redo()
+                    event.accept()
+                    return
+            elif event.key() == Qt.Key.Key_Return or event.key() == Qt.Key.Key_Enter:
+                # Finish editing on Enter - prevent newline
+                print(f"[ANNOTATION DEBUG] TextAnnotationItem.keyPressEvent: Enter key pressed, _editing={self._editing}")
                 self.finish_editing(accept=True)
                 event.accept()
-                return
+                return  # Don't call super() - prevent text editor from processing Enter
             elif event.key() == Qt.Key.Key_Escape:
                 # Cancel editing on Escape
+                print(f"[ANNOTATION DEBUG] TextAnnotationItem.keyPressEvent: Escape key pressed, _editing={self._editing}")
                 self.finish_editing(accept=False)
                 event.accept()
-                return
+                return  # Don't call super() - prevent text editor from processing Escape
         
         super().keyPressEvent(event)
+    
+    def inputMethodEvent(self, event) -> None:
+        """
+        Handle input method events (for intercepting Enter key before it becomes text).
+        
+        Args:
+            event: Input method event
+        """
+        from PySide6.QtCore import Qt
+        from PySide6.QtGui import QInputMethodEvent
+        
+        # Debug: Log all input method events
+        commit_str = event.commitString() if hasattr(event, 'commitString') else None
+        preedit_str = event.preeditString() if hasattr(event, 'preeditString') else None
+        print(f"[ANNOTATION DEBUG] TextAnnotationItem.inputMethodEvent: called, _editing={self._editing}, commitString={repr(commit_str)}, preeditString={repr(preedit_str)}")
+        
+        # Check if this is an Enter key input
+        if commit_str:
+            # Check if the commit string contains newline (Enter key)
+            if '\n' in commit_str or '\r' in commit_str:
+                print(f"[ANNOTATION DEBUG] TextAnnotationItem.inputMethodEvent: Enter key detected in commitString, intercepting")
+                # Finish editing instead of inserting newline
+                if self._editing:
+                    self.finish_editing(accept=True)
+                    event.accept()
+                    return
+            else:
+                print(f"[ANNOTATION DEBUG] TextAnnotationItem.inputMethodEvent: Non-Enter input, commitString={repr(commit_str)}")
+        
+        # For other input, call super
+        super().inputMethodEvent(event)
+    
+    def insertFromMimeData(self, source) -> None:
+        """
+        Override to intercept Enter key when pasting or inserting text.
+        
+        Args:
+            source: MimeData source
+        """
+        if self._editing and source.hasText():
+            text = source.text()
+            # Check if text contains newline (Enter key)
+            if '\n' in text or '\r' in text:
+                print(f"[ANNOTATION DEBUG] TextAnnotationItem.insertFromMimeData: Enter key detected in text, intercepting")
+                # Finish editing instead of inserting newline
+                self.finish_editing(accept=True)
+                return
+        
+        super().insertFromMimeData(source)
     
     def focusOutEvent(self, event) -> None:
         """
         Handle focus loss - finish editing.
         
+        Only processes focus loss for items that are currently being created (have on_editing_finished callback).
+        Existing annotations should not trigger this callback.
+        
         Args:
             event: Focus event
         """
-        if self._editing:
-            self.finish_editing(accept=True)
+        from PySide6.QtCore import Qt
+        import time
+        focus_reason = event.reason()
+        current_text = self.toPlainText()
+        
+        # Check if we should ignore this focus loss (grace period after starting editing)
+        ignore_focus_loss = False
+        if self._ignore_focus_loss_until is not None:
+            if time.time() < self._ignore_focus_loss_until:
+                ignore_focus_loss = True
+                print(f"[ANNOTATION DEBUG] TextAnnotationItem.focusOutEvent: ignoring focus loss (grace period), reason={focus_reason}")
+            else:
+                self._ignore_focus_loss_until = None  # Clear after grace period
+        
+        print(f"[ANNOTATION DEBUG] TextAnnotationItem.focusOutEvent: called, reason={focus_reason}, _editing={self._editing}, _is_new_annotation={self._is_new_annotation}, callback={'exists' if self.on_editing_finished is not None else 'None'}, text={repr(current_text)}, ignore_focus_loss={ignore_focus_loss}")
+        
+        # Check conditions for processing
+        should_process = self._editing and self._is_new_annotation and self.on_editing_finished is not None and not ignore_focus_loss
+        print(f"[ANNOTATION DEBUG] TextAnnotationItem.focusOutEvent: should_process={should_process} (_editing={self._editing}, _is_new_annotation={self._is_new_annotation}, callback={'exists' if self.on_editing_finished is not None else 'None'}, ignore_focus_loss={ignore_focus_loss})")
+        
+        # Only finish editing if we're actually editing AND we're creating a new annotation
+        # Existing annotations should have _is_new_annotation = False and on_editing_finished = None
+        if should_process:
+            # Check focus reason - if it's a mouse click, we might be selecting the item
+            # In that case, only finish if text is not empty
+            # If focus is lost due to mouse click and text is empty, cancel
+            # Otherwise, accept the changes
+            if focus_reason == Qt.FocusReason.MouseFocusReason:
+                # Mouse click - check if text is empty
+                text_stripped = current_text.strip()
+                print(f"[ANNOTATION DEBUG] TextAnnotationItem.focusOutEvent: MouseFocusReason, text_stripped={repr(text_stripped)}")
+                if not text_stripped:
+                    print(f"[ANNOTATION DEBUG] TextAnnotationItem.focusOutEvent: Empty text, canceling")
+                    self.finish_editing(accept=False)
+                else:
+                    print(f"[ANNOTATION DEBUG] TextAnnotationItem.focusOutEvent: Non-empty text, accepting")
+                    self.finish_editing(accept=True)
+            else:
+                # Other focus reasons (tab, window activation, etc.) - accept changes
+                print(f"[ANNOTATION DEBUG] TextAnnotationItem.focusOutEvent: Non-mouse focus loss, accepting")
+                self.finish_editing(accept=True)
+        else:
+            print(f"[ANNOTATION DEBUG] TextAnnotationItem.focusOutEvent: Skipping (should_process=False)")
+        
         super().focusOutEvent(event)
+    
+    def eventFilter(self, obj, event) -> bool:
+        """
+        Event filter to intercept Enter key before text editor processes it.
+        
+        Args:
+            obj: Object that received the event
+            event: Event
+            
+        Returns:
+            True if event was handled, False otherwise
+        """
+        from PySide6.QtCore import QEvent
+        from PySide6.QtGui import QKeyEvent
+        
+        # Only filter events for this item
+        if obj != self:
+            return False
+        
+        # Check for key press events
+        if event.type() == QEvent.Type.KeyPress:
+            key_event = event
+            if isinstance(key_event, QKeyEvent):
+                if self._editing and (key_event.key() == Qt.Key.Key_Return or key_event.key() == Qt.Key.Key_Enter):
+                    print(f"[ANNOTATION DEBUG] TextAnnotationItem.eventFilter: Enter key intercepted in event filter")
+                    # Finish editing instead of inserting newline
+                    self.finish_editing(accept=True)
+                    return True  # Event handled
+        
+        # Let other events through
+        return False
+    
+    def _on_contents_changed(self, position: int, chars_removed: int, chars_added: int) -> None:
+        """
+        Handle document contents change - detect and remove newlines.
+        
+        Args:
+            position: Position where change occurred
+            chars_removed: Number of characters removed
+            chars_added: Number of characters added
+        """
+        if not self._editing:
+            return
+        
+        # Get the text that was just added
+        text = self.toPlainText()
+        
+        # Check if text contains newlines
+        if '\n' in text or '\r' in text:
+            print(f"[ANNOTATION DEBUG] TextAnnotationItem._on_contents_changed: Newline detected in text, removing and finishing editing")
+            # Remove newlines
+            text_without_newlines = text.replace('\n', '').replace('\r', '')
+            # Set text without newlines
+            self.setPlainText(text_without_newlines)
+            # Finish editing
+            self.finish_editing(accept=True)
+    
+    def itemChange(self, change: QGraphicsItem.GraphicsItemChange, value) -> object:
+        """
+        Handle item changes (e.g., position changes when moved).
+        
+        Args:
+            change: Type of change
+            value: New value
+            
+        Returns:
+            Modified value
+        """
+        if change == QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged:
+            # Call movement callback if set (for undo/redo tracking)
+            if self.on_moved_callback:
+                try:
+                    # #region agent log
+                    with open('/Users/kevingrizzard/Documents/GitHub/DICOMViewerV3/.cursor/debug.log', 'a') as f:
+                        import json
+                        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"C","location":"text_annotation_tool.py:itemChange","message":"Text annotation moved","data":{"item_id":str(id(self)),"position":str(self.pos()),"has_callback":self.on_moved_callback is not None},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+                    # #endregion
+                    self.on_moved_callback(self)
+                except Exception:
+                    pass
+        
+        return super().itemChange(change, value)
+
+
+def is_any_text_annotation_editing(scene) -> bool:
+    """
+    Check if any text annotation in the scene is currently being edited.
+    
+    Args:
+        scene: QGraphicsScene to check
+        
+    Returns:
+        True if any TextAnnotationItem in the scene has _editing = True, False otherwise
+    """
+    if scene is None:
+        return False
+    from tools.text_annotation_tool import TextAnnotationItem
+    for item in scene.items():
+        if isinstance(item, TextAnnotationItem) and getattr(item, '_editing', False):
+            return True
+    return False
 
 
 class TextAnnotationTool:
@@ -209,6 +484,9 @@ class TextAnnotationTool:
         # Create a temporary text item for preview
         self.current_item = TextAnnotationItem("", self.config_manager, on_editing_finished=on_editing_finished)
         self.current_item.setPos(pos)
+        # Mark as new annotation
+        self.current_item._is_new_annotation = True
+        print(f"[ANNOTATION DEBUG] TextAnnotationTool.start_annotation: created item, _is_new_annotation=True")
         # Don't start editing here - coordinator will do it after adding to scene
     
     def finish_annotation(self, scene, initial_text: str = "") -> Optional[TextAnnotationItem]:
@@ -222,34 +500,74 @@ class TextAnnotationTool:
         Returns:
             Created text annotation item or None
         """
+        print(f"[ANNOTATION DEBUG] TextAnnotationTool.finish_annotation: called, current_item={'exists' if self.current_item is not None else 'None'}")
+        
+        # Guard against double-call
         if self.current_item is None:
+            print(f"[ANNOTATION DEBUG] TextAnnotationTool.finish_annotation: current_item is None, returning")
             return None
         
-        # Get final text
+        # Get final text BEFORE any state changes
         final_text = self.current_item.toPlainText().strip()
+        current_is_new = getattr(self.current_item, '_is_new_annotation', False)
+        has_callback = self.current_item.on_editing_finished is not None
+        print(f"[ANNOTATION DEBUG] TextAnnotationTool.finish_annotation: current_item state - text='{final_text}', _is_new_annotation={current_is_new}, callback={'exists' if has_callback else 'None'}")
         
-        # If text is empty, cancel the annotation
+        # If text is empty, cancel the annotation (don't create undo command)
+        # BUT still clear the callback to prevent issues
         if not final_text:
-            if self.current_item.scene() == scene:
+            print(f"[ANNOTATION DEBUG] TextAnnotationTool.finish_annotation: empty text, canceling annotation")
+            # Clear callback and flag even when canceling
+            if self.current_item:
+                self.current_item._is_new_annotation = False
+                self.current_item.on_editing_finished = None
+                print(f"[ANNOTATION DEBUG] TextAnnotationTool.finish_annotation: cleared callback and flag on cancel")
+            if self.current_item and self.current_item.scene() == scene:
                 scene.removeItem(self.current_item)
             self.current_item = None
             return None
         
-        # Finish editing
+        # Store item reference BEFORE any state changes
+        item = self.current_item
+        print(f"[ANNOTATION DEBUG] TextAnnotationTool.finish_annotation: stored item reference, item={item}")
+        
+        # Check if editing is still active (shouldn't be, but check)
+        was_editing = self.current_item._editing
+        print(f"[ANNOTATION DEBUG] TextAnnotationTool.finish_annotation: was_editing={was_editing}")
+        
+        # Finish editing (this may trigger callback, but we'll handle that in coordinator)
+        # Note: finish_editing will set _is_new_annotation = False and may call callback
+        print(f"[ANNOTATION DEBUG] TextAnnotationTool.finish_annotation: calling finish_editing")
         self.current_item.finish_editing(accept=True)
+        print(f"[ANNOTATION DEBUG] TextAnnotationTool.finish_annotation: finish_editing returned")
+        
+        # Check state after finish_editing
+        after_is_new = getattr(self.current_item, '_is_new_annotation', False)
+        after_callback = self.current_item.on_editing_finished is not None
+        print(f"[ANNOTATION DEBUG] TextAnnotationTool.finish_annotation: after finish_editing - _is_new_annotation={after_is_new}, callback={'exists' if after_callback else 'None'}")
         
         # Add to scene if not already there
         if self.current_item.scene() != scene:
             scene.addItem(self.current_item)
+            print(f"[ANNOTATION DEBUG] TextAnnotationTool.finish_annotation: added item to scene")
         
         # Store annotation
         key = (self.current_study_uid, self.current_series_uid, self.current_instance_identifier)
         if key not in self.annotations:
             self.annotations[key] = []
         self.annotations[key].append(self.current_item)
+        print(f"[ANNOTATION DEBUG] TextAnnotationTool.finish_annotation: stored in annotations dict, key={key}")
         
-        item = self.current_item
+        # Clear the callback and flag after annotation is finished (prevent accidental deletion on focus loss)
+        # Do this AFTER storing the item reference but BEFORE returning
+        print(f"[ANNOTATION DEBUG] TextAnnotationTool.finish_annotation: clearing callback and flag")
+        self.current_item._is_new_annotation = False
+        self.current_item.on_editing_finished = None
+        print(f"[ANNOTATION DEBUG] TextAnnotationTool.finish_annotation: callback and flag cleared")
+        
+        # Clear current_item reference
         self.current_item = None
+        print(f"[ANNOTATION DEBUG] TextAnnotationTool.finish_annotation: returning item={item}")
         
         return item
     

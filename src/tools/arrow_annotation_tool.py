@@ -149,6 +149,10 @@ class ArrowAnnotationItem(QGraphicsItemGroup):
         self.line_item = line_item
         self.arrowhead_item = arrowhead_item
         self.color = color
+        self._updating_position = False  # Flag to prevent recursive updates
+        self.on_moved_callback = None  # Callback for move tracking
+        self.on_mouse_release_callback = None  # Callback for mouse release (to finalize drag)
+        self._drag_in_progress = False  # Flag to track if drag is in progress
         
         # Add items to group
         self.addToGroup(line_item)
@@ -167,18 +171,23 @@ class ArrowAnnotationItem(QGraphicsItemGroup):
         Update arrow endpoints.
         
         Args:
-            start_point: New start point
-            end_point: New end point
+            start_point: New start point (scene coordinates)
+            end_point: New end point (scene coordinates)
         """
         self.start_point = start_point
         self.end_point = end_point
         
-        # Update line
-        line = QLineF(start_point, end_point)
+        # Update group position to start_point
+        self.setPos(start_point)
+        
+        # Update line (relative to group: from (0,0) to (end_point - start_point))
+        from PySide6.QtCore import QPointF
+        relative_end = end_point - start_point
+        line = QLineF(QPointF(0, 0), relative_end)
         self.line_item.setLine(line)
         
-        # Update arrowhead
-        self.arrowhead_item.update_endpoints(start_point, end_point)
+        # Update arrowhead (relative to group)
+        self.arrowhead_item.update_endpoints(QPointF(0, 0), relative_end)
     
     def itemChange(self, change: QGraphicsItem.GraphicsItemChange, value) -> object:
         """
@@ -193,23 +202,85 @@ class ArrowAnnotationItem(QGraphicsItemGroup):
         """
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionChange:
             # When group is moved, update start and end points
-            new_pos = value
-            old_pos = self.pos()
-            delta = new_pos - old_pos
-            
-            # Update start and end points
-            self.start_point += delta
-            self.end_point += delta
-            
-            # Update line and arrowhead
-            line = QLineF(self.start_point, self.end_point)
-            self.line_item.setLine(line)
-            self.arrowhead_item.update_endpoints(self.start_point, self.end_point)
+            if not self._updating_position:
+                new_pos = value
+                old_pos = self.pos()
+                delta = new_pos - old_pos
+                
+                # Capture positions BEFORE updating (for move tracking)
+                # Store COPIES in temporary attributes that the callback can access
+                from PySide6.QtCore import QPointF
+                self._pre_move_start_point = QPointF(self.start_point)  # Create copy, not reference
+                self._pre_move_end_point = QPointF(self.end_point)  # Create copy, not reference
+                
+                # #region agent log
+                with open('/Users/kevingrizzard/Documents/GitHub/DICOMViewerV3/.cursor/debug.log', 'a') as f:
+                    import json
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"arrow_annotation_tool.py:199","message":"ItemPositionChange: BEFORE updating positions","data":{"old_pos":str(old_pos),"new_pos":str(new_pos),"delta":str(delta),"start_point_before":str(self.start_point),"end_point_before":str(self.end_point),"pre_move_start":str(self._pre_move_start_point),"pre_move_end":str(self._pre_move_end_point),"has_callback":self.on_moved_callback is not None},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+                # #endregion
+                
+                # Update start and end points (they track the group's position)
+                self.start_point = QPointF(new_pos)  # Group position is start_point
+                self.end_point = QPointF(new_pos + (self.end_point - self._pre_move_start_point))  # Maintain relative offset
+                
+                # #region agent log
+                with open('/Users/kevingrizzard/Documents/GitHub/DICOMViewerV3/.cursor/debug.log', 'a') as f:
+                    import json
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"arrow_annotation_tool.py:211","message":"ItemPositionChange: AFTER updating positions","data":{"start_point_after":str(self.start_point),"end_point_after":str(self.end_point)},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+                # #endregion
+                
+                # Update line and arrowhead (they're relative to group, so no change needed)
+                # Line goes from (0,0) to (end_point - start_point) relative to group
+                relative_end = self.end_point - self.start_point
+                line = QLineF(QPointF(0, 0), relative_end)
+                self.line_item.setLine(line)
+                self.arrowhead_item.update_endpoints(QPointF(0, 0), relative_end)
             
             # Return new position
-            return new_pos
+            return value
+        elif change == QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged:
+            # Call movement callback if set (for undo/redo tracking)
+            # Only track moves during active drag (not programmatic updates)
+            if self.on_moved_callback and not self._updating_position and self._drag_in_progress:
+                try:
+                    self.on_moved_callback(self)
+                except Exception:
+                    pass
         
         return super().itemChange(change, value)
+    
+    def mousePressEvent(self, event) -> None:
+        """
+        Handle mouse press to start drag tracking.
+        
+        Args:
+            event: Mouse press event
+        """
+        # Mark that drag is starting
+        self._drag_in_progress = True
+        # Capture initial position BEFORE drag starts (for move tracking)
+        from PySide6.QtCore import QPointF
+        self._pre_drag_start_point = QPointF(self.start_point)
+        self._pre_drag_end_point = QPointF(self.end_point)
+        super().mousePressEvent(event)
+    
+    def mouseReleaseEvent(self, event) -> None:
+        """
+        Handle mouse release to finalize drag.
+        
+        Args:
+            event: Mouse release event
+        """
+        # Finalize move immediately on mouse release
+        if self.on_mouse_release_callback:
+            try:
+                self.on_mouse_release_callback(self)
+            except Exception:
+                pass
+        
+        # Clear drag flag
+        self._drag_in_progress = False
+        super().mouseReleaseEvent(event)
 
 
 class ArrowAnnotationTool:
@@ -313,19 +384,25 @@ class ArrowAnnotationTool:
         
         color = QColor(*pen_color)
         
-        # Create line item
-        line = QLineF(start_point, end_point)
+        # Create line item - position relative to group (group will be at start_point)
+        # Line goes from (0, 0) relative to group to (end_point - start_point)
+        from PySide6.QtCore import QPointF
+        relative_end = end_point - start_point
+        line = QLineF(QPointF(0, 0), relative_end)
         line_item = QGraphicsLineItem(line)
         pen = QPen(color, pen_width)
         pen.setCosmetic(True)  # Makes pen width viewport-relative
         line_item.setPen(pen)
         line_item.setZValue(160)
         
-        # Create arrowhead
-        arrowhead = ArrowHeadItem(start_point, end_point, color, self.arrowhead_size)
+        # Create arrowhead - also relative to group
+        arrowhead = ArrowHeadItem(QPointF(0, 0), relative_end, color, self.arrowhead_size)
         
         # Create arrow group
         arrow_item = ArrowAnnotationItem(start_point, end_point, line_item, arrowhead, color)
+        
+        # Set group position to start_point so line and arrowhead are positioned correctly
+        arrow_item.setPos(start_point)
         
         return arrow_item
     

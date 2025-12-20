@@ -1928,6 +1928,13 @@ class ImageViewer(QGraphicsView):
         Args:
             event: Key event
         """
+        # Check if any text annotation is being edited - if so, don't process arrow keys for navigation
+        from tools.text_annotation_tool import is_any_text_annotation_editing
+        if is_any_text_annotation_editing(self.scene):
+            # Let the text editor handle arrow keys for cursor movement
+            super().keyPressEvent(event)
+            return
+        
         if event.key() == Qt.Key.Key_Up:
             # Up arrow: next slice
             self.arrow_key_pressed.emit(1)

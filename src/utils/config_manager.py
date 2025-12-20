@@ -944,6 +944,21 @@ class ConfigManager:
                         "g": self.config.get("measurement_line_color_g", 255),
                         "b": self.config.get("measurement_line_color_b", 0)
                     }
+                },
+                "text_annotation": {
+                    "font_size": self.get_text_annotation_font_size(),
+                    "color": {
+                        "r": self.config.get("text_annotation_color_r", 255),
+                        "g": self.config.get("text_annotation_color_g", 255),
+                        "b": self.config.get("text_annotation_color_b", 0)
+                    }
+                },
+                "arrow_annotation": {
+                    "color": {
+                        "r": self.config.get("arrow_annotation_color_r", 255),
+                        "g": self.config.get("arrow_annotation_color_g", 255),
+                        "b": self.config.get("arrow_annotation_color_b", 0)
+                    }
                 }
             }
             
@@ -1062,6 +1077,30 @@ class ConfigManager:
                             b = line_color.get("b", 0)
                             if 0 <= r <= 255 and 0 <= g <= 255 and 0 <= b <= 255:
                                 self.set_measurement_line_color(r, g, b)
+                    
+                    # Text annotation settings
+                    if "text_annotation" in annotation and isinstance(annotation["text_annotation"], dict):
+                        text_annotation = annotation["text_annotation"]
+                        if "font_size" in text_annotation and isinstance(text_annotation["font_size"], int) and text_annotation["font_size"] > 0:
+                            self.set_text_annotation_font_size(text_annotation["font_size"])
+                        if "color" in text_annotation and isinstance(text_annotation["color"], dict):
+                            color = text_annotation["color"]
+                            r = color.get("r", 255)
+                            g = color.get("g", 255)
+                            b = color.get("b", 0)
+                            if 0 <= r <= 255 and 0 <= g <= 255 and 0 <= b <= 255:
+                                self.set_text_annotation_color(r, g, b)
+                    
+                    # Arrow annotation settings
+                    if "arrow_annotation" in annotation and isinstance(annotation["arrow_annotation"], dict):
+                        arrow_annotation = annotation["arrow_annotation"]
+                        if "color" in arrow_annotation and isinstance(arrow_annotation["color"], dict):
+                            color = arrow_annotation["color"]
+                            r = color.get("r", 255)
+                            g = color.get("g", 255)
+                            b = color.get("b", 0)
+                            if 0 <= r <= 255 and 0 <= g <= 255 and 0 <= b <= 255:
+                                self.set_arrow_annotation_color(r, g, b)
             
             # Import metadata panel settings
             if "metadata_panel" in import_data:

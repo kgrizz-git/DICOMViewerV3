@@ -41,7 +41,9 @@ class AnnotationClipboard:
         crosshairs: List,
         source_study_uid: str,
         source_series_uid: str,
-        source_instance_identifier: int
+        source_instance_identifier: int,
+        text_annotations: Optional[List] = None,
+        arrow_annotations: Optional[List] = None
     ) -> Dict[str, Any]:
         """
         Copy annotations to clipboard.
@@ -53,6 +55,8 @@ class AnnotationClipboard:
             source_study_uid: Study UID of source slice
             source_series_uid: Series UID of source slice
             source_instance_identifier: Instance identifier of source slice
+            text_annotations: Optional list of TextAnnotationItem objects to copy
+            arrow_annotations: Optional list of ArrowAnnotationItem objects to copy
             
         Returns:
             Dictionary containing serialized annotation data
@@ -62,7 +66,9 @@ class AnnotationClipboard:
             'version': '1.0',
             'rois': self._serialize_rois(rois),
             'measurements': self._serialize_measurements(measurements),
-            'crosshairs': self._serialize_crosshairs(crosshairs)
+            'crosshairs': self._serialize_crosshairs(crosshairs),
+            'text_annotations': self._serialize_text_annotations(text_annotations or []),
+            'arrow_annotations': self._serialize_arrow_annotations(arrow_annotations or [])
         }
         
         self.clipboard_data = data
@@ -168,6 +174,72 @@ class AnnotationClipboard:
                 'text_offset_viewport': c.text_offset_viewport
             }
             serialized.append(cross_data)
+        
+        return serialized
+    
+    def _serialize_text_annotations(self, text_annotations: List) -> List[Dict[str, Any]]:
+        """
+        Serialize text annotation items.
+        
+        Args:
+            text_annotations: List of TextAnnotationItem objects
+            
+        Returns:
+            List of dictionaries containing text annotation properties
+        """
+        from PySide6.QtGui import QColor
+        
+        serialized = []
+        for text_item in text_annotations:
+            pos = text_item.pos()
+            text_color_obj = text_item.defaultTextColor()
+            font = text_item.font()
+            
+            text_data = {
+                'text': text_item.toPlainText(),
+                'position': {
+                    'x': pos.x(),
+                    'y': pos.y()
+                },
+                'font_size': font.pointSize() if font.pointSize() > 0 else font.pixelSize(),
+                'color': {
+                    'r': text_color_obj.red(),
+                    'g': text_color_obj.green(),
+                    'b': text_color_obj.blue()
+                }
+            }
+            serialized.append(text_data)
+        
+        return serialized
+    
+    def _serialize_arrow_annotations(self, arrow_annotations: List) -> List[Dict[str, Any]]:
+        """
+        Serialize arrow annotation items.
+        
+        Args:
+            arrow_annotations: List of ArrowAnnotationItem objects
+            
+        Returns:
+            List of dictionaries containing arrow annotation properties
+        """
+        serialized = []
+        for arrow_item in arrow_annotations:
+            arrow_data = {
+                'start_point': {
+                    'x': arrow_item.start_point.x(),
+                    'y': arrow_item.start_point.y()
+                },
+                'end_point': {
+                    'x': arrow_item.end_point.x(),
+                    'y': arrow_item.end_point.y()
+                },
+                'color': {
+                    'r': arrow_item.color.red(),
+                    'g': arrow_item.color.green(),
+                    'b': arrow_item.color.blue()
+                }
+            }
+            serialized.append(arrow_data)
         
         return serialized
     

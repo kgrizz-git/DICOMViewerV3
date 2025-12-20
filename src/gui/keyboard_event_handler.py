@@ -162,14 +162,21 @@ class KeyboardEventHandler:
                     pass
         
         # Arrow keys for slice navigation
-        elif event.key() == Qt.Key.Key_Up:
-            # Up arrow: next slice
-            self.slice_navigator.next_slice()
-            return True
-        elif event.key() == Qt.Key.Key_Down:
-            # Down arrow: previous slice
-            self.slice_navigator.previous_slice()
-            return True
+        elif event.key() == Qt.Key.Key_Up or event.key() == Qt.Key.Key_Down:
+            # Check if any text annotation is being edited - if so, don't process arrow keys for navigation
+            from tools.text_annotation_tool import is_any_text_annotation_editing
+            if self.image_viewer.scene is not None and is_any_text_annotation_editing(self.image_viewer.scene):
+                # Let the text editor handle arrow keys for cursor movement
+                return False
+            
+            if event.key() == Qt.Key.Key_Up:
+                # Up arrow: next slice
+                self.slice_navigator.next_slice()
+                return True
+            elif event.key() == Qt.Key.Key_Down:
+                # Down arrow: previous slice
+                self.slice_navigator.previous_slice()
+                return True
         
         # Spacebar to toggle overlay visibility
         elif event.key() == Qt.Key.Key_Space:

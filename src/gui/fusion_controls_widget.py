@@ -641,7 +641,7 @@ class FusionControlsWidget(QWidget):
             current_overlay_uid: Current overlay series UID to select
         """
         # DEBUG
-        print(f"[FUSION CONTROLS DEBUG] update_series_lists called with {len(series_list)} series")
+        # print(f"[FUSION CONTROLS DEBUG] update_series_lists called with {len(series_list)} series")
         
         self._updating = True
         
@@ -651,7 +651,7 @@ class FusionControlsWidget(QWidget):
         # Clear existing items (only overlay, base is read-only)
         self.overlay_series_combo.clear()
         
-        print(f"[FUSION CONTROLS DEBUG] Cleared overlay dropdown, now adding {len(series_list)} items")
+        # print(f"[FUSION CONTROLS DEBUG] Cleared overlay dropdown, now adding {len(series_list)} items")
         
         # Insert placeholder when there is no current or previous overlay
         placeholder_index = -1
@@ -661,7 +661,7 @@ class FusionControlsWidget(QWidget):
         
         # Add series to overlay combo only
         for series_uid, display_name in series_list:
-            print(f"[FUSION CONTROLS DEBUG]   Adding: {display_name}")
+            # print(f"[FUSION CONTROLS DEBUG]   Adding: {display_name}")
             self.overlay_series_combo.addItem(display_name, series_uid)
         
         # Restore or set overlay selection

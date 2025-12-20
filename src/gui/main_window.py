@@ -1678,6 +1678,8 @@ class MainWindow(QMainWindow):
     <li>Draw elliptical and rectangular ROIs</li>
     <li>ROI statistics (mean, std dev, min, max, area)</li>
     <li>Distance measurements (pixels, mm, cm)</li>
+    <li>Text annotations: Add and edit text labels on images</li>
+    <li>Arrow annotations: Add arrows to point to features</li>
     <li>Histogram display: View pixel value distribution with window/level overlay (Cmd+Shift+H / Ctrl+Shift+H)</li>
     <li>Undo/redo functionality</li>
     </ul>

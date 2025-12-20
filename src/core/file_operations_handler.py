@@ -319,17 +319,17 @@ class FileOperationsHandler:
                 gc_start = time.time()
                 gc.collect()
                 gc_time = time.time() - gc_start
-                print(f"[ORGANIZE DEBUG] Pre-organize GC: {gc_time:.3f}s")
+                # print(f"[ORGANIZE DEBUG] Pre-organize GC: {gc_time:.3f}s")
                 QApplication.processEvents()
             
             # Organize into studies/series
             try:
                 import time
                 organize_start = time.time()
-                print(f"[ORGANIZE DEBUG] Starting organize of {len(datasets)} datasets...")
+                # print(f"[ORGANIZE DEBUG] Starting organize of {len(datasets)} datasets...")
                 studies = self.dicom_organizer.organize(datasets, file_paths)
                 organize_time = time.time() - organize_start
-                print(f"[ORGANIZE DEBUG] Organize completed in {organize_time:.2f}s")
+                # print(f"[ORGANIZE DEBUG] Organize completed in {organize_time:.2f}s")
             except MemoryError as e:
                 self.file_dialog.show_error(
                     self.main_window,
@@ -777,17 +777,17 @@ class FileOperationsHandler:
                     gc_start = time.time()
                     gc.collect()
                     gc_time = time.time() - gc_start
-                    print(f"[ORGANIZE DEBUG] Pre-organize GC: {gc_time:.3f}s")
+                    # print(f"[ORGANIZE DEBUG] Pre-organize GC: {gc_time:.3f}s")
                     QApplication.processEvents()
                 
                 # Organize
                 try:
                     import time
                     organize_start = time.time()
-                    print(f"[ORGANIZE DEBUG] Starting organize of {len(datasets)} datasets...")
+                    # print(f"[ORGANIZE DEBUG] Starting organize of {len(datasets)} datasets...")
                     studies = self.dicom_organizer.organize(datasets)
                     organize_time = time.time() - organize_start
-                    print(f"[ORGANIZE DEBUG] Organize completed in {organize_time:.2f}s")
+                    # print(f"[ORGANIZE DEBUG] Organize completed in {organize_time:.2f}s")
                 except MemoryError as e:
                     self.file_dialog.show_error(
                         self.main_window,

@@ -872,12 +872,12 @@ class DICOMViewerApp(QObject):
                 self.current_dataset, rescale_slope, rescale_intercept, rescale_type
             )
             if inferred_type:
-                print(f"[WL UNIT DEBUG] _update_focused_subwindow_references: Setting unit immediately from dataset: {inferred_type}")
+                # print(f"[WL UNIT DEBUG] _update_focused_subwindow_references: Setting unit immediately from dataset: {inferred_type}")
                 self.window_level_controls.set_unit(inferred_type)
             else:
                 # Clear unit if cannot be inferred
                 self.window_level_controls.set_unit(None)
-                print(f"[WL UNIT DEBUG] _update_focused_subwindow_references: Clearing unit (rescale_type=None, cannot infer)")
+                # print(f"[WL UNIT DEBUG] _update_focused_subwindow_references: Clearing unit (rescale_type=None, cannot infer)")
         
         # Update right panel controls to show focused subwindow's state
         self._update_right_panel_for_focused_subwindow()
@@ -926,12 +926,12 @@ class DICOMViewerApp(QObject):
     def _update_right_panel_for_focused_subwindow(self) -> None:
         """Update right panel controls to reflect focused subwindow's state."""
         # DEBUG: Log when _update_right_panel_for_focused_subwindow is called
-        print(f"[WL UNIT DEBUG] _update_right_panel_for_focused_subwindow called")
-        print(f"[WL UNIT DEBUG]   view_state_manager: {self.view_state_manager}")
-        if self.view_state_manager:
-            print(f"[WL UNIT DEBUG]   use_rescaled_values: {self.view_state_manager.use_rescaled_values}")
-            print(f"[WL UNIT DEBUG]   rescale_type: {self.view_state_manager.rescale_type}")
-        print(f"[WL UNIT DEBUG]   current_dataset: {self.current_dataset is not None}")
+        # print(f"[WL UNIT DEBUG] _update_right_panel_for_focused_subwindow called")
+        # print(f"[WL UNIT DEBUG]   view_state_manager: {self.view_state_manager}")
+        # if self.view_state_manager:
+        #     print(f"[WL UNIT DEBUG]   use_rescaled_values: {self.view_state_manager.use_rescaled_values}")
+        #     print(f"[WL UNIT DEBUG]   rescale_type: {self.view_state_manager.rescale_type}")
+        # print(f"[WL UNIT DEBUG]   current_dataset: {self.current_dataset is not None}")
         # print(f"[DEBUG-WL] _update_right_panel_for_focused_subwindow called")
         if self.image_viewer is None:
             # print(f"[DEBUG-WL]   ERROR: image_viewer is None")
@@ -955,15 +955,15 @@ class DICOMViewerApp(QObject):
                 unit = DICOMProcessor.infer_rescale_type(
                     self.current_dataset, rescale_slope, rescale_intercept, rescale_type
                 )
-                if unit:
-                    print(f"[WL UNIT DEBUG] _update_right_panel_for_focused_subwindow: Got unit from dataset fallback: {unit}")
-                else:
-                    print(f"[WL UNIT DEBUG] _update_right_panel_for_focused_subwindow: Cannot infer unit from dataset")
+                # if unit:
+                #     print(f"[WL UNIT DEBUG] _update_right_panel_for_focused_subwindow: Got unit from dataset fallback: {unit}")
+                # else:
+                #     print(f"[WL UNIT DEBUG] _update_right_panel_for_focused_subwindow: Cannot infer unit from dataset")
             
             # DEBUG: Log unit value before setting
-            print(f"[WL UNIT DEBUG] _update_right_panel_for_focused_subwindow: Setting unit to: {unit}")
-            print(f"[WL UNIT DEBUG]   view_state_manager.rescale_type: {self.view_state_manager.rescale_type}")
-            print(f"[WL UNIT DEBUG]   view_state_manager.use_rescaled_values: {self.view_state_manager.use_rescaled_values}")
+            # print(f"[WL UNIT DEBUG] _update_right_panel_for_focused_subwindow: Setting unit to: {unit}")
+            # print(f"[WL UNIT DEBUG]   view_state_manager.rescale_type: {self.view_state_manager.rescale_type}")
+            # print(f"[WL UNIT DEBUG]   view_state_manager.use_rescaled_values: {self.view_state_manager.use_rescaled_values}")
             
             if (self.view_state_manager.current_window_center is not None and 
                 self.view_state_manager.current_window_width is not None):
@@ -974,14 +974,14 @@ class DICOMViewerApp(QObject):
                     block_signals=True,
                     unit=unit
                 )
-                print(f"[WL UNIT DEBUG] _update_right_panel_for_focused_subwindow: Called set_window_level with unit={unit}")
+                # print(f"[WL UNIT DEBUG] _update_right_panel_for_focused_subwindow: Called set_window_level with unit={unit}")
             else:
                 # Even if window/level values are None, update the unit
                 self.window_level_controls.set_unit(unit)  # unit may be None
-                if unit:
-                    print(f"[WL UNIT DEBUG] _update_right_panel_for_focused_subwindow: Called set_unit({unit})")
-                else:
-                    print(f"[WL UNIT DEBUG] _update_right_panel_for_focused_subwindow: Called set_unit(None) to clear units")
+                # if unit:
+                #     print(f"[WL UNIT DEBUG] _update_right_panel_for_focused_subwindow: Called set_unit({unit})")
+                # else:
+                #     print(f"[WL UNIT DEBUG] _update_right_panel_for_focused_subwindow: Called set_unit(None) to clear units")
         else:
             # print(f"[DEBUG-WL]   ERROR: view_state_manager is None")
             pass
@@ -1005,28 +1005,28 @@ class DICOMViewerApp(QObject):
             )
         
         # Update fusion controls with focused subwindow's series
-        print(f"[RIGHT PANEL DEBUG] Checking fusion controls update")
-        print(f"[RIGHT PANEL DEBUG] hasattr current_studies: {hasattr(self, 'current_studies')}")
-        if hasattr(self, 'current_studies'):
-            print(f"[RIGHT PANEL DEBUG] current_studies is not None: {self.current_studies is not None}")
-            if self.current_studies:
-                print(f"[RIGHT PANEL DEBUG] current_studies count: {len(self.current_studies)}")
+        # print(f"[RIGHT PANEL DEBUG] Checking fusion controls update")
+        # print(f"[RIGHT PANEL DEBUG] hasattr current_studies: {hasattr(self, 'current_studies')}")
+        # if hasattr(self, 'current_studies'):
+        #     print(f"[RIGHT PANEL DEBUG] current_studies is not None: {self.current_studies is not None}")
+        #     if self.current_studies:
+        #         print(f"[RIGHT PANEL DEBUG] current_studies count: {len(self.current_studies)}")
         if hasattr(self, 'current_studies') and self.current_studies:
             focused_subwindow = self.multi_window_layout.get_focused_subwindow()
-            print(f"[RIGHT PANEL DEBUG] focused_subwindow: {focused_subwindow is not None}")
+            # print(f"[RIGHT PANEL DEBUG] focused_subwindow: {focused_subwindow is not None}")
             if focused_subwindow:
                 subwindows = self.multi_window_layout.get_all_subwindows()
                 focused_idx = subwindows.index(focused_subwindow) if focused_subwindow in subwindows else -1
-                print(f"[RIGHT PANEL DEBUG] focused_idx: {focused_idx}")
-                print(f"[RIGHT PANEL DEBUG] focused_idx in subwindow_managers: {focused_idx in self.subwindow_managers}")
+                # print(f"[RIGHT PANEL DEBUG] focused_idx: {focused_idx}")
+                # print(f"[RIGHT PANEL DEBUG] focused_idx in subwindow_managers: {focused_idx in self.subwindow_managers}")
                 if focused_idx >= 0 and focused_idx in self.subwindow_managers:
                     fusion_coordinator = self.subwindow_managers[focused_idx].get('fusion_coordinator')
-                    print(f"[RIGHT PANEL DEBUG] fusion_coordinator: {fusion_coordinator is not None}")
+                    # print(f"[RIGHT PANEL DEBUG] fusion_coordinator: {fusion_coordinator is not None}")
                     if fusion_coordinator:
-                        print(f"[RIGHT PANEL DEBUG] Calling update_fusion_controls_series_list()")
+                        # print(f"[RIGHT PANEL DEBUG] Calling update_fusion_controls_series_list()")
                         fusion_coordinator.update_fusion_controls_series_list()
-        else:
-            print(f"[RIGHT PANEL DEBUG] Skipping - no current_studies")
+        # else:
+        #     print(f"[RIGHT PANEL DEBUG] Skipping - no current_studies")
         
         # Update ROI list (will be updated when slice is displayed)
         # Update ROI statistics (will be updated when ROI is selected)
@@ -1362,9 +1362,9 @@ class DICOMViewerApp(QObject):
         
         Clears edited tags for the previous dataset before loading new one.
         """
-        print(f"[LOAD DEBUG] ============================================")
-        print(f"[LOAD DEBUG] _handle_load_first_slice called with {len(studies)} study/studies")
-        print(f"[LOAD DEBUG] ============================================")
+        # print(f"[LOAD DEBUG] ============================================")
+        # print(f"[LOAD DEBUG] _handle_load_first_slice called with {len(studies)} study/studies")
+        # print(f"[LOAD DEBUG] ============================================")
         
         # Clear edited tags for previous dataset if it exists
         if self.current_dataset is not None and self.tag_edit_history:
@@ -1425,22 +1425,22 @@ class DICOMViewerApp(QObject):
             self.current_slice_index = first_slice_info['slice_index']
             
             # Update fusion controls with new studies
-            print(f"[MAIN DEBUG] Checking fusion controls update after loading files")
+            # print(f"[MAIN DEBUG] Checking fusion controls update after loading files")
             focused_subwindow = self.multi_window_layout.get_focused_subwindow()
-            print(f"[MAIN DEBUG] focused_subwindow: {focused_subwindow is not None}")
+            # print(f"[MAIN DEBUG] focused_subwindow: {focused_subwindow is not None}")
             if focused_subwindow:
                 subwindows = self.multi_window_layout.get_all_subwindows()
                 focused_idx = subwindows.index(focused_subwindow) if focused_subwindow in subwindows else -1
-                print(f"[MAIN DEBUG] focused_idx: {focused_idx}")
-                print(f"[MAIN DEBUG] focused_idx in subwindow_managers: {focused_idx in self.subwindow_managers}")
+                # print(f"[MAIN DEBUG] focused_idx: {focused_idx}")
+                # print(f"[MAIN DEBUG] focused_idx in subwindow_managers: {focused_idx in self.subwindow_managers}")
                 if focused_idx >= 0 and focused_idx in self.subwindow_managers:
                     fusion_coordinator = self.subwindow_managers[focused_idx].get('fusion_coordinator')
-                    print(f"[MAIN DEBUG] fusion_coordinator: {fusion_coordinator is not None}")
+                    # print(f"[MAIN DEBUG] fusion_coordinator: {fusion_coordinator is not None}")
                     if fusion_coordinator:
-                        print(f"[MAIN DEBUG] Calling update_fusion_controls_series_list()")
+                        # print(f"[MAIN DEBUG] Calling update_fusion_controls_series_list()")
                         fusion_coordinator.update_fusion_controls_series_list()
-                else:
-                    print(f"[MAIN DEBUG] No valid subwindow manager for fusion")
+                # else:
+                #     print(f"[MAIN DEBUG] No valid subwindow manager for fusion")
             
             # Clear stale subwindow data that references series not in current_studies
             # This prevents navigation failures when subwindows have outdated series references
@@ -4963,9 +4963,57 @@ class DICOMViewerApp(QObject):
                 pass
         return selected_crosshairs
     
+    def _get_selected_text_annotations(self, subwindow: SubWindowContainer) -> list:
+        """
+        Get selected text annotation items from the scene.
+        
+        Args:
+            subwindow: SubWindowContainer to get text annotations from
+            
+        Returns:
+            List of selected TextAnnotationItem objects
+        """
+        selected_text_annotations = []
+        if subwindow and subwindow.image_viewer and subwindow.image_viewer.scene:
+            try:
+                selected_items = subwindow.image_viewer.scene.selectedItems()
+                from tools.text_annotation_tool import TextAnnotationItem
+                
+                for item in selected_items:
+                    if isinstance(item, TextAnnotationItem):
+                        selected_text_annotations.append(item)
+            except RuntimeError:
+                # Scene may have been deleted
+                pass
+        return selected_text_annotations
+    
+    def _get_selected_arrow_annotations(self, subwindow: SubWindowContainer) -> list:
+        """
+        Get selected arrow annotation items from the scene.
+        
+        Args:
+            subwindow: SubWindowContainer to get arrow annotations from
+            
+        Returns:
+            List of selected ArrowAnnotationItem objects
+        """
+        selected_arrow_annotations = []
+        if subwindow and subwindow.image_viewer and subwindow.image_viewer.scene:
+            try:
+                selected_items = subwindow.image_viewer.scene.selectedItems()
+                from tools.arrow_annotation_tool import ArrowAnnotationItem
+                
+                for item in selected_items:
+                    if isinstance(item, ArrowAnnotationItem):
+                        selected_arrow_annotations.append(item)
+            except RuntimeError:
+                # Scene may have been deleted
+                pass
+        return selected_arrow_annotations
+    
     def _copy_annotations(self) -> None:
         """
-        Copy selected annotations (ROIs, measurements, crosshairs) to clipboard.
+        Copy selected annotations (ROIs, measurements, crosshairs, text annotations, arrow annotations) to clipboard.
         
         Only copies selected annotations. If nothing is selected, shows a status message.
         """
@@ -4978,9 +5026,12 @@ class DICOMViewerApp(QObject):
         selected_rois = self._get_selected_rois(subwindow)
         selected_measurements = self._get_selected_measurements(subwindow)
         selected_crosshairs = self._get_selected_crosshairs(subwindow)
+        selected_text_annotations = self._get_selected_text_annotations(subwindow)
+        selected_arrow_annotations = self._get_selected_arrow_annotations(subwindow)
         
         # If nothing selected, show message and return
-        total_count = len(selected_rois) + len(selected_measurements) + len(selected_crosshairs)
+        total_count = (len(selected_rois) + len(selected_measurements) + len(selected_crosshairs) +
+                      len(selected_text_annotations) + len(selected_arrow_annotations))
         if total_count == 0:
             self.main_window.update_status("No annotations selected")
             return
@@ -4999,7 +5050,9 @@ class DICOMViewerApp(QObject):
                     selected_crosshairs,
                     roi_manager.current_study_uid,
                     roi_manager.current_series_uid,
-                    roi_manager.current_instance_identifier
+                    roi_manager.current_instance_identifier,
+                    text_annotations=selected_text_annotations,
+                    arrow_annotations=selected_arrow_annotations
                 )
                 
                 # Update status
@@ -5037,6 +5090,8 @@ class DICOMViewerApp(QObject):
         roi_manager = managers['roi_manager']
         measurement_tool = managers['measurement_tool']
         crosshair_manager = managers['crosshair_manager']
+        text_annotation_tool = managers.get('text_annotation_tool')
+        arrow_annotation_tool = managers.get('arrow_annotation_tool')
         
         # Determine offset based on whether pasting to same slice
         current_key = (roi_manager.current_study_uid,
@@ -5068,6 +5123,20 @@ class DICOMViewerApp(QObject):
             if new_crosshair:
                 newly_created.append(new_crosshair)
         
+        # Paste text annotations
+        if text_annotation_tool:
+            for text_data in data.get('text_annotations', []):
+                new_text = self._paste_text_annotation(subwindow, managers, text_data, offset)
+                if new_text:
+                    newly_created.append(new_text)
+        
+        # Paste arrow annotations
+        if arrow_annotation_tool:
+            for arrow_data in data.get('arrow_annotations', []):
+                new_arrow = self._paste_arrow_annotation(subwindow, managers, arrow_data, offset)
+                if new_arrow:
+                    newly_created.append(new_arrow)
+        
         # Clear current selection
         if subwindow.image_viewer and subwindow.image_viewer.scene:
             subwindow.image_viewer.scene.clearSelection()
@@ -5087,7 +5156,9 @@ class DICOMViewerApp(QObject):
             subwindow.image_viewer.scene.update()
         
         # Update status
-        total_count = len(data.get('rois', [])) + len(data.get('measurements', [])) + len(data.get('crosshairs', []))
+        total_count = (len(data.get('rois', [])) + len(data.get('measurements', [])) + 
+                      len(data.get('crosshairs', [])) + len(data.get('text_annotations', [])) + 
+                      len(data.get('arrow_annotations', [])))
         self.main_window.update_status(f"Pasted {total_count} annotation(s)")
     
     def _paste_roi(self, subwindow: SubWindowContainer, managers: Dict, roi_data: Dict, offset: QPointF):
@@ -5356,6 +5427,159 @@ class DICOMViewerApp(QObject):
         self.undo_redo_manager.execute_command(command)
         
         return crosshair
+    
+    def _paste_text_annotation(self, subwindow: SubWindowContainer, managers: Dict, text_data: Dict, offset: QPointF):
+        """
+        Recreate a text annotation from clipboard data.
+        
+        Args:
+            subwindow: SubWindowContainer to paste into
+            managers: Dictionary of managers for this subwindow
+            text_data: Serialized text annotation data
+            offset: QPointF offset to apply
+            
+        Returns:
+            Created TextAnnotationItem or None
+        """
+        from tools.text_annotation_tool import TextAnnotationItem
+        from utils.undo_redo import TextAnnotationCommand
+        from PySide6.QtGui import QColor, QFont
+        
+        if not subwindow.image_viewer or not subwindow.image_viewer.scene:
+            return None
+        
+        text_annotation_tool = managers.get('text_annotation_tool')
+        if not text_annotation_tool:
+            return None
+        
+        # Extract data and apply offset
+        text = text_data.get('text', '')
+        pos = QPointF(text_data['position']['x'] + offset.x(),
+                     text_data['position']['y'] + offset.y())
+        font_size = text_data.get('font_size', 12)
+        color_data = text_data.get('color', {'r': 255, 'g': 255, 'b': 0})
+        color = QColor(color_data['r'], color_data['g'], color_data['b'])
+        
+        # Create text annotation item
+        text_item = TextAnnotationItem(text, self.config_manager, on_editing_finished=None)
+        text_item.setPos(pos)
+        text_item.setDefaultTextColor(color)
+        font = QFont("Arial", font_size)
+        font.setBold(True)
+        text_item.setFont(font)
+        
+        # Add to scene
+        subwindow.image_viewer.scene.addItem(text_item)
+        text_item.setZValue(160)
+        
+        # Add to text annotation tool
+        key = (text_annotation_tool.current_study_uid,
+               text_annotation_tool.current_series_uid,
+               text_annotation_tool.current_instance_identifier)
+        
+        if key not in text_annotation_tool.annotations:
+            text_annotation_tool.annotations[key] = []
+        text_annotation_tool.annotations[key].append(text_item)
+        
+        # Create undo command
+        command = TextAnnotationCommand(
+            text_annotation_tool,
+            "add",
+            text_item,
+            subwindow.image_viewer.scene,
+            text_annotation_tool.current_study_uid,
+            text_annotation_tool.current_series_uid,
+            text_annotation_tool.current_instance_identifier
+        )
+        self.undo_redo_manager.execute_command(command)
+        
+        return text_item
+    
+    def _paste_arrow_annotation(self, subwindow: SubWindowContainer, managers: Dict, arrow_data: Dict, offset: QPointF):
+        """
+        Recreate an arrow annotation from clipboard data.
+        
+        Args:
+            subwindow: SubWindowContainer to paste into
+            managers: Dictionary of managers for this subwindow
+            arrow_data: Serialized arrow annotation data
+            offset: QPointF offset to apply
+            
+        Returns:
+            Created ArrowAnnotationItem or None
+        """
+        from tools.arrow_annotation_tool import ArrowAnnotationItem
+        from utils.undo_redo import ArrowAnnotationCommand
+        from PySide6.QtGui import QColor, QPen
+        from PySide6.QtCore import QLineF
+        from PySide6.QtWidgets import QGraphicsLineItem
+        
+        if not subwindow.image_viewer or not subwindow.image_viewer.scene:
+            return None
+        
+        arrow_annotation_tool = managers.get('arrow_annotation_tool')
+        if not arrow_annotation_tool:
+            return None
+        
+        # Extract data and apply offset
+        start = QPointF(arrow_data['start_point']['x'] + offset.x(),
+                       arrow_data['start_point']['y'] + offset.y())
+        end = QPointF(arrow_data['end_point']['x'] + offset.x(),
+                     arrow_data['end_point']['y'] + offset.y())
+        color_data = arrow_data.get('color', {'r': 255, 'g': 255, 'b': 0})
+        color = QColor(color_data['r'], color_data['g'], color_data['b'])
+        
+        # Get line thickness from config (use measurement line thickness for now)
+        if self.config_manager:
+            pen_width = self.config_manager.get_measurement_line_thickness()
+        else:
+            pen_width = 2
+        
+        # Create line item
+        line = QLineF(start, end)
+        line_item = QGraphicsLineItem(line)
+        pen = QPen(color, pen_width)
+        pen.setCosmetic(True)
+        line_item.setPen(pen)
+        line_item.setZValue(160)
+        
+        # Create arrowhead
+        from tools.arrow_annotation_tool import ArrowHeadItem
+        arrowhead = ArrowHeadItem(start, end, color, arrow_annotation_tool.arrowhead_size)
+        
+        # Create arrow group
+        arrow_item = ArrowAnnotationItem(start, end, line_item, arrowhead, color)
+        
+        # Add to scene
+        subwindow.image_viewer.scene.addItem(arrow_item)
+        
+        # Add to arrow annotation tool
+        key = (arrow_annotation_tool.current_study_uid,
+               arrow_annotation_tool.current_series_uid,
+               arrow_annotation_tool.current_instance_identifier)
+        
+        if key not in arrow_annotation_tool.arrows:
+            arrow_annotation_tool.arrows[key] = []
+        arrow_annotation_tool.arrows[key].append(arrow_item)
+        
+        # Set up move callback for undo/redo tracking
+        arrow_coordinator = managers.get('arrow_annotation_coordinator')
+        if arrow_coordinator and hasattr(arrow_coordinator, '_on_arrow_moved'):
+            arrow_item.on_moved_callback = arrow_coordinator._on_arrow_moved
+        
+        # Create undo command
+        command = ArrowAnnotationCommand(
+            arrow_annotation_tool,
+            "add",
+            arrow_item,
+            subwindow.image_viewer.scene,
+            arrow_annotation_tool.current_study_uid,
+            arrow_annotation_tool.current_series_uid,
+            arrow_annotation_tool.current_instance_identifier
+        )
+        self.undo_redo_manager.execute_command(command)
+        
+        return arrow_item
     
     def eventFilter(self, obj, event) -> bool:
         """
