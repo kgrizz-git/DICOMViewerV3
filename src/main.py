@@ -5511,7 +5511,7 @@ class DICOMViewerApp(QObject):
         from tools.arrow_annotation_tool import ArrowAnnotationItem
         from utils.undo_redo import ArrowAnnotationCommand
         from PySide6.QtGui import QColor, QPen
-        from PySide6.QtCore import QLineF
+        from PySide6.QtCore import QLineF, QPointF
         from PySide6.QtWidgets import QGraphicsLineItem
         
         if not subwindow.image_viewer or not subwindow.image_viewer.scene:
@@ -5535,20 +5535,25 @@ class DICOMViewerApp(QObject):
         else:
             pen_width = 2
         
-        # Create line item
-        line = QLineF(start, end)
+        # Create line item - position relative to group (group will be at start)
+        # Line goes from (0, 0) relative to group to (end - start)
+        relative_end = end - start
+        line = QLineF(QPointF(0, 0), relative_end)
         line_item = QGraphicsLineItem(line)
         pen = QPen(color, pen_width)
         pen.setCosmetic(True)
         line_item.setPen(pen)
         line_item.setZValue(160)
         
-        # Create arrowhead
+        # Create arrowhead - also relative to group
         from tools.arrow_annotation_tool import ArrowHeadItem
-        arrowhead = ArrowHeadItem(start, end, color, arrow_annotation_tool.arrowhead_size)
+        arrowhead = ArrowHeadItem(QPointF(0, 0), relative_end, color, arrow_annotation_tool.arrowhead_size)
         
         # Create arrow group
         arrow_item = ArrowAnnotationItem(start, end, line_item, arrowhead, color)
+        
+        # Set group position to start so line and arrowhead are positioned correctly
+        arrow_item.setPos(start)
         
         # Add to scene
         subwindow.image_viewer.scene.addItem(arrow_item)
