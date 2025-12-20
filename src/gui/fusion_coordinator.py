@@ -839,19 +839,19 @@ class FusionCoordinator:
         study_uid = self.get_current_study_uid()
         
         # DEBUG
-        print(f"[FUSION DEBUG] update_fusion_controls_series_list called")
-        print(f"[FUSION DEBUG]   studies exists: {studies is not None}")
-        if studies:
-            print(f"[FUSION DEBUG]   studies count: {len(studies)}")
-        print(f"[FUSION DEBUG]   study_uid: {study_uid[:20] if study_uid else 'None'}...")
+        # print(f"[FUSION DEBUG] update_fusion_controls_series_list called")
+        # print(f"[FUSION DEBUG]   studies exists: {studies is not None}")
+        # if studies:
+        #     print(f"[FUSION DEBUG]   studies count: {len(studies)}")
+        # print(f"[FUSION DEBUG]   study_uid: {study_uid[:20] if study_uid else 'None'}...")
         
         # Get available series
         series_list = self.fusion_handler.get_available_series_for_fusion(studies, study_uid)
         
         # DEBUG
-        print(f"[FUSION DEBUG]   series_list count: {len(series_list)}")
-        for uid, name in series_list:
-            print(f"[FUSION DEBUG]     - {name}")
+        # print(f"[FUSION DEBUG]   series_list count: {len(series_list)}")
+        # for uid, name in series_list:
+        #     print(f"[FUSION DEBUG]     - {name}")
         
         # Update controls
         current_base = self.fusion_handler.base_series_uid or ""
@@ -865,7 +865,7 @@ class FusionCoordinator:
                 if any(uid == current_viewing_series for uid, _ in series_list):
                     self.fusion_handler.set_base_series(current_viewing_series)
                     current_base = current_viewing_series
-                    print(f"[FUSION DEBUG] Auto-initialized base series to current viewing series: {current_viewing_series[:20]}...")
+                    # print(f"[FUSION DEBUG] Auto-initialized base series to current viewing series: {current_viewing_series[:20]}...")
         
         self.fusion_controls.update_series_lists(
             series_list,
@@ -881,7 +881,7 @@ class FusionCoordinator:
             self._update_base_display("")
         
         # DEBUG
-        print(f"[FUSION DEBUG]   Overlay dropdown updated. Overlay items: {self.fusion_controls.overlay_series_combo.count()}")
+        # print(f"[FUSION DEBUG]   Overlay dropdown updated. Overlay items: {self.fusion_controls.overlay_series_combo.count()}")
         
         # Auto-detect compatible series (global check happens inside _auto_detect_fusion_candidates)
         self._auto_detect_fusion_candidates(studies, study_uid, series_list)
@@ -889,7 +889,7 @@ class FusionCoordinator:
         # Update spatial alignment if both series are selected
         # (This handles the case where series list is updated and selections exist)
         if self.fusion_handler.base_series_uid and self.fusion_handler.overlay_series_uid:
-            print(f"[FUSION DEBUG] update_fusion_controls_series_list: Calling _update_spatial_alignment")
+            # print(f"[FUSION DEBUG] update_fusion_controls_series_list: Calling _update_spatial_alignment")
             self._update_spatial_alignment()
     
     def _auto_detect_fusion_candidates(

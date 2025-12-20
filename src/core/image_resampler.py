@@ -88,26 +88,26 @@ class ImageResampler:
         
         try:
             # DEBUG: Log dataset order before sorting
-            if datasets and len(datasets) > 0:
-                print(f"[3D RESAMPLE DEBUG] dicom_series_to_sitk: Input datasets order check")
-                print(f"[3D RESAMPLE DEBUG]   Series UID: {series_uid[:30] if series_uid else 'None'}...")
-                print(f"[3D RESAMPLE DEBUG]   Total input datasets: {len(datasets)}")
-                # Log first 3 and last 3 slice locations
-                for i in [0, 1, 2] if len(datasets) > 2 else range(len(datasets)):
-                    ds = datasets[i]
-                    slice_loc = getattr(ds, 'SliceLocation', None)
-                    if slice_loc is None and hasattr(ds, 'ImagePositionPatient'):
-                        ipp = ds.ImagePositionPatient
-                        slice_loc = float(ipp[2]) if ipp and len(ipp) >= 3 else None
-                    print(f"[3D RESAMPLE DEBUG]   Input dataset[{i}]: SliceLocation={slice_loc}")
-                if len(datasets) > 3:
-                    for i in range(max(3, len(datasets)-3), len(datasets)):
-                        ds = datasets[i]
-                        slice_loc = getattr(ds, 'SliceLocation', None)
-                        if slice_loc is None and hasattr(ds, 'ImagePositionPatient'):
-                            ipp = ds.ImagePositionPatient
-                            slice_loc = float(ipp[2]) if ipp and len(ipp) >= 3 else None
-                        print(f"[3D RESAMPLE DEBUG]   Input dataset[{i}]: SliceLocation={slice_loc}")
+            # if datasets and len(datasets) > 0:
+            #     print(f"[3D RESAMPLE DEBUG] dicom_series_to_sitk: Input datasets order check")
+            #     print(f"[3D RESAMPLE DEBUG]   Series UID: {series_uid[:30] if series_uid else 'None'}...")
+            #     print(f"[3D RESAMPLE DEBUG]   Total input datasets: {len(datasets)}")
+            #     # Log first 3 and last 3 slice locations
+            #     for i in [0, 1, 2] if len(datasets) > 2 else range(len(datasets)):
+            #         ds = datasets[i]
+            #         slice_loc = getattr(ds, 'SliceLocation', None)
+            #         if slice_loc is None and hasattr(ds, 'ImagePositionPatient'):
+            #             ipp = ds.ImagePositionPatient
+            #             slice_loc = float(ipp[2]) if ipp and len(ipp) >= 3 else None
+            #         print(f"[3D RESAMPLE DEBUG]   Input dataset[{i}]: SliceLocation={slice_loc}")
+            #     if len(datasets) > 3:
+            #         for i in range(max(3, len(datasets)-3), len(datasets)):
+            #             ds = datasets[i]
+            #             slice_loc = getattr(ds, 'SliceLocation', None)
+            #             if slice_loc is None and hasattr(ds, 'ImagePositionPatient'):
+            #                 ipp = ds.ImagePositionPatient
+            #                 slice_loc = float(ipp[2]) if ipp and len(ipp) >= 3 else None
+            #             print(f"[3D RESAMPLE DEBUG]   Input dataset[{i}]: SliceLocation={slice_loc}")
             
             # Sort datasets by slice location
             sorted_datasets = self._sort_datasets_by_location(datasets)
@@ -116,25 +116,25 @@ class ImageResampler:
                 return None
             
             # DEBUG: Log dataset order after sorting
-            if sorted_datasets and len(sorted_datasets) > 0:
-                print(f"[3D RESAMPLE DEBUG] dicom_series_to_sitk: Sorted datasets order check")
-                print(f"[3D RESAMPLE DEBUG]   Total sorted datasets: {len(sorted_datasets)}")
-                # Log first 3 and last 3 slice locations
-                for i in [0, 1, 2] if len(sorted_datasets) > 2 else range(len(sorted_datasets)):
-                    ds = sorted_datasets[i]
-                    slice_loc = getattr(ds, 'SliceLocation', None)
-                    if slice_loc is None and hasattr(ds, 'ImagePositionPatient'):
-                        ipp = ds.ImagePositionPatient
-                        slice_loc = float(ipp[2]) if ipp and len(ipp) >= 3 else None
-                    print(f"[3D RESAMPLE DEBUG]   Sorted dataset[{i}]: SliceLocation={slice_loc}")
-                if len(sorted_datasets) > 3:
-                    for i in range(max(3, len(sorted_datasets)-3), len(sorted_datasets)):
-                        ds = sorted_datasets[i]
-                        slice_loc = getattr(ds, 'SliceLocation', None)
-                        if slice_loc is None and hasattr(ds, 'ImagePositionPatient'):
-                            ipp = ds.ImagePositionPatient
-                            slice_loc = float(ipp[2]) if ipp and len(ipp) >= 3 else None
-                        print(f"[3D RESAMPLE DEBUG]   Sorted dataset[{i}]: SliceLocation={slice_loc}")
+            # if sorted_datasets and len(sorted_datasets) > 0:
+            #     print(f"[3D RESAMPLE DEBUG] dicom_series_to_sitk: Sorted datasets order check")
+            #     print(f"[3D RESAMPLE DEBUG]   Total sorted datasets: {len(sorted_datasets)}")
+            #     # Log first 3 and last 3 slice locations
+            #     for i in [0, 1, 2] if len(sorted_datasets) > 2 else range(len(sorted_datasets)):
+            #         ds = sorted_datasets[i]
+            #         slice_loc = getattr(ds, 'SliceLocation', None)
+            #         if slice_loc is None and hasattr(ds, 'ImagePositionPatient'):
+            #             ipp = ds.ImagePositionPatient
+            #             slice_loc = float(ipp[2]) if ipp and len(ipp) >= 3 else None
+            #         print(f"[3D RESAMPLE DEBUG]   Sorted dataset[{i}]: SliceLocation={slice_loc}")
+            #     if len(sorted_datasets) > 3:
+            #         for i in range(max(3, len(sorted_datasets)-3), len(sorted_datasets)):
+            #             ds = sorted_datasets[i]
+            #             slice_loc = getattr(ds, 'SliceLocation', None)
+            #             if slice_loc is None and hasattr(ds, 'ImagePositionPatient'):
+            #                 ipp = ds.ImagePositionPatient
+            #                 slice_loc = float(ipp[2]) if ipp and len(ipp) >= 3 else None
+            #             print(f"[3D RESAMPLE DEBUG]   Sorted dataset[{i}]: SliceLocation={slice_loc}")
             
             # Extract pixel arrays
             pixel_arrays = []
@@ -182,20 +182,20 @@ class ImageResampler:
                     pos2 = np.array([float(x) for x in sorted_datasets[1].ImagePositionPatient])
                     
                     # DEBUG: Log slice spacing calculation
-                    print(f"[3D RESAMPLE DEBUG] dicom_series_to_sitk: Slice spacing calculation")
-                    print(f"[3D RESAMPLE DEBUG]   ImagePositionPatient[0]: {pos1}")
-                    print(f"[3D RESAMPLE DEBUG]   ImagePositionPatient[1]: {pos2}")
+                    # print(f"[3D RESAMPLE DEBUG] dicom_series_to_sitk: Slice spacing calculation")
+                    # print(f"[3D RESAMPLE DEBUG]   ImagePositionPatient[0]: {pos1}")
+                    # print(f"[3D RESAMPLE DEBUG]   ImagePositionPatient[1]: {pos2}")
                     
                     # Calculate 3D distance
                     distance_3d = np.linalg.norm(pos2 - pos1)
-                    print(f"[3D RESAMPLE DEBUG]   3D distance: {distance_3d:.3f}mm")
+                    # print(f"[3D RESAMPLE DEBUG]   3D distance: {distance_3d:.3f}mm")
                     
                     # Get slice thickness for comparison
                     slice_thickness = None
                     if hasattr(sorted_datasets[0], 'SliceThickness'):
                         try:
                             slice_thickness = float(sorted_datasets[0].SliceThickness)
-                            print(f"[3D RESAMPLE DEBUG]   SliceThickness: {slice_thickness:.3f}mm")
+                            # print(f"[3D RESAMPLE DEBUG]   SliceThickness: {slice_thickness:.3f}mm")
                         except (ValueError, TypeError):
                             pass
                     
@@ -212,30 +212,30 @@ class ImageResampler:
                             pos_diff = pos2 - pos1
                             slice_spacing = abs(np.dot(pos_diff, slice_normal))
                             
-                            print(f"[3D RESAMPLE DEBUG]   Slice normal (from IOP): {slice_normal}")
-                            print(f"[3D RESAMPLE DEBUG]   Spacing along normal: {slice_spacing:.3f}mm")
+                            # print(f"[3D RESAMPLE DEBUG]   Slice normal (from IOP): {slice_normal}")
+                            # print(f"[3D RESAMPLE DEBUG]   Spacing along normal: {slice_spacing:.3f}mm")
                             
                             # Debug: Check for overlap
                             if slice_thickness is not None and slice_spacing < slice_thickness:
                                 overlap = slice_thickness - slice_spacing
-                                print(f"[3D RESAMPLE DEBUG]   OVERLAP DETECTED: thickness={slice_thickness:.2f}mm, spacing={slice_spacing:.2f}mm, overlap={overlap:.2f}mm")
+                                # print(f"[3D RESAMPLE DEBUG]   OVERLAP DETECTED: thickness={slice_thickness:.2f}mm, spacing={slice_spacing:.2f}mm, overlap={overlap:.2f}mm")
                             elif slice_thickness is not None:
                                 gap = slice_spacing - slice_thickness
-                                print(f"[3D RESAMPLE DEBUG]   Gap between slices: {gap:.2f}mm")
+                                # print(f"[3D RESAMPLE DEBUG]   Gap between slices: {gap:.2f}mm")
                         else:
                             # Fall back to 3D distance if no orientation
                             slice_spacing = distance_3d
-                            print(f"[3D RESAMPLE DEBUG]   No ImageOrientationPatient, using 3D distance: {slice_spacing:.3f}mm")
+                            # print(f"[3D RESAMPLE DEBUG]   No ImageOrientationPatient, using 3D distance: {slice_spacing:.3f}mm")
                     else:
                         # Fall back to 3D distance if no orientation
                         slice_spacing = distance_3d
-                        print(f"[3D RESAMPLE DEBUG]   No ImageOrientationPatient, using 3D distance: {slice_spacing:.3f}mm")
+                        # print(f"[3D RESAMPLE DEBUG]   No ImageOrientationPatient, using 3D distance: {slice_spacing:.3f}mm")
                 elif hasattr(ds, 'SliceThickness'):
                     slice_spacing = float(ds.SliceThickness)
-                    print(f"[3D RESAMPLE DEBUG] dicom_series_to_sitk: Using SliceThickness: {slice_spacing:.3f}mm")
+                    # print(f"[3D RESAMPLE DEBUG] dicom_series_to_sitk: Using SliceThickness: {slice_spacing:.3f}mm")
             elif hasattr(ds, 'SliceThickness'):
                 slice_spacing = float(ds.SliceThickness)
-                print(f"[3D RESAMPLE DEBUG] dicom_series_to_sitk: Single slice, using SliceThickness: {slice_spacing:.3f}mm")
+                # print(f"[3D RESAMPLE DEBUG] dicom_series_to_sitk: Single slice, using SliceThickness: {slice_spacing:.3f}mm")
             
             # SimpleITK uses (x, y, z) order for spacing
             # Pixel spacing is [row, col] in DICOM, which maps to [y, x] in SimpleITK
@@ -250,11 +250,11 @@ class ImageResampler:
                     slice_cosines = np.cross(row_cosines, col_cosines)
                     
                     # DEBUG: Log direction matrix calculation
-                    print(f"[3D RESAMPLE DEBUG] dicom_series_to_sitk: Direction matrix calculation")
-                    print(f"[3D RESAMPLE DEBUG]   ImageOrientationPatient: {iop}")
-                    print(f"[3D RESAMPLE DEBUG]   Row cosines: {row_cosines}")
-                    print(f"[3D RESAMPLE DEBUG]   Col cosines: {col_cosines}")
-                    print(f"[3D RESAMPLE DEBUG]   Slice normal (cross product): {slice_cosines}")
+                    # print(f"[3D RESAMPLE DEBUG] dicom_series_to_sitk: Direction matrix calculation")
+                    # print(f"[3D RESAMPLE DEBUG]   ImageOrientationPatient: {iop}")
+                    # print(f"[3D RESAMPLE DEBUG]   Row cosines: {row_cosines}")
+                    # print(f"[3D RESAMPLE DEBUG]   Col cosines: {col_cosines}")
+                    # print(f"[3D RESAMPLE DEBUG]   Slice normal (cross product): {slice_cosines}")
                     
                     # FIX: Direction matrix in row-major order for SimpleITK (not column-major)
                     # Format: [Row_x, Row_y, Row_z, Col_x, Col_y, Col_z, Slice_x, Slice_y, Slice_z]
@@ -263,10 +263,10 @@ class ImageResampler:
                         col_cosines[0], col_cosines[1], col_cosines[2],  # Col vector
                         slice_cosines[0], slice_cosines[1], slice_cosines[2]  # Slice normal
                     ]
-                    print(f"[3D RESAMPLE DEBUG]   Direction matrix (row-major, FIXED): {direction}")
-                    print(f"[3D RESAMPLE DEBUG]   Row cosines: {row_cosines}")
-                    print(f"[3D RESAMPLE DEBUG]   Col cosines: {col_cosines}")
-                    print(f"[3D RESAMPLE DEBUG]   Slice normal: {slice_cosines}")
+                    # print(f"[3D RESAMPLE DEBUG]   Direction matrix (row-major, FIXED): {direction}")
+                    # print(f"[3D RESAMPLE DEBUG]   Row cosines: {row_cosines}")
+                    # print(f"[3D RESAMPLE DEBUG]   Col cosines: {col_cosines}")
+                    # print(f"[3D RESAMPLE DEBUG]   Slice normal: {slice_cosines}")
                     sitk_image.SetDirection(direction)
             
             return sitk_image
@@ -417,9 +417,9 @@ class ImageResampler:
             return None
         
         # DEBUG: Log slice index mapping from unsorted to sorted order
-        print(f"[3D RESAMPLE DEBUG] get_resampled_slice: Slice index mapping check")
-        print(f"[3D RESAMPLE DEBUG]   Requested slice_idx (unsorted): {slice_idx}")
-        print(f"[3D RESAMPLE DEBUG]   Total reference_datasets (unsorted): {len(reference_datasets)}")
+        # print(f"[3D RESAMPLE DEBUG] get_resampled_slice: Slice index mapping check")
+        # print(f"[3D RESAMPLE DEBUG]   Requested slice_idx (unsorted): {slice_idx}")
+        # print(f"[3D RESAMPLE DEBUG]   Total reference_datasets (unsorted): {len(reference_datasets)}")
         
         # Get the dataset at slice_idx in unsorted reference_datasets
         target_dataset = reference_datasets[slice_idx]
@@ -427,26 +427,26 @@ class ImageResampler:
         if target_slice_loc is None and hasattr(target_dataset, 'ImagePositionPatient'):
             ipp = target_dataset.ImagePositionPatient
             target_slice_loc = float(ipp[2]) if ipp and len(ipp) >= 3 else None
-        print(f"[3D RESAMPLE DEBUG]   Target dataset at unsorted_idx={slice_idx}: SliceLocation={target_slice_loc}")
+        # print(f"[3D RESAMPLE DEBUG]   Target dataset at unsorted_idx={slice_idx}: SliceLocation={target_slice_loc}")
         
         # Find its position in sorted datasets (used to create reference_sitk)
         sorted_reference_datasets = self._sort_datasets_by_location(reference_datasets)
-        print(f"[3D RESAMPLE DEBUG]   Total sorted reference_datasets: {len(sorted_reference_datasets)}")
+        # print(f"[3D RESAMPLE DEBUG]   Total sorted reference_datasets: {len(sorted_reference_datasets)}")
         
         # Map unsorted index to sorted index
         try:
             sorted_slice_idx = sorted_reference_datasets.index(target_dataset)
-            print(f"[3D RESAMPLE DEBUG]   Slice index mapping: unsorted_idx={slice_idx} -> sorted_idx={sorted_slice_idx}")
+            # print(f"[3D RESAMPLE DEBUG]   Slice index mapping: unsorted_idx={slice_idx} -> sorted_idx={sorted_slice_idx}")
             if sorted_slice_idx < len(sorted_reference_datasets):
                 sorted_ds = sorted_reference_datasets[sorted_slice_idx]
                 sorted_slice_loc = getattr(sorted_ds, 'SliceLocation', None)
                 if sorted_slice_loc is None and hasattr(sorted_ds, 'ImagePositionPatient'):
                     ipp = sorted_ds.ImagePositionPatient
                     sorted_slice_loc = float(ipp[2]) if ipp and len(ipp) >= 3 else None
-                print(f"[3D RESAMPLE DEBUG]   Sorted dataset at sorted_idx={sorted_slice_idx}: SliceLocation={sorted_slice_loc}")
+                # print(f"[3D RESAMPLE DEBUG]   Sorted dataset at sorted_idx={sorted_slice_idx}: SliceLocation={sorted_slice_loc}")
         except ValueError:
             # Dataset not found in sorted list (shouldn't happen), fall back to original index
-            print(f"[3D RESAMPLE DEBUG] WARNING: Dataset at unsorted_idx={slice_idx} not found in sorted list!")
+            # print(f"[3D RESAMPLE DEBUG] WARNING: Dataset at unsorted_idx={slice_idx} not found in sorted list!")
             sorted_slice_idx = slice_idx
         
         # Create cache key
@@ -490,24 +490,24 @@ class ImageResampler:
             return None
         
         # DEBUG: Log which slice is extracted from volume
-        print(f"[3D RESAMPLE DEBUG] get_resampled_slice: Extracting slice from resampled volume")
-        print(f"[3D RESAMPLE DEBUG]   Volume shape (z, y, x): {volume_array.shape}")
-        print(f"[3D RESAMPLE DEBUG]   Using sorted_slice_idx: {sorted_slice_idx} (was unsorted_idx: {slice_idx})")
+        # print(f"[3D RESAMPLE DEBUG] get_resampled_slice: Extracting slice from resampled volume")
+        # print(f"[3D RESAMPLE DEBUG]   Volume shape (z, y, x): {volume_array.shape}")
+        # print(f"[3D RESAMPLE DEBUG]   Using sorted_slice_idx: {sorted_slice_idx} (was unsorted_idx: {slice_idx})")
         
         # volume_array is (z, y, x), extract slice at sorted index
         # FIX: Use sorted_slice_idx instead of slice_idx to correctly map from unsorted to sorted order
         if sorted_slice_idx < volume_array.shape[0]:
             slice_array = volume_array[sorted_slice_idx]
-            print(f"[3D RESAMPLE DEBUG]   Successfully extracted slice {sorted_slice_idx} from volume")
+            # print(f"[3D RESAMPLE DEBUG]   Successfully extracted slice {sorted_slice_idx} from volume")
         else:
-            print(f"[3D RESAMPLE DEBUG] ERROR: sorted_slice_idx={sorted_slice_idx} >= volume_array.shape[0]={volume_array.shape[0]}")
+            # print(f"[3D RESAMPLE DEBUG] ERROR: sorted_slice_idx={sorted_slice_idx} >= volume_array.shape[0]={volume_array.shape[0]}")
             return None
         
         # Apply rescale if parameters exist (3D resampling works with raw pixel values)
         if overlay_datasets:
             # DEBUG: Check rescale parameter consistency across slices
-            print(f"[3D RESAMPLE DEBUG] get_resampled_slice: Rescale parameter check")
-            print(f"[3D RESAMPLE DEBUG]   Total overlay_datasets: {len(overlay_datasets)}")
+            # print(f"[3D RESAMPLE DEBUG] get_resampled_slice: Rescale parameter check")
+            # print(f"[3D RESAMPLE DEBUG]   Total overlay_datasets: {len(overlay_datasets)}")
             
             # Check rescale parameters for multiple slices
             rescale_params_list = []
@@ -521,21 +521,23 @@ class ImageResampler:
                 ds = overlay_datasets[idx]
                 rescale_slope, rescale_intercept, rescale_type = DICOMProcessor.get_rescale_parameters(ds)
                 rescale_params_list.append((idx, rescale_slope, rescale_intercept, rescale_type))
-                print(f"[3D RESAMPLE DEBUG]   Slice[{idx}]: slope={rescale_slope}, intercept={rescale_intercept}, type={rescale_type}")
+                # print(f"[3D RESAMPLE DEBUG]   Slice[{idx}]: slope={rescale_slope}, intercept={rescale_intercept}, type={rescale_type}")
             
             # Check consistency
             if len(rescale_params_list) > 1:
                 first_params = rescale_params_list[0][1:4]  # (slope, intercept, type)
                 all_consistent = all(params[1:4] == first_params for params in rescale_params_list[1:])
                 if not all_consistent:
-                    print(f"[3D RESAMPLE DEBUG]   WARNING: Rescale parameters are NOT consistent across slices!")
+                    # print(f"[3D RESAMPLE DEBUG]   WARNING: Rescale parameters are NOT consistent across slices!")
+                    pass
                 else:
-                    print(f"[3D RESAMPLE DEBUG]   Rescale parameters are consistent across slices")
+                    # print(f"[3D RESAMPLE DEBUG]   Rescale parameters are consistent across slices")
+                    pass
             
             # Use first dataset's rescale parameters
             rescale_slope, rescale_intercept, _ = DICOMProcessor.get_rescale_parameters(overlay_datasets[0])
             if rescale_slope is not None and rescale_intercept is not None:
-                print(f"[3D RESAMPLE DEBUG]   Applying rescale: slope={rescale_slope}, intercept={rescale_intercept}")
+                # print(f"[3D RESAMPLE DEBUG]   Applying rescale: slope={rescale_slope}, intercept={rescale_intercept}")
                 slice_array = slice_array.astype(np.float32) * float(rescale_slope) + float(rescale_intercept)
         
         return slice_array

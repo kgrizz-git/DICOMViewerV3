@@ -87,6 +87,8 @@ This application provides comprehensive DICOM image viewing capabilities with ad
 
 ### Analysis Tools
 - Draw elliptical or rectangular regions of interest (ROIs)
+- Text annotations: Add and edit text labels on images (T key)
+- Arrow annotations: Add arrows to point to features (A key)
 - Draw crosshairs to display pixel values and coordinates at clicked points (crosshairs are a type of ROI)
 - Calculate statistics (mean, standard deviation, min, max, area) within ROIs
 - Measure distances (pixels, mm, or cm based on DICOM metadata)
@@ -105,12 +107,12 @@ This application provides comprehensive DICOM image viewing capabilities with ad
 ### Data Management
 - Clear ROIs from slice or whole dataset (including crosshairs)
 - Clear measurements
-- Copy and paste annotations (ROIs, measurements, crosshairs)
+- Copy and paste annotations (ROIs, measurements, crosshairs, text annotations, arrow annotations)
   - Select annotations and copy with Cmd+C/Ctrl+C
   - Paste to current slice with Cmd+V/Ctrl+V
   - Smart offset: duplicates appear offset when pasting to same slice, no offset when pasting to different slice
   - Supports cross-slice pasting
-- Undo/redo functionality for ROI and measurement operations (create, move, delete, paste)
+- Undo/redo functionality for ROI, measurement, text annotation, and arrow annotation operations (create, move, delete, paste)
 - ROI list panel with selection
 - Status bar updates during file loading showing number of studies, series, and files loaded
 
@@ -135,23 +137,25 @@ This application provides comprehensive DICOM image viewing capabilities with ad
 - **R**: Rectangle ROI mode (draw rectangular regions of interest)
 - **E**: Ellipse ROI mode (draw elliptical regions of interest)
 - **M**: Measure mode (create distance measurements)
-- **S**: Select mode (select ROIs and measurements)
+- **S**: Select mode (select ROIs, measurements, text annotations, and arrow annotations)
 - **W**: Window/Level ROI mode (auto-adjust from ROI)
-- **H**: Crosshair mode (draw crosshairs to display pixel values)
+- **T**: Text annotation mode (click to place and edit text labels)
+- **A**: Arrow annotation mode (click and drag to draw arrows)
 - **C**: Clear all measurements on current slice
 - **D**: Delete all ROIs on current slice (including crosshairs)
-- **Cmd+C / Ctrl+C**: Copy selected annotations (ROIs, measurements, crosshairs) - works in image viewer
+- **Cmd+C / Ctrl+C**: Copy selected annotations (ROIs, measurements, crosshairs, text annotations, arrow annotations) - works in image viewer
 - **Cmd+V / Ctrl+V**: Paste annotations to current slice - works in image viewer
-- **Cmd+Z / Ctrl+Z**: Undo last operation
+- **Cmd+Z / Ctrl+Z**: Undo last operation (ROI/measurement/text/arrow annotation creation, move, or deletion)
 - **Cmd+Shift+Z / Ctrl+Shift+Z**: Redo last undone operation
 - **V**: Reset view (restore initial zoom, pan, and window/level for focused subwindow)
-- **A**: Reset all views (reset zoom, pan, and window/level for all subwindows)
+- **Shift+V**: Reset view (same as V)
+- **Shift+A**: Reset all views (reset zoom, pan, and window/level for all subwindows)
 - **Cmd+Shift+H / Ctrl+Shift+H**: Open histogram dialog (shows pixel value distribution with window/level overlay)
 - **N**: Toggle series navigator bar visibility
 - **Spacebar**: Toggle overlay visibility (cycles through 3 states)
 - **Cmd+P / Ctrl+P**: Toggle Privacy View (masks patient-related tags in display)
 - **Arrow Keys**: Navigate slices (Up/Down) and series (Left/Right)
-- **Delete**: Delete selected ROI or measurement
+- **Delete**: Delete selected ROI, measurement, text annotation, or arrow annotation
 - **I**: Invert image colors
 - **Ctrl+T**: View/Edit DICOM Tags (copy/paste for DICOM tags works in the Tag Viewer Dialog)
 - **Shift+Ctrl+T**: Export DICOM Tags

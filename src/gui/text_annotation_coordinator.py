@@ -15,8 +15,8 @@ Requirements:
     - ImageViewer for scene operations
 """
 
-from PySide6.QtCore import QPointF
-from typing import Optional, Callable, TYPE_CHECKING
+from PySide6.QtCore import QPointF, QTimer
+from typing import Optional, Callable, TYPE_CHECKING, Dict
 from pydicom.dataset import Dataset
 from tools.text_annotation_tool import TextAnnotationTool
 from gui.image_viewer import ImageViewer
@@ -62,6 +62,13 @@ class TextAnnotationCoordinator:
         self.get_current_slice_index = get_current_slice_index
         self.undo_redo_manager = undo_redo_manager
         self.update_undo_redo_state_callback = update_undo_redo_state_callback
+        self._processing_finished = False  # Flag to prevent double-call
+        self._annotation_in_progress = False  # Flag to prevent double initialization
+        
+        # Move tracking for undo/redo (similar to arrow annotations)
+        from PySide6.QtCore import QTimer
+        self._text_move_tracking: Dict = {}  # Track text annotation moves for batching
+        self._text_move_batch_timer: Optional[QTimer] = None
     
     def handle_text_annotation_started(self, pos: QPointF) -> None:
         """
@@ -70,6 +77,14 @@ class TextAnnotationCoordinator:
         Args:
             pos: Starting position
         """
+        # Prevent double initialization
+        if self._annotation_in_progress:
+            print(f"[ANNOTATION DEBUG] TextAnnotationCoordinator.handle_text_annotation_started: Already in progress, skipping")
+            return
+        
+        print(f"[ANNOTATION DEBUG] TextAnnotationCoordinator.handle_text_annotation_started: called, pos={pos}")
+        self._annotation_in_progress = True
+        
         # Set current slice context before starting annotation
         current_dataset = self.get_current_dataset()
         if current_dataset is not None:
@@ -82,17 +97,26 @@ class TextAnnotationCoordinator:
         # Create callback for when editing finishes
         def on_editing_finished(accept: bool) -> None:
             """Handle editing finished - finish the annotation."""
+            print(f"[ANNOTATION DEBUG] TextAnnotationCoordinator.on_editing_finished: accept={accept}, _processing_finished={self._processing_finished}")
+            # Prevent double-call
+            if self._processing_finished:
+                print(f"[ANNOTATION DEBUG] TextAnnotationCoordinator.on_editing_finished: Already processing, skipping")
+                return
+            
             # Clear annotation state
             if hasattr(self.image_viewer, 'text_annotating'):
                 self.image_viewer.text_annotating = False
                 self.image_viewer.text_annotation_start_pos = None
             
             if accept:
+                self._processing_finished = True
                 self.handle_text_annotation_finished()
             else:
                 # Cancel annotation
                 if self.image_viewer.scene is not None:
                     self.text_annotation_tool.cancel_annotation(self.image_viewer.scene)
+            # Clear in-progress flag
+            self._annotation_in_progress = False
         
         # Start annotation (creates item but doesn't start editing yet)
         self.text_annotation_tool.start_annotation(pos, on_editing_finished=on_editing_finished)
@@ -107,11 +131,19 @@ class TextAnnotationCoordinator:
     
     def handle_text_annotation_finished(self) -> None:
         """Handle text annotation finish."""
+        print(f"[ANNOTATION DEBUG] TextAnnotationCoordinator.handle_text_annotation_finished: called, _processing_finished={self._processing_finished}")
+        
         if self.image_viewer.scene is None:
+            print(f"[ANNOTATION DEBUG] TextAnnotationCoordinator.handle_text_annotation_finished: scene is None, returning")
+            self._processing_finished = False
             return
         
+        print(f"[ANNOTATION DEBUG] TextAnnotationCoordinator.handle_text_annotation_finished: calling finish_annotation")
         annotation = self.text_annotation_tool.finish_annotation(self.image_viewer.scene)
+        print(f"[ANNOTATION DEBUG] TextAnnotationCoordinator.handle_text_annotation_finished: finish_annotation returned, annotation={'exists' if annotation is not None else 'None'}")
+        
         if annotation is not None:
+            print(f"[ANNOTATION DEBUG] TextAnnotationCoordinator.handle_text_annotation_finished: annotation={annotation}, creating undo command")
             # Create undo/redo command for annotation addition
             if self.undo_redo_manager:
                 from utils.undo_redo import TextAnnotationCommand
@@ -123,6 +155,7 @@ class TextAnnotationCoordinator:
                     study_uid = getattr(current_dataset, 'StudyInstanceUID', '')
                     series_uid = get_composite_series_key(current_dataset)
                 
+                print(f"[ANNOTATION DEBUG] TextAnnotationCoordinator.handle_text_annotation_finished: creating command with key=({study_uid[:20] if study_uid else ''}..., {series_uid[:20] if series_uid else ''}..., {instance_identifier})")
                 command = TextAnnotationCommand(
                     self.text_annotation_tool,
                     "add",
@@ -132,10 +165,152 @@ class TextAnnotationCoordinator:
                     series_uid,
                     instance_identifier
                 )
+                print(f"[ANNOTATION DEBUG] TextAnnotationCoordinator.handle_text_annotation_finished: executing command")
                 self.undo_redo_manager.execute_command(command)
+                print(f"[ANNOTATION DEBUG] TextAnnotationCoordinator.handle_text_annotation_finished: command executed, undo stack size={len(self.undo_redo_manager.undo_stack)}")
+                
+                # Set up move callback for undo/redo tracking
+                annotation.on_moved_callback = self._on_text_annotation_moved
+                # Set up text edit callback for future edits
+                annotation.on_text_edit_finished = self._on_text_annotation_edited
+                print(f"[ANNOTATION DEBUG] TextAnnotationCoordinator.handle_text_annotation_finished: set up callbacks for new annotation, on_text_edit_finished={'exists' if annotation.on_text_edit_finished is not None else 'None'}")
+                
+                # Store initial position for move tracking
+                if annotation not in self._text_move_tracking:
+                    self._text_move_tracking[annotation] = {
+                        'initial_position': annotation.pos(),
+                        'current_position': annotation.pos(),
+                        'initialized': True
+                    }
+                    print(f"[ANNOTATION DEBUG] TextAnnotationCoordinator.handle_text_annotation_finished: stored initial position for text annotation")
+                
                 # Update undo/redo state after command execution
                 if self.update_undo_redo_state_callback:
                     self.update_undo_redo_state_callback()
+            else:
+                print(f"[ANNOTATION DEBUG] TextAnnotationCoordinator.handle_text_annotation_finished: no undo_redo_manager")
+        else:
+            print(f"[ANNOTATION DEBUG] TextAnnotationCoordinator.handle_text_annotation_finished: annotation is None, not creating undo command")
+        
+        # Reset processing flag
+        self._processing_finished = False
+        self._annotation_in_progress = False
+        print(f"[ANNOTATION DEBUG] TextAnnotationCoordinator.handle_text_annotation_finished: completed, _processing_finished={self._processing_finished}, _annotation_in_progress={self._annotation_in_progress}")
+    
+    def _on_text_annotation_moved(self, text_item) -> None:
+        """
+        Handle text annotation movement - track for undo/redo with batching.
+        
+        Args:
+            text_item: TextAnnotationItem that was moved
+        """
+        try:
+            # Check if item is still valid
+            if text_item is None:
+                return
+            
+            # Get current position
+            current_pos = text_item.pos()
+            
+            # Check if item is being tracked for movement
+            is_tracked = text_item in self._text_move_tracking
+            
+            # #region agent log
+            with open('/Users/kevingrizzard/Documents/GitHub/DICOMViewerV3/.cursor/debug.log', 'a') as f:
+                import json
+                tracking_data = self._text_move_tracking.get(text_item, {}) if text_item in self._text_move_tracking else {}
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"C","location":"text_annotation_coordinator.py:_on_text_annotation_moved","message":"Text annotation moved","data":{"item_id":str(id(text_item)),"is_tracked":is_tracked,"current_pos":str(current_pos),"tracking_initial_pos":str(tracking_data.get('initial_position', 'N/A')),"tracking_initialized":tracking_data.get('initialized', False)},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+            # #endregion
+            
+            if not is_tracked:
+                # Start tracking
+                self._text_move_tracking[text_item] = {
+                    'initial_position': current_pos,
+                    'current_position': current_pos,
+                    'initialized': True
+                }
+                print(f"[ANNOTATION DEBUG] TextAnnotationCoordinator._on_text_annotation_moved: First move, starting tracking")
+            else:
+                # Update current position
+                tracking = self._text_move_tracking[text_item]
+                tracking['current_position'] = current_pos
+            
+            # Start/restart batch timer (200ms delay)
+            if self._text_move_batch_timer is not None:
+                self._text_move_batch_timer.stop()
+            
+            self._text_move_batch_timer = QTimer()
+            self._text_move_batch_timer.setSingleShot(True)
+            self._text_move_batch_timer.timeout.connect(lambda: self._finalize_text_move(text_item))
+            self._text_move_batch_timer.start(200)  # 200ms delay
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+    
+    def _on_text_annotation_edited(self, text_item, old_text: str, new_text: str) -> None:
+        """
+        Handle text annotation text edit - create undo/redo command.
+        
+        Args:
+            text_item: TextAnnotationItem that was edited
+            old_text: Original text content
+            new_text: New text content
+        """
+        print(f"[ANNOTATION DEBUG] TextAnnotationCoordinator._on_text_annotation_edited: called, text_item={'exists' if text_item is not None else 'None'}, undo_manager={'exists' if self.undo_redo_manager is not None else 'None'}, old_text='{old_text}', new_text='{new_text}'")
+        
+        if text_item is None or self.undo_redo_manager is None:
+            print(f"[ANNOTATION DEBUG] TextAnnotationCoordinator._on_text_annotation_edited: early return (text_item or undo_manager is None)")
+            return
+        
+        # Only create command if text actually changed
+        if old_text != new_text:
+            from utils.undo_redo import TextAnnotationEditCommand
+            command = TextAnnotationEditCommand(text_item, old_text, new_text)
+            self.undo_redo_manager.execute_command(command)
+            # Update undo/redo state after command execution
+            if self.update_undo_redo_state_callback:
+                self.update_undo_redo_state_callback()
+            print(f"[ANNOTATION DEBUG] TextAnnotationCoordinator._on_text_annotation_edited: created edit command, old_text='{old_text}', new_text='{new_text}'")
+        else:
+            print(f"[ANNOTATION DEBUG] TextAnnotationCoordinator._on_text_annotation_edited: text unchanged, not creating command")
+    
+    def _finalize_text_move(self, text_item) -> None:
+        """
+        Finalize text annotation move by creating undo/redo command.
+        
+        Args:
+            text_item: TextAnnotationItem that was moved
+        """
+        if text_item not in self._text_move_tracking:
+            return
+        
+        tracking = self._text_move_tracking[text_item]
+        initial_pos = tracking['initial_position']
+        final_pos = tracking['current_position']
+        
+        # #region agent log
+        with open('/Users/kevingrizzard/Documents/GitHub/DICOMViewerV3/.cursor/debug.log', 'a') as f:
+            import json
+            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"C","location":"text_annotation_coordinator.py:_finalize_text_move","message":"Finalizing text move","data":{"item_id":str(id(text_item)),"initial_pos":str(initial_pos),"final_pos":str(final_pos),"position_changed":initial_pos != final_pos},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+        # #endregion
+        
+        # Only create command if position actually changed
+        if initial_pos != final_pos and self.undo_redo_manager and self.image_viewer.scene:
+            from utils.undo_redo import TextAnnotationMoveCommand
+            command = TextAnnotationMoveCommand(
+                text_item,
+                initial_pos,
+                final_pos,
+                self.image_viewer.scene
+            )
+            self.undo_redo_manager.execute_command(command)
+            # Update undo/redo state after command execution
+            if self.update_undo_redo_state_callback:
+                self.update_undo_redo_state_callback()
+        
+        # Remove from tracking
+        if text_item in self._text_move_tracking:
+            del self._text_move_tracking[text_item]
     
     def handle_text_annotation_delete_requested(self, annotation_item) -> None:
         """
@@ -191,6 +366,22 @@ class TextAnnotationCoordinator:
         self.text_annotation_tool.display_annotations_for_slice(
             study_uid, series_uid, instance_identifier, self.image_viewer.scene
         )
+        
+        # Set up move callbacks and text edit callbacks for all displayed annotations
+        annotations = self.text_annotation_tool.get_annotations_for_slice(study_uid, series_uid, instance_identifier)
+        for annotation in annotations:
+            annotation.on_moved_callback = self._on_text_annotation_moved
+            # Set up text edit callback for existing annotations (not new ones)
+            # The callback receives (text_item, old_text, new_text) from finish_editing
+            annotation.on_text_edit_finished = self._on_text_annotation_edited
+            print(f"[ANNOTATION DEBUG] TextAnnotationCoordinator.display_annotations_for_slice: set up callbacks for annotation, on_text_edit_finished={'exists' if annotation.on_text_edit_finished is not None else 'None'}")
+            # Store initial position if not already stored
+            if annotation not in self._text_move_tracking:
+                self._text_move_tracking[annotation] = {
+                    'initial_position': annotation.pos(),
+                    'current_position': annotation.pos(),
+                    'initialized': True
+                }
     
     def clear_annotations_from_other_slices(self, study_uid: str, series_uid: str, instance_identifier: int) -> None:
         """

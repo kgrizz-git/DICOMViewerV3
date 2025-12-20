@@ -84,11 +84,34 @@ class UndoRedoManager:
             True if undo was successful, False if no commands to undo
         """
         if not self.undo_stack:
+            print(f"[ANNOTATION DEBUG] UndoRedoManager.undo: no commands to undo")
             return False
         
         command = self.undo_stack.pop()
+        command_type = type(command).__name__
+        
+        # #region agent log
+        with open('/Users/kevingrizzard/Documents/GitHub/DICOMViewerV3/.cursor/debug.log', 'a') as f:
+            import json
+            log_data = {"command_type":command_type,"undo_stack_size_before":len(self.undo_stack) + 1,"undo_stack_size_after":len(self.undo_stack)}
+            if hasattr(command, 'action'):
+                log_data["command_action"] = command.action
+            if hasattr(command, 'arrow_item'):
+                log_data["arrow_item_id"] = str(id(command.arrow_item))
+            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"D","location":"undo_redo.py:90","message":"UndoRedoManager.undo: command being undone","data":log_data,"timestamp":int(__import__('time').time()*1000)}) + '\n')
+        # #endregion
+        
+        print(f"[ANNOTATION DEBUG] UndoRedoManager.undo: undoing command type={command_type}, undo stack size before={len(self.undo_stack) + 1}, after={len(self.undo_stack)}")
+        
+        # Log command details if it's an annotation command
+        if hasattr(command, 'action'):
+            print(f"[ANNOTATION DEBUG] UndoRedoManager.undo: command action={command.action}")
+        if hasattr(command, 'arrow_item'):
+            print(f"[ANNOTATION DEBUG] UndoRedoManager.undo: ArrowAnnotationMoveCommand, arrow_item={command.arrow_item}")
+        
         command.undo()
         self.redo_stack.append(command)
+        print(f"[ANNOTATION DEBUG] UndoRedoManager.undo: undo completed, redo stack size={len(self.redo_stack)}")
         return True
     
     def redo(self) -> bool:
@@ -383,6 +406,8 @@ class TextAnnotationCommand(Command):
         """Execute the command."""
         if self.scene is None:
             return
+        
+        print(f"[ANNOTATION DEBUG] TextAnnotationCommand.execute: action={self.action}, key={self.key}")
             
         if self.action == "add":
             # Add annotation
@@ -390,6 +415,9 @@ class TextAnnotationCommand(Command):
                 self.text_annotation_tool.annotations[self.key] = []
             if self.annotation_item not in self.text_annotation_tool.annotations[self.key]:
                 self.text_annotation_tool.annotations[self.key].append(self.annotation_item)
+                # Ensure item state is correct (no callback, not new annotation)
+                self.annotation_item.on_editing_finished = None
+                self.annotation_item._is_new_annotation = False
                 if self.annotation_item.scene() != self.scene:
                     self.scene.addItem(self.annotation_item)
         elif self.action == "remove":
@@ -404,6 +432,10 @@ class TextAnnotationCommand(Command):
         """Undo the command."""
         if self.scene is None:
             return
+        
+        callback_exists = self.annotation_item.on_editing_finished is not None
+        is_new = getattr(self.annotation_item, '_is_new_annotation', False)
+        print(f"[ANNOTATION DEBUG] TextAnnotationCommand.undo: action={self.action}, key={self.key}, item state: callback={'exists' if callback_exists else 'None'}, _is_new_annotation={is_new}")
             
         if self.action == "add":
             # Undo add = remove
@@ -418,6 +450,9 @@ class TextAnnotationCommand(Command):
                 self.text_annotation_tool.annotations[self.key] = []
             if self.annotation_item not in self.text_annotation_tool.annotations[self.key]:
                 self.text_annotation_tool.annotations[self.key].append(self.annotation_item)
+                # Ensure item state is correct (no callback, not new annotation)
+                self.annotation_item.on_editing_finished = None
+                self.annotation_item._is_new_annotation = False
                 if self.annotation_item.scene() != self.scene:
                     self.scene.addItem(self.annotation_item)
 
@@ -489,6 +524,185 @@ class ArrowAnnotationCommand(Command):
                 self.arrow_annotation_tool.arrows[self.key].append(self.arrow_item)
                 if self.arrow_item.scene() != self.scene:
                     self.scene.addItem(self.arrow_item)
+
+
+class TextAnnotationEditCommand(Command):
+    """
+    Command for text annotation text content edits (not creation/deletion).
+    """
+    
+    def __init__(self, text_annotation_item, old_text: str, new_text: str):
+        """
+        Initialize text annotation edit command.
+        
+        Args:
+            text_annotation_item: TextAnnotationItem to edit
+            old_text: Original text content
+            new_text: New text content
+        """
+        self.text_annotation_item = text_annotation_item
+        self.old_text = old_text
+        self.new_text = new_text
+    
+    def execute(self) -> None:
+        """Execute the command - set to new text."""
+        if self.text_annotation_item is None:
+            return
+        # #region agent log
+        with open('/Users/kevingrizzard/Documents/GitHub/DICOMViewerV3/.cursor/debug.log', 'a') as f:
+            import json
+            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"D","location":"undo_redo.py:TextAnnotationEditCommand.execute","message":"Setting text annotation to new text","data":{"item_id":str(id(self.text_annotation_item)),"old_text":self.old_text,"new_text":self.new_text},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+        # #endregion
+        self.text_annotation_item.setPlainText(self.new_text)
+    
+    def undo(self) -> None:
+        """Undo the command - restore old text."""
+        if self.text_annotation_item is None:
+            return
+        # #region agent log
+        with open('/Users/kevingrizzard/Documents/GitHub/DICOMViewerV3/.cursor/debug.log', 'a') as f:
+            import json
+            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"D","location":"undo_redo.py:TextAnnotationEditCommand.undo","message":"Restoring text annotation to old text","data":{"item_id":str(id(self.text_annotation_item)),"old_text":self.old_text,"new_text":self.new_text},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+        # #endregion
+        self.text_annotation_item.setPlainText(self.old_text)
+
+
+class TextAnnotationMoveCommand(Command):
+    """
+    Command for text annotation movement operations.
+    """
+    
+    def __init__(self, text_annotation_item, old_position: 'QPointF', new_position: 'QPointF', scene):
+        """
+        Initialize text annotation move command.
+        
+        Args:
+            text_annotation_item: TextAnnotationItem to move
+            old_position: Original position (QPointF)
+            new_position: New position (QPointF)
+            scene: QGraphicsScene
+        """
+        self.text_annotation_item = text_annotation_item
+        self.old_position = old_position
+        self.new_position = new_position
+        self.scene = scene
+    
+    def execute(self) -> None:
+        """Execute the command - move to new position."""
+        if self.text_annotation_item is None or self.scene is None:
+            return
+        if self.text_annotation_item.scene() == self.scene:
+            # #region agent log
+            with open('/Users/kevingrizzard/Documents/GitHub/DICOMViewerV3/.cursor/debug.log', 'a') as f:
+                import json
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"C","location":"undo_redo.py:TextAnnotationMoveCommand.execute","message":"Moving text annotation to new position","data":{"item_id":str(id(self.text_annotation_item)),"old_pos":str(self.old_position),"new_pos":str(self.new_position)},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+            # #endregion
+            self.text_annotation_item.setPos(self.new_position)
+    
+    def undo(self) -> None:
+        """Undo the command - restore old position."""
+        if self.text_annotation_item is None or self.scene is None:
+            return
+        if self.text_annotation_item.scene() == self.scene:
+            # #region agent log
+            with open('/Users/kevingrizzard/Documents/GitHub/DICOMViewerV3/.cursor/debug.log', 'a') as f:
+                import json
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"C","location":"undo_redo.py:TextAnnotationMoveCommand.undo","message":"Restoring text annotation to old position","data":{"item_id":str(id(self.text_annotation_item)),"old_pos":str(self.old_position),"new_pos":str(self.new_position)},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+            # #endregion
+            self.text_annotation_item.setPos(self.old_position)
+
+
+class ArrowAnnotationMoveCommand(Command):
+    """
+    Command for arrow annotation movement operations.
+    Tracks both start_point and end_point changes.
+    """
+    
+    def __init__(self, arrow_item, old_start_point: 'QPointF', old_end_point: 'QPointF',
+                 new_start_point: 'QPointF', new_end_point: 'QPointF', scene):
+        """
+        Initialize arrow annotation move command.
+        
+        Args:
+            arrow_item: ArrowAnnotationItem to move
+            old_start_point: Original start point (QPointF)
+            old_end_point: Original end point (QPointF)
+            new_start_point: New start point (QPointF)
+            new_end_point: New end point (QPointF)
+            scene: QGraphicsScene
+        """
+        self.arrow_item = arrow_item
+        self.old_start_point = old_start_point
+        self.old_end_point = old_end_point
+        self.new_start_point = new_start_point
+        self.new_end_point = new_end_point
+        self.scene = scene
+    
+    def execute(self) -> None:
+        """Execute the command - move to new positions."""
+        if self.arrow_item is None or self.scene is None:
+            return
+        
+        # Debug: log execute operation
+        callback_state = self.arrow_item.on_moved_callback is not None
+        print(f"[ANNOTATION DEBUG] ArrowAnnotationMoveCommand.execute: moving to new positions, callback={'exists' if callback_state else 'None'}")
+        
+        if self.arrow_item.scene() == self.scene:
+            # Save and temporarily clear callback to prevent recursive updates
+            saved_callback = self.arrow_item.on_moved_callback
+            self.arrow_item.on_moved_callback = None
+            
+            # Set flag to prevent recursive updates BEFORE any position changes
+            self.arrow_item._updating_position = True
+            
+            # Update arrow points and position
+            # Use update_endpoints which handles both position and line/arrowhead correctly
+            self.arrow_item.update_endpoints(self.new_start_point, self.new_end_point)
+            
+            # Clear flag AFTER all position changes
+            self.arrow_item._updating_position = False
+            
+            # Restore callback AFTER flag is cleared
+            self.arrow_item.on_moved_callback = saved_callback
+    
+    def undo(self) -> None:
+        """Undo the command - restore old positions."""
+        print(f"[ANNOTATION DEBUG] ArrowAnnotationMoveCommand.undo: called, arrow_item={'exists' if self.arrow_item is not None else 'None'}, scene={'exists' if self.scene is not None else 'None'}")
+        
+        if self.arrow_item is None or self.scene is None:
+            print(f"[ANNOTATION DEBUG] ArrowAnnotationMoveCommand.undo: early return (arrow_item or scene is None)")
+            return
+        
+        # Debug: log undo operation
+        callback_state = self.arrow_item.on_moved_callback is not None
+        updating_state = getattr(self.arrow_item, '_updating_position', False)
+        print(f"[ANNOTATION DEBUG] ArrowAnnotationMoveCommand.undo: restoring positions from ({self.new_start_point.x():.1f}, {self.new_start_point.y():.1f}, {self.new_end_point.x():.1f}, {self.new_end_point.y():.1f}) to ({self.old_start_point.x():.1f}, {self.old_start_point.y():.1f}, {self.old_end_point.x():.1f}, {self.old_end_point.y():.1f})")
+        print(f"[ANNOTATION DEBUG] ArrowAnnotationMoveCommand.undo: initial state - callback={'exists' if callback_state else 'None'}, _updating_position={updating_state}")
+        
+        if self.arrow_item.scene() == self.scene:
+            # Save and temporarily clear callback to prevent recursive updates
+            saved_callback = self.arrow_item.on_moved_callback
+            print(f"[ANNOTATION DEBUG] ArrowAnnotationMoveCommand.undo: saved callback={'exists' if saved_callback is not None else 'None'}, clearing it")
+            self.arrow_item.on_moved_callback = None
+            
+            # Set flag to prevent recursive updates BEFORE any position changes
+            self.arrow_item._updating_position = True
+            print(f"[ANNOTATION DEBUG] ArrowAnnotationMoveCommand.undo: set _updating_position=True")
+            
+            # Restore arrow points and position using update_endpoints
+            # This handles both position and line/arrowhead correctly
+            self.arrow_item.update_endpoints(self.old_start_point, self.old_end_point)
+            print(f"[ANNOTATION DEBUG] ArrowAnnotationMoveCommand.undo: restored positions using update_endpoints")
+            
+            # Clear flag AFTER all position changes
+            self.arrow_item._updating_position = False
+            print(f"[ANNOTATION DEBUG] ArrowAnnotationMoveCommand.undo: cleared _updating_position flag")
+            
+            # Restore callback AFTER flag is cleared
+            self.arrow_item.on_moved_callback = saved_callback
+            print(f"[ANNOTATION DEBUG] ArrowAnnotationMoveCommand.undo: restored callback={'exists' if saved_callback is not None else 'None'}")
+        else:
+            print(f"[ANNOTATION DEBUG] ArrowAnnotationMoveCommand.undo: arrow_item not in scene, skipping")
 
 
 class MeasurementMoveCommand(Command):

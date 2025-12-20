@@ -315,34 +315,34 @@ class FusionHandler:
             Pixel array for overlay, or None if not available
         """
         # DEBUG: Log dataset ordering when passed to get_resampled_slice
-        if base_datasets and len(base_datasets) > 0:
-            print(f"[3D RESAMPLE DEBUG] interpolate_overlay_slice: base_datasets order check")
-            print(f"[3D RESAMPLE DEBUG]   Total base datasets: {len(base_datasets)}")
-            print(f"[3D RESAMPLE DEBUG]   Requested slice_idx: {base_slice_idx}")
-            # Log first 3 and last 3 slice locations
-            for i in [0, 1, 2] if len(base_datasets) > 2 else range(len(base_datasets)):
-                ds = base_datasets[i]
-                loc = self.get_slice_location(ds)
-                print(f"[3D RESAMPLE DEBUG]   Base dataset[{i}]: SliceLocation={loc}")
-            if len(base_datasets) > 3:
-                for i in range(max(3, len(base_datasets)-3), len(base_datasets)):
-                    ds = base_datasets[i]
-                    loc = self.get_slice_location(ds)
-                    print(f"[3D RESAMPLE DEBUG]   Base dataset[{i}]: SliceLocation={loc}")
-        
-        if overlay_datasets and len(overlay_datasets) > 0:
-            print(f"[3D RESAMPLE DEBUG] interpolate_overlay_slice: overlay_datasets order check")
-            print(f"[3D RESAMPLE DEBUG]   Total overlay datasets: {len(overlay_datasets)}")
-            # Log first 3 and last 3 slice locations
-            for i in [0, 1, 2] if len(overlay_datasets) > 2 else range(len(overlay_datasets)):
-                ds = overlay_datasets[i]
-                loc = self.get_slice_location(ds)
-                print(f"[3D RESAMPLE DEBUG]   Overlay dataset[{i}]: SliceLocation={loc}")
-            if len(overlay_datasets) > 3:
-                for i in range(max(3, len(overlay_datasets)-3), len(overlay_datasets)):
-                    ds = overlay_datasets[i]
-                    loc = self.get_slice_location(ds)
-                    print(f"[3D RESAMPLE DEBUG]   Overlay dataset[{i}]: SliceLocation={loc}")
+        # if base_datasets and len(base_datasets) > 0:
+        #     print(f"[3D RESAMPLE DEBUG] interpolate_overlay_slice: base_datasets order check")
+        #     print(f"[3D RESAMPLE DEBUG]   Total base datasets: {len(base_datasets)}")
+        #     print(f"[3D RESAMPLE DEBUG]   Requested slice_idx: {base_slice_idx}")
+        #     # Log first 3 and last 3 slice locations
+        #     for i in [0, 1, 2] if len(base_datasets) > 2 else range(len(base_datasets)):
+        #         ds = base_datasets[i]
+        #         loc = self.get_slice_location(ds)
+        #         print(f"[3D RESAMPLE DEBUG]   Base dataset[{i}]: SliceLocation={loc}")
+        #     if len(base_datasets) > 3:
+        #         for i in range(max(3, len(base_datasets)-3), len(base_datasets)):
+        #             ds = base_datasets[i]
+        #             loc = self.get_slice_location(ds)
+        #             print(f"[3D RESAMPLE DEBUG]   Base dataset[{i}]: SliceLocation={loc}")
+        # 
+        # if overlay_datasets and len(overlay_datasets) > 0:
+        #     print(f"[3D RESAMPLE DEBUG] interpolate_overlay_slice: overlay_datasets order check")
+        #     print(f"[3D RESAMPLE DEBUG]   Total overlay datasets: {len(overlay_datasets)}")
+        #     # Log first 3 and last 3 slice locations
+        #     for i in [0, 1, 2] if len(overlay_datasets) > 2 else range(len(overlay_datasets)):
+        #         ds = overlay_datasets[i]
+        #         loc = self.get_slice_location(ds)
+        #         print(f"[3D RESAMPLE DEBUG]   Overlay dataset[{i}]: SliceLocation={loc}")
+        #     if len(overlay_datasets) > 3:
+        #         for i in range(max(3, len(overlay_datasets)-3), len(overlay_datasets)):
+        #             ds = overlay_datasets[i]
+        #             loc = self.get_slice_location(ds)
+        #             print(f"[3D RESAMPLE DEBUG]   Overlay dataset[{i}]: SliceLocation={loc}")
         
         # Phase 2: Check if 3D resampling is needed
         use_3d, reason = self._should_use_3d_resampling(base_datasets, overlay_datasets)

@@ -161,12 +161,12 @@ class FusionProcessor:
         overlay_array = overlay_array.astype(np.float32)
         
         # DEBUG
-        print(f"\n[FUSION DEBUG] create_fusion_image called")
-        print(f"  base_array shape: {base_array.shape}, dtype: {base_array.dtype}")
-        print(f"  base_array range: [{np.min(base_array):.2f}, {np.max(base_array):.2f}]")
-        print(f"  overlay_array shape: {overlay_array.shape}, dtype: {overlay_array.dtype}")
-        print(f"  overlay_array range: [{np.min(overlay_array):.2f}, {np.max(overlay_array):.2f}]")
-        print(f"  alpha: {alpha}, threshold: {threshold}, colormap: {colormap}")
+        # print(f"\n[FUSION DEBUG] create_fusion_image called")
+        # print(f"  base_array shape: {base_array.shape}, dtype: {base_array.dtype}")
+        # print(f"  base_array range: [{np.min(base_array):.2f}, {np.max(base_array):.2f}]")
+        # print(f"  overlay_array shape: {overlay_array.shape}, dtype: {overlay_array.dtype}")
+        # print(f"  overlay_array range: [{np.min(overlay_array):.2f}, {np.max(overlay_array):.2f}]")
+        # print(f"  alpha: {alpha}, threshold: {threshold}, colormap: {colormap}")
         print(f"  base_pixel_spacing: {base_pixel_spacing}")
         print(f"  overlay_pixel_spacing: {overlay_pixel_spacing}")
         print(f"  translation_offset: {translation_offset}")

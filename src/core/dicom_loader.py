@@ -316,7 +316,7 @@ class DICOMLoader:
                     timing_parts.append(f"compressed: {compression_type}")
                 else:
                     timing_parts.append("uncompressed")
-                print(f"[LOAD DEBUG] {filename}: {' | '.join(timing_parts)}")
+                # print(f"[LOAD DEBUG] {filename}: {' | '.join(timing_parts)}")
             
             return dataset
             
@@ -398,7 +398,7 @@ class DICOMLoader:
         file_times = []  # Track all file load times
         gc_times = []  # Track GC overhead
         
-        print(f"[LOAD DEBUG] Starting load of {total_files} files (defer_size={defer_size/1024/1024:.1f}MB)")
+        # print(f"[LOAD DEBUG] Starting load of {total_files} files (defer_size={defer_size/1024/1024:.1f}MB)")
         
         for idx, file_path in enumerate(file_paths):
             file_load_start = time.time()
@@ -449,7 +449,7 @@ class DICOMLoader:
                     if file_load_time > 0.5:
                         filename = os.path.basename(file_path)
                         slow_files.append((filename, file_load_time, file_size_mb))
-                        print(f"[LOAD DEBUG] Slow file: {filename} took {file_load_time:.3f}s ({file_size_mb:.2f}MB)")
+                        # print(f"[LOAD DEBUG] Slow file: {filename} took {file_load_time:.3f}s ({file_size_mb:.2f}MB)")
                     
                     # Periodic garbage collection every 50 files to prevent memory buildup
                     if len(self.loaded_files) % 50 == 0:
@@ -458,7 +458,7 @@ class DICOMLoader:
                         gc_time = time.time() - gc_start
                         gc_times.append(gc_time)
                         QApplication.processEvents()  # Keep UI responsive during GC
-                        print(f"[LOAD DEBUG] GC at file {len(self.loaded_files)}: {gc_time:.3f}s")
+                        # print(f"[LOAD DEBUG] GC at file {len(self.loaded_files)}: {gc_time:.3f}s")
                     # More frequent GC for large file counts
                     elif len(self.loaded_files) > 200 and len(self.loaded_files) % 25 == 0:
                         gc_start = time.time()
@@ -466,13 +466,13 @@ class DICOMLoader:
                         gc_time = time.time() - gc_start
                         gc_times.append(gc_time)
                         QApplication.processEvents()
-                        print(f"[LOAD DEBUG] GC at file {len(self.loaded_files)}: {gc_time:.3f}s")
+                        # print(f"[LOAD DEBUG] GC at file {len(self.loaded_files)}: {gc_time:.3f}s")
                     
                     # Debug: Log every 100 files
                     if len(self.loaded_files) % 100 == 0:
                         elapsed = time.time() - load_start_time
                         avg_time = elapsed / len(self.loaded_files)
-                        print(f"[LOAD DEBUG] Loaded {len(self.loaded_files)}/{total_files} files in {elapsed:.1f}s (avg {avg_time*1000:.1f}ms/file)")
+                        # print(f"[LOAD DEBUG] Loaded {len(self.loaded_files)}/{total_files} files in {elapsed:.1f}s (avg {avg_time*1000:.1f}ms/file)")
             except Exception as e:
                 # Additional safety net for unexpected errors
                 error_msg = f"Unexpected error loading file: {str(e)}"
@@ -481,7 +481,7 @@ class DICOMLoader:
                     error_msg = f"{error_type}: {error_msg}"
                 self.failed_files.append((file_path, error_msg))
                 file_load_time = time.time() - file_load_start
-                print(f"[LOAD DEBUG] Error loading {os.path.basename(file_path)}: {error_msg} (took {file_load_time:.3f}s)")
+                # print(f"[LOAD DEBUG] Error loading {os.path.basename(file_path)}: {error_msg} (took {file_load_time:.3f}s)")
         
         # Final progress update
         if progress_callback and total_files > 0:
@@ -494,18 +494,18 @@ class DICOMLoader:
             max_time = max(file_times)
             min_time = min(file_times)
             total_gc_time = sum(gc_times) if gc_times else 0
-            print(f"[LOAD DEBUG] ===== Loading Summary =====")
-            print(f"[LOAD DEBUG] Total files: {len(self.loaded_files)}/{total_files}")
-            print(f"[LOAD DEBUG] Total time: {total_time:.2f}s")
-            print(f"[LOAD DEBUG] Avg time/file: {avg_time*1000:.1f}ms")
-            print(f"[LOAD DEBUG] Min time/file: {min_time*1000:.1f}ms")
-            print(f"[LOAD DEBUG] Max time/file: {max_time*1000:.1f}ms")
-            print(f"[LOAD DEBUG] GC overhead: {total_gc_time:.2f}s ({total_gc_time/total_time*100:.1f}%)")
-            if slow_files:
-                print(f"[LOAD DEBUG] Slow files (>0.5s): {len(slow_files)}")
-                for filename, load_time, size_mb in slow_files[:5]:  # Show top 5
-                    print(f"[LOAD DEBUG]   - {filename}: {load_time:.3f}s ({size_mb:.2f}MB)")
-            print(f"[LOAD DEBUG] ============================")
+            # print(f"[LOAD DEBUG] ===== Loading Summary =====")
+            # print(f"[LOAD DEBUG] Total files: {len(self.loaded_files)}/{total_files}")
+            # print(f"[LOAD DEBUG] Total time: {total_time:.2f}s")
+            # print(f"[LOAD DEBUG] Avg time/file: {avg_time*1000:.1f}ms")
+            # print(f"[LOAD DEBUG] Min time/file: {min_time*1000:.1f}ms")
+            # print(f"[LOAD DEBUG] Max time/file: {max_time*1000:.1f}ms")
+            # print(f"[LOAD DEBUG] GC overhead: {total_gc_time:.2f}s ({total_gc_time/total_time*100:.1f}%)")
+            # if slow_files:
+            #     print(f"[LOAD DEBUG] Slow files (>0.5s): {len(slow_files)}")
+            #     for filename, load_time, size_mb in slow_files[:5]:  # Show top 5
+            #         print(f"[LOAD DEBUG]   - {filename}: {load_time:.3f}s ({size_mb:.2f}MB)")
+            # print(f"[LOAD DEBUG] ============================")
         
         return self.loaded_files
     
@@ -546,7 +546,7 @@ class DICOMLoader:
         else:
             file_paths = [str(p) for p in dir_path.iterdir() if p.is_file()]
         scan_time = time.time() - scan_start
-        print(f"[LOAD DEBUG] Scanned directory in {scan_time:.2f}s, found {len(file_paths)} files")
+        # print(f"[LOAD DEBUG] Scanned directory in {scan_time:.2f}s, found {len(file_paths)} files")
         
         total_files = len(file_paths)
         last_update_time = time.time()
@@ -558,7 +558,7 @@ class DICOMLoader:
         file_times = []  # Track all file load times
         gc_times = []  # Track GC overhead
         
-        print(f"[LOAD DEBUG] Starting load of {total_files} files (defer_size={defer_size/1024/1024:.1f}MB)")
+        # print(f"[LOAD DEBUG] Starting load of {total_files} files (defer_size={defer_size/1024/1024:.1f}MB)")
         
         # Attempt to load each file as DICOM (regardless of extension)
         for idx, file_path in enumerate(file_paths):
@@ -603,7 +603,7 @@ class DICOMLoader:
                     if file_load_time > 0.5:
                         filename = os.path.basename(file_path)
                         slow_files.append((filename, file_load_time, file_size_mb))
-                        print(f"[LOAD DEBUG] Slow file: {filename} took {file_load_time:.3f}s ({file_size_mb:.2f}MB)")
+                        # print(f"[LOAD DEBUG] Slow file: {filename} took {file_load_time:.3f}s ({file_size_mb:.2f}MB)")
                     
                     # Periodic garbage collection every 50 files to prevent memory buildup
                     if len(self.loaded_files) % 50 == 0:
@@ -612,7 +612,7 @@ class DICOMLoader:
                         gc_time = time.time() - gc_start
                         gc_times.append(gc_time)
                         QApplication.processEvents()  # Keep UI responsive during GC
-                        print(f"[LOAD DEBUG] GC at file {len(self.loaded_files)}: {gc_time:.3f}s")
+                        # print(f"[LOAD DEBUG] GC at file {len(self.loaded_files)}: {gc_time:.3f}s")
                     # More frequent GC for large file counts
                     elif len(self.loaded_files) > 200 and len(self.loaded_files) % 25 == 0:
                         gc_start = time.time()
@@ -620,13 +620,13 @@ class DICOMLoader:
                         gc_time = time.time() - gc_start
                         gc_times.append(gc_time)
                         QApplication.processEvents()
-                        print(f"[LOAD DEBUG] GC at file {len(self.loaded_files)}: {gc_time:.3f}s")
+                        # print(f"[LOAD DEBUG] GC at file {len(self.loaded_files)}: {gc_time:.3f}s")
                     
                     # Debug: Log every 100 files
                     if len(self.loaded_files) % 100 == 0:
                         elapsed = time.time() - load_start_time
                         avg_time = elapsed / len(self.loaded_files)
-                        print(f"[LOAD DEBUG] Loaded {len(self.loaded_files)}/{total_files} files in {elapsed:.1f}s (avg {avg_time*1000:.1f}ms/file)")
+                        # print(f"[LOAD DEBUG] Loaded {len(self.loaded_files)}/{total_files} files in {elapsed:.1f}s (avg {avg_time*1000:.1f}ms/file)")
             except Exception as e:
                 # Additional safety net for unexpected errors
                 error_msg = f"Unexpected error loading file: {str(e)}"
@@ -635,7 +635,7 @@ class DICOMLoader:
                     error_msg = f"{error_type}: {error_msg}"
                 self.failed_files.append((file_path, error_msg))
                 file_load_time = time.time() - file_load_start
-                print(f"[LOAD DEBUG] Error loading {os.path.basename(file_path)}: {error_msg} (took {file_load_time:.3f}s)")
+                # print(f"[LOAD DEBUG] Error loading {os.path.basename(file_path)}: {error_msg} (took {file_load_time:.3f}s)")
         
         # Final progress update
         if progress_callback and total_files > 0:
@@ -648,18 +648,18 @@ class DICOMLoader:
             max_time = max(file_times)
             min_time = min(file_times)
             total_gc_time = sum(gc_times) if gc_times else 0
-            print(f"[LOAD DEBUG] ===== Loading Summary =====")
-            print(f"[LOAD DEBUG] Total files: {len(self.loaded_files)}/{total_files}")
-            print(f"[LOAD DEBUG] Total time: {total_time:.2f}s")
-            print(f"[LOAD DEBUG] Avg time/file: {avg_time*1000:.1f}ms")
-            print(f"[LOAD DEBUG] Min time/file: {min_time*1000:.1f}ms")
-            print(f"[LOAD DEBUG] Max time/file: {max_time*1000:.1f}ms")
-            print(f"[LOAD DEBUG] GC overhead: {total_gc_time:.2f}s ({total_gc_time/total_time*100:.1f}%)")
-            if slow_files:
-                print(f"[LOAD DEBUG] Slow files (>0.5s): {len(slow_files)}")
-                for filename, load_time, size_mb in slow_files[:5]:  # Show top 5
-                    print(f"[LOAD DEBUG]   - {filename}: {load_time:.3f}s ({size_mb:.2f}MB)")
-            print(f"[LOAD DEBUG] ============================")
+            # print(f"[LOAD DEBUG] ===== Loading Summary =====")
+            # print(f"[LOAD DEBUG] Total files: {len(self.loaded_files)}/{total_files}")
+            # print(f"[LOAD DEBUG] Total time: {total_time:.2f}s")
+            # print(f"[LOAD DEBUG] Avg time/file: {avg_time*1000:.1f}ms")
+            # print(f"[LOAD DEBUG] Min time/file: {min_time*1000:.1f}ms")
+            # print(f"[LOAD DEBUG] Max time/file: {max_time*1000:.1f}ms")
+            # print(f"[LOAD DEBUG] GC overhead: {total_gc_time:.2f}s ({total_gc_time/total_time*100:.1f}%)")
+            # if slow_files:
+            #     print(f"[LOAD DEBUG] Slow files (>0.5s): {len(slow_files)}")
+            #     for filename, load_time, size_mb in slow_files[:5]:  # Show top 5
+            #         print(f"[LOAD DEBUG]   - {filename}: {load_time:.3f}s ({size_mb:.2f}MB)")
+            # print(f"[LOAD DEBUG] ============================")
         
         return self.loaded_files
     
