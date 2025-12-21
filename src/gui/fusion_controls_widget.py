@@ -62,15 +62,19 @@ class FusionControlsWidget(QWidget):
     resampling_mode_changed = Signal(str)  # Emitted when resampling mode changes ('fast', 'high_accuracy')
     interpolation_method_changed = Signal(str)  # Emitted when interpolation method changes
     
-    def __init__(self, parent=None):
+    def __init__(self, config_manager=None, parent=None):
         """
         Initialize fusion controls widget.
         
         Args:
+            config_manager: ConfigManager instance for theme access
             parent: Parent widget
         """
         super().__init__(parent)
         self.setObjectName("fusion_controls_widget")
+        
+        # Store config manager for theme access
+        self.config_manager = config_manager
         
         # Track if we're updating controls programmatically
         self._updating = False
@@ -620,10 +624,12 @@ class FusionControlsWidget(QWidget):
                     # Explicitly disable in 3D mode
                     self.offset_unit_combo.setEnabled(False)
         
-        if not enabled:
+        # Only set status to "Disabled" if fusion itself is disabled, not just offset controls
+        # Offset controls can be disabled when 3D resampling is active, but fusion is still enabled
+        if not enabled and not self.enable_checkbox.isChecked():
             # When fusion is disabled, record this in the scrollable status log
             # so the user can see when fusion was turned off.
-            self.set_status("Disabled", is_error=False)
+            self.set_status("Disabled", severity="info")
     
     def update_series_lists(
         self,
@@ -678,7 +684,7 @@ class FusionControlsWidget(QWidget):
         
         self._updating = False
     
-    def set_status(self, status_text: str, is_error: bool = False) -> None:
+    def set_status(self, status_text: str, severity: str = "info") -> None:
         """
         Update fusion status display.
         
@@ -688,13 +694,19 @@ class FusionControlsWidget(QWidget):
         
         Args:
             status_text: Status text to display
-            is_error: True if this is an error status
+            severity: Severity level - "info", "warning", or "error"
         """
         # Append message to scrollable log, tagging severity. Normal messages
         # use a theme-aware text color (black on light backgrounds, white on
-        # dark backgrounds), while errors are rendered in red.
+        # dark backgrounds), warnings are yellow, and errors are red.
         if self.status_text_edit is not None:
-            prefix = "[ERROR] " if is_error else "[INFO] "
+            if severity == "error":
+                prefix = "[ERROR] "
+            elif severity == "warning":
+                prefix = "[WARNING] "
+            else:
+                prefix = "[INFO] "
+            
             # Move cursor to end and insert formatted text
             cursor = self.status_text_edit.textCursor()
             cursor.movePosition(QTextCursor.MoveOperation.End)
@@ -703,30 +715,129 @@ class FusionControlsWidget(QWidget):
             if self.status_text_edit.toPlainText():
                 cursor.insertText("\n")
 
+            # Get theme from config manager
+            theme = "light"  # Default to light theme
+            if self.config_manager is not None:
+                theme = self.config_manager.get_theme()
+            
+            # Set colors based on theme and severity
             char_format = QTextCharFormat()
-            if is_error:
-                # Errors: always use a distinct red so they stand out.
-                char_format.setForeground(QColor(220, 0, 0))
-            else:
-                # Info/warning: choose black or white based on background
-                palette = self.status_text_edit.palette()
-                # Prefer viewport background role; fall back to Base.
-                bg = palette.color(self.status_text_edit.viewport().backgroundRole())
-                if not bg.isValid():
-                    from PySide6.QtGui import QPalette
-                    bg = palette.color(QPalette.ColorRole.Base)
-                # Simple light/dark heuristic
-                if bg.lightness() > 128:
-                    text_color = QColor(0, 0, 0)
+            if severity == "error":
+                # Errors: theme-specific red
+                if theme == "dark":
+                    char_format.setForeground(QColor(255, 50, 50))  # Bright red for dark theme
                 else:
-                    text_color = QColor(255, 255, 255)
-                char_format.setForeground(text_color)
+                    char_format.setForeground(QColor(200, 0, 0))  # Dark red for light theme
+            elif severity == "warning":
+                # Warnings: theme-specific color
+                if theme == "dark":
+                    char_format.setForeground(QColor(255, 200, 0))  # Yellow for dark theme
+                else:
+                    char_format.setForeground(QColor(255, 165, 0))  # Orange for light theme
+            else:
+                # Info: theme-specific text color
+                if theme == "dark":
+                    char_format.setForeground(QColor(255, 255, 255))  # White for dark theme
+                else:
+                    char_format.setForeground(QColor(0, 0, 0))  # Black for light theme
 
             cursor.insertText(f"{prefix}{status_text}", char_format)
 
             # Auto-scroll to the newest message
             self.status_text_edit.setTextCursor(cursor)
             self.status_text_edit.ensureCursorVisible()
+    
+    def clear_status(self) -> None:
+        """
+        Clear all messages from the fusion status box.
+        """
+        if self.status_text_edit is not None:
+            self.status_text_edit.clear()
+    
+    def update_status_text_colors(self) -> None:
+        """
+        Update colors of all existing text in the fusion status box based on current theme.
+        
+        This method iterates through all text blocks in the status box, identifies
+        severity prefixes ([INFO], [WARNING], [ERROR]), and applies theme-aware colors.
+        Called when the theme changes to update already-printed text.
+        """
+        if self.status_text_edit is None:
+            return
+        
+        # Get current theme from config manager
+        theme = "light"  # Default to light theme
+        if self.config_manager is not None:
+            theme = self.config_manager.get_theme()
+        
+        # Get document and create cursor for iteration
+        document = self.status_text_edit.document()
+        if document is None:
+            return
+        
+        cursor = QTextCursor(document)
+        cursor.movePosition(QTextCursor.MoveOperation.Start)
+        
+        # Define color mapping based on theme and severity
+        def get_color_for_severity(severity: str) -> QColor:
+            """Get color for a given severity level based on current theme."""
+            if severity == "error":
+                if theme == "dark":
+                    return QColor(255, 50, 50)  # Bright red for dark theme
+                else:
+                    return QColor(200, 0, 0)  # Dark red for light theme
+            elif severity == "warning":
+                if theme == "dark":
+                    return QColor(255, 200, 0)  # Yellow for dark theme
+                else:
+                    return QColor(255, 165, 0)  # Orange for light theme
+            else:  # info
+                if theme == "dark":
+                    return QColor(255, 255, 255)  # White for dark theme
+                else:
+                    return QColor(0, 0, 0)  # Black for light theme
+        
+        # Iterate through all blocks and update colors
+        block = document.firstBlock()
+        while block.isValid():
+            block_text = block.text()
+            
+            # Check for severity prefixes in this block
+            if "[ERROR]" in block_text:
+                severity = "error"
+                prefix = "[ERROR]"
+            elif "[WARNING]" in block_text:
+                severity = "warning"
+                prefix = "[WARNING]"
+            elif "[INFO]" in block_text:
+                severity = "info"
+                prefix = "[INFO]"
+            else:
+                # No prefix found, skip this block (shouldn't happen, but handle gracefully)
+                block = block.next()
+                continue
+            
+            # Find the position of the prefix in the block
+            prefix_pos = block_text.find(prefix)
+            if prefix_pos >= 0:
+                # Calculate absolute position in document
+                block_start = block.position()
+                prefix_start = block_start + prefix_pos
+                prefix_end = prefix_start + len(prefix)
+                
+                # Get the end of the block (or end of line if there's a newline)
+                block_end = block_start + len(block_text)
+                
+                # Apply color to the entire line (from prefix to end of block)
+                cursor.setPosition(prefix_start)
+                cursor.setPosition(block_end, QTextCursor.MoveMode.KeepAnchor)
+                
+                # Create character format with appropriate color
+                char_format = QTextCharFormat()
+                char_format.setForeground(get_color_for_severity(severity))
+                cursor.setCharFormat(char_format)
+            
+            block = block.next()
     
     def get_selected_base_series(self) -> str:
         """Get currently selected base series UID (for compatibility, but base is read-only)."""

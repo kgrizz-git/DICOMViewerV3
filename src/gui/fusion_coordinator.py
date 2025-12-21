@@ -27,6 +27,7 @@ from core.fusion_handler import FusionHandler
 from core.fusion_processor import FusionProcessor
 from gui.fusion_controls_widget import FusionControlsWidget
 from PySide6.QtWidgets import QMessageBox
+from PySide6.QtCore import QTimer
 
 
 class FusionCoordinator:
@@ -85,8 +86,8 @@ class FusionCoordinator:
         # Per-subwindow fusion status history. Each FusionCoordinator instance
         # owns its own log so that the shared FusionControlsWidget can display
         # messages specific to the currently focused subwindow only.
-        # Stored as list of (message, is_error) tuples.
-        self._status_history: List[Tuple[str, bool]] = []
+        # Stored as list of (message, severity) tuples where severity is "info", "warning", or "error".
+        self._status_history: List[Tuple[str, str]] = []
         
         # Note: Signals are connected externally when subwindow gains focus
         # Do not auto-connect here to allow per-subwindow signal routing
@@ -109,7 +110,7 @@ class FusionCoordinator:
         # messages are shown.
         self._restore_status_history_to_controls()
 
-    def _append_status(self, message: str, is_error: bool = False) -> None:
+    def _append_status(self, message: str, severity: str = "info") -> None:
         """
         Append a status message to this coordinator's history and update the
         shared FusionControlsWidget.
@@ -117,12 +118,17 @@ class FusionCoordinator:
         This ensures each FusionCoordinator (one per subwindow) retains its own
         status log, while the visible widget always reflects the currently
         focused subwindow only.
+        
+        Args:
+            message: Status message text
+            severity: Severity level - "info", "warning", or "error"
         """
-        self._status_history.append((message, is_error))
+        # Store as (message, severity) tuple for history
+        self._status_history.append((message, severity))
         # Update the shared controls widget (which currently belongs to the
         # focused subwindow when this coordinator is connected).
         if self.fusion_controls is not None:
-            self.fusion_controls.set_status(message, is_error=is_error)
+            self.fusion_controls.set_status(message, severity=severity)
 
     def _restore_status_history_to_controls(self) -> None:
         """
@@ -140,8 +146,8 @@ class FusionCoordinator:
         if hasattr(self.fusion_controls, "status_text_edit"):
             self.fusion_controls.status_text_edit.clear()
         
-        for msg, is_err in self._status_history:
-            self.fusion_controls.set_status(msg, is_error=is_err)
+        for msg, severity in self._status_history:
+            self.fusion_controls.set_status(msg, severity=severity)
     
     def disconnect_fusion_controls_signals(self) -> None:
         """Disconnect FusionControlsWidget signals from this coordinator."""
@@ -195,7 +201,7 @@ class FusionCoordinator:
             # Validate series selection. Treat missing overlay as an
             # informational prompt rather than an error in the status box.
             if not self.fusion_handler.base_series_uid or not self.fusion_handler.overlay_series_uid:
-                self._append_status("Please select overlay series", is_error=False)
+                self._append_status("Please select overlay series", severity="info")
                 return
             
             # Update spatial alignment when first enabling fusion
@@ -211,16 +217,16 @@ class FusionCoordinator:
                 
                 if base_datasets and overlay_datasets:
                     if self.fusion_handler.check_frame_of_reference_match(base_datasets, overlay_datasets):
-                        self._append_status("Aligned (Frame of Reference)", is_error=False)
+                        self._append_status("Aligned (Frame of Reference)", severity="info")
                         # Update resampling status
                         self._update_resampling_status()
                     else:
-                        self._append_status("Warning: Different Frame of Reference", is_error=True)
+                        self._append_status("Different Frame of Reference", severity="warning")
                         # Note: Still allow fusion, but warn user
                         # Update resampling status
                         self._update_resampling_status()
         else:
-            self._append_status("Disabled", is_error=False)
+            self._append_status("Disabled", severity="info")
         
         # Request display update
         self.request_display_update()
@@ -289,6 +295,20 @@ class FusionCoordinator:
             series_uid: New overlay series UID
         """
         self.fusion_handler.set_overlay_series(series_uid)
+        
+        # Check for duplicate locations in overlay series
+        studies = self.get_current_studies()
+        study_uid = self.get_current_study_uid()
+        
+        if study_uid in studies and series_uid in studies[study_uid]:
+            overlay_datasets = studies[study_uid][series_uid]
+            if overlay_datasets:
+                has_duplicates, duplicate_count = self.fusion_handler.has_duplicate_locations(overlay_datasets)
+                if has_duplicates:
+                    self._append_status(
+                        "Overlay series has multiple slices at the same location. Only the first occurrence at each location will be used in 3D fusion.",
+                        severity="warning"
+                    )
         
         # Update resampling status when overlay changes
         self._update_resampling_status()
@@ -547,25 +567,50 @@ class FusionCoordinator:
         if not base_datasets or not overlay_datasets:
             return
         
-        # Get status from handler
+        # Get status from handler (this now reflects actual mode if available)
         mode_display, reason = self.fusion_handler.get_resampling_status(base_datasets, overlay_datasets)
         
-        # Check if 3D resampling will actually be used
+        # Check predicted mode
         use_3d, _ = self.fusion_handler._should_use_3d_resampling(base_datasets, overlay_datasets)
+        
+        # Check actual mode used
+        actual_mode = self.fusion_handler.get_actual_resampling_mode_used()
+        
+        # Use actual mode if available, otherwise use predicted mode
+        actual_use_3d = actual_mode if actual_mode is not None else use_3d
         
         # Disable offset controls when 3D resampling is active (offset is not applied in 3D mode)
         if hasattr(self.fusion_controls, "set_offset_controls_enabled"):
-            self.fusion_controls.set_offset_controls_enabled(not use_3d)
+            self.fusion_controls.set_offset_controls_enabled(not actual_use_3d)
         
         # Update offset status text to indicate how alignment is determined
         if hasattr(self.fusion_controls, "set_offset_status_text"):
-            self.fusion_controls.set_offset_status_text(use_3d)
+            self.fusion_controls.set_offset_status_text(actual_use_3d)
         
-        # Check if warning should be shown (2D selected but 3D recommended)
+        # Check if 3D was attempted but failed (actual mode is False but predicted was True)
         show_warning = False
         warning_text = ""
-        if self.fusion_handler.resampling_mode == 'fast':
-            # Check if 3D would be recommended
+        if actual_mode is False and use_3d:
+            # 3D failed and fell back to 2D - show warning in status box and update UI
+            failure_reason = self.fusion_handler.get_resampling_failure_reason()
+            if failure_reason:
+                warning_msg = f"3D resampling failed ({failure_reason}), using 2D mode"
+            else:
+                warning_msg = "3D resampling failed, using 2D mode"
+            self._append_status(warning_msg, severity="warning")
+            
+            # Update radio buttons and handler mode to reflect actual mode (2D) when 3D fails
+            # This ensures UI matches what's actually being used
+            # Update handler first, then UI
+            self.fusion_handler.resampling_mode = 'fast'
+            if hasattr(self.fusion_controls, "set_resampling_mode"):
+                self.fusion_controls.set_resampling_mode('fast')  # Switch to 2D mode
+            
+            # Show warning in resampling group
+            show_warning = True
+            warning_text = f"3D resampling failed ({failure_reason if failure_reason else 'unknown error'}), using 2D fallback mode"
+        elif self.fusion_handler.resampling_mode == 'fast':
+            # Check if 3D would be recommended (but user selected 2D)
             needs_3d, _ = self.fusion_handler.image_resampler.needs_resampling(
                 overlay_datasets, base_datasets
             )
@@ -625,6 +670,16 @@ class FusionCoordinator:
         if overlay_array is None:
             return None
         
+        # Check actual mode used (may differ from predicted if 3D failed)
+        actual_use_3d = self.fusion_handler.get_actual_resampling_mode_used()
+        if actual_use_3d is None:
+            # Fallback to predicted mode if actual mode not set yet
+            actual_use_3d = use_3d
+        else:
+            # Actual mode was just determined - update UI to reflect it
+            # Update resampling status to reflect actual mode
+            QTimer.singleShot(0, self._update_resampling_status)
+        
         # Convert base image to array
         base_array = np.array(base_image)
         
@@ -636,7 +691,7 @@ class FusionCoordinator:
         overlay_pixel_spacing = None
         translation_offset = None
         
-        if not use_3d:  # Only get spatial params for 2D mode
+        if not actual_use_3d:  # Only get spatial params for 2D mode
             if current_slice_idx < len(base_datasets) and current_slice_idx >= 0:
                 base_ds = base_datasets[current_slice_idx]
                 base_pixel_spacing = self.fusion_handler.get_pixel_spacing(base_ds)
@@ -674,7 +729,7 @@ class FusionCoordinator:
                 base_pixel_spacing=base_pixel_spacing,
                 overlay_pixel_spacing=overlay_pixel_spacing,
                 translation_offset=translation_offset,
-                skip_2d_resize=use_3d  # Phase 2: Skip 2D resize when 3D resampling was used
+                skip_2d_resize=actual_use_3d  # Phase 2: Skip 2D resize when 3D resampling was actually used
             )
             
             # Convert to PIL Image
@@ -790,7 +845,7 @@ class FusionCoordinator:
             # No pixel spacing available
             stored_scale = (1.0, 1.0)
             self.fusion_controls.set_scaling_factors(1.0, 1.0)
-            self._append_status("Warning: Pixel spacing not available", is_error=True)
+            self._append_status("Pixel spacing not available", severity="warning")
         
         # Calculate and display translation offset
         if base_pixel_spacing and overlay_pixel_spacing:
@@ -814,7 +869,7 @@ class FusionCoordinator:
                 if not self.fusion_controls.has_user_modified_offset():
                     self.fusion_controls.set_calculated_offset(0.0, 0.0)
                 if not self.fusion_controls.status_label.text().startswith("Status: Warning"):
-                    self._append_status("Warning: Image position not available", is_error=True)
+                    self._append_status("Image position not available", severity="warning")
         else:
             stored_offset = (0.0, 0.0)
             if not self.fusion_controls.has_user_modified_offset():
@@ -856,16 +911,17 @@ class FusionCoordinator:
         # Update controls
         current_base = self.fusion_handler.base_series_uid or ""
         current_overlay = self.fusion_handler.overlay_series_uid or ""
+        current_viewing_series = self.get_current_series_uid()
         
-        # Auto-initialize base series to current viewing series if not set
-        if not current_base:
-            current_viewing_series = self.get_current_series_uid()
-            if current_viewing_series:
-                # Verify series exists in available series list
-                if any(uid == current_viewing_series for uid, _ in series_list):
+        # Auto-initialize or update base series to current viewing series
+        # Update base series if it's not set OR if it differs from the current viewing series
+        if current_viewing_series:
+            # Verify series exists in available series list
+            if any(uid == current_viewing_series for uid, _ in series_list):
+                if not current_base or current_base != current_viewing_series:
                     self.fusion_handler.set_base_series(current_viewing_series)
                     current_base = current_viewing_series
-                    # print(f"[FUSION DEBUG] Auto-initialized base series to current viewing series: {current_viewing_series[:20]}...")
+                    # print(f"[FUSION DEBUG] Auto-initialized/updated base series to current viewing series: {current_viewing_series[:20]}...")
         
         self.fusion_controls.update_series_lists(
             series_list,

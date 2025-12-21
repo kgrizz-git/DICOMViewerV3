@@ -115,6 +115,16 @@ class ImageResampler:
                 print(f"Warning: Could not sort datasets for series {series_uid}")
                 return None
             
+            # Filter duplicate locations (keep first occurrence of each unique location)
+            # This prevents zero-valued spacing errors when multiple slices share the same location
+            filtered_datasets = self._filter_duplicate_locations(sorted_datasets)
+            if not filtered_datasets:
+                print(f"Warning: No valid slices after filtering duplicates for series {series_uid}")
+                return None
+            
+            # Use filtered datasets for all subsequent processing
+            sorted_datasets = filtered_datasets
+            
             # DEBUG: Log dataset order after sorting
             # if sorted_datasets and len(sorted_datasets) > 0:
             #     print(f"[3D RESAMPLE DEBUG] dicom_series_to_sitk: Sorted datasets order check")
@@ -277,6 +287,74 @@ class ImageResampler:
             traceback.print_exc()
             return None
     
+    def _get_location(self, ds: Dataset) -> Optional[float]:
+        """
+        Get slice location from dataset.
+        
+        Args:
+            ds: DICOM dataset
+            
+        Returns:
+            Slice location as float, or None if not available
+        """
+        # Try SliceLocation first
+        if hasattr(ds, 'SliceLocation'):
+            try:
+                return float(ds.SliceLocation)
+            except (ValueError, TypeError):
+                pass
+        
+        # Fall back to ImagePositionPatient Z coordinate
+        if hasattr(ds, 'ImagePositionPatient'):
+            ipp = ds.ImagePositionPatient
+            if ipp and len(ipp) >= 3:
+                try:
+                    return float(ipp[2])
+                except (ValueError, TypeError, IndexError):
+                    pass
+        
+        return None
+    
+    def _filter_duplicate_locations(
+        self,
+        sorted_datasets: List[Dataset],
+        tolerance: float = 0.01
+    ) -> List[Dataset]:
+        """
+        Filter out duplicate slice locations, keeping only the first occurrence.
+        
+        Args:
+            sorted_datasets: List of datasets already sorted by location
+            tolerance: Tolerance in mm for considering locations as duplicates (default: 0.01mm)
+            
+        Returns:
+            Filtered list of datasets with unique locations
+        """
+        if not sorted_datasets:
+            return []
+        
+        filtered = []
+        seen_locations = []
+        
+        for ds in sorted_datasets:
+            location = self._get_location(ds)
+            if location is None:
+                # Skip datasets without valid location
+                continue
+            
+            # Check if this location is a duplicate (within tolerance)
+            is_duplicate = False
+            for seen_loc in seen_locations:
+                if abs(location - seen_loc) < tolerance:
+                    is_duplicate = True
+                    break
+            
+            if not is_duplicate:
+                filtered.append(ds)
+                seen_locations.append(location)
+        
+        return filtered
+    
     def _sort_datasets_by_location(self, datasets: List[Dataset]) -> List[Dataset]:
         """
         Sort datasets by slice location.
@@ -287,29 +365,9 @@ class ImageResampler:
         Returns:
             Sorted list of datasets
         """
-        def get_location(ds: Dataset) -> float:
-            """Get slice location from dataset."""
-            # Try SliceLocation first
-            if hasattr(ds, 'SliceLocation'):
-                try:
-                    return float(ds.SliceLocation)
-                except (ValueError, TypeError):
-                    pass
-            
-            # Fall back to ImagePositionPatient Z coordinate
-            if hasattr(ds, 'ImagePositionPatient'):
-                ipp = ds.ImagePositionPatient
-                if ipp and len(ipp) >= 3:
-                    try:
-                        return float(ipp[2])
-                    except (ValueError, TypeError, IndexError):
-                        pass
-            
-            return float('inf')  # Put datasets without location at end
-        
-        sorted_list = sorted(datasets, key=get_location)
+        sorted_list = sorted(datasets, key=lambda ds: self._get_location(ds) or float('inf'))
         # Filter out datasets without valid location
-        return [ds for ds in sorted_list if get_location(ds) != float('inf')]
+        return [ds for ds in sorted_list if self._get_location(ds) is not None]
     
     def sitk_to_numpy(self, sitk_image: 'sitk.Image') -> Optional[np.ndarray]:
         """
@@ -430,7 +488,9 @@ class ImageResampler:
         # print(f"[3D RESAMPLE DEBUG]   Target dataset at unsorted_idx={slice_idx}: SliceLocation={target_slice_loc}")
         
         # Find its position in sorted datasets (used to create reference_sitk)
+        # Note: dicom_series_to_sitk() filters duplicates, so we need to filter here too for correct mapping
         sorted_reference_datasets = self._sort_datasets_by_location(reference_datasets)
+        sorted_reference_datasets = self._filter_duplicate_locations(sorted_reference_datasets)
         # print(f"[3D RESAMPLE DEBUG]   Total sorted reference_datasets: {len(sorted_reference_datasets)}")
         
         # Map unsorted index to sorted index
@@ -445,9 +505,24 @@ class ImageResampler:
                     sorted_slice_loc = float(ipp[2]) if ipp and len(ipp) >= 3 else None
                 # print(f"[3D RESAMPLE DEBUG]   Sorted dataset at sorted_idx={sorted_slice_idx}: SliceLocation={sorted_slice_loc}")
         except ValueError:
-            # Dataset not found in sorted list (shouldn't happen), fall back to original index
-            # print(f"[3D RESAMPLE DEBUG] WARNING: Dataset at unsorted_idx={slice_idx} not found in sorted list!")
-            sorted_slice_idx = slice_idx
+            # Dataset not found in sorted list - may have been filtered as duplicate
+            # Find first dataset at the same location (within tolerance)
+            target_location = self._get_location(target_dataset)
+            if target_location is not None:
+                # Search for first dataset with same location
+                found = False
+                for idx, ds in enumerate(sorted_reference_datasets):
+                    ds_location = self._get_location(ds)
+                    if ds_location is not None and abs(ds_location - target_location) < 0.01:
+                        sorted_slice_idx = idx
+                        found = True
+                        break
+                if not found:
+                    # Fall back to original index if location not found
+                    sorted_slice_idx = slice_idx
+            else:
+                # No location available, fall back to original index
+                sorted_slice_idx = slice_idx
         
         # Create cache key
         cache_key = None
