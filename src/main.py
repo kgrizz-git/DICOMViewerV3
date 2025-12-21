@@ -194,7 +194,7 @@ class DICOMViewerApp(QObject):
         # Initialize fusion components
         # Note: FusionHandler is now created per-subwindow, not shared
         self.fusion_processor = FusionProcessor()
-        self.fusion_controls_widget = FusionControlsWidget()
+        self.fusion_controls_widget = FusionControlsWidget(config_manager=self.config_manager)
         
         # Initialize overlay manager with config settings
         font_size = self.config_manager.get_overlay_font_size()
@@ -735,6 +735,9 @@ class DICOMViewerApp(QObject):
                     inverted
                 )
         image_viewer.inversion_state_changed_callback = on_inversion_state_changed
+        
+        # Set file path callback for "Show file" context menu
+        image_viewer.get_file_path_callback = lambda idx=idx: self._get_current_slice_file_path(idx)
         
         # Store managers
         self.subwindow_managers[idx] = managers
@@ -1279,19 +1282,9 @@ class DICOMViewerApp(QObject):
                     # Fallback: just clear the items list if scene not available
                     overlay_manager.overlay_items.clear()
         
-        # Clear fusion caches for all subwindows (frees large 3D resampled volumes)
-        for idx in self.subwindow_managers:
-            managers = self.subwindow_managers[idx]
-            fusion_handler = managers.get('fusion_handler')
-            if fusion_handler:
-                # Clear all fusion caches
-                fusion_handler._slice_location_cache.clear()
-                fusion_handler._resampling_decision_cache = None
-                fusion_handler._resampling_decision_cache_key = None
-                fusion_handler.clear_alignment_cache()  # Clears all alignment cache entries
-                # Clear 3D resampling volume cache (this is the big one!)
-                if hasattr(fusion_handler, 'image_resampler') and fusion_handler.image_resampler:
-                    fusion_handler.image_resampler.clear_cache()  # Clears all cached volumes
+        # Reset fusion for all subwindows (disable fusion, clear status, clear caches)
+        # This is called when opening new files to ensure fusion is disabled
+        self._reset_fusion_for_all_subwindows()
         
         # Clear metadata panel (shared)
         self.metadata_panel.set_dataset(None)
@@ -1311,6 +1304,9 @@ class DICOMViewerApp(QObject):
         self.intensity_projection_controls_widget.set_enabled(False)
         self.intensity_projection_controls_widget.set_projection_type("aip")
         self.intensity_projection_controls_widget.set_slice_count(4)
+        
+        # Reset fusion for all subwindows (disable fusion, clear status, clear caches)
+        self._reset_fusion_for_all_subwindows()
         
         # Clear all subwindow data structures
         self.subwindow_data.clear()
@@ -1356,6 +1352,33 @@ class DICOMViewerApp(QObject):
         # Update status
         self.main_window.update_status("Ready")
     
+    def _reset_fusion_for_all_subwindows(self) -> None:
+        """
+        Disable fusion and clear status for all subwindows.
+        
+        This is called when files are closed or when new files are opened
+        to ensure fusion is disabled and status messages are cleared.
+        """
+        # Disable fusion in all handlers and clear caches
+        for idx in self.subwindow_managers:
+            managers = self.subwindow_managers[idx]
+            fusion_handler = managers.get('fusion_handler')
+            if fusion_handler:
+                # Disable fusion in handler (prevents re-enabling on file load)
+                fusion_handler.fusion_enabled = False
+                # Clear all fusion caches
+                fusion_handler._slice_location_cache.clear()
+                fusion_handler._resampling_decision_cache = None
+                fusion_handler._resampling_decision_cache_key = None
+                fusion_handler.clear_alignment_cache()  # Clears all alignment cache entries
+                # Clear 3D resampling volume cache (this is the big one!)
+                if hasattr(fusion_handler, 'image_resampler') and fusion_handler.image_resampler:
+                    fusion_handler.image_resampler.clear_cache()  # Clears all cached volumes
+        
+        # Disable fusion in UI widget and clear status messages
+        self.fusion_controls_widget.set_fusion_enabled(False)
+        self.fusion_controls_widget.clear_status()
+    
     def _handle_load_first_slice(self, studies: dict) -> None:
         """
         Handle loading first slice after file operations.
@@ -1365,6 +1388,9 @@ class DICOMViewerApp(QObject):
         # print(f"[LOAD DEBUG] ============================================")
         # print(f"[LOAD DEBUG] _handle_load_first_slice called with {len(studies)} study/studies")
         # print(f"[LOAD DEBUG] ============================================")
+        
+        # Disable fusion and clear status for all subwindows when opening new files
+        self._reset_fusion_for_all_subwindows()
         
         # Clear edited tags for previous dataset if it exists
         if self.current_dataset is not None and self.tag_edit_history:
@@ -1379,18 +1405,6 @@ class DICOMViewerApp(QObject):
                 subwindow.image_viewer.image_item = None
                 # Force viewport update
                 subwindow.image_viewer.viewport().update()
-        
-        # Clear fusion caches before loading new files (prevents memory accumulation)
-        for idx in self.subwindow_managers:
-            managers = self.subwindow_managers[idx]
-            fusion_handler = managers.get('fusion_handler')
-            if fusion_handler:
-                fusion_handler._slice_location_cache.clear()
-                fusion_handler._resampling_decision_cache = None
-                fusion_handler._resampling_decision_cache_key = None
-                fusion_handler.clear_alignment_cache()
-                if hasattr(fusion_handler, 'image_resampler') and fusion_handler.image_resampler:
-                    fusion_handler.image_resampler.clear_cache()
         
         # Clear overlay items for all subwindows (including viewport corner overlays)
         for idx in self.subwindow_managers:
@@ -1903,6 +1917,9 @@ class DICOMViewerApp(QObject):
         # Privacy view toggle (shared)
         self.main_window.privacy_view_toggled.connect(self._on_privacy_view_toggled)
         
+        # Theme change (shared) - update fusion status text colors
+        self.main_window.theme_changed.connect(self.fusion_controls_widget.update_status_text_colors)
+        
         # About this File (shared)
         self.main_window.about_this_file_requested.connect(self._open_about_this_file)
         
@@ -2201,6 +2218,9 @@ class DICOMViewerApp(QObject):
                 image_viewer.about_this_file_requested.connect(self._open_about_this_file)
                 image_viewer.histogram_requested.connect(self.dialog_coordinator.open_histogram)
                 
+                # Set file path callback for "Show file" context menu
+                image_viewer.get_file_path_callback = lambda idx=idx: self._get_current_slice_file_path(idx)
+                
                 # Connect assign series request
                 subwindow.assign_series_requested.connect(self._on_assign_series_requested)
         
@@ -2347,6 +2367,8 @@ class DICOMViewerApp(QObject):
             self.current_slice_index = slice_index
             self.current_dataset = self.subwindow_data[idx]['current_dataset']
             self._update_series_navigator_highlighting()
+            # Update right panel to reflect new series (including fusion base series)
+            self._update_right_panel_for_focused_subwindow()
     
     def _disconnect_focused_subwindow_signals(self) -> None:
         """Disconnect signals from previously focused subwindow."""
@@ -2832,6 +2854,8 @@ class DICOMViewerApp(QObject):
         
         # Series navigator signals
         self.series_navigator.series_selected.connect(self._on_series_navigator_selected)
+        self.series_navigator.show_file_requested.connect(self._on_show_file_from_series)
+        self.series_navigator.about_this_file_requested.connect(self._on_about_this_file_from_series)
         self.image_viewer.toggle_series_navigator_requested.connect(self.main_window.toggle_series_navigator)
         
         # Tag edit signals
@@ -3297,6 +3321,9 @@ class DICOMViewerApp(QObject):
                     if focused_series_uid and focused_study_uid:
                         self.series_navigator.set_current_series(focused_series_uid, focused_study_uid)
                 
+                # Update right panel to reflect new series (including fusion base series)
+                self._update_right_panel_for_focused_subwindow()
+                
                 # Update cine player context and check if series is cine-capable
                 self._update_cine_player_context()
         finally:
@@ -3710,6 +3737,88 @@ class DICOMViewerApp(QObject):
                     return path
         
         return None
+    
+    def _on_show_file_from_series(self, study_uid: str, series_uid: str) -> None:
+        """
+        Handle "Show file" request from series navigator thumbnail.
+        
+        Opens file explorer and selects the first slice file of the specified series.
+        
+        Args:
+            study_uid: Study Instance UID
+            series_uid: Series UID (composite key)
+        """
+        from utils.file_explorer import reveal_file_in_explorer
+        
+        # Check if we have the studies data
+        if not self.current_studies or study_uid not in self.current_studies:
+            return
+        
+        study_series = self.current_studies[study_uid]
+        if series_uid not in study_series or not study_series[series_uid]:
+            return
+        
+        # Get first dataset from the series
+        first_dataset = study_series[series_uid][0]
+        
+        # Get file path for first slice (slice_index=0)
+        file_path = self._get_file_path_for_dataset(first_dataset, study_uid, series_uid, 0)
+        
+        if file_path and os.path.exists(file_path):
+            reveal_file_in_explorer(file_path)
+    
+    def _on_about_this_file_from_series(self, study_uid: str, series_uid: str) -> None:
+        """
+        Handle "About This File" request from series navigator thumbnail.
+        
+        Opens About This File dialog with the first slice of the specified series.
+        
+        Args:
+            study_uid: Study Instance UID
+            series_uid: Series UID (composite key)
+        """
+        # Check if we have the studies data
+        if not self.current_studies or study_uid not in self.current_studies:
+            return
+        
+        study_series = self.current_studies[study_uid]
+        if series_uid not in study_series or not study_series[series_uid]:
+            return
+        
+        # Get first dataset from the series
+        first_dataset = study_series[series_uid][0]
+        
+        # Get file path for first slice (slice_index=0)
+        file_path = self._get_file_path_for_dataset(first_dataset, study_uid, series_uid, 0)
+        
+        # Open About This File dialog
+        self.dialog_coordinator.open_about_this_file(first_dataset, file_path)
+    
+    def _get_current_slice_file_path(self, subwindow_idx: Optional[int] = None) -> Optional[str]:
+        """
+        Get file path for the currently displayed slice in a subwindow.
+        
+        Args:
+            subwindow_idx: Subwindow index (None to use focused subwindow)
+            
+        Returns:
+            File path if found, None otherwise
+        """
+        # Use focused subwindow if index not provided
+        if subwindow_idx is None:
+            subwindow_idx = self.focused_subwindow_index
+        
+        # Get current slice information from subwindow
+        dataset = self._get_subwindow_dataset(subwindow_idx)
+        study_uid = self._get_subwindow_study_uid(subwindow_idx)
+        series_uid = self._get_subwindow_series_uid(subwindow_idx)
+        slice_index = self._get_subwindow_slice_index(subwindow_idx)
+        
+        if not dataset or not study_uid or not series_uid:
+            return None
+        
+        # Get file path using existing method
+        return self._get_file_path_for_dataset(dataset, study_uid, series_uid, slice_index)
     
     def _update_about_this_file_dialog(self) -> None:
         """Update About This File dialog with current dataset and file path."""

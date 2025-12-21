@@ -563,6 +563,59 @@ class ConfigManager:
             return []
         return list(self.config["overlay_tags"].keys())
     
+    @staticmethod
+    def normalize_path(file_path: str) -> Optional[str]:
+        """
+        Normalize a file or folder path for consistent storage.
+        
+        Removes trailing slashes, normalizes path separators, converts to absolute path,
+        and handles edge cases like root directory and empty strings.
+        
+        Args:
+            file_path: Path to normalize
+            
+        Returns:
+            Normalized path string, or None if path is invalid or empty
+        """
+        if not file_path or not isinstance(file_path, str):
+            return None
+        
+        # Strip whitespace
+        file_path = file_path.strip()
+        if not file_path:
+            return None
+        
+        # Normalize path separators and resolve relative paths
+        normalized = os.path.normpath(file_path)
+        
+        # Convert to absolute path if it exists
+        if os.path.exists(normalized):
+            normalized = os.path.abspath(normalized)
+        else:
+            # Even if path doesn't exist, normalize it
+            # This handles cases where path might be valid but not yet created
+            normalized = os.path.abspath(normalized)
+        
+        # Remove trailing slashes/separators (except for root directory)
+        # On Unix, root is "/", on Windows it's like "C:\" or "C:/"
+        if normalized != os.path.sep and normalized != "/":
+            # Remove trailing separators
+            while normalized.endswith(os.path.sep) or normalized.endswith("/"):
+                normalized = normalized.rstrip(os.path.sep).rstrip("/")
+                if normalized == "":
+                    normalized = os.path.sep
+                    break
+        
+        # Handle root directory cases
+        if normalized == os.path.sep or normalized == "/":
+            return normalized
+        
+        # On Windows, preserve drive root (e.g., "C:\")
+        if os.name == 'nt' and len(normalized) == 3 and normalized[1:3] == ":\\":
+            return normalized
+        
+        return normalized
+    
     def get_recent_files(self) -> List[str]:
         """
         Get list of recently opened files and folders.
@@ -577,18 +630,26 @@ class ConfigManager:
         Add a file or folder to recent files list.
         
         Removes duplicates and keeps only the most recent 20 items.
+        Paths are normalized before being stored.
         
         Args:
             file_path: Path to file or folder
         """
+        # Normalize the path before storing
+        normalized_path = self.normalize_path(file_path)
+        
+        # Skip if path is invalid or empty
+        if not normalized_path:
+            return
+        
         recent_files = self.config.get("recent_files", [])
         
         # Remove if already exists (to move to top)
-        if file_path in recent_files:
-            recent_files.remove(file_path)
+        if normalized_path in recent_files:
+            recent_files.remove(normalized_path)
         
         # Add to beginning
-        recent_files.insert(0, file_path)
+        recent_files.insert(0, normalized_path)
         
         # Keep only last 20
         recent_files = recent_files[:20]

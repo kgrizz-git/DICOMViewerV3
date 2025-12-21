@@ -68,6 +68,11 @@ class FusionHandler:
         # Cache for alignment (offset and scaling) per base-overlay pair
         # Key: (base_series_uid, overlay_series_uid), Value: {'scale': (x, y), 'offset': (x, y)}
         self._alignment_cache: Dict[Tuple[str, str], Dict[str, Optional[Tuple[float, float]]]] = {}
+        
+        # Track actual resampling mode used (True = 3D used, False = 2D fallback, None = not determined yet)
+        self._actual_resampling_mode_used: Optional[bool] = None
+        # Store failure reason when 3D fails
+        self._resampling_failure_reason: Optional[str] = None
     
     def set_base_series(self, series_uid: str) -> None:
         """
@@ -81,6 +86,9 @@ class FusionHandler:
         # Clear alignment cache entries involving old base
         if old_base_uid:
             self.clear_alignment_cache(old_base_uid)
+        # Clear actual mode tracking when series changes
+        self._actual_resampling_mode_used = None
+        self._resampling_failure_reason = None
     
     def set_overlay_series(self, series_uid: str) -> None:
         """
@@ -96,6 +104,9 @@ class FusionHandler:
         # Clear resampling decision cache
         self._resampling_decision_cache = None
         self._resampling_decision_cache_key = None
+        # Clear actual mode tracking when series changes
+        self._actual_resampling_mode_used = None
+        self._resampling_failure_reason = None
         # Clear alignment cache entries involving old overlay
         if old_overlay_uid:
             self.clear_alignment_cache(old_overlay_uid)
@@ -193,6 +204,47 @@ class FusionHandler:
         self._slice_location_cache[series_uid] = locations
         
         return locations
+    
+    def has_duplicate_locations(
+        self,
+        datasets: List[Dataset],
+        tolerance: float = 0.01
+    ) -> Tuple[bool, int]:
+        """
+        Check if a series has multiple slices at the same location.
+        
+        Args:
+            datasets: List of DICOM datasets
+            tolerance: Tolerance in mm for considering locations as duplicates (default: 0.01mm)
+            
+        Returns:
+            Tuple of (has_duplicates: bool, duplicate_count: int)
+            duplicate_count is the number of slices that are duplicates (total slices - unique locations)
+        """
+        if not datasets:
+            return (False, 0)
+        
+        # Get sorted locations
+        locations = self._get_sorted_slice_locations(datasets, "temp_check")
+        if len(locations) < 2:
+            return (False, 0)
+        
+        # Check for duplicates
+        unique_locations = []
+        duplicate_count = 0
+        
+        for idx, location in locations:
+            is_duplicate = False
+            for seen_loc in unique_locations:
+                if abs(location - seen_loc) < tolerance:
+                    is_duplicate = True
+                    duplicate_count += 1
+                    break
+            
+            if not is_duplicate:
+                unique_locations.append(location)
+        
+        return (duplicate_count > 0, duplicate_count)
     
     def find_matching_slice(
         self,
@@ -360,14 +412,32 @@ class FusionHandler:
                     reference_series_uid=self.base_series_uid
                 )
                 if resampled_slice is not None:
+                    # 3D resampling succeeded
+                    self._actual_resampling_mode_used = True
+                    self._resampling_failure_reason = None
                     # Rescale is already applied in image_resampler.get_resampled_slice()
                     return resampled_slice.astype(np.float32)
                 else:
+                    # 3D resampling returned None, fall back to 2D
+                    self._actual_resampling_mode_used = False
+                    self._resampling_failure_reason = "3D resampling returned None"
                     print(f"Warning: 3D resampling returned None, falling back to 2D")
             except Exception as e:
+                # 3D resampling failed with exception, fall back to 2D
+                self._actual_resampling_mode_used = False
+                error_msg = str(e)
+                # Extract meaningful error message (e.g., zero slice spacing)
+                if "Zero-valued spacing" in error_msg or "zero slice spacing" in error_msg.lower():
+                    self._resampling_failure_reason = "Zero-valued spacing not supported for 3D mode"
+                else:
+                    self._resampling_failure_reason = f"3D resampling error: {error_msg[:100]}"
                 print(f"Error in 3D resampling: {e}, falling back to 2D")
                 import traceback
                 traceback.print_exc()
+        else:
+            # 2D mode was selected/predicted, so actual mode is 2D
+            self._actual_resampling_mode_used = False
+            self._resampling_failure_reason = None
         
         # Fall back to 2D interpolation (original Phase 1 method)
         # Find matching slice(s)
@@ -652,6 +722,25 @@ class FusionHandler:
             'offset': offset,
         }
     
+    def get_actual_resampling_mode_used(self) -> Optional[bool]:
+        """
+        Get the actual resampling mode that was used.
+        
+        Returns:
+            True if 3D resampling was actually used, False if 2D fallback was used,
+            None if mode hasn't been determined yet (no resampling attempted)
+        """
+        return self._actual_resampling_mode_used
+    
+    def get_resampling_failure_reason(self) -> Optional[str]:
+        """
+        Get the reason why 3D resampling failed (if it did).
+        
+        Returns:
+            Failure reason string, or None if 3D succeeded or wasn't attempted
+        """
+        return self._resampling_failure_reason
+    
     def get_alignment(
         self,
         base_series_uid: Optional[str],
@@ -773,11 +862,22 @@ class FusionHandler:
             - ("Auto (3D High Accuracy)", "Different orientation detected")
             - ("Fast Mode (2D)", "User selected Fast Mode")
             - ("High Accuracy (3D)", "User selected High Accuracy Mode")
+            - ("2D Mode (3D Failed)", "3D resampling failed (zero slice spacing), using 2D fallback")
         """
         if not base_datasets or not overlay_datasets:
             return ("Disabled", "No datasets available")
         
         use_3d, reason = self._should_use_3d_resampling(base_datasets, overlay_datasets)
+        
+        # Check actual mode used - if 3D was attempted but failed, show that
+        actual_mode = self._actual_resampling_mode_used
+        if actual_mode is False and use_3d:
+            # 3D was predicted but failed, show fallback status
+            failure_reason = self._resampling_failure_reason or "3D resampling failed"
+            if self.resampling_mode == 'fast':
+                return ("Fast Mode (2D)", reason)
+            else:
+                return ("2D Mode (3D Failed)", f"{failure_reason}, using 2D fallback")
         
         if self.resampling_mode == 'fast':
             return ("Fast Mode (2D)", reason)

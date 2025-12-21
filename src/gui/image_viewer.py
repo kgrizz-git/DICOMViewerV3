@@ -139,6 +139,8 @@ class ImageViewer(QGraphicsView):
         self.get_current_dataset_callback: Optional[Callable[[], Any]] = None
         self.get_current_slice_index_callback: Optional[Callable[[], int]] = None
         self.get_use_rescaled_values_callback: Optional[Callable[[], bool]] = None
+        # Callback to get file path for current slice (for "Show file" context menu)
+        self.get_file_path_callback: Optional[Callable[[], Optional[str]]] = None
         
         # Zoom settings
         self.min_zoom = 0.1
@@ -1888,9 +1890,24 @@ class ImageViewer(QGraphicsView):
                         
                         context_menu.addSeparator()
                         
-                        # About this File action (at the bottom)
+                        # About this File action
                         about_this_file_action = context_menu.addAction("About this File...")
                         about_this_file_action.triggered.connect(self.about_this_file_requested.emit)
+                        
+                        # Show file action (always show, but enable only if callback is available and returns a valid path)
+                        show_file_action = context_menu.addAction("Show File in File Explorer")
+                        show_file_enabled = False
+                        if self.get_file_path_callback:
+                            try:
+                                file_path = self.get_file_path_callback()
+                                if file_path:
+                                    show_file_enabled = True
+                                    show_file_action.triggered.connect(
+                                        lambda: self._on_show_file_requested()
+                                    )
+                            except Exception:
+                                pass
+                        show_file_action.setEnabled(show_file_enabled)
                         
                         context_menu.exec(event.globalPosition().toPoint())
             
@@ -1901,6 +1918,19 @@ class ImageViewer(QGraphicsView):
             self.right_mouse_context_menu_shown = False
         
         super().mouseReleaseEvent(event)
+    
+    def _on_show_file_requested(self) -> None:
+        """
+        Handle "Show file" request from context menu.
+        
+        Opens file explorer and selects the currently displayed slice file.
+        """
+        from utils.file_explorer import reveal_file_in_explorer
+        
+        if self.get_file_path_callback:
+            file_path = self.get_file_path_callback()
+            if file_path and os.path.exists(file_path):
+                reveal_file_in_explorer(file_path)
     
     def viewportEvent(self, event: QEvent) -> bool:
         """

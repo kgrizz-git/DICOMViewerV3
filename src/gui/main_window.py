@@ -77,6 +77,7 @@ class MainWindow(QMainWindow):
     quick_start_guide_requested = Signal()  # Emitted when Quick Start Guide is requested
     fusion_technical_doc_requested = Signal()  # Emitted when Fusion Technical Documentation is requested
     tag_export_requested = Signal()  # Emitted when tag export is requested
+    theme_changed = Signal(str)  # Emitted when theme changes (theme name)
     series_navigator_visibility_changed = Signal(bool)  # Emitted when series navigator visibility changes
     undo_tag_edit_requested = Signal()  # Emitted when undo tag edit is requested
     redo_tag_edit_requested = Signal()  # Emitted when redo tag edit is requested
@@ -1524,6 +1525,8 @@ class MainWindow(QMainWindow):
         # Save to config and apply
         self.config_manager.set_theme(theme)
         self._apply_theme()
+        # Emit signal to notify other components
+        self.theme_changed.emit(theme)
     
     def _on_privacy_view_toggled(self, checked: bool) -> None:
         """
@@ -1967,9 +1970,23 @@ class MainWindow(QMainWindow):
             # Add action for each recent file using regular QAction for native appearance
             for file_path in recent_files:
                 # Create display name (truncate if too long)
-                display_name = os.path.basename(file_path) if os.path.isfile(file_path) else os.path.basename(file_path)
-                if len(display_name) > 50:
-                    display_name = display_name[:47] + "..."
+                display_name = os.path.basename(file_path)
+                
+                # Handle edge case where basename returns empty string
+                # (e.g., root directory, trailing slashes, etc.)
+                if not display_name:
+                    # Use the full path as fallback (truncated if needed)
+                    display_name = file_path
+                    if len(display_name) > 50:
+                        display_name = display_name[:47] + "..."
+                    
+                    # If path is root directory or still empty, use default label
+                    if not display_name or display_name in (os.path.sep, "/"):
+                        display_name = "Folder" if os.path.isdir(file_path) else "File"
+                else:
+                    # Normal basename case - truncate if too long
+                    if len(display_name) > 50:
+                        display_name = display_name[:47] + "..."
                 
                 # Create regular QAction with just the display name (no prefixes)
                 recent_action = QAction(display_name, self)

@@ -270,6 +270,31 @@ The estimates below assume that the DICOM spatial metadata (`PixelSpacing`, `Ima
    - Same as 2D mode (normalize, colormap, threshold, alpha blend)
    - Skip 2D resize and translation (already handled by 3D interpolation/resampling on the full volume)
 
+### Duplicate Slice Locations
+
+Some DICOM series contain multiple slices at the same physical location.
+
+**2D Mode Behavior**:
+- When multiple overlay slices exist at the same location, only the first occurrence is used for slice matching
+- The `find_matching_slice()` method returns the first match within tolerance (0.01mm)
+- All base slices at the same location will receive the same overlay slice
+
+**3D Mode Behavior**:
+- Duplicate locations are automatically filtered out before volume construction
+- The system keeps only the first occurrence of each unique location (within 0.01mm tolerance)
+- This filtering prevents zero-valued spacing errors in SimpleITK, which occurs when consecutive slices share the same location
+- Filtering happens after sorting but before pixel array extraction, ensuring valid slice spacing calculations
+
+**Warning System**:
+- A warning is displayed in the fusion status box when an overlay series contains duplicate locations
+- The warning message indicates how many duplicates were detected
+- Users are informed that only the first occurrence at each location will be used in 3D fusion
+
+**Impact**:
+- Filtering duplicates ensures correct slice spacing calculation and prevents 3D resampling failures
+- The filtered volume may have fewer slices than the original series, but spatial accuracy is maintained
+- Index mapping in `get_resampled_slice()` handles filtered duplicates by finding the first dataset at the same location
+
 ### Error Sources (3D Mode)
 
 As with 2D mode, 3D fusion errors fall into **algorithm‑intrinsic** and **metadata / input‑driven** categories.
@@ -306,6 +331,7 @@ As with 2D mode, 3D fusion errors fall into **algorithm‑intrinsic** and **meta
    - **Behaviour**: The resampler sorts slices by their reported locations; slices without valid locations may be dropped, and mis‑ordered slices will produce a volume with discontinuities or overlaps.
    - **Error**: Not easily bounded in voxels or mm; errors can range from minor ordering noise up to gross mis‑ordering of slices or missing chunks of the volume.
    - **Impact**: Distorted or incomplete 3D overlay volume, so fused slices may show incorrect anatomy for a given Z index, even if interpolation itself is mathematically correct.
+   - **Duplicate Location Handling**: Duplicate locations are automatically filtered in 3D mode to ensure valid spacing calculations. Only the first occurrence of each unique location is used when constructing the volume.
 
 4. **Slice Spacing Calculation**:
    - **Source (metadata)**: Inaccurate `ImagePositionPatient`, `ImageOrientationPatient`, or `SliceThickness`.
@@ -316,6 +342,7 @@ As with 2D mode, 3D fusion errors fall into **algorithm‑intrinsic** and **meta
        - For 30° oblique: spacing error ≈ **13%** of the true spacing.
        - For 45° oblique: spacing error ≈ **29%** of the true spacing.
    - **Impact**: Incorrect spacing distorts the Z‑axis scale of the volume; overlay voxels may appear too close together or too far apart in the through‑plane dimension.
+   - **Duplicate Location Handling**: When multiple slices exist at the same location, the system filters duplicates (keeping first occurrence) to prevent zero-valued spacing errors. This ensures valid spacing calculations even when series contain duplicate locations.
 
 5. **Direction Matrix Construction**:
    - **Source (metadata)**: `ImageOrientationPatient` encodes row/column direction cosines; small rounding or non‑orthogonality can occur.

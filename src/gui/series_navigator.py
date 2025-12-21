@@ -132,8 +132,10 @@ class SeriesThumbnail(QFrame):
     """
     
     clicked = Signal(str)  # Emitted with series_uid when clicked
+    show_file_requested = Signal(str, str)  # Emitted with (study_uid, series_uid) when "Show file" is requested
+    about_this_file_requested = Signal(str, str)  # Emitted with (study_uid, series_uid) when "About This File" is requested
     
-    def __init__(self, series_uid: str, series_number: int, thumbnail_image: Optional[Image.Image], parent=None):
+    def __init__(self, series_uid: str, series_number: int, thumbnail_image: Optional[Image.Image], study_uid: str = "", parent=None):
         """
         Initialize series thumbnail.
         
@@ -141,12 +143,14 @@ class SeriesThumbnail(QFrame):
             series_uid: Series instance UID
             series_number: Series number to display
             thumbnail_image: PIL Image for thumbnail (or None)
+            study_uid: Study Instance UID (required for file path lookup)
             parent: Parent widget
         """
         super().__init__(parent)
         self.series_uid = series_uid
         self.series_number = series_number
         self.thumbnail_image = thumbnail_image
+        self.study_uid = study_uid
         self.is_current = False
         
         # Set fixed size for thumbnails (85% of 80x80 to fit smaller navigator height)
@@ -224,6 +228,36 @@ class SeriesThumbnail(QFrame):
             if not getattr(self, "_drag_started", False):
                 self.clicked.emit(self.series_uid)
         super().mouseReleaseEvent(event)
+    
+    def contextMenuEvent(self, event) -> None:
+        """
+        Handle right-click context menu event.
+        
+        Args:
+            event: Context menu event
+        """
+        from PySide6.QtWidgets import QMenu
+        
+        # Only show context menu if we have study_uid (required for file path lookup)
+        if not self.study_uid:
+            return
+        
+        context_menu = QMenu(self)
+        
+        # Add "About This File" action
+        about_this_file_action = context_menu.addAction("About This File...")
+        about_this_file_action.triggered.connect(
+            lambda: self.about_this_file_requested.emit(self.study_uid, self.series_uid)
+        )
+        
+        # Add "Show File in File Explorer" action
+        show_file_action = context_menu.addAction("Show File in File Explorer")
+        show_file_action.triggered.connect(
+            lambda: self.show_file_requested.emit(self.study_uid, self.series_uid)
+        )
+        
+        # Show context menu at cursor position
+        context_menu.exec(event.globalPos())
     
     def _thumbnail_to_qimage(self, pil_image) -> QImage:
         """Convert PIL Image to QImage for drag pixmap."""
@@ -360,6 +394,8 @@ class SeriesNavigator(QWidget):
     
     series_selected = Signal(str)  # Emitted with series_uid when thumbnail is clicked
     series_navigation_requested = Signal(int)  # Emitted when arrow keys are pressed (-1 for prev, 1 for next)
+    show_file_requested = Signal(str, str)  # Emitted with (study_uid, series_uid) when "Show file" is requested
+    about_this_file_requested = Signal(str, str)  # Emitted with (study_uid, series_uid) when "About This File" is requested
     
     def __init__(self, dicom_processor: DICOMProcessor, parent=None):
         """
@@ -576,8 +612,12 @@ class SeriesNavigator(QWidget):
                         self.thumbnail_cache[cache_key] = thumbnail_image
                 
                 # Create thumbnail widget
-                thumbnail = SeriesThumbnail(series_uid, series_num, thumbnail_image, thumbnails_container)
+                thumbnail = SeriesThumbnail(series_uid, series_num, thumbnail_image, study_uid, thumbnails_container)
                 thumbnail.clicked.connect(self.series_selected.emit)
+                # Connect show_file_requested signal to SeriesNavigator signal
+                thumbnail.show_file_requested.connect(self.show_file_requested.emit)
+                # Connect about_this_file_requested signal to SeriesNavigator signal
+                thumbnail.about_this_file_requested.connect(self.about_this_file_requested.emit)
                 # Highlight if this is the current series AND current study
                 is_current = (series_uid == current_series_uid and study_uid == current_study_uid)
                 thumbnail.set_current(is_current)

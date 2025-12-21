@@ -188,6 +188,7 @@ class FusionTechnicalDocDialog(QDialog):
                 <li><a href="#options">Fusion Options and Parameters</a></li>
                 <li><a href="#2d-algorithm">2D Fusion Algorithm</a></li>
                 <li><a href="#3d-algorithm">3D Fusion Algorithm</a></li>
+                <li><a href="#duplicate-locations">Duplicate Slice Locations</a></li>
                 <li><a href="#spatial-alignment">Spatial Alignment</a></li>
                 <li><a href="#error-analysis">Error Sources and Accuracy Analysis</a></li>
                 <li><a href="#performance">Performance Considerations</a></li>
@@ -485,6 +486,21 @@ class FusionTechnicalDocDialog(QDialog):
             </ul>
             <p><em>Metadata error scenarios</em> (e.g., mismatched FrameOfReferenceUIDs, mis‑encoded positions or spacings) are not bounded by these values. In those cases, voxel‑level misalignment can be arbitrarily large and the fused images should be interpreted with extreme caution unless the metadata has been corrected or explicit registration has been applied.</p>
             
+            <h2 id="duplicate-locations">Duplicate Slice Locations</h2>
+            <p>Some DICOM series contain multiple slices at the same physical location.</p>
+            
+            <h3>2D Mode Behavior</h3>
+            <p>When multiple overlay slices exist at the same location, only the first occurrence is used for slice matching. The <code>find_matching_slice()</code> method returns the first match within tolerance (0.01mm). All base slices at the same location will receive the same overlay slice.</p>
+            
+            <h3>3D Mode Behavior</h3>
+            <p>Duplicate locations are automatically filtered out before volume construction. The system keeps only the first occurrence of each unique location (within 0.01mm tolerance). This filtering prevents zero‑valued spacing errors in SimpleITK, which occurs when consecutive slices share the same location. Filtering happens after sorting but before pixel array extraction, ensuring valid slice spacing calculations.</p>
+            
+            <h3>Warning System</h3>
+            <p>A warning is displayed in the fusion status box when an overlay series contains duplicate locations. The warning message indicates how many duplicates were detected. Users are informed that only the first occurrence at each location will be used in 3D fusion.</p>
+            
+            <h3>Impact</h3>
+            <p>Filtering duplicates ensures correct slice spacing calculation and prevents 3D resampling failures. The filtered volume may have fewer slices than the original series, but spatial accuracy is maintained. Index mapping in <code>get_resampled_slice()</code> handles filtered duplicates by finding the first dataset at the same location.</p>
+            
             <h2 id="spatial-alignment">Spatial Alignment</h2>
             
             <h3>Automatic Alignment</h3>
@@ -570,8 +586,8 @@ class FusionTechnicalDocDialog(QDialog):
                 <tr>
                     <td>Slice location extraction</td>
                     <td>Unbounded; can mis‑match slices by many indices (tens of voxels) if tags are wrong</td>
-                    <td>Same: mis‑ordering/dropping slices can distort the volume</td>
-                    <td>Incorrect/missing <code>SliceLocation</code>/<code>ImagePositionPatient</code> affects which slices are fused, not the interpolation math</td>
+                    <td>Same: mis‑ordering/dropping slices can distort the volume. Duplicate locations are automatically filtered to ensure valid spacing calculations</td>
+                    <td>Incorrect/missing <code>SliceLocation</code>/<code>ImagePositionPatient</code> affects which slices are fused, not the interpolation math. Only first occurrence of each unique location is used in 3D mode</td>
                 </tr>
                 <tr>
                     <td>Orientation mismatch</td>
@@ -582,8 +598,8 @@ class FusionTechnicalDocDialog(QDialog):
                 <tr>
                     <td>Slice spacing calculation</td>
                     <td>N/A</td>
-                    <td>Typically ±0.1–0.5 mm with good metadata; larger % errors if derived from oblique positions</td>
-                    <td>Depends on positions and thickness; algorithm follows reported geometry</td>
+                    <td>Typically ±0.1–0.5 mm with good metadata; larger % errors if derived from oblique positions. Duplicate locations are filtered to prevent zero spacing errors</td>
+                    <td>Depends on positions and thickness; algorithm follows reported geometry. Duplicates filtered before spacing calculation</td>
                 </tr>
                 <tr>
                     <td>Frame of Reference mismatch</td>
