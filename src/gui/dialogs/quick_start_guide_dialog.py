@@ -177,6 +177,7 @@ class QuickStartGuideDialog(QDialog):
             <h2>Table of Contents</h2>
             <ul>
                 <li><a href="#controls-overview">Controls Overview</a></li>
+                <li><a href="#multi-window-layouts">Multi-Window Layouts</a></li>
                 <li><a href="#navigation">Navigation</a></li>
                 <li><a href="#cine-playback">Cine Playback</a></li>
                 <li><a href="#zoom-pan">Zoom and Pan</a></li>
@@ -206,6 +207,22 @@ class QuickStartGuideDialog(QDialog):
                 <li><strong>Context Menu:</strong> Right-click on the image for quick access to modes and options</li>
                 <li><strong>Keyboard Shortcuts:</strong> Arrow keys for navigation, Delete key for removing items</li>
             </ul>
+            
+            <h2 id="multi-window-layouts">Multi-Window Layouts</h2>
+            <p>The application supports multiple viewing layouts to display one or more image viewers simultaneously:</p>
+            <ul>
+                <li><strong>1x1 Layout:</strong> Single image viewer (press <code>1</code> key)</li>
+                <li><strong>1x2 Layout:</strong> Two image viewers side by side (press <code>2</code> key)</li>
+                <li><strong>2x1 Layout:</strong> Two image viewers stacked vertically (press <code>3</code> key)</li>
+                <li><strong>2x2 Layout:</strong> Four image viewers in a grid (press <code>4</code> key)</li>
+            </ul>
+            <p>You can switch between layouts using:</p>
+            <ul>
+                <li><strong>Keyboard Shortcuts:</strong> Press <code>1</code>, <code>2</code>, <code>3</code>, or <code>4</code> to quickly switch layouts</li>
+                <li><strong>Menu:</strong> View → Layout → select desired layout</li>
+                <li><strong>Context Menu:</strong> Right-click on image → Layout → select desired layout</li>
+            </ul>
+            <p><strong>Note:</strong> Layout shortcuts work when the image viewer, series navigator, left panel, or right panel has focus. They are disabled when editing text annotations.</p>
             
             <h2 id="navigation">Navigation</h2>
             <h3>Slice Navigation</h3>
@@ -534,6 +551,10 @@ class QuickStartGuideDialog(QDialog):
                 <li><strong><code>H</code>:</strong> Crosshair mode (draw crosshairs to display pixel values and coordinates)</li>
                 <li><strong><code>N</code>:</strong> Toggle series navigator bar visibility</li>
                 <li><strong><code>I</code>:</strong> Invert image colors</li>
+                <li><strong><code>1</code>:</strong> Switch to 1x1 layout (single viewer)</li>
+                <li><strong><code>2</code>:</strong> Switch to 1x2 layout (two viewers side by side)</li>
+                <li><strong><code>3</code>:</strong> Switch to 2x1 layout (two viewers stacked)</li>
+                <li><strong><code>4</code>:</strong> Switch to 2x2 layout (four viewers in grid)</li>
                 <li><strong><code>Cmd+Z / Ctrl+Z</code>:</strong> Undo last operation (ROI/measurement/text/arrow annotation creation, move, or deletion)</li>
                 <li><strong><code>Cmd+Shift+Z / Ctrl+Shift+Z</code>:</strong> Redo last undone operation</li>
                 <li><strong><code>Cmd+C / Ctrl+C</code>:</strong> Copy selected annotations (ROIs, measurements, crosshairs, text annotations, arrow annotations)</li>

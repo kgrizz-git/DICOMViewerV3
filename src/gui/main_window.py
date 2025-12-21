@@ -292,23 +292,23 @@ class MainWindow(QMainWindow):
         
         # Layout submenu
         layout_menu = view_menu.addMenu("&Layout")
-        self.layout_1x1_action = QAction("&1x1", self)
+        self.layout_1x1_action = QAction("&1x1  (1)", self)
         self.layout_1x1_action.setCheckable(True)
         self.layout_1x1_action.setChecked(True)  # Default
         self.layout_1x1_action.triggered.connect(lambda: self._on_layout_changed("1x1"))
         layout_menu.addAction(self.layout_1x1_action)
         
-        self.layout_1x2_action = QAction("&1x2", self)
+        self.layout_1x2_action = QAction("&1x2  (2)", self)
         self.layout_1x2_action.setCheckable(True)
         self.layout_1x2_action.triggered.connect(lambda: self._on_layout_changed("1x2"))
         layout_menu.addAction(self.layout_1x2_action)
         
-        self.layout_2x1_action = QAction("&2x1", self)
+        self.layout_2x1_action = QAction("&2x1  (3)", self)
         self.layout_2x1_action.setCheckable(True)
         self.layout_2x1_action.triggered.connect(lambda: self._on_layout_changed("2x1"))
         layout_menu.addAction(self.layout_2x1_action)
         
-        self.layout_2x2_action = QAction("&2x2", self)
+        self.layout_2x2_action = QAction("&2x2  (4)", self)
         self.layout_2x2_action.setCheckable(True)
         self.layout_2x2_action.triggered.connect(lambda: self._on_layout_changed("2x2"))
         layout_menu.addAction(self.layout_2x2_action)
