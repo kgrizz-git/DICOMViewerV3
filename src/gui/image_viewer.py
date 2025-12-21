@@ -1663,19 +1663,19 @@ class ImageViewer(QGraphicsView):
                         
                         # Layout submenu
                         layout_menu = context_menu.addMenu("Layout")
-                        layout_1x1_action = layout_menu.addAction("1x1")
+                        layout_1x1_action = layout_menu.addAction("1x1  (1)")
                         layout_1x1_action.setCheckable(True)
                         layout_1x1_action.triggered.connect(lambda: self.layout_change_requested.emit("1x1"))
                         
-                        layout_1x2_action = layout_menu.addAction("1x2")
+                        layout_1x2_action = layout_menu.addAction("1x2  (2)")
                         layout_1x2_action.setCheckable(True)
                         layout_1x2_action.triggered.connect(lambda: self.layout_change_requested.emit("1x2"))
                         
-                        layout_2x1_action = layout_menu.addAction("2x1")
+                        layout_2x1_action = layout_menu.addAction("2x1  (3)")
                         layout_2x1_action.setCheckable(True)
                         layout_2x1_action.triggered.connect(lambda: self.layout_change_requested.emit("2x1"))
                         
-                        layout_2x2_action = layout_menu.addAction("2x2")
+                        layout_2x2_action = layout_menu.addAction("2x2  (4)")
                         layout_2x2_action.setCheckable(True)
                         layout_2x2_action.triggered.connect(lambda: self.layout_change_requested.emit("2x2"))
                         

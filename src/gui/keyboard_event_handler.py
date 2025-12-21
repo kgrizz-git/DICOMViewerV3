@@ -59,7 +59,8 @@ class KeyboardEventHandler:
         toggle_privacy_view_callback: Optional[Callable[[bool], None]] = None,
         get_privacy_view_state_callback: Optional[Callable[[], bool]] = None,
         delete_text_annotation_callback: Optional[Callable[[object], None]] = None,
-        delete_arrow_annotation_callback: Optional[Callable[[object], None]] = None
+        delete_arrow_annotation_callback: Optional[Callable[[object], None]] = None,
+        change_layout_callback: Optional[Callable[[str], None]] = None
     ):
         """
         Initialize the keyboard event handler.
@@ -86,6 +87,7 @@ class KeyboardEventHandler:
             reset_all_views_callback: Optional callback to reset all views
             toggle_privacy_view_callback: Optional callback to toggle privacy view (takes enabled bool)
             get_privacy_view_state_callback: Optional callback to get current privacy view state (returns bool)
+            change_layout_callback: Optional callback to change layout mode (takes layout_mode string: "1x1", "1x2", "2x1", or "2x2")
         """
         self.roi_manager = roi_manager
         self.measurement_tool = measurement_tool
@@ -110,6 +112,7 @@ class KeyboardEventHandler:
         self.get_privacy_view_state_callback = get_privacy_view_state_callback
         self.delete_text_annotation_callback = delete_text_annotation_callback
         self.delete_arrow_annotation_callback = delete_arrow_annotation_callback
+        self.change_layout_callback = change_layout_callback
     
     def handle_key_event(self, event: QKeyEvent) -> bool:
         """
@@ -336,6 +339,29 @@ class KeyboardEventHandler:
             if event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier):
                 return False  # Let Qt handle Cmd+T / Ctrl+T
             self.set_mouse_mode("text_annotation")
+            return True
+        
+        # Layout shortcuts: 1, 2, 3, 4 for 1x1, 1x2, 2x1, 2x2 layouts
+        elif event.key() in (Qt.Key.Key_1, Qt.Key.Key_2, Qt.Key.Key_3, Qt.Key.Key_4):
+            # Check if any text annotation is being edited - if so, don't process layout shortcuts
+            from tools.text_annotation_tool import is_any_text_annotation_editing
+            if self.image_viewer.scene is not None and is_any_text_annotation_editing(self.image_viewer.scene):
+                # Let the text editor handle the keys
+                return False
+            
+            # Don't intercept if Cmd/Ctrl is pressed (for standard shortcuts)
+            if event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier):
+                return False  # Let Qt handle Cmd+1-4 / Ctrl+1-4
+            
+            if self.change_layout_callback:
+                if event.key() == Qt.Key.Key_1:
+                    self.change_layout_callback("1x1")
+                elif event.key() == Qt.Key.Key_2:
+                    self.change_layout_callback("1x2")
+                elif event.key() == Qt.Key.Key_3:
+                    self.change_layout_callback("2x1")
+                elif event.key() == Qt.Key.Key_4:
+                    self.change_layout_callback("2x2")
             return True
         
         return False
