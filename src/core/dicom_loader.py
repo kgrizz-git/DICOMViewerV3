@@ -55,6 +55,7 @@ class DICOMLoader:
         self.loaded_files: List[pydicom.Dataset] = []
         self.failed_files: List[Tuple[str, str]] = []  # (path, error_message)
         self._compression_error_files: set = set()  # Track files that have shown compression errors
+        self._cancelled: bool = False  # Flag to track cancellation request
     
     def validate_dicom_file(self, file_path: str) -> tuple[bool, Optional[str]]:
         """
@@ -130,6 +131,22 @@ class DICOMLoader:
         except Exception as e:
             return False, f"Validation failed: {str(e)}"
     
+    def cancel(self) -> None:
+        """Set cancellation flag to stop loading operations."""
+        self._cancelled = True
+    
+    def reset_cancellation(self) -> None:
+        """Reset cancellation flag to allow new loading operations."""
+        self._cancelled = False
+    
+    def is_cancelled(self) -> bool:
+        """Check if loading has been cancelled.
+        
+        Returns:
+            True if cancellation has been requested, False otherwise
+        """
+        return self._cancelled
+    
     def load_file(self, file_path: str, defer_size: Optional[int] = None, 
                   progress_callback: Optional[Callable[[str, Optional[int], Optional[int]], None]] = None) -> Optional[pydicom.Dataset]:
         """
@@ -164,6 +181,10 @@ class DICOMLoader:
             if not is_valid:
                 print(f"Validation failed for {os.path.basename(file_path)}: {error_msg}")
                 self.failed_files.append((file_path, error_msg))
+                return None
+            
+            # Check for cancellation after validation
+            if self._cancelled:
                 return None
             
             # Suppress excess padding warnings - these are informational and pydicom handles them automatically
@@ -245,6 +266,10 @@ class DICOMLoader:
                         progress_callback(f"Loading {num_frames} frames from {filename}...", None, num_frames)
                         # Process events before blocking operation to allow timer to fire
                         QApplication.processEvents()
+                    
+                    # Check for cancellation before expensive pixel array loading
+                    if self._cancelled:
+                        return None
                     
                     # Check estimated memory requirement before loading
                     rows = int(getattr(dataset, 'Rows', 512))
@@ -400,7 +425,14 @@ class DICOMLoader:
         
         # print(f"[LOAD DEBUG] Starting load of {total_files} files (defer_size={defer_size/1024/1024:.1f}MB)")
         
+        # Reset cancellation flag at start of loading
+        self._cancelled = False
+        
         for idx, file_path in enumerate(file_paths):
+            # Check for cancellation at start of each iteration
+            if self._cancelled:
+                break
+            
             file_load_start = time.time()
             
             # Call progress callback with throttling (every 5 files or 50ms)
@@ -410,6 +442,10 @@ class DICOMLoader:
                 last_update_time = time.time()
                 # Process events more frequently to keep UI responsive
                 QApplication.processEvents()
+            
+            # Check for cancellation again after processing events
+            if self._cancelled:
+                break
             
             try:
                 # Get file size for debugging
@@ -437,6 +473,10 @@ class DICOMLoader:
                             progress_callback(idx + 1, total_files, message)
                         # Otherwise, it's a normal loading message which is handled by the main progress callback
                     file_progress_callback = multi_file_progress
+                
+                # Check for cancellation before loading file
+                if self._cancelled:
+                    break
                 
                 dataset = self.load_file(file_path, defer_size=defer_size, progress_callback=file_progress_callback)
                 file_load_time = time.time() - file_load_start
@@ -560,8 +600,15 @@ class DICOMLoader:
         
         # print(f"[LOAD DEBUG] Starting load of {total_files} files (defer_size={defer_size/1024/1024:.1f}MB)")
         
+        # Reset cancellation flag at start of loading
+        self._cancelled = False
+        
         # Attempt to load each file as DICOM (regardless of extension)
         for idx, file_path in enumerate(file_paths):
+            # Check for cancellation at start of each iteration
+            if self._cancelled:
+                break
+            
             file_load_start = time.time()
             
             # Call progress callback with throttling (every 5 files or 50ms)
@@ -569,8 +616,11 @@ class DICOMLoader:
                 filename = os.path.basename(file_path)
                 progress_callback(idx + 1, total_files, filename)
                 last_update_time = time.time()
-                # Process events more frequently to keep UI responsive
-                QApplication.processEvents()
+                # Note: processEvents is now called inside progress_callback with throttling
+            
+            # Check for cancellation again after processing events
+            if self._cancelled:
+                break
             
             try:
                 # Get file size for debugging
@@ -591,6 +641,10 @@ class DICOMLoader:
                             progress_callback(idx + 1, total_files, message)
                         # Otherwise, it's a normal loading message which is handled by the main progress callback
                     file_progress_callback = multi_file_progress
+                
+                # Check for cancellation before loading file
+                if self._cancelled:
+                    break
                 
                 dataset = self.load_file(file_path, defer_size=defer_size, progress_callback=file_progress_callback)
                 file_load_time = time.time() - file_load_start

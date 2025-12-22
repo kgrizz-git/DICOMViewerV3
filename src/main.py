@@ -1224,7 +1224,8 @@ class DICOMViewerApp(QObject):
             toggle_privacy_view_callback=lambda enabled: self._on_privacy_view_toggled(enabled),
             get_privacy_view_state_callback=lambda: self.privacy_view_enabled,
             delete_text_annotation_callback=None,  # Will be set when coordinators are available
-            delete_arrow_annotation_callback=None  # Will be set when coordinators are available
+            delete_arrow_annotation_callback=None,  # Will be set when coordinators are available
+            change_layout_callback=self.main_window.set_layout_mode
         )
     
     def _clear_data(self) -> None:
@@ -5708,14 +5709,79 @@ class DICOMViewerApp(QObject):
         """
         from PySide6.QtGui import QKeyEvent
         from PySide6.QtCore import Qt
+        from PySide6.QtWidgets import QApplication
         if isinstance(event, QKeyEvent):
             # Don't intercept standard shortcuts - let menu system handle them
             if event.key() == Qt.Key.Key_Z:
                 if event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier):
                     # Cmd+Z or Ctrl+Z - let menu handle it
                     return False
+            
+            # For layout shortcuts (1, 2, 3, 4), check if focused widget is allowed
+            if event.key() in (Qt.Key.Key_1, Qt.Key.Key_2, Qt.Key.Key_3, Qt.Key.Key_4):
+                # Check if focused widget is navigator, left panel, right panel, or image viewer (or their children)
+                focused_widget = QApplication.focusWidget()
+                if focused_widget is not None:
+                    if not self._is_widget_allowed_for_layout_shortcuts(focused_widget):
+                        # Focused widget is not allowed, don't process layout shortcuts
+                        return False
+            
             return self.keyboard_event_handler.handle_key_event(event)
         return super().eventFilter(obj, event)
+    
+    def _is_widget_allowed_for_layout_shortcuts(self, widget) -> bool:
+        """
+        Check if a widget is allowed to trigger layout shortcuts.
+        
+        Allowed widgets:
+        - Series navigator or its children
+        - Left panel or its children
+        - Right panel or its children
+        - Image viewer or its children
+        
+        Args:
+            widget: Widget to check
+            
+        Returns:
+            True if widget is allowed, False otherwise
+        """
+        if widget is None:
+            return False
+        
+        # Traverse up the parent chain to find allowed widgets
+        current = widget
+        max_depth = 10  # Safety limit
+        depth = 0
+        
+        while current is not None and depth < max_depth:
+            # Check if current widget is the series navigator
+            if current == self.series_navigator:
+                return True
+            
+            # Check if current widget is the left panel
+            if hasattr(self.main_window, 'left_panel') and current == self.main_window.left_panel:
+                return True
+            
+            # Check if current widget is the right panel
+            if hasattr(self.main_window, 'right_panel') and current == self.main_window.right_panel:
+                return True
+            
+            # Check if current widget is an image viewer
+            from gui.image_viewer import ImageViewer
+            if isinstance(current, ImageViewer):
+                return True
+            
+            # Check if current widget is a child of left/right panel by checking object name
+            if hasattr(current, 'objectName'):
+                obj_name = current.objectName()
+                if obj_name == "left_panel" or obj_name == "right_panel":
+                    return True
+            
+            # Move up the parent chain
+            current = current.parentWidget()
+            depth += 1
+        
+        return False
     
     def run(self) -> int:
         """
