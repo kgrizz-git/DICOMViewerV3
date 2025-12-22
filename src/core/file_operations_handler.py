@@ -24,13 +24,29 @@ Requirements:
 import os
 import gc
 from typing import Callable, Optional
-from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import QTimer
+from PySide6.QtWidgets import QApplication, QProgressDialog
+from PySide6.QtCore import QTimer, Qt, QEvent, QObject
 from core.dicom_loader import DICOMLoader
 from core.dicom_organizer import DICOMOrganizer
 from gui.dialogs.file_dialog import FileDialog
 from utils.config_manager import ConfigManager
 from gui.main_window import MainWindow
+
+
+class ProgressDialogEventFilter(QObject):
+    """Event filter for progress dialog to handle Escape key."""
+    
+    def __init__(self, cancel_callback: Callable):
+        super().__init__()
+        self.cancel_callback = cancel_callback
+    
+    def eventFilter(self, obj, event) -> bool:
+        """Filter Escape key presses to trigger cancellation."""
+        if event.type() == QEvent.Type.KeyPress:
+            if event.key() == Qt.Key.Key_Escape:
+                self.cancel_callback()
+                return True
+        return False
 
 class FileOperationsHandler:
     """
@@ -82,6 +98,10 @@ class FileOperationsHandler:
         self._loading_timer: Optional[QTimer] = None
         self._loading_base_message: str = ""
         self._loading_dot_state: int = 0
+        
+        # Progress dialog for loading operations
+        self._progress_dialog: Optional[QProgressDialog] = None
+        self._progress_event_filter: Optional[ProgressDialogEventFilter] = None
     
     def _start_animated_loading(self, base_message: str) -> None:
         """
@@ -116,6 +136,55 @@ class FileOperationsHandler:
             self._loading_timer = None
         self._loading_base_message = ""
         self._loading_dot_state = 0
+    
+    def _create_progress_dialog(self, total_files: int, message: str) -> QProgressDialog:
+        """
+        Create a progress dialog for loading operations.
+        
+        Args:
+            total_files: Total number of files to load
+            message: Initial message to display
+            
+        Returns:
+            QProgressDialog instance
+        """
+        # Close any existing progress dialog
+        self._close_progress_dialog()
+        
+        # Ensure total_files is at least 1 to avoid QProgressDialog issues
+        if total_files <= 0:
+            total_files = 1
+        
+        # Create progress dialog
+        progress = QProgressDialog(message, "Cancel", 0, total_files, self.main_window)
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.setMinimumDuration(0)  # Show immediately
+        progress.setWindowTitle("Loading DICOM Files")
+        
+        # Connect cancel button to cancellation handler
+        progress.canceled.connect(self._on_cancel_loading)
+        
+        # Install event filter to handle Escape key
+        self._progress_event_filter = ProgressDialogEventFilter(self._on_cancel_loading)
+        progress.installEventFilter(self._progress_event_filter)
+        
+        self._progress_dialog = progress
+        return progress
+    
+    def _on_cancel_loading(self) -> None:
+        """Handle cancellation request from progress dialog."""
+        self.dicom_loader.cancel()
+        self.update_status_callback("Cancelling...")
+        self._stop_animated_loading()
+    
+    def _close_progress_dialog(self) -> None:
+        """Safely close and cleanup progress dialog."""
+        if self._progress_dialog is not None:
+            if self._progress_event_filter is not None:
+                self._progress_dialog.removeEventFilter(self._progress_event_filter)
+            self._progress_dialog.close()
+            self._progress_dialog = None
+            self._progress_event_filter = None
     
     def _check_large_files(self, file_paths: list[str], threshold_mb: float = 25.0) -> None:
         """
@@ -224,39 +293,56 @@ class FileOperationsHandler:
         self._check_large_files(file_paths)
         
         try:
-            # For single file, use animated loading dots
-            if len(file_paths) == 1:
-                self._start_animated_loading(f"Loading {source_name}")
-            else:
-                # Update status: start loading
-                self.update_status_callback(f"Loading files from {source_name}...")
+            # Reset cancellation flag
+            self.dicom_loader.reset_cancellation()
+            
+            # Create progress dialog for all loads
+            progress_dialog = self._create_progress_dialog(
+                len(file_paths),
+                f"Loading files from {source_name}..."
+            )
+            progress_dialog.setValue(0)
             QApplication.processEvents()
             
             # Create progress callback
             def progress_callback(current: int, total: int, filename: str) -> None:
-                if filename:
-                    # Check if this is a defer message
-                    if filename.startswith("Deferring"):
-                        # Display defer message directly in status bar
-                        self.update_status_callback(filename)
-                    elif total == 1:
-                        # Single file: update animated loading base message
-                        base_msg = filename.rstrip('.')
-                        self._loading_base_message = base_msg
-                        # Update dots immediately
-                        dots = ["...", "..", "."][self._loading_dot_state % 3]
-                        self.update_status_callback(f"{base_msg}{dots}")
+                # Update progress dialog
+                if self._progress_dialog:
+                    self._progress_dialog.setValue(current)
+                    if filename:
+                        # Update dialog label with current filename
+                        if filename.startswith("Deferring"):
+                            self._progress_dialog.setLabelText(filename)
+                        else:
+                            self._progress_dialog.setLabelText(f"Loading file {current}/{total}: {filename}...")
                     else:
-                        # Multiple files: show file count
-                        self.update_status_callback(f"Loading file {current}/{total}: {filename}...")
-                else:
-                    # Stop animation if active
-                    self._stop_animated_loading()
-                    self.update_status_callback(f"Loaded {total} file(s). Organizing into studies/series...")
+                        self._progress_dialog.setLabelText(f"Loaded {total} file(s). Organizing into studies/series...")
+                
+                # Check for cancellation
+                if self._progress_dialog and self._progress_dialog.wasCanceled():
+                    self._on_cancel_loading()
+                
                 QApplication.processEvents()
             
             # Load files
             datasets = self.dicom_loader.load_files(file_paths, progress_callback=progress_callback)
+            
+            # Close progress dialog
+            self._close_progress_dialog()
+            
+            # Check for cancellation
+            was_cancelled = self.dicom_loader.is_cancelled()
+            if was_cancelled:
+                num_loaded = len(datasets) if datasets else 0
+                if num_loaded > 0:
+                    # Show cancellation message but keep partial data
+                    self.update_status_callback(f"Loading cancelled. {num_loaded} file(s) loaded successfully.")
+                    # Continue with organization and display of partial data
+                else:
+                    # No files loaded, return None
+                    self.update_status_callback("Loading cancelled.")
+                    self.dicom_loader.reset_cancellation()
+                    return None, None
             
             # Stop animation after loading completes
             self._stop_animated_loading()
@@ -378,16 +464,25 @@ class FileOperationsHandler:
             self.update_status_callback(final_status)
             QApplication.processEvents()
             
+            # Reset cancellation flag
+            self.dicom_loader.reset_cancellation()
+            
             return datasets, studies
         
         except SystemExit:
             self._stop_animated_loading()
+            self._close_progress_dialog()
+            self.dicom_loader.reset_cancellation()
             raise  # Don't catch system exit
         except KeyboardInterrupt:
             self._stop_animated_loading()
+            self._close_progress_dialog()
+            self.dicom_loader.reset_cancellation()
             raise  # Don't catch Ctrl+C
         except MemoryError as e:
             self._stop_animated_loading()
+            self._close_progress_dialog()
+            self.dicom_loader.reset_cancellation()
             self.file_dialog.show_error(
                 self.main_window,
                 "Memory Error",
@@ -397,6 +492,8 @@ class FileOperationsHandler:
             return None, None
         except BaseException as e:
             self._stop_animated_loading()
+            self._close_progress_dialog()
+            self.dicom_loader.reset_cancellation()
             # Catch everything else including C extension errors that make it to Python
             error_type = type(e).__name__
             error_msg = f"A critical error occurred during file loading.\n\n"
@@ -448,20 +545,83 @@ class FileOperationsHandler:
             pass
         
         try:
-            # Update status: start loading
-            self.update_status_callback(f"Loading files from {source_name}...")
+            # Reset cancellation flag
+            self.dicom_loader.reset_cancellation()
+            
+            # Estimate total files for progress dialog (we'll update it when we know the actual count)
+            # For now, use a placeholder - we'll need to scan first or update dynamically
+            # Since we already scanned for large files check, we can use that count if available
+            try:
+                from pathlib import Path
+                folder_path_obj = Path(folder_path)
+                estimated_total = len([str(p) for p in folder_path_obj.rglob('*') if p.is_file()])
+            except Exception:
+                estimated_total = 100  # Fallback estimate
+            
+            # Create progress dialog
+            progress_dialog = self._create_progress_dialog(
+                estimated_total,
+                f"Loading files from {source_name}..."
+            )
+            progress_dialog.setValue(0)
             QApplication.processEvents()
             
-            # Create progress callback
+            # Create progress callback with throttling for UI updates
+            last_progress_update = [0]  # Use list to allow modification in nested function
+            last_label_update = [0]
+            progress_update_interval = 0.1  # Update progress bar every 100ms
+            label_update_interval = 0.5  # Update label text every 500ms
+            
             def progress_callback(current: int, total: int, filename: str) -> None:
-                if filename:
-                    self.update_status_callback(f"Loading file {current}/{total}: {filename}...")
-                else:
-                    self.update_status_callback(f"Loaded {total} file(s). Organizing into studies/series...")
-                QApplication.processEvents()
+                import time
+                current_time = time.time()
+                
+                # Update progress dialog with throttling
+                if self._progress_dialog:
+                    # Always update maximum if needed (infrequent operation)
+                    if total > self._progress_dialog.maximum():
+                        self._progress_dialog.setMaximum(total)
+                    
+                    # Throttle progress bar updates (every 100ms)
+                    if current_time - last_progress_update[0] >= progress_update_interval:
+                        self._progress_dialog.setValue(current)
+                        last_progress_update[0] = current_time
+                    
+                    # Throttle label text updates (every 500ms) - this is more expensive
+                    if current_time - last_label_update[0] >= label_update_interval:
+                        if filename:
+                            self._progress_dialog.setLabelText(f"Loading file {current}/{total}: {filename}...")
+                        else:
+                            self._progress_dialog.setLabelText(f"Loaded {total} file(s). Organizing into studies/series...")
+                        last_label_update[0] = current_time
+                
+                # Check for cancellation
+                if self._progress_dialog and self._progress_dialog.wasCanceled():
+                    self._on_cancel_loading()
+                
+                # Throttle processEvents - only call every 50ms
+                if current_time - last_progress_update[0] >= 0.05:
+                    QApplication.processEvents()
             
             # Load folder (recursive)
             datasets = self.dicom_loader.load_directory(folder_path, recursive=True, progress_callback=progress_callback)
+            
+            # Close progress dialog
+            self._close_progress_dialog()
+            
+            # Check for cancellation
+            was_cancelled = self.dicom_loader.is_cancelled()
+            if was_cancelled:
+                num_loaded = len(datasets) if datasets else 0
+                if num_loaded > 0:
+                    # Show cancellation message but keep partial data
+                    self.update_status_callback(f"Loading cancelled. {num_loaded} file(s) loaded successfully.")
+                    # Continue with organization and display of partial data
+                else:
+                    # No files loaded, return None
+                    self.update_status_callback("Loading cancelled.")
+                    self.dicom_loader.reset_cancellation()
+                    return None, None
             
             if not datasets:
                 # Check if there were specific errors
@@ -533,13 +693,22 @@ class FileOperationsHandler:
             self.update_status_callback(final_status)
             QApplication.processEvents()
             
+            # Reset cancellation flag
+            self.dicom_loader.reset_cancellation()
+            
             return datasets, studies
         
         except SystemExit:
+            self._close_progress_dialog()
+            self.dicom_loader.reset_cancellation()
             raise  # Don't catch system exit
         except KeyboardInterrupt:
+            self._close_progress_dialog()
+            self.dicom_loader.reset_cancellation()
             raise  # Don't catch Ctrl+C
         except MemoryError as e:
+            self._close_progress_dialog()
+            self.dicom_loader.reset_cancellation()
             self.file_dialog.show_error(
                 self.main_window,
                 "Memory Error",
@@ -548,6 +717,8 @@ class FileOperationsHandler:
             )
             return None, None
         except BaseException as e:
+            self._close_progress_dialog()
+            self.dicom_loader.reset_cancellation()
             # Catch everything else including C extension errors that make it to Python
             error_type = type(e).__name__
             error_msg = f"A critical error occurred during folder loading.\n\n"
@@ -603,27 +774,54 @@ class FileOperationsHandler:
             self._check_large_files([file_path])
             
             try:
-                # Start animated loading for single file
-                self._start_animated_loading(f"Loading {source_name}")
+                # Reset cancellation flag
+                self.dicom_loader.reset_cancellation()
+                
+                # Create progress dialog
+                progress_dialog = self._create_progress_dialog(
+                    1,
+                    f"Loading {source_name}..."
+                )
+                progress_dialog.setValue(0)
                 QApplication.processEvents()
                 
-                # Create progress callback that updates animated loading
+                # Create progress callback
                 def progress_callback(current: int, total: int, filename: str) -> None:
-                    if filename:
-                        # Update base message for animated dots
-                        # Extract base message (remove existing dots if any)
-                        base_msg = filename.rstrip('.')
-                        self._loading_base_message = base_msg
-                        # Update dots immediately
-                        dots = ["...", "..", "."][self._loading_dot_state % 3]
-                        self.update_status_callback(f"{base_msg}{dots}")
-                    else:
-                        # Stop animation and show final message
-                        self._stop_animated_loading()
-                        self.update_status_callback(f"Loaded {total} file(s). Organizing into studies/series...")
+                    # Update progress dialog
+                    if self._progress_dialog:
+                        self._progress_dialog.setValue(current)
+                        if filename:
+                            if filename.startswith("Deferring"):
+                                self._progress_dialog.setLabelText(filename)
+                            else:
+                                self._progress_dialog.setLabelText(filename.rstrip('.'))
+                        else:
+                            self._progress_dialog.setLabelText(f"Loaded {total} file(s). Organizing into studies/series...")
+                    
+                    # Check for cancellation
+                    if self._progress_dialog and self._progress_dialog.wasCanceled():
+                        self._on_cancel_loading()
+                    
                     QApplication.processEvents()
                 
                 datasets = self.dicom_loader.load_files([file_path], progress_callback=progress_callback)
+                
+                # Close progress dialog
+                self._close_progress_dialog()
+                
+                # Check for cancellation
+                was_cancelled = self.dicom_loader.is_cancelled()
+                if was_cancelled:
+                    num_loaded = len(datasets) if datasets else 0
+                    if num_loaded > 0:
+                        # Show cancellation message but keep partial data
+                        self.update_status_callback(f"Loading cancelled. {num_loaded} file(s) loaded successfully.")
+                        # Continue with organization and display of partial data
+                    else:
+                        # No files loaded, return None
+                        self.update_status_callback("Loading cancelled.")
+                        self.dicom_loader.reset_cancellation()
+                        return None, None
                 
                 # Stop animation after loading completes
                 self._stop_animated_loading()
@@ -704,9 +902,14 @@ class FileOperationsHandler:
                 self.update_status_callback(final_status)
                 QApplication.processEvents()
                 
+                # Reset cancellation flag
+                self.dicom_loader.reset_cancellation()
+                
                 return datasets, studies
                 
             except MemoryError as e:
+                self._close_progress_dialog()
+                self.dicom_loader.reset_cancellation()
                 self.file_dialog.show_error(
                     self.main_window,
                     "Memory Error",
@@ -715,6 +918,8 @@ class FileOperationsHandler:
                 )
                 return None, None
             except Exception as e:
+                self._close_progress_dialog()
+                self.dicom_loader.reset_cancellation()
                 error_type = type(e).__name__
                 error_msg = f"Error loading file: {str(e)}"
                 if error_type not in error_msg:
@@ -741,19 +946,62 @@ class FileOperationsHandler:
                 pass
             
             try:
-                # Update status: start loading
-                self.update_status_callback(f"Loading files from {source_name}...")
+                # Reset cancellation flag
+                self.dicom_loader.reset_cancellation()
+                
+                # Estimate total files for progress dialog
+                try:
+                    from pathlib import Path
+                    folder_path_obj = Path(file_path)
+                    estimated_total = len([str(p) for p in folder_path_obj.rglob('*') if p.is_file()])
+                except Exception:
+                    estimated_total = 100  # Fallback estimate
+                
+                # Create progress dialog
+                progress_dialog = self._create_progress_dialog(
+                    estimated_total,
+                    f"Loading files from {source_name}..."
+                )
+                progress_dialog.setValue(0)
                 QApplication.processEvents()
                 
                 # Create progress callback
                 def progress_callback(current: int, total: int, filename: str) -> None:
-                    if filename:
-                        self.update_status_callback(f"Loading file {current}/{total}: {filename}...")
-                    else:
-                        self.update_status_callback(f"Loaded {total} file(s). Organizing into studies/series...")
+                    # Update progress dialog
+                    if self._progress_dialog:
+                        # Update maximum if total changed
+                        if total > self._progress_dialog.maximum():
+                            self._progress_dialog.setMaximum(total)
+                        self._progress_dialog.setValue(current)
+                        if filename:
+                            self._progress_dialog.setLabelText(f"Loading file {current}/{total}: {filename}...")
+                        else:
+                            self._progress_dialog.setLabelText(f"Loaded {total} file(s). Organizing into studies/series...")
+                    
+                    # Check for cancellation
+                    if self._progress_dialog and self._progress_dialog.wasCanceled():
+                        self._on_cancel_loading()
+                    
                     QApplication.processEvents()
                 
                 datasets = self.dicom_loader.load_directory(file_path, recursive=True, progress_callback=progress_callback)
+                
+                # Close progress dialog
+                self._close_progress_dialog()
+                
+                # Check for cancellation
+                was_cancelled = self.dicom_loader.is_cancelled()
+                if was_cancelled:
+                    num_loaded = len(datasets) if datasets else 0
+                    if num_loaded > 0:
+                        # Show cancellation message but keep partial data
+                        self.update_status_callback(f"Loading cancelled. {num_loaded} file(s) loaded successfully.")
+                        # Continue with organization and display of partial data
+                    else:
+                        # No files loaded, return None
+                        self.update_status_callback("Loading cancelled.")
+                        self.dicom_loader.reset_cancellation()
+                        return None, None
                 
                 if not datasets:
                     # Check if there were specific errors
@@ -828,9 +1076,14 @@ class FileOperationsHandler:
                 self.update_status_callback(final_status)
                 QApplication.processEvents()
                 
+                # Reset cancellation flag
+                self.dicom_loader.reset_cancellation()
+                
                 return datasets, studies
                 
             except MemoryError as e:
+                self._close_progress_dialog()
+                self.dicom_loader.reset_cancellation()
                 self.file_dialog.show_error(
                     self.main_window,
                     "Memory Error",
@@ -839,6 +1092,8 @@ class FileOperationsHandler:
                 )
                 return None, None
             except Exception as e:
+                self._close_progress_dialog()
+                self.dicom_loader.reset_cancellation()
                 error_type = type(e).__name__
                 error_msg = f"Error loading folder: {str(e)}"
                 if error_type not in error_msg:
@@ -902,20 +1157,63 @@ class FileOperationsHandler:
                 pass
             
             try:
-                # Update status: start loading
-                self.update_status_callback(f"Loading files from {source_name}...")
+                # Reset cancellation flag
+                self.dicom_loader.reset_cancellation()
+                
+                # Estimate total files for progress dialog
+                try:
+                    from pathlib import Path
+                    folder_path_obj = Path(folder_path)
+                    estimated_total = len([str(p) for p in folder_path_obj.rglob('*') if p.is_file()])
+                except Exception:
+                    estimated_total = 100  # Fallback estimate
+                
+                # Create progress dialog
+                progress_dialog = self._create_progress_dialog(
+                    estimated_total,
+                    f"Loading files from {source_name}..."
+                )
+                progress_dialog.setValue(0)
                 QApplication.processEvents()
                 
                 # Create progress callback
                 def progress_callback(current: int, total: int, filename: str) -> None:
-                    if filename:
-                        self.update_status_callback(f"Loading file {current}/{total}: {filename}...")
-                    else:
-                        self.update_status_callback(f"Loaded {total} file(s). Organizing into studies/series...")
+                    # Update progress dialog
+                    if self._progress_dialog:
+                        # Update maximum if total changed
+                        if total > self._progress_dialog.maximum():
+                            self._progress_dialog.setMaximum(total)
+                        self._progress_dialog.setValue(current)
+                        if filename:
+                            self._progress_dialog.setLabelText(f"Loading file {current}/{total}: {filename}...")
+                        else:
+                            self._progress_dialog.setLabelText(f"Loaded {total} file(s). Organizing into studies/series...")
+                    
+                    # Check for cancellation
+                    if self._progress_dialog and self._progress_dialog.wasCanceled():
+                        self._on_cancel_loading()
+                    
                     QApplication.processEvents()
                 
                 # Load folder (recursive)
                 datasets = self.dicom_loader.load_directory(folder_path, recursive=True, progress_callback=progress_callback)
+                
+                # Close progress dialog
+                self._close_progress_dialog()
+                
+                # Check for cancellation
+                was_cancelled = self.dicom_loader.is_cancelled()
+                if was_cancelled:
+                    num_loaded = len(datasets) if datasets else 0
+                    if num_loaded > 0:
+                        # Show cancellation message but keep partial data
+                        self.update_status_callback(f"Loading cancelled. {num_loaded} file(s) loaded successfully.")
+                        # Continue with organization and display of partial data
+                    else:
+                        # No files loaded, return None
+                        self.update_status_callback("Loading cancelled.")
+                        self.dicom_loader.reset_cancellation()
+                        return None, None
                 
                 if not datasets:
                     # Check if there were specific errors
@@ -981,13 +1279,22 @@ class FileOperationsHandler:
                 self.update_status_callback(final_status)
                 QApplication.processEvents()
                 
+                # Reset cancellation flag
+                self.dicom_loader.reset_cancellation()
+                
                 return datasets, studies
             
             except SystemExit:
+                self._close_progress_dialog()
+                self.dicom_loader.reset_cancellation()
                 raise  # Don't catch system exit
             except KeyboardInterrupt:
+                self._close_progress_dialog()
+                self.dicom_loader.reset_cancellation()
                 raise  # Don't catch Ctrl+C
             except MemoryError as e:
+                self._close_progress_dialog()
+                self.dicom_loader.reset_cancellation()
                 self.file_dialog.show_error(
                     self.main_window,
                     "Memory Error",
@@ -996,6 +1303,8 @@ class FileOperationsHandler:
                 )
                 return None, None
             except BaseException as e:
+                self._close_progress_dialog()
+                self.dicom_loader.reset_cancellation()
                 # Catch everything else including C extension errors that make it to Python
                 error_type = type(e).__name__
                 error_msg = f"A critical error occurred during folder loading.\n\n"
@@ -1030,20 +1339,55 @@ class FileOperationsHandler:
             self._check_large_files(files)
             
             try:
-                # Update status: start loading
-                self.update_status_callback(f"Loading files from {source_name}...")
+                # Reset cancellation flag
+                self.dicom_loader.reset_cancellation()
+                
+                # Create progress dialog
+                progress_dialog = self._create_progress_dialog(
+                    len(files),
+                    f"Loading files from {source_name}..."
+                )
+                progress_dialog.setValue(0)
                 QApplication.processEvents()
                 
                 # Create progress callback
                 def progress_callback(current: int, total: int, filename: str) -> None:
-                    if filename:
-                        self.update_status_callback(f"Loading file {current}/{total}: {filename}...")
-                    else:
-                        self.update_status_callback(f"Loaded {total} file(s). Organizing into studies/series...")
+                    # Update progress dialog
+                    if self._progress_dialog:
+                        self._progress_dialog.setValue(current)
+                        if filename:
+                            if filename.startswith("Deferring"):
+                                self._progress_dialog.setLabelText(filename)
+                            else:
+                                self._progress_dialog.setLabelText(f"Loading file {current}/{total}: {filename}...")
+                        else:
+                            self._progress_dialog.setLabelText(f"Loaded {total} file(s). Organizing into studies/series...")
+                    
+                    # Check for cancellation
+                    if self._progress_dialog and self._progress_dialog.wasCanceled():
+                        self._on_cancel_loading()
+                    
                     QApplication.processEvents()
                 
                 # Load files
                 datasets = self.dicom_loader.load_files(files, progress_callback=progress_callback)
+                
+                # Close progress dialog
+                self._close_progress_dialog()
+                
+                # Check for cancellation
+                was_cancelled = self.dicom_loader.is_cancelled()
+                if was_cancelled:
+                    num_loaded = len(datasets) if datasets else 0
+                    if num_loaded > 0:
+                        # Show cancellation message but keep partial data
+                        self.update_status_callback(f"Loading cancelled. {num_loaded} file(s) loaded successfully.")
+                        # Continue with organization and display of partial data
+                    else:
+                        # No files loaded, return None
+                        self.update_status_callback("Loading cancelled.")
+                        self.dicom_loader.reset_cancellation()
+                        return None, None
                 
                 if not datasets:
                     # Check if there were specific errors
@@ -1153,13 +1497,22 @@ class FileOperationsHandler:
                 self.update_status_callback(final_status)
                 QApplication.processEvents()
                 
+                # Reset cancellation flag
+                self.dicom_loader.reset_cancellation()
+                
                 return datasets, studies
             
             except SystemExit:
+                self._close_progress_dialog()
+                self.dicom_loader.reset_cancellation()
                 raise  # Don't catch system exit
             except KeyboardInterrupt:
+                self._close_progress_dialog()
+                self.dicom_loader.reset_cancellation()
                 raise  # Don't catch Ctrl+C
             except MemoryError as e:
+                self._close_progress_dialog()
+                self.dicom_loader.reset_cancellation()
                 self.file_dialog.show_error(
                     self.main_window,
                     "Memory Error",
@@ -1168,6 +1521,8 @@ class FileOperationsHandler:
                 )
                 return None, None
             except BaseException as e:
+                self._close_progress_dialog()
+                self.dicom_loader.reset_cancellation()
                 # Catch everything else including C extension errors that make it to Python
                 error_type = type(e).__name__
                 error_msg = f"A critical error occurred during file loading.\n\n"

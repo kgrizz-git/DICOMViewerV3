@@ -940,22 +940,24 @@ class MainWindow(QMainWindow):
                     color: #7f7f7f;
                 }}
                 
-                /* Commented out to allow native checkmark rendering
+                /* General checkbox styling - matches metadata panel */
                 QCheckBox::indicator {{
                     width: 16px;
                     height: 16px;
-                    border: 1px solid #555555;
+                    border: 2px solid #6a6a6a;
                     border-radius: 3px;
+                    background-color: #1e1e1e;
                 }}
                 
                 QCheckBox::indicator:hover {{
-                    border: 1px solid #6a6a6a;
+                    border: 2px solid #8a8a8a;
                 }}
                 
                 QCheckBox::indicator:checked {{
-                    border: 1px solid #555555;
+                    border: 2px solid #6a6a6a;
+                    background-color: #1e1e1e;
+                    image: url('{white_checkmark_path}');
                 }}
-                */
                 
                 /* Metadata panel checkbox with border and custom checkmark */
                 QWidget[objectName="metadata_panel"] QCheckBox::indicator {{
@@ -964,6 +966,10 @@ class MainWindow(QMainWindow):
                     border: 2px solid #6a6a6a;
                     border-radius: 3px;
                     background-color: #1e1e1e;
+                }}
+                
+                QWidget[objectName="metadata_panel"] QCheckBox::indicator:hover {{
+                    border: 2px solid #8a8a8a;
                 }}
                 
                 QWidget[objectName="metadata_panel"] QCheckBox::indicator:checked {{
@@ -1334,22 +1340,24 @@ class MainWindow(QMainWindow):
                     color: #a0a0a0;
                 }}
                 
-                /* Commented out to allow native checkmark rendering
+                /* General checkbox styling - matches metadata panel */
                 QCheckBox::indicator {{
                     width: 16px;
                     height: 16px;
-                    border: 1px solid #c0c0c0;
+                    border: 2px solid #808080;
                     border-radius: 3px;
+                    background-color: #ffffff;
                 }}
                 
                 QCheckBox::indicator:hover {{
-                    border: 1px solid #a0a0a0;
+                    border: 2px solid #606060;
                 }}
                 
                 QCheckBox::indicator:checked {{
-                    border: 1px solid #c0c0c0;
+                    border: 2px solid #808080;
+                    background-color: #ffffff;
+                    image: url('{black_checkmark_path}');
                 }}
-                */
                 
                 /* Metadata panel checkbox with border and custom checkmark */
                 QWidget[objectName="metadata_panel"] QCheckBox::indicator {{
@@ -1358,6 +1366,10 @@ class MainWindow(QMainWindow):
                     border: 2px solid #808080;
                     border-radius: 3px;
                     background-color: #ffffff;
+                }}
+                
+                QWidget[objectName="metadata_panel"] QCheckBox::indicator:hover {{
+                    border: 2px solid #606060;
                 }}
                 
                 QWidget[objectName="metadata_panel"] QCheckBox::indicator:checked {{
