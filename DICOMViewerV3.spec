@@ -204,5 +204,6 @@ app = BUNDLE(
         'NSHighResolutionCapable': 'True',
         'CFBundleShortVersionString': '3.0.0',
         'CFBundleVersion': '3.0.0',
+        'CFBundleIconFile': 'dvv6ldvv6ldvv6ld_edit-removebg-preview',  # Icon name without .icns extension
     },
 )
