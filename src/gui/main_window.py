@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (QMainWindow, QMenuBar, QToolBar, QStatusBar,
                                 QMessageBox, QComboBox, QLabel, QSizePolicy, QColorDialog,
                                 QApplication, QDialog, QTextBrowser, QPushButton, QDialogButtonBox, QMenu,
                                 QScrollArea, QFrame)
-from PySide6.QtCore import Qt, Signal, QEvent, QBuffer, QByteArray, QIODevice
+from PySide6.QtCore import Qt, Signal, QEvent, QBuffer, QByteArray, QIODevice, QDir
 from PySide6.QtGui import QAction, QIcon, QKeySequence, QColor, QDragEnterEvent, QDropEvent, QPixmap
 from typing import Optional, TYPE_CHECKING
 
@@ -39,6 +39,35 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.config_manager import ConfigManager
 from gui.dialogs.edit_recent_list_dialog import EditRecentListDialog
+
+
+def _get_resource_path(relative_path: str) -> str:
+    """
+    Get absolute path to a resource file, works for both development and PyInstaller bundle.
+    
+    Args:
+        relative_path: Relative path from project root (e.g., "resources/images/file.png")
+        
+    Returns:
+        Absolute file path with forward slashes for Qt stylesheet url() function.
+        Qt stylesheets work best with absolute paths using forward slashes on all platforms.
+    """
+    if getattr(sys, 'frozen', False):
+        # Running in a PyInstaller bundle
+        base_path = Path(sys._MEIPASS)
+    else:
+        # Running in development mode
+        # main_window.py is in src/gui/, so go up to project root
+        base_path = Path(__file__).parent.parent.parent
+    
+    resource_path = base_path / relative_path
+    absolute_path = resource_path.resolve()
+    
+    # Convert to string with forward slashes (Qt stylesheets work with forward slashes on all platforms)
+    # Use absolute path directly - Qt's url() function handles absolute paths correctly
+    path_str = str(absolute_path).replace('\\', '/')
+    
+    return path_str
 
 
 class MainWindow(QMainWindow):
@@ -656,44 +685,23 @@ class MainWindow(QMainWindow):
         """
         theme = self.config_manager.get_theme()
         
-        # Get path to checkmark images
-        # main_window.py is in src/gui/, so go up to project root, then to resources/images
-        project_root = Path(__file__).parent.parent.parent
-        images_dir = project_root / "resources" / "images"
+        # Set up resource search path for images using QDir.addSearchPath
+        # This allows us to use relative paths in stylesheets
+        if getattr(sys, 'frozen', False):
+            # Running in a PyInstaller bundle
+            base_path = Path(sys._MEIPASS)
+        else:
+            # Running in development mode
+            base_path = Path(__file__).parent.parent.parent
         
-        # Get raw absolute paths before URL encoding
-        white_checkmark_raw = (images_dir / "checkbox_checkmark_white.png").absolute()
-        black_checkmark_raw = (images_dir / "checkbox_checkmark_black.png").absolute()
+        resources_dir = str((base_path / "resources" / "images").resolve())
+        # Add search path with 'images' prefix for use in stylesheets
+        QDir.addSearchPath('images', resources_dir)
         
-        # Debug: Print raw paths
-        # print(f"[CHECKMARK DEBUG] White checkmark raw path: {white_checkmark_raw}")
-        # print(f"[CHECKMARK DEBUG] Black checkmark raw path: {black_checkmark_raw}")
-        
-        # Check if files exist
-        white_exists = white_checkmark_raw.exists()
-        black_exists = black_checkmark_raw.exists()
-        # print(f"[CHECKMARK DEBUG] White checkmark exists: {white_exists}")
-        # print(f"[CHECKMARK DEBUG] Black checkmark exists: {black_exists}")
-        
-        # if white_exists:
-        #     print(f"[CHECKMARK DEBUG] White checkmark file size: {white_checkmark_raw.stat().st_size} bytes")
-        # if black_exists:
-        #     print(f"[CHECKMARK DEBUG] Black checkmark file size: {black_checkmark_raw.stat().st_size} bytes")
-        
-        # Try relative paths from application working directory
-        # Use simple relative path without URL encoding
-        white_checkmark_path = "resources/images/checkbox_checkmark_white.png"
-        black_checkmark_path = "resources/images/checkbox_checkmark_black.png"
-        
-        # Debug: Print paths
-        # print(f"[CHECKMARK DEBUG] White checkmark path (relative): {white_checkmark_path}")
-        # print(f"[CHECKMARK DEBUG] Black checkmark path (relative): {black_checkmark_path}")
-        
-        # Debug: Print final URL format that will be in stylesheet
-        # white_url = f"url('{white_checkmark_path}')"
-        # black_url = f"url('{black_checkmark_path}')"
-        # print(f"[CHECKMARK DEBUG] White checkmark final URL: {white_url}")
-        # print(f"[CHECKMARK DEBUG] Black checkmark final URL: {black_url}")
+        # Use relative paths with the 'images:' prefix in stylesheets
+        # This is the Qt-recommended approach for resource paths
+        white_checkmark_path = "images:checkbox_checkmark_white.png"
+        black_checkmark_path = "images:checkbox_checkmark_black.png"
         
         if theme == "dark":
             # Dark theme - simplified palette-like colors
