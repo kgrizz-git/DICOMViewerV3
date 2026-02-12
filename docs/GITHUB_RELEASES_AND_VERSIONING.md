@@ -151,6 +151,10 @@ git push origin v3.0.0 --force
 
 **Semantic Versioning** (SemVer) is a versioning scheme that uses three numbers: `MAJOR.MINOR.PATCH` (e.g., `3.0.0`).
 
+> **📖 For a comprehensive guide on Semantic Versioning, including detailed rules, decision-making processes, and how AI can help you follow SemVer, see [SEMANTIC_VERSIONING_GUIDE.md](./SEMANTIC_VERSIONING_GUIDE.md).**
+
+This section provides a quick reference. For complete details, refer to the comprehensive guide.
+
 ### Version Number Format
 
 ```
@@ -606,7 +610,8 @@ git diff v3.0.0..v3.1.0 --stat
 
 ## Additional Resources
 
-- **Semantic Versioning**: https://semver.org/
+- **Semantic Versioning Guide**: [SEMANTIC_VERSIONING_GUIDE.md](./SEMANTIC_VERSIONING_GUIDE.md) - Comprehensive guide to Semantic Versioning for this project
+- **Semantic Versioning (Official)**: https://semver.org/
 - **Git Tagging**: https://git-scm.com/book/en/v2/Git-Basics-Tagging
 - **GitHub Releases**: https://docs.github.com/en/repositories/releasing-projects-on-github
 - **GitHub Actions**: https://docs.github.com/en/actions

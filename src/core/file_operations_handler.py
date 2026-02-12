@@ -102,6 +102,9 @@ class FileOperationsHandler:
         # Progress dialog for loading operations
         self._progress_dialog: Optional[QProgressDialog] = None
         self._progress_event_filter: Optional[ProgressDialogEventFilter] = None
+        
+        # Track explicit user cancellation (not just dialog state)
+        self._user_cancelled: bool = False
     
     def _start_animated_loading(self, base_message: str) -> None:
         """
@@ -161,10 +164,11 @@ class FileOperationsHandler:
         progress.setMinimumDuration(0)  # Show immediately
         progress.setWindowTitle("Loading DICOM Files")
         
-        # Connect cancel button to cancellation handler
-        progress.canceled.connect(self._on_cancel_loading)
+        # Don't connect canceled signal directly - it can fire automatically in compiled apps
+        # Instead, we'll check for cancellation manually in the progress callback
+        # progress.canceled.connect(self._on_cancel_loading)  # Disabled to prevent auto-cancellation
         
-        # Install event filter to handle Escape key
+        # Install event filter to handle Escape key (this is safe as it only triggers on actual key press)
         self._progress_event_filter = ProgressDialogEventFilter(self._on_cancel_loading)
         progress.installEventFilter(self._progress_event_filter)
         
@@ -173,6 +177,7 @@ class FileOperationsHandler:
     
     def _on_cancel_loading(self) -> None:
         """Handle cancellation request from progress dialog."""
+        self._user_cancelled = True  # Mark as explicit user cancellation
         self.dicom_loader.cancel()
         self.update_status_callback("Cancelling...")
         self._stop_animated_loading()
@@ -293,7 +298,8 @@ class FileOperationsHandler:
         self._check_large_files(file_paths)
         
         try:
-            # Reset cancellation flag
+            # Reset cancellation flags
+            self._user_cancelled = False
             self.dicom_loader.reset_cancellation()
             
             # Create progress dialog for all loads
@@ -304,8 +310,16 @@ class FileOperationsHandler:
             progress_dialog.setValue(0)
             QApplication.processEvents()
             
+            # Track if we've actually started loading files (to avoid false cancellation on dialog creation)
+            # Use list to allow modification in nested function
+            loading_started = [False]
+            
             # Create progress callback
             def progress_callback(current: int, total: int, filename: str) -> None:
+                # Mark that loading has started once we get a real progress update with a filename
+                if current > 0 and filename:
+                    loading_started[0] = True
+                
                 # Update progress dialog
                 if self._progress_dialog:
                     self._progress_dialog.setValue(current)
@@ -317,10 +331,16 @@ class FileOperationsHandler:
                             self._progress_dialog.setLabelText(f"Loading file {current}/{total}: {filename}...")
                     else:
                         self._progress_dialog.setLabelText(f"Loaded {total} file(s). Organizing into studies/series...")
+                    
+                    # Manually check if Cancel button was clicked (only after loading has actually started)
+                    # This prevents false cancellation when dialog is first shown
+                    if not self._user_cancelled and loading_started[0] and self._progress_dialog.wasCanceled():
+                        self._on_cancel_loading()
                 
-                # Check for cancellation
-                if self._progress_dialog and self._progress_dialog.wasCanceled():
-                    self._on_cancel_loading()
+                # Check for explicit user cancellation
+                if self._user_cancelled:
+                    # Already handled by _on_cancel_loading
+                    pass
                 
                 QApplication.processEvents()
             
@@ -330,8 +350,8 @@ class FileOperationsHandler:
             # Close progress dialog
             self._close_progress_dialog()
             
-            # Check for cancellation
-            was_cancelled = self.dicom_loader.is_cancelled()
+            # Check for cancellation (use explicit user cancellation flag)
+            was_cancelled = self._user_cancelled
             if was_cancelled:
                 num_loaded = len(datasets) if datasets else 0
                 if num_loaded > 0:
@@ -545,7 +565,8 @@ class FileOperationsHandler:
             pass
         
         try:
-            # Reset cancellation flag
+            # Reset cancellation flags
+            self._user_cancelled = False
             self.dicom_loader.reset_cancellation()
             
             # Estimate total files for progress dialog (we'll update it when we know the actual count)
@@ -566,6 +587,9 @@ class FileOperationsHandler:
             progress_dialog.setValue(0)
             QApplication.processEvents()
             
+            # Track if we've actually started loading files (to avoid false cancellation on dialog creation)
+            loading_started = [False]
+            
             # Create progress callback with throttling for UI updates
             last_progress_update = [0]  # Use list to allow modification in nested function
             last_label_update = [0]
@@ -575,6 +599,10 @@ class FileOperationsHandler:
             def progress_callback(current: int, total: int, filename: str) -> None:
                 import time
                 current_time = time.time()
+                
+                # Mark that loading has started once we get a real progress update with a filename
+                if current > 0 and filename:
+                    loading_started[0] = True
                 
                 # Update progress dialog with throttling
                 if self._progress_dialog:
@@ -594,10 +622,16 @@ class FileOperationsHandler:
                         else:
                             self._progress_dialog.setLabelText(f"Loaded {total} file(s). Organizing into studies/series...")
                         last_label_update[0] = current_time
+                    
+                    # Manually check if Cancel button was clicked (only after loading has actually started)
+                    # This prevents false cancellation when dialog is first shown
+                    if not self._user_cancelled and loading_started[0] and self._progress_dialog.wasCanceled():
+                        self._on_cancel_loading()
                 
-                # Check for cancellation
-                if self._progress_dialog and self._progress_dialog.wasCanceled():
-                    self._on_cancel_loading()
+                # Check for explicit user cancellation
+                if self._user_cancelled:
+                    # Already handled by _on_cancel_loading
+                    pass
                 
                 # Throttle processEvents - only call every 50ms
                 if current_time - last_progress_update[0] >= 0.05:
@@ -609,8 +643,8 @@ class FileOperationsHandler:
             # Close progress dialog
             self._close_progress_dialog()
             
-            # Check for cancellation
-            was_cancelled = self.dicom_loader.is_cancelled()
+            # Check for cancellation (use explicit user cancellation flag)
+            was_cancelled = self._user_cancelled
             if was_cancelled:
                 num_loaded = len(datasets) if datasets else 0
                 if num_loaded > 0:
@@ -774,7 +808,8 @@ class FileOperationsHandler:
             self._check_large_files([file_path])
             
             try:
-                # Reset cancellation flag
+                # Reset cancellation flags
+                self._user_cancelled = False
                 self.dicom_loader.reset_cancellation()
                 
                 # Create progress dialog
@@ -785,8 +820,15 @@ class FileOperationsHandler:
                 progress_dialog.setValue(0)
                 QApplication.processEvents()
                 
+                # Track if we've actually started loading files (to avoid false cancellation on dialog creation)
+                loading_started = [False]
+                
                 # Create progress callback
                 def progress_callback(current: int, total: int, filename: str) -> None:
+                    # Mark that loading has started once we get a real progress update with a filename
+                    if current > 0 and filename:
+                        loading_started[0] = True
+                    
                     # Update progress dialog
                     if self._progress_dialog:
                         self._progress_dialog.setValue(current)
@@ -797,11 +839,17 @@ class FileOperationsHandler:
                                 self._progress_dialog.setLabelText(filename.rstrip('.'))
                         else:
                             self._progress_dialog.setLabelText(f"Loaded {total} file(s). Organizing into studies/series...")
+                        
+                        # Manually check if Cancel button was clicked (only after loading has actually started)
+                        # This prevents false cancellation when dialog is first shown
+                        if not self._user_cancelled and loading_started[0] and self._progress_dialog.wasCanceled():
+                            self._on_cancel_loading()
                     
-                    # Check for cancellation
-                    if self._progress_dialog and self._progress_dialog.wasCanceled():
-                        self._on_cancel_loading()
-                    
+                    # Check for explicit user cancellation
+                    if self._user_cancelled:
+                        # Already handled by _on_cancel_loading
+                        pass
+                        
                     QApplication.processEvents()
                 
                 datasets = self.dicom_loader.load_files([file_path], progress_callback=progress_callback)
@@ -809,8 +857,8 @@ class FileOperationsHandler:
                 # Close progress dialog
                 self._close_progress_dialog()
                 
-                # Check for cancellation
-                was_cancelled = self.dicom_loader.is_cancelled()
+                # Check for cancellation (use explicit user cancellation flag)
+                was_cancelled = self._user_cancelled
                 if was_cancelled:
                     num_loaded = len(datasets) if datasets else 0
                     if num_loaded > 0:
@@ -946,7 +994,8 @@ class FileOperationsHandler:
                 pass
             
             try:
-                # Reset cancellation flag
+                # Reset cancellation flags
+                self._user_cancelled = False
                 self.dicom_loader.reset_cancellation()
                 
                 # Estimate total files for progress dialog
@@ -965,8 +1014,15 @@ class FileOperationsHandler:
                 progress_dialog.setValue(0)
                 QApplication.processEvents()
                 
+                # Track if we've actually started loading files (to avoid false cancellation on dialog creation)
+                loading_started = [False]
+                
                 # Create progress callback
                 def progress_callback(current: int, total: int, filename: str) -> None:
+                    # Mark that loading has started once we get a real progress update with a filename
+                    if current > 0 and filename:
+                        loading_started[0] = True
+                    
                     # Update progress dialog
                     if self._progress_dialog:
                         # Update maximum if total changed
@@ -977,20 +1033,26 @@ class FileOperationsHandler:
                             self._progress_dialog.setLabelText(f"Loading file {current}/{total}: {filename}...")
                         else:
                             self._progress_dialog.setLabelText(f"Loaded {total} file(s). Organizing into studies/series...")
-                    
-                    # Check for cancellation
-                    if self._progress_dialog and self._progress_dialog.wasCanceled():
-                        self._on_cancel_loading()
-                    
-                    QApplication.processEvents()
+                        
+                        # Manually check if Cancel button was clicked (only after loading has actually started)
+                        # This prevents false cancellation when dialog is first shown
+                        if not self._user_cancelled and loading_started[0] and self._progress_dialog.wasCanceled():
+                            self._on_cancel_loading()
+                
+                # Check for explicit user cancellation
+                if self._user_cancelled:
+                    # Already handled by _on_cancel_loading
+                    pass
+                
+                QApplication.processEvents()
                 
                 datasets = self.dicom_loader.load_directory(file_path, recursive=True, progress_callback=progress_callback)
                 
                 # Close progress dialog
                 self._close_progress_dialog()
                 
-                # Check for cancellation
-                was_cancelled = self.dicom_loader.is_cancelled()
+                # Check for cancellation (use explicit user cancellation flag)
+                was_cancelled = self._user_cancelled
                 if was_cancelled:
                     num_loaded = len(datasets) if datasets else 0
                     if num_loaded > 0:
@@ -1157,7 +1219,8 @@ class FileOperationsHandler:
                 pass
             
             try:
-                # Reset cancellation flag
+                # Reset cancellation flags
+                self._user_cancelled = False
                 self.dicom_loader.reset_cancellation()
                 
                 # Estimate total files for progress dialog
@@ -1176,8 +1239,15 @@ class FileOperationsHandler:
                 progress_dialog.setValue(0)
                 QApplication.processEvents()
                 
+                # Track if we've actually started loading files (to avoid false cancellation on dialog creation)
+                loading_started = [False]
+                
                 # Create progress callback
                 def progress_callback(current: int, total: int, filename: str) -> None:
+                    # Mark that loading has started once we get a real progress update with a filename
+                    if current > 0 and filename:
+                        loading_started[0] = True
+                    
                     # Update progress dialog
                     if self._progress_dialog:
                         # Update maximum if total changed
@@ -1188,12 +1258,18 @@ class FileOperationsHandler:
                             self._progress_dialog.setLabelText(f"Loading file {current}/{total}: {filename}...")
                         else:
                             self._progress_dialog.setLabelText(f"Loaded {total} file(s). Organizing into studies/series...")
-                    
-                    # Check for cancellation
-                    if self._progress_dialog and self._progress_dialog.wasCanceled():
-                        self._on_cancel_loading()
-                    
-                    QApplication.processEvents()
+                        
+                        # Manually check if Cancel button was clicked (only after loading has actually started)
+                        # This prevents false cancellation when dialog is first shown
+                        if not self._user_cancelled and loading_started[0] and self._progress_dialog.wasCanceled():
+                            self._on_cancel_loading()
+                
+                # Check for explicit user cancellation
+                if self._user_cancelled:
+                    # Already handled by _on_cancel_loading
+                    pass
+                
+                QApplication.processEvents()
                 
                 # Load folder (recursive)
                 datasets = self.dicom_loader.load_directory(folder_path, recursive=True, progress_callback=progress_callback)
@@ -1201,8 +1277,8 @@ class FileOperationsHandler:
                 # Close progress dialog
                 self._close_progress_dialog()
                 
-                # Check for cancellation
-                was_cancelled = self.dicom_loader.is_cancelled()
+                # Check for cancellation (use explicit user cancellation flag)
+                was_cancelled = self._user_cancelled
                 if was_cancelled:
                     num_loaded = len(datasets) if datasets else 0
                     if num_loaded > 0:
@@ -1339,7 +1415,8 @@ class FileOperationsHandler:
             self._check_large_files(files)
             
             try:
-                # Reset cancellation flag
+                # Reset cancellation flags
+                self._user_cancelled = False
                 self.dicom_loader.reset_cancellation()
                 
                 # Create progress dialog
@@ -1350,8 +1427,15 @@ class FileOperationsHandler:
                 progress_dialog.setValue(0)
                 QApplication.processEvents()
                 
+                # Track if we've actually started loading files (to avoid false cancellation on dialog creation)
+                loading_started = [False]
+                
                 # Create progress callback
                 def progress_callback(current: int, total: int, filename: str) -> None:
+                    # Mark that loading has started once we get a real progress update with a filename
+                    if current > 0 and filename:
+                        loading_started[0] = True
+                    
                     # Update progress dialog
                     if self._progress_dialog:
                         self._progress_dialog.setValue(current)
@@ -1362,11 +1446,17 @@ class FileOperationsHandler:
                                 self._progress_dialog.setLabelText(f"Loading file {current}/{total}: {filename}...")
                         else:
                             self._progress_dialog.setLabelText(f"Loaded {total} file(s). Organizing into studies/series...")
+                        
+                        # Manually check if Cancel button was clicked (only after loading has actually started)
+                        # This prevents false cancellation when dialog is first shown
+                        if not self._user_cancelled and loading_started[0] and self._progress_dialog.wasCanceled():
+                            self._on_cancel_loading()
                     
-                    # Check for cancellation
-                    if self._progress_dialog and self._progress_dialog.wasCanceled():
-                        self._on_cancel_loading()
-                    
+                    # Check for explicit user cancellation
+                    if self._user_cancelled:
+                        # Already handled by _on_cancel_loading
+                        pass
+                        
                     QApplication.processEvents()
                 
                 # Load files
@@ -1375,8 +1465,8 @@ class FileOperationsHandler:
                 # Close progress dialog
                 self._close_progress_dialog()
                 
-                # Check for cancellation
-                was_cancelled = self.dicom_loader.is_cancelled()
+                # Check for cancellation (use explicit user cancellation flag)
+                was_cancelled = self._user_cancelled
                 if was_cancelled:
                     num_loaded = len(datasets) if datasets else 0
                     if num_loaded > 0:
