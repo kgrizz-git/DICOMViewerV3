@@ -21,11 +21,17 @@ from PySide6.QtGui import QPen, QColor, QBrush, QPainterPath
 from typing import List, Optional, Tuple, Dict
 import math
 from utils.config_manager import ConfigManager
+from utils.debug_log import debug_log
+
+# Arrowhead is drawn larger than line thickness so it stays visually balanced
+ARROWHEAD_SIZE_MULTIPLIER = 3.5
 
 
 class ArrowHeadItem(QGraphicsPathItem):
     """
     Custom QGraphicsPathItem for filled arrowhead.
+    Uses ItemIgnoresTransformations so size stays fixed in viewport (matches cosmetic line).
+    Path is in item coordinates (1 unit = 1 viewport pixel); tip at (0,0), triangle along +x.
     """
     
     def __init__(self, start_point: QPointF, end_point: QPointF, color: QColor, size: float = 12.0):
@@ -33,10 +39,10 @@ class ArrowHeadItem(QGraphicsPathItem):
         Initialize arrowhead item.
         
         Args:
-            start_point: Start point of arrow line
-            end_point: End point of arrow line (where arrowhead points)
+            start_point: Start point of arrow line (group coords)
+            end_point: End point of arrow line / tip (group coords)
             color: Color for arrowhead
-            size: Size of arrowhead in pixels
+            size: Size of arrowhead in viewport pixels
         """
         super().__init__()
         
@@ -45,81 +51,62 @@ class ArrowHeadItem(QGraphicsPathItem):
         self.arrow_size = size
         self._color = color
         
-        # Create filled triangle path
+        # Viewport-relative: same apparent size at any zoom (matches cosmetic line)
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations, True)
+        
+        # Path in item coords: tip at (0,0), triangle along +x (1 unit = 1 viewport pixel)
         self._update_path()
         
-        # Set styling
+        # Position so tip (0,0) is at end_point in group coords; rotate so +x points along arrow
+        self._update_position_and_rotation()
+        
+        # Cosmetic pen so outline doesn't scale
         pen = QPen(color, 1)
+        pen.setCosmetic(True)
         brush = QBrush(color)
         self.setPen(pen)
         self.setBrush(brush)
         
-        # Set z-value above line
         self.setZValue(161)
     
     def _update_path(self) -> None:
-        """Update arrowhead path based on current endpoints."""
-        # Calculate angle of line
+        """Build triangle path in item coords: tip (0,0), base at (-arrow_size, 0), width arrow_size*0.8."""
+        path = QPainterPath()
+        tip = QPointF(0, 0)
+        height = self.arrow_size
+        half_base = self.arrow_size * 0.4  # 0.8/2
+        path.moveTo(tip)
+        path.lineTo(-height, half_base)
+        path.lineTo(-height, -half_base)
+        path.closeSubpath()
+        self.setPath(path)
+    
+    def _update_position_and_rotation(self) -> None:
+        """Set position to tip (end_point) and rotation so triangle points along arrow direction."""
         dx = self.end_point.x() - self.start_point.x()
         dy = self.end_point.y() - self.start_point.y()
-        angle = math.atan2(dy, dx)
-        
-        # Arrowhead dimensions
-        base_width = self.arrow_size * 0.8  # Base width of triangle
-        height = self.arrow_size  # Height of triangle
-        
-        # Create triangle path
-        path = QPainterPath()
-        
-        # Tip of arrow at end_point
-        tip = self.end_point
-        
-        # Calculate perpendicular direction for base
-        perp_angle = angle + math.pi / 2
-        base_offset_x = math.cos(perp_angle) * (base_width / 2)
-        base_offset_y = math.sin(perp_angle) * (base_width / 2)
-        
-        # Base center point (behind tip)
-        base_center_x = tip.x() - math.cos(angle) * height
-        base_center_y = tip.y() - math.sin(angle) * height
-        
-        # Three points of triangle
-        point1 = tip  # Tip
-        point2 = QPointF(base_center_x + base_offset_x, base_center_y + base_offset_y)  # Base left
-        point3 = QPointF(base_center_x - base_offset_x, base_center_y - base_offset_y)  # Base right
-        
-        # Draw triangle
-        path.moveTo(point1)
-        path.lineTo(point2)
-        path.lineTo(point3)
-        path.closeSubpath()
-        
-        self.setPath(path)
+        angle_rad = math.atan2(dy, dx)
+        self.setPos(self.end_point)
+        self.setRotation(math.degrees(angle_rad))
     
     def update_endpoints(self, start_point: QPointF, end_point: QPointF) -> None:
         """
-        Update arrowhead position and rotation.
-        
-        Args:
-            start_point: New start point
-            end_point: New end point
+        Update arrowhead position and rotation when arrow endpoints change.
         """
         self.start_point = start_point
         self.end_point = end_point
         self._update_path()
+        self._update_position_and_rotation()
     
     def set_color(self, color: QColor) -> None:
         """
         Update arrowhead color.
-        
-        Args:
-            color: New color
         """
         self._color = color
         pen = QPen(color, 1)
-        brush = QBrush(color)
+        pen.setCosmetic(True)
         self.setPen(pen)
-        self.setBrush(brush)
+        self.setBrush(QBrush(color))
 
 
 class ArrowAnnotationItem(QGraphicsItemGroup):
@@ -180,13 +167,10 @@ class ArrowAnnotationItem(QGraphicsItemGroup):
         # Update group position to start_point
         self.setPos(start_point)
         
-        # Update line (relative to group: from (0,0) to (end_point - start_point))
+        # Update line (full length to tip) and arrowhead position/rotation
         from PySide6.QtCore import QPointF
         relative_end = end_point - start_point
-        line = QLineF(QPointF(0, 0), relative_end)
-        self.line_item.setLine(line)
-        
-        # Update arrowhead (relative to group)
+        self.line_item.setLine(QLineF(QPointF(0, 0), relative_end))
         self.arrowhead_item.update_endpoints(QPointF(0, 0), relative_end)
     
     def itemChange(self, change: QGraphicsItem.GraphicsItemChange, value) -> object:
@@ -212,28 +196,16 @@ class ArrowAnnotationItem(QGraphicsItemGroup):
                 from PySide6.QtCore import QPointF
                 self._pre_move_start_point = QPointF(self.start_point)  # Create copy, not reference
                 self._pre_move_end_point = QPointF(self.end_point)  # Create copy, not reference
-                
-                # #region agent log
-                with open('/Users/kevingrizzard/Documents/GitHub/DICOMViewerV3/.cursor/debug.log', 'a') as f:
-                    import json
-                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"arrow_annotation_tool.py:199","message":"ItemPositionChange: BEFORE updating positions","data":{"old_pos":str(old_pos),"new_pos":str(new_pos),"delta":str(delta),"start_point_before":str(self.start_point),"end_point_before":str(self.end_point),"pre_move_start":str(self._pre_move_start_point),"pre_move_end":str(self._pre_move_end_point),"has_callback":self.on_moved_callback is not None},"timestamp":int(__import__('time').time()*1000)}) + '\n')
-                # #endregion
-                
+                debug_log("arrow_annotation_tool.py:199", "ItemPositionChange: BEFORE updating positions", {"old_pos": str(old_pos), "new_pos": str(new_pos), "delta": str(delta), "start_point_before": str(self.start_point), "end_point_before": str(self.end_point), "pre_move_start": str(self._pre_move_start_point), "pre_move_end": str(self._pre_move_end_point), "has_callback": self.on_moved_callback is not None}, hypothesis_id="A")
+
                 # Update start and end points (they track the group's position)
                 self.start_point = QPointF(new_pos)  # Group position is start_point
                 self.end_point = QPointF(new_pos + (self.end_point - self._pre_move_start_point))  # Maintain relative offset
-                
-                # #region agent log
-                with open('/Users/kevingrizzard/Documents/GitHub/DICOMViewerV3/.cursor/debug.log', 'a') as f:
-                    import json
-                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"arrow_annotation_tool.py:211","message":"ItemPositionChange: AFTER updating positions","data":{"start_point_after":str(self.start_point),"end_point_after":str(self.end_point)},"timestamp":int(__import__('time').time()*1000)}) + '\n')
-                # #endregion
-                
-                # Update line and arrowhead (they're relative to group, so no change needed)
-                # Line goes from (0,0) to (end_point - start_point) relative to group
+                debug_log("arrow_annotation_tool.py:211", "ItemPositionChange: AFTER updating positions", {"start_point_after": str(self.start_point), "end_point_after": str(self.end_point)}, hypothesis_id="A")
+
+                # Update line (full length) and arrowhead position/rotation
                 relative_end = self.end_point - self.start_point
-                line = QLineF(QPointF(0, 0), relative_end)
-                self.line_item.setLine(line)
+                self.line_item.setLine(QLineF(QPointF(0, 0), relative_end))
                 self.arrowhead_item.update_endpoints(QPointF(0, 0), relative_end)
             
             # Return new position
@@ -375,28 +347,25 @@ class ArrowAnnotationTool:
         Returns:
             ArrowAnnotationItem
         """
-        # Get pen settings from config
-        pen_width = 2  # Default
-        pen_color = (255, 255, 0)  # Default yellow
-        if self.config_manager:
-            pen_width = self.config_manager.get_measurement_line_thickness()  # Use measurement line thickness for now
-            pen_color = self.config_manager.get_arrow_annotation_color()  # Use arrow-specific color
-        
+        # Get arrow size (line thickness) and color from config; arrowhead drawn larger for balance
+        size = self.config_manager.get_arrow_annotation_size() if self.config_manager else 6
+        arrowhead_size = size * ARROWHEAD_SIZE_MULTIPLIER
+        pen_color = self.config_manager.get_arrow_annotation_color() if self.config_manager else (255, 255, 0)
         color = QColor(*pen_color)
         
-        # Create line item - position relative to group (group will be at start_point)
-        # Line goes from (0, 0) relative to group to (end_point - start_point)
+        # Create line item - full length to tip (arrowhead is viewport-sized and sits on top)
         from PySide6.QtCore import QPointF
         relative_end = end_point - start_point
         line = QLineF(QPointF(0, 0), relative_end)
         line_item = QGraphicsLineItem(line)
-        pen = QPen(color, pen_width)
+        pen = QPen(color, size)
         pen.setCosmetic(True)  # Makes pen width viewport-relative
+        pen.setCapStyle(Qt.PenCapStyle.FlatCap)  # Line ends at tip, does not extend past arrowhead
         line_item.setPen(pen)
         line_item.setZValue(160)
         
-        # Create arrowhead - also relative to group
-        arrowhead = ArrowHeadItem(QPointF(0, 0), relative_end, color, self.arrowhead_size)
+        # Create arrowhead - also relative to group (larger than line for visual balance)
+        arrowhead = ArrowHeadItem(QPointF(0, 0), relative_end, color, arrowhead_size)
         
         # Create arrow group
         arrow_item = ArrowAnnotationItem(start_point, end_point, line_item, arrowhead, color)
@@ -590,7 +559,7 @@ class ArrowAnnotationTool:
     
     def update_all_arrow_styles(self, config_manager: ConfigManager) -> None:
         """
-        Update styles (line thickness, color) for all existing arrows.
+        Update styles (line thickness, arrowhead size, color) for all existing arrows.
         
         Args:
             config_manager: ConfigManager instance to get current settings
@@ -598,20 +567,20 @@ class ArrowAnnotationTool:
         if config_manager is None:
             return
         
-        # Get new settings from config (arrow-specific color, measurement line thickness for now)
-        pen_width = config_manager.get_measurement_line_thickness()  # Use measurement line thickness for now
-        pen_color = config_manager.get_arrow_annotation_color()  # Use arrow-specific color
-        
+        arrow_size = config_manager.get_arrow_annotation_size()
+        arrowhead_size = arrow_size * ARROWHEAD_SIZE_MULTIPLIER
+        pen_color = config_manager.get_arrow_annotation_color()
         color = QColor(*pen_color)
-        pen = QPen(color, pen_width)
+        pen = QPen(color, arrow_size)
         pen.setCosmetic(True)
+        pen.setCapStyle(Qt.PenCapStyle.FlatCap)
         
-        # Update all arrows
         for key, arrow_list in self.arrows.items():
             for arrow in arrow_list:
-                # Update line pen
                 arrow.line_item.setPen(pen)
-                
-                # Update arrowhead color
                 arrow.arrowhead_item.set_color(color)
                 arrow.color = color
+                relative_end = arrow.end_point - arrow.start_point
+                arrow.line_item.setLine(QLineF(QPointF(0, 0), relative_end))
+                arrow.arrowhead_item.arrow_size = arrowhead_size
+                arrow.arrowhead_item.update_endpoints(QPointF(0, 0), relative_end)

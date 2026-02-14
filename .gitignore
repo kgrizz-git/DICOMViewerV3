@@ -200,6 +200,8 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+# Debug log written when DICOMVIEWER_DEBUG_LOG is set
+.cursor/
 
 # Marimo
 marimo/_static/
