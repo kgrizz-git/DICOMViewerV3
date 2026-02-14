@@ -2466,24 +2466,11 @@ class DICOMViewerApp(QObject):
             except (TypeError, RuntimeError):
                 pass
             
-            # Zoom and transform changes
-            # IMPORTANT: Do not call bare disconnect() here; it removes *all* listeners
-            # (including per-tool coordinators like arrow annotations).
             try:
-                self.image_viewer.zoom_changed.disconnect(self.view_state_manager.handle_zoom_changed)
-            except (TypeError, RuntimeError, AttributeError):
-                pass
-            try:
-                self.image_viewer.zoom_changed.disconnect(self.zoom_display_widget.update_zoom)
-            except (TypeError, RuntimeError, AttributeError):
-                pass
-            try:
-                self.image_viewer.zoom_changed.disconnect(self._on_zoom_changed)
-            except (TypeError, RuntimeError, AttributeError):
-                pass
-            try:
-                self.image_viewer.transform_changed.disconnect(self.view_state_manager.handle_transform_changed)
-            except (TypeError, RuntimeError, AttributeError):
+                # Zoom and transform changes
+                self.image_viewer.zoom_changed.disconnect()
+                self.image_viewer.transform_changed.disconnect()
+            except (TypeError, RuntimeError):
                 pass
             
             try:
@@ -5680,9 +5667,21 @@ class DICOMViewerApp(QObject):
         # Add to scene
         subwindow.image_viewer.scene.addItem(arrow_item)
         
-        # Set line end using active view directional mapping
+        # Set line end from view scale so pasted arrow meets arrowhead at current zoom
         view = subwindow.image_viewer
-        arrow_item.update_line_end_for_view_scale(view)
+        scale = 1.0
+        if hasattr(view, 'viewportTransform'):
+            t = view.viewportTransform()
+            if t:
+                scale = t.m11()
+        if scale <= 0 and hasattr(view, 'transform'):
+            t = view.transform()
+            if t:
+                scale = t.m11()
+        if scale <= 0:
+            scale = getattr(view, 'current_zoom', 1.0)
+        if scale > 0:
+            arrow_item.update_line_end_for_view_scale(scale)
         
         # Add to arrow annotation tool
         key = (arrow_annotation_tool.current_study_uid,

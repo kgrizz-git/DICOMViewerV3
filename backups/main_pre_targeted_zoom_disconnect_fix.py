@@ -2466,24 +2466,11 @@ class DICOMViewerApp(QObject):
             except (TypeError, RuntimeError):
                 pass
             
-            # Zoom and transform changes
-            # IMPORTANT: Do not call bare disconnect() here; it removes *all* listeners
-            # (including per-tool coordinators like arrow annotations).
             try:
-                self.image_viewer.zoom_changed.disconnect(self.view_state_manager.handle_zoom_changed)
-            except (TypeError, RuntimeError, AttributeError):
-                pass
-            try:
-                self.image_viewer.zoom_changed.disconnect(self.zoom_display_widget.update_zoom)
-            except (TypeError, RuntimeError, AttributeError):
-                pass
-            try:
-                self.image_viewer.zoom_changed.disconnect(self._on_zoom_changed)
-            except (TypeError, RuntimeError, AttributeError):
-                pass
-            try:
-                self.image_viewer.transform_changed.disconnect(self.view_state_manager.handle_transform_changed)
-            except (TypeError, RuntimeError, AttributeError):
+                # Zoom and transform changes
+                self.image_viewer.zoom_changed.disconnect()
+                self.image_viewer.transform_changed.disconnect()
+            except (TypeError, RuntimeError):
                 pass
             
             try:
