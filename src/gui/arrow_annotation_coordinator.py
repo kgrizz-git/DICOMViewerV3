@@ -21,6 +21,7 @@ from pydicom.dataset import Dataset
 from tools.arrow_annotation_tool import ArrowAnnotationTool
 from gui.image_viewer import ImageViewer
 from utils.dicom_utils import get_composite_series_key
+from utils.debug_log import debug_log, annotation_debug
 
 if TYPE_CHECKING:
     from utils.undo_redo import UndoRedoManager
@@ -110,11 +111,7 @@ class ArrowAnnotationCoordinator:
             # Store initial position for move tracking (before any moves happen)
             # This allows us to track the true initial position for undo
             if arrow not in self._arrow_move_tracking:
-                # #region agent log
-                with open('/Users/kevingrizzard/Documents/GitHub/DICOMViewerV3/.cursor/debug.log', 'a') as f:
-                    import json
-                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"B","location":"arrow_annotation_coordinator.py:110","message":"Storing initial position on arrow creation","data":{"arrow_id":str(id(arrow)),"start_point":str(arrow.start_point),"end_point":str(arrow.end_point)},"timestamp":int(__import__('time').time()*1000)}) + '\n')
-                # #endregion
+                debug_log("arrow_annotation_coordinator.py:110", "Storing initial position on arrow creation", {"arrow_id": str(id(arrow)), "start_point": str(arrow.start_point), "end_point": str(arrow.end_point)}, hypothesis_id="B")
                 # Store COPIES, not references
                 from PySide6.QtCore import QPointF
                 self._arrow_move_tracking[arrow] = {
@@ -124,7 +121,7 @@ class ArrowAnnotationCoordinator:
                     'current_end': QPointF(arrow.end_point),  # Create copy
                     'initialized': True  # Flag to indicate we have the true initial position
                 }
-                print(f"[ANNOTATION DEBUG] ArrowAnnotationCoordinator.handle_arrow_annotation_finished: stored initial position for arrow, start={arrow.start_point}, end={arrow.end_point}")
+                annotation_debug(f" ArrowAnnotationCoordinator.handle_arrow_annotation_finished: stored initial position for arrow, start={arrow.start_point}, end={arrow.end_point}")
             
             # Create undo/redo command for arrow addition
             if self.undo_redo_manager:
@@ -224,7 +221,7 @@ class ArrowAnnotationCoordinator:
                         'current_end': QPointF(arrow_item.end_point),  # Create copy
                         'initialized': True
                     }
-                    print(f"[ANNOTATION DEBUG] ArrowAnnotationCoordinator.display_arrows_for_slice: stored initial position for existing arrow")
+                    annotation_debug(f" ArrowAnnotationCoordinator.display_arrows_for_slice: stored initial position for existing arrow")
     
     def _on_arrow_moved(self, arrow_item) -> None:
         """
@@ -240,7 +237,7 @@ class ArrowAnnotationCoordinator:
             
             # Skip if arrow is being updated programmatically (e.g., during undo/redo)
             if getattr(arrow_item, '_updating_position', False):
-                print(f"[ANNOTATION DEBUG] ArrowAnnotationCoordinator._on_arrow_moved: skipping (programmatic update), _updating_position=True")
+                annotation_debug(f" ArrowAnnotationCoordinator._on_arrow_moved: skipping (programmatic update), _updating_position=True")
                 return
             
             # Get positions BEFORE the move (stored in itemChange)
@@ -254,15 +251,10 @@ class ArrowAnnotationCoordinator:
             
             # Check if arrow is being tracked for movement
             is_tracked = arrow_item in self._arrow_move_tracking
-            
-            # #region agent log
-            with open('/Users/kevingrizzard/Documents/GitHub/DICOMViewerV3/.cursor/debug.log', 'a') as f:
-                import json
-                tracking_data = self._arrow_move_tracking.get(arrow_item, {}) if arrow_item in self._arrow_move_tracking else {}
-                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"arrow_annotation_coordinator.py:237","message":"_on_arrow_moved: callback called","data":{"arrow_id":str(id(arrow_item)),"is_tracked":is_tracked,"pre_move_start":str(pre_move_start) if pre_move_start else "None","pre_move_end":str(pre_move_end) if pre_move_end else "None","current_start":str(current_start),"current_end":str(current_end),"tracking_initial_start":str(tracking_data.get('initial_start', 'N/A')),"tracking_initial_end":str(tracking_data.get('initial_end', 'N/A')),"tracking_initialized":tracking_data.get('initialized', False)},"timestamp":int(__import__('time').time()*1000)}) + '\n')
-            # #endregion
-            
-            print(f"[ANNOTATION DEBUG] ArrowAnnotationCoordinator._on_arrow_moved: arrow={arrow_item}, _updating_position={getattr(arrow_item, '_updating_position', False)}, tracking={is_tracked}, pre_move_start={pre_move_start}, pre_move_end={pre_move_end}, current_start={current_start}, current_end={current_end}")
+            tracking_data = self._arrow_move_tracking.get(arrow_item, {}) if arrow_item in self._arrow_move_tracking else {}
+            debug_log("arrow_annotation_coordinator.py:237", "_on_arrow_moved: callback called", {"arrow_id": str(id(arrow_item)), "is_tracked": is_tracked, "pre_move_start": str(pre_move_start) if pre_move_start else "None", "pre_move_end": str(pre_move_end) if pre_move_end else "None", "current_start": str(current_start), "current_end": str(current_end), "tracking_initial_start": str(tracking_data.get('initial_start', 'N/A')), "tracking_initial_end": str(tracking_data.get('initial_end', 'N/A')), "tracking_initialized": tracking_data.get('initialized', False)}, hypothesis_id="A")
+
+            annotation_debug(f" ArrowAnnotationCoordinator._on_arrow_moved: arrow={arrow_item}, _updating_position={getattr(arrow_item, '_updating_position', False)}, tracking={is_tracked}, pre_move_start={pre_move_start}, pre_move_end={pre_move_end}, current_start={current_start}, current_end={current_end}")
             
             if not is_tracked:
                 # First time tracking this arrow during this drag
@@ -275,19 +267,19 @@ class ArrowAnnotationCoordinator:
                     from PySide6.QtCore import QPointF
                     initial_start = QPointF(pre_drag_start)  # Create copy
                     initial_end = QPointF(pre_drag_end)  # Create copy
-                    print(f"[ANNOTATION DEBUG] ArrowAnnotationCoordinator._on_arrow_moved: First move, using pre_drag positions as initial")
+                    annotation_debug(f" ArrowAnnotationCoordinator._on_arrow_moved: First move, using pre_drag positions as initial")
                 elif pre_move_start is not None and pre_move_end is not None:
                     # Fallback to pre_move positions
                     from PySide6.QtCore import QPointF
                     initial_start = QPointF(pre_move_start)  # Create copy
                     initial_end = QPointF(pre_move_end)  # Create copy
-                    print(f"[ANNOTATION DEBUG] ArrowAnnotationCoordinator._on_arrow_moved: First move, using pre_move positions as initial")
+                    annotation_debug(f" ArrowAnnotationCoordinator._on_arrow_moved: First move, using pre_move positions as initial")
                 else:
                     # No pre_drag or pre_move - use current (will skip command if no change)
                     from PySide6.QtCore import QPointF
                     initial_start = QPointF(current_start)  # Create copy
                     initial_end = QPointF(current_end)  # Create copy
-                    print(f"[ANNOTATION DEBUG] ArrowAnnotationCoordinator._on_arrow_moved: First move, no pre_drag/pre_move, using current")
+                    annotation_debug(f" ArrowAnnotationCoordinator._on_arrow_moved: First move, no pre_drag/pre_move, using current")
                 
                 # Start tracking with COPIES
                 from PySide6.QtCore import QPointF
@@ -304,7 +296,7 @@ class ArrowAnnotationCoordinator:
                 from PySide6.QtCore import QPointF
                 tracking['current_start'] = QPointF(current_start)  # Store copy
                 tracking['current_end'] = QPointF(current_end)  # Store copy
-                print(f"[ANNOTATION DEBUG] ArrowAnnotationCoordinator._on_arrow_moved: Continuing tracking, updated current positions")
+                annotation_debug(f" ArrowAnnotationCoordinator._on_arrow_moved: Continuing tracking, updated current positions")
             
             # Don't create command yet - just update tracking
             # Command will be created on mouse release via callback
@@ -319,15 +311,15 @@ class ArrowAnnotationCoordinator:
         Args:
             arrow_item: ArrowAnnotationItem that was moved
         """
-        print(f"[ANNOTATION DEBUG] ArrowAnnotationCoordinator._finalize_arrow_move: called, arrow_item={'exists' if arrow_item is not None else 'None'}, in_tracking={arrow_item in self._arrow_move_tracking if arrow_item is not None else False}")
+        annotation_debug(f" ArrowAnnotationCoordinator._finalize_arrow_move: called, arrow_item={'exists' if arrow_item is not None else 'None'}, in_tracking={arrow_item in self._arrow_move_tracking if arrow_item is not None else False}")
         
         if arrow_item not in self._arrow_move_tracking:
-            print(f"[ANNOTATION DEBUG] ArrowAnnotationCoordinator._finalize_arrow_move: arrow not in tracking, returning")
+            annotation_debug(f" ArrowAnnotationCoordinator._finalize_arrow_move: arrow not in tracking, returning")
             return
         
         # Verify arrow is still valid
         if arrow_item is None or not hasattr(arrow_item, 'start_point'):
-            print(f"[ANNOTATION DEBUG] ArrowAnnotationCoordinator._finalize_arrow_move: arrow invalid, removing from tracking")
+            annotation_debug(f" ArrowAnnotationCoordinator._finalize_arrow_move: arrow invalid, removing from tracking")
             if arrow_item in self._arrow_move_tracking:
                 del self._arrow_move_tracking[arrow_item]
             return
@@ -339,25 +331,20 @@ class ArrowAnnotationCoordinator:
         initial_end = QPointF(tracking['initial_end'])
         final_start = QPointF(tracking['current_start'])
         final_end = QPointF(tracking['current_end'])
-        
-        # #region agent log
-        with open('/Users/kevingrizzard/Documents/GitHub/DICOMViewerV3/.cursor/debug.log', 'a') as f:
-            import json
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"arrow_annotation_coordinator.py:320","message":"_finalize_arrow_move: checking positions","data":{"arrow_id":str(id(arrow_item)),"initial_start":str(initial_start),"initial_end":str(initial_end),"final_start":str(final_start),"final_end":str(final_end),"initialized":tracking.get('initialized', False)},"timestamp":int(__import__('time').time()*1000)}) + '\n')
-        # #endregion
-        
-        print(f"[ANNOTATION DEBUG] ArrowAnnotationCoordinator._finalize_arrow_move: positions - initial=({initial_start.x():.1f}, {initial_start.y():.1f}, {initial_end.x():.1f}, {initial_end.y():.1f}), final=({final_start.x():.1f}, {final_start.y():.1f}, {final_end.x():.1f}, {final_end.y():.1f})")
+        debug_log("arrow_annotation_coordinator.py:320", "_finalize_arrow_move: checking positions", {"arrow_id": str(id(arrow_item)), "initial_start": str(initial_start), "initial_end": str(initial_end), "final_start": str(final_start), "final_end": str(final_end), "initialized": tracking.get('initialized', False)}, hypothesis_id="A")
+
+        annotation_debug(f" ArrowAnnotationCoordinator._finalize_arrow_move: positions - initial=({initial_start.x():.1f}, {initial_start.y():.1f}, {initial_end.x():.1f}, {initial_end.y():.1f}), final=({final_start.x():.1f}, {final_start.y():.1f}, {final_end.x():.1f}, {final_end.y():.1f})")
         
         # Check if position changed
         position_changed = (initial_start != final_start or initial_end != final_end)
         has_manager = self.undo_redo_manager is not None
         has_scene = self.image_viewer.scene is not None
-        print(f"[ANNOTATION DEBUG] ArrowAnnotationCoordinator._finalize_arrow_move: position_changed={position_changed}, has_manager={has_manager}, has_scene={has_scene}")
+        annotation_debug(f" ArrowAnnotationCoordinator._finalize_arrow_move: position_changed={position_changed}, has_manager={has_manager}, has_scene={has_scene}")
         
         # Only create command if position actually changed
         if position_changed and has_manager and has_scene:
             from utils.undo_redo import ArrowAnnotationMoveCommand
-            print(f"[ANNOTATION DEBUG] ArrowAnnotationCoordinator._finalize_arrow_move: creating ArrowAnnotationMoveCommand")
+            annotation_debug(f" ArrowAnnotationCoordinator._finalize_arrow_move: creating ArrowAnnotationMoveCommand")
             command = ArrowAnnotationMoveCommand(
                 arrow_item,
                 initial_start,
@@ -366,14 +353,14 @@ class ArrowAnnotationCoordinator:
                 final_end,
                 self.image_viewer.scene
             )
-            print(f"[ANNOTATION DEBUG] ArrowAnnotationCoordinator._finalize_arrow_move: executing command, undo stack size before={len(self.undo_redo_manager.undo_stack)}")
+            annotation_debug(f" ArrowAnnotationCoordinator._finalize_arrow_move: executing command, undo stack size before={len(self.undo_redo_manager.undo_stack)}")
             self.undo_redo_manager.execute_command(command)
-            print(f"[ANNOTATION DEBUG] ArrowAnnotationCoordinator._finalize_arrow_move: command executed, undo stack size after={len(self.undo_redo_manager.undo_stack)}")
+            annotation_debug(f" ArrowAnnotationCoordinator._finalize_arrow_move: command executed, undo stack size after={len(self.undo_redo_manager.undo_stack)}")
             # Update undo/redo state after command execution
             if self.update_undo_redo_state_callback:
                 self.update_undo_redo_state_callback()
         else:
-            print(f"[ANNOTATION DEBUG] ArrowAnnotationCoordinator._finalize_arrow_move: NOT creating command (position_changed={position_changed}, has_manager={has_manager}, has_scene={has_scene})")
+            annotation_debug(f" ArrowAnnotationCoordinator._finalize_arrow_move: NOT creating command (position_changed={position_changed}, has_manager={has_manager}, has_scene={has_scene})")
         
         # Remove from tracking (so next drag starts fresh)
         if arrow_item in self._arrow_move_tracking:
@@ -384,7 +371,7 @@ class ArrowAnnotationCoordinator:
             delattr(arrow_item, '_pre_drag_start_point')
         if hasattr(arrow_item, '_pre_drag_end_point'):
             delattr(arrow_item, '_pre_drag_end_point')
-            print(f"[ANNOTATION DEBUG] ArrowAnnotationCoordinator._finalize_arrow_move: removed from tracking")
+            annotation_debug(f" ArrowAnnotationCoordinator._finalize_arrow_move: removed from tracking")
     
     def clear_arrows_from_other_slices(self, study_uid: str, series_uid: str, instance_identifier: int) -> None:
         """

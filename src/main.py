@@ -5639,25 +5639,23 @@ class DICOMViewerApp(QObject):
         color_data = arrow_data.get('color', {'r': 255, 'g': 255, 'b': 0})
         color = QColor(color_data['r'], color_data['g'], color_data['b'])
         
-        # Get line thickness from config (use measurement line thickness for now)
-        if self.config_manager:
-            pen_width = self.config_manager.get_measurement_line_thickness()
-        else:
-            pen_width = 2
+        # Get arrow size (line thickness) from config; arrowhead drawn larger for balance
+        arrow_size = self.config_manager.get_arrow_annotation_size() if self.config_manager else 6
+        from tools.arrow_annotation_tool import ARROWHEAD_SIZE_MULTIPLIER, ArrowHeadItem
+        arrowhead_size = arrow_size * ARROWHEAD_SIZE_MULTIPLIER
         
-        # Create line item - position relative to group (group will be at start)
-        # Line goes from (0, 0) relative to group to (end - start)
+        # Create line item - full length to tip (arrowhead is viewport-sized and sits on top)
         relative_end = end - start
         line = QLineF(QPointF(0, 0), relative_end)
         line_item = QGraphicsLineItem(line)
-        pen = QPen(color, pen_width)
+        pen = QPen(color, arrow_size)
         pen.setCosmetic(True)
+        pen.setCapStyle(Qt.PenCapStyle.FlatCap)
         line_item.setPen(pen)
         line_item.setZValue(160)
         
-        # Create arrowhead - also relative to group
-        from tools.arrow_annotation_tool import ArrowHeadItem
-        arrowhead = ArrowHeadItem(QPointF(0, 0), relative_end, color, arrow_annotation_tool.arrowhead_size)
+        # Create arrowhead (viewport-relative via ItemIgnoresTransformations)
+        arrowhead = ArrowHeadItem(QPointF(0, 0), relative_end, color, arrowhead_size)
         
         # Create arrow group
         arrow_item = ArrowAnnotationItem(start, end, line_item, arrowhead, color)
