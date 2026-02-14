@@ -7,10 +7,6 @@ This module handles loading DICOM files from various sources including:
 - Directories (with recursive search)
 - Files regardless of extension
 
-When loading a folder, the following are excluded from being tried as DICOM:
-- .DS_Store (macOS folder metadata)
-- Files whose name starts with ~$ (e.g. Office temporary/lock files)
-
 Inputs:
     - File paths (single or multiple)
     - Directory paths
@@ -41,25 +37,6 @@ from core.multiframe_handler import is_multiframe, get_frame_count
 # Default defer size: 250MB - files larger than this will defer pixel data loading
 # This balances fast initial load with responsive slice navigation
 DEFAULT_DEFER_SIZE = 262144000  # 250 MB in bytes
-
-# Basename patterns to skip when loading a folder as DICOM (system/temp files, not DICOM)
-_SKIP_BASENAMES = frozenset({".ds_store"})  # macOS folder metadata (case-insensitive match)
-_SKIP_BASENAME_PREFIX = "~$"  # Office/temp lock files (e.g. ~$document.docx)
-
-
-def _should_skip_file_for_dicom(path: Path) -> bool:
-    """
-    Return True if this path should not be tried as DICOM when loading a folder.
-    Excludes system and temporary files (e.g. .DS_Store, ~$*.docx).
-    """
-    name = path.name
-    if not name:
-        return True
-    if name.lower() in _SKIP_BASENAMES:
-        return True
-    if name.startswith(_SKIP_BASENAME_PREFIX):
-        return True
-    return False
 
 
 class DICOMLoader:
@@ -602,14 +579,12 @@ class DICOMLoader:
             self.failed_files.append((directory_path, "Directory does not exist or is not a directory"))
             return []
         
-        # Get all files in directory (and subdirectories if recursive).
-        # Exclude system/temp files that are never DICOM (e.g. .DS_Store, ~$*).
+        # Get all files in directory (and subdirectories if recursive)
         scan_start = time.time()
         if recursive:
-            candidates = [p for p in dir_path.rglob('*') if p.is_file()]
+            file_paths = [str(p) for p in dir_path.rglob('*') if p.is_file()]
         else:
-            candidates = [p for p in dir_path.iterdir() if p.is_file()]
-        file_paths = [str(p) for p in candidates if not _should_skip_file_for_dicom(p)]
+            file_paths = [str(p) for p in dir_path.iterdir() if p.is_file()]
         scan_time = time.time() - scan_start
         # print(f"[LOAD DEBUG] Scanned directory in {scan_time:.2f}s, found {len(file_paths)} files")
         

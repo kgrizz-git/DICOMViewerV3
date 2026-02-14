@@ -75,17 +75,38 @@ class ArrowAnnotationCoordinator:
             self.image_viewer.zoom_changed.connect(self._on_zoom_changed_for_arrows)
     
     def _on_zoom_changed_for_arrows(self, zoom_level: float) -> None:
-        """Handle zoom change by recomputing directional line endpoints for this view."""
-        self._update_arrow_lines_for_view_scale()
+        """Use the zoom value emitted by the view so scale is exact (no read-back timing issues)."""
+        self._update_arrow_lines_for_view_scale(scale=zoom_level)
     
-    def _update_arrow_lines_for_view_scale(self) -> None:
+    def _get_view_scale(self) -> float:
+        """Get scene-to-viewport scale from the active ImageViewer. Returns at least 0.001."""
+        # Prefer current_zoom (kept in sync by the view) then live transform
+        scale = getattr(self.image_viewer, 'current_zoom', None)
+        if scale is not None and scale > 0:
+            return max(0.001, scale)
+        scale = 0.0
+        if hasattr(self.image_viewer, 'viewportTransform'):
+            t = self.image_viewer.viewportTransform()
+            if t:
+                scale = t.m11()
+        if scale <= 0 and hasattr(self.image_viewer, 'transform'):
+            t = self.image_viewer.transform()
+            if t:
+                scale = t.m11()
+        if scale <= 0:
+            scale = getattr(self.image_viewer, 'current_zoom', 1.0)
+        return max(0.001, scale) if scale > 0 else 0.001
+    
+    def _update_arrow_lines_for_view_scale(self, scale: Optional[float] = None) -> None:
         """Update line end for all arrows in this view so line meets arrowhead at current zoom."""
         if self.image_viewer.scene is None:
             return
+        if scale is None or scale <= 0:
+            scale = self._get_view_scale()
         for arrow_list in self.arrow_annotation_tool.arrows.values():
             for arrow in arrow_list:
                 if arrow.scene() == self.image_viewer.scene:
-                    arrow.update_line_end_for_view_scale(self.image_viewer)
+                    arrow.update_line_end_for_view_scale(scale)
     
     def handle_arrow_annotation_started(self, pos: QPointF) -> None:
         """
@@ -142,8 +163,9 @@ class ArrowAnnotationCoordinator:
                 }
                 annotation_debug(f" ArrowAnnotationCoordinator.handle_arrow_annotation_finished: stored initial position for arrow, start={arrow.start_point}, end={arrow.end_point}")
             
-            # Set line end from active view so line meets arrowhead at current zoom
-            arrow.update_line_end_for_view_scale(self.image_viewer)
+            # Set line end from view scale so line meets arrowhead
+            scale = self._get_view_scale()
+            arrow.update_line_end_for_view_scale(scale)
             
             # Create undo/redo command for arrow addition
             if self.undo_redo_manager:
