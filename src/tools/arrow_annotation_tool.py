@@ -109,6 +109,24 @@ class ArrowHeadItem(QGraphicsPathItem):
         self.setBrush(QBrush(color))
 
 
+def _line_end_shortened(relative_end: QPointF, fraction: float = 0.02) -> QPointF:
+    """
+    Return point slightly before relative_end so the line does not stick out past the arrowhead.
+    Uses a fraction of arrow length (and minimum pullback) so the gap is invisible under the head.
+    """
+    dx = relative_end.x()
+    dy = relative_end.y()
+    length = math.sqrt(dx * dx + dy * dy)
+    if length <= 1e-6:
+        return QPointF(0, 0)
+    pullback = max(2.0, length * fraction)
+    if pullback >= length:
+        return QPointF(0, 0)
+    unit_x = dx / length
+    unit_y = dy / length
+    return QPointF(dx - unit_x * pullback, dy - unit_y * pullback)
+
+
 class ArrowAnnotationItem(QGraphicsItemGroup):
     """
     Represents a single arrow annotation.
@@ -167,10 +185,11 @@ class ArrowAnnotationItem(QGraphicsItemGroup):
         # Update group position to start_point
         self.setPos(start_point)
         
-        # Update line (full length to tip) and arrowhead position/rotation
+        # Update line (shortened so it does not stick out) and arrowhead position/rotation
         from PySide6.QtCore import QPointF
         relative_end = end_point - start_point
-        self.line_item.setLine(QLineF(QPointF(0, 0), relative_end))
+        line_end = _line_end_shortened(relative_end)
+        self.line_item.setLine(QLineF(QPointF(0, 0), line_end))
         self.arrowhead_item.update_endpoints(QPointF(0, 0), relative_end)
     
     def itemChange(self, change: QGraphicsItem.GraphicsItemChange, value) -> object:
@@ -203,9 +222,10 @@ class ArrowAnnotationItem(QGraphicsItemGroup):
                 self.end_point = QPointF(new_pos + (self.end_point - self._pre_move_start_point))  # Maintain relative offset
                 debug_log("arrow_annotation_tool.py:211", "ItemPositionChange: AFTER updating positions", {"start_point_after": str(self.start_point), "end_point_after": str(self.end_point)}, hypothesis_id="A")
 
-                # Update line (full length) and arrowhead position/rotation
+                # Update line (shortened) and arrowhead position/rotation
                 relative_end = self.end_point - self.start_point
-                self.line_item.setLine(QLineF(QPointF(0, 0), relative_end))
+                line_end = _line_end_shortened(relative_end)
+                self.line_item.setLine(QLineF(QPointF(0, 0), line_end))
                 self.arrowhead_item.update_endpoints(QPointF(0, 0), relative_end)
             
             # Return new position
@@ -353,10 +373,11 @@ class ArrowAnnotationTool:
         pen_color = self.config_manager.get_arrow_annotation_color() if self.config_manager else (255, 255, 0)
         color = QColor(*pen_color)
         
-        # Create line item - full length to tip (arrowhead is viewport-sized and sits on top)
+        # Create line item - end slightly before tip so line does not stick out past arrowhead
         from PySide6.QtCore import QPointF
         relative_end = end_point - start_point
-        line = QLineF(QPointF(0, 0), relative_end)
+        line_end = _line_end_shortened(relative_end)
+        line = QLineF(QPointF(0, 0), line_end)
         line_item = QGraphicsLineItem(line)
         pen = QPen(color, size)
         pen.setCosmetic(True)  # Makes pen width viewport-relative
@@ -581,6 +602,7 @@ class ArrowAnnotationTool:
                 arrow.arrowhead_item.set_color(color)
                 arrow.color = color
                 relative_end = arrow.end_point - arrow.start_point
-                arrow.line_item.setLine(QLineF(QPointF(0, 0), relative_end))
+                line_end = _line_end_shortened(relative_end)
+                arrow.line_item.setLine(QLineF(QPointF(0, 0), line_end))
                 arrow.arrowhead_item.arrow_size = arrowhead_size
                 arrow.arrowhead_item.update_endpoints(QPointF(0, 0), relative_end)

@@ -5641,12 +5641,13 @@ class DICOMViewerApp(QObject):
         
         # Get arrow size (line thickness) from config; arrowhead drawn larger for balance
         arrow_size = self.config_manager.get_arrow_annotation_size() if self.config_manager else 6
-        from tools.arrow_annotation_tool import ARROWHEAD_SIZE_MULTIPLIER, ArrowHeadItem
+        from tools.arrow_annotation_tool import ARROWHEAD_SIZE_MULTIPLIER, ArrowHeadItem, _line_end_shortened
         arrowhead_size = arrow_size * ARROWHEAD_SIZE_MULTIPLIER
         
-        # Create line item - full length to tip (arrowhead is viewport-sized and sits on top)
+        # Create line item - end slightly before tip so line does not stick out past arrowhead
         relative_end = end - start
-        line = QLineF(QPointF(0, 0), relative_end)
+        line_end = _line_end_shortened(relative_end)
+        line = QLineF(QPointF(0, 0), line_end)
         line_item = QGraphicsLineItem(line)
         pen = QPen(color, arrow_size)
         pen.setCosmetic(True)
