@@ -16,7 +16,7 @@ Requirements:
     - ConfigManager for configuration
 """
 
-from typing import Optional, Callable, Any, Dict
+from typing import Optional, Callable, Any
 from gui.dialogs.settings_dialog import SettingsDialog
 from gui.dialogs.overlay_settings_dialog import OverlaySettingsDialog
 from gui.dialogs.tag_viewer_dialog import TagViewerDialog
@@ -56,8 +56,12 @@ class DialogCoordinator:
         settings_applied_callback: Optional[Callable[[], None]] = None,
         overlay_config_applied_callback: Optional[Callable[[], None]] = None,
         tag_edit_history: Optional[Any] = None,
-        get_histogram_callbacks_for_subwindow: Optional[Callable[[int], dict]] = None,
-        get_focused_subwindow_index: Optional[Callable[[], int]] = None,
+        get_current_dataset: Optional[Callable[[], Optional[Dataset]]] = None,
+        get_current_slice_index: Optional[Callable[[], int]] = None,
+        get_window_center: Optional[Callable[[], Optional[float]]] = None,
+        get_window_width: Optional[Callable[[], Optional[float]]] = None,
+        get_use_rescaled: Optional[Callable[[], bool]] = None,
+        get_rescale_params: Optional[Callable[[], tuple]] = None,
         undo_redo_manager: Optional[Any] = None,
         ui_refresh_callback: Optional[Callable[[], None]] = None
     ):
@@ -71,8 +75,12 @@ class DialogCoordinator:
             settings_applied_callback: Optional callback when settings are applied
             overlay_config_applied_callback: Optional callback when overlay config is applied
             tag_edit_history: Optional TagEditHistoryManager for tag editing undo/redo
-            get_histogram_callbacks_for_subwindow: Callback (idx) -> dict of callbacks for that subwindow's histogram
-            get_focused_subwindow_index: Callback to get currently focused subwindow index (0-3)
+            get_current_dataset: Optional callback to get current dataset
+            get_current_slice_index: Optional callback to get current slice index
+            get_window_center: Optional callback to get current window center
+            get_window_width: Optional callback to get current window width
+            get_use_rescaled: Optional callback to get use_rescaled_values flag
+            get_rescale_params: Optional callback to get (slope, intercept, type) tuple
         """
         self.config_manager = config_manager
         self.main_window = main_window
@@ -85,13 +93,18 @@ class DialogCoordinator:
         self.tag_edit_history = tag_edit_history
         self.tag_edited_callback = None  # Will be set from main.py to handle tag edits
         
-        # Per-subwindow histogram dialogs (up to 4, keyed by subwindow index)
-        self.get_histogram_callbacks_for_subwindow = get_histogram_callbacks_for_subwindow
-        self.get_focused_subwindow_index = get_focused_subwindow_index
-        self.histogram_dialogs: Dict[int, Optional[HistogramDialog]] = {}
+        # Store callbacks for histogram dialog
+        self.get_current_dataset = get_current_dataset
+        self.get_current_slice_index = get_current_slice_index
+        self.get_window_center = get_window_center
+        self.get_window_width = get_window_width
+        self.get_use_rescaled = get_use_rescaled
+        self.get_rescale_params = get_rescale_params
         
         # Tag viewer dialog (persistent)
         self.tag_viewer_dialog: Optional[TagViewerDialog] = None
+        # Histogram dialog (persistent)
+        self.histogram_dialog: Optional[HistogramDialog] = None
         # About this File dialog (persistent)
         self.about_this_file_dialog: Optional[AboutThisFileDialog] = None
     
@@ -273,40 +286,24 @@ class DialogCoordinator:
         if self.tag_viewer_dialog is not None:
             self.tag_viewer_dialog.clear_filter()
     
-    def open_histogram(self, subwindow_index: Optional[int] = None) -> None:
-        """
-        Open or show histogram dialog for a subwindow.
-        If subwindow_index is None, uses the currently focused subwindow.
-        Supports up to 4 histograms (one per subwindow index 0-3).
-        """
-        if self.get_focused_subwindow_index is None or self.get_histogram_callbacks_for_subwindow is None:
-            return
-        idx = subwindow_index if subwindow_index is not None else self.get_focused_subwindow_index()
-        # Guard: only indices 0-3 are valid for histogram dialogs
-        if idx < 0 or idx > 3:
-            return
-        if self.histogram_dialogs.get(idx) is None:
-            callbacks = self.get_histogram_callbacks_for_subwindow(idx)
-            if not callbacks:
-                return
-            self.histogram_dialogs[idx] = HistogramDialog(
+    def open_histogram(self) -> None:
+        """Handle histogram dialog request."""
+        if self.histogram_dialog is None:
+            self.histogram_dialog = HistogramDialog(
                 self.main_window,
-                title_suffix=f" (View {idx + 1})",
-                **callbacks
+                get_current_dataset=self.get_current_dataset,
+                get_current_slice_index=self.get_current_slice_index,
+                get_window_center=self.get_window_center,
+                get_window_width=self.get_window_width,
+                get_use_rescaled=self.get_use_rescaled,
+                get_rescale_params=self.get_rescale_params
             )
-        dialog = self.histogram_dialogs[idx]
-        dialog.update_histogram()
-        dialog.show()
-        dialog.raise_()
-        dialog.activateWindow()
-    
-    def update_histogram_for_subwindow(self, idx: int) -> None:
-        """Update the histogram dialog for the given subwindow index if it exists and is visible."""
-        if idx < 0 or idx > 3:
-            return
-        dialog = self.histogram_dialogs.get(idx)
-        if dialog is not None and dialog.isVisible():
-            dialog.update_histogram()
+        
+        # Update histogram and show dialog
+        self.histogram_dialog.update_histogram()
+        self.histogram_dialog.show()
+        self.histogram_dialog.raise_()
+        self.histogram_dialog.activateWindow()
     
     def open_about_this_file(self, current_dataset: Optional[Dataset] = None, file_path: Optional[str] = None) -> None:
         """
