@@ -184,3 +184,203 @@ If any required tag is missing, `pixel_to_patient_coordinates` returns `None` an
 | **Patient (px, py, pz) mm** | `pixel_to_patient_coordinates(current_dataset, x, y, z)` using DICOM ImagePositionPatient, ImageOrientationPatient, Pixel Spacing, and slice spacing. Row/column/slice map to patient axes only through these tags (no explicit sagittal/coronal logic). |
 
 Correctness for sagittal and coronal depends on the **dataset** and **(x, y, z)** representing the **same** image and orientation as the displayed view.
+
+---
+
+## 5. Code Analysis and Verification
+
+### 5.1 Investigation Summary
+
+A thorough code review was conducted to verify the correctness of the patient coordinate calculation implementation, particularly focusing on how pixel indices (row/column) are used in combination with ImageOrientationPatient direction cosines.
+
+### 5.2 DICOM Standard Requirements
+
+According to the DICOM standard (Part 3, Section C.7.6.2 - Image Plane Module):
+
+**ImageOrientationPatient (0020,0037):**
+- Contains six values representing direction cosines
+- **First three values [0:3]**: Direction cosines for the **row** direction (direction in which the row index increases)
+- **Last three values [3:6]**: Direction cosines for the **column** direction (direction in which the column index increases)
+
+**PixelSpacing (0028,0030):**
+- Contains two values in mm
+- **First value [0]**: Row spacing (distance between centers of adjacent rows, vertical spacing)
+- **Second value [1]**: Column spacing (distance between centers of adjacent columns, horizontal spacing)
+
+**Standard Formula:**
+```
+PatientPosition(i, j) = ImagePositionPatient
+                      + i * PixelSpacing[0] * RowDirection
+                      + j * PixelSpacing[1] * ColumnDirection
+                      + slice_index * slice_spacing * SliceNormal
+```
+Where:
+- `i` = row index (vertical, top to bottom in array)
+- `j` = column index (horizontal, left to right in array)
+- `RowDirection` = ImageOrientationPatient[0:3]
+- `ColumnDirection` = ImageOrientationPatient[3:6]
+- `SliceNormal` = RowDirection × ColumnDirection (cross product, right-hand rule)
+
+### 5.3 Code Implementation Review
+
+#### 5.3.1 Coordinate Extraction (`src/gui/image_viewer.py`, lines 1103-1104)
+
+```python
+x = int(scene_pos.x())
+y = int(scene_pos.y())
+```
+
+**Analysis:**
+- Qt scene coordinates map directly to image pixel positions (scene is set up with 1:1 correspondence)
+- `scene_pos.x()` → horizontal position (left to right) → **column index**
+- `scene_pos.y()` → vertical position (top to bottom) → **row index**
+
+**Result:** ✓ CORRECT - x represents column, y represents row
+
+#### 5.3.2 Coordinate Passing (`src/gui/crosshair_coordinator.py`, line 97)
+
+```python
+patient_coords = pixel_to_patient_coordinates(current_dataset, x, y, z)
+```
+
+**Analysis:**
+- `x` (column) is passed as first argument
+- `y` (row) is passed as second argument
+- Function signature expects `pixel_x`, `pixel_y`, `slice_index`
+
+**Result:** ✓ CORRECT - Arguments are passed in (column, row, slice) order
+
+#### 5.3.3 Direction Cosine Extraction (`src/utils/dicom_utils.py`, lines 295-296)
+
+```python
+row_cosine = np.array([float(orient[0]), float(orient[1]), float(orient[2])])
+col_cosine = np.array([float(orient[3]), float(orient[4]), float(orient[5])])
+```
+
+**Analysis:**
+- `row_cosine` extracts ImageOrientationPatient[0:3]
+- `col_cosine` extracts ImageOrientationPatient[3:6]
+- Matches DICOM standard: first three = row direction, last three = column direction
+
+**Result:** ✓ CORRECT - Direction cosines are extracted properly
+
+#### 5.3.4 Pixel Spacing Extraction (`src/utils/dicom_utils.py`, lines 142-143)
+
+```python
+row_spacing = float(pixel_spacing[0])
+col_spacing = float(pixel_spacing[1])
+```
+
+**Analysis:**
+- `row_spacing` = PixelSpacing[0]
+- `col_spacing` = PixelSpacing[1]
+- Matches DICOM standard: first value = row spacing, second value = column spacing
+
+**Result:** ✓ CORRECT - Pixel spacing is extracted properly
+
+#### 5.3.5 Slice Normal Calculation (`src/utils/dicom_utils.py`, line 361)
+
+```python
+slice_normal = np.cross(row_cosine, col_cosine)
+```
+
+**Analysis:**
+- Uses NumPy cross product: row_cosine × col_cosine
+- Follows right-hand rule convention
+- Perpendicular to image plane, points in slice progression direction
+
+**Result:** ✓ CORRECT - Slice normal calculation follows DICOM convention
+
+#### 5.3.6 Patient Position Formula (`src/utils/dicom_utils.py`, lines 365-370)
+
+```python
+patient_pos = (
+    img_pos +
+    pixel_y * row_spacing * row_cosine +
+    pixel_x * col_spacing * col_cosine +
+    slice_index * slice_spacing * slice_normal
+)
+```
+
+**Analysis:**
+Let's trace the formula with actual parameter meanings:
+- `pixel_x` = column index (from `x = scene_pos.x()`)
+- `pixel_y` = row index (from `y = scene_pos.y()`)
+
+Expanding the formula:
+```
+patient_pos = img_pos
+            + pixel_y * row_spacing * row_cosine
+            + pixel_x * col_spacing * col_cosine
+            + slice_index * slice_spacing * slice_normal
+```
+
+Substituting meanings:
+```
+patient_pos = img_pos
+            + row_index * row_spacing * row_cosine
+            + col_index * col_spacing * col_cosine
+            + slice_index * slice_spacing * slice_normal
+```
+
+This EXACTLY matches the DICOM standard formula where:
+- Row index (i) multiplies row spacing and row direction cosines
+- Column index (j) multiplies column spacing and column direction cosines
+
+**Result:** ✓ CORRECT - Formula matches DICOM standard
+
+#### 5.3.7 Pixel Value Lookup Verification (`src/gui/image_viewer.py`, line 2329)
+
+To confirm our coordinate interpretation is correct, we verify the pixel value lookup:
+
+```python
+pixel_value = float(frame_array[y, x])
+```
+
+**Analysis:**
+- NumPy array indexing: `array[row, column]`
+- Code uses: `frame_array[y, x]`
+- Since `y` = row index and `x` = column index, this is correct
+- This confirms that our row/column interpretation throughout the chain is consistent
+
+**Result:** ✓ CORRECT - Pixel lookup confirms row/column interpretation
+
+### 5.4 Conclusion
+
+After thorough analysis of the entire coordinate flow from user click through patient coordinate calculation, the implementation is **CORRECT** and follows the DICOM standard precisely:
+
+1. ✓ Scene coordinates are correctly interpreted as (column, row)
+2. ✓ ImageOrientationPatient values are correctly extracted as (row_cosine, col_cosine)
+3. ✓ PixelSpacing values are correctly extracted as (row_spacing, col_spacing)
+4. ✓ The formula correctly applies: row_index × row_spacing × row_cosine + column_index × column_spacing × column_cosine
+5. ✓ Slice normal is correctly calculated using cross product
+6. ✓ Pixel value lookup confirms the coordinate interpretation is consistent
+
+### 5.5 Potential Sources of Confusion
+
+While the implementation is mathematically correct, there are some aspects that could cause confusion:
+
+1. **Parameter Naming**: The function parameter names `pixel_x` and `pixel_y` might suggest "X-Y coordinates" in a Cartesian sense, but they actually represent (column, row) in the image array sense. The code correctly treats them this way.
+
+2. **Documentation Comments**: The docstrings correctly state:
+   - Line 321: `pixel_x: Column index (X in image)`
+   - Line 322: `pixel_y: Row index (Y in image)`
+   
+   This is accurate and matches the implementation.
+
+3. **Coordinate System Terminology**: "X" and "Y" in scene/display coordinates map to "column" and "row" in array indices, which can be confusing when dealing with DICOM's "row direction" and "column direction" cosines. However, the code handles this correctly.
+
+### 5.6 No Issues Found
+
+The crosshair ROI patient position coordinate calculation is implemented correctly according to the DICOM standard. The code properly:
+- Interprets scene positions as (column, row) indices
+- Extracts DICOM orientation and spacing parameters correctly
+- Applies the standard transformation formula
+- Handles slice normal calculation properly
+
+If users are experiencing incorrect patient coordinates, the issue is likely elsewhere:
+- Incorrect or missing DICOM tags in the dataset
+- Display/reformatting issues in multi-planar reconstructions
+- Coordinate system interpretation in the viewing software
+
+The `pixel_to_patient_coordinates` function itself is sound.
