@@ -47,8 +47,7 @@ class HistogramDialog(QDialog):
         get_window_center: Optional[Callable[[], Optional[float]]] = None,
         get_window_width: Optional[Callable[[], Optional[float]]] = None,
         get_use_rescaled: Optional[Callable[[], bool]] = None,
-        get_rescale_params: Optional[Callable[[], tuple]] = None,
-        title_suffix: str = ""
+        get_rescale_params: Optional[Callable[[], tuple]] = None
     ):
         """
         Initialize the histogram dialog.
@@ -61,12 +60,10 @@ class HistogramDialog(QDialog):
             get_window_width: Callback to get current window width
             get_use_rescaled: Callback to get use_rescaled_values flag
             get_rescale_params: Callback to get (slope, intercept, type) tuple
-            title_suffix: Optional suffix for window title (e.g. " (View 1)")
         """
         super().__init__(parent)
         
-        base_title = "Pixel Value Histogram"
-        self.setWindowTitle(base_title + title_suffix if title_suffix else base_title)
+        self.setWindowTitle("Pixel Value Histogram")
         self.setModal(False)  # Non-modal so it can stay open
         self.resize(600, 500)
         

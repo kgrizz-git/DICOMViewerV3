@@ -96,6 +96,7 @@ class ConfigManager:
             "measurement_line_color_r": 0,  # Measurement line color (green default)
             "measurement_line_color_g": 255,
             "measurement_line_color_b": 0,
+            "arrow_annotation_size": 6,  # Arrow line thickness (arrowhead scales via multiplier)
             # ROI statistics visibility defaults
             "roi_default_visible_statistics": ["mean", "std", "min", "max", "count", "area"],  # Default visible statistics for new ROIs
             "multi_window_layout": "1x1",  # Multi-window layout mode: "1x1", "1x2", "2x1", "2x2"
@@ -891,6 +892,16 @@ class ConfigManager:
             self.config["arrow_annotation_color_b"] = b
             self.save_config()
     
+    def get_arrow_annotation_size(self) -> int:
+        """Get arrow annotation size (line thickness; arrowhead scales via multiplier)."""
+        return self.config.get("arrow_annotation_size", 6)
+    
+    def set_arrow_annotation_size(self, size: int) -> None:
+        """Set arrow annotation size (arrowhead size and line thickness). Valid range 4-30."""
+        if 4 <= size <= 30:
+            self.config["arrow_annotation_size"] = size
+            self.save_config()
+    
     def get_roi_default_visible_statistics(self) -> List[str]:
         """Get default visible statistics for new ROIs."""
         stats = self.config.get("roi_default_visible_statistics", ["mean", "std", "min", "max", "count", "area"])
@@ -1019,7 +1030,8 @@ class ConfigManager:
                         "r": self.config.get("arrow_annotation_color_r", 255),
                         "g": self.config.get("arrow_annotation_color_g", 255),
                         "b": self.config.get("arrow_annotation_color_b", 0)
-                    }
+                    },
+                    "size": self.config.get("arrow_annotation_size", 6)
                 }
             }
             
@@ -1162,6 +1174,10 @@ class ConfigManager:
                             b = color.get("b", 0)
                             if 0 <= r <= 255 and 0 <= g <= 255 and 0 <= b <= 255:
                                 self.set_arrow_annotation_color(r, g, b)
+                        if "size" in arrow_annotation and isinstance(arrow_annotation["size"], int):
+                            size = arrow_annotation["size"]
+                            if 4 <= size <= 30:
+                                self.set_arrow_annotation_size(size)
             
             # Import metadata panel settings
             if "metadata_panel" in import_data:

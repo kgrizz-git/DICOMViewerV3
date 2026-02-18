@@ -73,6 +73,7 @@ class AnnotationOptionsDialog(QDialog):
         self.original_text_annotation_color = self.config_manager.get_text_annotation_color()
         self.original_text_annotation_font_size = self.config_manager.get_text_annotation_font_size()
         self.original_arrow_annotation_color = self.config_manager.get_arrow_annotation_color()
+        self.original_arrow_annotation_size = self.config_manager.get_arrow_annotation_size()
     
     def _create_ui(self) -> None:
         """Create the UI components."""
@@ -299,6 +300,24 @@ class AnnotationOptionsDialog(QDialog):
         
         arrow_layout.addRow("Color:", arrow_color_layout)
         
+        # Arrow size (arrowhead size and line thickness)
+        arrow_size_layout = QHBoxLayout()
+        arrow_size_decrease_button = QPushButton("−")
+        arrow_size_decrease_button.setMaximumWidth(30)
+        arrow_size_decrease_button.clicked.connect(lambda: self.arrow_size_spinbox.setValue(max(4, self.arrow_size_spinbox.value() - 1)))
+        self.arrow_size_spinbox = QSpinBox()
+        self.arrow_size_spinbox.setRange(4, 30)
+        self.arrow_size_spinbox.setValue(6)
+        self.arrow_size_spinbox.setSuffix(" px")
+        arrow_size_increase_button = QPushButton("+")
+        arrow_size_increase_button.setMaximumWidth(30)
+        arrow_size_increase_button.clicked.connect(lambda: self.arrow_size_spinbox.setValue(min(30, self.arrow_size_spinbox.value() + 1)))
+        arrow_size_layout.addWidget(arrow_size_decrease_button)
+        arrow_size_layout.addWidget(self.arrow_size_spinbox)
+        arrow_size_layout.addWidget(arrow_size_increase_button)
+        arrow_size_layout.addStretch()
+        arrow_layout.addRow("Size:", arrow_size_layout)
+        
         arrow_group.setLayout(arrow_layout)
         layout.addWidget(arrow_group)
         
@@ -366,6 +385,8 @@ class AnnotationOptionsDialog(QDialog):
         arrow_color = self.config_manager.get_arrow_annotation_color()
         self._update_color_display("arrow", *arrow_color)
         self.arrow_color = arrow_color
+        arrow_size = self.config_manager.get_arrow_annotation_size()
+        self.arrow_size_spinbox.setValue(arrow_size)
         
         # ROI statistics visibility settings
         default_stats = self.config_manager.get_roi_default_visible_statistics()
@@ -461,6 +482,7 @@ class AnnotationOptionsDialog(QDialog):
         
         # Save arrow annotation settings
         self.config_manager.set_arrow_annotation_color(*self.arrow_color)
+        self.config_manager.set_arrow_annotation_size(self.arrow_size_spinbox.value())
         
         # Save ROI statistics visibility settings
         selected_stats = []
