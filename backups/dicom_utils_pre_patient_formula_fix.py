@@ -316,11 +316,6 @@ def pixel_to_patient_coordinates(
     - PixelSpacing: Physical spacing between pixels (row, column)
     - SliceThickness or SpacingBetweenSlices: Slice spacing
     
-    In the formula, col_cosine (IOP last three values) is the direction corresponding
-    to row index (pixel_y); row_cosine (IOP first three) corresponds to column index
-    (pixel_x). So row number moves along the column direction and column number along
-    the row direction.
-    
     Args:
         dataset: pydicom Dataset
         pixel_x: Column index (X in image)
@@ -366,11 +361,11 @@ def pixel_to_patient_coordinates(
         slice_normal = np.cross(row_cosine, col_cosine)
         
         # Calculate patient coordinates
-        # Position = ImagePositionPatient + (pixel_y * row_spacing * col_cosine) + (pixel_x * col_spacing * row_cosine) + (slice_index * slice_spacing * slice_normal)
+        # Position = ImagePositionPatient + (pixel_y * row_spacing * row_cosine) + (pixel_x * col_spacing * col_cosine) + (slice_index * slice_spacing * slice_normal)
         patient_pos = (
             img_pos +
-            pixel_y * row_spacing * col_cosine +
-            pixel_x * col_spacing * row_cosine +
+            pixel_y * row_spacing * row_cosine +
+            pixel_x * col_spacing * col_cosine +
             slice_index * slice_spacing * slice_normal
         )
         
@@ -447,4 +442,3 @@ def get_patient_tag_keywords() -> List[str]:
         "PatientSex",
         "PatientAge",
     ]
-

@@ -8,5 +8,5 @@
 - [ ] Refactor code files that are larger than ~750 lines.
 - [ ] Import template md files from Notes_and_Ideas repo into a new folder `dev-docs\templates`.
 - [ ] Enable optional smoothing when displaying magnified images so they appear less "blocky".
-- [ ] Verify and document the crosshair ROI position calculation, especially for views other than axial (e.g., sagittal, coronal).
 - [ ] DICOM tag viewer (ctrl+T) only showing tag values for first image
+- [ ] Got error on PET/CT study when I switched to fast mode, scrolled slices, adjusted overlay level, and then tried re-enabling high-accuracy fusion mode: [WARNING] 3D resampling failed, using 2D mode

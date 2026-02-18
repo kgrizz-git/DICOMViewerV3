@@ -8,15 +8,16 @@ This document provides detailed research findings on the correct method for calc
 
 **The Issue:** The in-plane directions (row vs. column) may be getting switched in the patient coordinate calculation.
 
-**Key Finding:** According to the DICOM standard and multiple authoritative sources, the correct formula uses:
-- ImageOrientationPatient **first three values** = **row direction** cosines
-- ImageOrientationPatient **last three values** = **column direction** cosines
+**Key Finding:** According to the DICOM standard and the convention used in this implementation, the correct formula uses:
+- ImageOrientationPatient **first three values** = **row direction** cosines (used with **column index**, pixel_x)
+- ImageOrientationPatient **last three values** = **column direction** cosines (used with **row index**, pixel_y)
 - PixelSpacing **first value** = **row spacing** (vertical/between rows)
 - PixelSpacing **second value** = **column spacing** (horizontal/between columns)
 
 **Critical Convention:** 
 - **pixel_x** = **column** index (horizontal position in image)
 - **pixel_y** = **row** index (vertical position in image)
+- In the position formula: **row index** (pixel_y) is combined with **column direction** (IOP[3:6]); **column index** (pixel_x) with **row direction** (IOP[0:3]).
 
 ## DICOM Standard Tags
 
@@ -42,6 +43,8 @@ This document provides detailed research findings on the correct method for calc
 Where:
 - **First three values [Xr, Yr, Zr]:** Direction cosines of the **first row** of the image (direction from left to right across the image, as column index increases)
 - **Last three values [Xc, Yc, Zc]:** Direction cosines of the **first column** of the image (direction from top to bottom down the image, as row index increases)
+
+For the position formula, **first row** (IOP[0:3]) is used with **column index** (pixel_x), and **first column** (IOP[3:6]) is used with **row index** (pixel_y).
 
 **Important:** Both vectors are unit vectors (length = 1) and must be orthogonal (perpendicular) to each other.
 
@@ -87,7 +90,7 @@ To convert pixel coordinates (pixel_x, pixel_y) to patient coordinates (X, Y, Z)
 ### Mathematical Notation
 
 ```
-P(pixel_x, pixel_y) = IPP + pixel_y × Δr × R + pixel_x × Δc × C
+P(pixel_x, pixel_y) = IPP + pixel_y × Δr × C + pixel_x × Δc × R
 ```
 
 Where:
@@ -97,15 +100,15 @@ Where:
 - **pixel_x** = column index (horizontal, 0 to Columns-1)
 - **Δr** = PixelSpacing[0] (row spacing, vertical)
 - **Δc** = PixelSpacing[1] (column spacing, horizontal)
-- **R** = [Xr, Yr, Zr] = row direction vector (first 3 values of IOP)
-- **C** = [Xc, Yc, Zc] = column direction vector (last 3 values of IOP)
+- **R** = [Xr, Yr, Zr] = row direction vector (first 3 values of IOP) — used with **column index** (pixel_x)
+- **C** = [Xc, Yc, Zc] = column direction vector (last 3 values of IOP) — used with **row index** (pixel_y)
 
 ### Component-wise Formula
 
 ```
-X = IPP_x + pixel_y × Δr × Xr + pixel_x × Δc × Xc
-Y = IPP_y + pixel_y × Δr × Yr + pixel_x × Δc × Yc
-Z = IPP_z + pixel_y × Δr × Zr + pixel_x × Δc × Zc
+X = IPP_x + pixel_y × Δr × Xc + pixel_x × Δc × Xr
+Y = IPP_y + pixel_y × Δr × Yc + pixel_x × Δc × Yr
+Z = IPP_z + pixel_y × Δr × Zc + pixel_x × Δc × Zr
 ```
 
 ### Pseudocode
@@ -136,10 +139,10 @@ def pixel_to_patient_coordinates(dataset, pixel_x, pixel_y):
     row_spacing = PS[0]        # First: row spacing (vertical)
     col_spacing = PS[1]        # Second: column spacing (horizontal)
     
-    # Calculate patient position
-    X = IPP[0] + pixel_y * row_spacing * row_direction[0] + pixel_x * col_spacing * col_direction[0]
-    Y = IPP[1] + pixel_y * row_spacing * row_direction[1] + pixel_x * col_spacing * col_direction[1]
-    Z = IPP[2] + pixel_y * row_spacing * row_direction[2] + pixel_x * col_spacing * col_direction[2]
+    # Calculate patient position (column direction with row index, row direction with column index)
+    X = IPP[0] + pixel_y * row_spacing * col_direction[0] + pixel_x * col_spacing * row_direction[0]
+    Y = IPP[1] + pixel_y * row_spacing * col_direction[1] + pixel_x * col_spacing * row_direction[1]
+    Z = IPP[2] + pixel_y * row_spacing * col_direction[2] + pixel_x * col_spacing * row_direction[2]
     
     return (X, Y, Z)
 ```
@@ -149,7 +152,7 @@ def pixel_to_patient_coordinates(dataset, pixel_x, pixel_y):
 For 3D volumes with multiple slices, the formula extends to include the slice direction:
 
 ```
-P(pixel_x, pixel_y, slice_idx) = IPP + pixel_y × Δr × R + pixel_x × Δc × C + slice_idx × Δs × N
+P(pixel_x, pixel_y, slice_idx) = IPP + pixel_y × Δr × C + pixel_x × Δc × R + slice_idx × Δs × N
 ```
 
 Where:
@@ -177,18 +180,18 @@ Note: Some systems use **RAS** (Right-Anterior-Superior) which is the opposite s
 
 ### 1. Swapping Row and Column Directions
 
-**Problem:** Using column direction with pixel_y (row index) and row direction with pixel_x (column index).
+**Problem:** In the convention used here, **column direction** (IOP last 3) corresponds to **row index** (pixel_y), and **row direction** (IOP first 3) to **column index** (pixel_x). Using the opposite pairing is incorrect.
 
 **Incorrect:**
 ```python
 # WRONG!
-patient_pos = IPP + pixel_x * row_spacing * row_direction + pixel_y * col_spacing * col_direction
+patient_pos = IPP + pixel_y * row_spacing * row_direction + pixel_x * col_spacing * col_direction
 ```
 
 **Correct:**
 ```python
 # CORRECT!
-patient_pos = IPP + pixel_y * row_spacing * row_direction + pixel_x * col_spacing * col_direction
+patient_pos = IPP + pixel_y * row_spacing * col_direction + pixel_x * col_spacing * row_direction
 ```
 
 ### 2. Confusing pixel_x/pixel_y with row/column
@@ -206,8 +209,8 @@ When someone passes (x, y) coordinates from a mouse click:
 **Problem:** Using PixelSpacing[1] (column spacing) with row direction, or vice versa.
 
 **Remember:**
-- PixelSpacing[0] = row spacing (vertical) → use with **pixel_y** and **row_direction**
-- PixelSpacing[1] = column spacing (horizontal) → use with **pixel_x** and **col_direction**
+- PixelSpacing[0] = row spacing (vertical) → use with **pixel_y** and **col_direction** (column direction, IOP[3:6])
+- PixelSpacing[1] = column spacing (horizontal) → use with **pixel_x** and **row_direction** (row direction, IOP[0:3])
 
 ### 4. Incorrect ImageOrientationPatient indexing
 
@@ -225,8 +228,8 @@ To verify your implementation is correct:
 2. ✓ Column direction uses **last 3** values of ImageOrientationPatient
 3. ✓ Row spacing is **PixelSpacing[0]**
 4. ✓ Column spacing is **PixelSpacing[1]**
-5. ✓ **pixel_y** (row index) is multiplied by **row spacing** and **row direction**
-6. ✓ **pixel_x** (column index) is multiplied by **column spacing** and **column direction**
+5. ✓ **pixel_y** (row index) is multiplied by **row spacing** and **column direction** (IOP[3:6])
+6. ✓ **pixel_x** (column index) is multiplied by **column spacing** and **row direction** (IOP[0:3])
 7. ✓ ImagePositionPatient is the origin (added before any offsets)
 8. ✓ For 3D: slice normal = cross product of row × column (in that order)
 
@@ -277,19 +280,23 @@ To verify your implementation is correct:
     - URL: https://www.mathworks.com/help/medical-imaging/ug/medical-image-coordinate-systems.html
     - MATLAB perspective on medical imaging coordinates
 
+11. **RedBrick AI (Medium) - DICOM Coordinate Systems: 3D DICOM for Computer Vision Engineers (Pt. 1)**
+    - URL: https://medium.com/redbrick-ai/dicom-coordinate-systems-3d-dicom-for-computer-vision-engineers-pt-1-61341d87485f
+    - 3D DICOM coordinate systems for computer vision engineers
+
 ## Conclusion
 
 The correct formula for calculating patient coordinates from pixel coordinates is:
 
 ```
 PatientPosition = ImagePositionPatient 
-                + (pixel_y × PixelSpacing[0] × ImageOrientationPatient[0:3])
-                + (pixel_x × PixelSpacing[1] × ImageOrientationPatient[3:6])
+                + (pixel_y × PixelSpacing[0] × ImageOrientationPatient[3:6])
+                + (pixel_x × PixelSpacing[1] × ImageOrientationPatient[0:3])
 ```
 
 The key points to remember:
-1. **pixel_y** is the **row** index (vertical) and uses **row direction** (first 3 IOP values) and **row spacing** (PS[0])
-2. **pixel_x** is the **column** index (horizontal) and uses **column direction** (last 3 IOP values) and **column spacing** (PS[1])
+1. **pixel_y** is the **row** index (vertical) and uses **column direction** (last 3 IOP values) and **row spacing** (PS[0])
+2. **pixel_x** is the **column** index (horizontal) and uses **row direction** (first 3 IOP values) and **column spacing** (PS[1])
 3. The order matters - mixing these up will cause the in-plane directions to be switched
 
 Any implementation that deviates from this formula will produce incorrect patient coordinates, particularly noticeable when the two in-plane directions are switched (e.g., using column direction with row indices).
