@@ -71,21 +71,16 @@ class ArrowAnnotationCoordinator:
         # Scale-based line shortening: keep line meeting arrowhead at any zoom
         if hasattr(self.image_viewer, 'transform_changed'):
             self.image_viewer.transform_changed.connect(self._update_arrow_lines_for_view_scale)
-        if hasattr(self.image_viewer, 'zoom_changed'):
-            self.image_viewer.zoom_changed.connect(self._on_zoom_changed_for_arrows)
-    
-    def _on_zoom_changed_for_arrows(self, zoom_level: float) -> None:
-        """Handle zoom change by recomputing directional line endpoints for this view."""
-        self._update_arrow_lines_for_view_scale()
     
     def _update_arrow_lines_for_view_scale(self) -> None:
         """Update line end for all arrows in this view so line meets arrowhead at current zoom."""
         if self.image_viewer.scene is None:
             return
+        # Each arrow gets scale from the view that displays it (scene.views()[0]) so zoom is correct
         for arrow_list in self.arrow_annotation_tool.arrows.values():
             for arrow in arrow_list:
                 if arrow.scene() == self.image_viewer.scene:
-                    arrow.update_line_end_for_view_scale(self.image_viewer)
+                    arrow.update_line_end_for_view_scale()
     
     def handle_arrow_annotation_started(self, pos: QPointF) -> None:
         """
@@ -142,8 +137,8 @@ class ArrowAnnotationCoordinator:
                 }
                 annotation_debug(f" ArrowAnnotationCoordinator.handle_arrow_annotation_finished: stored initial position for arrow, start={arrow.start_point}, end={arrow.end_point}")
             
-            # Set line end from active view so line meets arrowhead at current zoom
-            arrow.update_line_end_for_view_scale(self.image_viewer)
+            # Set line end from view scale so line meets arrowhead (arrow reads scale from scene's view)
+            arrow.update_line_end_for_view_scale()
             
             # Create undo/redo command for arrow addition
             if self.undo_redo_manager:
@@ -390,9 +385,6 @@ class ArrowAnnotationCoordinator:
         # Remove from tracking (so next drag starts fresh)
         if arrow_item in self._arrow_move_tracking:
             del self._arrow_move_tracking[arrow_item]
-        
-        # Apply same scale-based line end as zoom/transform (do not treat move differently)
-        self._update_arrow_lines_for_view_scale()
         
         # Clear pre_drag positions
         if hasattr(arrow_item, '_pre_drag_start_point'):

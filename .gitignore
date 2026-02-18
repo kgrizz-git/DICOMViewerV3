@@ -200,6 +200,8 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+# Debug log written when DICOMVIEWER_DEBUG_LOG is set
+.cursor/
 
 # Marimo
 marimo/_static/
@@ -215,6 +217,3 @@ settings.json
 # Uncomment if you don't want to track sample DICOM files
 # data/*.dcm
 # data/**/*.dcm
-
-# Documentation
-docs/PAYPAL_DONATION_OPTIONS.md

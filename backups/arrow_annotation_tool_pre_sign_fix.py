@@ -237,9 +237,9 @@ class ArrowAnnotationItem(QGraphicsItemGroup):
         unit_y = dy / length
         pixels_per_scene_unit = self._compute_directional_pixels_per_scene_unit(view, unit_x, unit_y) if view is not None else None
         if pixels_per_scene_unit is not None:
-            # Pullback so line ends just past arrowhead base; -OVERLAP extends line under head to hide AA seam
+            # Pullback so line ends at arrowhead base; +OVERLAP extends line under head to hide gap/AA
             arrowhead_size = getattr(self.arrowhead_item, 'arrow_size', 12.0)
-            pullback = max(1.0, arrowhead_size - ARROW_LINE_OVERLAP_VIEWPORT_PX) / pixels_per_scene_unit
+            pullback = (arrowhead_size + ARROW_LINE_OVERLAP_VIEWPORT_PX) / pixels_per_scene_unit
             pullback = min(pullback, length * 0.99)
             if pullback <= 0:
                 return

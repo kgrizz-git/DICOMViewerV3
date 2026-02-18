@@ -26,7 +26,7 @@ from utils.debug_log import debug_log
 # Arrowhead is drawn larger than line thickness so it stays visually balanced
 ARROWHEAD_SIZE_MULTIPLIER = 3.5
 # Viewport pixels the line extends under the arrowhead to hide anti-aliasing seam
-ARROW_LINE_OVERLAP_VIEWPORT_PX = 3
+ARROW_LINE_OVERLAP_VIEWPORT_PX = 1
 
 
 class ArrowHeadItem(QGraphicsPathItem):
@@ -193,67 +193,41 @@ class ArrowAnnotationItem(QGraphicsItemGroup):
         self.arrowhead_item.update_endpoints(QPointF(0, 0), relative_end)
         self._set_line_end(None)
     
-    def _compute_directional_pixels_per_scene_unit(self, view: object, unit_x: float, unit_y: float) -> Optional[float]:
-        """
-        Compute viewport pixels for 1 scene unit along the arrow direction using the view transform.
-        Uses viewportTransform().map(QPointF) to preserve subpixel precision.
-        """
-        if view is None or not hasattr(view, 'viewportTransform'):
-            return None
-        t = view.viewportTransform()
-        if not t:
-            return None
-        p0_scene = self.end_point
-        p1_scene = QPointF(self.end_point.x() + unit_x, self.end_point.y() + unit_y)
-        p0_view = t.map(p0_scene)
-        p1_view = t.map(p1_scene)
-        pixels_per_scene_unit = math.hypot(p1_view.x() - p0_view.x(), p1_view.y() - p0_view.y())
-        if pixels_per_scene_unit <= 1e-6:
-            return None
-        return pixels_per_scene_unit
-
-    def _set_line_end(self, view: Optional[object] = None) -> None:
+    def _set_line_end(self, scale: Optional[float] = None) -> None:
         """
         Set line end to meet the arrowhead base. Single authority for all line endpoint updates.
-        If a view is provided and directional scene->viewport scale is available, compute pullback
-        from directional mapping so behavior stays stable across zoom.
-        Otherwise uses _line_end_shortened as fallback.
+        If scale is provided and > 0, uses pullback = (arrowhead_size + overlap) / scale so line
+        extends slightly under the head. Otherwise uses _line_end_shortened as fallback.
         """
-        # Resolve a view from this item's scene when caller does not provide one
-        if view is None:
-            sc = self.scene()
-            if sc is not None and hasattr(sc, 'views'):
-                views = sc.views()
-                if views:
-                    view = views[0]
-
+        from PySide6.QtCore import QPointF
         relative_end = self.end_point - self.start_point
         dx = relative_end.x()
         dy = relative_end.y()
         length = math.sqrt(dx * dx + dy * dy)
         if length <= 1e-6:
             return
-        unit_x = dx / length
-        unit_y = dy / length
-        pixels_per_scene_unit = self._compute_directional_pixels_per_scene_unit(view, unit_x, unit_y) if view is not None else None
-        if pixels_per_scene_unit is not None:
-            # Pullback so line ends just past arrowhead base; -OVERLAP extends line under head to hide AA seam
+        if scale is not None and scale > 0:
+            # Pullback so line ends at arrowhead base; +OVERLAP extends line 1px under head to hide gap/AA
             arrowhead_size = getattr(self.arrowhead_item, 'arrow_size', 12.0)
-            pullback = max(1.0, arrowhead_size - ARROW_LINE_OVERLAP_VIEWPORT_PX) / pixels_per_scene_unit
+            effective_size = arrowhead_size + ARROW_LINE_OVERLAP_VIEWPORT_PX
+            pullback = effective_size / scale
             pullback = min(pullback, length * 0.99)
             if pullback <= 0:
                 return
+            unit_x = dx / length
+            unit_y = dy / length
             line_end = QPointF(dx - unit_x * pullback, dy - unit_y * pullback)
         else:
             line_end = _line_end_shortened(relative_end)
         self.line_item.setLine(QLineF(QPointF(0, 0), line_end))
     
-    def update_line_end_for_view_scale(self, view: Optional[object] = None) -> None:
+    def update_line_end_for_view_scale(self, scale: Optional[float] = None) -> None:
         """
-        Set line end using active view directional mapping so the line meets arrowhead at any zoom.
-        If view is None/invalid, _set_line_end uses fallback.
+        Set line end using view scale so the line meets the arrowhead base at any zoom.
+        Scale should be provided by the coordinator (e.g. from image_viewer.viewportTransform().m11()).
+        If None or invalid, _set_line_end uses fallback.
         """
-        self._set_line_end(view)
+        self._set_line_end(scale)
     
     def itemChange(self, change: QGraphicsItem.GraphicsItemChange, value) -> object:
         """

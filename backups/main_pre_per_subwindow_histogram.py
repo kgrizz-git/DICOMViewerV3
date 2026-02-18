@@ -786,33 +786,6 @@ class DICOMViewerApp(QObject):
             return self.subwindow_data[idx].get('current_series_uid', '')
         return ''
     
-    def get_focused_subwindow_index(self) -> int:
-        """Return the currently focused subwindow index (0-3). Used for histogram and other per-view features."""
-        return self.focused_subwindow_index
-    
-    def get_histogram_callbacks_for_subwindow(self, idx: int) -> dict:
-        """
-        Return a dict of callbacks for the histogram dialog tied to subwindow idx.
-        Used so each histogram always shows the image currently displayed in that subwindow.
-        """
-        if idx not in self.subwindow_managers:
-            return {}
-        vsm = self.subwindow_managers[idx].get('view_state_manager')
-        if vsm is None:
-            return {}
-        return {
-            'get_current_dataset': lambda i=idx: self._get_subwindow_dataset(i),
-            'get_current_slice_index': lambda i=idx: self._get_subwindow_slice_index(i),
-            'get_window_center': lambda: vsm.current_window_center,
-            'get_window_width': lambda: vsm.current_window_width,
-            'get_use_rescaled': lambda: vsm.use_rescaled_values,
-            'get_rescale_params': lambda: (
-                vsm.rescale_slope,
-                vsm.rescale_intercept,
-                getattr(vsm, 'rescale_type', None)
-            ),
-        }
-    
     def _update_focused_subwindow_references(self) -> None:
         """Update legacy references to point to focused subwindow's managers and data."""
         focused_subwindow = self.multi_window_layout.get_focused_subwindow()
@@ -1116,8 +1089,6 @@ class DICOMViewerApp(QObject):
                 slice_index,
                 preserve_view_override=preserve_view
             )
-            # Update histogram for this subwindow if its histogram dialog is open
-            self.dialog_coordinator.update_histogram_for_subwindow(idx)
         else:
             # print(f"[DEBUG-WL]   ERROR: Missing data - dataset={dataset is not None}, study_uid={bool(study_uid)}, series_uid={bool(series_uid)}, current_studies={bool(self.current_studies)}")
             pass
@@ -1174,8 +1145,12 @@ class DICOMViewerApp(QObject):
             settings_applied_callback=self._on_settings_applied,
             overlay_config_applied_callback=self._on_overlay_config_applied,
             tag_edit_history=self.tag_edit_history,
-            get_histogram_callbacks_for_subwindow=self.get_histogram_callbacks_for_subwindow,
-            get_focused_subwindow_index=self.get_focused_subwindow_index,
+            get_current_dataset=lambda: self.current_dataset,
+            get_current_slice_index=lambda: self.current_slice_index,
+            get_window_center=lambda: self.view_state_manager.current_window_center if self.view_state_manager else None,
+            get_window_width=lambda: self.view_state_manager.current_window_width if self.view_state_manager else None,
+            get_use_rescaled=lambda: self.view_state_manager.use_rescaled_values if self.view_state_manager else False,
+            get_rescale_params=lambda: self.dicom_processor.get_rescale_parameters(self.current_dataset) if self.current_dataset else (None, None, None),
             undo_redo_manager=self.undo_redo_manager,
             ui_refresh_callback=self._refresh_tag_ui
         )
@@ -2242,9 +2217,7 @@ class DICOMViewerApp(QObject):
                 # Connect privacy view toggle from context menu
                 image_viewer.privacy_view_toggled.connect(self._on_privacy_view_toggled)
                 image_viewer.about_this_file_requested.connect(self._open_about_this_file)
-                image_viewer.histogram_requested.connect(
-                    lambda idx=idx: self.dialog_coordinator.open_histogram(idx)
-                )
+                image_viewer.histogram_requested.connect(self.dialog_coordinator.open_histogram)
                 
                 # Set file path callback for "Show file" context menu
                 image_viewer.get_file_path_callback = lambda idx=idx: self._get_current_slice_file_path(idx)
@@ -2373,9 +2346,6 @@ class DICOMViewerApp(QObject):
                 update_controls=is_focused,
                 update_metadata=is_focused
             )
-        
-        # Update histogram for this subwindow if its histogram dialog is open
-        self.dialog_coordinator.update_histogram_for_subwindow(idx)
         
         # Update slice navigator if this is the focused subwindow
         # This ensures navigation works correctly when a series is assigned to the focused subwindow
@@ -2770,10 +2740,13 @@ class DICOMViewerApp(QObject):
         # Window/level
         self.window_level_controls.window_changed.connect(self.view_state_manager.handle_window_changed)
         
-        # Update histogram for focused subwindow when window/level changes
-        self.window_level_controls.window_changed.connect(
-            self._update_histogram_for_focused_subwindow
-        )
+        # Update histogram dialog when window/level changes
+        def update_histogram_if_visible():
+            if (hasattr(self, 'dialog_coordinator') and 
+                self.dialog_coordinator.histogram_dialog and 
+                self.dialog_coordinator.histogram_dialog.isVisible()):
+                self.dialog_coordinator.histogram_dialog.update_histogram()
+        self.window_level_controls.window_changed.connect(update_histogram_if_visible)
         
         # Window/Level preset selection
         self.image_viewer.window_level_preset_selected.connect(self._on_window_level_preset_selected)
@@ -2883,9 +2856,14 @@ class DICOMViewerApp(QObject):
         self.main_window.viewport_resizing.connect(self.view_state_manager.handle_viewport_resizing)
         self.main_window.viewport_resized.connect(self.view_state_manager.handle_viewport_resized)
         
-        # Update histogram for focused subwindow when slice changes (histogram stays tied to its subwindow)
+        # Update histogram dialog when focused subwindow changes
+        self.multi_window_layout.focused_subwindow_changed.connect(
+            self._update_histogram_dialog_if_visible
+        )
+        
+        # Update histogram dialog when slice changes
         self.slice_navigator.slice_changed.connect(
-            self._update_histogram_for_focused_subwindow
+            self._update_histogram_dialog_if_visible
         )
         
         # Series navigator signals
@@ -4486,14 +4464,17 @@ class DICOMViewerApp(QObject):
         else:
             self.roi_statistics_panel.clear_statistics()
         
-        # Update histogram for focused subwindow if its histogram dialog is open
-        if hasattr(self, 'dialog_coordinator'):
-            self.dialog_coordinator.update_histogram_for_subwindow(self.focused_subwindow_index)
+        # Update histogram dialog if open
+        if hasattr(self, 'dialog_coordinator') and self.dialog_coordinator.histogram_dialog:
+            if self.dialog_coordinator.histogram_dialog.isVisible():
+                self.dialog_coordinator.histogram_dialog.update_histogram()
     
-    def _update_histogram_for_focused_subwindow(self) -> None:
-        """Update the histogram dialog for the currently focused subwindow, if it is open."""
-        if hasattr(self, 'dialog_coordinator'):
-            self.dialog_coordinator.update_histogram_for_subwindow(self.focused_subwindow_index)
+    def _update_histogram_dialog_if_visible(self) -> None:
+        """Update histogram dialog if it's visible."""
+        if (hasattr(self, 'dialog_coordinator') and 
+            self.dialog_coordinator.histogram_dialog and 
+            self.dialog_coordinator.histogram_dialog.isVisible()):
+            self.dialog_coordinator.histogram_dialog.update_histogram()
     
     def _on_reset_all_views(self) -> None:
         """

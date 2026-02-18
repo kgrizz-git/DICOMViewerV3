@@ -1755,6 +1755,8 @@ class ImageViewer(QGraphicsView):
                             "Rectangle ROI (R)": "roi_rectangle",
                             "Crosshair ROI (H)": "crosshair",
                             "Measure (M)": "measure",
+                            "Arrow Annotation (A)": "arrow_annotation",
+                            "Text Annotation (T)": "text_annotation",
                             "Window/Level ROI (W)": "auto_window_level"
                         }
                         for action_text, mode in left_mouse_actions.items():
