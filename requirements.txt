@@ -25,6 +25,8 @@ SimpleITK>=2.3.0  # For 3D image resampling in image fusion (Phase 2)
 # Required for lossyJPEG-YBR_FULL_422 and other compressed transfer syntaxes
 # Note: GDCM support may require additional system libraries and is not included here
 pylibjpeg>=1.4.0  # For JPEG 2000 and other compressed formats
-pyjpegls>=0.3.0  # For JPEG-LS compression
 pylibjpeg-libjpeg>=1.3.0  # JPEG decoder plugin for pylibjpeg (required for JPEG Baseline/Extended)
+pylibjpeg-openjpeg>=1.3.0  # JPEG 2000 decoder plugin for pylibjpeg
+pylibjpeg-rle>=1.3.0  # RLE decoder plugin for pylibjpeg
+pyjpegls>=0.3.0  # For JPEG-LS compression
 
