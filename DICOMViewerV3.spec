@@ -131,12 +131,11 @@ a = Analysis(
         'openpyxl',
         # Compressed DICOM support - these are plugins used by pydicom
         'pylibjpeg',
-        'pylibjpeg.codec',  # Core pylibjpeg codec
-        'pylibjpeg.openjpeg',  # JPEG 2000 support
-        'pylibjpeg.rle',  # RLE support
-        'pylibjpeg_libjpeg',  # Note: package name uses underscore, not dot
-        'pyjpegls',
-        'pyjpegls.codec',  # JPEG-LS codec
+        'openjpeg',  # JPEG 2000 support (from pylibjpeg-openjpeg)
+        'rle',  # RLE support (from pylibjpeg-rle)
+        'libjpeg',  # JPEG support (from pylibjpeg-libjpeg)
+        'jpeg_ls',  # JPEG-LS codec (from pyjpegls)
+        '_CharLS',  # JPEG-LS C extension (from pyjpegls)
         # Qt/PySide6 modules
         'PySide6.QtCore',
         'PySide6.QtGui',
