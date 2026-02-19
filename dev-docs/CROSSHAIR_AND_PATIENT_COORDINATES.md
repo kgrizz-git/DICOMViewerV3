@@ -90,7 +90,7 @@ This function converts **image indices** (column, row, slice) into **patient coo
 | Tag / concept | Role |
 |---------------|------|
 | **ImagePositionPatient** | Position of the **top-left pixel (0, 0)** of the image in patient coordinates (mm). |
-| **ImageOrientationPatient** | Six direction cosines: first three = **row direction** (patient-space direction in which **image row index** increases), next three = **column direction** (patient-space direction in which **image column index** increases). |
+| **ImageOrientationPatient** | Six direction cosines: first three = **row direction** (patient-space direction along the image row), next three = **column direction** (patient-space direction along the image column). |
 | **Pixel Spacing** | (row_spacing, column_spacing) in mm — from `PixelSpacing` or fallbacks (see `get_pixel_spacing`). |
 | **Slice spacing** | From `SpacingBetweenSlices` or `SliceThickness` (or 0 if missing). |
 
@@ -100,7 +100,7 @@ This function converts **image indices** (column, row, slice) into **patient coo
 - `pixel_y` = **row** index (image Y).  
 - `slice_index` = slice index (which slice in the stack).
 
-So: **row** in the formula below corresponds to **pixel_y**, and **column** to **pixel_x**.
+In the formula, **col_cosine** (IOP last three values) is the direction that corresponds to **row index** (pixel_y), and **row_cosine** (IOP first three values) corresponds to **column index** (pixel_x).
 
 ### 3.2 Slice direction (out-of-plane)
 
@@ -111,8 +111,8 @@ The direction in patient space along which **slice index** increases is **not** 
 
 Thus:
 
-- **Image row** → patient direction = **row_cosine** (from ImageOrientationPatient).  
-- **Image column** → patient direction = **col_cosine**.  
+- **Image row (pixel_y)** → patient direction = **col_cosine** (column direction cosines; row number varies along this direction).  
+- **Image column (pixel_x)** → patient direction = **row_cosine** (row direction cosines; column number varies along this direction).  
 - **Slice (out-of-plane)** → patient direction = **slice_normal**.
 
 Which of patient ±X, ±Y, ±Z corresponds to row, column, or slice **depends on the dataset’s ImageOrientationPatient** (and thus on whether the series is axial, sagittal, coronal, or oblique).
@@ -121,18 +121,20 @@ Which of patient ±X, ±Y, ±Z corresponds to row, column, or slice **depends on
 
 ```
 patient_pos = ImagePositionPatient
-            + pixel_y * row_spacing * row_cosine
-            + pixel_x * col_spacing * col_cosine
+            + pixel_y * row_spacing * col_cosine
+            + pixel_x * col_spacing * row_cosine
             + slice_index * slice_spacing * slice_normal
 ```
 
 So:
 
-- **Row (pixel_y)** moves along **row_cosine** by `row_spacing` per unit.  
-- **Column (pixel_x)** moves along **col_cosine** by `col_spacing` per unit.  
+- **Row (pixel_y)** moves along **col_cosine** by `row_spacing` per unit.  
+- **Column (pixel_x)** moves along **row_cosine** by `col_spacing` per unit.  
 - **Slice (slice_index)** moves along **slice_normal** by `slice_spacing` per unit.
 
 The result is (X, Y, Z) in **patient mm** (typically LPS or similar, depending on the DICOM convention used in the dataset).
+
+**Why this formula:** **col_cosine** is the cosine of the column direction with the patient x, y, z unit vectors; the **column direction** (top-to-bottom in the image) corresponds to **row number** (pixel_y). **row_cosine** is the cosine of the row direction with patient axes; the **row direction** (left-to-right) corresponds to **column number** (pixel_x). Hence row index is applied with col_cosine and column index with row_cosine.
 
 ### 3.4 How axial, sagittal, and coronal are “handled”
 
@@ -181,6 +183,13 @@ If any required tag is missing, `pixel_to_patient_coordinates` returns `None` an
 |-------------------|------------------------|
 | **(x, y, z)**     | Image column, row, and slice index from scene position: `x = int(scene_pos.x())`, `y = int(scene_pos.y())`, `z = get_current_slice_index()`. |
 | **Pixel value**   | Lookup at (x, y, z) in the current dataset via `_get_pixel_value_at_coords`. |
-| **Patient (px, py, pz) mm** | `pixel_to_patient_coordinates(current_dataset, x, y, z)` using DICOM ImagePositionPatient, ImageOrientationPatient, Pixel Spacing, and slice spacing. Row/column/slice map to patient axes only through these tags (no explicit sagittal/coronal logic). |
+| **Patient (px, py, pz) mm** | `pixel_to_patient_coordinates(current_dataset, x, y, z)` using DICOM ImagePositionPatient, ImageOrientationPatient, Pixel Spacing, and slice spacing. In-plane mapping: pixel_y ↔ col_cosine, pixel_x ↔ row_cosine. |
 
 Correctness for sagittal and coronal depends on the **dataset** and **(x, y, z)** representing the **same** image and orientation as the displayed view.
+
+---
+
+## References
+
+- **RedBrick AI (Medium) – DICOM Coordinate Systems: 3D DICOM for Computer Vision Engineers (Pt. 1)**  
+  https://medium.com/redbrick-ai/dicom-coordinate-systems-3d-dicom-for-computer-vision-engineers-pt-1-61341d87485f
