@@ -99,6 +99,10 @@ jobs:
           MimeType=application/dicom;
           EOF
 
+      - name: Copy .desktop file to AppDir root
+        if: matrix.os == 'ubuntu-latest'
+        run: cp AppDir/usr/share/applications/DICOMViewerV3.desktop AppDir/DICOMViewerV3.desktop
+
       - name: Copy icon
         if: matrix.os == 'ubuntu-latest'
         run: |
