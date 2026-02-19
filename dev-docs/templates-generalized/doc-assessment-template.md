@@ -1,5 +1,8 @@
 # Documentation Assessment Template - [PROJECT_NAME]
 
+**Template Version**: 2.0  
+**Last Updated**: 2026-02-18
+
 ## Purpose
 
 This document provides a systematic approach to assess the accuracy, agreement, and completion of project documentation against the actual codebase. The assessment verifies that documentation correctly describes:
@@ -105,24 +108,22 @@ This approach ensures:
 
 ### Step 2: Identify Code Files to Verify
 
-1. **Main scripts**:
-   - `[INSTALL_SCRIPT].sh` - Installation process
-   - `[UNINSTALL_SCRIPT].sh` - Uninstallation process
-   - `[CONFIGURE_SCRIPT].sh` - Configuration interface
-   - `[MANAGE_SCRIPT].sh` - Management interface
-   - `[MAIN_SCRIPT].sh` - Main application script
-   - `[MANUAL_UNINSTALL_GUIDE].sh` - Manual uninstall instructions
+1. **Main application files**:
+   - Entry point files (main application, CLI tools, etc.)
+   - Installation/setup scripts
+   - Configuration management files
+   - Core application logic files
 
-2. **Library modules** (in `[LIB_DIR]/`):
+2. **Library modules** (in `src/`, `lib/`, `utils/` directories):
    - Configuration handling
    - Core functionality modules
    - Utility functions
-   - Verification functions
+   - Validation functions
 
-3. **System integration files**:
-   - Service files
-   - Timer files
+3. **System integration files** (if applicable):
+   - Service/daemon files
    - Configuration files
+   - Integration scripts
 
 ### Step 3: Assessment Categories
 
@@ -182,7 +183,7 @@ Evaluate whether each documentation file is serving its intended purpose and is 
 
 - [ ] **Project Description**: Verify description matches actual project purpose
 - [ ] **Features List**: Check that all listed features exist in code
-- [ ] **Installation Instructions**: Verify installation steps match `[INSTALL_SCRIPT].sh` behavior
+- [ ] **Installation Instructions**: Verify installation steps match actual installation process behavior
 - [ ] **Quick Start**: Verify commands and examples work as documented
 - [ ] **System Requirements**: Verify documented requirements match actual dependencies
 - [ ] **Supported Systems**: Verify compatibility claims match code capabilities
@@ -194,9 +195,9 @@ Evaluate whether each documentation file is serving its intended purpose and is 
 #### GETTING_STARTED.md
 
 - [ ] **Prerequisites**: Verify all prerequisites are accurate and necessary
-- [ ] **Installation Steps**: Verify each step matches `[INSTALL_SCRIPT].sh` behavior
-- [ ] **Distribution-Specific Instructions**: Verify commands work for each distribution
-- [ ] **Configuration Steps**: Verify configuration process matches `[CONFIGURE_SCRIPT].sh`
+- [ ] **Installation Steps**: Verify each step matches actual installation process behavior
+- [ ] **Distribution-Specific Instructions**: Verify commands work for each distribution/platform
+- [ ] **Configuration Steps**: Verify configuration process matches actual configuration tool behavior
 - [ ] **Verification Steps**: Verify verification commands work as documented
 - [ ] **Troubleshooting**: Verify troubleshooting steps are accurate
 - [ ] **Common Questions**: Verify answers are accurate and up-to-date
@@ -210,10 +211,10 @@ Evaluate whether each documentation file is serving its intended purpose and is 
   - [ ] Verify configuration examples match actual config file format
   - [ ] Verify documented behavior matches code behavior
   - [ ] Verify all configuration options that exist in code are documented
-- [ ] **Managing the Service**: 
-  - [ ] Verify all `[MANAGE_SCRIPT].sh` menu options are documented
-  - [ ] Verify documented behavior matches actual menu behavior
-  - [ ] Verify system service commands are correct
+- [ ] **Managing the Service/Application**: 
+  - [ ] Verify all management interface options are documented
+  - [ ] Verify documented behavior matches actual behavior
+  - [ ] Verify system service/daemon commands are correct (if applicable)
 - [ ] **Understanding Logs**: 
   - [ ] Verify log file locations are correct
   - [ ] Verify log message examples match actual log format
@@ -229,9 +230,9 @@ Evaluate whether each documentation file is serving its intended purpose and is 
   - [ ] Verify advanced configuration options are documented
   - [ ] Verify manual procedures are accurate
 - [ ] **Uninstallation**: 
-  - [ ] Verify uninstall process matches `[UNINSTALL_SCRIPT].sh` behavior
-  - [ ] Verify protection modes are accurately described
-  - [ ] Verify manual uninstall guide reference is correct
+  - [ ] Verify uninstall process matches actual uninstallation behavior
+  - [ ] Verify protection modes are accurately described (if applicable)
+  - [ ] Verify manual uninstall guide reference is correct (if applicable)
 
 #### CONFIGURATION.md
 
@@ -277,28 +278,28 @@ Evaluate whether each documentation file is serving its intended purpose and is 
 
 #### Feature Completeness
 
-- [ ] **All Scripts Documented**: Verify every main script has documentation
-- [ ] **All Functions Documented**: Verify public/library functions are documented
+- [ ] **All Application Components Documented**: Verify every main component has documentation
+- [ ] **All Functions/Methods Documented**: Verify public/library functions are documented
 - [ ] **All Configuration Options Documented**: Verify every config option is documented
-- [ ] **All Command-Line Options Documented**: Verify all CLI options/flags are documented
+- [ ] **All Command-Line Options Documented**: Verify all CLI options/flags are documented (if applicable)
 - [ ] **All Error Messages Documented**: Verify common error messages are in troubleshooting guides
 
 #### Behavior Accuracy
 
-- [ ] **Installation Process**: Verify documented installation matches `[INSTALL_SCRIPT].sh`
-- [ ] **Uninstallation Process**: Verify documented uninstallation matches `[UNINSTALL_SCRIPT].sh`
-- [ ] **Configuration Process**: Verify documented configuration matches `[CONFIGURE_SCRIPT].sh`
-- [ ] **Main Functionality**: Verify documented behavior matches `[MAIN_SCRIPT].sh`
+- [ ] **Installation Process**: Verify documented installation matches actual installation process
+- [ ] **Uninstallation Process**: Verify documented uninstallation matches actual uninstallation process (if applicable)
+- [ ] **Configuration Process**: Verify documented configuration matches actual configuration process
+- [ ] **Main Functionality**: Verify documented behavior matches actual implementation
 - [ ] **Core Features**: Verify documented features match actual implementation
 - [ ] **Validation Logic**: Verify documented validation matches code
-- [ ] **Protection Modes**: Verify documented protection modes match implementation
+- [ ] **Protection Modes**: Verify documented protection modes match implementation (if applicable)
 
 #### File and Path Accuracy
 
 - [ ] **Installation Paths**: Verify all documented installation paths are correct
 - [ ] **Config File Path**: Verify config file path is correct
 - [ ] **Log File Paths**: Verify log file paths are correct
-- [ ] **System Integration Paths**: Verify system integration file paths are correct
+- [ ] **System Integration Paths**: Verify system integration file paths are correct (if applicable)
 - [ ] **Library Paths**: Verify library module paths are correct
 
 ### Cross-Documentation Consistency
@@ -312,8 +313,8 @@ Evaluate whether each documentation file is serving its intended purpose and is 
 
 ### Code Comments and Inline Documentation
 
-- [ ] **Script Headers**: Verify script headers accurately describe script purpose
-- [ ] **Function Comments**: Verify function comments accurately describe function behavior
+- [ ] **File Headers**: Verify file headers accurately describe file purpose
+- [ ] **Function/Method Comments**: Verify function/method comments accurately describe behavior
 - [ ] **Complex Logic**: Verify complex code sections have explanatory comments
 - [ ] **Configuration Comments**: Verify config file has comments explaining options
 

@@ -1,12 +1,15 @@
 # Functionality Integrity Assessment Template - [PROJECT_NAME]
 
+**Template Version**: 2.0  
+**Last Updated**: 2026-02-18
+
 ## Purpose
 
-This document provides a systematic approach to analyze shell scripts in the codebase for functionality integrity, code flow consistency, and system-wide compatibility. The assessment:
+This document provides a systematic approach to analyze code files in the codebase for functionality integrity, code flow consistency, and system-wide compatibility. The assessment:
 
 - Traces code execution paths from entry points through all execution branches
-- Examines interactions between scripts, functions, and files
-- Verifies consistency of variable names and arguments across the codebase
+- Examines interactions between modules, functions, and files
+- Verifies consistency of variable names, function signatures, and arguments across the codebase
 - Checks compatibility between different parts of the system
 - Identifies conflicts, gaps, contradictions, and edge cases
 - Evaluates overall functionality and integrity as a cohesive system
@@ -56,25 +59,26 @@ Instead, for each functionality integrity assessment:
 
 ### Assessment Process
 
-1. **Identify entry point scripts** in the base directory: `[MAIN_SCRIPT].sh`, `[CONFIGURE_SCRIPT].sh`, `[INSTALL_SCRIPT].sh`, `[UNINSTALL_SCRIPT].sh`, and any other executable scripts
-2. **Trace execution paths** for each entry point: Follow function calls, script sourcing, execution branches, and map dependencies
-3. **Examine interactions**: How scripts call library functions, how modules interact, data flow, configuration file operations, state management
-4. **Verify consistency**: Variable names, function arguments, return values, error handling patterns, configuration variable names
-5. **Check compatibility**: Function calls, sourced files, dependencies, configuration formats, data structures
+1. **Identify entry point files** in the base directory: main application files, configuration scripts, installation/setup files, and any other executable entry points
+2. **Trace execution paths** for each entry point: Follow function/method calls, module imports, execution branches, and map dependencies
+3. **Examine interactions**: How modules call functions, how components interact, data flow, configuration file operations, state management
+4. **Verify consistency**: Variable names, function signatures and arguments, return values, error handling patterns, configuration variable names
+5. **Check compatibility**: Function/method calls, imported/required modules, dependencies, configuration formats, data structures
 6. **Identify issues**: Conflicts (contradictory logic/behavior), gaps (missing functionality/error handling), contradictions (inconsistent assumptions), edge cases (unhandled boundary conditions)
 
 ### Scope
 
 **Files to Analyze**:
-- Shell scripts (`.sh` files) in the base directory
-- All scripts and files in `[LIB_DIR]/` directory that are called by base directory scripts
-- Configuration files (`.conf` files) that are read/written by scripts
-- Service files that invoke scripts
+- Source files in the base directory (main application files, entry points)
+- All modules/libraries in `src/`, `lib/`, `utils/`, `scripts/` directories that are called by main files
+- Configuration files that are read/written by the application
+- Service/daemon files that invoke application code (if applicable)
 
 **Files to Exclude**:
-- Markdown documentation files (`.md` files)
-- Files in the `tests/` directory
-- Backup files and Git-related files
+- Documentation files (`.md`, `.txt`, `.rst` files)
+- Files in the `tests/`, `test/`, `__tests__/` directories
+- Backup files (files with "backup", "_BAK", ".bak" in name or in backup folders)
+- Git-related files
 
 ---
 
@@ -82,119 +86,119 @@ Instead, for each functionality integrity assessment:
 
 ### Step 1: Identify Entry Points and Create Execution Map
 
-- [ ] Identify all executable `.sh` files in base directory and document their purpose
-- [ ] For each entry point, trace all `source` statements and map function call hierarchies
+- [ ] Identify all executable entry point files in base directory and document their purpose
+- [ ] For each entry point, trace all import/include/require statements and map function/method call hierarchies
 - [ ] Document conditional execution paths and identify all library modules used
-- [ ] List all files in `[LIB_DIR]/` directory and map inter-library dependencies
-- [ ] Create dependency graph showing relationships between scripts and modules
+- [ ] List all files in library directories (`src/`, `lib/`, `utils/`) and map inter-library dependencies
+- [ ] Create dependency graph showing relationships between modules and components
 
 ### Step 2: Code Flow Analysis
 
-For each entry point script, trace execution through all paths:
+For each entry point, trace execution through all paths:
 
 - [ ] **Main Execution Path**: 
   - Identify flow from start to finish
-  - Document all function calls in order with file locations
-  - Note all conditional branches (`if/elif/else`, `case`)
-  - Track all file I/O operations (reads/writes with locations)
-  - Document all external command invocations
+  - Document all function/method calls in order with file locations
+  - Note all conditional branches (if/else, switch/case, pattern matching)
+  - Track all I/O operations (file, network, database reads/writes with locations)
+  - Document all external API/library invocations
 
 - [ ] **Error Handling Paths**: 
-  - Trace error handling for each function call
+  - Trace error handling for each function/method call
   - Document error exit points
-  - Check if errors are properly propagated
-  - Verify cleanup operations on errors
+  - Check if errors are properly propagated (exceptions, error returns)
+  - Verify cleanup operations on errors (finally blocks, defer, destructors)
   - Check for error handling gaps
 
 - [ ] **Conditional Branches**: 
-  - Map all `if/elif/else` branches
-  - Document all `case` statement branches
+  - Map all conditional branches (if/else, switch/case, pattern matching)
+  - Document all branch paths
   - Trace execution through each branch
   - Verify all branches have proper handling
   - Check for unreachable code
 
 - [ ] **Loop Execution Paths**: 
-  - Identify all loops (`for`, `while`, `until`)
+  - Identify all loops (for, while, foreach, map/filter/reduce)
   - Trace execution through loop iterations
   - Verify loop termination conditions
   - Check for infinite loop possibilities
   - Document loop variable usage
 
-- [ ] **Function Call Chains**: 
-  - For each function call, trace to its definition
-  - Verify function exists (in same file or sourced library)
-  - Check function argument count and types
+- [ ] **Function/Method Call Chains**: 
+  - For each function/method call, trace to its definition
+  - Verify function/method exists (in same file or imported module)
+  - Check function/method signature (parameters, types)
   - Verify return value handling
-  - Document nested function call chains
+  - Document nested function/method call chains
 
 ### Step 3: Variable and Argument Consistency
 
 - [ ] **Variable Name Consistency**: 
-  - Check if same variables use consistent names across scripts
-  - Verify configuration variable names match between scripts that read config, scripts that write config, and config file format
-  - Check for typos or variations in variable names (e.g., `${VAR}` vs `${VAR_NAME}`)
-  - Verify environment variable names are consistent
-  - Check for variable name conflicts (same name, different purpose)
-  - **Methods**: Search for variable assignments/usages across scripts, compare config read vs. write code, verify exported variables match import expectations
+  - Check if same variables use consistent names across modules
+  - Verify configuration variable names match between code that reads config, code that writes config, and config file format
+  - Check for typos or variations in variable names
+  - Verify global/module-level variable names are consistent
+  - Check for variable name conflicts (same name, different purpose in different scopes)
+  - **Methods**: Search for variable assignments/usages across files, compare config read vs. write code, verify exported/imported variables match expectations
 
-- [ ] **Function Argument Consistency**: 
-  - For each function, verify all call sites use correct argument count
-  - Check argument order matches function definition
-  - Verify argument types (strings, numbers, arrays) match expectations
-  - Check for missing arguments in function calls
-  - Verify optional arguments are handled consistently
-  - **Methods**: For each function definition, find all call sites, compare signature with invocations, check for positional vs. named argument inconsistencies
+- [ ] **Function/Method Argument Consistency**: 
+  - For each function/method, verify all call sites use correct argument count
+  - Check argument order matches function/method definition
+  - Verify argument types match expectations (strings, numbers, objects, arrays)
+  - Check for missing arguments in function/method calls
+  - Verify optional/default arguments are handled consistently
+  - **Methods**: For each function/method definition, find all call sites, compare signature with invocations, check for positional vs. named argument inconsistencies
 
 - [ ] **Return Value Consistency**: 
-  - Verify functions that return values are called correctly
-  - Check return value handling is consistent (e.g., `$?` checks)
-  - Verify exit codes are used consistently (0=success, non-zero=error)
-  - Check for functions that should return values but don't
+  - Verify functions/methods that return values are called correctly
+  - Check return value handling is consistent (error codes, exceptions, return objects)
+  - Verify success/error indicators are used consistently
+  - Check for functions/methods that should return values but don't
   - Verify error return values are handled appropriately
 
 - [ ] **Configuration Variable Consistency**: 
-  - Verify config file variable names match script expectations
+  - Verify config file variable names match code expectations
   - Check that all config variables read are defined in config file format
-  - Verify default values match between different scripts
+  - Verify default values match between different modules
   - Check for config variables that are written but never read
-  - Verify config variable types are consistent (string, number, boolean)
+  - Verify config variable types are consistent (string, number, boolean, object)
 
 ### Step 4: Compatibility Analysis
 
-- [ ] **Function Call Compatibility**: 
-  - Verify all function calls have corresponding definitions
-  - Check function signatures match between definition and calls
-  - Verify functions are sourced before being called
-  - Check for circular dependencies in sourcing
-  - Verify function availability at call time
+- [ ] **Function/Method Call Compatibility**: 
+  - Verify all function/method calls have corresponding definitions
+  - Check function/method signatures match between definition and calls
+  - Verify functions/methods are imported/available before being called
+  - Check for circular dependencies in imports
+  - Verify function/method availability at call time
 
-- [ ] **File Sourcing Compatibility**: 
-  - Verify all `source` or `.` statements point to existing files
-  - Check sourcing order is correct (dependencies loaded first)
-  - Verify sourced files don't have conflicting function/variable names
-  - Check for missing source statements
-  - Verify paths in source statements are correct
+- [ ] **Module Import/Dependency Compatibility**: 
+  - Verify all import/include/require statements point to existing files/modules
+  - Check import order is correct (dependencies loaded first)
+  - Verify imported modules don't have conflicting function/variable/class names
+  - Check for missing import statements
+  - Verify paths in import statements are correct
 
 - [ ] **Data Structure Compatibility**: 
   - Verify data formats match between reading and writing
-  - Check array usage is consistent across scripts
-  - Verify string formats are compatible
+  - Check array/list/collection usage is consistent across modules
+  - Verify object/struct/record formats are compatible
   - Check numeric formats are compatible
-  - Verify boolean representation is consistent (0/1, true/false, yes/no)
+  - Verify boolean representation is consistent
 
 - [ ] **Configuration File Compatibility**: 
   - Verify config file format matches parser expectations
   - Check config file reading and writing use same format
   - Verify default values are compatible
   - Check for version compatibility issues
-  - Verify config file locking/unlocking is compatible (if applicable)
+  - Verify config file locking/synchronization is compatible (if applicable)
 
-- [ ] **External Command Compatibility**: 
-  - Verify external commands are used consistently
-  - Check command-line argument formats are compatible
+- [ ] **External API/Library Compatibility**: 
+  - Verify external APIs/libraries are used consistently
+  - Check API call signatures are compatible
   - Verify fallback mechanisms work correctly
-  - Check for command availability checks
-  - Verify error handling for missing commands
+  - Check for API/library availability checks
+  - Verify error handling for missing/unavailable APIs/libraries
 
 ### Step 5: Conflict Detection
 
@@ -307,13 +311,13 @@ For each entry point script, trace execution through all paths:
 
 ### Preparation
 - [ ] Create timestamped assessment file
-- [ ] List all entry point scripts and library files
+- [ ] List all entry point files and library files
 - [ ] Create initial execution flow map
 
 ### Analysis
-- [ ] Trace execution paths for each entry point (main, error, branches, loops, function chains)
+- [ ] Trace execution paths for each entry point (main, error, branches, loops, function/method chains)
 - [ ] Check variable/argument/return value/configuration consistency
-- [ ] Verify function call, file sourcing, data structure, config file, external command compatibility
+- [ ] Verify function/method call, module import, data structure, config file, external API/library compatibility
 - [ ] Identify logic/behavior/state management conflicts
 - [ ] Identify missing functionality/error handling/edge case handling
 - [ ] Identify documentation/assumption/design contradictions
@@ -683,11 +687,17 @@ Example:
 
 - **Edge Case Analysis**: Don't just verify "normal" operation. Think about boundary conditions, unusual inputs, error conditions, and system state edge cases.
 
-- **Modular Architecture**: This codebase follows a modular architecture pattern. When analyzing, maintain awareness of module boundaries and inter-module dependencies.
+- **Modular Architecture**: When analyzing, maintain awareness of module boundaries and inter-module dependencies. This applies to any modular architecture pattern (e.g., `src/`, `lib/`, `utils/` directories).
 
-- **Configuration File Operations**: Be aware of configuration file locking (if applicable) and verify its integration with other components.
+- **Backward Compatibility**: Consider impact on existing code, APIs, and dependencies that may rely on current structure.
 
-- **Scope**: Do not analyze files in the `tests/` directory or markdown documentation files. Focus on production code only.
+- **Testing**: All refactoring should be accompanied by appropriate testing to ensure functionality is preserved.
+
+- **Documentation**: Update relevant documentation when files are refactored (README, user guides, technical docs, API documentation).
+
+- **Incremental Approach**: Large refactorings should be done incrementally, one module at a time, with testing between steps.
+
+- **Scope**: Do not analyze files in test directories or documentation files. Focus on production code only.
 
 ---
 
