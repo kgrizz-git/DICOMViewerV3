@@ -6,6 +6,7 @@
 ---
 
 - [ ] Refactor code files that are larger than ~750 lines - see refactor assessment and refactoring plans
+- [ ] When exporting JPG/PNG with annotations, line thickness and text size are not the same as currently shown on the viewer - seems like they are not rescaled. We should scale them to the same fractional size of the image as is currently displayed, or map settings in annotation options to some fractional size of the image (eg, line thickness or text size of 5 maps to 2.5% of average of image width and height matrix size). Maybe add separate option for export screenshot that shows image exactly as it appears but only can apply to currently displayed images. How does "apply current zoom" work when exporting images from a series not actively being shown, or if the same series is open in two subwindows with different zoom factors?
 - [ ] Import template md files from Notes_and_Ideas repo into a new folder `dev-docs\templates`.
 - [ ] Enable optional smoothing when displaying magnified images so they appear less "blocky".
 - [ ] DICOM tag viewer (ctrl+T) only showing tag values for first image
