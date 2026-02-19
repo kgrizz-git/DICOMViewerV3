@@ -5,7 +5,7 @@
 
 ---
 
-- [ ] Refactor code files that are larger than ~750 lines.
+- [ ] Refactor code files that are larger than ~750 lines - see refactor assessment and refactoring plans
 - [ ] Import template md files from Notes_and_Ideas repo into a new folder `dev-docs\templates`.
 - [ ] Enable optional smoothing when displaying magnified images so they appear less "blocky".
 - [ ] DICOM tag viewer (ctrl+T) only showing tag values for first image
