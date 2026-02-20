@@ -211,18 +211,31 @@ Use this checklist when implementing Phase 3. Mark items only after they are ful
 
 **Goal**: Extract file and series loading logic from main.py into a coordinator so menu/signals delegate to it; main keeps high-level display entry points the coordinator can call back.
 
-- [ ] **Backup**: Copy `src/main.py` to `backups/main_pre_file_series_coordinator.py` (or equivalent). *(Create manually if needed.)*
-- [ ] **Create module**: Add `src/core/file_series_loading_coordinator.py` with module docstring (purpose: own file/series loading and first-slice display; inputs: loader, organizer, dialogs, config, callbacks; outputs: loading behavior and callbacks to display/update).
-- [ ] **Define callback interface**: Document and implement the callbacks the coordinator needs from the app (e.g. clear_data, display_slice, update_status, get_recent_list, add_recent, current_studies/subwindow_data access or pass-through). main.py will pass these when creating the coordinator.
-- [ ] **Move load-first-slice**: Move `_handle_load_first_slice` logic into the coordinator (or a method it calls). main.py replaces the body with a call to the coordinator; pass required state/callbacks.
-- [ ] **Move open entry points**: Move `_open_files`, `_open_folder`, `_open_recent_file`, `_open_files_from_paths` into the coordinator. main.py keeps the methods as thin wrappers that call the coordinator (menu/signals still connect to main; main delegates).
-- [ ] **Move series navigation and selection**: Move `_on_series_navigation_requested`, `_build_flat_series_list`, `_on_series_navigator_selected`, `_on_assign_series_from_context_menu`, `_assign_series_to_subwindow` into the coordinator (or keep assignment in main if it tightly couples to subwindow layout; document the split).
-- [ ] **Move file-path helpers**: Move `_get_file_path_for_dataset`, `_on_show_file_from_series`, `_on_about_this_file_from_series`, `_get_current_slice_file_path`, `_update_about_this_file_dialog` into the coordinator or a small helper used by the coordinator. main.py delegates to coordinator where appropriate.
-- [ ] **Wire main.py**: Ensure menu and signal connections still call main; main’s handlers call the coordinator. No change to public behavior.
-- [ ] **Tests**: Run the full test suite. Add or run any tests that cover file/series loading paths if present.
-- [ ] **Smoke test**: Open file(s), open folder, open recent, drag-drop paths; switch series via navigator; assign series from context menu; “About this file” and “Show file from series”. Verify first-slice display and status updates.
-- [ ] **Lint**: Lint `main.py` and `file_series_loading_coordinator.py`; fix issues.
-- [ ] **Documentation**: Document coordinator API, callbacks, and integration in main; update main.py docstrings where handlers were replaced.
+- [x] **Backup**: Copy `src/main.py` to `backups/main_pre_file_series_coordinator.py` (or equivalent). *(Create manually if needed.)*
+- [x] **Create module**: Add `src/core/file_series_loading_coordinator.py` with module docstring (purpose: own file/series loading and first-slice display; inputs: loader, organizer, dialogs, config, callbacks; outputs: loading behavior and callbacks to display/update).
+- [x] **Define callback interface**: Document and implement the callbacks the coordinator needs from the app (e.g. clear_data, display_slice, update_status, get_recent_list, add_recent, current_studies/subwindow_data access or pass-through). main.py will pass these when creating the coordinator.
+- [x] **Move load-first-slice**: Move `_handle_load_first_slice` logic into the coordinator (or a method it calls). main.py replaces the body with a call to the coordinator; pass required state/callbacks.
+- [x] **Move open entry points**: Move `_open_files`, `_open_folder`, `_open_recent_file`, `_open_files_from_paths` into the coordinator. main.py keeps the methods as thin wrappers that call the coordinator (menu/signals still connect to main; main delegates).
+- [x] **Move series navigation and selection**: Move `_on_series_navigation_requested`, `_build_flat_series_list`, `_on_series_navigator_selected`, `_on_assign_series_from_context_menu`, `_assign_series_to_subwindow` into the coordinator (or keep assignment in main if it tightly couples to subwindow layout; document the split).
+- [x] **Move file-path helpers**: Move `_get_file_path_for_dataset`, `_on_show_file_from_series`, `_on_about_this_file_from_series`, `_get_current_slice_file_path`, `_update_about_this_file_dialog` into the coordinator or a small helper used by the coordinator. main.py delegates to coordinator where appropriate.
+- [x] **Wire main.py**: Ensure menu and signal connections still call main; main’s handlers call the coordinator. No change to public behavior.
+- [x] **Tests**: Run the full test suite. Add or run any tests that cover file/series loading paths if present. *(Activate the project venv first—e.g. Windows: `.\venv\Scripts\Activate.ps1` or `venv\Scripts\activate`—then from project root: `python tests/run_tests.py` or `python -m pytest tests/ -v`.)*
+- [x] **Smoke test**: Open file(s), open folder, open recent, drag-drop paths; switch series via navigator; assign series from context menu; “About this file” and “Show file from series”. Verify first-slice display and status updates. *(See recommended smoke tests below.)*
+- [x] **Lint**: Lint `main.py` and `file_series_loading_coordinator.py`; fix issues.
+- [x] **Documentation**: Document coordinator API, callbacks, and integration in main; update main.py docstrings where handlers were replaced.
+
+**Recommended smoke tests for Phase 3.1** (run manually after opening the app with a venv):
+
+1. **Open file(s)** – File → Open File(s); select one or more DICOM files. Confirm first slice displays, series navigator appears, status bar updates.
+2. **Open folder** – File → Open Folder; select a folder with DICOMs. Confirm load and first-slice display.
+3. **Open recent** – File → Open Recent; pick a recent file or folder. Confirm it opens and displays.
+4. **Drag-and-drop** – Drag DICOM files or a folder onto the window. Confirm they load and first slice displays.
+5. **Series navigation** – With a multi-series study loaded, use left/right arrow (or series nav) to move between series. Confirm image and slice navigator update; no double-firing or lock messages in console.
+6. **Series navigator selection** – Click a different series in the series navigator. Confirm focused subwindow shows that series.
+7. **Assign series from context menu** – Right-click in the viewer → Assign Series → choose a series. Confirm the focused subwindow shows the chosen series.
+8. **About this file** – With a series loaded, open "About this file" (e.g. from Help or context). Confirm dialog shows current dataset/path; change slice and reopen to confirm it updates.
+9. **Show file from series** – In the series navigator, use "Show file" (or equivalent) on a series. Confirm file explorer opens and highlights the correct file (if supported on OS).
+10. **First-slice and UI state** – After any open action, confirm: fusion reset, projection controls reset, tag viewer filter cleared, metadata and window/level reflect current series, series navigator highlight matches focused subwindow.
 
 ---
 
@@ -287,3 +300,4 @@ Use this checklist when implementing Phase 3. Mark items only after they are ful
 - **Updated**: 2026-02-19 10:56 – Phase 1 completion tasks (assessment update, Phase 2 checklist, document history).
 - **Updated**: 2026-02-19 – Phase 2 implementation (menu bar builder, DICOMProcessor split, AnnotationPasteHandler); checklist items marked done; tests/smoke tests left for user.
 - **Updated**: 2026-02-19 – Added Phase 3 detailed checklist (file/series loading coordinator, subwindow lifecycle in steps 3.1–3.4).
+- **Updated**: 2026-02-19 – Phase 3.1 implementation complete: FileSeriesLoadingCoordinator added; load-first-slice, open entry points, series navigation, file-path helpers moved; main.py wired to delegate. Checklist marked done except Tests and Smoke test (require venv/manual run). Added recommended smoke tests for Phase 3.1.

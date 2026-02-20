@@ -231,9 +231,11 @@ You can download the DICOM Viewer V3 in one of two ways:
    # Create virtual environment
    python -m venv venv
    
-   # Activate virtual environment
-   # On Windows:
+   # Activate virtual environment (required before running the app or tests)
+   # On Windows (Command Prompt):
    venv\Scripts\activate
+   # On Windows (PowerShell):
+   .\venv\Scripts\Activate.ps1
    # On macOS/Linux:
    source venv/bin/activate
    
@@ -265,6 +267,8 @@ You can download the DICOM Viewer V3 in one of two ways:
 3. The application window should open and you can start loading DICOM files!
 
 ### Running tests
+
+**Activate the project venv first** (in the `venv` directory; see Installation). Then from the project root:
 
 Unit tests can be run from the project root (with the virtual environment activated).
 
