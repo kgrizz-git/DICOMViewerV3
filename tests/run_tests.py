@@ -5,9 +5,10 @@ Ensures src is on PYTHONPATH and runs pytest (or unittest if pytest not installe
 Run from project root:
   python tests/run_tests.py
   python tests/run_tests.py --unittest   # force unittest instead of pytest
-With venv activated from project root:
-  .venv\\Scripts\\activate   (Windows)
-  source .venv/bin/activate   (Linux/macOS)
+Activate the project venv first, then from project root:
+  venv\\Scripts\\activate   (Windows cmd)
+  .\\venv\\Scripts\\Activate.ps1   (Windows PowerShell)
+  source venv/bin/activate   (Linux/macOS)
   python tests/run_tests.py
 """
 

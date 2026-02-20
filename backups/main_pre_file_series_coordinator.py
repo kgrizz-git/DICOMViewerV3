@@ -78,7 +78,6 @@ from core.view_state_manager import ViewStateManager
 from core.file_operations_handler import FileOperationsHandler
 from core.slice_display_manager import SliceDisplayManager
 from core.annotation_paste_handler import AnnotationPasteHandler
-from core.file_series_loading_coordinator import FileSeriesLoadingCoordinator
 from gui.roi_coordinator import ROICoordinator
 from gui.measurement_coordinator import MeasurementCoordinator
 from gui.crosshair_coordinator import CrosshairCoordinator
@@ -1158,8 +1157,6 @@ class DICOMViewerApp(QObject):
             else:
                 raise RuntimeError("No subwindow managers available. Cannot initialize handlers.")
         
-        # Initialize file/series loading coordinator (owns load-first-slice and open entry points)
-        self._file_series_coordinator = FileSeriesLoadingCoordinator(self)
         # Initialize FileOperationsHandler (shared, not per-subwindow)
         self.file_operations_handler = FileOperationsHandler(
             self.dicom_loader,
@@ -1168,7 +1165,7 @@ class DICOMViewerApp(QObject):
             self.config_manager,
             self.main_window,
             clear_data_callback=self._clear_data,
-            load_first_slice_callback=self._file_series_coordinator.handle_load_first_slice,
+            load_first_slice_callback=self._handle_load_first_slice,
             update_status_callback=self.main_window.update_status
         )
         
@@ -1414,12 +1411,281 @@ class DICOMViewerApp(QObject):
     def _handle_load_first_slice(self, studies: dict) -> None:
         """
         Handle loading first slice after file operations.
-
-        Delegates to the file/series loading coordinator. Clears edited tags
-        for the previous dataset and updates display/state via the coordinator.
+        
+        Clears edited tags for the previous dataset before loading new one.
         """
-        self._file_series_coordinator.handle_load_first_slice(studies)
-
+        # print(f"[LOAD DEBUG] ============================================")
+        # print(f"[LOAD DEBUG] _handle_load_first_slice called with {len(studies)} study/studies")
+        # print(f"[LOAD DEBUG] ============================================")
+        
+        # Disable fusion and clear status for all subwindows when opening new files
+        self._reset_fusion_for_all_subwindows()
+        
+        # Clear edited tags for previous dataset if it exists
+        if self.current_dataset is not None and self.tag_edit_history:
+            self.tag_edit_history.clear_edited_tags(self.current_dataset)
+        # Clear all subwindows before loading new files
+        # This ensures old images don't persist in non-focused subwindows
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        for subwindow in subwindows:
+            if subwindow and subwindow.image_viewer:
+                # Clear scene to remove old images
+                subwindow.image_viewer.scene.clear()
+                subwindow.image_viewer.image_item = None
+                # Force viewport update
+                subwindow.image_viewer.viewport().update()
+        
+        # Clear overlay items for all subwindows (including viewport corner overlays)
+        for idx in self.subwindow_managers:
+            managers = self.subwindow_managers[idx]
+            overlay_manager = managers.get('overlay_manager')
+            if overlay_manager:
+                # Get the scene from the corresponding subwindow to properly clear overlays
+                subwindows = self.multi_window_layout.get_all_subwindows()
+                if idx < len(subwindows) and subwindows[idx] and subwindows[idx].image_viewer:
+                    scene = subwindows[idx].image_viewer.scene
+                    overlay_manager.clear_overlay_items(scene)
+                else:
+                    # Fallback: just clear the items list if scene not available
+                    overlay_manager.overlay_items.clear()
+        
+        # Reset projection state when new files are opened
+        self.slice_display_manager.reset_projection_state()
+        # Update widget to match reset state
+        self.intensity_projection_controls_widget.set_enabled(False)
+        self.intensity_projection_controls_widget.set_projection_type("aip")
+        self.intensity_projection_controls_widget.set_slice_count(4)
+        
+        # Clear tag viewer filter when opening new files
+        if self.dialog_coordinator:
+            self.dialog_coordinator.clear_tag_viewer_filter()
+        
+        first_slice_info = self.file_operations_handler.load_first_slice(studies)
+        if first_slice_info:
+            self.current_studies = studies
+            self.current_study_uid = first_slice_info['study_uid']
+            self.current_series_uid = first_slice_info['series_uid']
+            self.current_slice_index = first_slice_info['slice_index']
+            
+            # Update fusion controls with new studies
+            # print(f"[MAIN DEBUG] Checking fusion controls update after loading files")
+            focused_subwindow = self.multi_window_layout.get_focused_subwindow()
+            # print(f"[MAIN DEBUG] focused_subwindow: {focused_subwindow is not None}")
+            if focused_subwindow:
+                subwindows = self.multi_window_layout.get_all_subwindows()
+                focused_idx = subwindows.index(focused_subwindow) if focused_subwindow in subwindows else -1
+                # print(f"[MAIN DEBUG] focused_idx: {focused_idx}")
+                # print(f"[MAIN DEBUG] focused_idx in subwindow_managers: {focused_idx in self.subwindow_managers}")
+                if focused_idx >= 0 and focused_idx in self.subwindow_managers:
+                    fusion_coordinator = self.subwindow_managers[focused_idx].get('fusion_coordinator')
+                    # print(f"[MAIN DEBUG] fusion_coordinator: {fusion_coordinator is not None}")
+                    if fusion_coordinator:
+                        # print(f"[MAIN DEBUG] Calling update_fusion_controls_series_list()")
+                        fusion_coordinator.update_fusion_controls_series_list()
+                # else:
+                #     print(f"[MAIN DEBUG] No valid subwindow manager for fusion")
+            
+            # Clear stale subwindow data that references series not in current_studies
+            # This prevents navigation failures when subwindows have outdated series references
+            stale_count = 0
+            for idx in list(self.subwindow_data.keys()):
+                data = self.subwindow_data[idx]
+                study_uid = data.get('current_study_uid', '')
+                series_uid = data.get('current_series_uid', '')
+                if study_uid and series_uid:
+                    # Check if this series still exists in the loaded studies
+                    if (study_uid not in self.current_studies or 
+                        series_uid not in self.current_studies.get(study_uid, {})):
+                        # Stale data - clear it
+                        print(f"[DEBUG] Clearing stale subwindow data for subwindow {idx}: "
+                              f"study={study_uid[:20] if study_uid else 'None'}..., "
+                              f"series={series_uid[:20] if series_uid else 'None'}...")
+                        self.subwindow_data[idx] = {
+                            'current_dataset': None,
+                            'current_slice_index': 0,
+                            'current_series_uid': '',
+                            'current_study_uid': '',
+                            'current_datasets': []
+                        }
+                        stale_count += 1
+            if stale_count > 0:
+                print(f"[DEBUG] Cleared stale data from {stale_count} subwindow(s)")
+            
+            # Load Presentation States and Key Objects into annotation manager
+            # Collect all presentation states and key objects from all studies
+            all_presentation_states = {}
+            all_key_objects = {}
+            
+            for study_uid in studies.keys():
+                presentation_states = self.dicom_organizer.get_presentation_states(study_uid)
+                key_objects = self.dicom_organizer.get_key_objects(study_uid)
+                
+                if presentation_states:
+                    # print(f"[ANNOTATIONS] Found {len(presentation_states)} Presentation State(s) for study {study_uid[:20]}...")
+                    all_presentation_states[study_uid] = presentation_states
+                if key_objects:
+                    # print(f"[ANNOTATIONS] Found {len(key_objects)} Key Object(s) for study {study_uid[:20]}...")
+                    all_key_objects[study_uid] = key_objects
+            
+            # Load into annotation manager
+            if all_presentation_states:
+                self.annotation_manager.load_presentation_states(all_presentation_states)
+                # print(f"[ANNOTATIONS] Loaded Presentation States for {len(all_presentation_states)} studies")
+            if all_key_objects:
+                self.annotation_manager.load_key_objects(all_key_objects)
+                # print(f"[ANNOTATIONS] Loaded Key Objects for {len(all_key_objects)} studies")
+            
+            # Always load first series to subwindow 0 and make it focused
+            subwindow_0 = self.multi_window_layout.get_subwindow(0)
+            if subwindow_0:
+                self.multi_window_layout.set_focused_subwindow(subwindow_0)
+                self.focused_subwindow_index = 0
+            
+            # Get subwindow 0's managers for loading the first series
+            if 0 not in self.subwindow_managers:
+                # Ensure managers exist for subwindow 0
+                self._ensure_all_subwindows_have_managers()
+            
+            managers_0 = self.subwindow_managers[0]
+            slice_display_manager_0 = managers_0.get('slice_display_manager')
+            view_state_manager_0 = managers_0.get('view_state_manager')
+            
+            # Reset view state for subwindow 0
+            if view_state_manager_0:
+                view_state_manager_0.reset_window_level_state()
+                view_state_manager_0.reset_series_tracking()
+            
+            # Set up slice navigator
+            self.slice_navigator.set_total_slices(first_slice_info['total_slices'])
+            self.slice_navigator.set_current_slice(0)
+            
+            # Display slice in subwindow 0
+            if slice_display_manager_0:
+                slice_display_manager_0.display_slice(
+                    first_slice_info['dataset'],
+                    self.current_studies,
+                    self.current_study_uid,
+                    self.current_series_uid,
+                    self.current_slice_index
+                )
+            
+            # Update current dataset reference
+            self.current_dataset = first_slice_info['dataset']
+            
+            # Initialize subwindow_data[0] with loaded data for the first subwindow
+            # This ensures the first subwindow can navigate and respond to controls
+            focused_idx = 0
+            if focused_idx not in self.subwindow_data:
+                self.subwindow_data[focused_idx] = {}
+            
+            # Extract actual composite series key from the dataset that was displayed
+            # This ensures subwindow_data always reflects what's actually shown
+            displayed_dataset = first_slice_info['dataset']
+            extracted_series_uid = get_composite_series_key(displayed_dataset)
+            extracted_study_uid = getattr(displayed_dataset, 'StudyInstanceUID', '')
+            
+            # Get stored values for comparison
+            stored_series_uid = self.current_series_uid
+            stored_study_uid = self.current_study_uid
+            
+            # Log the sync with FULL UIDs (not truncated) to diagnose mismatches
+            if extracted_series_uid != stored_series_uid:
+                print(f"[DEBUG] Syncing subwindow_data after initial load: MISMATCH detected!")
+                print(f"[DEBUG]   Extracted series_uid from dataset: {extracted_series_uid}")
+                print(f"[DEBUG]   Stored series_uid: {stored_series_uid}")
+                print(f"[DEBUG]   Series UID match: False - updating stored value to match dataset")
+            else:
+                print(f"[DEBUG] Syncing subwindow_data after initial load: series_uid matches")
+                print(f"[DEBUG]   Series UID: {extracted_series_uid}")
+            
+            if extracted_study_uid != stored_study_uid:
+                print(f"[DEBUG]   Extracted study_uid from dataset: {extracted_study_uid}")
+                print(f"[DEBUG]   Stored study_uid: {stored_study_uid}")
+                print(f"[DEBUG]   Study UID match: False - updating stored value to match dataset")
+            
+            # Update subwindow_data and legacy references with extracted UIDs from dataset
+            # This ensures navigation always starts from the correct series that's actually displayed
+            self.subwindow_data[focused_idx]['current_dataset'] = displayed_dataset
+            self.subwindow_data[focused_idx]['current_slice_index'] = self.current_slice_index
+            self.subwindow_data[focused_idx]['current_series_uid'] = extracted_series_uid
+            self.subwindow_data[focused_idx]['current_study_uid'] = extracted_study_uid
+            
+            # Update legacy references to match
+            self.current_series_uid = extracted_series_uid
+            self.current_study_uid = extracted_study_uid
+            
+            # Get all datasets for the actual series (using extracted UID)
+            if extracted_study_uid in studies and extracted_series_uid in studies[extracted_study_uid]:
+                series_datasets = studies[extracted_study_uid][extracted_series_uid]
+                self.subwindow_data[focused_idx]['current_datasets'] = series_datasets
+            else:
+                # Fallback to stored values if extracted UIDs don't exist in studies
+                print(f"[DEBUG] WARNING: Extracted UIDs not found in studies, using stored values")
+                series_datasets = studies[self.current_study_uid][self.current_series_uid]
+                self.subwindow_data[focused_idx]['current_datasets'] = series_datasets
+            
+            # Ensure subwindow 0's slice_display_manager context is initialized with loaded data
+            # This is critical for navigation and window/level controls to work
+            # Use extracted UIDs to ensure context matches what's actually displayed
+            if slice_display_manager_0:
+                slice_display_manager_0.set_current_data_context(
+                    self.current_studies,
+                    extracted_study_uid,  # Use extracted UID, not stored
+                    extracted_series_uid,  # Use extracted UID, not stored
+                    self.current_slice_index
+                )
+            
+            # Ensure view_state_manager has the current dataset for window/level controls
+            if view_state_manager_0:
+                view_state_manager_0.current_dataset = first_slice_info['dataset']
+                # The window/level will be set when display_slice is called above
+                # We just need to ensure the dataset is set so handle_window_changed can work
+            
+            # Update references to point to subwindow 0's managers
+            self.view_state_manager = view_state_manager_0
+            self.slice_display_manager = slice_display_manager_0
+            if 0 in self.subwindow_managers:
+                managers_0 = self.subwindow_managers[0]
+                self.roi_coordinator = managers_0.get('roi_coordinator')
+            
+            # Ensure window/level controls are connected to subwindow 0's view_state_manager
+            # Reconnect signals to ensure they point to the correct manager
+            self._disconnect_focused_subwindow_signals()
+            self._connect_focused_subwindow_signals()
+            
+            # Clear metadata panel filter when loading new files
+            self.metadata_panel.clear_filter()
+            
+            # Update cine player context and check if series is cine-capable
+            self._update_cine_player_context()
+            
+            # Clear tag edit history for new dataset
+            if self.tag_edit_history:
+                self.tag_edit_history.clear_history(self.current_dataset)
+            self._update_undo_redo_state()
+            
+            # Store initial view state after a delay
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(100, self.view_state_manager.store_initial_view_state)
+            
+            # Update series navigator
+            self.series_navigator.update_series_list(
+                self.current_studies,
+                self.current_study_uid,
+                self.current_series_uid
+            )
+            
+            # Show navigator by default if it's hidden
+            navigator_was_hidden = not self.main_window.series_navigator_visible
+            if navigator_was_hidden:
+                self.main_window.toggle_series_navigator()
+            
+            # After navigator is shown (if it was hidden), fit image to viewport
+            # Use QTimer to ensure viewport has fully resized
+            if navigator_was_hidden:
+                from PySide6.QtCore import QTimer
+                QTimer.singleShot(50, lambda: self.image_viewer.fit_to_view(center_image=True))
+    
     def _get_rescale_params(self) -> tuple[Optional[float], Optional[float], Optional[str], bool]:
         """Get rescale parameters for ROI operations."""
         return (
@@ -2662,53 +2928,526 @@ class DICOMViewerApp(QObject):
         self.image_viewer.assign_series_requested.connect(self._on_assign_series_from_context_menu)
     
     def _open_files(self) -> None:
-        """Handle open files request. Delegates to file/series loading coordinator."""
-        self._file_series_coordinator.open_files()
-
+        """Handle open files request."""
+        datasets, studies = self.file_operations_handler.open_files()
+        if datasets is not None and studies is not None:
+            self.current_datasets = datasets
+            self.current_studies = studies
+    
     def _open_folder(self) -> None:
-        """Handle open folder request. Delegates to file/series loading coordinator."""
-        self._file_series_coordinator.open_folder()
-
+        """Handle open folder request."""
+        datasets, studies = self.file_operations_handler.open_folder()
+        if datasets is not None and studies is not None:
+            self.current_datasets = datasets
+            self.current_studies = studies
+    
     def _open_recent_file(self, file_path: str) -> None:
         """
-        Handle open recent file/folder request. Delegates to file/series loading coordinator.
-
+        Handle open recent file/folder request.
+        
         Args:
             file_path: Path to file or folder to open
         """
-        self._file_series_coordinator.open_recent_file(file_path)
-
+        datasets, studies = self.file_operations_handler.open_recent_file(file_path)
+        if datasets is not None and studies is not None:
+            self.current_datasets = datasets
+            self.current_studies = studies
+    
     def _open_files_from_paths(self, paths: list[str]) -> None:
         """
-        Handle open files/folders from drag-and-drop. Delegates to file/series loading coordinator.
-
+        Handle open files/folders from drag-and-drop.
+        
         Args:
             paths: List of file or folder paths to open
         """
-        self._file_series_coordinator.open_files_from_paths(paths)
+        datasets, studies = self.file_operations_handler.open_paths(paths)
+        if datasets is not None and studies is not None:
+            self.current_datasets = datasets
+            self.current_studies = studies
     
     def _on_series_navigation_requested(self, direction: int) -> None:
         """
         Handle series navigation request from image viewer (focused subwindow only).
-        Delegates to file/series loading coordinator.
+        
+        Args:
+            direction: -1 for left/previous series, 1 for right/next series
         """
-        self._file_series_coordinator.on_series_navigation_requested(direction)
-
+        timestamp = time.time()
+        # Try to determine signal source by checking call stack
+        frame = inspect.currentframe()
+        caller_frame = frame.f_back if frame else None
+        caller_name = caller_frame.f_code.co_name if caller_frame else "unknown"
+        caller_file = caller_frame.f_code.co_filename.split('/')[-1] if caller_frame else "unknown"
+        print(f"[DEBUG-NAV] [{timestamp:.6f}] _on_series_navigation_requested: direction={direction}, caller={caller_name} in {caller_file}, lock={self._series_navigation_in_progress}")
+        
+        # Prevent concurrent navigation operations
+        if self._series_navigation_in_progress:
+            print(f"[DEBUG-NAV] [{timestamp:.6f}] Series navigation: Navigation already in progress, ignoring request")
+            return
+        
+        # Set navigation lock
+        self._series_navigation_in_progress = True
+        print(f"[DEBUG-NAV] [{timestamp:.6f}] Series navigation: Lock acquired")
+        
+        try:
+            # Get focused subwindow's data
+            focused_idx = self.focused_subwindow_index
+            if focused_idx not in self.subwindow_data:
+                print(f"[DEBUG] Series navigation: subwindow {focused_idx} not in subwindow_data")
+                return
+            
+            data = self.subwindow_data[focused_idx]
+            focused_study_uid = data.get('current_study_uid', '')
+            focused_series_uid = data.get('current_series_uid', '')
+            focused_slice_index = data.get('current_slice_index', 0)
+            
+            # CRITICAL FIX: Extract actual composite series key from currently displayed dataset
+            # This ensures we navigate from what's actually shown, not what's stored
+            displayed_dataset = data.get('current_dataset')
+            if displayed_dataset:
+                extracted_series_uid = get_composite_series_key(displayed_dataset)
+                extracted_study_uid = getattr(displayed_dataset, 'StudyInstanceUID', '')
+                
+                if extracted_series_uid and extracted_series_uid != focused_series_uid:
+                    print(f"[DEBUG] Series navigation: MISMATCH at start! Stored={focused_series_uid}, Extracted={extracted_series_uid}")
+                    print(f"[DEBUG]   Full stored UID: {focused_series_uid}")
+                    print(f"[DEBUG]   Full extracted UID: {extracted_series_uid}")
+                    print(f"[DEBUG]   Using extracted UID for navigation")
+                    # Use the extracted UID - this is what's actually displayed
+                    focused_series_uid = extracted_series_uid
+                    focused_study_uid = extracted_study_uid
+                    # Update subwindow_data immediately to fix the mismatch
+                    data['current_series_uid'] = extracted_series_uid
+                    data['current_study_uid'] = extracted_study_uid
+            elif not focused_series_uid:
+                # No series loaded - load first series (right arrow) or last series (left arrow)
+                print(f"[DEBUG] Series navigation: No series loaded, attempting to load {'first' if direction > 0 else 'last'} series")
+                
+                # Need to get study_uid from somewhere - try to get it from current_studies
+                if not self.current_studies:
+                    print(f"[DEBUG] Series navigation: No studies loaded, cannot navigate")
+                    return
+                
+                # Use the first study (or could use focused_study_uid if available)
+                if not focused_study_uid:
+                    # Get first study
+                    focused_study_uid = list(self.current_studies.keys())[0]
+                    data['current_study_uid'] = focused_study_uid
+                
+                study_series = self.current_studies.get(focused_study_uid, {})
+                if not study_series:
+                    print(f"[DEBUG] Series navigation: Study has no series, cannot navigate")
+                    return
+                
+                # Build sorted list of series
+                series_list = []
+                for series_uid, datasets in study_series.items():
+                    if datasets:
+                        first_dataset = datasets[0]
+                        series_number = getattr(first_dataset, 'SeriesNumber', None)
+                        try:
+                            series_num = int(series_number) if series_number is not None else 0
+                        except (ValueError, TypeError):
+                            series_num = 0
+                        series_list.append((series_num, series_uid, datasets))
+                
+                series_list.sort(key=lambda x: x[0])
+                
+                if not series_list:
+                    print(f"[DEBUG] Series navigation: No valid series in study, cannot navigate")
+                    return
+                
+                # Load first series for right arrow, last series for left arrow
+                if direction > 0:
+                    # Right arrow: load first series
+                    _, target_series_uid, target_datasets = series_list[0]
+                    print(f"[DEBUG] Series navigation: Loading first series {target_series_uid[:20]}...")
+                else:
+                    # Left arrow: load last series
+                    _, target_series_uid, target_datasets = series_list[-1]
+                    print(f"[DEBUG] Series navigation: Loading last series {target_series_uid[:20]}...")
+                
+                # Update subwindow_data
+                data['current_series_uid'] = target_series_uid
+                data['current_study_uid'] = focused_study_uid
+                data['current_dataset'] = target_datasets[0]
+                data['current_slice_index'] = 0
+                
+                # Update legacy references
+                self.current_series_uid = target_series_uid
+                self.current_slice_index = 0
+                self.current_dataset = target_datasets[0]
+                self.current_study_uid = focused_study_uid
+                
+                # Set context
+                self.slice_display_manager.set_current_data_context(
+                    self.current_studies,
+                    focused_study_uid,
+                    target_series_uid,
+                    0
+                )
+                
+                # Display the series
+                self.slice_display_manager.display_slice(
+                    target_datasets[0],
+                    self.current_studies,
+                    focused_study_uid,
+                    target_series_uid,
+                    0
+                )
+                
+                # Extract actual composite series key from the dataset that was displayed
+                extracted_series_uid = get_composite_series_key(target_datasets[0])
+                extracted_study_uid = getattr(target_datasets[0], 'StudyInstanceUID', '')
+                
+                # Sync subwindow_data with actual displayed data
+                self.subwindow_data[focused_idx]['current_series_uid'] = extracted_series_uid
+                self.subwindow_data[focused_idx]['current_study_uid'] = extracted_study_uid
+                self.subwindow_data[focused_idx]['current_dataset'] = target_datasets[0]
+                self.subwindow_data[focused_idx]['current_slice_index'] = 0
+                
+                # Update legacy references to match
+                self.current_series_uid = extracted_series_uid
+                self.current_study_uid = extracted_study_uid
+                self.current_slice_index = 0
+                self.current_dataset = target_datasets[0]
+                
+                # Update slice display manager context with extracted UIDs
+                self.slice_display_manager.set_current_data_context(
+                    self.current_studies,
+                    extracted_study_uid,
+                    extracted_series_uid,
+                    0
+                )
+                
+                # Update undo/redo state when dataset changes
+                self._update_undo_redo_state()
+                
+                # Update slice navigator
+                if self.current_studies and self.current_study_uid and self.current_series_uid:
+                    datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
+                    self.slice_navigator.set_total_slices(len(datasets))
+                    self.slice_navigator.set_current_slice(0)
+                
+                # Update series navigator highlighting using focused subwindow's data
+                focused_idx = self.focused_subwindow_index
+                if focused_idx in self.subwindow_data:
+                    data = self.subwindow_data[focused_idx]
+                    focused_series_uid = data.get('current_series_uid', '')
+                    focused_study_uid = data.get('current_study_uid', '')
+                    if focused_series_uid and focused_study_uid:
+                        self.series_navigator.set_current_series(focused_series_uid, focused_study_uid)
+                
+                # Update cine player context
+                self._update_cine_player_context()
+                
+                return  # Early return since we've handled the navigation
+        
+            print(f"[DEBUG] Series navigation: subwindow {focused_idx}, study={focused_study_uid[:20] if focused_study_uid else 'None'}..., "
+                  f"series={focused_series_uid[:20] if focused_series_uid else 'None'}..., direction={direction}")
+            
+            # Ensure we have valid study UID and that the study exists in current_studies
+            if not focused_study_uid or focused_study_uid not in self.current_studies:
+                print(f"[DEBUG] Series navigation: Invalid study UID or study not in current_studies")
+                return
+            
+            # Validate that the series_uid exists in the study (critical fix for skipping)
+            study_series = self.current_studies[focused_study_uid]
+            if focused_series_uid and focused_series_uid not in study_series:
+                # Series doesn't exist - might be stale data
+                # Use first series in study as fallback
+                print(f"[DEBUG] Series navigation: Series {focused_series_uid[:20] if focused_series_uid else 'None'}... not found in study. "
+                      f"Available series: {list(study_series.keys())[:3]}... (showing first 3)")
+                if study_series:
+                    # Get first series (sorted by SeriesNumber if available)
+                    series_list = []
+                    for series_uid, datasets in study_series.items():
+                        if datasets:
+                            first_dataset = datasets[0]
+                            series_number = getattr(first_dataset, 'SeriesNumber', None)
+                            try:
+                                series_num = int(series_number) if series_number is not None else 0
+                            except (ValueError, TypeError):
+                                series_num = 0
+                            series_list.append((series_num, series_uid, datasets))
+                    series_list.sort(key=lambda x: x[0])
+                    
+                    if series_list:
+                        _, first_series_uid, first_datasets = series_list[0]
+                        focused_series_uid = first_series_uid
+                        # Update subwindow_data with correct series
+                        self.subwindow_data[focused_idx]['current_series_uid'] = first_series_uid
+                        self.subwindow_data[focused_idx]['current_dataset'] = first_datasets[0]
+                        self.subwindow_data[focused_idx]['current_slice_index'] = 0
+                        focused_slice_index = 0
+                        print(f"[DEBUG] Series navigation: Using fallback series {first_series_uid[:20]}...")
+                    else:
+                        print(f"[DEBUG] Series navigation: No valid series in study, cannot navigate")
+                        return
+                else:
+                    print(f"[DEBUG] Series navigation: Study has no series, cannot navigate")
+                    return
+            
+            # Set context to match focused subwindow's data BEFORE navigation
+            # This is critical - the slice_display_manager needs the correct context
+            self.slice_display_manager.set_current_data_context(
+            self.current_studies,
+            focused_study_uid,
+                focused_series_uid,
+                focused_slice_index
+            )
+            
+            # Verify context was set correctly (debug check)
+            # Ensure the slice_display_manager's internal state matches what we set
+            if (self.slice_display_manager.current_study_uid != focused_study_uid or 
+                self.slice_display_manager.current_series_uid != focused_series_uid):
+                print(f"[DEBUG] Series navigation: Context mismatch detected. "
+                      f"Expected study={focused_study_uid[:20]}..., series={focused_series_uid[:20]}..., "
+                      f"Got study={self.slice_display_manager.current_study_uid[:20] if self.slice_display_manager.current_study_uid else 'None'}..., "
+                      f"series={self.slice_display_manager.current_series_uid[:20] if self.slice_display_manager.current_series_uid else 'None'}...")
+                # Context didn't update correctly, force it again
+                self.slice_display_manager.set_current_data_context(
+                    self.current_studies,
+                    focused_study_uid,
+                    focused_series_uid,
+                    focused_slice_index
+                )
+            
+            # Build flat list of all series from all studies in navigator order
+            flat_series_list = self._build_flat_series_list(self.current_studies)
+            
+            if not flat_series_list:
+                print(f"[DEBUG] Series navigation: No series found in any study")
+                return
+            
+            # Find current series in flat list by matching both study_uid and series_uid
+            current_index = None
+            for idx, (_, study_uid, series_uid, _) in enumerate(flat_series_list):
+                if study_uid == focused_study_uid and series_uid == focused_series_uid:
+                    current_index = idx
+                    break
+            
+            if current_index is None:
+                print(f"[DEBUG] Series navigation: Current series not found in flat list. "
+                      f"Looking for study={focused_study_uid[:20] if focused_study_uid else 'None'}..., "
+                      f"series={focused_series_uid[:20] if focused_series_uid else 'None'}...")
+                return
+            
+            # Calculate new index
+            new_index = current_index + direction
+            
+            # Check if new index is valid
+            if new_index < 0 or new_index >= len(flat_series_list):
+                print(f"[DEBUG] Series navigation: New index {new_index} out of range [0, {len(flat_series_list)}). "
+                      f"Already at {'first' if new_index < 0 else 'last'} series.")
+                return
+            
+            # Get target series from flat list
+            _, target_study_uid, target_series_uid, target_first_dataset = flat_series_list[new_index]
+            
+            # Get full datasets list for the target series
+            if target_study_uid not in self.current_studies:
+                print(f"[DEBUG] Series navigation: Target study {target_study_uid[:20]}... not found in current_studies")
+                return
+            
+            if target_series_uid not in self.current_studies[target_study_uid]:
+                print(f"[DEBUG] Series navigation: Target series {target_series_uid[:20]}... not found in study")
+                return
+            
+            target_datasets = self.current_studies[target_study_uid][target_series_uid]
+            if not target_datasets:
+                print(f"[DEBUG] Series navigation: Target series has no datasets")
+                return
+            
+            # Set new series information
+            new_series_uid = target_series_uid
+            slice_index = 0  # Always start at first slice when navigating to new series
+            dataset = target_datasets[0]
+            
+            print(f"[DEBUG] Series navigation: Successfully navigating from index {current_index} to {new_index}, "
+                  f"new_series_uid={new_series_uid[:20]}..., new_study_uid={target_study_uid[:20]}...")
+            
+            if new_series_uid is not None and dataset is not None:
+                # Update focused subwindow's data
+                self.subwindow_data[focused_idx]['current_series_uid'] = new_series_uid
+                self.subwindow_data[focused_idx]['current_study_uid'] = target_study_uid
+                self.subwindow_data[focused_idx]['current_slice_index'] = slice_index
+                self.subwindow_data[focused_idx]['current_dataset'] = dataset
+                
+                # Update legacy references (point to focused subwindow)
+                self.current_series_uid = new_series_uid
+                self.current_slice_index = slice_index
+                self.current_dataset = dataset
+                self.current_study_uid = target_study_uid  # Use target study UID
+                
+                # Reset projection state when switching series
+                self.slice_display_manager.reset_projection_state()
+                # Update widget to match reset state
+                self.intensity_projection_controls_widget.set_enabled(False)
+                self.intensity_projection_controls_widget.set_projection_type("aip")
+                self.intensity_projection_controls_widget.set_slice_count(4)
+                
+                # Display slice
+                self.slice_display_manager.display_slice(
+                    dataset,
+                    self.current_studies,
+                    target_study_uid,  # Use target study UID from navigation
+                    new_series_uid,
+                    slice_index
+                )
+                
+                # Extract actual composite series key from the dataset that was displayed
+                # This ensures subwindow_data always reflects what's actually shown
+                extracted_series_uid = get_composite_series_key(dataset)
+                extracted_study_uid = getattr(dataset, 'StudyInstanceUID', '')
+                
+                # Get stored values for comparison
+                stored_series_uid = new_series_uid
+                stored_study_uid = target_study_uid
+                
+                # Log the sync with FULL UIDs (not truncated) to diagnose mismatches
+                if extracted_series_uid != stored_series_uid:
+                    print(f"[DEBUG] Syncing subwindow_data after navigation: MISMATCH detected!")
+                    print(f"[DEBUG]   Extracted series_uid from dataset: {extracted_series_uid}")
+                    print(f"[DEBUG]   Stored series_uid (from navigation): {stored_series_uid}")
+                    print(f"[DEBUG]   Series UID match: False - updating stored value to match dataset")
+                else:
+                    print(f"[DEBUG] Syncing subwindow_data after navigation: series_uid matches")
+                    print(f"[DEBUG]   Series UID: {extracted_series_uid}")
+                
+                if extracted_study_uid != stored_study_uid:
+                    print(f"[DEBUG]   Extracted study_uid from dataset: {extracted_study_uid}")
+                    print(f"[DEBUG]   Stored study_uid: {stored_study_uid}")
+                    print(f"[DEBUG]   Study UID match: False - updating stored value to match dataset")
+                
+                # Update subwindow_data with extracted UIDs from dataset
+                # This ensures navigation always starts from the correct series that's actually displayed
+                self.subwindow_data[focused_idx]['current_series_uid'] = extracted_series_uid
+                self.subwindow_data[focused_idx]['current_study_uid'] = extracted_study_uid
+                self.subwindow_data[focused_idx]['current_dataset'] = dataset
+                self.subwindow_data[focused_idx]['current_slice_index'] = slice_index
+                
+                # Update legacy references to match
+                self.current_series_uid = extracted_series_uid
+                self.current_study_uid = extracted_study_uid
+                self.current_slice_index = slice_index
+                self.current_dataset = dataset
+                
+                # Update slice display manager context with extracted UIDs (after sync)
+                # This ensures the manager's context matches what's actually displayed
+                self.slice_display_manager.set_current_data_context(
+                    self.current_studies,
+                    extracted_study_uid,  # Use extracted UID
+                    extracted_series_uid,  # Use extracted UID
+                    slice_index
+                )
+                
+                # Update undo/redo state when dataset changes
+                self._update_undo_redo_state()
+                
+                # Update slice navigator (shared, shows focused subwindow's slice)
+                if self.current_studies and self.current_study_uid and self.current_series_uid:
+                    datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
+                    self.slice_navigator.set_total_slices(len(datasets))
+                    self.slice_navigator.set_current_slice(slice_index)
+                
+                # Update series navigator highlighting using focused subwindow's data
+                # Get focused subwindow's series and study UID for highlighting
+                if focused_idx in self.subwindow_data:
+                    data = self.subwindow_data[focused_idx]
+                    focused_series_uid = data.get('current_series_uid', '')
+                    focused_study_uid = data.get('current_study_uid', '')
+                    if focused_series_uid and focused_study_uid:
+                        self.series_navigator.set_current_series(focused_series_uid, focused_study_uid)
+                
+                # Update right panel to reflect new series (including fusion base series)
+                self._update_right_panel_for_focused_subwindow()
+                
+                # Update cine player context and check if series is cine-capable
+                self._update_cine_player_context()
+        finally:
+            # Always clear navigation lock, even if an error occurred
+            timestamp = time.time()
+            print(f"[DEBUG-NAV] [{timestamp:.6f}] Series navigation: Lock released")
+            self._series_navigation_in_progress = False
+    
     def _build_flat_series_list(self, studies: Dict) -> List[Tuple[int, str, str, Dataset]]:
-        """Build flat list of all series from all studies in navigator display order. Delegates to coordinator."""
-        return self._file_series_coordinator.build_flat_series_list(studies)
-
+        """
+        Build flat list of all series from all studies in navigator display order.
+        
+        This method creates a flat list that matches the order in which series appear
+        in the series navigator. Studies are iterated in dict order, and series within
+        each study are sorted by SeriesNumber (ascending).
+        
+        Args:
+            studies: Dictionary of studies {study_uid: {series_uid: [datasets]}}
+            
+        Returns:
+            List of tuples: [(series_num, study_uid, series_uid, first_dataset), ...]
+        """
+        flat_list = []
+        for study_uid, study_series in studies.items():
+            # Build series list for this study
+            series_list = []
+            for series_uid, datasets in study_series.items():
+                if datasets:
+                    first_dataset = datasets[0]
+                    series_number = getattr(first_dataset, 'SeriesNumber', None)
+                    try:
+                        series_num = int(series_number) if series_number is not None else 0
+                    except (ValueError, TypeError):
+                        series_num = 0
+                    series_list.append((series_num, study_uid, series_uid, first_dataset))
+            # Sort by SeriesNumber (ascending)
+            series_list.sort(key=lambda x: x[0])
+            # Add to flat list
+            flat_list.extend(series_list)
+        return flat_list
+    
     def _on_series_navigator_selected(self, series_uid: str) -> None:
-        """Handle series selection from series navigator (assigns to focused subwindow). Delegates to coordinator."""
-        self._file_series_coordinator.on_series_navigator_selected(series_uid)
-
+        """
+        Handle series selection from series navigator (assigns to focused subwindow).
+        
+        Args:
+            series_uid: Selected series UID
+        """
+        if not self.current_studies:
+            return
+        
+        # Find study containing this series
+        target_study_uid = None
+        for study_uid, series_dict in self.current_studies.items():
+            if series_uid in series_dict:
+                target_study_uid = study_uid
+                break
+        
+        if target_study_uid is None:
+            return
+        
+        study_series = self.current_studies[target_study_uid]
+        if series_uid not in study_series:
+            return
+        
+        datasets = study_series[series_uid]
+        if not datasets:
+            return
+        
+        # Assign to focused subwindow
+        focused_subwindow = self.multi_window_layout.get_focused_subwindow()
+        if focused_subwindow:
+            # Assign first slice of selected series to focused subwindow
+            # _assign_series_to_subwindow will handle the display
+            self._assign_series_to_subwindow(focused_subwindow, series_uid, 0)
+    
     def _on_assign_series_from_context_menu(self, series_uid: str) -> None:
-        """Handle series assignment request from context menu. Delegates to coordinator."""
-        self._file_series_coordinator.on_assign_series_from_context_menu(series_uid)
-
-    def _assign_series_to_subwindow(self, subwindow: SubWindowContainer, series_uid: str, slice_index: int) -> None:
-        """Assign a series/slice to a specific subwindow. Delegates to file/series loading coordinator."""
-        self._file_series_coordinator.assign_series_to_subwindow(subwindow, series_uid, slice_index)
+        """
+        Handle series assignment request from context menu (assigns to focused subwindow).
+        
+        Args:
+            series_uid: Selected series UID
+        """
+        # Same logic as _on_series_navigator_selected
+        self._on_series_navigator_selected(series_uid)
     
     def _display_slice(self, dataset, preserve_view_override: Optional[bool] = None) -> None:
         """
@@ -2986,25 +3725,158 @@ class DICOMViewerApp(QObject):
         self.dialog_coordinator.open_about_this_file(current_dataset, file_path)
     
     def _get_file_path_for_dataset(self, dataset, study_uid: str, series_uid: str, slice_index: int) -> Optional[str]:
-        """Get file path for a dataset. Delegates to file/series loading coordinator."""
-        return self._file_series_coordinator.get_file_path_for_dataset(dataset, study_uid, series_uid, slice_index)
-
+        """
+        Get file path for a dataset.
+        
+        Args:
+            dataset: DICOM dataset
+            study_uid: Study Instance UID
+            series_uid: Series UID (composite key)
+            slice_index: Slice index
+            
+        Returns:
+            File path if found, None otherwise
+        """
+        if not dataset or not study_uid or not series_uid:
+            return None
+        
+        # First, check if dataset has filename attribute (pydicom sometimes stores this)
+        if hasattr(dataset, 'filename') and dataset.filename:
+            return dataset.filename
+        
+        # Try to get instance number from dataset
+        instance_num = None
+        if hasattr(dataset, 'InstanceNumber'):
+            try:
+                instance_num = int(getattr(dataset, 'InstanceNumber'))
+            except (ValueError, TypeError):
+                pass
+        
+        # If we have instance_num, try that first
+        if instance_num is not None:
+            key = (study_uid, series_uid, instance_num)
+            if key in self.dicom_organizer.file_paths:
+                return self.dicom_organizer.file_paths[key]
+        
+        # Try with slice_index as instance_num
+        key = (study_uid, series_uid, slice_index)
+        if key in self.dicom_organizer.file_paths:
+            return self.dicom_organizer.file_paths[key]
+        
+        # If still not found, try to find by iterating through file_paths
+        # This handles cases where instance_num calculation doesn't match
+        for (s_uid, ser_uid, inst_num), path in self.dicom_organizer.file_paths.items():
+            if s_uid == study_uid and ser_uid == series_uid:
+                # Check if this might be the right file by comparing dataset
+                # We'll use the first match for this series, or try to match by instance
+                if instance_num is not None and inst_num == instance_num:
+                    return path
+                # If no instance match, return first file in series (better than nothing)
+                if instance_num is None:
+                    return path
+        
+        return None
+    
     def _on_show_file_from_series(self, study_uid: str, series_uid: str) -> None:
-        """Handle 'Show file' request from series navigator thumbnail. Delegates to coordinator."""
-        self._file_series_coordinator.on_show_file_from_series(study_uid, series_uid)
-
+        """
+        Handle "Show file" request from series navigator thumbnail.
+        
+        Opens file explorer and selects the first slice file of the specified series.
+        
+        Args:
+            study_uid: Study Instance UID
+            series_uid: Series UID (composite key)
+        """
+        from utils.file_explorer import reveal_file_in_explorer
+        
+        # Check if we have the studies data
+        if not self.current_studies or study_uid not in self.current_studies:
+            return
+        
+        study_series = self.current_studies[study_uid]
+        if series_uid not in study_series or not study_series[series_uid]:
+            return
+        
+        # Get first dataset from the series
+        first_dataset = study_series[series_uid][0]
+        
+        # Get file path for first slice (slice_index=0)
+        file_path = self._get_file_path_for_dataset(first_dataset, study_uid, series_uid, 0)
+        
+        if file_path and os.path.exists(file_path):
+            reveal_file_in_explorer(file_path)
+    
     def _on_about_this_file_from_series(self, study_uid: str, series_uid: str) -> None:
-        """Handle 'About This File' request from series navigator thumbnail. Delegates to coordinator."""
-        self._file_series_coordinator.on_about_this_file_from_series(study_uid, series_uid)
-
+        """
+        Handle "About This File" request from series navigator thumbnail.
+        
+        Opens About This File dialog with the first slice of the specified series.
+        
+        Args:
+            study_uid: Study Instance UID
+            series_uid: Series UID (composite key)
+        """
+        # Check if we have the studies data
+        if not self.current_studies or study_uid not in self.current_studies:
+            return
+        
+        study_series = self.current_studies[study_uid]
+        if series_uid not in study_series or not study_series[series_uid]:
+            return
+        
+        # Get first dataset from the series
+        first_dataset = study_series[series_uid][0]
+        
+        # Get file path for first slice (slice_index=0)
+        file_path = self._get_file_path_for_dataset(first_dataset, study_uid, series_uid, 0)
+        
+        # Open About This File dialog
+        self.dialog_coordinator.open_about_this_file(first_dataset, file_path)
+    
     def _get_current_slice_file_path(self, subwindow_idx: Optional[int] = None) -> Optional[str]:
-        """Get file path for the currently displayed slice in a subwindow. Delegates to coordinator."""
-        return self._file_series_coordinator.get_current_slice_file_path(subwindow_idx)
-
+        """
+        Get file path for the currently displayed slice in a subwindow.
+        
+        Args:
+            subwindow_idx: Subwindow index (None to use focused subwindow)
+            
+        Returns:
+            File path if found, None otherwise
+        """
+        # Use focused subwindow if index not provided
+        if subwindow_idx is None:
+            subwindow_idx = self.focused_subwindow_index
+        
+        # Get current slice information from subwindow
+        dataset = self._get_subwindow_dataset(subwindow_idx)
+        study_uid = self._get_subwindow_study_uid(subwindow_idx)
+        series_uid = self._get_subwindow_series_uid(subwindow_idx)
+        slice_index = self._get_subwindow_slice_index(subwindow_idx)
+        
+        if not dataset or not study_uid or not series_uid:
+            return None
+        
+        # Get file path using existing method
+        return self._get_file_path_for_dataset(dataset, study_uid, series_uid, slice_index)
+    
     def _update_about_this_file_dialog(self) -> None:
-        """Update About This File dialog with current dataset and file path. Delegates to coordinator."""
-        self._file_series_coordinator.update_about_this_file_dialog()
-
+        """Update About This File dialog with current dataset and file path."""
+        focused_idx = self.focused_subwindow_index
+        current_dataset = None
+        file_path = None
+        
+        if focused_idx in self.subwindow_data:
+            current_dataset = self.subwindow_data[focused_idx].get('current_dataset')
+            if current_dataset:
+                file_path = self._get_file_path_for_dataset(
+                    current_dataset,
+                    self.subwindow_data[focused_idx].get('current_study_uid', ''),
+                    self.subwindow_data[focused_idx].get('current_series_uid', ''),
+                    self.subwindow_data[focused_idx].get('current_slice_index', 0)
+                )
+        
+        self.dialog_coordinator.update_about_this_file(current_dataset, file_path)
+    
     def _on_privacy_view_toggled(self, enabled: bool) -> None:
         """
         Handle privacy view toggle.
