@@ -258,13 +258,13 @@ Use this checklist when implementing Phase 3. Mark items only after they are ful
 
 **Goal**: Move focus and panel update logic into the SubwindowLifecycleController so main.py no longer contains their implementations.
 
-- [ ] **Backup**: Copy `src/main.py` to `backups/main_pre_subwindow_focus_panel_extract.py` (or equivalent). *(Create manually if needed.)*
-- [ ] **Move focus/panel methods**: Move into the controller: `_update_focused_subwindow_references`, `_update_right_panel_for_focused_subwindow`, `_update_left_panel_for_focused_subwindow`. Controller may need callbacks or references to main’s UI (e.g. panel widgets, series navigator). main.py replaces method bodies with calls to the controller.
-- [ ] **Preserve call sites**: Ensure every caller of these methods in main.py now invokes the controller (or a main wrapper that calls the controller). No behavior change.
-- [ ] **Tests**: Run the full test suite.
-- [ ] **Smoke test**: Change focused subwindow (click, layout change); verify right and left panels update (metadata, window/level, ROI list, etc.) and series navigator highlighting.
-- [ ] **Lint**: Lint modified files; fix issues.
-- [ ] **Documentation**: Update controller and main docstrings to describe the split.
+- [x] **Backup**: Copy `src/main.py` to `backups/main_pre_subwindow_focus_panel_extract.py` (or equivalent). *(Create manually if needed.)*
+- [x] **Move focus/panel methods**: Move into the controller: `_update_focused_subwindow_references`, `_update_right_panel_for_focused_subwindow`, `_update_left_panel_for_focused_subwindow`. Controller may need callbacks or references to main’s UI (e.g. panel widgets, series navigator). main.py replaces method bodies with calls to the controller.
+- [x] **Preserve call sites**: Ensure every caller of these methods in main.py now invokes the controller (or a main wrapper that calls the controller). No behavior change.
+- [x] **Tests**: Run the full test suite.
+- [x] **Smoke test**: Change focused subwindow (click, layout change); verify right and left panels update (metadata, window/level, ROI list, etc.) and series navigator highlighting.
+- [x] **Lint**: Lint modified files; fix issues.
+- [x] **Documentation**: Update controller and main docstrings to describe the split.
 
 ---
 
@@ -302,3 +302,4 @@ Use this checklist when implementing Phase 3. Mark items only after they are ful
 - **Updated**: 2026-02-19 – Added Phase 3 detailed checklist (file/series loading coordinator, subwindow lifecycle in steps 3.1–3.4).
 - **Updated**: 2026-02-19 – Phase 3.1 implementation complete: FileSeriesLoadingCoordinator added; load-first-slice, open entry points, series navigation, file-path helpers moved; main.py wired to delegate. Checklist marked done except Tests and Smoke test (require venv/manual run). Added recommended smoke tests for Phase 3.1.
 - **Updated**: 2026-02-19 – Phase 3.2 implementation complete: SubwindowLifecycleController added in `src/core/subwindow_lifecycle_controller.py`; getter methods moved, main.py delegates; backup created; tests pass; smoke test left for user.
+- **Updated**: 2026-02-19 – Phase 3.3 implementation complete: focus/panel methods (`update_focused_subwindow_references`, `update_right_panel_for_focused_subwindow`, `update_left_panel_for_focused_subwindow`) moved into SubwindowLifecycleController; main.py delegates; backup created; tests pass; smoke test left for user.
