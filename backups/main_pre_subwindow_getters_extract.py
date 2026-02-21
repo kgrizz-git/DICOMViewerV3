@@ -79,7 +79,6 @@ from core.file_operations_handler import FileOperationsHandler
 from core.slice_display_manager import SliceDisplayManager
 from core.annotation_paste_handler import AnnotationPasteHandler
 from core.file_series_loading_coordinator import FileSeriesLoadingCoordinator
-from core.subwindow_lifecycle_controller import SubwindowLifecycleController
 from gui.roi_coordinator import ROICoordinator
 from gui.measurement_coordinator import MeasurementCoordinator
 from gui.crosshair_coordinator import CrosshairCoordinator
@@ -225,9 +224,6 @@ class DICOMViewerApp(QObject):
         
         # Initialize per-subwindow managers for all subwindows
         self._initialize_subwindow_managers()
-
-        # Subwindow lifecycle controller (getters in step 1; focus/panel and connect in later steps)
-        self._subwindow_lifecycle_controller = SubwindowLifecycleController(self)
 
         self._annotation_paste_handler = AnnotationPasteHandler(self)
 
@@ -765,32 +761,61 @@ class DICOMViewerApp(QObject):
         image_viewer.set_mouse_mode("pan")
     
     def _get_subwindow_dataset(self, idx: int) -> Optional[Dataset]:
-        """Get current dataset for a subwindow. Delegates to subwindow lifecycle controller."""
-        return self._subwindow_lifecycle_controller.get_subwindow_dataset(idx)
-
+        """Get current dataset for a subwindow."""
+        if idx in self.subwindow_data:
+            return self.subwindow_data[idx].get('current_dataset')
+        return None
+    
     def _get_subwindow_slice_index(self, idx: int) -> int:
-        """Get current slice index for a subwindow. Delegates to subwindow lifecycle controller."""
-        return self._subwindow_lifecycle_controller.get_subwindow_slice_index(idx)
-
+        """Get current slice index for a subwindow."""
+        if idx in self.subwindow_data:
+            return self.subwindow_data[idx].get('current_slice_index', 0)
+        return 0
+    
     def _get_subwindow_slice_display_manager(self, idx: int):
-        """Get slice display manager for a subwindow. Delegates to subwindow lifecycle controller."""
-        return self._subwindow_lifecycle_controller.get_subwindow_slice_display_manager(idx)
-
+        """Get slice display manager for a subwindow."""
+        if idx in self.subwindow_managers:
+            return self.subwindow_managers[idx].get('slice_display_manager')
+        return None
+    
     def _get_subwindow_study_uid(self, idx: int) -> str:
-        """Get current study UID for a subwindow. Delegates to subwindow lifecycle controller."""
-        return self._subwindow_lifecycle_controller.get_subwindow_study_uid(idx)
-
+        """Get current study UID for a subwindow."""
+        if idx in self.subwindow_data:
+            return self.subwindow_data[idx].get('current_study_uid', '')
+        return ''
+    
     def _get_subwindow_series_uid(self, idx: int) -> str:
-        """Get current series UID for a subwindow. Delegates to subwindow lifecycle controller."""
-        return self._subwindow_lifecycle_controller.get_subwindow_series_uid(idx)
-
+        """Get current series UID for a subwindow."""
+        if idx in self.subwindow_data:
+            return self.subwindow_data[idx].get('current_series_uid', '')
+        return ''
+    
     def get_focused_subwindow_index(self) -> int:
-        """Return the currently focused subwindow index (0-3). Delegates to subwindow lifecycle controller."""
-        return self._subwindow_lifecycle_controller.get_focused_subwindow_index()
-
+        """Return the currently focused subwindow index (0-3). Used for histogram and other per-view features."""
+        return self.focused_subwindow_index
+    
     def get_histogram_callbacks_for_subwindow(self, idx: int) -> dict:
-        """Return callbacks for the histogram dialog for subwindow idx. Delegates to subwindow lifecycle controller."""
-        return self._subwindow_lifecycle_controller.get_histogram_callbacks_for_subwindow(idx)
+        """
+        Return a dict of callbacks for the histogram dialog tied to subwindow idx.
+        Used so each histogram always shows the image currently displayed in that subwindow.
+        """
+        if idx not in self.subwindow_managers:
+            return {}
+        vsm = self.subwindow_managers[idx].get('view_state_manager')
+        if vsm is None:
+            return {}
+        return {
+            'get_current_dataset': lambda i=idx: self._get_subwindow_dataset(i),
+            'get_current_slice_index': lambda i=idx: self._get_subwindow_slice_index(i),
+            'get_window_center': lambda: vsm.current_window_center,
+            'get_window_width': lambda: vsm.current_window_width,
+            'get_use_rescaled': lambda: vsm.use_rescaled_values,
+            'get_rescale_params': lambda: (
+                vsm.rescale_slope,
+                vsm.rescale_intercept,
+                getattr(vsm, 'rescale_type', None)
+            ),
+        }
     
     def _update_focused_subwindow_references(self) -> None:
         """Update legacy references to point to focused subwindow's managers and data."""
@@ -4117,8 +4142,13 @@ class DICOMViewerApp(QObject):
         self.overlay_coordinator.hide_roi_graphics(hide)
     
     def _get_focused_subwindow(self) -> Optional[SubWindowContainer]:
-        """Get the currently focused subwindow. Delegates to subwindow lifecycle controller."""
-        return self._subwindow_lifecycle_controller.get_focused_subwindow()
+        """
+        Get the currently focused subwindow.
+        
+        Returns:
+            SubWindowContainer or None if no subwindow is focused
+        """
+        return self.multi_window_layout.get_focused_subwindow()
     
     def _get_selected_rois(self, subwindow: SubWindowContainer) -> list:
         """

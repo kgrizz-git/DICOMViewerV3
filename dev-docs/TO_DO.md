@@ -11,3 +11,10 @@
 - [ ] Enable optional smoothing when displaying magnified images so they appear less "blocky".
 - [ ] DICOM tag viewer (ctrl+T) only showing tag values for first image
 - [ ] Got error on PET/CT study when I switched to fast mode, scrolled slices, adjusted overlay level, and then tried re-enabling high-accuracy fusion mode: [WARNING] 3D resampling failed, using 2D mode
+- [ ] For histograms - calculate max of "frequency" (y-axis on histogram) for whole series and set the y-axis to use that as the maximum regardless of which slice of the series is currently displayed so that the scale is not constantly changing. 
+    - [ ] Also make y-axis label say "Frequency (Log Scale)" or "Frequency (Linear Scale)" depending what mode the display is in
+- [ ] See if I can make executables smaller especially on Mac
+- [ ] Try to make code faster
+
+## More minor
+- [ ] When an ROI is selected in one subwindow and we click into another subwindow, the ROI disappears from the ROI list in the right pane but the ROI statistics are still there until the user does something else in the new window or goes back to the first one and unselects the ROI. Clicking into a different subwindow should automatically unselect any selected ROI (and the statistics in the right pane should be cleared)

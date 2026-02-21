@@ -243,14 +243,14 @@ Use this checklist when implementing Phase 3. Mark items only after they are ful
 
 **Goal**: Extract subwindow getter helpers so they can later live in a controller; or move them into a new SubwindowLifecycleController in this step. Recommendation: create the controller module and move only getters in step 1.
 
-- [ ] **Backup**: Copy `src/main.py` to `backups/main_pre_subwindow_getters_extract.py` (or equivalent). *(Create manually if needed.)*
-- [ ] **Create module**: Add `src/core/subwindow_lifecycle_controller.py` (or `src/app/subwindow_controller.py`) with module docstring (purpose: own subwindow getters, focus/panel updates, and signal connect/disconnect/layout; inputs: app or references to multi_window_layout, subwindow_managers; outputs: subwindow/index and callbacks). If doing getters-only first, the class can be minimal (e.g. `SubwindowLifecycleController(app)` with getter methods).
-- [ ] **Move getter methods**: Move (or delegate from main to controller): `_get_subwindow_dataset`, `_get_subwindow_slice_index`, `_get_subwindow_slice_display_manager`, `_get_subwindow_study_uid`, `_get_subwindow_series_uid`, `get_focused_subwindow_index`, `get_histogram_callbacks_for_subwindow`, `_get_focused_subwindow`. main.py keeps thin wrappers that call the controller so all existing call sites continue to work.
-- [ ] **Instantiate controller**: In DICOMViewerApp, create the controller (e.g. in `__init__` after multi_window_layout and subwindow_managers exist), store as `self._subwindow_lifecycle_controller` or similar.
-- [ ] **Tests**: Run the full test suite.
-- [ ] **Smoke test**: Load DICOM, switch focus between subwindows, change layout (1x1, 1x2, 2x1, 2x2); confirm correct subwindow and slice context (e.g. ROI list, measurements, series navigator).
-- [ ] **Lint**: Lint `main.py` and `subwindow_lifecycle_controller.py`; fix issues.
-- [ ] **Documentation**: Document controller getter API and how main uses it.
+- [x] **Backup**: Copy `src/main.py` to `backups/main_pre_subwindow_getters_extract.py` (or equivalent). *(Create manually if needed.)*
+- [x] **Create module**: Add `src/core/subwindow_lifecycle_controller.py` (or `src/app/subwindow_controller.py`) with module docstring (purpose: own subwindow getters, focus/panel updates, and signal connect/disconnect/layout; inputs: app or references to multi_window_layout, subwindow_managers; outputs: subwindow/index and callbacks). If doing getters-only first, the class can be minimal (e.g. `SubwindowLifecycleController(app)` with getter methods).
+- [x] **Move getter methods**: Move (or delegate from main to controller): `_get_subwindow_dataset`, `_get_subwindow_slice_index`, `_get_subwindow_slice_display_manager`, `_get_subwindow_study_uid`, `_get_subwindow_series_uid`, `get_focused_subwindow_index`, `get_histogram_callbacks_for_subwindow`, `_get_focused_subwindow`. main.py keeps thin wrappers that call the controller so all existing call sites continue to work.
+- [x] **Instantiate controller**: In DICOMViewerApp, create the controller (e.g. in `__init__` after multi_window_layout and subwindow_managers exist), store as `self._subwindow_lifecycle_controller` or similar.
+- [x] **Tests**: Run the full test suite.
+- [x] **Smoke test**: Load DICOM, switch focus between subwindows, change layout (1x1, 1x2, 2x1, 2x2); confirm correct subwindow and slice context (e.g. ROI list, measurements, series navigator).
+- [x] **Lint**: Lint `main.py` and `subwindow_lifecycle_controller.py`; fix issues.
+- [x] **Documentation**: Document controller getter API and how main uses it.
 
 ---
 
@@ -301,3 +301,4 @@ Use this checklist when implementing Phase 3. Mark items only after they are ful
 - **Updated**: 2026-02-19 – Phase 2 implementation (menu bar builder, DICOMProcessor split, AnnotationPasteHandler); checklist items marked done; tests/smoke tests left for user.
 - **Updated**: 2026-02-19 – Added Phase 3 detailed checklist (file/series loading coordinator, subwindow lifecycle in steps 3.1–3.4).
 - **Updated**: 2026-02-19 – Phase 3.1 implementation complete: FileSeriesLoadingCoordinator added; load-first-slice, open entry points, series navigation, file-path helpers moved; main.py wired to delegate. Checklist marked done except Tests and Smoke test (require venv/manual run). Added recommended smoke tests for Phase 3.1.
+- **Updated**: 2026-02-19 – Phase 3.2 implementation complete: SubwindowLifecycleController added in `src/core/subwindow_lifecycle_controller.py`; getter methods moved, main.py delegates; backup created; tests pass; smoke test left for user.
