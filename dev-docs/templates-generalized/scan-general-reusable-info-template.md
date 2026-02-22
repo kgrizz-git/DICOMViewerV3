@@ -1,5 +1,8 @@
 # Template: Scan for General/Reusable Information Files
 
+**Template Version**: 2.0  
+**Last Updated**: 2026-02-18
+
 ## Purpose
 
 This template instructs you to scan the project documentation for markdown files that contain general information or are designed to be reusable reference material. These files are intended to be **portable and reusable across different projects**—they can be copied to other projects, used as reference material, or adapted for different contexts.

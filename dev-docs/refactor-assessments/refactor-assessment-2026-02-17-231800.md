@@ -593,7 +593,7 @@ None are designated “appropriately large” with no refactoring recommended. A
 ## Next Steps
 
 - [ ] Review prioritized recommendations with team/user
-- [ ] Choose 2–3 high-priority items for the first implementation phase (e.g. measurement_items extraction, ExportManager extraction, main_window_theme extraction)
-- [ ] Create implementation plans and tests for chosen refactorings
+- [x] Choose 2–3 high-priority items for the first implementation phase (e.g. measurement_items extraction, ExportManager extraction, main_window_theme extraction)
+- [x] Create implementation plans and tests for chosen refactorings *(Phase 1 completed 2026-02-18: measurement_items, ExportManager, main_window_theme.)*
 - [ ] Schedule refactoring work in small increments; re-run this assessment after major refactors
 - [ ] Update this assessment file when refactorings are completed (line counts and status)

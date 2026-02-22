@@ -231,9 +231,11 @@ You can download the DICOM Viewer V3 in one of two ways:
    # Create virtual environment
    python -m venv venv
    
-   # Activate virtual environment
-   # On Windows:
+   # Activate virtual environment (required before running the app or tests)
+   # On Windows (Command Prompt):
    venv\Scripts\activate
+   # On Windows (PowerShell):
+   .\venv\Scripts\Activate.ps1
    # On macOS/Linux:
    source venv/bin/activate
    
@@ -263,6 +265,42 @@ You can download the DICOM Viewer V3 in one of two ways:
    ```
 
 3. The application window should open and you can start loading DICOM files!
+
+### Running tests
+
+**Activate the project venv first** (in the `venv` directory; see Installation). Then from the project root:
+
+Unit tests can be run from the project root (with the virtual environment activated).
+
+**Optional:** Install the test runner:
+```bash
+pip install pytest
+```
+
+**Run all tests (pytest or unittest):**
+```bash
+# From project root; venv activated
+python tests/run_tests.py
+```
+This script sets `PYTHONPATH` to `src` and runs pytest if available, otherwise unittest.
+
+**Run with pytest directly:**
+```bash
+# Windows (PowerShell)
+$env:PYTHONPATH = "src"; python -m pytest tests -v --tb=short
+
+# macOS/Linux
+PYTHONPATH=src python -m pytest tests -v --tb=short
+```
+
+**Run with unittest:**
+```bash
+$env:PYTHONPATH = "src"; python -m unittest discover -s tests -p "test_*.py" -v
+# or
+python tests/run_tests.py --unittest
+```
+
+Tests live in `tests/`: `test_dicom_parser.py`, `test_dicom_loader.py`, `test_dicom_utils.py`, `test_export_manager.py`. No DICOM files are required for the current tests.
 
 ### Troubleshooting
 

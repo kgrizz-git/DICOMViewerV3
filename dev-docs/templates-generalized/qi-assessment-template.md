@@ -1,8 +1,11 @@
 # Quality Improvement Assessment Template - [PROJECT_NAME]
 
+**Template Version**: 2.0  
+**Last Updated**: 2026-02-18
+
 ## Purpose
 
-This document provides a systematic approach to analyze shell scripts (`.sh` files) in the codebase for quality issues, errors, and improvement opportunities. The assessment:
+This document provides a systematic approach to analyze code files in the codebase for quality issues, errors, and improvement opportunities. The assessment:
 
 - Identifies code errors such as repeated lines or sections, garbled code, undefined variables or functions
 - Detects potential bugs and problematic code patterns
@@ -62,15 +65,14 @@ This approach ensures:
 
 ### Assessment Process
 
-1. **Identify all shell scripts** in the codebase:
-   - Root directory: `*.sh` files
-   - Library directory: `[LIB_DIR]/*.sh` files
-   - Test directory: `tests/*.sh` files (for reference)
-   - Installation scripts: `[INSTALL_SCRIPT].sh`, `[UNINSTALL_SCRIPT].sh`
-   - Management scripts: `[CONFIGURE_SCRIPT].sh`, `[MANAGE_SCRIPT].sh`
-   - Main scripts: `[MAIN_SCRIPT].sh`
+1. **Identify all code files** in the codebase:
+   - Root directory: source files (e.g., `*.py`, `*.js`, `*.sh`, `*.java`, `*.cpp`, etc.)
+   - Source directories: `src/`, `lib/`, `utils/`, `scripts/`, and other relevant directories
+   - Test directory: `tests/`, `test/`, `__tests__/` (for reference)
+   - **Exclude backup files**: Files with "backup", "_BAK", ".bak" in name or in backup folders
+   - Main application files, configuration files, utility modules
 
-2. **Check each script for errors**:
+2. **Check each file for errors**:
    - Repeated lines or sections
    - Garbled or corrupted code
    - Undefined variables or functions
@@ -104,71 +106,72 @@ This approach ensures:
 
 ### Step 1: Identify Files to Analyze
 
-1. **Find all shell scripts**:
-   - Root directory: `*.sh` files
-   - Library directory: `[LIB_DIR]/*.sh` files
-   - Test directory: `tests/*.sh` files (for reference)
+1. **Find all code files**:
+   - Root directory: source files (e.g., `*.py`, `*.js`, `*.sh`, `*.java`, `*.cpp`, etc.)
+   - Source directories: `src/`, `lib/`, `utils/`, `scripts/`, and other relevant directories
+   - Test directory: `tests/`, `test/`, `__tests__/` (for reference)
+   - **Exclude backup files**: Files with "backup", "_BAK", ".bak" in name or in backup folders
 
 2. **Create file inventory**:
-   - List all `.sh` files with their locations
+   - List all code files with their locations
    - Note file sizes and purposes
-   - Identify main scripts vs. library modules
+   - Identify main application files vs. library modules vs. utilities
 
 ### Step 2: Error Detection
 
-For each shell script, check for:
+For each code file, check for:
 
 #### 2.1: Repeated Lines or Sections
 
 - [ ] Scan for duplicate code blocks
 - [ ] Check for copy-paste errors
-- [ ] Identify repeated function definitions
-- [ ] Look for duplicate variable assignments
-- [ ] Check for repeated conditional blocks
+- [ ] Identify repeated function/method/class definitions
+- [ ] Look for duplicate variable/constant assignments
+- [ ] Check for repeated conditional blocks or logic
 
 **Tools/Methods**:
 - Visual inspection
-- Use `diff` or `comm` to compare sections
+- Use diff tools to compare sections
 - Look for identical or near-identical code blocks
-- Check for functions defined multiple times
+- Check for functions/methods/classes defined multiple times
 
 #### 2.2: Garbled Code
 
 - [ ] Check for corrupted or malformed code
 - [ ] Look for incomplete statements
-- [ ] Identify broken function definitions
+- [ ] Identify broken function/method/class definitions
 - [ ] Check for malformed conditionals or loops
-- [ ] Verify proper script structure (shebang, proper closing)
+- [ ] Verify proper file structure (imports, proper syntax)
 
 **Indicators**:
-- Incomplete function definitions
-- Missing closing brackets or quotes
-- Syntax errors that prevent execution
-- Malformed command substitutions
-- Broken heredoc blocks
+- Incomplete function/method/class definitions
+- Missing closing brackets, braces, or quotes
+- Syntax errors that prevent compilation/execution
+- Malformed expressions or statements
+- Broken multi-line constructs
 
 #### 2.3: Undefined Variables or Functions
 
 - [ ] Check for variables used before assignment
-- [ ] Verify all function calls have corresponding definitions
-- [ ] Check for typos in variable or function names
-- [ ] Verify all sourced library functions exist
-- [ ] Check for missing source statements
+- [ ] Verify all function/method calls have corresponding definitions
+- [ ] Check for typos in variable, function, or class names
+- [ ] Verify all imported/required modules exist
+- [ ] Check for missing import/include/require statements
 
 **Methods**:
-- Trace variable usage through the script
-- Verify all `source` or `.` statements point to existing files
-- Check function definitions match function calls
-- Use `bash -n` for syntax checking
-- Look for variables referenced with `${VAR}` that may not be set
+- Trace variable usage through the code
+- Verify all import/include/require statements point to existing files
+- Check function/method definitions match calls
+- Use language-specific syntax checkers (linters, compilers)
+- Look for variables that may not be initialized before use
 
 #### 2.4: Syntax Errors
 
-- [ ] Run `bash -n` on each script to check for syntax errors
-- [ ] Check for unclosed quotes, brackets, or parentheses
-- [ ] Verify proper use of command substitution syntax
-- [ ] Check for proper array syntax
-- [ ] Verify proper use of arithmetic expansion
+- [ ] Run language-specific syntax checkers (linters, compilers) on each file
+- [ ] Check for unclosed quotes, brackets, braces, or parentheses
+- [ ] Verify proper use of language-specific syntax
+- [ ] Check for proper data structure syntax (arrays, objects, dictionaries)
+- [ ] Verify proper use of operators and expressions
 
 #### 2.5: Logic Errors
 
@@ -180,31 +183,31 @@ For each shell script, check for:
 
 #### 2.6: Missing Error Handling
 
-- [ ] Check if scripts handle errors gracefully
-- [ ] Verify `set -e` or `set -o errexit` usage where appropriate
+- [ ] Check if code handles errors gracefully
+- [ ] Verify proper use of try-catch/exception handling where appropriate
 - [ ] Check for proper error messages
-- [ ] Verify cleanup on errors (traps)
+- [ ] Verify cleanup on errors (finally blocks, defer, destructors)
 - [ ] Check for validation of inputs and dependencies
 
 ### Step 3: Quality Improvement Opportunities
 
-For each script, identify opportunities for:
+For each file, identify opportunities for:
 
 #### 3.1: Code Organization
 
-- [ ] Functions that could be better organized
+- [ ] Functions/methods/classes that could be better organized
 - [ ] Code that could be modularized
 - [ ] Better separation of concerns
-- [ ] Improved file structure
+- [ ] Improved file/package structure
 - [ ] Better naming conventions
 
 #### 3.2: Performance Optimizations
 
-- [ ] Unnecessary command executions
+- [ ] Unnecessary operations or computations
 - [ ] Inefficient loops or iterations
-- [ ] Redundant file operations
-- [ ] Opportunities for caching
-- [ ] Better algorithm choices
+- [ ] Redundant I/O operations (file, network, database)
+- [ ] Opportunities for caching or memoization
+- [ ] Better algorithm or data structure choices
 
 #### 3.3: Maintainability Enhancements
 
@@ -216,11 +219,11 @@ For each script, identify opportunities for:
 
 #### 3.4: Documentation Improvements
 
-- [ ] Missing function documentation
+- [ ] Missing function/method/class documentation
 - [ ] Unclear code comments
 - [ ] Missing usage examples
 - [ ] Incomplete error messages
-- [ ] Missing inline documentation
+- [ ] Missing inline documentation (docstrings, JSDoc, etc.)
 
 #### 3.5: Error Handling Improvements
 
@@ -232,10 +235,10 @@ For each script, identify opportunities for:
 
 #### 3.6: Code Reuse Opportunities
 
-- [ ] Duplicate code that could be extracted to functions
-- [ ] Common patterns that could be library functions
+- [ ] Duplicate code that could be extracted to functions/methods
+- [ ] Common patterns that could be library functions/utilities
 - [ ] Repeated logic that could be consolidated
-- [ ] Opportunities to use existing library functions
+- [ ] Opportunities to use existing library functions/modules
 
 ### Step 4: New Features or Approaches
 
@@ -286,18 +289,19 @@ When evaluating each finding, consider:
 ### Preparation
 
 - [ ] Create timestamped assessment file
-- [ ] List all `.sh` files to analyze
+- [ ] List all code files to analyze (root, `src/`, `lib/`, `utils/`, `scripts/`, etc.)
+- [ ] **Exclude backup files** (files with "backup", "_BAK", ".bak" in name or in backup folders)
 - [ ] Set up analysis environment
 
 ### Error Detection
 
-- [ ] Check all scripts for repeated lines/sections
-- [ ] Check all scripts for garbled code
-- [ ] Check all scripts for undefined variables
-- [ ] Check all scripts for undefined functions
-- [ ] Check all scripts for syntax errors
-- [ ] Check all scripts for logic errors
-- [ ] Check all scripts for missing error handling
+- [ ] Check all files for repeated lines/sections
+- [ ] Check all files for garbled code
+- [ ] Check all files for undefined variables
+- [ ] Check all files for undefined functions/methods/classes
+- [ ] Check all files for syntax errors
+- [ ] Check all files for logic errors
+- [ ] Check all files for missing error handling
 
 ### Quality Improvements
 
@@ -347,9 +351,9 @@ Use this structure in your timestamped assessment file:
 
 ### Summary Table
 
-| File | Location | Lines | Status | Issues Found | Improvements Suggested |
-|------|----------|-------|--------|--------------|------------------------|
-| filename.sh | path/to/file | XXX | Analyzed | X | Y |
+| File | Location | Lines | Language | Status | Issues Found | Improvements Suggested |
+|------|----------|-------|----------|--------|--------------|------------------------|
+| filename.ext | path/to/file | XXX | [Language] | Analyzed | X | Y |
 
 ## Error Detection Results
 
@@ -368,7 +372,7 @@ Use this structure in your timestamped assessment file:
 [What happens because of this error? What functionality is affected?]
 
 **Example**:
-```bash
+```[language]
 # Problematic code snippet
 ```
 
@@ -585,9 +589,9 @@ The following files were analyzed and found to be in good condition with minimal
 
 - **Implementation Difficulty**: Be realistic about effort estimates. Consider testing, documentation, and potential side effects when assessing difficulty.
 
-- **Modular Architecture**: This codebase follows a modular architecture pattern. When suggesting improvements, maintain consistency with existing module structure in `[LIB_DIR]/` directory.
+- **Modular Architecture**: When suggesting improvements, maintain consistency with existing module structure (e.g., `src/`, `lib/`, `utils/` directories).
 
-- **Backward Compatibility**: Consider impact on existing scripts and [INIT_SYSTEM] services when suggesting changes.
+- **Backward Compatibility**: Consider impact on existing code, APIs, and dependencies when suggesting changes.
 
 - **Testing**: All improvements should be accompanied by appropriate testing to ensure functionality is preserved or enhanced.
 
