@@ -16,6 +16,7 @@
 - [ ] See if I can make executables smaller especially on Mac
 - [ ] Try to make code faster
 - [ ] Reset View menu item and V shortcut not working
+- [ ] Make double-clicking on a subwindow expand it so it becomes a 1x1 layout but using whatever subwindow was double-clicked, not necessarily subwindow 1
 
 ## More minor
 - [ ] When an ROI is selected in one subwindow and we click into another subwindow, the ROI disappears from the ROI list in the right pane but the ROI statistics are still there until the user does something else in the new window or goes back to the first one and unselects the ROI. Clicking into a different subwindow should automatically unselect any selected ROI (and the statistics in the right pane should be cleared)

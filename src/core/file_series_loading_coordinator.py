@@ -332,7 +332,7 @@ class FileSeriesLoadingCoordinator:
             return
         idx = subwindows.index(subwindow)
         if idx not in app.subwindow_managers:
-            app._ensure_all_subwindows_have_managers()
+            app._subwindow_lifecycle_controller.ensure_all_subwindows_have_managers()
         if not app.current_studies:
             return
         target_study_uid = None
