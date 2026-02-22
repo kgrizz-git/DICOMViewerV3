@@ -39,7 +39,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.config_manager import ConfigManager
 from gui.dialogs.edit_recent_list_dialog import EditRecentListDialog
-from gui.main_window_menu_builder import build_menu_bar
 
 
 def _get_resource_path(relative_path: str) -> str:
@@ -160,9 +159,240 @@ class MainWindow(QMainWindow):
         self._apply_theme()
     
     def _create_menu_bar(self) -> None:
-        """Create the application menu bar via the menu bar builder."""
-        build_menu_bar(self)
+        """Create the application menu bar."""
+        menubar = self.menuBar()
+        
+        # File menu
+        file_menu = menubar.addMenu("&File")
+        
+        # Open File action
+        open_file_action = QAction("&Open File(s)...", self)
+        open_file_action.setShortcut(QKeySequence.Open)
+        open_file_action.triggered.connect(self.open_file_requested.emit)
+        file_menu.addAction(open_file_action)
+        
+        # Open Folder action
+        open_folder_action = QAction("Open &Folder...", self)
+        open_folder_action.setShortcut(QKeySequence("Ctrl+Shift+O"))
+        open_folder_action.triggered.connect(self.open_folder_requested.emit)
+        file_menu.addAction(open_folder_action)
+        
+        file_menu.addSeparator()
+        
+        # Recent Files submenu
+        self.recent_menu = file_menu.addMenu("&Recent")
+        # Install event filter for context menu support
+        self.recent_menu.installEventFilter(self)
+        self._update_recent_menu()
+        
+        # Edit Recent List action
+        edit_recent_list_action = QAction("Edit Recent List...", self)
+        edit_recent_list_action.triggered.connect(self._open_edit_recent_list_dialog)
+        file_menu.addAction(edit_recent_list_action)
+        
+        file_menu.addSeparator()
+        
+        # Export action
+        export_action = QAction("&Export...", self)
+        export_action.setShortcut(QKeySequence("Ctrl+E"))
+        export_action.triggered.connect(self.export_requested.emit)
+        file_menu.addAction(export_action)
+        
+        file_menu.addSeparator()
+        
+        # Export Customizations action
+        export_customizations_action = QAction("Export Customizations...", self)
+        export_customizations_action.triggered.connect(self.export_customizations_requested.emit)
+        file_menu.addAction(export_customizations_action)
+        
+        # Import Customizations action
+        import_customizations_action = QAction("Import Customizations...", self)
+        import_customizations_action.triggered.connect(self.import_customizations_requested.emit)
+        file_menu.addAction(import_customizations_action)
 
+        file_menu.addSeparator()
+
+        # Tag export presets actions
+        export_tag_presets_action = QAction("Export Tag Presets...", self)
+        export_tag_presets_action.triggered.connect(self.export_tag_presets_requested.emit)
+        file_menu.addAction(export_tag_presets_action)
+
+        import_tag_presets_action = QAction("Import Tag Presets...", self)
+        import_tag_presets_action.triggered.connect(self.import_tag_presets_requested.emit)
+        file_menu.addAction(import_tag_presets_action)
+        
+        file_menu.addSeparator()
+        
+        # Close action
+        close_action = QAction("&Close", self)
+        close_action.setShortcut(QKeySequence("Ctrl+W"))
+        close_action.triggered.connect(self.close_requested.emit)
+        file_menu.addAction(close_action)
+        
+        file_menu.addSeparator()
+        
+        # Exit action
+        exit_action = QAction("E&xit", self)
+        exit_action.setShortcut(QKeySequence.Quit)
+        exit_action.triggered.connect(self.close)
+        file_menu.addAction(exit_action)
+        
+        # Edit menu
+        edit_menu = menubar.addMenu("&Edit")
+        
+        # Copy action (for annotations)
+        self.copy_annotation_action = QAction("&Copy", self)
+        self.copy_annotation_action.setShortcut(QKeySequence.Copy)
+        self.copy_annotation_action.triggered.connect(self.copy_annotation_requested.emit)
+        edit_menu.addAction(self.copy_annotation_action)
+        
+        # Paste action (for annotations)
+        self.paste_annotation_action = QAction("&Paste", self)
+        self.paste_annotation_action.setShortcut(QKeySequence.Paste)
+        self.paste_annotation_action.triggered.connect(self.paste_annotation_requested.emit)
+        edit_menu.addAction(self.paste_annotation_action)
+        
+        edit_menu.addSeparator()
+        
+        # Undo/Redo actions (for both tag edits and annotations)
+        self.undo_tag_edit_action = QAction("&Undo", self)
+        self.undo_tag_edit_action.setShortcut(QKeySequence.Undo)
+        self.undo_tag_edit_action.setEnabled(False)
+        self.undo_tag_edit_action.triggered.connect(self.undo_tag_edit_requested.emit)
+        edit_menu.addAction(self.undo_tag_edit_action)
+        
+        self.redo_tag_edit_action = QAction("&Redo", self)
+        self.redo_tag_edit_action.setShortcut(QKeySequence.Redo)
+        self.redo_tag_edit_action.setEnabled(False)
+        self.redo_tag_edit_action.triggered.connect(self.redo_tag_edit_requested.emit)
+        edit_menu.addAction(self.redo_tag_edit_action)
+        
+        # View menu
+        view_menu = menubar.addMenu("&View")
+        
+        # Theme actions (exclusive)
+        theme_menu = view_menu.addMenu("&Theme")
+        self.light_theme_action = QAction("&Light", self)
+        self.light_theme_action.setCheckable(True)
+        self.light_theme_action.setChecked(self.config_manager.get_theme() == "light")
+        self.light_theme_action.triggered.connect(lambda: self._set_theme("light"))
+        theme_menu.addAction(self.light_theme_action)
+        
+        self.dark_theme_action = QAction("&Dark", self)
+        self.dark_theme_action.setCheckable(True)
+        self.dark_theme_action.setChecked(self.config_manager.get_theme() == "dark")
+        self.dark_theme_action.triggered.connect(lambda: self._set_theme("dark"))
+        theme_menu.addAction(self.dark_theme_action)
+        
+        view_menu.addSeparator()
+        
+        # Privacy View action
+        self.privacy_view_action = QAction("&Privacy View", self)
+        self.privacy_view_action.setCheckable(True)
+        self.privacy_view_action.setChecked(self.config_manager.get_privacy_view())
+        self.privacy_view_action.setShortcut(QKeySequence("Ctrl+P"))  # Works on all platforms (Cmd+P on Mac, Ctrl+P on Windows/Linux)
+        self.privacy_view_action.triggered.connect(self._on_privacy_view_toggled)
+        view_menu.addAction(self.privacy_view_action)
+        
+        view_menu.addSeparator()
+        
+        # Settings action
+        settings_action = QAction("&Settings...", self)
+        settings_action.triggered.connect(self.settings_requested.emit)
+        view_menu.addAction(settings_action)
+        
+        # Overlay Configuration action
+        overlay_config_action = QAction("Overlay &Configuration...", self)
+        overlay_config_action.setShortcut(QKeySequence("Ctrl+O"))
+        overlay_config_action.triggered.connect(self.overlay_config_requested.emit)
+        view_menu.addAction(overlay_config_action)
+        
+        # Overlay Settings action
+        overlay_settings_action = QAction("Overlay &Settings...", self)
+        overlay_settings_action.triggered.connect(self.overlay_settings_requested.emit)
+        view_menu.addAction(overlay_settings_action)
+        
+        # Annotation Options action
+        annotation_options_action = QAction("Annotation &Options...", self)
+        annotation_options_action.triggered.connect(self.annotation_options_requested.emit)
+        view_menu.addAction(annotation_options_action)
+        
+        view_menu.addSeparator()
+        
+        # Layout submenu
+        layout_menu = view_menu.addMenu("&Layout")
+        self.layout_1x1_action = QAction("&1x1  (1)", self)
+        self.layout_1x1_action.setCheckable(True)
+        self.layout_1x1_action.setChecked(True)  # Default
+        self.layout_1x1_action.triggered.connect(lambda: self._on_layout_changed("1x1"))
+        layout_menu.addAction(self.layout_1x1_action)
+        
+        self.layout_1x2_action = QAction("&1x2  (2)", self)
+        self.layout_1x2_action.setCheckable(True)
+        self.layout_1x2_action.triggered.connect(lambda: self._on_layout_changed("1x2"))
+        layout_menu.addAction(self.layout_1x2_action)
+        
+        self.layout_2x1_action = QAction("&2x1  (3)", self)
+        self.layout_2x1_action.setCheckable(True)
+        self.layout_2x1_action.triggered.connect(lambda: self._on_layout_changed("2x1"))
+        layout_menu.addAction(self.layout_2x1_action)
+        
+        self.layout_2x2_action = QAction("&2x2  (4)", self)
+        self.layout_2x2_action.setCheckable(True)
+        self.layout_2x2_action.triggered.connect(lambda: self._on_layout_changed("2x2"))
+        layout_menu.addAction(self.layout_2x2_action)
+        
+        # Tools menu
+        tools_menu = menubar.addMenu("&Tools")
+        
+        # Tag Viewer/Editor action
+        tag_viewer_action = QAction("View/Edit DICOM &Tags...", self)
+        tag_viewer_action.setShortcut(QKeySequence("Ctrl+T"))
+        tag_viewer_action.triggered.connect(self.tag_viewer_requested.emit)
+        tools_menu.addAction(tag_viewer_action)
+        
+        # Tag Export action
+        tag_export_action = QAction("Export DICOM &Tags...", self)
+        tag_export_action.setShortcut(QKeySequence("Shift+Ctrl+T"))
+        tag_export_action.triggered.connect(self.tag_export_requested.emit)
+        tools_menu.addAction(tag_export_action)
+        
+        # About this File action
+        about_this_file_action = QAction("About this File...", self)
+        about_this_file_action.setMenuRole(QAction.MenuRole.NoRole)  # Prevent macOS from moving to app menu
+        about_this_file_action.setShortcut(QKeySequence("Ctrl+A"))
+        about_this_file_action.triggered.connect(self.about_this_file_requested.emit)
+        tools_menu.addAction(about_this_file_action)
+        
+        tools_menu.addSeparator()
+        
+        # Histogram action
+        histogram_action = QAction("&Histogram...", self)
+        histogram_action.setShortcut(QKeySequence("Shift+Ctrl+H"))  # Cmd+Shift+H on Mac, Ctrl+Shift+H on Windows/Linux
+        histogram_action.triggered.connect(self.histogram_requested.emit)
+        tools_menu.addAction(histogram_action)
+        
+        # Help menu
+        help_menu = menubar.addMenu("&Help")
+        
+        quick_start_action = QAction("&Quick Start Guide", self)
+        quick_start_action.triggered.connect(self.quick_start_guide_requested.emit)
+        help_menu.addAction(quick_start_action)
+        
+        fusion_tech_doc_action = QAction("Fusion &Technical Documentation", self)
+        fusion_tech_doc_action.triggered.connect(self.fusion_technical_doc_requested.emit)
+        help_menu.addAction(fusion_tech_doc_action)
+        
+        disclaimer_action = QAction("&Disclaimer", self)
+        disclaimer_action.triggered.connect(self._show_disclaimer)
+        help_menu.addAction(disclaimer_action)
+        
+        help_menu.addSeparator()
+        
+        about_action = QAction("&About", self)
+        about_action.triggered.connect(self._show_about)
+        help_menu.addAction(about_action)
+    
     def _create_toolbar(self) -> None:
         """Create the application toolbar."""
         toolbar = QToolBar("Main Toolbar", self)
