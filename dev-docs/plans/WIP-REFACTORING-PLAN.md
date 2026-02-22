@@ -287,10 +287,39 @@ Use this checklist when implementing Phase 3. Mark items only after they are ful
 
 ### Phase 3 completion
 
-- [ ] **Full test run**: Run the entire test suite once after all Phase 3 sub-phases are done.
-- [ ] **Smoke test**: End-to-end: file/folder/recent/paths open, series navigation, layout changes, focus changes, series assignment, panel updates. Confirm no regressions.
-- [ ] **Line count**: Optionally run line count on `main.py` and record in this plan or in the refactor assessment “Next Steps” to show progress.
-- [ ] **Update assessment**: Optionally update `refactor-assessment-2026-02-17-231800.md` (line counts, Next Steps) when Phase 3 is completed.
+- [x] **Full test run**: Run the entire test suite once after all Phase 3 sub-phases are done.
+- [x] **Smoke test**: End-to-end: file/folder/recent/paths open, series navigation, layout changes, focus changes, series assignment, panel updates. Confirm no regressions.
+- [x] **Line count**: Run line count on `main.py` and all .py files and record all over 750 lines in this plan.
+
+**Python files over 750 lines** (as of plan update; `src/` and `tests/` only):
+
+| Lines | File |
+|------:|------|
+| 3266 | [src/main.py](src/main.py) |
+| 2471 | [src/gui/image_viewer.py](src/gui/image_viewer.py) |
+| 1687 | [src/core/file_operations_handler.py](src/core/file_operations_handler.py) |
+| 1327 | [src/core/slice_display_manager.py](src/core/slice_display_manager.py) |
+| 1319 | [src/gui/overlay_manager.py](src/gui/overlay_manager.py) |
+| 1315 | [src/gui/dialogs/tag_export_dialog.py](src/gui/dialogs/tag_export_dialog.py) |
+| 1242 | [src/gui/main_window.py](src/gui/main_window.py) |
+| 1230 | [src/core/export_manager.py](src/core/export_manager.py) |
+| 1202 | [src/utils/config_manager.py](src/utils/config_manager.py) |
+| 1179 | [src/tools/annotation_manager.py](src/tools/annotation_manager.py) |
+| 1176 | [src/gui/fusion_controls_widget.py](src/gui/fusion_controls_widget.py) |
+| 1140 | [src/tools/roi_manager.py](src/tools/roi_manager.py) |
+| 1096 | [src/utils/undo_redo.py](src/utils/undo_redo.py) |
+| 1088 | [src/core/view_state_manager.py](src/core/view_state_manager.py) |
+| 1031 | [src/gui/fusion_coordinator.py](src/gui/fusion_coordinator.py) |
+| 995 | [src/gui/roi_coordinator.py](src/gui/roi_coordinator.py) |
+| 889 | [src/core/fusion_handler.py](src/core/fusion_handler.py) |
+| 889 | [src/gui/series_navigator.py](src/gui/series_navigator.py) |
+| 842 | [src/gui/main_window_theme.py](src/gui/main_window_theme.py) |
+| 830 | [src/gui/dialogs/quick_start_guide_dialog.py](src/gui/dialogs/quick_start_guide_dialog.py) |
+| 817 | [src/gui/dialogs/fusion_technical_doc_dialog.py](src/gui/dialogs/fusion_technical_doc_dialog.py) |
+| 788 | [src/core/subwindow_lifecycle_controller.py](src/core/subwindow_lifecycle_controller.py) |
+| 758 | [src/core/dicom_loader.py](src/core/dicom_loader.py) |
+
+*No files in `tests/` exceed 750 lines.*
 
 ---
 
@@ -304,3 +333,4 @@ Use this checklist when implementing Phase 3. Mark items only after they are ful
 - **Updated**: 2026-02-19 – Phase 3.2 implementation complete: SubwindowLifecycleController added in `src/core/subwindow_lifecycle_controller.py`; getter methods moved, main.py delegates; backup created; tests pass; smoke test left for user.
 - **Updated**: 2026-02-19 – Phase 3.3 implementation complete: focus/panel methods (`update_focused_subwindow_references`, `update_right_panel_for_focused_subwindow`, `update_left_panel_for_focused_subwindow`) moved into SubwindowLifecycleController; main.py delegates; backup created; tests pass; smoke test left for user.
 - **Updated**: 2026-02-21 – Phase 3.4 implementation (code complete): connect/disconnect, display/redisplay, layout, and series-assignment methods moved into SubwindowLifecycleController; main.py delegates; FileSeriesLoadingCoordinator uses controller.ensure_all_subwindows_have_managers() in assign_series_to_subwindow; _initialize_subwindow_managers and _create_managers_for_subwindow left in main (controller calls app._create_managers_for_subwindow). Plan checklist and doc history updated. Tests and smoke test not run in session—run locally.
+- **Updated**: 2026-02-21 – Line count task complete: ran line count on all .py files under src/ and tests/; recorded 23 files over 750 lines in Phase 3 completion section (main.py 3266, image_viewer.py 2471, file_operations_handler 1687, etc.; no test files over 750).
