@@ -149,12 +149,10 @@ class SubwindowLifecycleController:
         app.image_viewer = focused_subwindow.image_viewer
         app.main_window.image_viewer = app.image_viewer
         if previous_image_viewer and previous_image_viewer != app.image_viewer:
-            with warnings.catch_warnings():
-                warnings.filterwarnings('ignore', category=RuntimeWarning, message='.*Failed to disconnect.*')
-                try:
-                    previous_image_viewer.pixel_info_changed.disconnect(app._on_pixel_info_changed)
-                except (TypeError, RuntimeError):
-                    pass
+            try:
+                previous_image_viewer.pixel_info_changed.disconnect(app._on_pixel_info_changed)
+            except (TypeError, RuntimeError):
+                pass
         if app.image_viewer:
             app.image_viewer.pixel_info_changed.connect(app._on_pixel_info_changed)
             app.image_viewer.set_pixel_info_callbacks(
@@ -315,7 +313,6 @@ class SubwindowLifecycleController:
                 )
                 image_viewer.get_file_path_callback = lambda i=idx: app._get_current_slice_file_path(i)
                 subwindow.assign_series_requested.connect(app._on_assign_series_requested)
-                image_viewer.assign_series_requested.connect(app._on_assign_series_from_context_menu)
         self.connect_all_subwindow_transform_signals()
 
     def connect_all_subwindow_transform_signals(self) -> None:

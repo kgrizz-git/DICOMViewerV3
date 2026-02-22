@@ -47,6 +47,7 @@ def main():
         )
     except ImportError:
         print("pytest not installed; falling back to unittest. Install with: pip install pytest")
+        print("(Python used: {})".format(sys.executable))
         return subprocess.call(
             [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py", "-v"],
             env=env,
