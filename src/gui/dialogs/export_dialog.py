@@ -112,7 +112,6 @@ class ExportDialog(QDialog):
         self.window_level_option = "current"  # "current" or "dataset"
         self.include_overlays = True
         self.export_scale = 1.0  # 1.0, 1.5, 2.0, or 4.0
-        self.scale_annotations_with_image = False
         self.anonymize_enabled = False
         
         # Get last export path from config if available
@@ -235,11 +234,6 @@ class ExportDialog(QDialog):
         self.resolution_combo.setCurrentIndex(0)
         self.resolution_combo.currentIndexChanged.connect(self._on_resolution_changed)
         resolution_layout.addWidget(self.resolution_combo)
-        self.scale_annotations_checkbox = QCheckBox("Enlarge line thickness and text size by the same factor")
-        self.scale_annotations_checkbox.setChecked(False)
-        self.scale_annotations_checkbox.setEnabled(False)  # Enabled only when 1.5×/2×/4× selected
-        self.scale_annotations_checkbox.toggled.connect(lambda checked: setattr(self, 'scale_annotations_with_image', checked))
-        resolution_layout.addWidget(self.scale_annotations_checkbox)
         self.resolution_group.setLayout(resolution_layout)
         layout.addWidget(self.resolution_group)
         
@@ -334,57 +328,25 @@ class ExportDialog(QDialog):
         scale = self.resolution_combo.currentData()
         if scale is not None:
             self.export_scale = float(scale)
-        is_scaled = self.export_scale > 1.0
-        self.scale_annotations_checkbox.setEnabled(is_scaled)
-        if not is_scaled:
-            self.scale_annotations_checkbox.setChecked(False)
-            self.scale_annotations_with_image = False
-    
-    def _get_max_dimension_from_selection(self) -> Optional[int]:
-        """Return max(image width, height) across selected items, or None if none selected."""
-        if not self.selected_items:
-            return None
-        max_dim = 0
-        for dataset in self.selected_items.values():
-            rows = getattr(dataset, 'Rows', 0) or 0
-            cols = getattr(dataset, 'Columns', 0) or 0
-            try:
-                rows, cols = int(rows), int(cols)
-            except (TypeError, ValueError):
-                continue
-            max_dim = max(max_dim, rows, cols)
-        return max_dim if max_dim > 0 else None
     
     def _update_resolution_availability(self) -> None:
-        """Enable/disable 4×, 2×, 1.5× based on max dimension of selected images (cap 4096)."""
-        max_dim = self._get_max_dimension_from_selection()
-        tooltip_disabled = "Not available: selected images would exceed 4096 px"
+        """Keep all resolution options enabled; per-slice fallback and post-export message handle 8192 px limit."""
+        # Scale options are always selectable. Export manager steps down (4→2→1.5→Native) per image
+        # and reports which files were exported at lower magnification, so we do not disable or reset here.
         model = self.resolution_combo.model()
         if not isinstance(model, QStandardItemModel):
             return
+        tooltip = "Images whose size would exceed 8192 px will be exported at a lower magnification; you will be notified after export."
         for i in range(self.resolution_combo.count()):
             scale = self.resolution_combo.itemData(i)
-            if scale is None:
-                continue
-            scale_f = float(scale)
             item = model.item(i)
-            if scale_f <= 1.0:
-                item.setEnabled(True)
-                item.setToolTip("")
+            if item is None:
                 continue
-            if max_dim is None:
-                item.setEnabled(True)
+            item.setEnabled(True)
+            if scale is not None and float(scale) > 1.0:
+                item.setToolTip(tooltip)
+            else:
                 item.setToolTip("")
-                continue
-            allowed = (scale_f == 1.5 and max_dim <= 2730) or (scale_f == 2.0 and max_dim <= 2048) or (scale_f == 4.0 and max_dim <= 1024)
-            item.setEnabled(allowed)
-            item.setToolTip(tooltip_disabled if not allowed else "")
-        # If current selection is disabled, switch to Native
-        current_scale = self.resolution_combo.currentData()
-        if current_scale is not None and current_scale > 1.0 and max_dim is not None:
-            if (current_scale == 1.5 and max_dim > 2730) or (current_scale == 2.0 and max_dim > 2048) or (current_scale == 4.0 and max_dim > 1024):
-                self.resolution_combo.setCurrentIndex(0)
-                self.export_scale = 1.0
     
     def _populate_tree(self) -> None:
         """Populate the tree with studies, series, and slices."""
@@ -641,12 +603,13 @@ class ExportDialog(QDialog):
         # Sync export scale from combo (in case index changed)
         scale_data = self.resolution_combo.currentData()
         export_scale = float(scale_data) if scale_data is not None else 1.0
-        scale_annotations = self.scale_annotations_checkbox.isChecked()
+        # Annotation sizes are formula-based only; do not scale with export magnification
+        scale_annotations = False
         
         # Perform export
         try:
             manager = ExportManager()
-            exported_count = manager.export_selected(
+            exported_count, downgraded_list = manager.export_selected(
                 self.selected_items,
                 self.output_path,
                 self.export_format,
@@ -675,10 +638,22 @@ class ExportDialog(QDialog):
             if self.config_manager and self.output_path:
                 self.config_manager.set_last_export_path(self.output_path)
             
+            msg = f"Successfully exported {exported_count} file(s) to:\n{self.output_path}"
+            if downgraded_list:
+                def scale_label(s: float) -> str:
+                    if s == 1.0:
+                        return "Native"
+                    return f"{s}×"
+                lines = []
+                for filename, req, actual in downgraded_list[:20]:
+                    lines.append(f"  • {filename}: requested {scale_label(req)}, exported at {scale_label(actual)} (would exceed 8192 px)")
+                if len(downgraded_list) > 20:
+                    lines.append(f"  ... and {len(downgraded_list) - 20} more.")
+                msg += "\n\nThe following were exported at a lower magnification than requested (max dimension 8192 px):\n" + "\n".join(lines)
             QMessageBox.information(
                 self,
                 "Export Complete",
-                f"Successfully exported {exported_count} file(s) to:\n{self.output_path}"
+                msg
             )
             self.accept()
         except Exception as e:

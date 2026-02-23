@@ -23,7 +23,7 @@ Requirements:
 
 import copy
 import os
-from typing import Optional, List, Dict, Tuple, Any
+from typing import Optional, List, Dict, Tuple, Any, Any
 
 import numpy as np
 import pydicom.uid
@@ -37,12 +37,15 @@ from core.dicom_processor import DICOMProcessor
 from utils.dicom_utils import get_slice_thickness, get_composite_series_key
 
 
-# Export scale factor choices (plan: cap output max dimension at 4096)
+# Export scale factor choices (plan: cap output max dimension at 8192)
+MAX_EXPORT_DIMENSION = 8192
 EXPORT_SCALE_NATIVE = 1.0
 EXPORT_SCALE_1_5 = 1.5
 EXPORT_SCALE_2 = 2.0
 EXPORT_SCALE_4 = 4.0
 EXPORT_SCALE_CHOICES = (EXPORT_SCALE_NATIVE, EXPORT_SCALE_1_5, EXPORT_SCALE_2, EXPORT_SCALE_4)
+# Ordered scale steps for fallback: try requested then next down until under limit
+EXPORT_SCALE_ORDERED = (4.0, 2.0, 1.5, 1.0)
 
 # Formula-based annotation sizing (no magnification): line_thickness = (1/100)*(setting/2)*(w+h)/2;
 # text_size = (1/100)*setting*(w+h)/2. With "enlarge by same factor", multiply by export scale.
@@ -59,6 +62,21 @@ class ExportManager:
     def __init__(self):
         """Initialize the export manager."""
         pass
+    
+    @staticmethod
+    def _effective_scale_for_image(width: int, height: int, requested_scale: float) -> float:
+        """
+        Return the scale to use for export so that max dimension does not exceed MAX_EXPORT_DIMENSION.
+        Tries requested scale, then next magnification down (4→2→1.5→1), until under limit or native.
+        Never returns a scale that would make the image smaller than native.
+        """
+        if requested_scale <= 1.0 or width <= 0 or height <= 0:
+            return 1.0
+        max_dim = max(width, height)
+        for s in EXPORT_SCALE_ORDERED:
+            if s <= requested_scale and max_dim * s <= MAX_EXPORT_DIMENSION:
+                return float(s)
+        return 1.0
     
     @staticmethod
     def get_export_paths_for_selection(
@@ -310,9 +328,14 @@ class ExportManager:
         projection_type: str = "aip",
         projection_slice_count: int = 4,
         subwindow_annotation_managers: Optional[List[Dict[str, Any]]] = None
-    ) -> int:
+    ) -> Tuple[int, List[Tuple[str, float, float]]]:
         """
         Export selected items based on hierarchical selection.
+        
+        Returns:
+            (exported_count, downgraded_list). downgraded_list is a list of
+            (filename, requested_scale, actual_scale) for images exported at
+            a lower magnification than requested (PNG/JPG only).
         
         Args:
             selected_items: Dictionary of {(study_uid, series_uid, slice_index): dataset}
@@ -337,11 +360,9 @@ class ExportManager:
             subwindow_annotation_managers: Optional list of per-subwindow dicts with keys
                 roi_manager, measurement_tool, text_annotation_tool, arrow_annotation_tool.
                 When provided, annotations are aggregated from all subwindows for each slice (Option B).
-            
-        Returns:
-            Number of files exported
         """
         exported = 0
+        downgraded: List[Tuple[str, float, float]] = []  # (filename, requested_scale, actual_scale)
         
         # Create progress dialog
         progress = QProgressDialog("Exporting images...", "Cancel", 0, len(selected_items))
@@ -439,7 +460,7 @@ class ExportManager:
                     if studies and study_uid in studies and series_uid in studies[study_uid]:
                         total_slices = len(studies[study_uid][series_uid])
                     
-                    if self.export_slice(
+                    success, downgrade_info = self.export_slice(
                         dataset,
                         output_path,
                         format,
@@ -466,8 +487,12 @@ class ExportManager:
                         projection_slice_count=projection_slice_count,
                         studies=studies,
                         subwindow_annotation_managers=subwindow_annotation_managers
-                    ):
+                    )
+                    if success:
                         exported += 1
+                        if downgrade_info is not None and format in ("PNG", "JPG"):
+                            req, act = downgrade_info
+                            downgraded.append((os.path.basename(output_path), req, act))
                     
                     progress.setValue(exported)
             
@@ -476,7 +501,7 @@ class ExportManager:
             progress.close()
             raise e
         
-        return exported
+        return (exported, downgraded)
     
     def export_slice(
         self,
@@ -506,10 +531,10 @@ class ExportManager:
         projection_slice_count: int = 4,
         studies: Optional[Dict[str, Dict[str, List[Dataset]]]] = None,
         subwindow_annotation_managers: Optional[List[Dict[str, Any]]] = None
-    ) -> bool:
+    ) -> Tuple[bool, Optional[Tuple[float, float]]]:
         """
         Export a single slice or projection image.
-        
+
         Args:
             dataset: DICOM dataset
             output_path: Output file path
@@ -535,9 +560,10 @@ class ExportManager:
             projection_slice_count: Number of slices to combine (2, 3, 4, 6, or 8)
             studies: Optional studies dictionary for gathering slices for projection
             subwindow_annotation_managers: Optional list of per-subwindow annotation managers (Option B aggregate)
-            
+
         Returns:
-            True if successful
+            (success, downgrade_info). downgrade_info is (requested_scale, actual_scale) when
+            image was exported at lower magnification than requested (PNG/JPG only), else None.
         """
         try:
             if format == "DICOM":
@@ -572,6 +598,7 @@ class ExportManager:
                     else:
                         # Export original data without anonymization
                         dataset.save_as(output_path)
+                return (True, None)
             else:
                 # Export as image (PNG or JPG)
                 window_center = None
@@ -612,7 +639,7 @@ class ExportManager:
                     )
                 
                 if image is None:
-                    return False
+                    return (False, None)
                 
                 # Handle PhotometricInterpretation (MONOCHROME1 inversion, YBR conversion, etc.)
                 # Only apply for non-projection images (projections are already processed)
@@ -620,14 +647,17 @@ class ExportManager:
                 if not is_projection_image:
                     image = ExportManager.process_image_by_photometric_interpretation(image, dataset)
                 
-                # Apply export scale (1.5×, 2×, 4×) BEFORE rendering overlays
-                if export_scale > 1.0:
-                    new_width = int(image.width * export_scale)
-                    new_height = int(image.height * export_scale)
+                # Apply export scale: use effective scale (may be lower than requested to stay under 8192 px)
+                effective_scale = ExportManager._effective_scale_for_image(
+                    image.width, image.height, export_scale
+                )
+                downgrade_info: Optional[Tuple[float, float]] = (export_scale, effective_scale) if effective_scale < export_scale else None
+                if effective_scale > 1.0:
+                    new_width = int(image.width * effective_scale)
+                    new_height = int(image.height * effective_scale)
                     image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
                 
                 # Render overlays and ROIs if requested (on final-size image)
-                # Annotation sizes use formula-based scaling; coordinates scaled by export_scale
                 if include_overlays:
                     image = self._render_overlays_and_rois(
                         image,
@@ -642,8 +672,8 @@ class ExportManager:
                         series_uid,
                         slice_index,
                         total_slices,
-                        coordinate_scale=export_scale,
-                        export_scale=export_scale,
+                        coordinate_scale=effective_scale,
+                        export_scale=effective_scale,
                         scale_annotations_with_image=scale_annotations_with_image,
                         projection_enabled=projection_enabled,
                         projection_type=projection_type,
@@ -657,10 +687,10 @@ class ExportManager:
                 elif format == "JPG":
                     image.save(output_path, "JPEG", quality=95)
             
-            return True
+                return (True, downgrade_info)
         except Exception as e:
             print(f"Error exporting slice: {e}")
-            return False
+            return (False, None)
     
     def _create_projection_for_export(
         self,
