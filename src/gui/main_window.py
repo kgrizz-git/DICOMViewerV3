@@ -147,6 +147,12 @@ class MainWindow(QMainWindow):
                         self.config_manager.get("window_width", 1200),
                         self.config_manager.get("window_height", 800))
         
+        # Reset View action (shared by menu and toolbar to avoid ambiguous shortcuts)
+        self.reset_view_action = QAction("&Reset View", self)
+        self.reset_view_action.setToolTip("Reset zoom, pan, window/level to initial (V, Shift+V)")
+        self.reset_view_action.setShortcuts([QKeySequence("V"), QKeySequence("Shift+V")])
+        self.reset_view_action.triggered.connect(self.reset_view_requested.emit)
+        
         # Create UI components
         self._create_menu_bar()
         self._create_toolbar()
@@ -270,12 +276,8 @@ class MainWindow(QMainWindow):
         
         toolbar.addSeparator()
         
-        # Reset View button
-        reset_view_action = QAction("Reset View", self)
-        reset_view_action.setToolTip("Reset zoom, pan, window center and level to initial values")
-        reset_view_action.setShortcut(QKeySequence("Shift+V"))
-        reset_view_action.triggered.connect(self.reset_view_requested.emit)
-        toolbar.addAction(reset_view_action)
+        # Reset View button (shared action with View menu; V or Shift+V for focused subwindow)
+        toolbar.addAction(self.reset_view_action)
         
         # Reset All Views button
         reset_all_views_action = QAction("Reset All Views", self)

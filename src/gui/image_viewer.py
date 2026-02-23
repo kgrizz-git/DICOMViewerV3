@@ -1614,7 +1614,7 @@ class ImageViewer(QGraphicsView):
                         context_menu = QMenu(self)
                         
                         # Reset View action
-                        reset_action = context_menu.addAction("Reset View (V)")
+                        reset_action = context_menu.addAction("Reset View (V, Shift+V)")
                         reset_action.triggered.connect(self.reset_view_requested.emit)
                         
                         # Reset All Views action

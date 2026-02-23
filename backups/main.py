@@ -965,8 +965,7 @@ class DICOMViewerApp(QObject):
             get_privacy_view_state_callback=lambda: self.privacy_view_enabled,
             delete_text_annotation_callback=None,  # Will be set when coordinators are available
             delete_arrow_annotation_callback=None,  # Will be set when coordinators are available
-            change_layout_callback=self.main_window.set_layout_mode,
-            is_focus_ok_for_reset_view=lambda: self._is_widget_allowed_for_layout_shortcuts(QApplication.focusWidget())
+            change_layout_callback=self.main_window.set_layout_mode
         )
     
     def _clear_data(self) -> None:
@@ -2711,10 +2710,9 @@ class DICOMViewerApp(QObject):
             data['current_slice_index'] = slice_index
             data['current_dataset'] = series_datasets[slice_index]
             
-            # Keep app-level legacy references in sync with focused subwindow's current slice
-            # (focus change updates them in update_focused_subwindow_references)
-            self.current_slice_index = slice_index
-            self.current_dataset = series_datasets[slice_index]
+            # Note: Legacy references (self.current_slice_index, self.current_dataset) are NOT updated here
+            # They are maintained in _update_focused_subwindow_references() to avoid contamination
+            # when switching between subwindows
             
             # Display slice using focused subwindow's slice display manager
             slice_display_manager = managers['slice_display_manager']
