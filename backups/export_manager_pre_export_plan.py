@@ -23,7 +23,7 @@ Requirements:
 
 import copy
 import os
-from typing import Optional, List, Dict, Tuple, Any
+from typing import Optional, List, Dict, Tuple
 
 import numpy as np
 import pydicom.uid
@@ -34,21 +34,7 @@ from PySide6.QtWidgets import QProgressDialog
 
 from core.dicom_parser import DICOMParser
 from core.dicom_processor import DICOMProcessor
-from utils.dicom_utils import get_slice_thickness, get_composite_series_key
-
-
-# Export scale factor choices (plan: cap output max dimension at 4096)
-EXPORT_SCALE_NATIVE = 1.0
-EXPORT_SCALE_1_5 = 1.5
-EXPORT_SCALE_2 = 2.0
-EXPORT_SCALE_4 = 4.0
-EXPORT_SCALE_CHOICES = (EXPORT_SCALE_NATIVE, EXPORT_SCALE_1_5, EXPORT_SCALE_2, EXPORT_SCALE_4)
-
-# Formula-based annotation sizing (no magnification): line_thickness = (1/100)*(setting/2)*(w+h)/2;
-# text_size = (1/100)*setting*(w+h)/2. With "enlarge by same factor", multiply by export scale.
-MIN_EXPORT_LINE_THICKNESS = 1
-MIN_EXPORT_FONT_SIZE = 8
-MAX_EXPORT_FONT_SIZE = 72
+from utils.dicom_utils import get_slice_thickness
 
 
 class ExportManager:
@@ -59,121 +45,6 @@ class ExportManager:
     def __init__(self):
         """Initialize the export manager."""
         pass
-    
-    @staticmethod
-    def get_export_paths_for_selection(
-        selected_items: Dict[Tuple[str, str, int], Dataset],
-        output_dir: str,
-        format: str,
-        projection_enabled: bool = False,
-        projection_type: str = "aip",
-        projection_slice_count: int = 4
-    ) -> List[str]:
-        """
-        Return the list of file paths that would be written by export_selected.
-        Used to check for overwrites before exporting.
-        
-        Args:
-            selected_items: Same as export_selected
-            output_dir: Output directory
-            format: "PNG", "JPG", or "DICOM"
-            projection_enabled: Whether projection suffix is added to filenames
-            projection_type: "aip", "mip", or "minip"
-            projection_slice_count: Number of slices (for suffix)
-            
-        Returns:
-            List of absolute paths that would be written
-        """
-        paths: List[str] = []
-        invalid_chars = '<>:"/\\|?*'
-        
-        def sanitize(name: str) -> str:
-            s = str(name)
-            for c in invalid_chars:
-                s = s.replace(c, '_')
-            s = s.replace(' ', '_').strip('. ')
-            return s or 'UNKNOWN'
-        
-        items_by_study_series: Dict[Tuple[str, str], List[Tuple[int, Dataset]]] = {}
-        for (study_uid, series_uid, slice_index), dataset in selected_items.items():
-            key = (study_uid, series_uid)
-            if key not in items_by_study_series:
-                items_by_study_series[key] = []
-            items_by_study_series[key].append((slice_index, dataset))
-        
-        for key in items_by_study_series:
-            items_by_study_series[key].sort(key=lambda x: x[0])
-        
-        for (study_uid, series_uid), items in items_by_study_series.items():
-            if not items:
-                continue
-            first_dataset = items[0][1]
-            patient_id = sanitize(getattr(first_dataset, 'PatientID', 'UNKNOWN_PATIENT'))
-            study_date = sanitize(getattr(first_dataset, 'StudyDate', 'UNKNOWN_DATE'))
-            study_description = sanitize(getattr(first_dataset, 'StudyDescription', 'UNKNOWN_STUDY'))
-            series_number = getattr(first_dataset, 'SeriesNumber', None)
-            series_description = sanitize(getattr(first_dataset, 'SeriesDescription', 'UNKNOWN_SERIES'))
-            if series_number is None or series_number == '':
-                series_number = 'UNKNOWN_SERIES_NUM'
-            else:
-                series_number = str(int(series_number)) if isinstance(series_number, (int, float)) else str(series_number)
-            series_number_sanitized = sanitize(series_number)
-            
-            patient_dir = os.path.join(output_dir, patient_id)
-            study_dir = os.path.join(patient_dir, f"{study_date}-{study_description}")
-            series_dir = os.path.join(study_dir, f"{series_number_sanitized}-{series_description}")
-            
-            projection_suffix = ""
-            if projection_enabled:
-                projection_suffix = f"_{projection_type.upper()}_{projection_slice_count}slices"
-            
-            for slice_index, dataset in items:
-                instance_num = getattr(dataset, 'InstanceNumber', slice_index + 1)
-                if format == "DICOM":
-                    filename = f"Instance_{instance_num:04d}{projection_suffix}.dcm"
-                elif format == "PNG":
-                    filename = f"Instance_{instance_num:04d}{projection_suffix}.png"
-                else:
-                    filename = f"Instance_{instance_num:04d}{projection_suffix}.jpg"
-                paths.append(os.path.join(series_dir, filename))
-        
-        return paths
-    
-    @staticmethod
-    def export_line_thickness_pixels(
-        setting: int,
-        width: int,
-        height: int,
-        scale_factor: float = 1.0
-    ) -> int:
-        """
-        Compute line thickness in pixels for export.
-        Formula: (1/100) * (setting/2) * (width+height)/2 * scale_factor.
-        Result is multiplied by 0.5 (half) for export line thickness.
-        """
-        if width <= 0 or height <= 0:
-            return MIN_EXPORT_LINE_THICKNESS
-        base = (1.0 / 100.0) * (setting / 2.0) * ((width + height) / 2.0) * scale_factor
-        base = base * 0.5  # Reduce line thickness by half for export
-        return max(MIN_EXPORT_LINE_THICKNESS, int(round(base)))
-    
-    @staticmethod
-    def export_text_size_pixels(
-        setting: int,
-        width: int,
-        height: int,
-        scale_factor: float = 1.0
-    ) -> int:
-        """
-        Compute text/font size in pixels for export. Clamped to [MIN_EXPORT_FONT_SIZE, MAX_EXPORT_FONT_SIZE].
-        Formula: (1/100) * setting * (width+height)/2 * scale_factor.
-        Result is multiplied by 0.25 (one quarter) for export text size.
-        """
-        if width <= 0 or height <= 0:
-            return MIN_EXPORT_FONT_SIZE
-        base = (1.0 / 100.0) * setting * ((width + height) / 2.0) * scale_factor
-        base = base * 0.25  # Reduce text size to one quarter for export
-        return max(MIN_EXPORT_FONT_SIZE, min(MAX_EXPORT_FONT_SIZE, int(round(base))))
     
     @staticmethod
     def process_image_by_photometric_interpretation(image: Image.Image, dataset: Dataset) -> Image.Image:
@@ -300,16 +171,14 @@ class ExportManager:
         overlay_manager=None,
         measurement_tool=None,
         config_manager=None,
-        text_annotation_tool=None,
-        arrow_annotation_tool=None,
         studies: Optional[Dict[str, Dict[str, List[Dataset]]]] = None,
-        export_scale: float = 1.0,
-        scale_annotations_with_image: bool = False,
+        export_at_display_resolution: bool = False,
+        current_zoom: Optional[float] = None,
+        initial_fit_zoom: float = 1.0,
         anonymize: bool = False,
         projection_enabled: bool = False,
         projection_type: str = "aip",
-        projection_slice_count: int = 4,
-        subwindow_annotation_managers: Optional[List[Dict[str, Any]]] = None
+        projection_slice_count: int = 4
     ) -> int:
         """
         Export selected items based on hierarchical selection.
@@ -328,15 +197,12 @@ class ExportManager:
             measurement_tool: Optional measurement tool for rendering measurements
             config_manager: Optional config manager for overlay configuration
             studies: Optional studies dictionary for calculating total_slices {study_uid: {series_uid: [datasets]}}
-            export_scale: Scale factor for image dimensions (1.0, 1.5, 2.0, or 4.0)
-            scale_annotations_with_image: If True, multiply annotation line/font sizes by export_scale
+            export_at_display_resolution: Whether to export at displayed resolution (apply zoom)
+            current_zoom: Optional current zoom level from viewer
             anonymize: Whether to anonymize DICOM exports
             projection_enabled: Whether intensity projection (combine slices) is enabled
             projection_type: Type of projection ("aip", "mip", or "minip")
             projection_slice_count: Number of slices to combine (2, 3, 4, 6, or 8)
-            subwindow_annotation_managers: Optional list of per-subwindow dicts with keys
-                roi_manager, measurement_tool, text_annotation_tool, arrow_annotation_tool.
-                When provided, annotations are aggregated from all subwindows for each slice (Option B).
             
         Returns:
             Number of files exported
@@ -452,20 +318,18 @@ class ExportManager:
                         overlay_manager,
                         measurement_tool,
                         config_manager,
-                        text_annotation_tool,
-                        arrow_annotation_tool,
                         study_uid,
                         series_uid,
                         slice_index,
                         total_slices,
-                        export_scale,
-                        scale_annotations_with_image,
+                        export_at_display_resolution,
+                        current_zoom,
+                        initial_fit_zoom,
                         anonymize=anonymize,
                         projection_enabled=projection_enabled,
                         projection_type=projection_type,
                         projection_slice_count=projection_slice_count,
-                        studies=studies,
-                        subwindow_annotation_managers=subwindow_annotation_managers
+                        studies=studies
                     ):
                         exported += 1
                     
@@ -492,20 +356,18 @@ class ExportManager:
         overlay_manager=None,
         measurement_tool=None,
         config_manager=None,
-        text_annotation_tool=None,
-        arrow_annotation_tool=None,
         study_uid: Optional[str] = None,
         series_uid: Optional[str] = None,
         slice_index: Optional[int] = None,
         total_slices: Optional[int] = None,
-        export_scale: float = 1.0,
-        scale_annotations_with_image: bool = False,
+        export_at_display_resolution: bool = False,
+        current_zoom: Optional[float] = None,
+        initial_fit_zoom: float = 1.0,
         anonymize: bool = False,
         projection_enabled: bool = False,
         projection_type: str = "aip",
         projection_slice_count: int = 4,
-        studies: Optional[Dict[str, Dict[str, List[Dataset]]]] = None,
-        subwindow_annotation_managers: Optional[List[Dict[str, Any]]] = None
+        studies: Optional[Dict[str, Dict[str, List[Dataset]]]] = None
     ) -> bool:
         """
         Export a single slice or projection image.
@@ -527,14 +389,13 @@ class ExportManager:
             series_uid: Optional series UID for ROI lookup
             slice_index: Optional slice index for ROI lookup
             total_slices: Optional total number of slices in series (for "Slice X/Y" formatting)
-            export_scale: Scale factor for image dimensions (1.0, 1.5, 2.0, or 4.0)
-            scale_annotations_with_image: If True, multiply annotation sizes by export_scale
+            export_at_display_resolution: Whether to export at displayed resolution (apply zoom)
+            current_zoom: Optional current zoom level from viewer
             anonymize: Whether to anonymize DICOM exports
             projection_enabled: Whether intensity projection (combine slices) is enabled
             projection_type: Type of projection ("aip", "mip", or "minip")
             projection_slice_count: Number of slices to combine (2, 3, 4, 6, or 8)
             studies: Optional studies dictionary for gathering slices for projection
-            subwindow_annotation_managers: Optional list of per-subwindow annotation managers (Option B aggregate)
             
         Returns:
             True if successful
@@ -620,14 +481,17 @@ class ExportManager:
                 if not is_projection_image:
                     image = ExportManager.process_image_by_photometric_interpretation(image, dataset)
                 
-                # Apply export scale (1.5×, 2×, 4×) BEFORE rendering overlays
-                if export_scale > 1.0:
-                    new_width = int(image.width * export_scale)
-                    new_height = int(image.height * export_scale)
+                # Apply display resolution scaling BEFORE rendering overlays
+                # This ensures font size is calculated based on magnified dimensions
+                zoom_factor = 1.0
+                if export_at_display_resolution and current_zoom and current_zoom > 1.0:
+                    zoom_factor = current_zoom
+                    new_width = int(image.width * zoom_factor)
+                    new_height = int(image.height * zoom_factor)
                     image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
                 
-                # Render overlays and ROIs if requested (on final-size image)
-                # Annotation sizes use formula-based scaling; coordinates scaled by export_scale
+                # Render overlays and ROIs if requested (now on magnified image)
+                # Font size will be calculated based on magnified dimensions
                 if include_overlays:
                     image = self._render_overlays_and_rois(
                         image,
@@ -636,20 +500,17 @@ class ExportManager:
                         overlay_manager,
                         measurement_tool,
                         config_manager,
-                        text_annotation_tool,
-                        arrow_annotation_tool,
                         study_uid,
                         series_uid,
                         slice_index,
                         total_slices,
-                        coordinate_scale=export_scale,
-                        export_scale=export_scale,
-                        scale_annotations_with_image=scale_annotations_with_image,
+                        zoom_factor,  # Pass zoom factor to scale ROI/measurement coordinates
                         projection_enabled=projection_enabled,
                         projection_type=projection_type,
                         projection_slice_count=projection_slice_count,
                         studies=studies,
-                        subwindow_annotation_managers=subwindow_annotation_managers
+                        export_at_display_resolution=export_at_display_resolution,
+                        initial_fit_zoom=initial_fit_zoom
                     )
                 
                 if format == "PNG":
@@ -1012,98 +873,81 @@ class ExportManager:
         overlay_manager,
         measurement_tool,
         config_manager,
-        text_annotation_tool=None,
-        arrow_annotation_tool=None,
-        study_uid: Optional[str] = None,
-        series_uid: Optional[str] = None,
-        slice_index: Optional[int] = None,
+        study_uid: Optional[str],
+        series_uid: Optional[str],
+        slice_index: Optional[int],
         total_slices: Optional[int] = None,
-        coordinate_scale: float = 1.0,
-        export_scale: float = 1.0,
-        scale_annotations_with_image: bool = False,
+        zoom_factor: float = 1.0,
         projection_enabled: bool = False,
         projection_type: str = "aip",
         projection_slice_count: int = 4,
         studies: Optional[Dict[str, Dict[str, List[Dataset]]]] = None,
-        subwindow_annotation_managers: Optional[List[Dict[str, Any]]] = None
+        export_at_display_resolution: bool = False,
+        initial_fit_zoom: float = 1.0
     ) -> Image.Image:
         """
         Render overlays, ROIs, and measurements onto a PIL Image.
-        Annotation sizes use formula: line_thickness = (1/100)*(setting/2)*(w+h)/2,
-        text_size = (1/100)*setting*(w+h)/2; optional scale by export_scale when scale_annotations_with_image.
+        
+        Args:
+            image: PIL Image to draw on
+            dataset: DICOM dataset
+            roi_manager: ROI manager instance
+            overlay_manager: Overlay manager instance
+            measurement_tool: Measurement tool instance
+            config_manager: Config manager instance
+            study_uid: Study UID for ROI lookup
+            series_uid: Series UID for ROI lookup
+            slice_index: Slice index for ROI lookup
+            total_slices: Optional total number of slices in series (for "Slice X/Y" formatting)
+            zoom_factor: Factor to scale ROI/measurement coordinates by (default 1.0)
+            projection_enabled: Whether intensity projection is enabled
+            projection_type: Type of projection ("aip", "mip", or "minip")
+            projection_slice_count: Number of slices to combine
+            studies: Optional studies dictionary for calculating projection thickness
+            
+        Returns:
+            PIL Image with overlays, ROIs, and measurements rendered
         """
         # Convert to RGB if grayscale (needed for drawing colored ROIs)
         if image.mode == 'L':
             image = image.convert('RGB')
         
-        # Use dataset-derived keys for ROI/measurement/annotation lookup (matches app's get_composite_series_key)
-        export_study_uid = getattr(dataset, 'StudyInstanceUID', '') or (study_uid or '')
-        export_series_uid = get_composite_series_key(dataset) or (series_uid or '')
-        
         draw = ImageDraw.Draw(image)
         width, height = image.size
-        anno_scale = export_scale if scale_annotations_with_image else 1.0
         
-        # Option B: aggregate annotations from all subwindows when list is provided
-        use_aggregate = bool(subwindow_annotation_managers and len(subwindow_annotation_managers) > 0)
-        rois_agg: List[Any] = []
-        measurements_agg: List[Any] = []
-        text_items_agg: List[Any] = []
-        arrow_items_agg: List[Any] = []
-        if use_aggregate and export_study_uid and export_series_uid and slice_index is not None:
-            for d in subwindow_annotation_managers:
-                rm = d.get('roi_manager')
-                if rm:
-                    rois_agg.extend(rm.get_rois_for_slice(export_study_uid, export_series_uid, slice_index))
-                mt = d.get('measurement_tool')
-                if mt:
-                    measurements_agg.extend(mt.measurements.get((export_study_uid, export_series_uid, slice_index), []))
-                tt = d.get('text_annotation_tool')
-                if tt:
-                    try:
-                        text_items_agg.extend(tt.get_annotations_for_slice(export_study_uid, export_series_uid, slice_index))
-                    except Exception:
-                        pass
-                at = d.get('arrow_annotation_tool')
-                if at:
-                    try:
-                        arrow_items_agg.extend(at.get_arrows_for_slice(export_study_uid, export_series_uid, slice_index))
-                    except Exception:
-                        pass
-        
-        # Draw ROIs (coordinates scaled by coordinate_scale; line/font from formula)
-        if export_study_uid and export_series_uid and slice_index is not None:
-            rois = rois_agg if use_aggregate else (roi_manager.get_rois_for_slice(export_study_uid, export_series_uid, slice_index) if roi_manager else [])
-            if rois:
-                roi_line_color = (255, 0, 0)
-                roi_font_color = (255, 255, 0)
-                roi_line_thickness_setting = 2
-                roi_font_size_setting = 6
-                if config_manager:
-                    roi_line_color = config_manager.get_roi_line_color()
-                    roi_font_color = config_manager.get_roi_font_color()
-                    roi_line_thickness_setting = config_manager.get_roi_line_thickness()
-                    roi_font_size_setting = config_manager.get_roi_font_size()
-                roi_line_thickness = ExportManager.export_line_thickness_pixels(
-                    roi_line_thickness_setting, width, height, anno_scale
-                )
-                roi_font_size = ExportManager.export_text_size_pixels(
-                    roi_font_size_setting, width, height, anno_scale
-                )
-                for roi in rois:
-                    bounds = roi.get_bounds()
-                x1 = int(max(0, min(bounds.left() * coordinate_scale, width)))
-                y1 = int(max(0, min(bounds.top() * coordinate_scale, height)))
-                x2 = int(max(0, min(bounds.right() * coordinate_scale, width)))
-                y2 = int(max(0, min(bounds.bottom() * coordinate_scale, height)))
+        # Draw ROIs (scale coordinates by zoom_factor)
+        if roi_manager and study_uid and series_uid and slice_index is not None:
+            # Get ROI colors from config
+            roi_line_color = (255, 0, 0)  # Default red
+            roi_font_color = (255, 255, 0)  # Default yellow
+            roi_line_thickness = 2
+            roi_font_size = 6
+            
+            if config_manager:
+                roi_line_color = config_manager.get_roi_line_color()
+                roi_font_color = config_manager.get_roi_font_color()
+                roi_line_thickness = config_manager.get_roi_line_thickness()
+                roi_font_size = config_manager.get_roi_font_size()
+            
+            rois = roi_manager.get_rois_for_slice(study_uid, series_uid, slice_index)
+            for roi in rois:
+                bounds = roi.get_bounds()
+                # Convert QRectF coordinates to integers and scale by zoom
+                x1 = int(max(0, min(bounds.left() * zoom_factor, width)))
+                y1 = int(max(0, min(bounds.top() * zoom_factor, height)))
+                x2 = int(max(0, min(bounds.right() * zoom_factor, width)))
+                y2 = int(max(0, min(bounds.bottom() * zoom_factor, height)))
+                
+                scaled_thickness = max(1, int(roi_line_thickness * zoom_factor))
                 
                 if roi.shape_type == "rectangle":
-                    draw.rectangle([x1, y1, x2, y2], outline=roi_line_color, width=roi_line_thickness)
+                    draw.rectangle([x1, y1, x2, y2], outline=roi_line_color, width=scaled_thickness)
                 elif roi.shape_type == "ellipse":
-                    draw.ellipse([x1, y1, x2, y2], outline=roi_line_color, width=roi_line_thickness)
+                    draw.ellipse([x1, y1, x2, y2], outline=roi_line_color, width=scaled_thickness)
                 
                 # Draw ROI statistics text if available and visible
                 if roi.statistics and roi.statistics_overlay_visible:
+                    # Try to get a font for ROI statistics
                     roi_font = None
                     font_paths = [
                         "arial.ttf",
@@ -1112,18 +956,22 @@ class ExportManager:
                         "/System/Library/Fonts/Helvetica.ttc",
                         "C:/Windows/Fonts/arial.ttf"
                     ]
+                    scaled_font_size = max(8, int(roi_font_size * zoom_factor))
                     for font_path in font_paths:
                         try:
-                            roi_font = ImageFont.truetype(font_path, roi_font_size)
+                            roi_font = ImageFont.truetype(font_path, scaled_font_size)
                             break
-                        except Exception:
+                        except:
                             continue
+                    
                     if roi_font is None:
                         try:
                             roi_font = ImageFont.load_default()
-                        except Exception:
+                        except:
                             pass
+                    
                     if roi_font:
+                        # Format statistics text
                         stats_lines = []
                         if "mean" in roi.visible_statistics and "mean" in roi.statistics:
                             stats_lines.append(f"Mean: {roi.statistics['mean']:.2f}")
@@ -1137,40 +985,45 @@ class ExportManager:
                             stats_lines.append(f"Area: {roi.statistics['area']:.2f}")
                         if "count" in roi.visible_statistics and "count" in roi.statistics:
                             stats_lines.append(f"Count: {int(roi.statistics['count'])}")
+                        
                         if stats_lines:
                             stats_text = "\n".join(stats_lines)
-                            text_x = int(x2 + 5)
-                            text_y = int(y1 + 5)
+                            # Position text at top-right of ROI bounds with offset
+                            text_x = int(x2 + 5 * zoom_factor)
+                            text_y = int(y1 + 5 * zoom_factor)
                             draw.text((text_x, text_y), stats_text, fill=roi_font_color, font=roi_font)
         
-        # Draw measurements (coordinates by coordinate_scale; line/font from formula)
-        if export_study_uid and export_series_uid and slice_index is not None:
-            measurements = measurements_agg if use_aggregate else (measurement_tool.measurements.get((export_study_uid, export_series_uid, slice_index), []) if measurement_tool else [])
-            if measurements:
-                measurement_line_color = (0, 255, 0)
-                measurement_font_color = (0, 255, 0)
-                measurement_line_thickness_setting = 2
-                measurement_font_size_setting = 6
-                if config_manager:
-                    measurement_line_color = config_manager.get_measurement_line_color()
-                    measurement_font_color = config_manager.get_measurement_font_color()
-                    measurement_line_thickness_setting = config_manager.get_measurement_line_thickness()
-                    measurement_font_size_setting = config_manager.get_measurement_font_size()
-                measurement_line_thickness = ExportManager.export_line_thickness_pixels(
-                    measurement_line_thickness_setting, width, height, anno_scale
-                )
-                measurement_font_size = ExportManager.export_text_size_pixels(
-                    measurement_font_size_setting, width, height, anno_scale
-                )
-                measurement_line_thickness = max(2, measurement_line_thickness)
-                for measurement in measurements:
-                    start_x = int(measurement.start_point.x() * coordinate_scale)
-                start_y = int(measurement.start_point.y() * coordinate_scale)
-                end_x = int((measurement.start_point.x() + measurement.end_relative.x()) * coordinate_scale)
-                end_y = int((measurement.start_point.y() + measurement.end_relative.y()) * coordinate_scale)
-                draw.line([(start_x, start_y), (end_x, end_y)], fill=measurement_line_color, width=measurement_line_thickness)
+        # Draw measurements (scale coordinates by zoom_factor)
+        if measurement_tool and study_uid and series_uid and slice_index is not None:
+            # Get measurement colors from config
+            measurement_line_color = (0, 255, 0)  # Default green
+            measurement_font_color = (0, 255, 0)  # Default green
+            measurement_line_thickness = 2
+            measurement_font_size = 6
+            
+            if config_manager:
+                measurement_line_color = config_manager.get_measurement_line_color()
+                measurement_font_color = config_manager.get_measurement_font_color()
+                measurement_line_thickness = config_manager.get_measurement_line_thickness()
+                measurement_font_size = config_manager.get_measurement_font_size()
+            
+            measurements = measurement_tool.measurements.get((study_uid, series_uid, slice_index), [])
+            for measurement in measurements:
+                # Scale measurement coordinates
+                start_x = int(measurement.start_point.x() * zoom_factor)
+                start_y = int(measurement.start_point.y() * zoom_factor)
+                end_x = int((measurement.start_point.x() + measurement.end_relative.x()) * zoom_factor)
+                end_y = int((measurement.start_point.y() + measurement.end_relative.y()) * zoom_factor)
+                
+                # Draw measurement line with config color and thickness
+                scaled_thickness = max(2, int(measurement_line_thickness * zoom_factor))
+                draw.line([(start_x, start_y), (end_x, end_y)], fill=measurement_line_color, width=scaled_thickness)
+                
+                # Draw text label at midpoint
                 mid_x = int((start_x + end_x) / 2)
                 mid_y = int((start_y + end_y) / 2)
+                
+                # Try to get a font for measurement text
                 measurement_font = None
                 font_paths = [
                     "arial.ttf",
@@ -1179,128 +1032,69 @@ class ExportManager:
                     "/System/Library/Fonts/Helvetica.ttc",
                     "C:/Windows/Fonts/arial.ttf"
                 ]
+                scaled_font_size = max(10, int(measurement_font_size * zoom_factor))
                 for font_path in font_paths:
                     try:
-                        measurement_font = ImageFont.truetype(font_path, measurement_font_size)
+                        measurement_font = ImageFont.truetype(font_path, scaled_font_size)
                         break
-                    except Exception:
+                    except:
                         continue
+                
                 if measurement_font is None:
                     try:
                         measurement_font = ImageFont.load_default()
-                    except Exception:
+                    except:
                         pass
+                
+                # Draw measurement text with config color
                 if measurement_font:
                     draw.text((mid_x, mid_y), measurement.distance_formatted, fill=measurement_font_color, font=measurement_font)
         
-        # Draw text annotations for this slice (formula-based font size; coordinates scaled by coordinate_scale)
-        if export_study_uid and export_series_uid and slice_index is not None and config_manager:
-            if use_aggregate:
-                text_items = text_items_agg
-            else:
-                if text_annotation_tool:
-                    try:
-                        text_items = text_annotation_tool.get_annotations_for_slice(export_study_uid, export_series_uid, slice_index)
-                    except Exception:
-                        text_items = []
-                else:
-                    text_items = []
-            try:
-                if text_items:
-                    text_font_size_setting = config_manager.get_text_annotation_font_size()
-                    text_font_size = ExportManager.export_text_size_pixels(
-                        text_font_size_setting, width, height, anno_scale
-                    )
-                    text_color = config_manager.get_text_annotation_color()
-                    if isinstance(text_color, (list, tuple)) and len(text_color) >= 3:
-                        fill_color = (int(text_color[0]), int(text_color[1]), int(text_color[2]))
-                    else:
-                        fill_color = (255, 255, 0)
-                    font_paths = [
-                        "arialbd.ttf", "Arial Bold.ttf",
-                        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
-                        "/System/Library/Fonts/Helvetica.ttc", "arial.ttf", "Arial.ttf",
-                        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-                        "C:/Windows/Fonts/arialbd.ttf", "C:/Windows/Fonts/arial.ttf"
-                    ]
-                    text_font = None
-                    for font_path in font_paths:
-                        try:
-                            text_font = ImageFont.truetype(font_path, text_font_size)
-                            break
-                        except Exception:
-                            continue
-                    if text_font is None:
-                        try:
-                            text_font = ImageFont.load_default()
-                        except Exception:
-                            pass
-                    if text_font:
-                        for item in text_items:
-                            try:
-                                sx = item.scenePos().x() * coordinate_scale
-                                sy = item.scenePos().y() * coordinate_scale
-                                tx = int(max(0, min(sx, width - 1)))
-                                ty = int(max(0, min(sy, height - 1)))
-                                text = item.toPlainText() or ""
-                                if text:
-                                    draw.text((tx, ty), text, fill=fill_color, font=text_font)
-                            except Exception:
-                                continue
-            except Exception:
-                pass
-        
-        # Draw arrow annotations for this slice (formula-based line thickness; coordinates scaled)
-        if export_study_uid and export_series_uid and slice_index is not None and config_manager:
-            if use_aggregate:
-                arrow_items = arrow_items_agg
-            else:
-                if arrow_annotation_tool:
-                    try:
-                        arrow_items = arrow_annotation_tool.get_arrows_for_slice(export_study_uid, export_series_uid, slice_index)
-                    except Exception:
-                        arrow_items = []
-                else:
-                    arrow_items = []
-            if arrow_items:
-                try:
-                    arrow_size_setting = config_manager.get_arrow_annotation_size() if hasattr(config_manager, 'get_arrow_annotation_size') else 2
-                    arrow_thickness = ExportManager.export_line_thickness_pixels(
-                        arrow_size_setting, width, height, anno_scale
-                    )
-                    arrow_thickness = max(1, arrow_thickness)
-                    arrow_color = config_manager.get_arrow_annotation_color() if hasattr(config_manager, 'get_arrow_annotation_color') else (255, 255, 0)
-                    if isinstance(arrow_color, (list, tuple)) and len(arrow_color) >= 3:
-                        line_color = (int(arrow_color[0]), int(arrow_color[1]), int(arrow_color[2]))
-                    else:
-                        line_color = (255, 255, 0)
-                    for item in arrow_items:
-                        try:
-                            pos = item.pos()
-                            start_x = int(pos.x() * coordinate_scale)
-                            start_y = int(pos.y() * coordinate_scale)
-                            end_x = int((pos.x() + (item.end_point.x() - item.start_point.x())) * coordinate_scale)
-                            end_y = int((pos.y() + (item.end_point.y() - item.start_point.y())) * coordinate_scale)
-                            start_x = max(0, min(start_x, width))
-                            start_y = max(0, min(start_y, height))
-                            end_x = max(0, min(end_x, width))
-                            end_y = max(0, min(end_y, height))
-                            draw.line([(start_x, start_y), (end_x, end_y)], fill=line_color, width=arrow_thickness)
-                        except Exception:
-                            continue
-                except Exception:
-                    pass
-        
-        # Draw overlay (DICOM corner) text – font size from formula
+        # Draw overlay text
         if overlay_manager and config_manager:
             parser = DICOMParser(dataset)
             modality = overlay_manager._get_modality(parser)
             corner_tags = config_manager.get_overlay_tags(modality)
-            overlay_font_size_setting = config_manager.get_overlay_font_size()
-            font_size = ExportManager.export_text_size_pixels(
-                overlay_font_size_setting, width, height, anno_scale
-            )
+            
+            # Get base font size from overlay manager
+            base_font_size = overlay_manager.font_size
             font_color = overlay_manager.font_color
+            
+            # Calculate font size
+            # The viewer uses ItemIgnoresTransformations flag, which keeps font size constant
+            # regardless of zoom level. When exporting at display resolution with zoom,
+            # we scale the font by the ratio of current zoom to initial fit zoom.
+            
+            # If exporting at display resolution, scale by the zoom ratio
+            if export_at_display_resolution:
+                # Scale by the ratio of current zoom to initial fit zoom
+                # This maintains the relative font size as seen in the viewer
+                zoom_ratio = zoom_factor / initial_fit_zoom if initial_fit_zoom > 0 else zoom_factor
+                base_font_with_scaling = base_font_size * zoom_ratio
+            else:
+                base_font_with_scaling = base_font_size
+            
+            # Apply minimal scaling based on ORIGINAL (unzoomed) image size for very small/large images
+            image_min_dimension = min(width, height)
+            
+            # If image was zoomed for export, use original dimensions for scaling decision
+            if zoom_factor > 1.0:
+                image_min_dimension = int(image_min_dimension / zoom_factor)
+            
+            if image_min_dimension < 256:
+                # Very small images: scale up slightly for readability
+                scale_factor = image_min_dimension / 256.0
+                font_size = max(8, int(base_font_with_scaling * scale_factor))
+            elif image_min_dimension > 2048:
+                # Very large images: scale up to maintain visibility
+                scale_factor = image_min_dimension / 1024.0
+                font_size = int(base_font_with_scaling * scale_factor)
+            else:
+                # Normal size images (256-2048): use appropriately scaled font size
+                font_size = int(base_font_with_scaling)
+            
+            # Clamp font size to reasonable bounds for readability
+            font_size = max(8, min(72, font_size))
             
             # Use user's selected font color with minimal safety check
             if isinstance(font_color, (list, tuple)) and len(font_color) >= 3:

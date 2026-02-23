@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                                 QTreeWidgetItem, QCheckBox)
 from PySide6.QtCore import Qt, QRectF
 from PySide6.QtGui import QStandardItemModel, QStandardItem
-from typing import Optional, List, Dict, Tuple, Any
+from typing import Optional, List, Dict, Tuple
 import os
 
 from pydicom.dataset import Dataset
@@ -51,7 +51,6 @@ class ExportDialog(QDialog):
         studies: Dict[str, Dict[str, List[Dataset]]],
         current_window_center: Optional[float] = None,
         current_window_width: Optional[float] = None,
-        focused_subwindow_index: Optional[int] = None,
         use_rescaled_values: bool = False,
         roi_manager=None,
         overlay_manager=None,
@@ -62,7 +61,6 @@ class ExportDialog(QDialog):
         projection_enabled: bool = False,
         projection_type: str = "aip",
         projection_slice_count: int = 4,
-        subwindow_annotation_managers: Optional[List[Dict[str, Any]]] = None,
         parent=None
     ):
         """
@@ -70,9 +68,8 @@ class ExportDialog(QDialog):
         
         Args:
             studies: Dictionary of studies {study_uid: {series_uid: [datasets]}}
-            current_window_center: Optional current window center from viewer (focused sub-window)
-            current_window_width: Optional current window width from viewer (focused sub-window)
-            focused_subwindow_index: Optional 0-based index of the focused sub-window (for label, e.g. "sub-window 1")
+            current_window_center: Optional current window center from viewer
+            current_window_width: Optional current window width from viewer
             use_rescaled_values: Whether to use rescaled values (matches viewer setting)
             roi_manager: Optional ROI manager for rendering ROIs
             overlay_manager: Optional overlay manager for rendering overlays
@@ -81,9 +78,6 @@ class ExportDialog(QDialog):
             projection_enabled: Whether intensity projection (combine slices) is enabled
             projection_type: Type of projection ("aip", "mip", or "minip")
             projection_slice_count: Number of slices to combine (2, 3, 4, 6, or 8)
-            subwindow_annotation_managers: Optional list of per-subwindow dicts (roi_manager, measurement_tool,
-                text_annotation_tool, arrow_annotation_tool). When provided, annotations are aggregated from all
-                subwindows for export (Option B).
             parent: Parent widget
         """
         super().__init__(parent)
@@ -95,7 +89,6 @@ class ExportDialog(QDialog):
         self.studies = studies
         self.current_window_center = current_window_center
         self.current_window_width = current_window_width
-        self.focused_subwindow_index = focused_subwindow_index  # 0-based; None if unknown
         self.use_rescaled_values = use_rescaled_values
         self.roi_manager = roi_manager
         self.overlay_manager = overlay_manager
@@ -106,7 +99,6 @@ class ExportDialog(QDialog):
         self.projection_enabled = projection_enabled
         self.projection_type = projection_type
         self.projection_slice_count = projection_slice_count
-        self.subwindow_annotation_managers = subwindow_annotation_managers or []
         
         self.export_format = "PNG"
         self.window_level_option = "current"  # "current" or "dataset"
@@ -183,16 +175,7 @@ class ExportDialog(QDialog):
         window_level_layout = QVBoxLayout()
         
         self.window_level_button_group = QButtonGroup()
-        # Label clarifies focused sub-window and shows center/width when available (e.g. "sub-window 1 - 44/486")
-        if (self.current_window_center is not None and self.current_window_width is not None
-                and self.focused_subwindow_index is not None):
-            sub_num = self.focused_subwindow_index + 1
-            c = int(round(self.current_window_center))
-            w = int(round(self.current_window_width))
-            current_wl_label = f"Use currently focused sub-window window/level (sub-window {sub_num} - {c}/{w})"
-        else:
-            current_wl_label = "Use currently focused sub-window window/level"
-        self.current_wl_radio = QRadioButton(current_wl_label)
+        self.current_wl_radio = QRadioButton("Use current viewer window/level")
         self.dataset_wl_radio = QRadioButton("Use dataset default window/level")
         
         # Default to current if available, otherwise dataset
@@ -611,31 +594,6 @@ class ExportDialog(QDialog):
         else:
             self.export_format = "DICOM"
         
-        # Check for overwrites before exporting
-        paths = ExportManager.get_export_paths_for_selection(
-            self.selected_items,
-            self.output_path,
-            self.export_format,
-            projection_enabled=self.projection_enabled,
-            projection_type=self.projection_type,
-            projection_slice_count=self.projection_slice_count
-        )
-        existing = [p for p in paths if os.path.exists(p)]
-        if existing:
-            msg = f"{len(existing)} file(s) already exist and will be overwritten.\n\nExamples:\n" + "\n".join(os.path.basename(p) for p in existing[:5])
-            if len(existing) > 5:
-                msg += f"\n... and {len(existing) - 5} more."
-            msg += "\n\nContinue?"
-            reply = QMessageBox.question(
-                self,
-                "Overwrite existing files?",
-                msg,
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No
-            )
-            if reply != QMessageBox.StandardButton.Yes:
-                return
-        
         # Get anonymize state (only for DICOM format)
         anonymize = self.anonymize_enabled and self.export_format == "DICOM"
         # Sync export scale from combo (in case index changed)
@@ -667,8 +625,7 @@ class ExportDialog(QDialog):
                 anonymize=anonymize,
                 projection_enabled=self.projection_enabled,
                 projection_type=self.projection_type,
-                projection_slice_count=self.projection_slice_count,
-                subwindow_annotation_managers=self.subwindow_annotation_managers
+                projection_slice_count=self.projection_slice_count
             )
             
             # Save export path to config for next time

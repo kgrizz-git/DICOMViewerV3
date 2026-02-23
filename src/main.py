@@ -1377,6 +1377,7 @@ class DICOMViewerApp(QObject):
         
         # Export (shared)
         self.main_window.export_requested.connect(self._open_export)
+        self.main_window.export_screenshots_requested.connect(self._open_export_screenshots)
         
         # Undo/Redo tag edits (shared)
         # Undo/redo signals (for both tag edits and annotations)
@@ -1932,31 +1933,44 @@ class DICOMViewerApp(QObject):
         self.dialog_coordinator.open_tag_export()
     
     def _open_export(self) -> None:
-        """Handle Export dialog request."""
-        # Get current window/level values if available
+        """Handle Export dialog request. Resolution options are in the dialog (Native / 1.5× / 2× / 4×)."""
         window_center, window_width = self.window_level_controls.get_window_level()
-        # Get current rescale state to match viewer behavior
         use_rescaled_values = self.view_state_manager.use_rescaled_values
-        # Get current projection state from slice display manager
         projection_enabled = self.slice_display_manager.projection_enabled
         projection_type = self.slice_display_manager.projection_type
         projection_slice_count = self.slice_display_manager.projection_slice_count
-        # Get initial fit zoom for font scaling
-        initial_fit_zoom = self.view_state_manager.get_initial_fit_zoom()
+        focused_subwindow_index = self.get_focused_subwindow_index()
+        # Option B: aggregate annotations from all subwindows for export
+        subwindow_annotation_managers = []
+        for idx in sorted(self.subwindow_managers.keys()):
+            m = self.subwindow_managers[idx]
+            subwindow_annotation_managers.append({
+                'roi_manager': m.get('roi_manager'),
+                'measurement_tool': m.get('measurement_tool'),
+                'text_annotation_tool': m.get('text_annotation_tool'),
+                'arrow_annotation_tool': m.get('arrow_annotation_tool')
+            })
         self.dialog_coordinator.open_export(
             current_window_center=window_center,
             current_window_width=window_width,
-            current_zoom=self.image_viewer.current_zoom,
-            initial_fit_zoom=initial_fit_zoom,
+            focused_subwindow_index=focused_subwindow_index,
             use_rescaled_values=use_rescaled_values,
             roi_manager=self.roi_manager,
             overlay_manager=self.overlay_manager,
             measurement_tool=self.measurement_tool,
+            text_annotation_tool=getattr(self, 'text_annotation_tool', None),
+            arrow_annotation_tool=getattr(self, 'arrow_annotation_tool', None),
             projection_enabled=projection_enabled,
             projection_type=projection_type,
-            projection_slice_count=projection_slice_count
+            projection_slice_count=projection_slice_count,
+            subwindow_annotation_managers=subwindow_annotation_managers
         )
-    
+
+    def _open_export_screenshots(self) -> None:
+        """Handle Export Screenshots dialog request. One file per selected subwindow."""
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        self.dialog_coordinator.open_export_screenshots(subwindows)
+
     def _on_export_customizations(self) -> None:
         """Handle Export Customizations request."""
         # Get last export path or use current directory

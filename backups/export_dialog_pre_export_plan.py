@@ -25,8 +25,7 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                                 QGroupBox, QRadioButton, QButtonGroup, QTreeWidget,
                                 QTreeWidgetItem, QCheckBox)
 from PySide6.QtCore import Qt, QRectF
-from PySide6.QtGui import QStandardItemModel, QStandardItem
-from typing import Optional, List, Dict, Tuple, Any
+from typing import Optional, List, Dict, Tuple
 import os
 
 from pydicom.dataset import Dataset
@@ -51,18 +50,16 @@ class ExportDialog(QDialog):
         studies: Dict[str, Dict[str, List[Dataset]]],
         current_window_center: Optional[float] = None,
         current_window_width: Optional[float] = None,
-        focused_subwindow_index: Optional[int] = None,
+        current_zoom: Optional[float] = None,
+        initial_fit_zoom: Optional[float] = None,
         use_rescaled_values: bool = False,
         roi_manager=None,
         overlay_manager=None,
         measurement_tool=None,
         config_manager=None,
-        text_annotation_tool=None,
-        arrow_annotation_tool=None,
         projection_enabled: bool = False,
         projection_type: str = "aip",
         projection_slice_count: int = 4,
-        subwindow_annotation_managers: Optional[List[Dict[str, Any]]] = None,
         parent=None
     ):
         """
@@ -70,9 +67,10 @@ class ExportDialog(QDialog):
         
         Args:
             studies: Dictionary of studies {study_uid: {series_uid: [datasets]}}
-            current_window_center: Optional current window center from viewer (focused sub-window)
-            current_window_width: Optional current window width from viewer (focused sub-window)
-            focused_subwindow_index: Optional 0-based index of the focused sub-window (for label, e.g. "sub-window 1")
+            current_window_center: Optional current window center from viewer
+            current_window_width: Optional current window width from viewer
+            current_zoom: Optional current zoom level from viewer
+            initial_fit_zoom: Optional initial fit-to-view zoom factor for font scaling
             use_rescaled_values: Whether to use rescaled values (matches viewer setting)
             roi_manager: Optional ROI manager for rendering ROIs
             overlay_manager: Optional overlay manager for rendering overlays
@@ -81,9 +79,6 @@ class ExportDialog(QDialog):
             projection_enabled: Whether intensity projection (combine slices) is enabled
             projection_type: Type of projection ("aip", "mip", or "minip")
             projection_slice_count: Number of slices to combine (2, 3, 4, 6, or 8)
-            subwindow_annotation_managers: Optional list of per-subwindow dicts (roi_manager, measurement_tool,
-                text_annotation_tool, arrow_annotation_tool). When provided, annotations are aggregated from all
-                subwindows for export (Option B).
             parent: Parent widget
         """
         super().__init__(parent)
@@ -95,24 +90,21 @@ class ExportDialog(QDialog):
         self.studies = studies
         self.current_window_center = current_window_center
         self.current_window_width = current_window_width
-        self.focused_subwindow_index = focused_subwindow_index  # 0-based; None if unknown
+        self.current_zoom = current_zoom
+        self.initial_fit_zoom = initial_fit_zoom if initial_fit_zoom is not None else 1.0
         self.use_rescaled_values = use_rescaled_values
         self.roi_manager = roi_manager
         self.overlay_manager = overlay_manager
         self.measurement_tool = measurement_tool
         self.config_manager = config_manager
-        self.text_annotation_tool = text_annotation_tool
-        self.arrow_annotation_tool = arrow_annotation_tool
         self.projection_enabled = projection_enabled
         self.projection_type = projection_type
         self.projection_slice_count = projection_slice_count
-        self.subwindow_annotation_managers = subwindow_annotation_managers or []
         
         self.export_format = "PNG"
         self.window_level_option = "current"  # "current" or "dataset"
         self.include_overlays = True
-        self.export_scale = 1.0  # 1.0, 1.5, 2.0, or 4.0
-        self.scale_annotations_with_image = False
+        self.export_at_display_resolution = True
         self.anonymize_enabled = False
         
         # Get last export path from config if available
@@ -183,16 +175,7 @@ class ExportDialog(QDialog):
         window_level_layout = QVBoxLayout()
         
         self.window_level_button_group = QButtonGroup()
-        # Label clarifies focused sub-window and shows center/width when available (e.g. "sub-window 1 - 44/486")
-        if (self.current_window_center is not None and self.current_window_width is not None
-                and self.focused_subwindow_index is not None):
-            sub_num = self.focused_subwindow_index + 1
-            c = int(round(self.current_window_center))
-            w = int(round(self.current_window_width))
-            current_wl_label = f"Use currently focused sub-window window/level (sub-window {sub_num} - {c}/{w})"
-        else:
-            current_wl_label = "Use currently focused sub-window window/level"
-        self.current_wl_radio = QRadioButton(current_wl_label)
+        self.current_wl_radio = QRadioButton("Use current viewer window/level")
         self.dataset_wl_radio = QRadioButton("Use dataset default window/level")
         
         # Default to current if available, otherwise dataset
@@ -222,26 +205,11 @@ class ExportDialog(QDialog):
         self.overlay_checkbox.toggled.connect(lambda checked: setattr(self, 'include_overlays', checked))
         layout.addWidget(self.overlay_checkbox)
         
-        # Resolution: Native, 1.5×, 2×, 4× (only for PNG/JPG); scale limits applied on selection
-        self.resolution_group = QGroupBox("Resolution (PNG/JPG)")
-        resolution_layout = QVBoxLayout()
-        self.resolution_combo = QComboBox()
-        resolution_model = QStandardItemModel()
-        for label, scale in [("Native resolution", 1.0), ("1.5×", 1.5), ("2×", 2.0), ("4×", 4.0)]:
-            item = QStandardItem(label)
-            item.setData(scale, Qt.ItemDataRole.UserRole)
-            resolution_model.appendRow(item)
-        self.resolution_combo.setModel(resolution_model)
-        self.resolution_combo.setCurrentIndex(0)
-        self.resolution_combo.currentIndexChanged.connect(self._on_resolution_changed)
-        resolution_layout.addWidget(self.resolution_combo)
-        self.scale_annotations_checkbox = QCheckBox("Enlarge line thickness and text size by the same factor")
-        self.scale_annotations_checkbox.setChecked(False)
-        self.scale_annotations_checkbox.setEnabled(False)  # Enabled only when 1.5×/2×/4× selected
-        self.scale_annotations_checkbox.toggled.connect(lambda checked: setattr(self, 'scale_annotations_with_image', checked))
-        resolution_layout.addWidget(self.scale_annotations_checkbox)
-        self.resolution_group.setLayout(resolution_layout)
-        layout.addWidget(self.resolution_group)
+        # Display resolution option (only for PNG/JPG)
+        self.display_res_checkbox = QCheckBox("Export at displayed resolution (apply current zoom)")
+        self.display_res_checkbox.setChecked(True)
+        self.display_res_checkbox.stateChanged.connect(lambda: setattr(self, 'export_at_display_resolution', self.display_res_checkbox.isChecked()))
+        layout.addWidget(self.display_res_checkbox)
         
         # Update window/level and overlay options when format changes
         self.png_radio.toggled.connect(self._on_format_changed)
@@ -318,73 +286,19 @@ class ExportDialog(QDialog):
         
         self.window_level_group.setEnabled(is_image_format)
         self.overlay_checkbox.setEnabled(is_image_format)
-        self.resolution_group.setEnabled(is_image_format)
+        self.display_res_checkbox.setEnabled(is_image_format)
         self.anonymize_checkbox.setEnabled(is_dicom_format)
         
         if not is_image_format:
+            # DICOM format - disable overlay and display resolution options
             self.overlay_checkbox.setChecked(False)
             self.include_overlays = False
+            self.display_res_checkbox.setChecked(False)
+            self.export_at_display_resolution = False
         else:
+            # Image format - disable anonymize option
             self.anonymize_checkbox.setChecked(False)
             self.anonymize_enabled = False
-            self._update_resolution_availability()
-    
-    def _on_resolution_changed(self, index: int) -> None:
-        """Sync export_scale from resolution combo."""
-        scale = self.resolution_combo.currentData()
-        if scale is not None:
-            self.export_scale = float(scale)
-        is_scaled = self.export_scale > 1.0
-        self.scale_annotations_checkbox.setEnabled(is_scaled)
-        if not is_scaled:
-            self.scale_annotations_checkbox.setChecked(False)
-            self.scale_annotations_with_image = False
-    
-    def _get_max_dimension_from_selection(self) -> Optional[int]:
-        """Return max(image width, height) across selected items, or None if none selected."""
-        if not self.selected_items:
-            return None
-        max_dim = 0
-        for dataset in self.selected_items.values():
-            rows = getattr(dataset, 'Rows', 0) or 0
-            cols = getattr(dataset, 'Columns', 0) or 0
-            try:
-                rows, cols = int(rows), int(cols)
-            except (TypeError, ValueError):
-                continue
-            max_dim = max(max_dim, rows, cols)
-        return max_dim if max_dim > 0 else None
-    
-    def _update_resolution_availability(self) -> None:
-        """Enable/disable 4×, 2×, 1.5× based on max dimension of selected images (cap 4096)."""
-        max_dim = self._get_max_dimension_from_selection()
-        tooltip_disabled = "Not available: selected images would exceed 4096 px"
-        model = self.resolution_combo.model()
-        if not isinstance(model, QStandardItemModel):
-            return
-        for i in range(self.resolution_combo.count()):
-            scale = self.resolution_combo.itemData(i)
-            if scale is None:
-                continue
-            scale_f = float(scale)
-            item = model.item(i)
-            if scale_f <= 1.0:
-                item.setEnabled(True)
-                item.setToolTip("")
-                continue
-            if max_dim is None:
-                item.setEnabled(True)
-                item.setToolTip("")
-                continue
-            allowed = (scale_f == 1.5 and max_dim <= 2730) or (scale_f == 2.0 and max_dim <= 2048) or (scale_f == 4.0 and max_dim <= 1024)
-            item.setEnabled(allowed)
-            item.setToolTip(tooltip_disabled if not allowed else "")
-        # If current selection is disabled, switch to Native
-        current_scale = self.resolution_combo.currentData()
-        if current_scale is not None and current_scale > 1.0 and max_dim is not None:
-            if (current_scale == 1.5 and max_dim > 2730) or (current_scale == 2.0 and max_dim > 2048) or (current_scale == 4.0 and max_dim > 1024):
-                self.resolution_combo.setCurrentIndex(0)
-                self.export_scale = 1.0
     
     def _populate_tree(self) -> None:
         """Populate the tree with studies, series, and slices."""
@@ -554,8 +468,6 @@ class ExportDialog(QDialog):
                         self.selected_items[key] = dataset
         
         self._update_selection_count()
-        if self.png_radio.isChecked() or self.jpg_radio.isChecked():
-            self._update_resolution_availability()
     
     def _update_selection_count(self) -> None:
         """Update selection count label."""
@@ -611,37 +523,8 @@ class ExportDialog(QDialog):
         else:
             self.export_format = "DICOM"
         
-        # Check for overwrites before exporting
-        paths = ExportManager.get_export_paths_for_selection(
-            self.selected_items,
-            self.output_path,
-            self.export_format,
-            projection_enabled=self.projection_enabled,
-            projection_type=self.projection_type,
-            projection_slice_count=self.projection_slice_count
-        )
-        existing = [p for p in paths if os.path.exists(p)]
-        if existing:
-            msg = f"{len(existing)} file(s) already exist and will be overwritten.\n\nExamples:\n" + "\n".join(os.path.basename(p) for p in existing[:5])
-            if len(existing) > 5:
-                msg += f"\n... and {len(existing) - 5} more."
-            msg += "\n\nContinue?"
-            reply = QMessageBox.question(
-                self,
-                "Overwrite existing files?",
-                msg,
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No
-            )
-            if reply != QMessageBox.StandardButton.Yes:
-                return
-        
         # Get anonymize state (only for DICOM format)
         anonymize = self.anonymize_enabled and self.export_format == "DICOM"
-        # Sync export scale from combo (in case index changed)
-        scale_data = self.resolution_combo.currentData()
-        export_scale = float(scale_data) if scale_data is not None else 1.0
-        scale_annotations = self.scale_annotations_checkbox.isChecked()
         
         # Perform export
         try:
@@ -659,16 +542,14 @@ class ExportDialog(QDialog):
                 self.overlay_manager,
                 self.measurement_tool,
                 self.config_manager,
-                self.text_annotation_tool,
-                self.arrow_annotation_tool,
                 self.studies,
-                export_scale,
-                scale_annotations,
+                self.export_at_display_resolution,
+                self.current_zoom,
+                self.initial_fit_zoom,
                 anonymize=anonymize,
                 projection_enabled=self.projection_enabled,
                 projection_type=self.projection_type,
-                projection_slice_count=self.projection_slice_count,
-                subwindow_annotation_managers=self.subwindow_annotation_managers
+                projection_slice_count=self.projection_slice_count
             )
             
             # Save export path to config for next time
