@@ -148,6 +148,11 @@ def build_menu_bar(main_window) -> None:
 
     view_menu.addSeparator()
 
+    # Reset View (same action as toolbar to avoid ambiguous shortcut overload)
+    view_menu.addAction(main_window.reset_view_action)
+
+    view_menu.addSeparator()
+
     main_window.privacy_view_action = QAction("&Privacy View", main_window)
     main_window.privacy_view_action.setCheckable(True)
     main_window.privacy_view_action.setChecked(main_window.config_manager.get_privacy_view())

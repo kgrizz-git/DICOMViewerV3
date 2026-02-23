@@ -268,8 +268,8 @@ class QuickStartGuideDialog(QDialog):
                         <li>Scrollbars: Use horizontal/vertical scrollbars when image is larger than viewport</li>
                     </ul>
                 </li>
-                <li><strong>Reset View:</strong> Press <code>V</code> key or right-click context menu → "Reset View (V)" to restore initial zoom and position for the focused subwindow</li>
-                <li><strong>Reset All Views:</strong> Press <code>A</code> key or right-click context menu → "Reset All Views (A)" to reset zoom, pan, and window/level for all subwindows simultaneously</li>
+                <li><strong>Reset View:</strong> Press <code>V</code> or <code>Shift+V</code>, or use <strong>View → Reset View</strong>, the toolbar button, or right-click context menu → "Reset View (V, Shift+V)" to restore initial zoom, pan, and window/level for the focused subwindow</li>
+                <li><strong>Reset All Views:</strong> Press <code>Shift+A</code> or use the toolbar to reset zoom, pan, and window/level for all subwindows simultaneously</li>
             </ul>
             
             <h2 id="histogram">Histogram Display</h2>
@@ -545,8 +545,7 @@ class QuickStartGuideDialog(QDialog):
                 <li><strong><code>A</code>:</strong> Arrow annotation mode (click and drag to draw arrows)</li>
                 <li><strong><code>C</code>:</strong> Clear all measurements on current slice</li>
                 <li><strong><code>D</code>:</strong> Delete all ROIs on current slice (including crosshairs)</li>
-                <li><strong><code>V</code>:</strong> Reset view (restore initial zoom, pan, and window/level for focused subwindow)</li>
-                <li><strong><code>Shift+V</code>:</strong> Reset view (same as <code>V</code>)</li>
+                <li><strong><code>V</code> or <code>Shift+V</code>:</strong> Reset view for the focused subwindow (restore initial zoom, pan, and window/level). Also available via <strong>View → Reset View</strong>.</li>
                 <li><strong><code>Shift+A</code>:</strong> Reset all views (reset zoom, pan, and window/level for all subwindows)</li>
                 <li><strong><code>H</code>:</strong> Crosshair mode (draw crosshairs to display pixel values and coordinates)</li>
                 <li><strong><code>N</code>:</strong> Toggle series navigator bar visibility</li>
