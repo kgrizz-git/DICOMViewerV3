@@ -69,6 +69,10 @@ def build_menu_bar(main_window) -> None:
     export_action.triggered.connect(main_window.export_requested.emit)
     file_menu.addAction(export_action)
 
+    export_screenshots_action = QAction("Export Screenshots...", main_window)
+    export_screenshots_action.triggered.connect(main_window.export_screenshots_requested.emit)
+    file_menu.addAction(export_screenshots_action)
+
     file_menu.addSeparator()
 
     export_customizations_action = QAction("Export Customizations...", main_window)

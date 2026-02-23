@@ -88,6 +88,7 @@ class MainWindow(QMainWindow):
     open_recent_file_requested = Signal(str)  # Emitted when a recent file/folder is selected (path)
     close_requested = Signal()  # Emitted when close is requested
     export_requested = Signal()
+    export_screenshots_requested = Signal()  # Emitted when Export Screenshots is requested
     settings_requested = Signal()
     overlay_settings_requested = Signal()  # Emitted when overlay settings dialog is requested
     tag_viewer_requested = Signal()
