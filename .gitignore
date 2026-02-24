@@ -218,3 +218,5 @@ settings.json
 # Uncomment if you don't want to track sample DICOM files
 # data/*.dcm
 # data/**/*.dcm
+
+.DS_Store

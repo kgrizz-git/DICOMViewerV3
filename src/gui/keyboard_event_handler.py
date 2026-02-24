@@ -60,7 +60,8 @@ class KeyboardEventHandler:
         get_privacy_view_state_callback: Optional[Callable[[], bool]] = None,
         delete_text_annotation_callback: Optional[Callable[[object], None]] = None,
         delete_arrow_annotation_callback: Optional[Callable[[object], None]] = None,
-        change_layout_callback: Optional[Callable[[str], None]] = None
+        change_layout_callback: Optional[Callable[[str], None]] = None,
+        is_focus_ok_for_reset_view: Optional[Callable[[], bool]] = None
     ):
         """
         Initialize the keyboard event handler.
@@ -88,6 +89,7 @@ class KeyboardEventHandler:
             toggle_privacy_view_callback: Optional callback to toggle privacy view (takes enabled bool)
             get_privacy_view_state_callback: Optional callback to get current privacy view state (returns bool)
             change_layout_callback: Optional callback to change layout mode (takes layout_mode string: "1x1", "1x2", "2x1", or "2x2")
+            is_focus_ok_for_reset_view: Optional callback returning True if focus is in a widget where V should trigger Reset View (e.g. image viewer, navigator)
         """
         self.roi_manager = roi_manager
         self.measurement_tool = measurement_tool
@@ -113,6 +115,7 @@ class KeyboardEventHandler:
         self.delete_text_annotation_callback = delete_text_annotation_callback
         self.delete_arrow_annotation_callback = delete_arrow_annotation_callback
         self.change_layout_callback = change_layout_callback
+        self.is_focus_ok_for_reset_view = is_focus_ok_for_reset_view
     
     def handle_key_event(self, event: QKeyEvent) -> bool:
         """
@@ -271,18 +274,21 @@ class KeyboardEventHandler:
             self.delete_all_rois_callback()
             return True
         
-        # V key - available (Shift+V for Reset View)
+        # V key - V or Shift+V for Reset View (focused subwindow)
         elif event.key() == Qt.Key.Key_V:
-            # Check for Shift modifier for Reset View
+            # Shift+V: Reset View (always when Shift held)
             if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
-                # Shift+V: Reset View
                 if self.reset_view_callback:
                     self.reset_view_callback()
                 return True
             # Don't intercept if Cmd/Ctrl is pressed (for standard shortcuts like Ctrl+V)
             if event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier):
                 return False  # Let Qt handle Cmd+V / Ctrl+V
-            # Single V key is available (not used)
+            # Plain V: Reset View only when focus is in an allowed widget (e.g. image viewer, navigator)
+            # so that typing "V" in text annotations still inserts the character
+            if self.reset_view_callback and self.is_focus_ok_for_reset_view and self.is_focus_ok_for_reset_view():
+                self.reset_view_callback()
+                return True
             return False
         
         # N key for Toggle Series Navigator
