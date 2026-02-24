@@ -30,3 +30,6 @@ pylibjpeg-openjpeg>=1.3.0  # JPEG 2000 decoder plugin for pylibjpeg
 pylibjpeg-rle>=1.3.0  # RLE decoder plugin for pylibjpeg
 pyjpegls>=0.3.0  # For JPEG-LS compression
 
+# Testing (recommended for project venv; run: pip install -r requirements.txt)
+pytest>=7.0.0  # Test runner; supports tests/ and unittest-style tests
+

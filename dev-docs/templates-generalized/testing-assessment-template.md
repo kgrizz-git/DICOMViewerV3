@@ -1,5 +1,8 @@
 # Testing Assessment Template - [PROJECT_NAME]
 
+**Template Version**: 2.0  
+**Last Updated**: 2026-02-18
+
 ## Purpose
 
 This document provides a systematic approach to identify what tests need to be performed for the [PROJECT_NAME]. The assessment:
@@ -7,7 +10,7 @@ This document provides a systematic approach to identify what tests need to be p
 - Identifies existing tests that should be re-run due to code changes
 - Suggests new tests needed to cover functionality and edge cases
 - Examines code and documentation to extract test requirements
-- Analyzes shell scripts to identify functionality that requires testing
+- Analyzes code files to identify functionality that requires testing
 - Categorizes tests by automation feasibility (automated vs manual/interactive)
 - Identifies test environment requirements and setup possibilities
 - Provides prioritized recommendations for critical testing needs
@@ -73,16 +76,16 @@ This approach ensures:
    - Note any broken or flaky tests that need attention
 
 2. **Extract test requirements from documentation**:
-   - Read `[DEV_DOCS]/plan-phase-4-testing.md` to identify pending tests
-   - Read `[DEV_DOCS]/TECHNICAL_DETAILS.md` to extract test requirements for features
-   - Review `[DEV_DOCS]/STEAMOS_GAMING_MODE.md` for [PLATFORM_MODE]-specific test needs
-   - Check enhancement documents in `[DEV_DOCS]/enhancements/` for feature-specific test requirements
-   - Review `[DEV_DOCS]/REMAINING_WORK_SUMMARY.md` for testing-related work items
+   - Read testing plan documentation to identify pending tests
+   - Read technical documentation to extract test requirements for features
+   - Read platform-specific documentation for platform-specific test needs (if applicable)
+   - Check enhancement documents for feature-specific test requirements
+   - Review remaining work documentation for testing-related work items
    - Focus on identifying what tests need to be created, not evaluating the documentation itself
 
 3. **Examine code to identify missing tests**:
-   - Review main scripts (`[MAIN_SCRIPT].sh`, `[CONFIG_SCRIPT].sh`, `[MANAGE_SCRIPT].sh`, `[INSTALL_SCRIPT].sh`, `un[INSTALL_SCRIPT].sh`)
-   - Review library modules in `[LIB_DIR]/` directory
+   - Review main application files (entry points, configuration, installation, etc.)
+   - Review library modules in source directories (`src/`, `lib/`, `utils/`)
    - Identify functionality that may not be covered by existing tests
    - Look for error handling paths that need testing
    - Identify edge cases and boundary conditions
@@ -108,15 +111,15 @@ This approach ensures:
 
 #### 0.1: Identify Tests Requiring Re-Execution
 
-**Location**: `[TEST_DIR]/` directory
+**Location**: Test directory (e.g., `tests/`, `test/`, `__tests__/`)
 
 **Purpose**: Identify which existing tests should be re-run due to code changes or need updates.
 
 **Tasks**:
-- [ ] List all test files in `[TEST_DIR]/` directory
+- [ ] List all test files in test directory
 - [ ] For each test file, identify what code it tests
 - [ ] Use `git log` to check if tested code has changed since test was written
-- [ ] Check `[DEV_DOCS]/testing-assessments/test-history.md` for the last time each test was run
+- [ ] Check test history documentation for the last time each test was run
 - [ ] Compare test file modification dates with codebase file modification dates
 - [ ] **CRITICAL: Identify tests that modify the actual configuration file** (`${HOME}/[CONFIG_FILE_PATH]`)
   - [ ] Check if test backs up the config file before modifying it
@@ -132,17 +135,17 @@ This approach ensures:
   - [ ] For each outdated test, determine if it should be removed or kept for historical reference
   - [ ] Suggest adding a comment at the top of outdated tests stating they are outdated and no longer relevant
   - [ ] Document the reason why the test is outdated (e.g., feature removed, functionality changed, replaced by different approach)
-- [ ] Update `[DEV_DOCS]/testing-assessments/test-history.md` with current test execution dates and results
+- [ ] Update test history documentation with current test execution dates and results
 
 **For each test file**:
 - [ ] Document what the test covers
 - [ ] Check if tested code files have been modified (use `git log --follow <file>`)
 - [ ] **CRITICAL: Check if test modifies the actual configuration file**
-  - [ ] Does test modify `${HOME}/[CONFIG_FILE_PATH]`? (Yes/No/Uses test config)
+  - [ ] Does test modify actual configuration file? (Yes/No/Uses test config)
   - [ ] Does test backup config before modifying? (Yes/No/N/A)
-  - [ ] Does test use trap to ensure cleanup? (Yes/No/N/A)
+  - [ ] Does test use trap/cleanup to ensure restoration? (Yes/No/N/A)
   - [ ] Does test restore config after completion? (Yes/No/N/A)
-  - [ ] **WARNING**: If test modifies actual config without proper backup/restore/trap, mark as **CRITICAL ISSUE**
+  - [ ] **WARNING**: If test modifies actual config without proper backup/restore/cleanup, mark as **CRITICAL ISSUE**
 - [ ] **Recommendation**: Should this test be re-run? (Yes/No/Needs Update/Outdated)
 - [ ] If needs update, note what changes are required
 - [ ] **Check if test is outdated**: Does this test cover functionality that no longer exists or is no longer relevant?
@@ -563,12 +566,15 @@ This approach ensures:
 
 ### Section 3: Identify Missing Tests from Code Analysis
 
-#### 3.1: Tests Needed for Main Scripts
+#### 3.1: Tests Needed for Main Application Files
 
-**Scripts to Review**:
-- `[MAIN_SCRIPT].sh` - Main entry point
-- `[CONFIG_SCRIPT].sh` - Configuration wizard
-- `[MANAGE_SCRIPT].sh` - Management interface
+**Files to Review**:
+- Main entry point files
+- Configuration management files
+- Installation/setup files
+- Core application logic files
+
+**Purpose**: Identify functionality in main files that needs testing but may not be covered by existing tests.CRIPT].sh` - Management interface
 - `[INSTALL_SCRIPT].sh` - Installation script
 - `un[INSTALL_SCRIPT].sh` - Uninstall script
 
@@ -586,43 +592,43 @@ This approach ensures:
 
 **Documentation Format**:
 ```
-### Tests Needed for Main Scripts
+### Tests Needed for Main Application Files
 
-#### [MAIN_SCRIPT].sh
+#### Main Entry Point
 - **Test: Main execution path with valid config**
-  - Purpose: Verify script runs correctly with valid configuration
+  - Purpose: Verify application runs correctly with valid configuration
   - Priority: CRITICAL
   - Status: [Exists/Needs creation/Needs re-run]
 
 - **Test: Error handling for missing config file**
-  - Purpose: Verify script handles missing config gracefully
+  - Purpose: Verify application handles missing config gracefully
   - Priority: HIGH
   - Status: [Exists/Needs creation]
 
-[Continue for each script and functionality...]
+[Continue for each file and functionality...]
 ```
 
 #### 3.2: Tests Needed for Library Modules
 
-**Modules to Review**: All files in `[LIB_DIR]/` directory (config.sh, logging.sh, display-detection.sh, desktop-environment.sh, window-management.sh, time-validation.sh, popup-display.sh, uninstall-verification.sh, configure-*.sh, etc.)
+**Modules to Review**: All files in source directories (`src/`, `lib/`, `utils/`, etc.)
 
-**Purpose**: Identify functions and features in library modules that need testing.
+**Purpose**: Identify functions, methods, and classes in library modules that need testing.
 
 **Tasks**:
-- [ ] For each module, list all functions
-- [ ] Compare functions with existing test coverage
-- [ ] Identify functions that need unit tests
+- [ ] For each module, list all functions/methods/classes
+- [ ] Compare functions/methods/classes with existing test coverage
+- [ ] Identify components that need unit tests
 - [ ] Identify error conditions that need tests
 - [ ] Identify edge cases that need tests
 - [ ] Identify external dependency interactions that need tests
-- [ ] Identify environment-specific behavior that needs tests
+- [ ] Identify environment-specific behavior that need tests
 - [ ] For each identified gap, suggest a specific test
 
 **Documentation Format**:
 ```
 ### Tests Needed for Library Modules
 
-#### [LIB_DIR]/config.sh
+#### src/config_module
 - **Test: load_config() with valid config file**
   - Purpose: Verify config loading works correctly
   - Priority: CRITICAL
@@ -635,7 +641,7 @@ This approach ensures:
   - Function: load_config()
   - Status: [Exists/Needs creation]
 
-[Continue for each module and function...]
+[Continue for each module and function/method/class...]
 ```
 
 ### Section 4: Test Execution and Results
