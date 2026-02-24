@@ -13,7 +13,6 @@
     - [ ] RUN SMOKE TESTS - check various export options, magnified, with ROIs and text, without, etc.
 - [ ] When the Text annotation mode is selected, "Text" does not get highlighted on the menu bar
 - [ ] Enable optional smoothing when displaying magnified images so they appear less "blocky".
-- [ ] Add ExposureIndex, DeviationIndex, HelicalPitch to overlay options
 - [ ] Make it possible to copy and to export ROI statistics. 
     - [ ] Copy - user should be able to select the ROI statistics in the right pane and copy them
     - [ ] Export - add "Export ROI Statistics" to Tools menu and context menu. Should open a dialog where the user chooses txt, csv, or xlsx format and selects which series to export from (should be able to do multiple series). User should also have option to choose file save location and name but default name should be the Accession number plus "ROI stats". If Accession number is blank use the Patient ID instead. Stats should be grouped by series at the highest level (ie, a clear header row saying the series number and series description), image/slice/frame at the next level (with a row saying the slice/frame number), and ROI at the lowest level (with a heading for, eg, Ellipse ROI 1). Include all stats for ellipse ROIs, rectangle ROIs, and crosshair ROIs. For the crosshair ROIs record the pixel coordinates and the patient coordinates if they were able to be computed.
