@@ -51,6 +51,7 @@ COMMON_TAGS = [
     "RepetitionTime", "EchoTime", "EchoTrainLength", "FlipAngle", "MagneticFieldStrength",
     # CT-specific tags
     "RevolutionTime", "KVP", "ExposureTime", "Exposure", "XRayTubeCurrent", "ExposureInmAs",
+    "ExposureIndex", "DeviationIndex", "HelicalPitch", "SpiralPitchFactor",
     "TableHeight", "GantryDetectorTilt",
     # US-specific tags
     "TransducerFrequency", "MechanicalIndex", "ThermalIndex",
