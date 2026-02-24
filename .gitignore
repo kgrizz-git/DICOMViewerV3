@@ -212,6 +212,7 @@ __marimo__/
 *.tmp
 config.ini
 settings.json
+.DS_Store
 
 # DICOM data (if sensitive)
 # Uncomment if you don't want to track sample DICOM files
