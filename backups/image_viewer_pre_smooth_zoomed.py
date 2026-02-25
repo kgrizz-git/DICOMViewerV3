@@ -87,7 +87,6 @@ class ImageViewer(QGraphicsView):
     clear_measurements_requested = Signal()  # Emitted when clear measurements is requested
     toggle_overlay_requested = Signal()  # Emitted when toggle overlay is requested
     privacy_view_toggled = Signal(bool)  # Emitted when privacy view is toggled from context menu (True = enabled)
-    smooth_when_zoomed_toggled = Signal(bool)  # Emitted when smooth when zoomed is toggled from context menu (True = enabled)
     annotation_options_requested = Signal()  # Emitted when annotation options dialog is requested
     crosshair_clicked = Signal(QPointF, str, int, int, int)  # Emitted when crosshair tool is clicked (pos, pixel_value_str, x, y, z)
     about_this_file_requested = Signal()  # Emitted when About this File is requested from context menu
@@ -208,15 +207,6 @@ class ImageViewer(QGraphicsView):
         
         # Privacy view state (for context menu synchronization)
         self._privacy_view_enabled: bool = False
-
-        # Smooth image when zoomed (display option; applied to view and image item)
-        self._smooth_when_zoomed: bool = False
-        # When True, we are in "interacting" state (zoom/pan just happened); use fast transform until idle timer fires
-        self._smooth_idle_interacting: bool = False
-        # Single-shot timer: when it fires, we leave "interacting" state and apply smooth mode if enabled
-        self._smooth_idle_timer = QTimer(self)
-        self._smooth_idle_timer.setSingleShot(True)
-        self._smooth_idle_timer.timeout.connect(self._on_smooth_idle_timeout)
         
         # Callbacks for window/level presets (set from main.py)
         self.get_window_level_presets_callback: Optional[Callable[[], List[Tuple[float, float, bool, Optional[str]]]]] = None
@@ -246,7 +236,7 @@ class ImageViewer(QGraphicsView):
         # Also enable drag-and-drop on viewport (the actual widget that receives mouse events)
         self.viewport().setAcceptDrops(True)
         self.setRenderHint(QPainter.RenderHint.Antialiasing)
-        # SmoothPixmapTransform is set/cleared by _apply_smoothing_mode() based on _smooth_when_zoomed
+        self.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         
         # Enable focus to receive key events
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
@@ -265,65 +255,16 @@ class ImageViewer(QGraphicsView):
         # Background - darker grey for better yellow text contrast
         darker_grey = QColor(64, 64, 64)
         self.setBackgroundBrush(darker_grey)
-
-        # Apply initial smoothing mode (view hint only when no image yet)
-        self._apply_smoothing_mode()
-
+    
     def set_background_color(self, color: QColor) -> None:
         """
         Set the background color of the image viewer.
-
+        
         Args:
             color: QColor for the background
         """
         self.setBackgroundBrush(color)
-
-    def _apply_smoothing_mode(self) -> None:
-        """
-        Apply the current smooth-when-zoomed setting to the view and image item.
-        When smoothing is enabled, uses fast transformation during zoom/pan (interacting)
-        and smooth transformation after idle. Sets or clears SmoothPixmapTransform on the view
-        and sets the image item's transformation mode. Antialiasing hint is unchanged.
-        """
-        # When smoothing is on but we're interacting (zoom/pan), use fast until idle
-        effective_smooth = self._smooth_when_zoomed and not self._smooth_idle_interacting
-        if effective_smooth:
-            self.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
-            if self.image_item is not None:
-                self.image_item.setTransformationMode(Qt.TransformationMode.SmoothTransformation)
-        else:
-            self.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
-            if self.image_item is not None:
-                self.image_item.setTransformationMode(Qt.TransformationMode.FastTransformation)
-
-    def _on_smooth_idle_timeout(self) -> None:
-        """Leave interacting state and apply smooth mode if smoothing is enabled."""
-        self._smooth_idle_interacting = False
-        self._apply_smoothing_mode()
-
-    def _restart_smooth_idle_timer(self) -> None:
-        """
-        Restart the smooth-idle timer and switch to fast mode while interacting.
-        Call on zoom, pan, or scrollbar change when smoothing is enabled.
-        """
-        if not self._smooth_when_zoomed:
-            return
-        self._smooth_idle_interacting = True
-        self._apply_smoothing_mode()
-        self._smooth_idle_timer.start(300)
-
-    def set_smooth_when_zoomed_state(self, enabled: bool) -> None:
-        """
-        Set the smooth-when-zoomed state for this viewer. Used by main to sync the global config to this viewer.
-
-        Args:
-            enabled: True to enable image smoothing when zoomed, False for fast (blocky) scaling
-        """
-        self._smooth_when_zoomed = enabled
-        self._smooth_idle_interacting = False
-        self._smooth_idle_timer.stop()
-        self._apply_smoothing_mode()
-
+    
     def _apply_inversion(self, image: Image.Image) -> Image.Image:
         """
         Apply inversion to a PIL Image.
@@ -529,8 +470,7 @@ class ImageViewer(QGraphicsView):
         # print(f"[VIEWER] Adding item to scene...")
         self.scene.addItem(self.image_item)
         # print(f"[VIEWER] Item added to scene successfully")
-        self._apply_smoothing_mode()
-
+        
         # Force scene and viewport update to ensure display refreshes
         # print(f"[VIEWER] Forcing scene and viewport update...")
         self.scene.invalidate(self.scene.sceneRect())
@@ -670,9 +610,7 @@ class ImageViewer(QGraphicsView):
                 image_center = scene_rect.center()
                 # print(f"[DEBUG-FIT] fit_to_view: Centering on {image_center}")
                 self.centerOn(image_center)
-
-        self._restart_smooth_idle_timer()
-
+    
     def zoom_in(self) -> None:
         """Zoom in on the image, centered on viewport center."""
         if self.image_item is None:
@@ -1693,15 +1631,9 @@ class ImageViewer(QGraphicsView):
                         privacy_view_action.setCheckable(True)
                         privacy_view_action.setChecked(self._privacy_view_enabled)
                         privacy_view_action.triggered.connect(lambda checked: self.privacy_view_toggled.emit(checked))
-
-                        # Image Smoothing action
-                        smooth_when_zoomed_action = context_menu.addAction("Image Smoothing")
-                        smooth_when_zoomed_action.setCheckable(True)
-                        smooth_when_zoomed_action.setChecked(self._smooth_when_zoomed)
-                        smooth_when_zoomed_action.triggered.connect(lambda checked: self.smooth_when_zoomed_toggled.emit(checked))
-
+                        
                         context_menu.addSeparator()
-
+                        
                         # Series navigation actions
                         prev_series_action = context_menu.addAction("Prev Series (←)")
                         prev_series_action.triggered.connect(lambda: self.series_navigation_requested.emit(-1))
@@ -2122,12 +2054,10 @@ class ImageViewer(QGraphicsView):
         Check if transform has changed and emit signal if so.
         
         Uses QTimer to delay signal emission slightly to ensure transform is fully applied.
-        Also restarts the smooth-idle timer so we use fast transform during zoom/pan.
         """
         current_transform = self.transform()
         if current_transform != self.last_transform:
             self.last_transform = current_transform
-            self._restart_smooth_idle_timer()
             # Use QTimer to delay signal emission slightly, ensuring transform is fully applied
             QTimer.singleShot(10, lambda: self.transform_changed.emit())
     
@@ -2150,9 +2080,7 @@ class ImageViewer(QGraphicsView):
         if current_h != self.last_horizontal_scroll or current_v != self.last_vertical_scroll:
             self.last_horizontal_scroll = current_h
             self.last_vertical_scroll = current_v
-
-            self._restart_smooth_idle_timer()
-
+            
             # Emit transform_changed immediately for smooth updates during panning
             # This ensures overlay positions update in sync with viewport movement
             self.transform_changed.emit()
@@ -2303,21 +2231,16 @@ class ImageViewer(QGraphicsView):
         print(f"[DEBUG-MAGNIFIER] _extract_image_region: center=({center_x:.1f}, {center_y:.1f}), size={size:.3f}, zoom_factor={zoom_factor:.3f}")
         print(f"[DEBUG-MAGNIFIER] _extract_image_region: extracted_region=({x1}, {y1}) to ({x2}, {y2}), dimensions=({extracted_width}x{extracted_height})")
         
-        # Apply zoom factor; use same smooth/fast setting as main view
+        # Apply zoom factor
         if zoom_factor != 1.0:
             scaled_width = int(extracted_width * zoom_factor)
             scaled_height = int(extracted_height * zoom_factor)
-            transform_mode = (
-                Qt.TransformationMode.SmoothTransformation
-                if self._smooth_when_zoomed
-                else Qt.TransformationMode.FastTransformation
-            )
             print(f"[DEBUG-MAGNIFIER] _extract_image_region: scaling to ({scaled_width}x{scaled_height})")
             region = region.scaled(
                 scaled_width,
                 scaled_height,
                 Qt.AspectRatioMode.KeepAspectRatio,
-                transform_mode
+                Qt.TransformationMode.SmoothTransformation
             )
             print(f"[DEBUG-MAGNIFIER] _extract_image_region: final_pixmap_size=({region.width()}x{region.height()})")
         else:

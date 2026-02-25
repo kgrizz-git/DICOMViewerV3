@@ -30,6 +30,7 @@ This application provides comprehensive DICOM image viewing capabilities with ad
 - Switch mouse scroll wheel between zooming and slice navigation
 - Dark or light interface option
 - Reset view to fit viewport
+- **Image Smoothing**: Optional image smoothing when zoomed (View menu or image context menu); off by default; persisted in config
 - **Intensity Projections**: Combine multiple slices (2, 3, 4, 6, or 8) to view Average (AIP), Maximum (MIP), or Minimum (MinIP) intensity projections
   - Scroll through combined projections one underlying slice at a time
   - Access via right panel widget or context menu → "Combine..."

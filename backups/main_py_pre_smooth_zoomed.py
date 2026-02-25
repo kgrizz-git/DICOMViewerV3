@@ -237,11 +237,7 @@ class DICOMViewerApp(QObject):
         for subwindow in subwindows:
             if subwindow and subwindow.image_viewer:
                 subwindow.image_viewer.set_privacy_view_state(self.privacy_view_enabled)
-        # Initialize smooth-when-zoomed state on all image viewers from config
-        for subwindow in subwindows:
-            if subwindow and subwindow.image_viewer:
-                subwindow.image_viewer.set_smooth_when_zoomed_state(self.config_manager.get_smooth_image_when_zoomed())
-
+        
         # Ensure focused subwindow has managers and update references
         # This must happen before _initialize_handlers() which needs these references
         # print(f"DEBUG: Setting up focused subwindow references")
@@ -575,8 +571,7 @@ class DICOMViewerApp(QObject):
         # Set scroll wheel mode
         scroll_mode = self.config_manager.get_scroll_wheel_mode()
         image_viewer.set_scroll_wheel_mode(scroll_mode)
-        image_viewer.set_smooth_when_zoomed_state(self.config_manager.get_smooth_image_when_zoomed())
-
+        
         # Create managers for this subwindow
         managers = {}
         
@@ -1395,10 +1390,7 @@ class DICOMViewerApp(QObject):
         
         # Privacy view toggle (shared)
         self.main_window.privacy_view_toggled.connect(self._on_privacy_view_toggled)
-
-        # Smooth when zoomed toggle (shared)
-        self.main_window.smooth_when_zoomed_toggled.connect(self._on_smooth_when_zoomed_toggled)
-
+        
         # Theme change (shared) - update fusion status text colors
         self.main_window.theme_changed.connect(self.fusion_controls_widget.update_status_text_colors)
         
@@ -1873,63 +1865,36 @@ class DICOMViewerApp(QObject):
                 if focused_idx in self.subwindow_data:
                     current_dataset = self.subwindow_data[focused_idx].get('current_dataset')
                     if current_dataset:
-                        self._refresh_overlays_after_privacy_change()
-
-    def _on_smooth_when_zoomed_toggled(self, enabled: bool) -> None:
-        """
-        Handle smooth-when-zoomed toggle from View menu or image viewer context menu.
-        Persists setting and pushes state to all image viewers; syncs View menu check state.
-
-        Args:
-            enabled: True if smooth when zoomed is enabled, False otherwise
-        """
-        self.config_manager.set_smooth_image_when_zoomed(enabled)
-        subwindows = self.multi_window_layout.get_all_subwindows()
-        for subwindow in subwindows:
-            if subwindow and subwindow.image_viewer:
-                subwindow.image_viewer.set_smooth_when_zoomed_state(enabled)
-        self.main_window.set_smooth_when_zoomed_checked(enabled)
-
-    def _refresh_overlays_after_privacy_change(self) -> None:
-        """Refresh overlays after privacy view change (extracted for reuse)."""
-        if self.current_dataset is None:
-            return
-        focused_subwindow = self.multi_window_layout.get_focused_subwindow()
-        if focused_subwindow and focused_subwindow.image_viewer:
-            focused_idx = self.multi_window_layout.get_all_subwindows().index(focused_subwindow)
-            if focused_idx in self.subwindow_data:
-                current_dataset = self.subwindow_data[focused_idx].get('current_dataset')
-                if current_dataset:
-                    # Refresh overlay by re-displaying the current slice
-                    if focused_idx in self.subwindow_managers:
-                        slice_display_manager = self.subwindow_managers[focused_idx].get('slice_display_manager')
-                        if slice_display_manager and hasattr(slice_display_manager, 'current_dataset'):
-                            # Re-display current slice to refresh overlays with privacy mode
-                            if (slice_display_manager.current_dataset is not None and
-                                hasattr(slice_display_manager, 'current_studies') and
-                                hasattr(slice_display_manager, 'current_study_uid') and
-                                hasattr(slice_display_manager, 'current_series_uid') and
-                                hasattr(slice_display_manager, 'current_slice_index')):
-                                try:
-                                    slice_display_manager.display_slice(
-                                        slice_display_manager.current_dataset,
-                                        slice_display_manager.current_studies,
-                                        slice_display_manager.current_study_uid,
-                                        slice_display_manager.current_series_uid,
-                                        slice_display_manager.current_slice_index,
-                                        update_metadata=False  # Don't update metadata panel (already updated above)
-                                    )
-                                except Exception:
-                                    # If display_slice fails, just refresh overlays directly
-                                    overlay_manager = self.subwindow_managers[focused_idx].get('overlay_manager')
-                                    if overlay_manager and slice_display_manager.current_dataset:
-                                        from core.dicom_parser import DICOMParser
-                                        parser = DICOMParser(slice_display_manager.current_dataset)
-                                        overlay_manager.create_overlay_items(
-                                            focused_subwindow.image_viewer.scene,
-                                            parser
+                        # Refresh overlay by re-displaying the current slice
+                        if focused_idx in self.subwindow_managers:
+                            slice_display_manager = self.subwindow_managers[focused_idx].get('slice_display_manager')
+                            if slice_display_manager and hasattr(slice_display_manager, 'current_dataset'):
+                                # Re-display current slice to refresh overlays with privacy mode
+                                if (slice_display_manager.current_dataset is not None and 
+                                    hasattr(slice_display_manager, 'current_studies') and
+                                    hasattr(slice_display_manager, 'current_study_uid') and
+                                    hasattr(slice_display_manager, 'current_series_uid') and
+                                    hasattr(slice_display_manager, 'current_slice_index')):
+                                    try:
+                                        slice_display_manager.display_slice(
+                                            slice_display_manager.current_dataset,
+                                            slice_display_manager.current_studies,
+                                            slice_display_manager.current_study_uid,
+                                            slice_display_manager.current_series_uid,
+                                            slice_display_manager.current_slice_index,
+                                            update_metadata=False  # Don't update metadata panel (already updated above)
                                         )
-
+                                    except Exception:
+                                        # If display_slice fails, just refresh overlays directly
+                                        overlay_manager = self.subwindow_managers[focused_idx].get('overlay_manager')
+                                        if overlay_manager and slice_display_manager.current_dataset:
+                                            from core.dicom_parser import DICOMParser
+                                            parser = DICOMParser(slice_display_manager.current_dataset)
+                                            overlay_manager.create_overlay_items(
+                                                focused_subwindow.image_viewer.scene,
+                                                parser
+                                            )
+    
     def _open_tag_viewer(self) -> None:
         """Handle tag viewer dialog request."""
         self.dialog_coordinator.open_tag_viewer(self.current_dataset, privacy_mode=self.privacy_view_enabled)

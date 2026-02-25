@@ -164,12 +164,6 @@ def build_menu_bar(main_window) -> None:
     main_window.privacy_view_action.triggered.connect(main_window._on_privacy_view_toggled)
     view_menu.addAction(main_window.privacy_view_action)
 
-    main_window.smooth_when_zoomed_action = QAction("Image Smoothing", main_window)
-    main_window.smooth_when_zoomed_action.setCheckable(True)
-    main_window.smooth_when_zoomed_action.setChecked(main_window.config_manager.get_smooth_image_when_zoomed())
-    main_window.smooth_when_zoomed_action.triggered.connect(main_window._on_smooth_when_zoomed_toggled)
-    view_menu.addAction(main_window.smooth_when_zoomed_action)
-
     view_menu.addSeparator()
 
     settings_action = QAction("&Settings...", main_window)

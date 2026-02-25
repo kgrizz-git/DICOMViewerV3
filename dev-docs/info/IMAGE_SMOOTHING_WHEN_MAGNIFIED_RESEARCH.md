@@ -142,4 +142,18 @@ If the pipeline ever draws by first resizing a **PIL Image** or numpy array and 
 
 ---
 
+## 8. Implementation
+
+The approach recommended in this document has been implemented. Implementation covers:
+
+- **Config**: Persisted setting `smooth_image_when_zoomed` (default off), with get/set API.
+- **Two-tier behavior**: When smoothing is on, the view uses fast transformation during zoom/pan/scroll and smooth transformation after an idle delay (~300 ms); when off, always fast.
+- **UI**: Checkable "Smooth when zoomed" in the View menu and in the image viewer context menu; state synced across all subwindows and persisted.
+- **Magnifier**: Uses the same setting when scaling the extracted region (smooth vs fast).
+- **Tests and docs**: Config tests and documentation updates.
+
+See the implementation plan: `dev-docs/plans/IMAGE_SMOOTHING_IMPLEMENTATION_PLAN.md`.
+
+---
+
 *Document created for DICOM Viewer V3 to guide implementation of optional image smoothing when magnified, with simple behavior during zoom/pan and smoother behavior when idle.*

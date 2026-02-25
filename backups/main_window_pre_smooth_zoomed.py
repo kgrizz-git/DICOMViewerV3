@@ -115,7 +115,6 @@ class MainWindow(QMainWindow):
     open_files_from_paths_requested = Signal(list)  # Emitted when files/folders are dropped (list of paths)
     layout_changed = Signal(str)  # Emitted when layout mode changes ("1x1", "1x2", "2x1", "2x2")
     privacy_view_toggled = Signal(bool)  # Emitted when privacy view is toggled (True = enabled)
-    smooth_when_zoomed_toggled = Signal(bool)  # Emitted when smooth-when-zoomed is toggled (True = enabled)
     about_this_file_requested = Signal()  # Emitted when About this File is requested
     histogram_requested = Signal()  # Emitted when Histogram dialog is requested
     export_customizations_requested = Signal()  # Emitted when Export Customizations is requested
@@ -526,25 +525,7 @@ class MainWindow(QMainWindow):
         new_state = not current_state
         # Update via the existing handler
         self._on_privacy_view_toggled(new_state)
-
-    def _on_smooth_when_zoomed_toggled(self, checked: bool) -> None:
-        """
-        Handle smooth-when-zoomed toggle from View menu or context menu.
-
-        Args:
-            checked: True if smooth when zoomed is enabled, False otherwise
-        """
-        self.config_manager.set_smooth_image_when_zoomed(checked)
-        self.smooth_when_zoomed_toggled.emit(checked)
-
-    def set_smooth_when_zoomed_checked(self, checked: bool) -> None:
-        """Sync the View menu Image Smoothing action check state without emitting triggered."""
-        if not hasattr(self, 'smooth_when_zoomed_action') or self.smooth_when_zoomed_action is None:
-            return
-        self.smooth_when_zoomed_action.blockSignals(True)
-        self.smooth_when_zoomed_action.setChecked(checked)
-        self.smooth_when_zoomed_action.blockSignals(False)
-
+    
     def _update_privacy_mode_button(self) -> None:
         """Update privacy mode button text and appearance based on current state."""
         if not hasattr(self, 'privacy_mode_action'):
