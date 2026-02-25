@@ -21,3 +21,7 @@ If no venv exists, create one: `python -m venv venv`, activate it, then `pip ins
 
 - See `.cursor/rules` and user rules for backup-before-modify, testing, and commit guidelines.
 - Project layout: `src/` (application), `tests/` (tests), `dev-docs/` (plans, assessments).
+
+## View and display options
+
+- **Image Smoothing**: User-configurable option in the **View** menu and in the **image viewer context menu** (right-click on image). When enabled, the image uses smooth scaling when idle after zoom/pan; during zoom/pan it uses fast scaling for responsiveness. Default is **off** (no enhancement). Setting is persisted in config.

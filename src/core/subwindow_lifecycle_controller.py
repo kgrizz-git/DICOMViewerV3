@@ -309,6 +309,7 @@ class SubwindowLifecycleController:
                 image_viewer.files_dropped.connect(app._open_files_from_paths)
                 image_viewer.layout_change_requested.connect(app._on_layout_change_requested)
                 image_viewer.privacy_view_toggled.connect(app._on_privacy_view_toggled)
+                image_viewer.smooth_when_zoomed_toggled.connect(app._on_smooth_when_zoomed_toggled)
                 image_viewer.about_this_file_requested.connect(app._open_about_this_file)
                 image_viewer.histogram_requested.connect(
                     lambda i=idx: app.dialog_coordinator.open_histogram(i)

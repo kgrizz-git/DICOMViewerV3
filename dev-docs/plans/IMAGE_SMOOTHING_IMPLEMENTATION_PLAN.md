@@ -134,25 +134,25 @@ Use this checklist when implementing Phase 1. Mark items only after they are ful
 
 ### 5.1 Config: add "smooth image when zoomed"
 
-- [ ] **Backup:** Copy `src/utils/config_manager.py` to `backups/config_manager_pre_smooth_zoomed.py` (or equivalent).
-- [ ] **Default config:** In `default_config` dict, add `"smooth_image_when_zoomed": False` with a short comment (e.g. "User option to smooth image when zoomed; off by default for no-enhancement").
-- [ ] **Getters/setters:** Add `get_smooth_image_when_zoomed(self) -> bool` and `set_smooth_image_when_zoomed(self, enabled: bool) -> None` following the same pattern as `get_privacy_view` / `set_privacy_view` (read/write config key, call `save_config()` in setter). Add brief docstrings.
-- [ ] **Lint:** Run linter on `config_manager.py`; fix any issues.
+- [x] **Backup:** Copy `src/utils/config_manager.py` to `backups/config_manager_pre_smooth_zoomed.py` (or equivalent).
+- [x] **Default config:** In `default_config` dict, add `"smooth_image_when_zoomed": False` with a short comment (e.g. "User option to smooth image when zoomed; off by default for no-enhancement").
+- [x] **Getters/setters:** Add `get_smooth_image_when_zoomed(self) -> bool` and `set_smooth_image_when_zoomed(self, enabled: bool) -> None` following the same pattern as `get_privacy_view` / `set_privacy_view` (read/write config key, call `save_config()` in setter). Add brief docstrings.
+- [x] **Lint:** Run linter on `config_manager.py`; fix any issues.
 
 ### 5.2 ImageViewer: state and apply logic
 
-- [ ] **Backup:** Copy `src/gui/image_viewer.py` to `backups/image_viewer_pre_smooth_zoomed.py` (or equivalent).
-- [ ] **State:** Add instance attribute `_smooth_when_zoomed: bool = False` in `__init__`.
-- [ ] **Apply method:** Add private method `_apply_smoothing_mode(self) -> None` that: (1) if `image_item` is not None, calls `image_item.setTransformationMode(Qt.TransformationMode.SmoothTransformation)` when `_smooth_when_zoomed` else `Qt.TransformationMode.FastTransformation`; (2) sets `self.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)` when `_smooth_when_zoomed`, or clears it with `self.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)` when not. Ensure the Antialiasing hint is unaffected (set/clear only `SmoothPixmapTransform`).
-- [ ] **Call apply when image is set:** In the code path that creates and sets `self.image_item` (e.g. wherever the `QGraphicsPixmapItem` is created and added to the scene), call `_apply_smoothing_mode()` after adding the item so every new image immediately gets the current mode.
-- [ ] **Public setter:** Add `set_smooth_when_zoomed_state(self, enabled: bool) -> None` that sets `_smooth_when_zoomed = enabled` and calls `_apply_smoothing_mode()`. Document that this is used by main to sync the global setting to this viewer.
-- [ ] **Initial state:** The attribute starts as `False` on construction. The config value is pushed to all viewers via the startup loop and `_create_managers_for_subwindow` additions in §5.3 — no further wiring is needed here. Verify that calling `set_smooth_when_zoomed_state(True/False)` correctly updates `_smooth_when_zoomed` and invokes `_apply_smoothing_mode()`.
-- [ ] **Lint:** Run linter on `image_viewer.py`; fix any issues.
+- [x] **Backup:** Copy `src/gui/image_viewer.py` to `backups/image_viewer_pre_smooth_zoomed.py` (or equivalent).
+- [x] **State:** Add instance attribute `_smooth_when_zoomed: bool = False` in `__init__`.
+- [x] **Apply method:** Add private method `_apply_smoothing_mode(self) -> None` that: (1) if `image_item` is not None, calls `image_item.setTransformationMode(Qt.TransformationMode.SmoothTransformation)` when `_smooth_when_zoomed` else `Qt.TransformationMode.FastTransformation`; (2) sets `self.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)` when `_smooth_when_zoomed`, or clears it with `self.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)` when not. Ensure the Antialiasing hint is unaffected (set/clear only `SmoothPixmapTransform`).
+- [x] **Call apply when image is set:** In the code path that creates and sets `self.image_item` (e.g. wherever the `QGraphicsPixmapItem` is created and added to the scene), call `_apply_smoothing_mode()` after adding the item so every new image immediately gets the current mode.
+- [x] **Public setter:** Add `set_smooth_when_zoomed_state(self, enabled: bool) -> None` that sets `_smooth_when_zoomed = enabled` and calls `_apply_smoothing_mode()`. Document that this is used by main to sync the global setting to this viewer.
+- [x] **Initial state:** The attribute starts as `False` on construction. The config value is pushed to all viewers via the startup loop and `_create_managers_for_subwindow` additions in §5.3 — no further wiring is needed here. Verify that calling `set_smooth_when_zoomed_state(True/False)` correctly updates `_smooth_when_zoomed` and invokes `_apply_smoothing_mode()`.
+- [x] **Lint:** Run linter on `image_viewer.py`; fix any issues.
 
 ### 5.3 Main: pass initial config to viewers
 
-- [ ] **Existing subwindows at startup:** In the same block as the privacy view loop in `main.py` (after `_initialize_subwindow_managers()`, ~lines 235–239), add a loop over `multi_window_layout.get_all_subwindows()` that calls `subwindow.image_viewer.set_smooth_when_zoomed_state(self.config_manager.get_smooth_image_when_zoomed())` for each subwindow (with null checks). This applies the saved config to all viewers at startup.
-- [ ] **On subwindow creation:** In `_create_managers_for_subwindow()`, after `image_viewer.set_scroll_wheel_mode(scroll_mode)`, add `image_viewer.set_smooth_when_zoomed_state(self.config_manager.get_smooth_image_when_zoomed())` so new subwindows (e.g. when switching to 2×2 layout) get the current config.
+- [x] **Existing subwindows at startup:** In the same block as the privacy view loop in `main.py` (after `_initialize_subwindow_managers()`, ~lines 235–239), add a loop over `multi_window_layout.get_all_subwindows()` that calls `subwindow.image_viewer.set_smooth_when_zoomed_state(self.config_manager.get_smooth_image_when_zoomed())` for each subwindow (with null checks). This applies the saved config to all viewers at startup.
+- [x] **On subwindow creation:** In `_create_managers_for_subwindow()`, after `image_viewer.set_scroll_wheel_mode(scroll_mode)`, add `image_viewer.set_smooth_when_zoomed_state(self.config_manager.get_smooth_image_when_zoomed())` so new subwindows (e.g. when switching to 2×2 layout) get the current config.
 - [ ] **Smoke test:** Run app; load an image; programmatically set smoothing on/off (e.g. via a temporary debug path or button) and confirm view and item switch between smooth and fast. Confirm new subwindow gets correct initial state in a multi-view layout.
 - [ ] **Revert any temporary test UI** used for verification before committing Phase 1.
 
@@ -164,13 +164,13 @@ Use this checklist when implementing Phase 2. Mark items only after they are ful
 
 ### 6.1 Idle timer and "interacting" state
 
-- [ ] **Backup:** If not already backed up, ensure `src/gui/image_viewer.py` has a backup before further edits.
-- [ ] **Timer:** In `__init__`, create a `QTimer` instance: `self._smooth_idle_timer = QTimer(self)`, then `self._smooth_idle_timer.setSingleShot(True)`, and connect `self._smooth_idle_timer.timeout` to a method that calls `_apply_smoothing_mode()`. Use a *restartable instance*, not `QTimer.singleShot()` — the static form creates a new timer on every call and cannot be cancelled or restarted. To restart on each interaction, call `self._smooth_idle_timer.start(300)` — calling `start()` on an already-running single-shot timer cancels and restarts the 300 ms countdown.
-- [ ] **Interacting:** When the user triggers a transform change (zoom in/out, fit, reset view) or scrollbar change (pan), or wheel event that changes view: call `self._smooth_idle_timer.start(300)` to restart the countdown, and if `_smooth_when_zoomed` is True, immediately apply **fast** mode. If smoothing is disabled, no action is needed (always fast).
-- [ ] **Wire events:** Hook into the same code paths that already trigger `_check_transform_changed()` or scrollbar updates so that each also calls `_smooth_idle_timer.start(300)` and applies fast mode when smoothing is on. Ensure **all** zoom/pan entry points are covered: wheel zoom, zoom buttons/shortcuts, fit-to-view, reset view, scrollbar pan, and pan-by-drag (if it changes transform or scrollbars).
-- [ ] **Timer fire:** On timer fire, `_apply_smoothing_mode()` is called (connected above). This applies smooth when `_smooth_when_zoomed` is True, else fast — reverting to the user's preference after the idle delay.
-- [ ] **Edge cases:** When there is no image (`image_item` is None), `_apply_smoothing_mode()` should no-op or only update the view hint; avoid errors. When smoothing is turned off while the timer is armed, the next timer fire is a no-op (will apply fast). Optionally call `self._smooth_idle_timer.stop()` when smoothing is turned off to avoid the unnecessary callback.
-- [ ] **Lint:** Run linter on `image_viewer.py`; fix any issues.
+- [x] **Backup:** If not already backed up, ensure `src/gui/image_viewer.py` has a backup before further edits.
+- [x] **Timer:** In `__init__`, create a `QTimer` instance: `self._smooth_idle_timer = QTimer(self)`, then `self._smooth_idle_timer.setSingleShot(True)`, and connect `self._smooth_idle_timer.timeout` to a method that calls `_apply_smoothing_mode()`. Use a *restartable instance*, not `QTimer.singleShot()` — the static form creates a new timer on every call and cannot be cancelled or restarted. To restart on each interaction, call `self._smooth_idle_timer.start(300)` — calling `start()` on an already-running single-shot timer cancels and restarts the 300 ms countdown.
+- [x] **Interacting:** When the user triggers a transform change (zoom in/out, fit, reset view) or scrollbar change (pan), or wheel event that changes view: call `self._smooth_idle_timer.start(300)` to restart the countdown, and if `_smooth_when_zoomed` is True, immediately apply **fast** mode. If smoothing is disabled, no action is needed (always fast).
+- [x] **Wire events:** Hook into the same code paths that already trigger `_check_transform_changed()` or scrollbar updates so that each also calls `_smooth_idle_timer.start(300)` and applies fast mode when smoothing is on. Ensure **all** zoom/pan entry points are covered: wheel zoom, zoom buttons/shortcuts, fit-to-view, reset view, scrollbar pan, and pan-by-drag (if it changes transform or scrollbars).
+- [x] **Timer fire:** On timer fire, `_apply_smoothing_mode()` is called (connected above). This applies smooth when `_smooth_when_zoomed` is True, else fast — reverting to the user's preference after the idle delay.
+- [x] **Edge cases:** When there is no image (`image_item` is None), `_apply_smoothing_mode()` should no-op or only update the view hint; avoid errors. When smoothing is turned off while the timer is armed, the next timer fire is a no-op (will apply fast). Optionally call `self._smooth_idle_timer.stop()` when smoothing is turned off to avoid the unnecessary callback.
+- [x] **Lint:** Run linter on `image_viewer.py`; fix any issues.
 
 ### 6.2 Verification
 
@@ -185,31 +185,31 @@ Use this checklist when implementing Phase 3. Mark items only after they are ful
 
 ### 7.1 MainWindow: action, signal, handler
 
-- [ ] **Backup:** Copy `src/gui/main_window.py` to `backups/main_window_pre_smooth_zoomed.py` (or equivalent) if not already backed up.
-- [ ] **Signal:** Add `smooth_when_zoomed_toggled = Signal(bool)` at class level in MainWindow, alongside the existing signals (e.g. `privacy_view_toggled`).
-- [ ] **Action:** Add checkable QAction (e.g. `smooth_when_zoomed_action`), label "Smooth when zoomed" (or "Image smoothing"). Set initial checked state from `config_manager.get_smooth_image_when_zoomed()` where the action is created (e.g. in menu builder).
-- [ ] **Handler:** Add `_on_smooth_when_zoomed_toggled(self, checked: bool)` that calls `self.config_manager.set_smooth_image_when_zoomed(checked)` and emits `self.smooth_when_zoomed_toggled.emit(checked)`. Connect the action's `triggered` signal to this handler. Note: when the toggle arrives via the context menu path (see §7.3), main's handler also calls `config_manager.set_smooth_image_when_zoomed` — that double-save is intentional and harmless (same value, idempotent).
-- [ ] **Sync menu state:** Provide a method (e.g. `set_smooth_when_zoomed_checked(self, checked: bool)`) that sets the action's checked state using `blockSignals(True/False)` around `setChecked()` so the action's `triggered` is not re-emitted. Main calls this to sync the View menu when the toggle originates from a context menu.
-- [ ] **Lint:** Run linter on `main_window.py`; fix any issues.
+- [x] **Backup:** Copy `src/gui/main_window.py` to `backups/main_window_pre_smooth_zoomed.py` (or equivalent) if not already backed up.
+- [x] **Signal:** Add `smooth_when_zoomed_toggled = Signal(bool)` at class level in MainWindow, alongside the existing signals (e.g. `privacy_view_toggled`).
+- [x] **Action:** Add checkable QAction (e.g. `smooth_when_zoomed_action`), label "Smooth when zoomed" (or "Image smoothing"). Set initial checked state from `config_manager.get_smooth_image_when_zoomed()` where the action is created (e.g. in menu builder).
+- [x] **Handler:** Add `_on_smooth_when_zoomed_toggled(self, checked: bool)` that calls `self.config_manager.set_smooth_image_when_zoomed(checked)` and emits `self.smooth_when_zoomed_toggled.emit(checked)`. Connect the action's `triggered` signal to this handler. Note: when the toggle arrives via the context menu path (see §7.3), main's handler also calls `config_manager.set_smooth_image_when_zoomed` — that double-save is intentional and harmless (same value, idempotent).
+- [x] **Sync menu state:** Provide a method (e.g. `set_smooth_when_zoomed_checked(self, checked: bool)`) that sets the action's checked state using `blockSignals(True/False)` around `setChecked()` so the action's `triggered` is not re-emitted. Main calls this to sync the View menu when the toggle originates from a context menu.
+- [x] **Lint:** Run linter on `main_window.py`; fix any issues.
 
 ### 7.2 Menu builder: View menu
 
-- [ ] **Backup:** Copy `src/gui/main_window_menu_builder.py` to `backups/main_window_menu_builder_pre_smooth_zoomed.py` (or equivalent).
-- [ ] **Add action:** In the View menu section, after the Privacy View action (and its separator), add the "Smooth when zoomed" action (stored as `main_window.smooth_when_zoomed_action`), checkable, initial checked state from `main_window.config_manager.get_smooth_image_when_zoomed()`. Connect `triggered` to `main_window._on_smooth_when_zoomed_toggled`.
-- [ ] **Lint:** Run linter on menu builder; fix any issues.
+- [x] **Backup:** Copy `src/gui/main_window_menu_builder.py` to `backups/main_window_menu_builder_pre_smooth_zoomed.py` (or equivalent).
+- [x] **Add action:** In the View menu section, after the Privacy View action (and its separator), add the "Smooth when zoomed" action (stored as `main_window.smooth_when_zoomed_action`), checkable, initial checked state from `main_window.config_manager.get_smooth_image_when_zoomed()`. Connect `triggered` to `main_window._on_smooth_when_zoomed_toggled`.
+- [x] **Lint:** Run linter on menu builder; fix any issues.
 
 ### 7.3 Main: connect signal and push to all viewers
 
-- [ ] **Backup:** Copy `src/main.py` to `backups/main_py_pre_smooth_zoomed.py` (or equivalent) if not already backed up.
-- [ ] **ImageViewer signal:** In `image_viewer.py`, add `smooth_when_zoomed_toggled = Signal(bool)` at class level (alongside `privacy_view_toggled = Signal(bool)`). In the context menu, add a checkable "Smooth when zoomed" action placed after the Privacy View item; set its checked state to `self._smooth_when_zoomed`. On `triggered`, emit `self.smooth_when_zoomed_toggled.emit(checked)` with the new boolean state.
-- [ ] **Connect in lifecycle controller:** In `SubwindowLifecycleController.connect_subwindow_signals()`, add `image_viewer.smooth_when_zoomed_toggled.connect(app._on_smooth_when_zoomed_toggled)` directly alongside `image_viewer.privacy_view_toggled.connect(app._on_privacy_view_toggled)`.
-- [ ] **Connect MainWindow signal:** In main, connect `main_window.smooth_when_zoomed_toggled` to the same handler `app._on_smooth_when_zoomed_toggled`.
-- [ ] **Handler:** Add `_on_smooth_when_zoomed_toggled(self, enabled: bool)` in main. Always call `self.config_manager.set_smooth_image_when_zoomed(enabled)` (this is the only place config is set when the toggle comes from a context menu; when it comes from the View menu, MainWindow already saved it, so this is an idempotent double-save — harmless). Then loop over all subwindows and call `subwindow.image_viewer.set_smooth_when_zoomed_state(enabled)`. Finally call `self.main_window.set_smooth_when_zoomed_checked(enabled)` to keep the View menu check mark in sync.
-- [ ] **Lint:** Run linter on `main.py` and `image_viewer.py`; fix any issues.
+- [x] **Backup:** Copy `src/main.py` to `backups/main_py_pre_smooth_zoomed.py` (or equivalent) if not already backed up.
+- [x] **ImageViewer signal:** In `image_viewer.py`, add `smooth_when_zoomed_toggled = Signal(bool)` at class level (alongside `privacy_view_toggled = Signal(bool)`). In the context menu, add a checkable "Smooth when zoomed" action placed after the Privacy View item; set its checked state to `self._smooth_when_zoomed`. On `triggered`, emit `self.smooth_when_zoomed_toggled.emit(checked)` with the new boolean state.
+- [x] **Connect in lifecycle controller:** In `SubwindowLifecycleController.connect_subwindow_signals()`, add `image_viewer.smooth_when_zoomed_toggled.connect(app._on_smooth_when_zoomed_toggled)` directly alongside `image_viewer.privacy_view_toggled.connect(app._on_privacy_view_toggled)`.
+- [x] **Connect MainWindow signal:** In main, connect `main_window.smooth_when_zoomed_toggled` to the same handler `app._on_smooth_when_zoomed_toggled`.
+- [x] **Handler:** Add `_on_smooth_when_zoomed_toggled(self, enabled: bool)` in main. Always call `self.config_manager.set_smooth_image_when_zoomed(enabled)` (this is the only place config is set when the toggle comes from a context menu; when it comes from the View menu, MainWindow already saved it, so this is an idempotent double-save — harmless). Then loop over all subwindows and call `subwindow.image_viewer.set_smooth_when_zoomed_state(enabled)`. Finally call `self.main_window.set_smooth_when_zoomed_checked(enabled)` to keep the View menu check mark in sync.
+- [x] **Lint:** Run linter on `main.py` and `image_viewer.py`; fix any issues.
 
 ### 7.4 Subwindow creation and initial state
 
-- [ ] **Confirm:** Phase 1 already passes initial config to each new image_viewer in `_create_managers_for_subwindow()`. Confirm the call is present; add it here if it was deferred.
+- [x] **Confirm:** Phase 1 already passes initial config to each new image_viewer in `_create_managers_for_subwindow()`. Confirm the call is present; add it here if it was deferred.
 - [ ] **Smoke test:** Toggle from View menu: all views update, config persists after restart. Toggle from context menu (right-click on image): same. Both menus show correct check state. New subwindow gets current setting.
 
 ---
@@ -220,10 +220,10 @@ Use this checklist when implementing Phase 4. Mark items only after they are ful
 
 ### 8.1 Magnifier: use smoothing setting when scaling
 
-- [ ] **Backup:** If making further edits to `image_viewer.py`, ensure backup exists.
-- [ ] **Locate scaling:** In `_extract_image_region()` (or the method that produces the scaled pixmap for the magnifier), find the call to `region.scaled(..., Qt.TransformationMode.SmoothTransformation)`.
-- [ ] **Use setting:** Replace with a transformation mode chosen from `_smooth_when_zoomed`: `Qt.TransformationMode.SmoothTransformation` if True, else `Qt.TransformationMode.FastTransformation`.
-- [ ] **Lint:** Run linter; fix any issues.
+- [x] **Backup:** If making further edits to `image_viewer.py`, ensure backup exists.
+- [x] **Locate scaling:** In `_extract_image_region()` (or the method that produces the scaled pixmap for the magnifier), find the call to `region.scaled(..., Qt.TransformationMode.SmoothTransformation)`.
+- [x] **Use setting:** Replace with a transformation mode chosen from `_smooth_when_zoomed`: `Qt.TransformationMode.SmoothTransformation` if True, else `Qt.TransformationMode.FastTransformation`.
+- [x] **Lint:** Run linter; fix any issues.
 - [ ] **Manual test:** With smoothing off, open magnifier and zoom; confirm magnifier region is not smoothed (blocky). With smoothing on, confirm it is smoothed. Toggle while magnifier is open and confirm the next magnifier refresh uses the new mode.
 
 ---
@@ -234,16 +234,16 @@ Use this checklist when implementing Phase 5. Mark items only after they are ful
 
 ### 9.1 Tests
 
-- [ ] **Config:** Add or extend tests in `tests/` (e.g. `test_config_manager.py` or a new file) for: default value of `smooth_image_when_zoomed` is `False`; get/set round-trip; value persists to disk and reloads correctly.
-- [ ] **ImageViewer:** If feasible with existing test fixtures, add a test that creates an ImageViewer, sets an image, calls `set_smooth_when_zoomed_state(True)` then `set_smooth_when_zoomed_state(False)` and verifies `image_item.transformationMode()` and the view's render hints change accordingly via Qt API. Skip if the test requires a heavy GUI fixture that is not practical; document in plan as skipped.
-- [ ] **Idle timer:** Optional: test that after triggering a transform event and advancing time by more than the idle delay (e.g. using `QTest.qWait` or mocking the timer), smoothing mode is applied. Document if skipped.
-- [ ] **Run tests:** Execute full test suite (`python tests/run_tests.py` or `python -m pytest tests/ -v`). Do not change tests artificially to pass; fix implementation or document known gaps.
+- [x] **Config:** Add or extend tests in `tests/` (e.g. `test_config_manager.py` or a new file) for: default value of `smooth_image_when_zoomed` is `False`; get/set round-trip; value persists to disk and reloads correctly. Added `tests/test_config_manager_smooth_zoomed.py` with five tests; all pass.
+- [x] **ImageViewer:** If feasible with existing test fixtures, add a test that creates an ImageViewer, sets an image, calls `set_smooth_when_zoomed_state(True)` then `set_smooth_when_zoomed_state(False)` and verifies `image_item.transformationMode()` and the view's render hints change accordingly via Qt API. Skip if the test requires a heavy GUI fixture that is not practical; document in plan as skipped. **Skipped:** No lightweight GUI fixture for ImageViewer with scene/image_item; would require QApplication and full widget tree.
+- [x] **Idle timer:** Optional: test that after triggering a transform event and advancing time by more than the idle delay (e.g. using `QTest.qWait` or mocking the timer), smoothing mode is applied. Document if skipped. **Skipped:** Optional per plan; would require GUI event loop and timer advancement.
+- [x] **Run tests:** Execute full test suite (`python tests/run_tests.py` or `python -m pytest tests/ -v`). Do not change tests artificially to pass; fix implementation or document known gaps. Full suite (49 tests) passes.
 
 ### 9.2 Documentation
 
-- [ ] **AGENTS.md / README:** Add a line noting that "Smooth when zoomed" (image smoothing) is a user-configurable option in the View menu and image viewer context menu; default is off; persisted in config.
-- [ ] **Research doc:** In `dev-docs/info/IMAGE_SMOOTHING_WHEN_MAGNIFIED_RESEARCH.md`, add a short **Implementation** subsection at the end stating the recommended approach has been implemented per this plan (`dev-docs/plans/IMAGE_SMOOTHING_IMPLEMENTATION_PLAN.md`), covering config, two-tier idle behavior, context menu and View menu, magnifier, and tests.
-- [ ] **Export/import customizations (optional):** If desired, include `smooth_image_when_zoomed` in `config_manager.export_customizations()` / `import_customizations()` so it is saved and restored with other view preferences. Document here if skipped.
+- [x] **AGENTS.md / README:** Add a line noting that "Smooth when zoomed" (image smoothing) is a user-configurable option in the View menu and image viewer context menu; default is off; persisted in config. AGENTS.md "View and display options" section and README "Image Display" bullet added.
+- [x] **Research doc:** In `dev-docs/info/IMAGE_SMOOTHING_WHEN_MAGNIFIED_RESEARCH.md`, add a short **Implementation** subsection at the end stating the recommended approach has been implemented per this plan (`dev-docs/plans/IMAGE_SMOOTHING_IMPLEMENTATION_PLAN.md`), covering config, two-tier idle behavior, context menu and View menu, magnifier, and tests.
+- [x] **Export/import customizations (optional):** If desired, include `smooth_image_when_zoomed` in `config_manager.export_customizations()` / `import_customizations()` so it is saved and restored with other view preferences. Document here if skipped. **Skipped:** Not added to export/import customizations in this implementation; can be added in a follow-up if desired.
 
 ---
 
@@ -272,10 +272,10 @@ Use this checklist when implementing Phase 5. Mark items only after they are ful
 
 ## 12. Status
 
-- **Phase 1:** Not started
-- **Phase 2:** Not started
-- **Phase 3:** Not started
-- **Phase 4:** Not started
-- **Phase 5:** Not started
+- **Phase 1:** In progress (config, ImageViewer, main wiring done; smoke test pending)
+- **Phase 2:** Implemented (idle timer and two-tier behavior; manual verification pending)
+- **Phase 3:** Implemented (context menu and View menu; smoke test pending)
+- **Phase 4:** Implemented (magnifier uses smoothing setting; manual test pending)
+- **Phase 5:** Implemented (config tests added, docs updated, research doc Implementation section added; ImageViewer and idle timer tests skipped per plan; export/import customizations skipped)
 
 Update this section as phases are completed.

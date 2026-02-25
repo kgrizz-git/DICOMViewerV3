@@ -102,7 +102,6 @@ class ConfigManager:
             "multi_window_layout": "1x1",  # Multi-window layout mode: "1x1", "1x2", "2x1", "2x2"
             "disclaimer_accepted": False,  # Whether user has accepted disclaimer and chosen not to see it again
             "privacy_view_enabled": False,  # Whether privacy view mode is enabled (masks patient tags in display)
-            "smooth_image_when_zoomed": False,  # User option to smooth image when zoomed; off by default for no-enhancement
         }
         
         # Load configuration
@@ -947,32 +946,13 @@ class ConfigManager:
     def set_privacy_view(self, enabled: bool) -> None:
         """
         Set whether privacy view mode is enabled.
-
+        
         Args:
             enabled: True to enable privacy view, False to disable
         """
         self.config["privacy_view_enabled"] = enabled
         self.save_config()
-
-    def get_smooth_image_when_zoomed(self) -> bool:
-        """
-        Get whether image smoothing when zoomed is enabled.
-
-        Returns:
-            True if smoothing when zoomed is enabled, False otherwise
-        """
-        return self.config.get("smooth_image_when_zoomed", False)
-
-    def set_smooth_image_when_zoomed(self, enabled: bool) -> None:
-        """
-        Set whether image smoothing when zoomed is enabled.
-
-        Args:
-            enabled: True to enable smoothing when zoomed, False to disable
-        """
-        self.config["smooth_image_when_zoomed"] = enabled
-        self.save_config()
-
+    
     def export_customizations(self, file_path: str) -> bool:
         """
         Export customization settings to a JSON file.
