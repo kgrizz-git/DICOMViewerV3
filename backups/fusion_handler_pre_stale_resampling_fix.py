@@ -111,25 +111,6 @@ class FusionHandler:
         if old_overlay_uid:
             self.clear_alignment_cache(old_overlay_uid)
     
-    def set_resampling_mode(self, mode: str) -> None:
-        """
-        Set resampling mode and invalidate actual-mode tracking until next render.
-        
-        Call this when the user changes the resampling mode (e.g. Fast <-> High Accuracy).
-        This clears _actual_resampling_mode_used and _resampling_failure_reason so that
-        status logic uses the predicted mode until the next slice is rendered. When the
-        coordinator forces Fast after a real 3D failure, it should assign
-        resampling_mode = 'fast' directly so actual/failure reason are not cleared.
-        
-        Args:
-            mode: 'fast' or 'high_accuracy'
-        """
-        self.resampling_mode = mode
-        self._actual_resampling_mode_used = None
-        self._resampling_failure_reason = None
-        self._resampling_decision_cache = None
-        self._resampling_decision_cache_key = None
-    
     def check_frame_of_reference_match(
         self,
         series1_datasets: List[Dataset],

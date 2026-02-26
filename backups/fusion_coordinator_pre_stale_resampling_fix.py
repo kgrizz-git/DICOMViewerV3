@@ -291,33 +291,15 @@ class FusionCoordinator:
         """
         Handle overlay series selection change.
         
-        Updates handler state immediately so the UI reflects the selection, then
-        defers heavy work (pixel value range, spatial alignment, display update)
-        to the next event loop tick to avoid freezing the UI.
-        
         Args:
             series_uid: New overlay series UID
         """
         self.fusion_handler.set_overlay_series(series_uid)
-        # Defer expensive work so the dropdown and handler state update immediately.
-        # Heavy work: duplicate check, pixel value range over full series, spatial
-        # alignment, and fusion display update (which may run 3D resampling).
-        QTimer.singleShot(0, self._finish_overlay_series_load)
-
-    def _finish_overlay_series_load(self) -> None:
-        """
-        Run after overlay series is set: duplicate check, resampling status,
-        auto window/level (may scan full series), spatial alignment, and display update.
-        Called deferred from handle_overlay_series_changed to avoid main-thread freeze.
-        """
-        series_uid = self.fusion_handler.overlay_series_uid
-        if not series_uid:
-            return
-
+        
+        # Check for duplicate locations in overlay series
         studies = self.get_current_studies()
         study_uid = self.get_current_study_uid()
-
-        # Check for duplicate locations in overlay series
+        
         if study_uid in studies and series_uid in studies[study_uid]:
             overlay_datasets = studies[study_uid][series_uid]
             if overlay_datasets:
@@ -327,81 +309,79 @@ class FusionCoordinator:
                         "Overlay series has multiple slices at the same location. Only the first occurrence at each location will be used in 3D fusion.",
                         severity="warning"
                     )
-
+        
         # Update resampling status when overlay changes
         self._update_resampling_status()
-
+        
         # Auto-set overlay window/level: try DICOM tags first, then auto-calculate from series
+        studies = self.get_current_studies()
+        study_uid = self.get_current_study_uid()
+        
         if study_uid in studies and series_uid in studies[study_uid]:
             datasets = studies[study_uid][series_uid]
             if datasets:
                 from core.dicom_processor import DICOMProcessor
-
-                # For large series, sample slices to avoid long freezes when computing pixel range
-                MAX_SLICES_FOR_PIXEL_RANGE = 24
-                if len(datasets) > MAX_SLICES_FOR_PIXEL_RANGE:
-                    step = (len(datasets) - 1) / (MAX_SLICES_FOR_PIXEL_RANGE - 1) if MAX_SLICES_FOR_PIXEL_RANGE > 1 else 0
-                    indices = [0] + [int(round(step * i)) for i in range(1, MAX_SLICES_FOR_PIXEL_RANGE - 1)] + [len(datasets) - 1]
-                    indices = sorted(set(indices))
-                    datasets_to_scan = [datasets[i] for i in indices]
-                else:
-                    datasets_to_scan = datasets
-
+                
+                # Debug: Show overlay series pixel value statistics
                 # Get rescale parameters
                 rescale_slope, rescale_intercept, rescale_type = DICOMProcessor.get_rescale_parameters(datasets[0])
                 has_rescale = (rescale_slope is not None and rescale_intercept is not None)
-
-                # Get raw pixel value range (full series or sampled)
-                raw_min, raw_max = DICOMProcessor.get_series_pixel_value_range(datasets_to_scan, apply_rescale=False)
+                
+                # Get raw pixel value range (entire series)
+                raw_min, raw_max = DICOMProcessor.get_series_pixel_value_range(datasets, apply_rescale=False)
                 if raw_min is not None and raw_max is not None:
                     raw_range = raw_max - raw_min
                     print(f"[OVERLAY PIXEL VALUES] Raw (entire series): min={raw_min:.2f}, max={raw_max:.2f}, range={raw_range:.2f}")
-
-                # Get rescaled pixel value range (full or sampled series) if rescale parameters exist
+                
+                # Get rescaled pixel value range (entire series) if rescale parameters exist
                 if has_rescale:
-                    rescaled_min, rescaled_max = DICOMProcessor.get_series_pixel_value_range(datasets_to_scan, apply_rescale=True)
+                    rescaled_min, rescaled_max = DICOMProcessor.get_series_pixel_value_range(datasets, apply_rescale=True)
                     if rescaled_min is not None and rescaled_max is not None:
                         rescaled_range = rescaled_max - rescaled_min
                         print(f"[OVERLAY PIXEL VALUES] Rescaled (entire series): min={rescaled_min:.2f}, max={rescaled_max:.2f}, range={rescaled_range:.2f}")
                         print(f"[OVERLAY PIXEL VALUES] Rescale parameters: slope={rescale_slope}, intercept={rescale_intercept}")
                 else:
                     print(f"[OVERLAY PIXEL VALUES] No rescale parameters (RescaleSlope/RescaleIntercept not present)")
-
+                
                 # Try to get window/level from DICOM tags (with auto-calculation fallback for single slice)
                 window_center, window_width, is_rescaled = DICOMProcessor.get_window_level_from_dataset(
                     datasets[0],
                     rescale_slope=rescale_slope,
                     rescale_intercept=rescale_intercept
                 )
-
-                # If DICOM tags don't provide valid values, calculate from series (or sampled)
+                
+                # If DICOM tags don't provide valid values, calculate from entire series
                 if window_center is None or window_width is None:
+                    # Get series-wide pixel range
                     apply_rescale = (rescale_slope is not None and rescale_intercept is not None)
                     series_min, series_max = DICOMProcessor.get_series_pixel_value_range(
-                        datasets_to_scan,
+                        datasets,
                         apply_rescale=apply_rescale
                     )
-
+                    
                     if series_min is not None and series_max is not None:
+                        # Calculate window/level from series distribution
                         window_center = (series_min + series_max) / 2.0
                         window_width = series_max - series_min
                         print(f"[OVERLAY W/L] Auto-calculated from series: window={window_width:.1f}, level={window_center:.1f}")
                     else:
+                        # Fallback: use defaults
                         window_width = 1000.0
                         window_center = 500.0
                         print(f"[OVERLAY W/L] Using defaults: window={window_width:.1f}, level={window_center:.1f}")
                 else:
                     print(f"[OVERLAY W/L] From DICOM tags: window={window_width:.1f}, level={window_center:.1f}")
-
+                
+                # Set window/level in controls and store in handler (for per-subwindow state)
                 if window_center is not None and window_width is not None:
                     self.fusion_handler.overlay_window = window_width
                     self.fusion_handler.overlay_level = window_center
                     self.fusion_controls.set_overlay_window_level(window_width, window_center)
-
+        
         # Update spatial alignment parameters
         self._update_spatial_alignment()
-
-        # Re-validate if fusion is enabled (triggers display update, possibly 3D resampling)
+        
+        # Re-validate if fusion is enabled
         if self.fusion_handler.fusion_enabled:
             self.handle_fusion_enabled_changed(True)
     
@@ -542,7 +522,10 @@ class FusionCoordinator:
         Args:
             mode: 'fast' or 'high_accuracy'
         """
-        self.fusion_handler.set_resampling_mode(mode)
+        self.fusion_handler.resampling_mode = mode
+        
+        # Clear resampling decision cache to force re-evaluation
+        self.fusion_handler._resampling_decision_cache = None
         
         # Update status display
         self._update_resampling_status()
