@@ -270,6 +270,7 @@ class QuickStartGuideDialog(QDialog):
                 </li>
                 <li><strong>Reset View:</strong> Press <code>V</code> or <code>Shift+V</code>, or use <strong>View → Reset View</strong>, the toolbar button, or right-click context menu → "Reset View (V, Shift+V)" to restore initial zoom, pan, and window/level for the focused subwindow</li>
                 <li><strong>Reset All Views:</strong> Press <code>Shift+A</code> or use the toolbar to reset zoom, pan, and window/level for all subwindows simultaneously</li>
+                <li><strong>Image Smoothing:</strong> When enabled (<strong>View → Image Smoothing</strong> or context menu), the viewer uses bilinear smoothing when the image is zoomed (after a short idle); during zoom/pan it uses fast scaling for responsiveness. The magnifier follows the same setting. Off by default.</li>
             </ul>
             
             <h2 id="histogram">Histogram Display</h2>
@@ -647,6 +648,7 @@ class QuickStartGuideDialog(QDialog):
                         <li>Window/Level: Use current viewer settings or dataset default</li>
                         <li>Include overlays and ROIs: Export with metadata text, ROIs, and measurements visible</li>
                         <li>Export at displayed resolution: Apply current zoom level for high-resolution output</li>
+                        <li>When exporting at higher than native resolution (e.g. 1.5×, 2×, 4×), images are scaled using Lanczos resampling for high quality (independent of the viewer's Image Smoothing setting).</li>
                     </ul>
                 </li>
             <li>Exported files are organized in folders: <code>Patient ID / Study Date - Study Description / Series Number - Series Description</code></li>
