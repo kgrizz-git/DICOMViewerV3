@@ -30,7 +30,7 @@ This application provides comprehensive DICOM image viewing capabilities with ad
 - Switch mouse scroll wheel between zooming and slice navigation
 - Dark or light interface option
 - Reset view to fit viewport
-- **Image Smoothing**: Optional image smoothing when zoomed (View menu or image context menu); off by default; persisted in config
+- **Image Smoothing**: Optional image smoothing when zoomed (View menu or image context menu): when on, the viewer uses bilinear smoothing when idle and fast scaling during zoom/pan; the magnifier follows the same setting. Off by default; persisted in config.
 - **Intensity Projections**: Combine multiple slices (2, 3, 4, 6, or 8) to view Average (AIP), Maximum (MIP), or Minimum (MinIP) intensity projections
   - Scroll through combined projections one underlying slice at a time
   - Access via right panel widget or context menu → "Combine..."
@@ -124,6 +124,7 @@ This application provides comprehensive DICOM image viewing capabilities with ad
   - Export at displayed resolution (apply current zoom for high-resolution output)
   - Include overlays, ROIs, and measurements in exported images
   - Choose window/level settings (current viewer or dataset default)
+  - When exporting at increased resolution (1.5×, 2×, 4×), images are scaled using Lanczos resampling (independent of the viewer's Image Smoothing option).
   - Organized folder structure: Patient ID / Study Date - Study Description / Series Number - Series Description
   - Remembers last export directory between sessions
 - **Export/Import Customizations**: Save and share your customization settings
