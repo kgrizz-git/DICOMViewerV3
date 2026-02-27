@@ -55,6 +55,12 @@ class SubwindowLifecycleController:
             return self.app.subwindow_data[idx].get('current_dataset')
         return None
 
+    def get_subwindow_datasets(self, idx: int):
+        """Get current dataset list for a subwindow's series, if available."""
+        if idx in self.app.subwindow_data:
+            return self.app.subwindow_data[idx].get('current_datasets')
+        return None
+
     def get_subwindow_slice_index(self, idx: int) -> int:
         """Get current slice index for a subwindow."""
         if idx in self.app.subwindow_data:
@@ -104,6 +110,10 @@ class SubwindowLifecycleController:
                 vsm.rescale_intercept,
                 getattr(vsm, 'rescale_type', None)
             ),
+            'get_series_study_uid': lambda i=idx: self.get_subwindow_study_uid(i),
+            'get_series_uid': lambda i=idx: self.get_subwindow_series_uid(i),
+            'get_series_datasets': lambda i=idx: self.get_subwindow_datasets(i),
+            'get_all_studies': lambda: getattr(self.app, 'current_studies', {}),
         }
 
     def get_focused_subwindow(self):

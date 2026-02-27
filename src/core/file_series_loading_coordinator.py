@@ -384,6 +384,8 @@ class FileSeriesLoadingCoordinator:
             app.current_dataset = app.subwindow_data[idx]['current_dataset']
             app._update_series_navigator_highlighting()
             app._update_right_panel_for_focused_subwindow()
+            # Ensure cine player context and frame slider are updated when series changes
+            app._update_cine_player_context()
 
     def on_series_navigator_selected(self, series_uid: str) -> None:
         """Handle series selection from series navigator (assigns to focused subwindow)."""
