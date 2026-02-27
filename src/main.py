@@ -1393,6 +1393,21 @@ class DICOMViewerApp(QObject):
         self.main_window.copy_annotation_requested.connect(self._copy_annotations)
         self.main_window.paste_annotation_requested.connect(self._paste_annotations)
         
+        # Cine controls widget signals
+        self.cine_controls_widget.play_requested.connect(self._on_cine_play)
+        self.cine_controls_widget.pause_requested.connect(self._on_cine_pause)
+        self.cine_controls_widget.stop_requested.connect(self._on_cine_stop)
+        self.cine_controls_widget.speed_changed.connect(self._on_cine_speed_changed)
+        self.cine_controls_widget.loop_toggled.connect(self._on_cine_loop_toggled)
+        self.cine_controls_widget.frame_position_changed.connect(self._on_frame_slider_changed)
+        self.cine_controls_widget.loop_start_set.connect(self._on_cine_loop_start_set)
+        self.cine_controls_widget.loop_end_set.connect(self._on_cine_loop_end_set)
+        self.cine_controls_widget.loop_bounds_cleared.connect(self._on_cine_loop_bounds_cleared)
+
+        # Cine player signals
+        self.cine_player.frame_advance_requested.connect(self._on_cine_frame_advance)
+        self.cine_player.playback_state_changed.connect(self._on_cine_playback_state_changed)
+        
         # Privacy view toggle (shared)
         self.main_window.privacy_view_toggled.connect(self._on_privacy_view_toggled)
 
@@ -2837,7 +2852,8 @@ class DICOMViewerApp(QObject):
         # Update frame slider with current frame and total frames
         if is_cine_capable:
             total_slices = self.slice_navigator.total_slices
-            current_slice = self.current_slice_index
+            # Use slice navigator's notion of current slice for robustness
+            current_slice = self.slice_navigator.get_current_slice()
             self.cine_controls_widget.update_frame_position(current_slice, total_slices)
         else:
             # Reset slider when not cine-capable

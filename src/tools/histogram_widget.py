@@ -51,6 +51,10 @@ class HistogramWidget(QWidget):
         self.window_center: Optional[float] = None
         self.window_width: Optional[float] = None
         self.use_log_scale: bool = False
+        # Optional global axis constraints supplied by the dialog
+        self.global_frequency_max: Optional[float] = None
+        self.global_x_min: Optional[float] = None
+        self.global_x_max: Optional[float] = None
     
     def _create_ui(self) -> None:
         """Create the UI components."""
@@ -114,6 +118,28 @@ class HistogramWidget(QWidget):
         self.use_log_scale = use_log
         self._update_histogram()
     
+    def set_global_frequency_max(self, max_freq: Optional[float]) -> None:
+        """
+        Set an optional global maximum frequency for the y-axis.
+        
+        Args:
+            max_freq: Maximum histogram frequency across the series (or None to use per-slice max)
+        """
+        self.global_frequency_max = max_freq
+        self._update_histogram()
+    
+    def set_global_pixel_range(self, x_min: Optional[float], x_max: Optional[float]) -> None:
+        """
+        Set an optional global pixel value range for the x-axis.
+        
+        Args:
+            x_min: Minimum pixel value across the series (or None to use per-slice range)
+            x_max: Maximum pixel value across the series (or None to use per-slice range)
+        """
+        self.global_x_min = x_min
+        self.global_x_max = x_max
+        self._update_histogram()
+    
     def _update_histogram(self) -> None:
         """Update the histogram display."""
         if self.pixel_array is None:
@@ -131,10 +157,37 @@ class HistogramWidget(QWidget):
         # Clear axes
         self.axes.clear()
         
-        # Calculate histogram
-        hist, bins = np.histogram(pixels, bins=256)
+        # Calculate histogram, optionally using a fixed global x-range
+        if (
+            self.global_x_min is not None
+            and self.global_x_max is not None
+            and self.global_x_max > self.global_x_min
+        ):
+            hist, bins = np.histogram(pixels, bins=256, range=(self.global_x_min, self.global_x_max))
+        else:
+            hist, bins = np.histogram(pixels, bins=256)
         bin_centers = (bins[:-1] + bins[1:]) / 2.0
         
+        # Determine y-axis limits using optional global max
+        local_max = float(hist.max()) if hist.size > 0 else 0.0
+        y_max = float(self.global_frequency_max) if (self.global_frequency_max is not None and self.global_frequency_max > 0) else local_max
+        if y_max <= 0:
+            y_max = 1.0
+        
+        # Set y-axis scale and limits before drawing overlays
+        if self.use_log_scale:
+            self.axes.set_yscale('log')
+            # Avoid log(0) issues by setting a positive minimum based on data where possible
+            positive = hist[hist > 0]
+            if positive.size > 0:
+                bottom = max(0.1, float(positive.min()))
+            else:
+                bottom = 0.1
+            self.axes.set_ylim(bottom=bottom, top=y_max)
+        else:
+            self.axes.set_yscale('linear')
+            self.axes.set_ylim(bottom=0.0, top=y_max)
+
         # Plot histogram
         self.axes.plot(bin_centers, hist, 'b-', linewidth=1.5, label='Histogram')
         self.axes.fill_between(bin_centers, 0, hist, alpha=0.3)
@@ -165,16 +218,21 @@ class HistogramWidget(QWidget):
             self.axes.axvline(self.window_center, color='r', linestyle=':', 
                             linewidth=1, alpha=0.5)
         
-        self.axes.set_xlabel("Pixel Value")
-        self.axes.set_ylabel("Frequency")
+        # Set x-axis limits to global range if provided, otherwise to current data range
+        if (
+            self.global_x_min is not None
+            and self.global_x_max is not None
+            and self.global_x_max > self.global_x_min
+        ):
+            self.axes.set_xlim(self.global_x_min, self.global_x_max)
+        elif bin_centers.size > 0:
+            self.axes.set_xlim(bin_centers[0], bin_centers[-1])
         
-        # Set y-axis scale
+        self.axes.set_xlabel("Pixel Value")
         if self.use_log_scale:
-            self.axes.set_yscale('log')
-            # Avoid log(0) issues by setting a minimum
-            self.axes.set_ylim(bottom=0.1)
+            self.axes.set_ylabel("Frequency (Log Scale)")
         else:
-            self.axes.set_yscale('linear')
+            self.axes.set_ylabel("Frequency (Linear Scale)")
         
         self.axes.legend(loc='upper right')
         self.axes.grid(True, alpha=0.3)
