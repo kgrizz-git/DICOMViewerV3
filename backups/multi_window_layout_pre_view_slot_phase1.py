@@ -65,9 +65,6 @@ class MultiWindowLayout(QWidget):
         # Currently focused subwindow
         self.focused_subwindow: Optional[SubWindowContainer] = None
         
-        # Slot-to-view mapping for 2x2: slot_to_view[s] = view index in slot s (default [0,1,2,3])
-        self.slot_to_view: List[int] = [0, 1, 2, 3]
-        
         # Layout widget
         self.layout_widget: Optional[QWidget] = None
         self.layout_manager: Optional[QGridLayout] = None
@@ -75,12 +72,7 @@ class MultiWindowLayout(QWidget):
         # Create initial layout
         self._create_layout()
         
-        # Create all 4 subwindows up front so 1x2/2x1 can use (focused+1)%4 and 2x2 has all four.
-        # Only the number needed for the current layout are shown; the rest are hidden.
-        while len(self.subwindows) < 4:
-            self._create_subwindow()
-        
-        # Set initial layout mode (will show only the first subwindow in 1x1)
+        # Set initial layout mode
         self.set_layout("1x1")
     
     def _create_layout(self) -> None:
@@ -112,17 +104,15 @@ class MultiWindowLayout(QWidget):
         if layout_mode not in ["1x1", "1x2", "2x1", "2x2"]:
             return
         
-        num_subwindows = self._get_num_subwindows(layout_mode)
-        
-        # Only skip if layout matches AND we have enough subwindows AND layout is not 1x1.
-        # For 1x1 we never skip so that each set_layout("1x1") re-runs _arrange_subwindows
-        # and shows the current focused view.
-        if (self.current_layout == layout_mode and
-                layout_mode != "1x1" and
-                len(self.subwindows) >= num_subwindows):
+        # Only skip if layout matches AND subwindows already exist
+        # This ensures subwindows are created on first launch even if layout is already "1x1"
+        if self.current_layout == layout_mode and len(self.subwindows) > 0:
             return  # No change needed
         
         self.current_layout = layout_mode
+        
+        # Determine number of subwindows needed
+        num_subwindows = self._get_num_subwindows(layout_mode)
         
         # Create subwindows if needed
         while len(self.subwindows) < num_subwindows:
@@ -135,11 +125,10 @@ class MultiWindowLayout(QWidget):
         # Show needed subwindows and arrange them
         self._arrange_subwindows(layout_mode)
         
-        # Set focus to first visible slot if no focus or focused container not visible
+        # Set focus to first subwindow if no focus
         if self.focused_subwindow is None or not self.focused_subwindow.isVisible():
-            first_container = self._get_first_visible_container(layout_mode)
-            if first_container is not None:
-                self.set_focused_subwindow(first_container)
+            if self.subwindows:
+                self.set_focused_subwindow(self.subwindows[0])
         
         # Emit signal
         self.layout_changed.emit(layout_mode)
@@ -163,47 +152,6 @@ class MultiWindowLayout(QWidget):
         elif layout_mode == "2x2":
             return 4
         return 1
-    
-    def _get_focused_view_index(self) -> int:
-        """
-        Return the index of the currently focused subwindow in self.subwindows.
-        If focused subwindow is not in the list or None, return 0.
-        
-        Returns:
-            Index in [0, 3] for use with subwindows and slot_to_view.
-        """
-        if self.focused_subwindow is not None and self.focused_subwindow in self.subwindows:
-            return self.subwindows.index(self.focused_subwindow)
-        return 0
-    
-    def _get_first_visible_container(self, layout_mode: LayoutMode) -> Optional[SubWindowContainer]:
-        """
-        Return the container that is in the first visible slot for the given layout.
-        Used to set focus when no focus or focused container is not visible.
-        
-        Args:
-            layout_mode: Current layout mode
-            
-        Returns:
-            SubWindowContainer for first slot, or None if none.
-        """
-        if not self.subwindows:
-            return None
-        if layout_mode == "1x1":
-            idx = self._get_focused_view_index()
-            if idx < len(self.subwindows):
-                return self.subwindows[idx]
-            return self.subwindows[0]
-        if layout_mode == "1x2" or layout_mode == "2x1":
-            f = self._get_focused_view_index()
-            if f < len(self.subwindows):
-                return self.subwindows[f]
-            return self.subwindows[0] if self.subwindows else None
-        if layout_mode == "2x2":
-            if len(self.subwindows) >= 4:
-                return self.subwindows[self.slot_to_view[0]]
-            return self.subwindows[0] if self.subwindows else None
-        return self.subwindows[0] if self.subwindows else None
     
     def _create_subwindow(self) -> SubWindowContainer:
         """
@@ -254,40 +202,35 @@ class MultiWindowLayout(QWidget):
             expected_rows = 2
             expected_cols = 2
         
-        # Arrange based on layout mode (focus-based for 1x1, 1x2, 2x1; slot_to_view for 2x2)
+        # Arrange based on layout mode
         if layout_mode == "1x1":
-            # Single window: show only the focused view's container
+            # Single window: row 0, col 0, spans 1x1
             if len(self.subwindows) >= 1:
-                idx = self._get_focused_view_index()
-                container = self.subwindows[idx]
-                container.show()
-                self.layout_manager.addWidget(container, 0, 0, 1, 1)
+                self.subwindows[0].show()
+                self.layout_manager.addWidget(self.subwindows[0], 0, 0, 1, 1)
         elif layout_mode == "1x2":
-            # Two windows side by side: focused first, then (focused+1)%4
+            # Two windows side by side: row 0, cols 0 and 1
             if len(self.subwindows) >= 2:
-                f = self._get_focused_view_index()
-                n = (f + 1) % 4
-                self.subwindows[f].show()
-                self.subwindows[n].show()
-                self.layout_manager.addWidget(self.subwindows[f], 0, 0, 1, 1)
-                self.layout_manager.addWidget(self.subwindows[n], 0, 1, 1, 1)
+                self.subwindows[0].show()
+                self.subwindows[1].show()
+                self.layout_manager.addWidget(self.subwindows[0], 0, 0, 1, 1)
+                self.layout_manager.addWidget(self.subwindows[1], 0, 1, 1, 1)
         elif layout_mode == "2x1":
-            # Two windows stacked: focused first, then (focused+1)%4
+            # Two windows stacked: rows 0 and 1, col 0
             if len(self.subwindows) >= 2:
-                f = self._get_focused_view_index()
-                n = (f + 1) % 4
-                self.subwindows[f].show()
-                self.subwindows[n].show()
-                self.layout_manager.addWidget(self.subwindows[f], 0, 0, 1, 1)
-                self.layout_manager.addWidget(self.subwindows[n], 1, 0, 1, 1)
+                self.subwindows[0].show()
+                self.subwindows[1].show()
+                self.layout_manager.addWidget(self.subwindows[0], 0, 0, 1, 1)
+                self.layout_manager.addWidget(self.subwindows[1], 1, 0, 1, 1)
         elif layout_mode == "2x2":
-            # Four windows in grid: order by slot_to_view (slot s -> row s//2, col s%2)
+            # Four windows in grid: rows 0-1, cols 0-1
             if len(self.subwindows) >= 4:
-                for s in range(4):
-                    view_idx = self.slot_to_view[s]
-                    self.subwindows[view_idx].show()
-                    row, col = s // 2, s % 2
-                    self.layout_manager.addWidget(self.subwindows[view_idx], row, col, 1, 1)
+                for i in range(4):
+                    self.subwindows[i].show()
+                self.layout_manager.addWidget(self.subwindows[0], 0, 0, 1, 1)
+                self.layout_manager.addWidget(self.subwindows[1], 0, 1, 1, 1)
+                self.layout_manager.addWidget(self.subwindows[2], 1, 0, 1, 1)
+                self.layout_manager.addWidget(self.subwindows[3], 1, 1, 1, 1)
         
         # Explicitly manage grid layout dimensions
         # Set stretch factors only for rows/columns that should exist

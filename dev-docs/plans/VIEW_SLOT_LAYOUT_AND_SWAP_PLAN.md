@@ -73,17 +73,17 @@ This document is a multi-phase implementation plan for making layout switching f
 
 **Tasks:**
 
-- [ ] **1.1** Back up `src/gui/multi_window_layout.py` to `backups/` (or project backup location).
-- [ ] **1.2** In `MultiWindowLayout.__init__`, add `self.slot_to_view: List[int] = [0, 1, 2, 3]` (slot index → view index for 2x2).
-- [ ] **1.3** Add helper `_get_focused_view_index(self) -> int`: if `self.focused_subwindow` is in `self.subwindows`, return its index; else return 0.
-- [ ] **1.4** In `_arrange_subwindows`:
+- [x] **1.1** Back up `src/gui/multi_window_layout.py` to `backups/` (or project backup location).
+- [x] **1.2** In `MultiWindowLayout.__init__`, add `self.slot_to_view: List[int] = [0, 1, 2, 3]` (slot index → view index for 2x2).
+- [x] **1.3** Add helper `_get_focused_view_index(self) -> int`: if `self.focused_subwindow` is in `self.subwindows`, return its index; else return 0.
+- [x] **1.4** In `_arrange_subwindows`:
   - For **1x1:** Show only `subwindows[_get_focused_view_index()]` in the single cell (row 0, col 0). If no subwindows, no-op.
   - For **1x2:** Let `f = _get_focused_view_index()`, `n = (f + 1) % 4`. Show `subwindows[f]` at (0,0) and `subwindows[n]` at (0,1). Ensure both exist (create subwindows if needed already handled above).
   - For **2x1:** Same f and n; show `subwindows[f]` at (0,0) and `subwindows[n]` at (1,0).
   - For **2x2:** For slot s in 0..3, map to (row, col) as (s//2, s%2); add `subwindows[slot_to_view[s]]` at that (row, col).
-- [ ] **1.5** In `set_layout`, after creating/showing subwindows, when setting “focus to first subwindow if no focus”, set focus to the container that is now in the first visible slot, using the same mapping as in `_arrange_subwindows`: for 1x1 use `subwindows[_get_focused_view_index()]`; for 1x2/2x1 use `subwindows[f]` (focused); for 2x2 use `subwindows[slot_to_view[0]]`.
-- [ ] **1.6** Ensure `set_layout` is not skipped when only the focused view changes (e.g. user was in 2x2, clicked pane 2, then pressed 1 for 1x1 — pane 2 should become the single visible one). Change the early return to: **skip** only when `self.current_layout == layout_mode` **and** `(layout_mode != "1x1" and len(self.subwindows) >= num_subwindows)` — i.e. for 1x1 never skip; for other modes skip only when layout is unchanged and we already have enough subwindows.
-- [ ] **1.7** Run the application; test 1x1 (should show focused pane), 1x2/2x1 (focused + next), 2x2 (all four). Change focus then switch to 1x1 and confirm the correct pane is shown.
+- [x] **1.5** In `set_layout`, after creating/showing subwindows, when setting “focus to first subwindow if no focus”, set focus to the container that is now in the first visible slot, using the same mapping as in `_arrange_subwindows`: for 1x1 use `subwindows[_get_focused_view_index()]`; for 1x2/2x1 use `subwindows[f]` (focused); for 2x2 use `subwindows[slot_to_view[0]]`.
+- [x] **1.6** Ensure `set_layout` is not skipped when only the focused view changes (e.g. user was in 2x2, clicked pane 2, then pressed 1 for 1x1 — pane 2 should become the single visible one). Change the early return to: **skip** only when `self.current_layout == layout_mode` **and** `(layout_mode != "1x1" and len(self.subwindows) >= num_subwindows)` — i.e. for 1x1 never skip; for other modes skip only when layout is unchanged and we already have enough subwindows.
+- [x] **1.7** Run the application; test 1x1 (should show focused pane), 1x2/2x1 (focused + next), 2x2 (all four). Change focus then switch to 1x1 and confirm the correct pane is shown.
 
 **Success criteria:** 1x1 shows focused view only; 1x2/2x1 show focused and next in order; 2x2 shows all four in default order. No new UI yet.
 
