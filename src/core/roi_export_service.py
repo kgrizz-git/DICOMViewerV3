@@ -247,17 +247,22 @@ def write_txt(
                     stats, rescale_unit = compute_roi_statistics(
                         roi_item, dataset, use_rescale, roi_manager, dicom_processor
                     )
-                    unit = f" {rescale_unit}" if rescale_unit else ""
-                    lines.append(f"    Mean:     {stats.get('mean', 0):.2f}{unit}")
-                    lines.append(f"    Std Dev:  {stats.get('std', 0):.2f}{unit}")
-                    lines.append(f"    Min:      {stats.get('min', 0):.2f}{unit}")
-                    lines.append(f"    Max:      {stats.get('max', 0):.2f}{unit}")
-                    lines.append(f"    Pixels:   {int(stats.get('count', 0))}")
+                    unit_str = rescale_unit or ""
+                    lines.append(f"    Mean       {stats.get('mean', 0):.2f}    {unit_str}")
+                    lines.append(f"    Std Dev    {stats.get('std', 0):.2f}    {unit_str}")
+                    lines.append(f"    Min        {stats.get('min', 0):.2f}    {unit_str}")
+                    lines.append(f"    Max        {stats.get('max', 0):.2f}    {unit_str}")
+                    lines.append(f"    Pixels     {int(stats.get('count', 0))}    ")
                     area_mm2 = stats.get("area_mm2")
                     area_px = stats.get("area_pixels", 0)
                     if area_mm2 is not None:
-                        lines.append(f"    Area (mm²): {area_mm2:.2f}")
-                    lines.append(f"    Area (pixels): {area_px:.1f}")
+                        if area_mm2 >= 100.0:
+                            area_cm2 = area_mm2 / 100.0
+                            lines.append(f"    Area       {area_cm2:.2f}    cm²")
+                        else:
+                            lines.append(f"    Area       {area_mm2:.2f}    mm²")
+                    else:
+                        lines.append(f"    Area       {area_px:.1f}    pixels")
                 lines.append("")
             cross_idx = 0
             for cross_item in crosshairs:
@@ -265,13 +270,13 @@ def write_txt(
                 lines.append(f"  Crosshair {cross_idx}")
                 if dataset:
                     data = get_crosshair_export_data(cross_item, dataset)
-                    lines.append(f"    Pixel X:   {data['pixel_x']}")
-                    lines.append(f"    Pixel Y:   {data['pixel_y']}")
-                    lines.append(f"    Slice Index (0-based): {data['slice_index']}")
-                    lines.append(f"    Pixel Value: {data['pixel_value_str']}")
-                    lines.append(f"    Patient X (mm): {_format_float(data['patient_x'])}")
-                    lines.append(f"    Patient Y (mm): {_format_float(data['patient_y'])}")
-                    lines.append(f"    Patient Z (mm): {_format_float(data['patient_z'])}")
+                    lines.append(f"    Pixel X        {data['pixel_x']}    ")
+                    lines.append(f"    Pixel Y        {data['pixel_y']}    ")
+                    lines.append(f"    Slice Index    {data['slice_index']}    ")
+                    lines.append(f"    Pixel Value    {data['pixel_value_str']}    ")
+                    lines.append(f"    Patient X (mm) {_format_float(data['patient_x'])}    ")
+                    lines.append(f"    Patient Y (mm) {_format_float(data['patient_y'])}    ")
+                    lines.append(f"    Patient Z (mm) {_format_float(data['patient_z'])}    ")
                 lines.append("")
         lines.append("")
 
@@ -474,21 +479,26 @@ def write_xlsx(
                     stats, rescale_unit = compute_roi_statistics(
                         roi_item, dataset, use_rescale, roi_manager, dicom_processor
                     )
-                    unit = f" {rescale_unit}" if rescale_unit else ""
-                    ws.cell(row=row, column=1, value="Mean"); ws.cell(row=row, column=2, value=f"{stats.get('mean', 0):.2f}{unit}")
+                    unit_str = rescale_unit or ""
+                    ws.cell(row=row, column=1, value="Mean"); ws.cell(row=row, column=2, value=round(stats.get('mean', 0), 2)); ws.cell(row=row, column=3, value=unit_str)
                     row += 1
-                    ws.cell(row=row, column=1, value="Std Dev"); ws.cell(row=row, column=2, value=f"{stats.get('std', 0):.2f}{unit}")
+                    ws.cell(row=row, column=1, value="Std Dev"); ws.cell(row=row, column=2, value=round(stats.get('std', 0), 2)); ws.cell(row=row, column=3, value=unit_str)
                     row += 1
-                    ws.cell(row=row, column=1, value="Min"); ws.cell(row=row, column=2, value=f"{stats.get('min', 0):.2f}{unit}")
+                    ws.cell(row=row, column=1, value="Min"); ws.cell(row=row, column=2, value=round(stats.get('min', 0), 2)); ws.cell(row=row, column=3, value=unit_str)
                     row += 1
-                    ws.cell(row=row, column=1, value="Max"); ws.cell(row=row, column=2, value=f"{stats.get('max', 0):.2f}{unit}")
+                    ws.cell(row=row, column=1, value="Max"); ws.cell(row=row, column=2, value=round(stats.get('max', 0), 2)); ws.cell(row=row, column=3, value=unit_str)
                     row += 1
-                    ws.cell(row=row, column=1, value="Pixels"); ws.cell(row=row, column=2, value=int(stats.get("count", 0)))
-                    row += 1
-                    ws.cell(row=row, column=1, value="Area (pixels)"); ws.cell(row=row, column=2, value=stats.get("area_pixels", 0))
+                    ws.cell(row=row, column=1, value="Pixels"); ws.cell(row=row, column=2, value=int(stats.get("count", 0))); ws.cell(row=row, column=3, value="")
                     row += 1
                     area_mm2 = stats.get("area_mm2")
-                    ws.cell(row=row, column=1, value="Area (mm²)"); ws.cell(row=row, column=2, value=f"{area_mm2:.2f}" if area_mm2 is not None else "")
+                    area_px = stats.get("area_pixels", 0)
+                    if area_mm2 is not None:
+                        if area_mm2 >= 100.0:
+                            ws.cell(row=row, column=1, value="Area"); ws.cell(row=row, column=2, value=round(area_mm2 / 100.0, 2)); ws.cell(row=row, column=3, value="cm²")
+                        else:
+                            ws.cell(row=row, column=1, value="Area"); ws.cell(row=row, column=2, value=round(area_mm2, 2)); ws.cell(row=row, column=3, value="mm²")
+                    else:
+                        ws.cell(row=row, column=1, value="Area"); ws.cell(row=row, column=2, value=area_px); ws.cell(row=row, column=3, value="pixels")
                     row += 1
             for cross_idx, cross_item in enumerate(crosshairs, start=1):
                 ws.cell(row=row, column=1, value=f"  Crosshair {cross_idx}")
@@ -496,19 +506,19 @@ def write_xlsx(
                 row += 1
                 if dataset:
                     data = get_crosshair_export_data(cross_item, dataset)
-                    ws.cell(row=row, column=1, value="Pixel X"); ws.cell(row=row, column=2, value=data["pixel_x"])
+                    ws.cell(row=row, column=1, value="Pixel X"); ws.cell(row=row, column=2, value=data["pixel_x"]); ws.cell(row=row, column=3, value="")
                     row += 1
-                    ws.cell(row=row, column=1, value="Pixel Y"); ws.cell(row=row, column=2, value=data["pixel_y"])
+                    ws.cell(row=row, column=1, value="Pixel Y"); ws.cell(row=row, column=2, value=data["pixel_y"]); ws.cell(row=row, column=3, value="")
                     row += 1
-                    ws.cell(row=row, column=1, value="Slice Index (0-based)"); ws.cell(row=row, column=2, value=data["slice_index"])
+                    ws.cell(row=row, column=1, value="Slice Index (0-based)"); ws.cell(row=row, column=2, value=data["slice_index"]); ws.cell(row=row, column=3, value="")
                     row += 1
-                    ws.cell(row=row, column=1, value="Pixel Value"); ws.cell(row=row, column=2, value=data["pixel_value_str"])
+                    ws.cell(row=row, column=1, value="Pixel Value"); ws.cell(row=row, column=2, value=data["pixel_value_str"]); ws.cell(row=row, column=3, value="")
                     row += 1
-                    ws.cell(row=row, column=1, value="Patient X (mm)"); ws.cell(row=row, column=2, value=_format_float(data["patient_x"]))
+                    ws.cell(row=row, column=1, value="Patient X (mm)"); ws.cell(row=row, column=2, value=_format_float(data["patient_x"])); ws.cell(row=row, column=3, value="")
                     row += 1
-                    ws.cell(row=row, column=1, value="Patient Y (mm)"); ws.cell(row=row, column=2, value=_format_float(data["patient_y"]))
+                    ws.cell(row=row, column=1, value="Patient Y (mm)"); ws.cell(row=row, column=2, value=_format_float(data["patient_y"])); ws.cell(row=row, column=3, value="")
                     row += 1
-                    ws.cell(row=row, column=1, value="Patient Z (mm)"); ws.cell(row=row, column=2, value=_format_float(data["patient_z"]))
+                    ws.cell(row=row, column=1, value="Patient Z (mm)"); ws.cell(row=row, column=2, value=_format_float(data["patient_z"])); ws.cell(row=row, column=3, value="")
                     row += 1
         row += 1
 
