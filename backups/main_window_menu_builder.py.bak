@@ -239,10 +239,6 @@ def build_menu_bar(main_window) -> None:
     histogram_action.triggered.connect(main_window.histogram_requested.emit)
     tools_menu.addAction(histogram_action)
 
-    export_roi_stats_action = QAction("Export &ROI Statistics...", main_window)
-    export_roi_stats_action.triggered.connect(main_window.export_roi_statistics_requested.emit)
-    tools_menu.addAction(export_roi_stats_action)
-
     # --- Help menu ---
     help_menu = menubar.addMenu("&Help")
 

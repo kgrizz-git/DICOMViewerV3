@@ -353,7 +353,7 @@ class SubwindowLifecycleController:
                     image_viewer.zoom_changed.connect(view_state_manager.handle_zoom_changed)
 
     def connect_all_subwindow_context_menu_signals(self) -> None:
-        """Connect context menu and export ROI statistics signals for all subwindows."""
+        """Connect context menu scroll wheel mode signals for all subwindows."""
         app = self.app
         subwindows = app.multi_window_layout.get_all_subwindows()
         for idx, subwindow in enumerate(subwindows):
@@ -362,7 +362,6 @@ class SubwindowLifecycleController:
                 image_viewer.context_menu_scroll_wheel_mode_changed.connect(
                     app.mouse_mode_handler.handle_context_menu_scroll_wheel_mode_changed
                 )
-                image_viewer.export_roi_statistics_requested.connect(app._open_export_roi_statistics)
 
     def disconnect_focused_subwindow_signals(self) -> None:
         """Disconnect signals from previously focused subwindow."""

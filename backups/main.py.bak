@@ -1379,10 +1379,7 @@ class DICOMViewerApp(QObject):
         
         # Histogram (shared)
         self.main_window.histogram_requested.connect(self.dialog_coordinator.open_histogram)
-
-        # Export ROI Statistics (shared – main window menu entry)
-        self.main_window.export_roi_statistics_requested.connect(self._open_export_roi_statistics)
-
+        
         # Export (shared)
         self.main_window.export_requested.connect(self._open_export)
         self.main_window.export_screenshots_requested.connect(self._open_export_screenshots)
@@ -1984,10 +1981,6 @@ class DICOMViewerApp(QObject):
     def _open_tag_export(self) -> None:
         """Handle Tag Export dialog request."""
         self.dialog_coordinator.open_tag_export()
-
-    def _open_export_roi_statistics(self) -> None:
-        """Handle Export ROI Statistics request (from menu or image viewer context menu)."""
-        self.dialog_coordinator.open_export_roi_statistics(self.subwindow_managers)
     
     def _open_export(self) -> None:
         """Handle Export dialog request. Resolution options are in the dialog (Native / 1.5× / 2× / 4×)."""
