@@ -55,15 +55,15 @@ class ROIStatisticsPanel(QWidget):
         self.title_label.setStyleSheet("font-weight: bold; font-size: 12pt;")
         layout.addWidget(self.title_label)
 
-        # Statistics table
+        # Statistics table: Statistic | Value (numbers only) | Unit
         self.stats_table = QTableWidget()
-        self.stats_table.setColumnCount(2)
-        self.stats_table.setHorizontalHeaderLabels(["Statistic", "Value"])
+        self.stats_table.setColumnCount(3)
+        self.stats_table.setHorizontalHeaderLabels(["Statistic", "Value", "Unit"])
         self.stats_table.setRowCount(6)
         self.stats_table.verticalHeader().setVisible(False)
         self.stats_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
 
-        # Allow multi-row selection (row-oriented so both columns copy together)
+        # Allow multi-row selection (row-oriented so all columns copy together)
         self.stats_table.setSelectionBehavior(
             QAbstractItemView.SelectionBehavior.SelectRows
         )
@@ -75,6 +75,7 @@ class ROIStatisticsPanel(QWidget):
         header = self.stats_table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
 
         # Set row labels
         self.stats_table.setItem(0, 0, QTableWidgetItem("Mean"))
@@ -84,9 +85,10 @@ class ROIStatisticsPanel(QWidget):
         self.stats_table.setItem(4, 0, QTableWidgetItem("Pixels"))
         self.stats_table.setItem(5, 0, QTableWidgetItem("Area"))
 
-        # Initialize with empty values
+        # Initialize with empty values and units
         for i in range(6):
             self.stats_table.setItem(i, 1, QTableWidgetItem(""))
+            self.stats_table.setItem(i, 2, QTableWidgetItem(""))
 
         # Calculate minimum height to show all 6 rows without scrolling
         # Header height + (row height * 6 rows) + some padding
@@ -113,8 +115,7 @@ class ROIStatisticsPanel(QWidget):
         system clipboard as tab-separated plain text.
 
         If the panel is empty (no ROI selected), does nothing.
-        Values are read from the displayed table cells so units (e.g. HU,
-        cm²) are preserved exactly as shown.
+        Format: Statistic, Value (numbers only), Unit in three columns.
         """
         # Do nothing when panel is empty
         if self.current_statistics is None:
@@ -146,9 +147,11 @@ class ROIStatisticsPanel(QWidget):
         for row in selected_rows:
             col0_item = self.stats_table.item(row, 0)
             col1_item = self.stats_table.item(row, 1)
+            col2_item = self.stats_table.item(row, 2)
             col0 = col0_item.text() if col0_item else ""
             col1 = col1_item.text() if col1_item else ""
-            lines.append(f"{col0}\t{col1}")
+            col2 = col2_item.text() if col2_item else ""
+            lines.append(f"{col0}\t{col1}\t{col2}")
 
         text = "\n".join(lines)
         QApplication.clipboard().setText(text)
@@ -191,34 +194,40 @@ class ROIStatisticsPanel(QWidget):
         else:
             self.title_label.setText("ROI Statistics")
 
-        # Format values with units if rescale_type is provided
-        unit_suffix = f" {rescale_type}" if rescale_type else ""
+        # Format values (numbers only in Value column) and units (in Unit column)
+        rescale_unit = rescale_type or ""
 
-        # Update table
-        self.stats_table.setItem(0, 1, QTableWidgetItem(f"{statistics.get('mean', 0):.2f}{unit_suffix}"))
-        self.stats_table.setItem(1, 1, QTableWidgetItem(f"{statistics.get('std', 0):.2f}{unit_suffix}"))
-        self.stats_table.setItem(2, 1, QTableWidgetItem(f"{statistics.get('min', 0):.2f}{unit_suffix}"))
-        self.stats_table.setItem(3, 1, QTableWidgetItem(f"{statistics.get('max', 0):.2f}{unit_suffix}"))
+        # Update table: column 1 = value (number only), column 2 = unit
+        self.stats_table.setItem(0, 1, QTableWidgetItem(f"{statistics.get('mean', 0):.2f}"))
+        self.stats_table.setItem(0, 2, QTableWidgetItem(rescale_unit))
+        self.stats_table.setItem(1, 1, QTableWidgetItem(f"{statistics.get('std', 0):.2f}"))
+        self.stats_table.setItem(1, 2, QTableWidgetItem(rescale_unit))
+        self.stats_table.setItem(2, 1, QTableWidgetItem(f"{statistics.get('min', 0):.2f}"))
+        self.stats_table.setItem(2, 2, QTableWidgetItem(rescale_unit))
+        self.stats_table.setItem(3, 1, QTableWidgetItem(f"{statistics.get('max', 0):.2f}"))
+        self.stats_table.setItem(3, 2, QTableWidgetItem(rescale_unit))
         self.stats_table.setItem(4, 1, QTableWidgetItem(f"{statistics.get('count', 0)}"))
+        self.stats_table.setItem(4, 2, QTableWidgetItem(""))
 
-        # Format area with appropriate units
+        # Area: value and unit in separate columns
         area_mm2 = statistics.get('area_mm2')
         area_pixels = statistics.get('area_pixels', 0.0)
         if area_mm2 is not None:
-            # Display in mm² or cm² (if >= 100 mm²)
             if area_mm2 >= 100.0:
                 area_cm2 = area_mm2 / 100.0
-                area_text = f"{area_cm2:.2f} cm²"
+                self.stats_table.setItem(5, 1, QTableWidgetItem(f"{area_cm2:.2f}"))
+                self.stats_table.setItem(5, 2, QTableWidgetItem("cm²"))
             else:
-                area_text = f"{area_mm2:.2f} mm²"
+                self.stats_table.setItem(5, 1, QTableWidgetItem(f"{area_mm2:.2f}"))
+                self.stats_table.setItem(5, 2, QTableWidgetItem("mm²"))
         else:
-            # Display in pixels
-            area_text = f"{area_pixels:.1f} pixels"
-        self.stats_table.setItem(5, 1, QTableWidgetItem(area_text))
+            self.stats_table.setItem(5, 1, QTableWidgetItem(f"{area_pixels:.1f}"))
+            self.stats_table.setItem(5, 2, QTableWidgetItem("pixels"))
 
     def clear_statistics(self) -> None:
         """Clear displayed statistics."""
         for i in range(6):
             self.stats_table.setItem(i, 1, QTableWidgetItem(""))
+            self.stats_table.setItem(i, 2, QTableWidgetItem(""))
         self.current_statistics = None
         self.title_label.setText("ROI Statistics")
