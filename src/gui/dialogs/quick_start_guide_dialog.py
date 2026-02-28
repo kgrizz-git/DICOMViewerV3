@@ -621,6 +621,7 @@ class QuickStartGuideDialog(QDialog):
                 <li>Status bar updates in real-time during file loading, showing number of studies, series, and files loaded</li>
                 <li>Overlay metadata can be customized and toggled on/off via View → Overlay Configuration or with the <code>Spacebar</code> key</li>
                 <li>Export selected DICOM tags to Excel or CSV via Tools → Export Tags</li>
+                <li>Export ROI statistics and crosshair coordinates to TXT, CSV, or XLSX via <strong>Tools → Export ROI Statistics…</strong> or the image context menu (right-click on image)</li>
                 <li>Settings can be adjusted via Tools → Settings</li>
                 <li><strong>Annotations:</strong> The viewer automatically displays DICOM annotations including Presentation States, Key Object Selection Documents, and embedded overlays/graphic annotations</li>
             </ul>
@@ -700,6 +701,13 @@ class QuickStartGuideDialog(QDialog):
                     <li>Export selected tags to Excel (.xlsx) or CSV format</li>
                     <li>Choose which tags to export</li>
                     <li>Export tags from multiple slices or entire series</li>
+                </ul>
+            </li>
+            <li><strong>Export ROI Statistics:</strong> Access via <strong>Tools → Export ROI Statistics…</strong> or right-click on the image → Export ROI Statistics…
+                <ul>
+                    <li>Export ROI statistics (ellipse/rectangle) and crosshair coordinates to TXT, CSV, or XLSX</li>
+                    <li>Select one or more series; optional use of rescaled values (e.g. HU)</li>
+                    <li>Default filename uses Accession Number or Patient ID plus " ROI stats"</li>
                 </ul>
             </li>
             <li><strong>Tag Export Presets:</strong> Save and reuse named sets of DICOM tags for export

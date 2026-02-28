@@ -29,7 +29,6 @@ from gui.dialogs.quick_start_guide_dialog import QuickStartGuideDialog
 from gui.dialogs.histogram_dialog import HistogramDialog
 from gui.dialogs.about_this_file_dialog import AboutThisFileDialog
 from gui.dialogs.fusion_technical_doc_dialog import FusionTechnicalDocDialog
-from gui.dialogs.export_roi_statistics_dialog import ExportROIStatisticsDialog
 from gui.main_window import MainWindow
 from utils.config_manager import ConfigManager
 from PySide6.QtWidgets import QMessageBox
@@ -319,35 +318,6 @@ class DialogCoordinator:
         if dialog is not None and dialog.isVisible():
             dialog.update_histogram()
     
-    def open_export_roi_statistics(self, subwindow_managers: dict) -> None:
-        """
-        Open the Export ROI Statistics dialog.
-
-        Guards on empty studies (shows a message and returns early), otherwise
-        instantiates ExportROIStatisticsDialog and runs it modally.
-
-        Args:
-            subwindow_managers: Dict of {idx: managers_dict} from main app,
-                each entry has 'roi_manager' and 'crosshair_manager' keys.
-        """
-        current_studies = self.get_current_studies()
-        if not current_studies:
-            from PySide6.QtWidgets import QMessageBox
-            QMessageBox.warning(
-                self.main_window,
-                "No Data Loaded",
-                "Please load DICOM files before exporting ROI statistics."
-            )
-            return
-
-        dialog = ExportROIStatisticsDialog(
-            current_studies=current_studies,
-            subwindow_managers=subwindow_managers,
-            config_manager=self.config_manager,
-            parent=self.main_window
-        )
-        dialog.exec()
-
     def open_about_this_file(self, current_dataset: Optional[Dataset] = None, file_path: Optional[str] = None) -> None:
         """
         Handle About This File dialog request.

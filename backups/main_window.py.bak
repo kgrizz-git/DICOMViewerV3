@@ -118,7 +118,6 @@ class MainWindow(QMainWindow):
     smooth_when_zoomed_toggled = Signal(bool)  # Emitted when smooth-when-zoomed is toggled (True = enabled)
     about_this_file_requested = Signal()  # Emitted when About this File is requested
     histogram_requested = Signal()  # Emitted when Histogram dialog is requested
-    export_roi_statistics_requested = Signal()  # Emitted when Export ROI Statistics is requested
     export_customizations_requested = Signal()  # Emitted when Export Customizations is requested
     import_customizations_requested = Signal()  # Emitted when Import Customizations is requested
     export_tag_presets_requested = Signal()  # Emitted when Export Tag Presets is requested
