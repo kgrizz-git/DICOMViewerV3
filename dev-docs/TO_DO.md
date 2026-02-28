@@ -7,12 +7,8 @@
 
 - [ ] Run assessment templates
 - [ ] RUN SMOKE TESTS for exporting - check various export options, magnified, with ROIs and text, without, etc.
-- [ ] When the Text annotation mode is selected, "Text" does not get highlighted on the menu bar
 - [ ] Could consider more sophisticated smoothing but would need to use PIL rather than Qt (" If you want something “better” (e.g. bicubic or Lanczos), you’d have to do the resize yourself (e.g. with PIL/NumPy) and then hand the result to Qt for display.")
 - [ ] Build a technical guide
-- [x] Make it possible to copy and to export ROI statistics.
-    - [x] Copy - user can select the ROI statistics in the right pane and copy them (Ctrl+C or right-click Copy). Full table or selected rows; units preserved.
-    - [x] Export - "Export ROI Statistics..." in Tools menu and image context menu. Dialog: format (TXT, CSV, XLSX), series selection with annotation counts, rescale option, file path. Default filename: Accession number or Patient ID plus " ROI stats". Stats grouped by series → slice → ROI/crosshair. Ellipse/rectangle stats and crosshair pixel + patient coordinates. Implementation complete; see dev-docs/plans/ROI_STATISTICS_COPY_EXPORT_PLAN.md. Manual verification recommended.
 - [ ] Double check fusion
     - [ ] Code not very responsive on Parallels with 3D fusion
     - [ ] Check visually accuracy on usual PET/CT study, compare 2D/3D modes
