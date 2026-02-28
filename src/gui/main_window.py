@@ -741,7 +741,9 @@ class MainWindow(QMainWindow):
             self.mouse_mode_measure_action,
             self.mouse_mode_text_annotation_action,
             self.mouse_mode_arrow_annotation_action,
+            self.mouse_mode_crosshair_action,
             self.mouse_mode_zoom_action,
+            self.mouse_mode_magnifier_action,
             self.mouse_mode_pan_action,
             self.mouse_mode_auto_window_level_action
         ]
@@ -764,6 +766,10 @@ class MainWindow(QMainWindow):
             self.mouse_mode_rectangle_roi_action.setChecked(True)
         elif mode == "measure":
             self.mouse_mode_measure_action.setChecked(True)
+        elif mode == "text_annotation":
+            self.mouse_mode_text_annotation_action.setChecked(True)
+        elif mode == "arrow_annotation":
+            self.mouse_mode_arrow_annotation_action.setChecked(True)
         elif mode == "crosshair":
             self.mouse_mode_crosshair_action.setChecked(True)
         elif mode == "zoom":
