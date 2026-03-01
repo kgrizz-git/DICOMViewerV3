@@ -19,6 +19,7 @@
 - [ ] Try to make code faster
 - [ ] Make it possible to choose which subwindows to expand/show when switching layouts instead of always showing subwindow 1 in 1x1 mode, or 1 and 2 in 2x1 or 2x1 mode. Could try making it possible to swap subwindows (eg, right click in subwindow X and select Swap with subwindow Y), or probably better would be to do something like to differentiate between the windows and the contents - maybe call those "views"? E.g., we could have 4 "views" - for now let's call them View A-D - which by default/initially are assigned View A in subwindow 1, view B in subwindow 2, etc., but which could be reassigned...
     - goals are: 1, make it possible to swap contents or placing of subwindows and/or be able to assign any view to any subwindow; 2, make it possible to magnify any subwindow to full 1x1 display; 3, make switching to 1x2 or 2x1 display use the currently focused subwindow as the "first" one shown and use the "next" subwindow as the other one
+    * CURRENTLY AFTER PHASE 1 - WINDOW ASSIGNMENTS GETTING MESSED UP, IMAGE DRIFTING, CHANGING FOCUS ON MULTI LAYOUTS CAN CAUSE FOCUSED WINDOW TO JUMP TO FIRST DISPLAYED WINDOW (ALL SHIFT PLACES)
     - [ ] And make double-clicking on a subwindow expand it so it becomes a 1x1 layout showing only that subwindow
 - [ ] Allow syncing slices
 - [ ] Show line for current slice location on different views (eg axial slice in one window show as line on a coronal view in another window)

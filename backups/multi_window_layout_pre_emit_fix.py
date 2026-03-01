@@ -113,11 +113,6 @@ class MultiWindowLayout(QWidget):
         if layout_mode not in ["1x1", "1x2", "2x1", "2x2"]:
             return
         
-        # Store previous layout so we only emit layout_changed when the mode actually changed.
-        # This prevents the feedback loop: set_layout -> emit -> set_layout_mode -> emit ->
-        # deferred set_layout again (for 1x1 we never early-return, so we used to always re-emit).
-        previous_layout = getattr(self, 'current_layout', None)
-        
         # Debug: trace who called set_layout and with what focus (for shuffle/drift investigation)
         import traceback
         focused_idx = self._get_focused_view_index()
@@ -156,9 +151,8 @@ class MultiWindowLayout(QWidget):
             if first_container is not None:
                 self.set_focused_subwindow(first_container)
         
-        # Emit only when layout mode actually changed to prevent feedback loop.
-        if previous_layout != layout_mode:
-            self.layout_changed.emit(layout_mode)
+        # Emit signal
+        self.layout_changed.emit(layout_mode)
     
     def _get_num_subwindows(self, layout_mode: LayoutMode) -> int:
         """

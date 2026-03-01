@@ -24,6 +24,7 @@ Requirements:
 
 from PySide6.QtCore import QPointF
 from pydicom.dataset import Dataset
+from datetime import datetime
 from typing import Optional, Dict, Callable, List, Tuple
 import numpy as np
 from core.dicom_processor import DICOMProcessor
@@ -588,6 +589,9 @@ class ViewStateManager:
             center: Window center
             width: Window width
         """
+        # Debug: trace which view receives W/L (investigate W/L mixed between views)
+        ts = datetime.now().strftime("%H:%M:%S.%f")
+        print(f"[DEBUG-LAYOUT] [{ts}] handle_window_changed: view_state_manager id={id(self)} image_viewer id={id(self.image_viewer)} center={center:.2f} width={width:.2f}")
         # DEBUG: Print received values and current state
         # print(f"[DEBUG-WL] handle_window_changed called: center={center:.2f}, width={width:.2f}")
         # print(f"[DEBUG-WL]   Current stored: center={self.current_window_center}, width={self.current_window_width}")
@@ -864,12 +868,14 @@ class ViewStateManager:
         Captures the current viewport center in scene coordinates before the resize
         completes, so we can restore it after resize to maintain the centered view.
         """
-        # Capture current viewport center in scene coordinates before resize
+        # Debug: trace which viewer captures center (drift investigation)
+        scene_center = None
         if self.image_viewer.image_item is not None:
             scene_center = self.image_viewer.get_viewport_center_scene()
             if scene_center is not None:
                 self.saved_scene_center = scene_center
-                # print(f"[DEBUG-LAYOUT] handle_viewport_resizing: Captured scene center = {scene_center}")
+        ts = datetime.now().strftime("%H:%M:%S.%f")
+        print(f"[DEBUG-LAYOUT] [{ts}] handle_viewport_resizing: view_state_manager id={id(self)} image_viewer id={id(self.image_viewer)} saved_scene_center={scene_center}")
     
     def handle_viewport_resized(self) -> None:
         """
@@ -890,8 +896,11 @@ class ViewStateManager:
         is_focused = True  # Default to True if not in a subwindow container
         if isinstance(parent, SubWindowContainer):
             is_focused = parent.is_focused
-        
-        # Rescale image to fill viewport and restore center if we captured a scene center point
+        # Debug: trace which viewer gets viewport_resized and whether center is restored (drift investigation)
+        had_center = self.saved_scene_center is not None
+        center_val = self.saved_scene_center
+        ts = datetime.now().strftime("%H:%M:%S.%f")
+        print(f"[DEBUG-LAYOUT] [{ts}] handle_viewport_resized: view_state_manager id={id(self)} image_viewer id={id(self.image_viewer)} is_focused={is_focused} had_saved_scene_center={had_center} center={center_val}")
         # This works for splitter moves, series navigator show/hide, and layout changes
         if self.saved_scene_center is not None and self.image_viewer.image_item is not None:
             # print(f"[DEBUG-LAYOUT] handle_viewport_resized: Restoring scene center = {self.saved_scene_center}")
