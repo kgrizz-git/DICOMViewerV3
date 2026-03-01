@@ -52,8 +52,6 @@ class SubwindowLifecycleController:
         # Store histogram slot per image_viewer so we can disconnect before reconnecting
         # (connect_subwindow_signals is called on every layout change; without disconnect we accumulate duplicates)
         self._histogram_slots: Dict[int, Any] = {}  # id(image_viewer) -> callable
-        # Single restartable timer for 100ms viewport-resized callback; coalesces rapid layout changes.
-        self._viewport_resized_timer: Optional[QTimer] = None
 
     def get_subwindow_dataset(self, idx: int) -> Optional[Dataset]:
         """Get current dataset for a subwindow."""
@@ -762,35 +760,6 @@ class SubwindowLifecycleController:
         app._update_series_navigator_highlighting()
         app._update_about_this_file_dialog()
 
-    def _trigger_viewport_resized(self) -> None:
-        """Run viewport_resized for the focused subwindow and sync cursor. Used by the coalesced 100ms timer."""
-        app = self.app
-        subwindows_list = app.multi_window_layout.get_all_subwindows()
-        focused = app.multi_window_layout.get_focused_subwindow()
-        if focused is not None and focused.isVisible() and focused in subwindows_list:
-            idx = subwindows_list.index(focused)
-            # Debug: trace which subwindow gets viewport_resized at 100ms (drift investigation)
-            ts = datetime.now().strftime("%H:%M:%S.%f")
-            print(f"[DEBUG-LAYOUT] [{ts}] trigger_viewport_resized (100ms): focused_idx={idx} view_state_manager id={id(app.subwindow_managers.get(idx, {}).get('view_state_manager')) if idx in app.subwindow_managers else None}")
-            if idx in app.subwindow_managers:
-                managers = app.subwindow_managers[idx]
-                if 'view_state_manager' in managers:
-                    managers['view_state_manager'].handle_viewport_resized()
-        # Sync mouse mode (cursor) to all visible ImageViewers so cursor doesn't flicker
-        current_mode = app.main_window.get_current_mouse_mode() if hasattr(app.main_window, 'get_current_mouse_mode') else "pan"
-        tool_cursor = None
-        for subwindow in subwindows_list:
-            if subwindow and subwindow.isVisible() and subwindow.image_viewer:
-                subwindow.image_viewer.set_mouse_mode(current_mode)
-                subwindow.setCursor(subwindow.image_viewer.cursor())
-                if tool_cursor is None:
-                    tool_cursor = subwindow.image_viewer.cursor()
-        if tool_cursor is not None:
-            layout = app.multi_window_layout
-            layout.setCursor(tool_cursor)
-            if layout.layout_widget is not None:
-                layout.layout_widget.setCursor(tool_cursor)
-
     def on_layout_changed(self, layout_mode: str) -> None:
         """Handle layout mode change from multi-window layout."""
         app = self.app
@@ -829,14 +798,34 @@ class SubwindowLifecycleController:
             if layout.layout_widget is not None:
                 layout.layout_widget.setCursor(tool_cursor)
 
-        # Coalesce: use a single restartable timer so only the latest layout change gets the 100ms callback.
-        if self._viewport_resized_timer is None:
-            self._viewport_resized_timer = QTimer()
-            self._viewport_resized_timer.setSingleShot(True)
-            self._viewport_resized_timer.timeout.connect(self._trigger_viewport_resized)
-        if self._viewport_resized_timer.isActive():
-            self._viewport_resized_timer.stop()
-        self._viewport_resized_timer.start(100)
+        def trigger_viewport_resized():
+            subwindows_list = app.multi_window_layout.get_all_subwindows()
+            # Only run viewport_resized for the focused subwindow to prevent drift
+            # (multiple fit_to_view/centerOn on visible panes can fight and cause upward drift)
+            focused = app.multi_window_layout.get_focused_subwindow()
+            if focused is not None and focused.isVisible() and focused in subwindows_list:
+                idx = subwindows_list.index(focused)
+                # Debug: trace which subwindow gets viewport_resized at 100ms (drift investigation)
+                print(f"[DEBUG-LAYOUT] trigger_viewport_resized (100ms): focused_idx={idx} view_state_manager id={id(app.subwindow_managers.get(idx, {}).get('view_state_manager')) if idx in app.subwindow_managers else None}")
+                if idx in app.subwindow_managers:
+                    managers = app.subwindow_managers[idx]
+                    if 'view_state_manager' in managers:
+                        managers['view_state_manager'].handle_viewport_resized()
+            # Sync mouse mode (cursor) to all visible ImageViewers so cursor doesn't flicker
+            current_mode = app.main_window.get_current_mouse_mode() if hasattr(app.main_window, 'get_current_mouse_mode') else "pan"
+            tool_cursor = None
+            for subwindow in subwindows_list:
+                if subwindow and subwindow.isVisible() and subwindow.image_viewer:
+                    subwindow.image_viewer.set_mouse_mode(current_mode)
+                    subwindow.setCursor(subwindow.image_viewer.cursor())
+                    if tool_cursor is None:
+                        tool_cursor = subwindow.image_viewer.cursor()
+            if tool_cursor is not None:
+                layout = app.multi_window_layout
+                layout.setCursor(tool_cursor)
+                if layout.layout_widget is not None:
+                    layout.layout_widget.setCursor(tool_cursor)
+        QTimer.singleShot(100, trigger_viewport_resized)
 
     def on_main_window_layout_changed(self, layout_mode: str) -> None:
         """Handle layout mode change from main window menu.

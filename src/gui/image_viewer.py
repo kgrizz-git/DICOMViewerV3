@@ -892,6 +892,21 @@ class ImageViewer(QGraphicsView):
             # Ensure scrollbars are enabled for ScrollHandDrag to work
             self.horizontalScrollBar().setEnabled(True)
             self.verticalScrollBar().setEnabled(True)
+
+        # Keep SubWindowContainer cursor in sync so hit-test on container border shows tool cursor.
+        # Also set cursor on the layout parent chain (layout_widget, MultiWindowLayout) so in 1x1
+        # any background region shows the tool cursor and doesn't flicker to arrow.
+        from gui.sub_window_container import SubWindowContainer
+        parent = self.parent()
+        if isinstance(parent, SubWindowContainer):
+            parent.setCursor(self.cursor())
+            # Propagate to layout widget and MultiWindowLayout (parent of layout_widget)
+            layout_parent = parent.parent()
+            if layout_parent is not None:
+                layout_parent.setCursor(self.cursor())
+                layout_grandparent = layout_parent.parent()
+                if layout_grandparent is not None:
+                    layout_grandparent.setCursor(self.cursor())
     
     def set_roi_drawing_mode(self, mode: Optional[str]) -> None:
         """

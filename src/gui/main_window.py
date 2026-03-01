@@ -29,6 +29,7 @@ from typing import Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     from gui.image_viewer import ImageViewer
 from pathlib import Path
+from datetime import datetime
 import sys
 import os
 import urllib.parse
@@ -1236,6 +1237,12 @@ class MainWindow(QMainWindow):
         Args:
             layout_mode: Layout mode ("1x1", "1x2", "2x1", "2x2")
         """
+        # Debug: trace layout change source (investigate "layout changes by itself")
+        import traceback
+        stack = traceback.extract_stack()[-5:-1]
+        callers = " <- ".join([f"{f.name}:{f.lineno}" for f in stack])
+        ts = datetime.now().strftime("%H:%M:%S.%f")
+        print(f"[DEBUG-LAYOUT] [{ts}] main_window._on_layout_changed: mode={layout_mode!r} callers={callers}")
         # Update menu checkmarks
         self.layout_1x1_action.setChecked(layout_mode == "1x1")
         self.layout_1x2_action.setChecked(layout_mode == "1x2")
