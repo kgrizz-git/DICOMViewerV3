@@ -23,7 +23,10 @@
     - [x] And make double-clicking on a subwindow expand it so it becomes a 1x1 layout showing only that subwindow (Done: double-click expand + double-click in 1x1 reverts to previous layout; right-click → Swap in 2x2)
     - [ ] Maybe label windows? And then allow swapping windows in any layout
     - sometimes when swapping layouts from 2x2 to 2x1 or 1x2 an unfocused window does not resize appropriately (debugging added: set DICOM_DEBUG_LAYOUT_RESIZE=1 to log sizes)
-- ** Need to find a better way of referring to subwindows/views for swapping - probably just use "Swap with Subwindow 1" etc where those numbers always refer to the same order (1,2,3,4 = top left, top right, bottom left, bottom right)
+- swap should be referenced based on current window assignments, not view A, etc. so it should say "Swap with Window 1", etc, where 1,2,3,4 always refer to what would be in top-left, top-right, bottom-left, bottom-right on 2x2 layout. also when we go to 1x2 or 2x1 layout, it should always show the current focused window and the following window according to this scheme, not the next "view".
+- make swap work on all layouts but don't make focus follow view, instead make it stay on current window
+- add a very small 2x2 thumbnail somewhere so can see all window assignments even when not in 2x2 mode? perhaps far right of navigator, separated from series/studies by a separator? or make it only appear when you go to swap in the context menu?
+- make maximum width of left pane larger
 - sometimes when navigating slices an image seems to drift up (or the window is panning down)
 - [ ] Allow syncing slices
 - [ ] Show line for current slice location on different views (eg axial slice in one window show as line on a coronal view in another window)

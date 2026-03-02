@@ -114,8 +114,6 @@ class ImageViewer(QGraphicsView):
         
         # View index (0-3) when used in multi-window layout; set by app so context menu can build Swap submenu
         self.subwindow_index: Optional[int] = None
-        # Callback to get current slot_to_view [4 ints] for Swap menu (Window 1-4 = slot 0-3). Set by app.
-        self.get_slot_to_view_callback: Optional[Callable[[], List[int]]] = None
         
         # Set transformation anchor to viewport center for consistent zoom behavior
         # This anchor should remain constant - when set, scale() automatically centers zooming on viewport center
@@ -1776,26 +1774,16 @@ class ImageViewer(QGraphicsView):
                         layout_2x2_action.setCheckable(True)
                         layout_2x2_action.triggered.connect(lambda: self.layout_change_requested.emit("2x2"))
                         
-                        # Swap submenu: "Swap with Window 1/2/3/4" (grid positions); source = this view
+                        # Swap submenu (swap grid positions in 2x2; source = this view)
                         if self.subwindow_index is not None:
                             swap_menu = context_menu.addMenu("Swap")
-                            slot_to_view = [0, 1, 2, 3]
-                            if self.get_slot_to_view_callback:
-                                try:
-                                    stv = self.get_slot_to_view_callback()
-                                    if isinstance(stv, list) and len(stv) >= 4:
-                                        slot_to_view = stv[:4]
-                                except Exception:
-                                    pass
-                            for k in range(1, 5):
-                                other_view_index = slot_to_view[k - 1]
-                                action = swap_menu.addAction(f"Swap with Window {k}")
-                                if other_view_index == self.subwindow_index:
+                            for other in range(4):
+                                label = ["View A", "View B", "View C", "View D"][other]
+                                action = swap_menu.addAction(f"Swap with {label}")
+                                if other == self.subwindow_index:
                                     action.setEnabled(False)
                                 else:
-                                    action.triggered.connect(
-                                        lambda checked, o=other_view_index: self.swap_view_requested.emit(o)
-                                    )
+                                    action.triggered.connect(lambda checked, o=other: self.swap_view_requested.emit(o))
                         
                         # Note: Checkmarks will be updated by main.py based on current layout
                         

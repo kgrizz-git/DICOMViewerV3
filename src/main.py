@@ -1098,6 +1098,13 @@ class DICOMViewerApp(QObject):
         
         # Update status
         self.main_window.update_status("Ready")
+
+        # Reassign views A–D to default windows 1–4 (slot order [0,1,2,3])
+        self.multi_window_layout.reset_slot_to_view_default()
+
+    def _on_app_about_to_quit(self) -> None:
+        """Reset view–slot mapping to default when the application is exiting."""
+        self.multi_window_layout.reset_slot_to_view_default()
     
     def _reset_fusion_for_all_subwindows(self) -> None:
         """
@@ -1354,6 +1361,7 @@ class DICOMViewerApp(QObject):
         self.main_window.open_files_from_paths_requested.connect(self._open_files_from_paths)
         # Files dropped will be connected per subwindow
         self.main_window.close_requested.connect(self._close_files)
+        self.app.aboutToQuit.connect(self._on_app_about_to_quit)
         
         # Settings (shared, not per-subwindow)
         self.main_window.settings_requested.connect(self._open_settings)
@@ -1530,10 +1538,14 @@ class DICOMViewerApp(QObject):
     
     def _open_files(self) -> None:
         """Handle open files request. Delegates to file/series loading coordinator."""
+        # Open flow closes current files; reset views A–D to default windows 1–4
+        self.multi_window_layout.reset_slot_to_view_default()
         self._file_series_coordinator.open_files()
 
     def _open_folder(self) -> None:
         """Handle open folder request. Delegates to file/series loading coordinator."""
+        # Open flow closes current files; reset views A–D to default windows 1–4
+        self.multi_window_layout.reset_slot_to_view_default()
         self._file_series_coordinator.open_folder()
 
     def _open_recent_file(self, file_path: str) -> None:
@@ -1543,6 +1555,8 @@ class DICOMViewerApp(QObject):
         Args:
             file_path: Path to file or folder to open
         """
+        # Open flow closes current files; reset views A–D to default windows 1–4
+        self.multi_window_layout.reset_slot_to_view_default()
         self._file_series_coordinator.open_recent_file(file_path)
 
     def _open_files_from_paths(self, paths: list[str]) -> None:

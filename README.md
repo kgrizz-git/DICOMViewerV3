@@ -31,7 +31,7 @@ This application provides comprehensive DICOM image viewing capabilities with ad
 - Dark or light interface option
 - Reset view to fit viewport
 - **Image Smoothing**: Optional image smoothing when zoomed (View menu or image context menu): when on, the viewer uses bilinear smoothing when idle and fast scaling during zoom/pan; the magnifier follows the same setting. Off by default; persisted in config.
-- **Multi-window layout**: Switch layouts with keys <code>1</code>–<code>4</code> or View → Layout / right-click → Layout. In 1x1, the single pane is the **focused** pane. Double-click a pane to expand it to 1x1; double-click again in 1x1 to revert to the previous layout (or 2x2). In 2x2, right-click → **Swap** to exchange positions of two views (data stays with each view).
+- **Multi-window layout**: Switch layouts with keys <code>1</code>–<code>4</code> or View → Layout / right-click → Layout. In 1x1, the single pane is the **focused** pane. **1x2** shows the row (in the 2x2 grid) containing the focused window; **2x1** shows the column containing the focused window. Double-click a pane to expand it to 1x1; double-click again in 1x1 to revert to the previous layout (or 2x2). In 2x2, right-click → **Swap** → "Swap with Window 1/2/3/4" (grid positions: 1=top-left, 2=top-right, 3=bottom-left, 4=bottom-right) to exchange positions; data stays with each view.
 - **Intensity Projections**: Combine multiple slices (2, 3, 4, 6, or 8) to view Average (AIP), Maximum (MIP), or Minimum (MinIP) intensity projections
   - Scroll through combined projections one underlying slice at a time
   - Access via right panel widget or context menu → "Combine..."
