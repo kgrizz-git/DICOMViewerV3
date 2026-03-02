@@ -585,20 +585,3 @@ class MultiWindowLayout(QWidget):
                 pass
         if self.current_layout == "2x2":
             self._arrange_subwindows("2x2")
-
-    def reset_slot_to_view_default(self) -> None:
-        """
-        Reset slot-to-view mapping to default: views A–D (0–3) in windows 1–4 (slots 0–3).
-        Persist to config and re-arrange if currently in 2x2.
-        Call when all files are closed or when the application is about to exit.
-        """
-        self.slot_to_view = [0, 1, 2, 3]
-        if self.config_manager is not None and hasattr(
-            self.config_manager, "set_view_slot_order"
-        ):
-            try:
-                self.config_manager.set_view_slot_order(self.slot_to_view)
-            except Exception:
-                pass
-        if self.current_layout == "2x2":
-            self._arrange_subwindows("2x2")

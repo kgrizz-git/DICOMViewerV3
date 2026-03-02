@@ -386,6 +386,8 @@ class SubwindowLifecycleController:
                 self._histogram_slots[vid] = hist_slot
                 image_viewer.get_file_path_callback = lambda i=idx: app._get_current_slice_file_path(i)
                 image_viewer.set_subwindow_index(idx)
+                layout = app.multi_window_layout
+                image_viewer.get_slot_to_view_callback = lambda l=layout: l.get_slot_to_view()
                 subwindow.assign_series_requested.connect(app._on_assign_series_requested)
                 image_viewer.assign_series_requested.connect(app._on_assign_series_from_context_menu)
                 subwindow.expand_to_1x1_requested.connect(app._on_expand_to_1x1_requested)

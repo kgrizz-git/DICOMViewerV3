@@ -223,31 +223,6 @@ class MultiWindowLayout(QWidget):
             return self.subwindows.index(self.focused_subwindow)
         return 0
     
-    def _get_focused_slot(self) -> int:
-        """
-        Return the slot (0-3) that contains the currently focused view.
-        Slot 0=top-left, 1=top-right, 2=bottom-left, 3=bottom-right.
-        Used for slot-based 1x2/2x1: 1x2 shows the row containing focus, 2x1 shows the column.
-        
-        Returns:
-            Slot index s such that slot_to_view[s] == focused view index; 0 if not found.
-        """
-        focused_idx = self._get_focused_view_index()
-        for s in range(4):
-            if s < len(self.slot_to_view) and self.slot_to_view[s] == focused_idx:
-                return s
-        return 0
-    
-    def get_slot_to_view(self) -> List[int]:
-        """
-        Return current slot-to-view mapping (copy). Used by Swap menu to resolve
-        "Window 1-4" to view index. Window k = slot k-1; view in that slot = slot_to_view[k-1].
-        
-        Returns:
-            List of 4 ints: slot_to_view[s] = view index in slot s.
-        """
-        return list(self.slot_to_view)
-    
     def _get_first_visible_container(self, layout_mode: LayoutMode) -> Optional[SubWindowContainer]:
         """
         Return the container that is in the first visible slot for the given layout.
@@ -266,19 +241,10 @@ class MultiWindowLayout(QWidget):
             if idx < len(self.subwindows):
                 return self.subwindows[idx]
             return self.subwindows[0]
-        if layout_mode == "1x2":
-            focused_slot = self._get_focused_slot()
-            row = focused_slot // 2
-            idx = self.slot_to_view[row * 2] if row * 2 < len(self.slot_to_view) else 0
-            if idx < len(self.subwindows):
-                return self.subwindows[idx]
-            return self.subwindows[0] if self.subwindows else None
-        if layout_mode == "2x1":
-            focused_slot = self._get_focused_slot()
-            col = focused_slot % 2
-            idx = self.slot_to_view[col] if col < len(self.slot_to_view) else 0
-            if idx < len(self.subwindows):
-                return self.subwindows[idx]
+        if layout_mode == "1x2" or layout_mode == "2x1":
+            f = self._get_focused_view_index()
+            if f < len(self.subwindows):
+                return self.subwindows[f]
             return self.subwindows[0] if self.subwindows else None
         if layout_mode == "2x2":
             if len(self.subwindows) >= 4:
@@ -344,27 +310,23 @@ class MultiWindowLayout(QWidget):
                 container.show()
                 self.layout_manager.addWidget(container, 0, 0, 1, 1)
         elif layout_mode == "1x2":
-            # Two windows side by side: row in 2x2 containing focused slot (slot-based)
+            # Two windows side by side: focused first, then (focused+1)%4
             if len(self.subwindows) >= 2:
-                focused_slot = self._get_focused_slot()
-                row = focused_slot // 2
-                v0 = self.slot_to_view[row * 2]
-                v1 = self.slot_to_view[row * 2 + 1]
-                self.subwindows[v0].show()
-                self.subwindows[v1].show()
-                self.layout_manager.addWidget(self.subwindows[v0], 0, 0, 1, 1)
-                self.layout_manager.addWidget(self.subwindows[v1], 0, 1, 1, 1)
+                f = self._get_focused_view_index()
+                n = (f + 1) % 4
+                self.subwindows[f].show()
+                self.subwindows[n].show()
+                self.layout_manager.addWidget(self.subwindows[f], 0, 0, 1, 1)
+                self.layout_manager.addWidget(self.subwindows[n], 0, 1, 1, 1)
         elif layout_mode == "2x1":
-            # Two windows stacked: column in 2x2 containing focused slot (slot-based)
+            # Two windows stacked: focused first, then (focused+1)%4
             if len(self.subwindows) >= 2:
-                focused_slot = self._get_focused_slot()
-                col = focused_slot % 2
-                v0 = self.slot_to_view[col]
-                v1 = self.slot_to_view[col + 2]
-                self.subwindows[v0].show()
-                self.subwindows[v1].show()
-                self.layout_manager.addWidget(self.subwindows[v0], 0, 0, 1, 1)
-                self.layout_manager.addWidget(self.subwindows[v1], 1, 0, 1, 1)
+                f = self._get_focused_view_index()
+                n = (f + 1) % 4
+                self.subwindows[f].show()
+                self.subwindows[n].show()
+                self.layout_manager.addWidget(self.subwindows[f], 0, 0, 1, 1)
+                self.layout_manager.addWidget(self.subwindows[n], 1, 0, 1, 1)
         elif layout_mode == "2x2":
             # Four windows in grid: order by slot_to_view (slot s -> row s//2, col s%2)
             if len(self.subwindows) >= 4:
@@ -576,23 +538,6 @@ class MultiWindowLayout(QWidget):
             self.slot_to_view[s_b],
             self.slot_to_view[s_a],
         )
-        if self.config_manager is not None and hasattr(
-            self.config_manager, "set_view_slot_order"
-        ):
-            try:
-                self.config_manager.set_view_slot_order(self.slot_to_view)
-            except Exception:
-                pass
-        if self.current_layout == "2x2":
-            self._arrange_subwindows("2x2")
-
-    def reset_slot_to_view_default(self) -> None:
-        """
-        Reset slot-to-view mapping to default: views A–D (0–3) in windows 1–4 (slots 0–3).
-        Persist to config and re-arrange if currently in 2x2.
-        Call when all files are closed or when the application is about to exit.
-        """
-        self.slot_to_view = [0, 1, 2, 3]
         if self.config_manager is not None and hasattr(
             self.config_manager, "set_view_slot_order"
         ):
