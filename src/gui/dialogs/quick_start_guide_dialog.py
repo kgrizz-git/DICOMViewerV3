@@ -223,6 +223,7 @@ class QuickStartGuideDialog(QDialog):
                 <li><strong>Context Menu:</strong> Right-click on image → Layout → select desired layout</li>
             </ul>
             <p><strong>Note:</strong> Layout shortcuts work when the image viewer, series navigator, left panel, or right panel has focus. They are disabled when editing text annotations.</p>
+            <p><strong>Expand and revert:</strong> Double-click a pane (on the image or empty area) to expand it to full 1x1 view. Double-click again in 1x1 to revert to the previous layout (or 2x2). In 2x2 layout, right-click → <strong>Swap</strong> to exchange positions of two views (contents stay with each view).</p>
             
             <h2 id="navigation">Navigation</h2>
             <h3>Slice Navigation</h3>

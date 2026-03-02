@@ -774,17 +774,16 @@ class SubwindowLifecycleController:
         app._update_about_this_file_dialog()
 
     def _trigger_viewport_resized(self) -> None:
-        """Run viewport_resized for all visible subwindows (so unfocused panes resize when layout changes, e.g. 2x2→1x2) and sync cursor. Used by the coalesced 100ms timer."""
+        """Run viewport_resized for the focused subwindow and sync cursor. Used by the coalesced 100ms timer."""
         app = self.app
         subwindows_list = app.multi_window_layout.get_all_subwindows()
         focused = app.multi_window_layout.get_focused_subwindow()
-        focused_idx = subwindows_list.index(focused) if (focused is not None and focused.isVisible() and focused in subwindows_list) else None
-        # Debug: trace which subwindow is focused at 100ms (drift investigation)
-        ts = datetime.now().strftime("%H:%M:%S.%f")
-        print(f"[DEBUG-LAYOUT] [{ts}] trigger_viewport_resized (100ms): focused_idx={focused_idx} view_state_manager id={id(app.subwindow_managers.get(focused_idx, {}).get('view_state_manager')) if focused_idx is not None and focused_idx in app.subwindow_managers else None}")
-        # Call handle_viewport_resized for every visible subwindow so unfocused panes (e.g. second pane in 1x2) also rescale after layout change
-        for idx, subwindow in enumerate(subwindows_list):
-            if subwindow and subwindow.isVisible() and idx in app.subwindow_managers:
+        if focused is not None and focused.isVisible() and focused in subwindows_list:
+            idx = subwindows_list.index(focused)
+            # Debug: trace which subwindow gets viewport_resized at 100ms (drift investigation)
+            ts = datetime.now().strftime("%H:%M:%S.%f")
+            print(f"[DEBUG-LAYOUT] [{ts}] trigger_viewport_resized (100ms): focused_idx={idx} view_state_manager id={id(app.subwindow_managers.get(idx, {}).get('view_state_manager')) if idx in app.subwindow_managers else None}")
+            if idx in app.subwindow_managers:
                 managers = app.subwindow_managers[idx]
                 if 'view_state_manager' in managers:
                     managers['view_state_manager'].handle_viewport_resized()

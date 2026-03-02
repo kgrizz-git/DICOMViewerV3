@@ -19,7 +19,7 @@ This document is a multi-phase implementation plan for making layout switching f
 | **1x1 layout** | Always shows subwindow 0. | Shows the **currently focused** view’s container only. |
 | **1x2 / 2x1 layout** | Always shows subwindows 0 and 1 in fixed order. | Shows **focused** and **next** view (focused first, then (focused+1)%4), in that order. |
 | **2x2 layout** | Always shows subwindows 0–3 in fixed grid positions. | Shows all four; **slot order** configurable via swap (which view is in which grid cell). Default order [0,1,2,3]. |
-| **Double-click** | No special behavior. | Double-click on a subwindow sets focus to that container and switches to **1x1** (expand that pane). |
+| **Double-click** | No special behavior. | Double-click on a subwindow sets focus and switches to **1x1** (expand that pane); when already in 1x1, double-click reverts to **last used layout** (or 2x2 if none). |
 | **Context menu** | Layout submenu: 1x1, 1x2, 2x1, 2x2. | Add **Swap** submenu: "Swap with View A/B/C/D" (excluding current view). Only enabled in 2x2 or when useful. |
 | **Data** | subwindow_data[idx], subwindow_managers[idx] by index. | Unchanged; data remains keyed by view index. Swapping only repositions widgets, not data. |
 
@@ -58,7 +58,7 @@ This document is a multi-phase implementation plan for making layout switching f
 - **1x1:** Show exactly the container for the focused view: `subwindows[focused_index]`. If no focus, fall back to 0 and set focus to it.
 - **1x2 / 2x1:** Show two containers: `subwindows[focused_index]` and `subwindows[(focused_index + 1) % 4]`, in that order (first slot = focused, second = next).
 - **2x2:** Show all four; order by `slot_to_view`. Swap view i and j: find slots s_i, s_j where `slot_to_view[s_i]==i` and `slot_to_view[s_j]==j`, then swap `slot_to_view[s_i]` and `slot_to_view[s_j]`, then re-call `_arrange_subwindows("2x2")`.
-- **Double-click:** In the subwindow that received the double-click, set that container as focused, then set layout to 1x1. Only treat double-click as “expand to 1x1” when the click is on the **image or view area with no interactive item under the cursor** (e.g. not on a text annotation, ROI, measurement, arrow, crosshair). Double-click on a text annotation or other item that has its own double-click behavior (e.g. inline edit) must pass through to the view/scene. “Empty/background” here means *no such interactive item*; it does **not** mean outside the displayed image — double-click on the image pixels (when not on an annotation) should expand.
+- **Double-click:** In the subwindow that received the double-click, set that container as focused, then set layout to 1x1. Only treat double-click as “expand to 1x1” when the click is on the **image or view area with no interactive item under the cursor** (e.g. not on a text annotation, ROI, measurement, arrow, crosshair). Double-click on a text annotation or other item that has its own double-click behavior (e.g. inline edit) must pass through to the view/scene. “Empty/background” here means *no such interactive item*; it does **not** mean outside the displayed image — double-click on the image pixels (when not on an annotation) should expand. **When already in 1x1,** double-click should **revert to the last used layout** (the layout that was active before switching to 1x1); if none is stored in memory, revert to 2x2.
 - **Context menu Swap:** Right-click on a subwindow shows “Swap” submenu with “Swap with View A”, “Swap with View B”, … (A=0, B=1, C=2, D=3). Exclude the current view. When user picks “Swap with View X”, call `multi_window_layout.swap_views(source_view_index, X)` where **source_view_index** is the view that showed the menu (the emitting ImageViewer’s `subwindow_index`), not necessarily the focused view. Swap is only meaningful in 2x2; when layout is not 2x2, the handler should **no-op** (optionally show a short status message like “Swap is only available in 2x2 layout”). Do not auto-switch to 2x2 and then swap.
 
 ---
@@ -95,9 +95,9 @@ This document is a multi-phase implementation plan for making layout switching f
 
 **Tasks:**
 
-- [ ] **2.1** In `MultiWindowLayout`, add `def swap_views(self, view_index_a: int, view_index_b: int) -> None`. Validate 0 <= view_index_a, view_index_b < 4 and view_index_a != view_index_b. Find slot s_a such that `slot_to_view[s_a] == view_index_a`, and s_b such that `slot_to_view[s_b] == view_index_b`. Swap: `slot_to_view[s_a], slot_to_view[s_b] = slot_to_view[s_b], slot_to_view[s_a]`. If current layout is 2x2, call `_arrange_subwindows("2x2")`.
-- [ ] **2.2** (Optional) Add config key e.g. `view_slot_order` (list of 4 ints) in config_manager; save in `set_multi_window_layout` or on swap; restore in MultiWindowLayout when loading layout. If omitted, use [0,1,2,3]. Can be deferred to a later phase.
-- [ ] **2.3** Manually test: switch to 2x2, call `swap_views(0, 2)` from Python or a temporary button; confirm positions of views 0 and 2 are swapped and data (slice, ROIs) unchanged.
+- [x] **2.1** In `MultiWindowLayout`, add `def swap_views(self, view_index_a: int, view_index_b: int) -> None`. Validate 0 <= view_index_a, view_index_b < 4 and view_index_a != view_index_b. Find slot s_a such that `slot_to_view[s_a] == view_index_a`, and s_b such that `slot_to_view[s_b] == view_index_b`. Swap: `slot_to_view[s_a], slot_to_view[s_b] = slot_to_view[s_b], slot_to_view[s_a]`. If current layout is 2x2, call `_arrange_subwindows("2x2")`.
+- [x] **2.2** (Optional) Add config key e.g. `view_slot_order` (list of 4 ints) in config_manager; save in `set_multi_window_layout` or on swap; restore in MultiWindowLayout when loading layout. If omitted, use [0,1,2,3]. Can be deferred to a later phase.
+- [x] **2.3** Manually test: switch to 2x2, call `swap_views(0, 2)` from Python or a temporary button; confirm positions of views 0 and 2 are swapped and data (slice, ROIs) unchanged.
 
 **Success criteria:** swap_views(i, j) correctly swaps grid positions of two views in 2x2; data remains with the same view index.
 
@@ -109,11 +109,11 @@ This document is a multi-phase implementation plan for making layout switching f
 
 **Tasks:**
 
-- [ ] **3.1** Back up `src/gui/sub_window_container.py` (and if needed `src/gui/image_viewer.py`).
-- [ ] **3.2** Add signal on SubWindowContainer or ImageViewer: e.g. `expand_to_1x1_requested = Signal()` (no args; the source is the container that emitted). Option A: emit from SubWindowContainer when double-click is detected. Option B: emit from ImageViewer and have main/layout determine which container (focused or the one under cursor). Prefer Option A: SubWindowContainer already has an event filter on image_viewer; add handling for `QEvent.Type.MouseButtonDblClick` — set focus to this container (set_focused(True)) and emit `expand_to_1x1_requested.emit()`.
-- [ ] **3.3** In main.py (or subwindow_lifecycle_controller): connect `expand_to_1x1_requested` from each SubWindowContainer to a handler that (1) sets focused subwindow to the sender container (if not already), (2) calls `main_window` or `multi_window_layout` to set layout to "1x1". Connect in the same place other per-subwindow signals are connected (e.g. `SubwindowLifecycleController.connect_subwindow_signals()`): iterate `get_all_subwindows()` and for each container connect `container.expand_to_1x1_requested` to the handler. Avoid duplicate connections (e.g. disconnect before connecting if reconnecting when layout changes).
-- [ ] **3.4** Ensure double-click does not block other actions (e.g. text annotation inline edit). Handle double-click in the container’s event filter only when the click is on **image or view area with no interactive item under the cursor** (map to scene and check `scene.itemAt(...)`): if the item is the background or the image and not a text annotation, ROI, measurement, arrow, or crosshair, treat as expand-to-1x1 and return True to consume the event; otherwise return False so the view/scene can handle it (e.g. text annotation double-click to edit). “Empty/background” means *no such interactive item* — it does **not** mean outside the displayed image; double-click on the image pixels (when not on an annotation) should expand.
-- [ ] **3.5** Test: in 2x2 or 1x2/2x1, double-click on a subwindow; that pane should become the only visible one (1x1) and retain its slice/ROIs.
+- [x] **3.1** Back up `src/gui/sub_window_container.py` (and if needed `src/gui/image_viewer.py`).
+- [x] **3.2** Add signal on SubWindowContainer or ImageViewer: e.g. `expand_to_1x1_requested = Signal()` (no args; the source is the container that emitted). Option A: emit from SubWindowContainer when double-click is detected. Option B: emit from ImageViewer and have main/layout determine which container (focused or the one under cursor). Prefer Option A: SubWindowContainer already has an event filter on image_viewer; add handling for `QEvent.Type.MouseButtonDblClick` — set focus to this container (set_focused(True)) and emit `expand_to_1x1_requested.emit()`.
+- [x] **3.3** In main.py (or subwindow_lifecycle_controller): connect `expand_to_1x1_requested` from each SubWindowContainer to a handler that (1) sets focused subwindow to the sender container (if not already), (2) calls `main_window` or `multi_window_layout` to set layout to "1x1". Connect in the same place other per-subwindow signals are connected (e.g. `SubwindowLifecycleController.connect_subwindow_signals()`): iterate `get_all_subwindows()` and for each container connect `container.expand_to_1x1_requested` to the handler. Avoid duplicate connections (e.g. disconnect before connecting if reconnecting when layout changes).
+- [x] **3.4** Ensure double-click does not block other actions (e.g. text annotation inline edit). Handle double-click in the container’s event filter only when the click is on **image or view area with no interactive item under the cursor** (map to scene and check `scene.itemAt(...)`): if the item is the background or the image and not a text annotation, ROI, measurement, arrow, or crosshair, treat as expand-to-1x1 and return True to consume the event; otherwise return False so the view/scene can handle it (e.g. text annotation double-click to edit). “Empty/background” means *no such interactive item* — it does **not** mean outside the displayed image; double-click on the image pixels (when not on an annotation) should expand.
+- [x] **3.5** Test: in 2x2 or 1x2/2x1, double-click on a subwindow; that pane should become the only visible one (1x1) and retain its slice/ROIs.
 
 **Success criteria:** Double-click on any visible subwindow expands it to 1x1 (focus + set_layout("1x1")).
 
@@ -125,15 +125,15 @@ This document is a multi-phase implementation plan for making layout switching f
 
 **Tasks:**
 
-- [ ] **4.1** Back up `src/gui/image_viewer.py`.
-- [ ] **4.2** ImageViewer must know its “view index” (0–3) to build the Swap menu. Add optional attribute `self.subwindow_index: Optional[int] = None` on ImageViewer, with a setter e.g. `set_subwindow_index(self, idx: int)`. The app (main or subwindow_lifecycle_controller) must set this when creating/connecting subwindows so each ImageViewer has the correct index.
-- [ ] **4.3** Add signal on ImageViewer: `swap_view_requested = Signal(int)` (argument = other view index). When user chooses “Swap with View B”, emit `swap_view_requested.emit(1)` (B=1).
-- [ ] **4.4** In the image viewer context menu (where Layout submenu is built), add a “Swap” submenu after or before Layout:
+- [x] **4.1** Back up `src/gui/image_viewer.py`.
+- [x] **4.2** ImageViewer must know its “view index” (0–3) to build the Swap menu. Add optional attribute `self.subwindow_index: Optional[int] = None` on ImageViewer, with a setter e.g. `set_subwindow_index(self, idx: int)`. The app (main or subwindow_lifecycle_controller) must set this when creating/connecting subwindows so each ImageViewer has the correct index.
+- [x] **4.3** Add signal on ImageViewer: `swap_view_requested = Signal(int)` (argument = other view index). When user chooses “Swap with View B”, emit `swap_view_requested.emit(1)` (B=1).
+- [x] **4.4** In the image viewer context menu (where Layout submenu is built), add a “Swap” submenu after or before Layout:
   - If `self.subwindow_index is None`, omit the Swap submenu or disable it.
   - Otherwise, add submenu “Swap” with actions “Swap with View A” (0), “Swap with View B” (1), “Swap with View C” (2), “Swap with View D” (3). Disable or hide the action for the current view (`self.subwindow_index`). Always show Swap when `subwindow_index` is set; in the app handler, if layout is not 2x2, **no-op** (optionally show a short status message like “Swap is only available in 2x2 layout”). Do not auto-switch to 2x2 and then swap.
-- [ ] **4.5** Connect each ImageViewer’s `swap_view_requested` to a handler in main (or lifecycle controller). Handler receives `other_index`. The **source** view for swap must be the **view that showed the menu** (the emitting ImageViewer’s `subwindow_index`), not `focused_subwindow_index`, because right-click does not change focus. Resolve source from the sender: e.g. find the container whose `image_viewer is sender`, then get that container’s index via `get_all_subwindows().index(container)`, or use the emitting ImageViewer’s `subwindow_index` if set. Call `app.multi_window_layout.swap_views(source_index, other_index)`.
-- [ ] **4.6** Ensure subwindow_index is set for all ImageViewers when subwindows exist. In the same place other per-subwindow setup runs (e.g. `connect_subwindow_signals()` in subwindow_lifecycle_controller), use `for idx, container in enumerate(app.multi_window_layout.get_all_subwindows()): container.image_viewer.set_subwindow_index(idx)`.
-- [ ] **4.7** Test: in 2x2, right-click on a pane → Swap → “Swap with View C”; views should swap positions. Verify slice and ROIs stay with the same logical view.
+- [x] **4.5** Connect each ImageViewer’s `swap_view_requested` to a handler in main (or lifecycle controller). Handler receives `other_index`. The **source** view for swap must be the **view that showed the menu** (the emitting ImageViewer’s `subwindow_index`), not `focused_subwindow_index`, because right-click does not change focus. Resolve source from the sender: e.g. find the container whose `image_viewer is sender`, then get that container’s index via `get_all_subwindows().index(container)`, or use the emitting ImageViewer’s `subwindow_index` if set. Call `app.multi_window_layout.swap_views(source_index, other_index)`.
+- [x] **4.6** Ensure subwindow_index is set for all ImageViewers when subwindows exist. In the same place other per-subwindow setup runs (e.g. `connect_subwindow_signals()` in subwindow_lifecycle_controller), use `for idx, container in enumerate(app.multi_window_layout.get_all_subwindows()): container.image_viewer.set_subwindow_index(idx)`.
+- [x] **4.7** Test: in 2x2, right-click on a pane → Swap → “Swap with View C”; views should swap positions. Verify slice and ROIs stay with the same logical view.
 
 **Success criteria:** Context menu has “Swap” submenu with “Swap with View A/B/C/D”; choosing one swaps positions in 2x2; data preserved.
 
@@ -149,8 +149,10 @@ This document is a multi-phase implementation plan for making layout switching f
 - [ ] **5.2** When switching to 1x2/2x1, focused and next are shown; ensure focus remains on the “focused” container (first slot).
 - [ ] **5.3** If layout is 1x1 and user requests 1x2 via menu/key, ensure the two visible panes are focused and next (already implemented in Phase 1).
 - [ ] **5.4** Verify that after swap in 2x2, focus and right-panel data (ROI list, statistics) still reflect the focused view, not the slot position.
+- [x] **5.5** **Double-click in 1x1:** When the user is already in 1x1 layout and double-clicks on the visible pane (on image/background), revert to the **last used layout** before 1x1 (e.g. 2x2, 1x2, or 2x1). Store the previous layout when switching to 1x1 (e.g. in MultiWindowLayout or app state). If no previous layout is in memory (e.g. app just started in 1x1), revert to 2x2.
+- [x] **5.6** **Resize when switching from 2x2 to 1x2/2x1:** Sometimes when changing layout from 2x2 to 2x1 or 1x2, an unfocused window does not resize appropriately. Investigate (e.g. which container fails to resize, timing of show/layout activation). Consider adding temporary debugging (e.g. log container sizes before/after `_arrange_subwindows`, or force `updateGeometry()` / `adjustSize()` on visible subwindows after arrangement) to reproduce and fix.
 
-**Success criteria:** No focus/sync bugs when changing layout or after swap.
+**Success criteria:** No focus/sync bugs when changing layout or after swap; double-click in 1x1 restores previous layout; 1x2/2x1 resize is reliable.
 
 ---
 
@@ -160,10 +162,10 @@ This document is a multi-phase implementation plan for making layout switching f
 
 **Tasks:**
 
-- [ ] **6.1** **README.md:** Under features or usage, add a short note that layout can be switched with 1–4 keys and from the Layout menu; that the single pane in 1x1 is the focused pane; that double-click on a pane expands it to 1x1; and that in 2x2 you can swap view positions via right-click → Swap.
-- [ ] **6.2** **AGENTS.md:** In “View and display options” or a new bullet, mention that 1x1 shows the focused view, 1x2/2x1 show focused + next, and that Swap in the context menu reorders view positions in 2x2 without moving data.
-- [ ] **6.3** **Quick Start Guide** (`src/gui/dialogs/quick_start_guide_dialog.py` or equivalent): Add a line under layout section: double-click a pane to expand it to full view; right-click → Swap to exchange positions of two views in 2x2 layout.
-- [ ] **6.4** **TO_DO.md:** Check off or update the items for “Make it possible to choose which subwindows to expand/show…” and the sub-item “double-clicking on a subwindow expand it to 1x1”. Add a brief “Done” note or move to a “Completed” section if that’s the project’s convention.
+- [x] **6.1** **README.md:** Under features or usage, add a short note that layout can be switched with 1–4 keys and from the Layout menu; that the single pane in 1x1 is the focused pane; that double-click on a pane expands it to 1x1; and that in 2x2 you can swap view positions via right-click → Swap.
+- [x] **6.2** **AGENTS.md:** In “View and display options” or a new bullet, mention that 1x1 shows the focused view, 1x2/2x1 show focused + next, and that Swap in the context menu reorders view positions in 2x2 without moving data.
+- [x] **6.3** **Quick Start Guide** (`src/gui/dialogs/quick_start_guide_dialog.py` or equivalent): Add a line under layout section: double-click a pane to expand it to full view; right-click → Swap to exchange positions of two views in 2x2 layout.
+- [x] **6.4** **TO_DO.md:** Check off or update the items for “Make it possible to choose which subwindows to expand/show…” and the sub-item “double-clicking on a subwindow expand it to 1x1”. Add a brief “Done” note or move to a “Completed” section if that’s the project’s convention.
 
 **Success criteria:** Docs accurately describe the new behavior and any constraints.
 
@@ -189,8 +191,10 @@ This document is a multi-phase implementation plan for making layout switching f
 - [ ] 1x2/2x1: Focus view 2, switch to 1x2 — views 2 and 3 should appear (2 first). Same for 2x1.
 - [ ] 2x2: All four views visible; swap view 0 and 2 — positions swap; slice and ROIs unchanged.
 - [ ] Double-click: In 2x2, double-click view 1 — layout becomes 1x1 with view 1 only.
+- [ ] Double-click in 1x1: From 2x2 go to 1x1 (e.g. double-click a pane), then double-click again — layout reverts to 2x2; from 1x2 go to 1x1, then double-click — reverts to 1x2. If app starts in 1x1 and user double-clicks, revert to 2x2.
 - [ ] Context menu Swap: Right-click in 2x2 → Swap → Swap with View B; verify swap and data integrity.
 - [ ] Focus after layout change: After 1x1 or swap, right panel and series navigator reflect the focused view.
+- [ ] Resize 2x2→1x2/2x1: Switch from 2x2 to 1x2 or 2x1; both visible panes should resize correctly (no stuck/collapsed unfocused window).
 
 ---
 

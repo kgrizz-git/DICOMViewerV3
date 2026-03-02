@@ -100,7 +100,6 @@ class ConfigManager:
             # ROI statistics visibility defaults
             "roi_default_visible_statistics": ["mean", "std", "min", "max", "count", "area"],  # Default visible statistics for new ROIs
             "multi_window_layout": "1x1",  # Multi-window layout mode: "1x1", "1x2", "2x1", "2x2"
-            "view_slot_order": [0, 1, 2, 3],  # 2x2 slot-to-view mapping; list of 4 ints (permutation of 0-3)
             "disclaimer_accepted": False,  # Whether user has accepted disclaimer and chosen not to see it again
             "privacy_view_enabled": False,  # Whether privacy view mode is enabled (masks patient tags in display)
             "smooth_image_when_zoomed": False,  # User option to smooth image when zoomed; off by default for no-enhancement
@@ -325,31 +324,6 @@ class ConfigManager:
         """
         if layout_mode in ["1x1", "1x2", "2x1", "2x2"]:
             self.config["multi_window_layout"] = layout_mode
-            self.save_config()
-    
-    def get_view_slot_order(self) -> List[int]:
-        """
-        Get the 2x2 view slot order (slot index -> view index).
-        Used to restore which view is in which grid cell after restart.
-        
-        Returns:
-            List of 4 ints, a permutation of [0, 1, 2, 3]; default [0, 1, 2, 3]
-        """
-        return list(self.config.get("view_slot_order", [0, 1, 2, 3]))
-    
-    def set_view_slot_order(self, order: List[int]) -> None:
-        """
-        Save the 2x2 view slot order (slot index -> view index).
-        
-        Args:
-            order: List of 4 ints, permutation of [0, 1, 2, 3]
-        """
-        if (
-            isinstance(order, list)
-            and len(order) == 4
-            and set(order) == {0, 1, 2, 3}
-        ):
-            self.config["view_slot_order"] = list(order)
             self.save_config()
     
     def get_overlay_font_size(self) -> int:

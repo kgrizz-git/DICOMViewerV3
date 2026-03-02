@@ -1490,6 +1490,26 @@ class DICOMViewerApp(QObject):
         """Handle layout change request from image viewer context menu. Delegates to subwindow lifecycle controller."""
         self._subwindow_lifecycle_controller.on_layout_change_requested(layout_mode)
     
+    def _on_expand_to_1x1_requested(self) -> None:
+        """Handle double-click: expand to 1x1 or, if already in 1x1, revert to last used layout (or 2x2)."""
+        sender = self.sender()
+        if not isinstance(sender, SubWindowContainer):
+            return
+        if self.multi_window_layout.get_layout_mode() == "1x1":
+            # Already in 1x1: revert to last layout before 1x1 (or 2x2)
+            self.multi_window_layout.set_layout(self.multi_window_layout.get_revert_layout())
+        else:
+            self.multi_window_layout.set_focused_subwindow(sender)
+            self.multi_window_layout.set_layout("1x1")
+    
+    def _on_swap_view_requested(self, other_index: int) -> None:
+        """Handle Swap with View X from context menu: swap grid positions in 2x2; no-op if not 2x2."""
+        if self.multi_window_layout.get_layout_mode() != "2x2":
+            return
+        sender = self.sender()
+        if isinstance(sender, ImageViewer) and sender.subwindow_index is not None:
+            self.multi_window_layout.swap_views(sender.subwindow_index, other_index)
+    
     def _on_assign_series_requested(self, series_uid: str, slice_index: int) -> None:
         """Handle series assignment request from subwindow; sender() identifies which subwindow."""
         sender = self.sender()

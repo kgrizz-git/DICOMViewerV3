@@ -43,7 +43,6 @@ class SubWindowContainer(QFrame):
     focus_changed = Signal(bool)  # Emitted when focus state changes (True = focused)
     assign_series_requested = Signal(str, int)  # Emitted when series/slice assignment requested (series_uid, slice_index)
     context_menu_requested = Signal()  # Emitted when context menu is requested
-    expand_to_1x1_requested = Signal()  # Emitted when user double-clicks on image/background to expand this pane to 1x1
     
     def __init__(self, image_viewer: ImageViewer, parent=None):
         """
@@ -122,59 +121,6 @@ class SubWindowContainer(QFrame):
         self.setStyleSheet(stylesheet)
         self.update()
     
-    def _is_double_click_on_background_or_image(self, event) -> bool:
-        """
-        Return True if the double-click event is on the image or background
-        (no interactive scene item under cursor: not on text annotation, ROI, measurement, arrow, crosshair).
-        Used to decide whether to expand to 1x1 or let the scene handle the event.
-        """
-        try:
-            view = self.image_viewer
-            if view.scene is None:
-                return True
-            scene_pos = view.mapToScene(event.position().toPoint())
-            item = view.scene.itemAt(scene_pos, view.transform())
-            if item is None:
-                return True
-            if item is view.image_item:
-                return True
-            # Interactive items: ROI, measurement, text annotation, arrow, crosshair (or their children)
-            from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsEllipseItem
-            try:
-                from tools.measurement_tool import MeasurementItem, DraggableMeasurementText
-            except ImportError:
-                MeasurementItem = type(None)
-                DraggableMeasurementText = type(None)
-            try:
-                from tools.text_annotation_tool import TextAnnotationItem
-            except ImportError:
-                TextAnnotationItem = type(None)
-            try:
-                from tools.arrow_annotation_tool import ArrowAnnotationItem
-            except ImportError:
-                ArrowAnnotationItem = type(None)
-            try:
-                from tools.crosshair_manager import CrosshairItem
-            except ImportError:
-                CrosshairItem = type(None)
-            if isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem)) and item is not view.image_item:
-                return False
-            if isinstance(item, (MeasurementItem, DraggableMeasurementText, TextAnnotationItem, ArrowAnnotationItem)):
-                return False
-            if CrosshairItem is not type(None) and isinstance(item, CrosshairItem):
-                return False
-            # Check parent chain for measurement/text/arrow (e.g. handle or child of annotation)
-            parent = item.parentItem()
-            while parent is not None:
-                if isinstance(parent, (MeasurementItem, DraggableMeasurementText, TextAnnotationItem, ArrowAnnotationItem)):
-                    return False
-                if CrosshairItem is not type(None) and isinstance(parent, CrosshairItem):
-                    return False
-                parent = parent.parentItem()
-            return True
-        except Exception:
-            return True
-    
     def paintEvent(self, event) -> None:
         """
         Paint the border highlight.
@@ -200,8 +146,7 @@ class SubWindowContainer(QFrame):
     
     def eventFilter(self, obj, event) -> bool:
         """
-        Event filter to capture mouse clicks for focus management and
-        double-click to expand to 1x1 (when click is on image/background, not on interactive items).
+        Event filter to capture mouse clicks for focus management.
         
         Args:
             obj: Object that received the event
@@ -213,14 +158,6 @@ class SubWindowContainer(QFrame):
         from PySide6.QtCore import QEvent
         
         if obj == self.image_viewer:
-            if event.type() == QEvent.Type.MouseButtonDblClick:
-                # Double-click: expand to 1x1 only when click is on image or background (no interactive item)
-                if self._is_double_click_on_background_or_image(event):
-                    self.set_focused(True)
-                    self.expand_to_1x1_requested.emit()
-                    return True
-                # Otherwise let the view/scene handle it (e.g. text annotation inline edit)
-                return False
             if event.type() == QEvent.Type.MouseButtonPress:
                 # print(f"[DEBUG-FOCUS] SubWindowContainer.eventFilter: MouseButtonPress intercepted on image_viewer, is_focused={self.is_focused}")
                 # Click on image viewer - set focus to this container

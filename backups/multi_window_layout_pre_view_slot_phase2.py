@@ -67,15 +67,11 @@ class MultiWindowLayout(QWidget):
         self.focused_subwindow: Optional[SubWindowContainer] = None
         
         # Slot-to-view mapping for 2x2: slot_to_view[s] = view index in slot s (default [0,1,2,3])
-        # Restore from config if available and valid
-        self.slot_to_view = self._load_slot_to_view()
+        self.slot_to_view: List[int] = [0, 1, 2, 3]
         
         # Layout widget
         self.layout_widget: Optional[QWidget] = None
         self.layout_manager: Optional[QGridLayout] = None
-        
-        # Last layout before switching to 1x1 (for double-click-in-1x1 revert)
-        self._last_layout_before_1x1: Optional[LayoutMode] = None
         
         # Create initial layout
         self._create_layout()
@@ -87,29 +83,6 @@ class MultiWindowLayout(QWidget):
         
         # Set initial layout mode (will show only the first subwindow in 1x1)
         self.set_layout("1x1")
-    
-    def _load_slot_to_view(self) -> List[int]:
-        """
-        Load slot-to-view order from config if available and valid.
-        Returns a list of 4 ints in [0,3] representing a permutation of [0,1,2,3].
-        
-        Returns:
-            List of length 4: slot_to_view[s] = view index in slot s
-        """
-        default = [0, 1, 2, 3]
-        if self.config_manager is None or not hasattr(
-            self.config_manager, "get_view_slot_order"
-        ):
-            return default.copy()
-        try:
-            order = self.config_manager.get_view_slot_order()
-            if not isinstance(order, list) or len(order) != 4:
-                return default.copy()
-            if set(order) != {0, 1, 2, 3}:
-                return default.copy()
-            return list(order)
-        except Exception:
-            return default.copy()
     
     def _create_layout(self) -> None:
         """Create the layout structure."""
@@ -163,10 +136,6 @@ class MultiWindowLayout(QWidget):
                 layout_mode != "1x1" and
                 len(self.subwindows) >= num_subwindows):
             return  # No change needed
-        
-        # When switching to 1x1, remember previous layout for double-click revert
-        if layout_mode == "1x1" and self.current_layout != "1x1":
-            self._last_layout_before_1x1 = self.current_layout
         
         self.current_layout = layout_mode
         
@@ -369,7 +338,6 @@ class MultiWindowLayout(QWidget):
         # This ensures Qt has processed all layout changes before forcing recalculation
         # Fix: Use proper function instead of tuple lambda
         from PySide6.QtCore import QTimer
-        import os
         def force_layout_update():
             """Force layout geometry update after delay."""
             self.layout_widget.updateGeometry()
@@ -379,21 +347,6 @@ class MultiWindowLayout(QWidget):
             self.update()
         
         QTimer.singleShot(10, force_layout_update)
-        
-        # Optional: debug resize when switching from 2x2 to 1x2/2x1 (Phase 5.6). Set env DICOM_DEBUG_LAYOUT_RESIZE=1 to enable.
-        if os.environ.get("DICOM_DEBUG_LAYOUT_RESIZE"):
-            def _debug_resize():
-                visible = [i for i, w in enumerate(self.subwindows) if w and w.isVisible()]
-                for i in visible:
-                    w = self.subwindows[i]
-                    w.updateGeometry()
-                    w.update()
-                self.layout_widget.updateGeometry()
-                self.updateGeometry()
-                # Log sizes for investigation
-                sizes = [(i, self.subwindows[i].size().width(), self.subwindows[i].size().height()) for i in visible]
-                print(f"[DEBUG-RESIZE] layout={layout_mode} visible_indices={visible} sizes={sizes}")
-            QTimer.singleShot(50, _debug_resize)
     
     def _on_subwindow_focus_changed(self, focused: bool) -> None:
         """
@@ -502,48 +455,3 @@ class MultiWindowLayout(QWidget):
         """
         return self.current_layout
 
-    def get_revert_layout(self) -> LayoutMode:
-        """
-        Get the layout to revert to when user double-clicks in 1x1 (expand-to-1x1 toggle).
-        Returns the last layout that was active before switching to 1x1, or "2x2" if none.
-        """
-        if self._last_layout_before_1x1 in ("1x2", "2x1", "2x2"):
-            return self._last_layout_before_1x1
-        return "2x2"
-
-    def swap_views(self, view_index_a: int, view_index_b: int) -> None:
-        """
-        Swap the grid positions of two views in 2x2 layout.
-        View data (slice, ROIs, etc.) stays with the same view index; only
-        widget positions change.
-        
-        Args:
-            view_index_a: View index (0-3)
-            view_index_b: View index (0-3), must differ from view_index_a
-        """
-        if view_index_a < 0 or view_index_a >= 4 or view_index_b < 0 or view_index_b >= 4:
-            return
-        if view_index_a == view_index_b:
-            return
-        # Find slots that currently show these views
-        s_a = s_b = None
-        for s in range(4):
-            if self.slot_to_view[s] == view_index_a:
-                s_a = s
-            if self.slot_to_view[s] == view_index_b:
-                s_b = s
-        if s_a is None or s_b is None:
-            return
-        self.slot_to_view[s_a], self.slot_to_view[s_b] = (
-            self.slot_to_view[s_b],
-            self.slot_to_view[s_a],
-        )
-        if self.config_manager is not None and hasattr(
-            self.config_manager, "set_view_slot_order"
-        ):
-            try:
-                self.config_manager.set_view_slot_order(self.slot_to_view)
-            except Exception:
-                pass
-        if self.current_layout == "2x2":
-            self._arrange_subwindows("2x2")
