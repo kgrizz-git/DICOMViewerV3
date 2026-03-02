@@ -902,18 +902,14 @@ class ViewStateManager:
         ts = datetime.now().strftime("%H:%M:%S.%f")
         print(f"[DEBUG-LAYOUT] [{ts}] handle_viewport_resized: view_state_manager id={id(self)} image_viewer id={id(self.image_viewer)} is_focused={is_focused} had_saved_scene_center={had_center} center={center_val}")
         # This works for splitter moves, series navigator show/hide, and layout changes
-        if self.image_viewer.image_item is not None:
-            if self.saved_scene_center is not None:
-                # print(f"[DEBUG-LAYOUT] handle_viewport_resized: Restoring scene center = {self.saved_scene_center}")
-                # First, fit the image to the new viewport size (rescale to fill)
-                self.image_viewer.fit_to_view(center_image=False)
-                # Then restore the center point that was captured before the resize
-                self.image_viewer.centerOn(self.saved_scene_center)
-                self.saved_scene_center = None  # Clear after use
-                # print(f"[DEBUG-LAYOUT] handle_viewport_resized: Center restored, saved_scene_center cleared")
-            else:
-                # Unfocused pane or no saved center: still fit image to new viewport (e.g. when switching 2x2→1x2 the unfocused visible pane must rescale)
-                self.image_viewer.fit_to_view(center_image=True)
+        if self.saved_scene_center is not None and self.image_viewer.image_item is not None:
+            # print(f"[DEBUG-LAYOUT] handle_viewport_resized: Restoring scene center = {self.saved_scene_center}")
+            # First, fit the image to the new viewport size (rescale to fill)
+            self.image_viewer.fit_to_view(center_image=False)
+            # Then restore the center point that was captured before the resize
+            self.image_viewer.centerOn(self.saved_scene_center)
+            self.saved_scene_center = None  # Clear after use
+            # print(f"[DEBUG-LAYOUT] handle_viewport_resized: Center restored, saved_scene_center cleared")
         
         # Update overlay positions when viewport size changes
         # For QWidget overlays, always update (they stay fixed at viewport corners)

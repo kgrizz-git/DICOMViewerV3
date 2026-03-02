@@ -74,9 +74,6 @@ class MultiWindowLayout(QWidget):
         self.layout_widget: Optional[QWidget] = None
         self.layout_manager: Optional[QGridLayout] = None
         
-        # Last layout before switching to 1x1 (for double-click-in-1x1 revert)
-        self._last_layout_before_1x1: Optional[LayoutMode] = None
-        
         # Create initial layout
         self._create_layout()
         
@@ -163,10 +160,6 @@ class MultiWindowLayout(QWidget):
                 layout_mode != "1x1" and
                 len(self.subwindows) >= num_subwindows):
             return  # No change needed
-        
-        # When switching to 1x1, remember previous layout for double-click revert
-        if layout_mode == "1x1" and self.current_layout != "1x1":
-            self._last_layout_before_1x1 = self.current_layout
         
         self.current_layout = layout_mode
         
@@ -369,7 +362,6 @@ class MultiWindowLayout(QWidget):
         # This ensures Qt has processed all layout changes before forcing recalculation
         # Fix: Use proper function instead of tuple lambda
         from PySide6.QtCore import QTimer
-        import os
         def force_layout_update():
             """Force layout geometry update after delay."""
             self.layout_widget.updateGeometry()
@@ -379,21 +371,6 @@ class MultiWindowLayout(QWidget):
             self.update()
         
         QTimer.singleShot(10, force_layout_update)
-        
-        # Optional: debug resize when switching from 2x2 to 1x2/2x1 (Phase 5.6). Set env DICOM_DEBUG_LAYOUT_RESIZE=1 to enable.
-        if os.environ.get("DICOM_DEBUG_LAYOUT_RESIZE"):
-            def _debug_resize():
-                visible = [i for i, w in enumerate(self.subwindows) if w and w.isVisible()]
-                for i in visible:
-                    w = self.subwindows[i]
-                    w.updateGeometry()
-                    w.update()
-                self.layout_widget.updateGeometry()
-                self.updateGeometry()
-                # Log sizes for investigation
-                sizes = [(i, self.subwindows[i].size().width(), self.subwindows[i].size().height()) for i in visible]
-                print(f"[DEBUG-RESIZE] layout={layout_mode} visible_indices={visible} sizes={sizes}")
-            QTimer.singleShot(50, _debug_resize)
     
     def _on_subwindow_focus_changed(self, focused: bool) -> None:
         """
@@ -501,15 +478,6 @@ class MultiWindowLayout(QWidget):
             Current layout mode
         """
         return self.current_layout
-
-    def get_revert_layout(self) -> LayoutMode:
-        """
-        Get the layout to revert to when user double-clicks in 1x1 (expand-to-1x1 toggle).
-        Returns the last layout that was active before switching to 1x1, or "2x2" if none.
-        """
-        if self._last_layout_before_1x1 in ("1x2", "2x1", "2x2"):
-            return self._last_layout_before_1x1
-        return "2x2"
 
     def swap_views(self, view_index_a: int, view_index_b: int) -> None:
         """
