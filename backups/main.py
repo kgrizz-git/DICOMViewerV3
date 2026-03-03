@@ -237,7 +237,11 @@ class DICOMViewerApp(QObject):
         for subwindow in subwindows:
             if subwindow and subwindow.image_viewer:
                 subwindow.image_viewer.set_privacy_view_state(self.privacy_view_enabled)
-        
+        # Initialize smooth-when-zoomed state on all image viewers from config
+        for subwindow in subwindows:
+            if subwindow and subwindow.image_viewer:
+                subwindow.image_viewer.set_smooth_when_zoomed_state(self.config_manager.get_smooth_image_when_zoomed())
+
         # Ensure focused subwindow has managers and update references
         # This must happen before _initialize_handlers() which needs these references
         # print(f"DEBUG: Setting up focused subwindow references")
@@ -571,7 +575,8 @@ class DICOMViewerApp(QObject):
         # Set scroll wheel mode
         scroll_mode = self.config_manager.get_scroll_wheel_mode()
         image_viewer.set_scroll_wheel_mode(scroll_mode)
-        
+        image_viewer.set_smooth_when_zoomed_state(self.config_manager.get_smooth_image_when_zoomed())
+
         # Create managers for this subwindow
         managers = {}
         
@@ -965,7 +970,8 @@ class DICOMViewerApp(QObject):
             get_privacy_view_state_callback=lambda: self.privacy_view_enabled,
             delete_text_annotation_callback=None,  # Will be set when coordinators are available
             delete_arrow_annotation_callback=None,  # Will be set when coordinators are available
-            change_layout_callback=self.main_window.set_layout_mode
+            change_layout_callback=self.main_window.set_layout_mode,
+            is_focus_ok_for_reset_view=lambda: self._is_widget_allowed_for_layout_shortcuts(QApplication.focusWidget())
         )
     
     def _clear_data(self) -> None:
@@ -1092,6 +1098,13 @@ class DICOMViewerApp(QObject):
         
         # Update status
         self.main_window.update_status("Ready")
+
+        # Reassign views A–D to default windows 1–4 (slot order [0,1,2,3])
+        self.multi_window_layout.reset_slot_to_view_default()
+
+    def _on_app_about_to_quit(self) -> None:
+        """Reset view–slot mapping to default when the application is exiting."""
+        self.multi_window_layout.reset_slot_to_view_default()
     
     def _reset_fusion_for_all_subwindows(self) -> None:
         """
@@ -1348,6 +1361,7 @@ class DICOMViewerApp(QObject):
         self.main_window.open_files_from_paths_requested.connect(self._open_files_from_paths)
         # Files dropped will be connected per subwindow
         self.main_window.close_requested.connect(self._close_files)
+        self.app.aboutToQuit.connect(self._on_app_about_to_quit)
         
         # Settings (shared, not per-subwindow)
         self.main_window.settings_requested.connect(self._open_settings)
@@ -1373,9 +1387,13 @@ class DICOMViewerApp(QObject):
         
         # Histogram (shared)
         self.main_window.histogram_requested.connect(self.dialog_coordinator.open_histogram)
-        
+
+        # Export ROI Statistics (shared – main window menu entry)
+        self.main_window.export_roi_statistics_requested.connect(self._open_export_roi_statistics)
+
         # Export (shared)
         self.main_window.export_requested.connect(self._open_export)
+        self.main_window.export_screenshots_requested.connect(self._open_export_screenshots)
         
         # Undo/Redo tag edits (shared)
         # Undo/redo signals (for both tag edits and annotations)
@@ -1386,9 +1404,27 @@ class DICOMViewerApp(QObject):
         self.main_window.copy_annotation_requested.connect(self._copy_annotations)
         self.main_window.paste_annotation_requested.connect(self._paste_annotations)
         
+        # Cine controls widget signals
+        self.cine_controls_widget.play_requested.connect(self._on_cine_play)
+        self.cine_controls_widget.pause_requested.connect(self._on_cine_pause)
+        self.cine_controls_widget.stop_requested.connect(self._on_cine_stop)
+        self.cine_controls_widget.speed_changed.connect(self._on_cine_speed_changed)
+        self.cine_controls_widget.loop_toggled.connect(self._on_cine_loop_toggled)
+        self.cine_controls_widget.frame_position_changed.connect(self._on_frame_slider_changed)
+        self.cine_controls_widget.loop_start_set.connect(self._on_cine_loop_start_set)
+        self.cine_controls_widget.loop_end_set.connect(self._on_cine_loop_end_set)
+        self.cine_controls_widget.loop_bounds_cleared.connect(self._on_cine_loop_bounds_cleared)
+
+        # Cine player signals
+        self.cine_player.frame_advance_requested.connect(self._on_cine_frame_advance)
+        self.cine_player.playback_state_changed.connect(self._on_cine_playback_state_changed)
+        
         # Privacy view toggle (shared)
         self.main_window.privacy_view_toggled.connect(self._on_privacy_view_toggled)
-        
+
+        # Smooth when zoomed toggle (shared)
+        self.main_window.smooth_when_zoomed_toggled.connect(self._on_smooth_when_zoomed_toggled)
+
         # Theme change (shared) - update fusion status text colors
         self.main_window.theme_changed.connect(self.fusion_controls_widget.update_status_text_colors)
         
@@ -1462,6 +1498,26 @@ class DICOMViewerApp(QObject):
         """Handle layout change request from image viewer context menu. Delegates to subwindow lifecycle controller."""
         self._subwindow_lifecycle_controller.on_layout_change_requested(layout_mode)
     
+    def _on_expand_to_1x1_requested(self) -> None:
+        """Handle double-click: expand to 1x1 or, if already in 1x1, revert to last used layout (or 2x2)."""
+        sender = self.sender()
+        if not isinstance(sender, SubWindowContainer):
+            return
+        if self.multi_window_layout.get_layout_mode() == "1x1":
+            # Already in 1x1: revert to last layout before 1x1 (or 2x2)
+            self.multi_window_layout.set_layout(self.multi_window_layout.get_revert_layout())
+        else:
+            self.multi_window_layout.set_focused_subwindow(sender)
+            self.multi_window_layout.set_layout("1x1")
+    
+    def _on_swap_view_requested(self, other_index: int) -> None:
+        """Handle Swap with View X from context menu: swap grid positions in 2x2; no-op if not 2x2."""
+        if self.multi_window_layout.get_layout_mode() != "2x2":
+            return
+        sender = self.sender()
+        if isinstance(sender, ImageViewer) and sender.subwindow_index is not None:
+            self.multi_window_layout.swap_views(sender.subwindow_index, other_index)
+    
     def _on_assign_series_requested(self, series_uid: str, slice_index: int) -> None:
         """Handle series assignment request from subwindow; sender() identifies which subwindow."""
         sender = self.sender()
@@ -1482,10 +1538,14 @@ class DICOMViewerApp(QObject):
     
     def _open_files(self) -> None:
         """Handle open files request. Delegates to file/series loading coordinator."""
+        # Open flow closes current files; reset views A–D to default windows 1–4
+        self.multi_window_layout.reset_slot_to_view_default()
         self._file_series_coordinator.open_files()
 
     def _open_folder(self) -> None:
         """Handle open folder request. Delegates to file/series loading coordinator."""
+        # Open flow closes current files; reset views A–D to default windows 1–4
+        self.multi_window_layout.reset_slot_to_view_default()
         self._file_series_coordinator.open_folder()
 
     def _open_recent_file(self, file_path: str) -> None:
@@ -1495,6 +1555,8 @@ class DICOMViewerApp(QObject):
         Args:
             file_path: Path to file or folder to open
         """
+        # Open flow closes current files; reset views A–D to default windows 1–4
+        self.multi_window_layout.reset_slot_to_view_default()
         self._file_series_coordinator.open_recent_file(file_path)
 
     def _open_files_from_paths(self, paths: list[str]) -> None:
@@ -1863,36 +1925,63 @@ class DICOMViewerApp(QObject):
                 if focused_idx in self.subwindow_data:
                     current_dataset = self.subwindow_data[focused_idx].get('current_dataset')
                     if current_dataset:
-                        # Refresh overlay by re-displaying the current slice
-                        if focused_idx in self.subwindow_managers:
-                            slice_display_manager = self.subwindow_managers[focused_idx].get('slice_display_manager')
-                            if slice_display_manager and hasattr(slice_display_manager, 'current_dataset'):
-                                # Re-display current slice to refresh overlays with privacy mode
-                                if (slice_display_manager.current_dataset is not None and 
-                                    hasattr(slice_display_manager, 'current_studies') and
-                                    hasattr(slice_display_manager, 'current_study_uid') and
-                                    hasattr(slice_display_manager, 'current_series_uid') and
-                                    hasattr(slice_display_manager, 'current_slice_index')):
-                                    try:
-                                        slice_display_manager.display_slice(
-                                            slice_display_manager.current_dataset,
-                                            slice_display_manager.current_studies,
-                                            slice_display_manager.current_study_uid,
-                                            slice_display_manager.current_series_uid,
-                                            slice_display_manager.current_slice_index,
-                                            update_metadata=False  # Don't update metadata panel (already updated above)
+                        self._refresh_overlays_after_privacy_change()
+
+    def _on_smooth_when_zoomed_toggled(self, enabled: bool) -> None:
+        """
+        Handle smooth-when-zoomed toggle from View menu or image viewer context menu.
+        Persists setting and pushes state to all image viewers; syncs View menu check state.
+
+        Args:
+            enabled: True if smooth when zoomed is enabled, False otherwise
+        """
+        self.config_manager.set_smooth_image_when_zoomed(enabled)
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        for subwindow in subwindows:
+            if subwindow and subwindow.image_viewer:
+                subwindow.image_viewer.set_smooth_when_zoomed_state(enabled)
+        self.main_window.set_smooth_when_zoomed_checked(enabled)
+
+    def _refresh_overlays_after_privacy_change(self) -> None:
+        """Refresh overlays after privacy view change (extracted for reuse)."""
+        if self.current_dataset is None:
+            return
+        focused_subwindow = self.multi_window_layout.get_focused_subwindow()
+        if focused_subwindow and focused_subwindow.image_viewer:
+            focused_idx = self.multi_window_layout.get_all_subwindows().index(focused_subwindow)
+            if focused_idx in self.subwindow_data:
+                current_dataset = self.subwindow_data[focused_idx].get('current_dataset')
+                if current_dataset:
+                    # Refresh overlay by re-displaying the current slice
+                    if focused_idx in self.subwindow_managers:
+                        slice_display_manager = self.subwindow_managers[focused_idx].get('slice_display_manager')
+                        if slice_display_manager and hasattr(slice_display_manager, 'current_dataset'):
+                            # Re-display current slice to refresh overlays with privacy mode
+                            if (slice_display_manager.current_dataset is not None and
+                                hasattr(slice_display_manager, 'current_studies') and
+                                hasattr(slice_display_manager, 'current_study_uid') and
+                                hasattr(slice_display_manager, 'current_series_uid') and
+                                hasattr(slice_display_manager, 'current_slice_index')):
+                                try:
+                                    slice_display_manager.display_slice(
+                                        slice_display_manager.current_dataset,
+                                        slice_display_manager.current_studies,
+                                        slice_display_manager.current_study_uid,
+                                        slice_display_manager.current_series_uid,
+                                        slice_display_manager.current_slice_index,
+                                        update_metadata=False  # Don't update metadata panel (already updated above)
+                                    )
+                                except Exception:
+                                    # If display_slice fails, just refresh overlays directly
+                                    overlay_manager = self.subwindow_managers[focused_idx].get('overlay_manager')
+                                    if overlay_manager and slice_display_manager.current_dataset:
+                                        from core.dicom_parser import DICOMParser
+                                        parser = DICOMParser(slice_display_manager.current_dataset)
+                                        overlay_manager.create_overlay_items(
+                                            focused_subwindow.image_viewer.scene,
+                                            parser
                                         )
-                                    except Exception:
-                                        # If display_slice fails, just refresh overlays directly
-                                        overlay_manager = self.subwindow_managers[focused_idx].get('overlay_manager')
-                                        if overlay_manager and slice_display_manager.current_dataset:
-                                            from core.dicom_parser import DICOMParser
-                                            parser = DICOMParser(slice_display_manager.current_dataset)
-                                            overlay_manager.create_overlay_items(
-                                                focused_subwindow.image_viewer.scene,
-                                                parser
-                                            )
-    
+
     def _open_tag_viewer(self) -> None:
         """Handle tag viewer dialog request."""
         self.dialog_coordinator.open_tag_viewer(self.current_dataset, privacy_mode=self.privacy_view_enabled)
@@ -1929,33 +2018,50 @@ class DICOMViewerApp(QObject):
     def _open_tag_export(self) -> None:
         """Handle Tag Export dialog request."""
         self.dialog_coordinator.open_tag_export()
+
+    def _open_export_roi_statistics(self) -> None:
+        """Handle Export ROI Statistics request (from menu or image viewer context menu)."""
+        self.dialog_coordinator.open_export_roi_statistics(self.subwindow_managers)
     
     def _open_export(self) -> None:
-        """Handle Export dialog request."""
-        # Get current window/level values if available
+        """Handle Export dialog request. Resolution options are in the dialog (Native / 1.5× / 2× / 4×)."""
         window_center, window_width = self.window_level_controls.get_window_level()
-        # Get current rescale state to match viewer behavior
         use_rescaled_values = self.view_state_manager.use_rescaled_values
-        # Get current projection state from slice display manager
         projection_enabled = self.slice_display_manager.projection_enabled
         projection_type = self.slice_display_manager.projection_type
         projection_slice_count = self.slice_display_manager.projection_slice_count
-        # Get initial fit zoom for font scaling
-        initial_fit_zoom = self.view_state_manager.get_initial_fit_zoom()
+        focused_subwindow_index = self.get_focused_subwindow_index()
+        # Option B: aggregate annotations from all subwindows for export
+        subwindow_annotation_managers = []
+        for idx in sorted(self.subwindow_managers.keys()):
+            m = self.subwindow_managers[idx]
+            subwindow_annotation_managers.append({
+                'roi_manager': m.get('roi_manager'),
+                'measurement_tool': m.get('measurement_tool'),
+                'text_annotation_tool': m.get('text_annotation_tool'),
+                'arrow_annotation_tool': m.get('arrow_annotation_tool')
+            })
         self.dialog_coordinator.open_export(
             current_window_center=window_center,
             current_window_width=window_width,
-            current_zoom=self.image_viewer.current_zoom,
-            initial_fit_zoom=initial_fit_zoom,
+            focused_subwindow_index=focused_subwindow_index,
             use_rescaled_values=use_rescaled_values,
             roi_manager=self.roi_manager,
             overlay_manager=self.overlay_manager,
             measurement_tool=self.measurement_tool,
+            text_annotation_tool=getattr(self, 'text_annotation_tool', None),
+            arrow_annotation_tool=getattr(self, 'arrow_annotation_tool', None),
             projection_enabled=projection_enabled,
             projection_type=projection_type,
-            projection_slice_count=projection_slice_count
+            projection_slice_count=projection_slice_count,
+            subwindow_annotation_managers=subwindow_annotation_managers
         )
-    
+
+    def _open_export_screenshots(self) -> None:
+        """Handle Export Screenshots dialog request. One file per selected subwindow."""
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        self.dialog_coordinator.open_export_screenshots(subwindows)
+
     def _on_export_customizations(self) -> None:
         """Handle Export Customizations request."""
         # Get last export path or use current directory
@@ -2710,9 +2816,10 @@ class DICOMViewerApp(QObject):
             data['current_slice_index'] = slice_index
             data['current_dataset'] = series_datasets[slice_index]
             
-            # Note: Legacy references (self.current_slice_index, self.current_dataset) are NOT updated here
-            # They are maintained in _update_focused_subwindow_references() to avoid contamination
-            # when switching between subwindows
+            # Keep app-level legacy references in sync with focused subwindow's current slice
+            # (focus change updates them in update_focused_subwindow_references)
+            self.current_slice_index = slice_index
+            self.current_dataset = series_datasets[slice_index]
             
             # Display slice using focused subwindow's slice display manager
             slice_display_manager = managers['slice_display_manager']
@@ -2786,7 +2893,8 @@ class DICOMViewerApp(QObject):
         # Update frame slider with current frame and total frames
         if is_cine_capable:
             total_slices = self.slice_navigator.total_slices
-            current_slice = self.current_slice_index
+            # Use slice navigator's notion of current slice for robustness
+            current_slice = self.slice_navigator.get_current_slice()
             self.cine_controls_widget.update_frame_position(current_slice, total_slices)
         else:
             # Reset slider when not cine-capable

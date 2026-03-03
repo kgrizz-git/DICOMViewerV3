@@ -843,7 +843,19 @@ class SubwindowLifecycleController:
             if layout.layout_widget is not None:
                 layout.layout_widget.setCursor(tool_cursor)
 
-        # Coalesce: use a single restartable timer so only the latest layout change gets the 100ms callback.
+        self._schedule_viewport_resized_timer()
+
+    def schedule_viewport_resized(self) -> None:
+        """
+        Schedule a viewport resize for all visible subwindows (e.g. after a swap).
+        Uses the same coalesced 100ms timer as layout changes so that views that
+        were last shown in a smaller pane (e.g. 2x2) get fit_to_view in the
+        current window size.
+        """
+        self._schedule_viewport_resized_timer()
+
+    def _schedule_viewport_resized_timer(self) -> None:
+        """Start or restart the coalesced 100ms timer that runs _trigger_viewport_resized."""
         if self._viewport_resized_timer is None:
             self._viewport_resized_timer = QTimer()
             self._viewport_resized_timer.setSingleShot(True)
