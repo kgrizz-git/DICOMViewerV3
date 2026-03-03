@@ -100,7 +100,6 @@ class ImageViewer(QGraphicsView):
     projection_slice_count_changed = Signal(int)  # Emitted when projection slice count changes from context menu
     layout_change_requested = Signal(str)  # Emitted when layout change is requested from context menu ("1x1", "1x2", "2x1", "2x2")
     swap_view_requested = Signal(int)  # Emitted when user chooses Swap with View X (argument = other view index 0-3)
-    window_slot_map_popup_requested = Signal()  # Emitted when user requests window-slot map popup from Swap menu
     
     def __init__(self, parent: Optional[QWidget] = None, config_manager=None):
         """
@@ -1780,12 +1779,6 @@ class ImageViewer(QGraphicsView):
                         # Swap submenu: "Swap with Window 1/2/3/4" (grid positions); source = this view
                         if self.subwindow_index is not None:
                             swap_menu = context_menu.addMenu("Swap")
-
-                            # Optional: show a small window-slot map popup
-                            show_map_action = swap_menu.addAction("Show Window Map")
-                            show_map_action.triggered.connect(self.window_slot_map_popup_requested.emit)
-                            swap_menu.addSeparator()
-
                             slot_to_view = [0, 1, 2, 3]
                             if self.get_slot_to_view_callback:
                                 try:
