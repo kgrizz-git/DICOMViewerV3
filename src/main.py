@@ -73,6 +73,9 @@ from tools.histogram_widget import HistogramWidget
 from gui.overlay_manager import OverlayManager
 from utils.annotation_clipboard import AnnotationClipboard
 
+from metadata.metadata_controller import MetadataController
+from roi.roi_measurement_controller import ROIMeasurementController
+
 # Import handler classes
 from core.view_state_manager import ViewStateManager
 from core.file_operations_handler import FileOperationsHandler
@@ -103,174 +106,199 @@ class DICOMViewerApp(QObject):
     """
     
     def __init__(self):
-        """Initialize the application."""
-        # Initialize QObject first
+        """
+        Initialize the DICOM Viewer application.
+
+        Initialization order is significant and must be preserved:
+
+        1. _init_core_managers()
+           QApplication + all data managers (config, DICOM, history, undo/redo).
+           No widgets are created yet; Qt must exist first.
+
+        2. _init_main_window_and_layout()
+           MainWindow, FileDialog, and MultiWindowLayout.
+           Requires Step 1: widgets need config_manager and QApplication.
+
+        3. _init_controllers_and_tools()
+           MetadataController and ROIMeasurementController.
+           Requires Step 2: theme must be applied before metadata panel is shown.
+
+        4. _init_view_widgets()
+           Remaining shared view widgets (navigators, fusion, overlays, etc.).
+           Requires Step 1 for config; Step 3 for privacy flag propagation.
+
+        5. _post_init_subwindows_and_handlers()
+           UI assembly, per-subwindow manager creation, handler init, signal
+           wiring, and final interaction setup.
+           Must be last: all managers, widgets, and controllers must be ready.
+        """
+        # Initialize QObject first (must be the very first statement)
         super().__init__()
-        
-        # Create Qt application first (before any widgets)
+
+        # Step 1 – Core application and data managers
+        self._init_core_managers()
+
+        # Step 2 – Main window, file dialog, and layout skeleton
+        self._init_main_window_and_layout()
+
+        # Step 3 – Feature controllers (MetadataController, ROIMeasurementController)
+        self._init_controllers_and_tools()
+
+        # Step 4 – Remaining shared view widgets
+        self._init_view_widgets()
+
+        # Step 5 – Subwindow lifecycle, handlers, signals, and post-init interaction
+        self._post_init_subwindows_and_handlers()
+
+    def _init_core_managers(self) -> None:
+        """
+        Create the Qt application, all data managers, and application-wide state.
+
+        This is the very first initialization step. No widgets may be created
+        before QApplication exists.
+        """
+        # Qt application (must precede any widget creation)
         self.app = QApplication(sys.argv)
         self.app.setApplicationName("DICOM Viewer V3")
-        
-        # Set Fusion style for consistent cross-platform appearance
         self.app.setStyle(QStyleFactory.create("Fusion"))
-        
-        # Initialize managers
+
+        # DICOM data managers
         self.config_manager = ConfigManager()
         self.dicom_loader = DICOMLoader()
         self.dicom_organizer = DICOMOrganizer()
         self.dicom_processor = DICOMProcessor()
+
+        # Tag-edit history and general undo/redo stack
         self.tag_edit_history = TagEditHistoryManager(max_history=50)
         self.undo_redo_manager = UndoRedoManager(max_history=100)
         self.annotation_clipboard = AnnotationClipboard()
-        
-        # Privacy view state
+
+        # Application-wide flags read from persisted config
         self.privacy_view_enabled: bool = self.config_manager.get_privacy_view()
-        
-        # Track which studies have already shown fusion notification
-        # Set of study UIDs that have been notified about compatible fusion series
+        # Studies that have already shown the fusion compatibility notification
         self._fusion_notified_studies: set = set()
-        
-        # Create main window
+
+    def _init_main_window_and_layout(self) -> None:
+        """
+        Create the main window, file dialog, and multi-window layout.
+
+        Must follow _init_core_managers so that config_manager and the Qt
+        application are available.  The main window theme is applied here so
+        that subsequent widget creation happens against the correct palette.
+        """
+        # Main window
         self.main_window = MainWindow(self.config_manager)
-        
-        # Install event filter on main window for key events
         self.main_window.installEventFilter(self)
-        
-        # Create components
+
+        # File open dialog (shared across the application)
         self.file_dialog = FileDialog(self.config_manager)
-        
-        # Create multi-window layout instead of single image viewer
+
+        # Multi-window image layout
         self.multi_window_layout = MultiWindowLayout(config_manager=self.config_manager)
-        
-        # Get initial layout from config
         initial_layout = self.config_manager.get_multi_window_layout()
         self.multi_window_layout.set_layout(initial_layout)
-        # Update menu checkmarks to reflect the actual layout (defaults to "1x1" if no config exists)
         self.main_window.set_layout_mode(initial_layout)
-        
-        # For backward compatibility, keep image_viewer reference pointing to first subwindow's viewer
-        # This will be updated when subwindows are created
+
+        # Legacy backward-compatibility reference – updated once subwindows exist
         self.image_viewer: Optional[ImageViewer] = None
-        
-        # Per-subwindow managers (will be created dynamically)
-        # Structure: {subwindow_index: {manager_name: manager_instance}}
+
+        # Per-subwindow manager registry: {subwindow_index: {manager_name: instance}}
         self.subwindow_managers: Dict[int, Dict] = {}
-        
-        # Currently focused subwindow index
+
+        # Index of the subwindow that currently has input focus
         self.focused_subwindow_index: int = 0
-        
-        # Set image viewer reference in main window for theme updates (will be updated)
-        self.main_window.image_viewer = None  # Will be set after subwindows are created
-        # Apply theme again to set background color
+
+        # Ensure the main window's image_viewer ref is clear until subwindows are ready,
+        # then apply the theme so the background colour is correct.
+        self.main_window.image_viewer = None
         self.main_window._apply_theme()
-        self.metadata_panel = MetadataPanel(config_manager=self.config_manager,
-                                            undo_redo_manager=self.undo_redo_manager)
-        self.metadata_panel.set_history_manager(self.tag_edit_history)
-        self.metadata_panel.ui_refresh_callback = self._refresh_tag_ui
-        # Set undo/redo callbacks
-        self.metadata_panel.set_undo_redo_callbacks(
-            lambda: self._undo_tag_edit(),
-            lambda: self._redo_tag_edit(),
-            lambda: self.tag_edit_history.can_undo(self.current_dataset) if self.current_dataset and self.tag_edit_history else False,
-            lambda: self.tag_edit_history.can_redo(self.current_dataset) if self.current_dataset and self.tag_edit_history else False
-        )
-        # Initialize privacy mode
-        self.metadata_panel.set_privacy_mode(self.privacy_view_enabled)
+
+    def _init_view_widgets(self) -> None:
+        """
+        Create remaining shared view-layer widgets.
+
+        Must follow _init_core_managers (config access) and
+        _init_controllers_and_tools (privacy flag already confirmed).
+        """
         self.window_level_controls = WindowLevelControls()
         self.zoom_display_widget = ZoomDisplayWidget()
         self.slice_navigator = SliceNavigator()
-        self.roi_manager = ROIManager(config_manager=self.config_manager)
-        self.measurement_tool = MeasurementTool(config_manager=self.config_manager)
-        self.annotation_manager = AnnotationManager()
-        self.roi_statistics_panel = ROIStatisticsPanel()
-        self.roi_list_panel = ROIListPanel()
-        
-        # Flag to track if we're in the middle of a reset operation
+
+        # Operation guard flags
         self._resetting_projection_state = False
-        # Flag to prevent concurrent series navigation operations
         self._series_navigation_in_progress = False
-        self.roi_list_panel.set_roi_manager(self.roi_manager)
+
+        # Navigation and playback widgets
         self.series_navigator = SeriesNavigator(self.dicom_processor)
         self.cine_controls_widget = CineControlsWidget()
         self.intensity_projection_controls_widget = IntensityProjectionControlsWidget()
-        
-        # Initialize fusion components
-        # Note: FusionHandler is now created per-subwindow, not shared
+
+        # Fusion components (FusionHandler itself is created per-subwindow)
         self.fusion_processor = FusionProcessor()
         self.fusion_controls_widget = FusionControlsWidget(config_manager=self.config_manager)
-        
-        # Initialize overlay manager with config settings
+
+        # Shared overlay manager (each subwindow also has its own copy)
         font_size = self.config_manager.get_overlay_font_size()
         font_color = self.config_manager.get_overlay_font_color()
         self.overlay_manager = OverlayManager(
-            font_size=font_size, 
+            font_size=font_size,
             font_color=font_color,
-            config_manager=self.config_manager
+            config_manager=self.config_manager,
         )
-        # Overlay manager initializes to state 0 (all shown) by default
-        # Do not load state from config - always start with everything visible
-        # Initialize privacy mode
+        # Overlay always starts with everything visible; privacy mode is applied immediately.
         self.overlay_manager.set_privacy_mode(self.privacy_view_enabled)
-        
-        # Set scroll wheel mode (will be applied to subwindows after creation)
+
+        # Scroll-wheel mode is propagated to individual image viewers after creation.
         scroll_mode = self.config_manager.get_scroll_wheel_mode()
         self.slice_navigator.set_scroll_wheel_mode(scroll_mode)
-        
-        # Set up UI layout
+
+    def _post_init_subwindows_and_handlers(self) -> None:
+        """
+        Assemble the UI, create per-subwindow managers, wire handlers and signals.
+
+        This step must run last: it assumes all managers, widgets, and controllers
+        have been fully created by the earlier _init_* methods.
+        """
+        # Assemble the Qt UI layout (panels, splitters, menus, toolbars)
         self._setup_ui()
-        
-        # Initialize subwindow data structure (needed by _initialize_subwindow_managers)
-        # Structure: {subwindow_index: {current_dataset, current_slice_index, current_series_uid, current_study_uid}}
+
+        # Per-subwindow data: {index: {current_dataset, current_slice_index, ...}}
         self.subwindow_data: Dict[int, Dict] = {}
-        
-        # Subwindow lifecycle controller must exist before _initialize_subwindow_managers
-        # because that method calls _connect_all_subwindow_transform_signals() which delegates to the controller.
+
+        # Subwindow lifecycle controller must precede _initialize_subwindow_managers
+        # because that method calls _connect_all_subwindow_transform_signals().
         self._subwindow_lifecycle_controller = SubwindowLifecycleController(self)
-        
-        # Initialize per-subwindow managers for all subwindows
+
+        # Create per-subwindow managers for every current subwindow slot
         self._initialize_subwindow_managers()
 
         self._annotation_paste_handler = AnnotationPasteHandler(self)
 
-        # Initialize privacy view state on all image viewers
+        # Propagate initial privacy and smoothing settings to all image viewers
         subwindows = self.multi_window_layout.get_all_subwindows()
         for subwindow in subwindows:
             if subwindow and subwindow.image_viewer:
                 subwindow.image_viewer.set_privacy_view_state(self.privacy_view_enabled)
-        # Initialize smooth-when-zoomed state on all image viewers from config
         for subwindow in subwindows:
             if subwindow and subwindow.image_viewer:
-                subwindow.image_viewer.set_smooth_when_zoomed_state(self.config_manager.get_smooth_image_when_zoomed())
+                subwindow.image_viewer.set_smooth_when_zoomed_state(
+                    self.config_manager.get_smooth_image_when_zoomed()
+                )
 
-        # Ensure focused subwindow has managers and update references
-        # This must happen before _initialize_handlers() which needs these references
-        # print(f"DEBUG: Setting up focused subwindow references")
-        # print(f"DEBUG: subwindow_managers keys: {list(self.subwindow_managers.keys())}")
-        
+        # Resolve which subwindow currently has focus and set up its manager references.
+        # Must happen before _initialize_handlers() which consumes these references.
         focused_subwindow = self.multi_window_layout.get_focused_subwindow()
-        # print(f"DEBUG: Focused subwindow: {focused_subwindow}")
-        
         if focused_subwindow:
             subwindows = self.multi_window_layout.get_all_subwindows()
-            # print(f"DEBUG: Focused subwindow in subwindows list: {focused_subwindow in subwindows}")
             if focused_subwindow in subwindows:
                 focused_idx = subwindows.index(focused_subwindow)
-                # print(f"DEBUG: Focused subwindow index: {focused_idx}")
-                # print(f"DEBUG: Index in managers: {focused_idx in self.subwindow_managers}")
                 if focused_idx in self.subwindow_managers:
-                    # Update references immediately so _initialize_handlers() can use them
-                    # print(f"DEBUG: Calling _update_focused_subwindow_references()")
                     self._update_focused_subwindow_references()
-        
-        # If still no managers set, ensure at least the first subwindow's managers are used
+
+        # Fallback: if the focused-subwindow path failed to set managers, use index 0.
         if not hasattr(self, 'roi_coordinator') or self.roi_coordinator is None:
-            # print(f"DEBUG: roi_coordinator not set, using fallback")
             subwindows = self.multi_window_layout.get_all_subwindows()
-            # print(f"DEBUG: Fallback - subwindows count: {len(subwindows) if subwindows else 0}")
-            # print(f"DEBUG: Fallback - has index 0: {0 in self.subwindow_managers if self.subwindow_managers else False}")
             if subwindows and 0 in self.subwindow_managers:
-                # Use first subwindow's managers as fallback
-                # print(f"DEBUG: Using first subwindow's managers as fallback")
                 managers = self.subwindow_managers[0]
                 self.view_state_manager = managers['view_state_manager']
                 self.slice_display_manager = managers['slice_display_manager']
@@ -289,34 +317,62 @@ class DICOMViewerApp(QObject):
                 if subwindows[0]:
                     self.image_viewer = subwindows[0].image_viewer
                     self.main_window.image_viewer = self.image_viewer
-                # print(f"DEBUG: Fallback managers set successfully")
-            else:
-                # print(f"DEBUG: Fallback failed - no subwindows or no managers at index 0")
-                pass
-        
-        # print(f"DEBUG: Final check - has roi_coordinator: {hasattr(self, 'roi_coordinator')}")
-        if hasattr(self, 'roi_coordinator'):
-            # print(f"DEBUG: roi_coordinator is None: {self.roi_coordinator is None}")
-            pass
-        
-        # Legacy current data (for backward compatibility, points to focused subwindow)
+
+        # Legacy current-data fields for backward compatibility with handlers
+        # that predate the multi-window architecture.
         self.current_datasets: list = []
         self.current_studies: dict = {}
         self.current_slice_index = 0
         self.current_series_uid = ""
         self.current_study_uid = ""
         self.current_dataset: Optional[Dataset] = None
-        
-        # Initialize handler classes (will use focused subwindow's managers)
+
+        # Initialize handler objects (depends on all manager references above)
         self._initialize_handlers()
-        
-        # Connect signals
+
+        # Wire Qt signals to slots
         self._connect_signals()
-        
-        # Initialize pan mode on all subwindows
+
+        # Set default mouse mode to pan on every image viewer
         for subwindow in self.multi_window_layout.get_all_subwindows():
             if subwindow:
                 subwindow.image_viewer.set_mouse_mode("pan")
+
+    def _init_controllers_and_tools(self) -> None:
+        """
+        Initialize high-level feature controllers and expose their shared components.
+
+        Step 3 of the DICOMViewerApp initialization sequence. Creates:
+        - MetadataController: owns MetadataPanel, TagEditHistoryManager,
+          undo/redo wiring, and metadata privacy mode.
+        - ROIMeasurementController: owns ROIManager, MeasurementTool,
+          AnnotationManager, ROIStatisticsPanel, and ROIListPanel.
+
+        Backward-compatibility aliases (e.g. self.metadata_panel, self.roi_manager)
+        are set here so that the rest of the application can continue to access
+        these objects directly without knowing about the controller layer.
+        """
+        # Initialize metadata controller (owns metadata_panel and history wiring)
+        self.metadata_controller = MetadataController(
+            config_manager=self.config_manager,
+            tag_edit_history=self.tag_edit_history,
+            undo_redo_manager=self.undo_redo_manager,
+            ui_refresh_callback=self._refresh_tag_ui,
+            initial_privacy_mode=self.privacy_view_enabled,
+        )
+        self.metadata_panel = self.metadata_controller.metadata_panel
+
+        # Initialize ROI / measurement controller
+        self.roi_measurement_controller = ROIMeasurementController(
+            config_manager=self.config_manager
+        )
+        self.roi_manager = self.roi_measurement_controller.roi_manager
+        self.measurement_tool = self.roi_measurement_controller.measurement_tool
+        self.annotation_manager = self.roi_measurement_controller.annotation_manager
+        self.roi_statistics_panel = (
+            self.roi_measurement_controller.roi_statistics_panel
+        )
+        self.roi_list_panel = self.roi_measurement_controller.roi_list_panel
     
     def _initialize_subwindow_managers(self) -> None:
         """Initialize managers for each subwindow."""
@@ -801,6 +857,12 @@ class DICOMViewerApp(QObject):
     def _update_focused_subwindow_references(self) -> None:
         """Update legacy references to point to focused subwindow's managers and data. Delegates to subwindow lifecycle controller."""
         self._subwindow_lifecycle_controller.update_focused_subwindow_references()
+        # Keep ROI measurement controller in sync with the active subwindow's managers.
+        if hasattr(self, 'roi_measurement_controller') and self.roi_measurement_controller:
+            self.roi_measurement_controller.update_focused_managers(
+                getattr(self, 'roi_manager', None),
+                getattr(self, 'measurement_tool', None),
+            )
 
     def has_shown_fusion_notification(self, study_uid: str) -> bool:
         """
@@ -1082,8 +1144,8 @@ class DICOMViewerApp(QObject):
         self.series_navigator.update_series_list({}, "", "")
         
         # Clear tag edit history
-        if self.tag_edit_history:
-            self.tag_edit_history.clear_history()
+        if hasattr(self, 'metadata_controller') and self.metadata_controller:
+            self.metadata_controller.clear_tag_history()
         
         # Reset undo/redo state
         self._update_undo_redo_state()
@@ -1167,13 +1229,9 @@ class DICOMViewerApp(QObject):
             tag_str: Tag string that was edited
             new_value: New tag value
         """
-        # Refresh metadata panel
+        # Refresh metadata panel via controller
         search_text = self.metadata_panel.search_edit.text()
-        self.metadata_panel._cached_tags = None
-        # Clear parser cache so it re-reads from updated dataset
-        if self.metadata_panel.parser is not None:
-            self.metadata_panel.parser._tag_cache.clear()
-        self.metadata_panel._populate_tags(search_text)
+        self.metadata_controller.refresh_panel_tags(search_text)
         
         # Refresh tag viewer dialog if open
         if self.dialog_coordinator.tag_viewer_dialog:
@@ -1189,39 +1247,33 @@ class DICOMViewerApp(QObject):
     
     def _undo_tag_edit(self) -> None:
         """Handle undo tag edit request."""
-        if self.current_dataset is not None and self.tag_edit_history:
-            success = self.tag_edit_history.undo(self.current_dataset)
-            if success:
-                # Refresh metadata panel and tag viewer
-                # Clear parser caches so they re-read from updated dataset
-                if self.metadata_panel.parser is not None:
-                    self.metadata_panel.parser._tag_cache.clear()
-                self.metadata_panel._populate_tags()
-                if self.dialog_coordinator.tag_viewer_dialog:
-                    search_text = self.dialog_coordinator.tag_viewer_dialog.search_edit.text()
-                    if self.dialog_coordinator.tag_viewer_dialog.parser is not None:
-                        self.dialog_coordinator.tag_viewer_dialog.parser._tag_cache.clear()
-                    self.dialog_coordinator.tag_viewer_dialog._populate_tags(search_text)
-                # Update undo/redo state
-                self._update_undo_redo_state()
+        success = self.metadata_controller.undo_tag_edit(self.current_dataset)
+        if success:
+            # Refresh metadata panel via controller
+            self.metadata_controller.refresh_panel_tags()
+            # Refresh tag viewer dialog if open
+            if self.dialog_coordinator.tag_viewer_dialog:
+                search_text = self.dialog_coordinator.tag_viewer_dialog.search_edit.text()
+                if self.dialog_coordinator.tag_viewer_dialog.parser is not None:
+                    self.dialog_coordinator.tag_viewer_dialog.parser._tag_cache.clear()
+                self.dialog_coordinator.tag_viewer_dialog._populate_tags(search_text)
+            # Update undo/redo state
+            self._update_undo_redo_state()
     
     def _redo_tag_edit(self) -> None:
         """Handle redo tag edit request."""
-        if self.current_dataset is not None and self.tag_edit_history:
-            success = self.tag_edit_history.redo(self.current_dataset)
-            if success:
-                # Refresh metadata panel and tag viewer
-                # Clear parser caches so they re-read from updated dataset
-                if self.metadata_panel.parser is not None:
-                    self.metadata_panel.parser._tag_cache.clear()
-                self.metadata_panel._populate_tags()
-                if self.dialog_coordinator.tag_viewer_dialog:
-                    search_text = self.dialog_coordinator.tag_viewer_dialog.search_edit.text()
-                    if self.dialog_coordinator.tag_viewer_dialog.parser is not None:
-                        self.dialog_coordinator.tag_viewer_dialog.parser._tag_cache.clear()
-                    self.dialog_coordinator.tag_viewer_dialog._populate_tags(search_text)
-                # Update undo/redo state
-                self._update_undo_redo_state()
+        success = self.metadata_controller.redo_tag_edit(self.current_dataset)
+        if success:
+            # Refresh metadata panel via controller
+            self.metadata_controller.refresh_panel_tags()
+            # Refresh tag viewer dialog if open
+            if self.dialog_coordinator.tag_viewer_dialog:
+                search_text = self.dialog_coordinator.tag_viewer_dialog.search_edit.text()
+                if self.dialog_coordinator.tag_viewer_dialog.parser is not None:
+                    self.dialog_coordinator.tag_viewer_dialog.parser._tag_cache.clear()
+                self.dialog_coordinator.tag_viewer_dialog._populate_tags(search_text)
+            # Update undo/redo state
+            self._update_undo_redo_state()
     
     def _update_undo_redo_state(self) -> None:
         """Update undo/redo menu item states."""
@@ -1996,9 +2048,9 @@ class DICOMViewerApp(QObject):
         # Update state
         self.privacy_view_enabled = enabled
         
-        # Propagate to metadata panel
-        if hasattr(self, 'metadata_panel') and self.metadata_panel:
-            self.metadata_panel.set_privacy_mode(enabled)
+        # Propagate to metadata panel via controller
+        if hasattr(self, 'metadata_controller') and self.metadata_controller:
+            self.metadata_controller.set_privacy_mode(enabled)
         
         # Propagate to overlay manager (shared)
         if hasattr(self, 'overlay_manager') and self.overlay_manager:
@@ -2394,9 +2446,8 @@ class DICOMViewerApp(QObject):
             for roi in roi_list:
                 roi.visible_statistics = default_stats_set.copy()
         
-        # Update styles for all existing ROIs and measurements
-        self.roi_manager.update_all_roi_styles(self.config_manager)
-        self.measurement_tool.update_all_measurement_styles(self.config_manager)
+        # Update styles for all existing ROIs and measurements via controller
+        self.roi_measurement_controller.update_styles(self.config_manager)
         
         # Update styles for text and arrow annotations
         if hasattr(self, 'text_annotation_tool') and self.text_annotation_tool:
