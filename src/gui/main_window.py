@@ -410,7 +410,7 @@ class MainWindow(QMainWindow):
         self.left_panel = QWidget()
         self.left_panel.setObjectName("left_panel")
         left_scroll.setWidget(self.left_panel)
-        left_scroll.setMaximumWidth(400)
+        left_scroll.setMaximumWidth(600)
         left_scroll.setMinimumWidth(200)
         self.splitter.addWidget(left_scroll)
         
@@ -429,7 +429,7 @@ class MainWindow(QMainWindow):
         self.right_panel = QWidget()
         self.right_panel.setObjectName("right_panel")
         right_scroll.setWidget(self.right_panel)
-        right_scroll.setMaximumWidth(400)
+        right_scroll.setMaximumWidth(600)
         right_scroll.setMinimumWidth(200)
         self.splitter.addWidget(right_scroll)
         
