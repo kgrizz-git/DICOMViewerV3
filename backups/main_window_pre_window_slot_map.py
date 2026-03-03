@@ -41,7 +41,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.config_manager import ConfigManager
 from gui.dialogs.edit_recent_list_dialog import EditRecentListDialog
 from gui.main_window_menu_builder import build_menu_bar
-from gui.window_slot_map_widget import WindowSlotMapWidget
 
 
 def _get_resource_path(relative_path: str) -> str:
@@ -1139,32 +1138,10 @@ class MainWindow(QMainWindow):
         if central_widget:
             main_layout = central_widget.layout()
             if main_layout:
-                # Create a container bar so we can place the navigator on the left
-                # and the window-slot thumbnail on the right.
-                container = QWidget(central_widget)
-                container.setObjectName("series_navigator_bar")
-                bar_layout = QHBoxLayout(container)
-                bar_layout.setContentsMargins(0, 0, 0, 0)
-                bar_layout.setSpacing(4)
-
-                # Keep the bar compact in height so it doesn't dominate 1x1/1x2 layouts.
-                container.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-
-                # Navigator on the left (stretch to take remaining space)
-                navigator_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-                bar_layout.addWidget(navigator_widget, 1)
-
-                # Window slot map thumbnail on the right
-                self.window_slot_map_widget = WindowSlotMapWidget(container)
-                self.window_slot_map_widget.setObjectName("window_slot_map_widget")
-                bar_layout.addWidget(self.window_slot_map_widget, 0)
-
-                # Add bar to bottom of main layout
-                main_layout.addWidget(container)
-
-                # Initially hide whole bar
-                container.setVisible(False)
-                self.series_navigator_container = container
+                # Add navigator to bottom of layout
+                main_layout.addWidget(navigator_widget)
+                # Initially hide it
+                navigator_widget.setVisible(False)
                 self.series_navigator_visible = False
     
     def toggle_series_navigator(self) -> None:
@@ -1175,44 +1152,24 @@ class MainWindow(QMainWindow):
         # Emit viewport_resizing before change to preserve centering
         self.viewport_resizing.emit()
         
-        # Toggle visibility of the container bar (navigator + thumbnail)
+        # Toggle visibility
         self.series_navigator_visible = not self.series_navigator_visible
-        container = getattr(self, "series_navigator_container", None)
-        if container is not None:
-            container.setVisible(self.series_navigator_visible)
-        else:
-            # Fallback for safety: toggle navigator alone if container missing
-            self.series_navigator.setVisible(self.series_navigator_visible)
-
-    def set_window_slot_map_visible(self, visible: bool) -> None:
-        """
-        Show or hide the window-slot thumbnail widget (when series navigator is visible).
-        """
-        widget = getattr(self, "window_slot_map_widget", None)
-        if widget is not None:
-            widget.setVisible(visible)
-
-    def set_window_slot_map_callbacks(
-        self,
-        get_slot_to_view,
-        get_layout_mode,
-        get_focused_view_index,
-        get_thumbnail_for_view=None,
-    ) -> None:
-        """
-        Configure callbacks for the window-slot thumbnail widget so it can
-        query current slot_to_view, layout mode, focused view index, and
-        per-view image thumbnails.
-        """
-        widget = getattr(self, "window_slot_map_widget", None)
-        if widget is not None:
-            widget.set_callbacks(
-                get_slot_to_view=get_slot_to_view,
-                get_layout_mode=get_layout_mode,
-                get_focused_view_index=get_focused_view_index,
-                get_thumbnail_for_view=get_thumbnail_for_view,
-            )
-
+        self.series_navigator.setVisible(self.series_navigator_visible)
+        
+        # Update toolbar button text
+        if hasattr(self, 'series_navigator_action'):
+            if self.series_navigator_visible:
+                self.series_navigator_action.setText("Hide Series Navigator")
+            else:
+                self.series_navigator_action.setText("Show Series Navigator")
+        
+        # Emit signal
+        self.series_navigator_visibility_changed.emit(self.series_navigator_visible)
+        
+        # Emit viewport_resized after change to restore centering
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(10, lambda: self.viewport_resized.emit())
+    
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         """
         Handle drag enter event - accept files and folders.

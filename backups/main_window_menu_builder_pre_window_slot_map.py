@@ -172,15 +172,6 @@ def build_menu_bar(main_window) -> None:
 
     view_menu.addSeparator()
 
-    # Window assignment thumbnail toggle
-    main_window.show_window_slot_map_action = QAction("Show Window Assignment Thumbnail", main_window)
-    main_window.show_window_slot_map_action.setCheckable(True)
-    main_window.show_window_slot_map_action.setChecked(True)
-    main_window.show_window_slot_map_action.triggered.connect(
-        lambda checked: getattr(main_window, "set_window_slot_map_visible", lambda v: None)(checked)
-    )
-    view_menu.addAction(main_window.show_window_slot_map_action)
-
     settings_action = QAction("&Settings...", main_window)
     settings_action.triggered.connect(main_window.settings_requested.emit)
     view_menu.addAction(settings_action)

@@ -375,6 +375,10 @@ class SubwindowLifecycleController:
                         image_viewer.swap_view_requested.disconnect(app._on_swap_view_requested)
                     except (TypeError, RuntimeError):
                         pass
+                    try:
+                        image_viewer.window_slot_map_popup_requested.disconnect(app._on_window_slot_map_popup_requested)
+                    except (TypeError, RuntimeError):
+                        pass
 
                 image_viewer.files_dropped.connect(app._open_files_from_paths)
                 image_viewer.layout_change_requested.connect(app._on_layout_change_requested)
@@ -392,6 +396,7 @@ class SubwindowLifecycleController:
                 image_viewer.assign_series_requested.connect(app._on_assign_series_from_context_menu)
                 subwindow.expand_to_1x1_requested.connect(app._on_expand_to_1x1_requested)
                 image_viewer.swap_view_requested.connect(app._on_swap_view_requested)
+                image_viewer.window_slot_map_popup_requested.connect(app._on_window_slot_map_popup_requested)
         self.connect_all_subwindow_transform_signals()
 
     def connect_all_subwindow_transform_signals(self) -> None:
