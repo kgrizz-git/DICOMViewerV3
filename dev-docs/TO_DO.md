@@ -15,6 +15,7 @@
 - [ ] sometimes when navigating slices an image seems to drift up (or the window is panning down)
 - [ ] Allow syncing slices when orientations not orthogonal (or maybe within 45 deg?) so that scrolling slices on one also causes the synced one to change slices accordingly - based on ImagePositionPatient
 - [ ] Show line for current slice location on different views (eg axial slice in one window show as line on a coronal view in another window) - use ImagePositionPatient and orientation
+- [ ] Integrate pylinac and other automated QC analysis tools, and consider writing our own
 - [ ] Differentiate between frame # and slice #?
 - [ ] When an ROI is selected in one subwindow and we click into another subwindow, the ROI disappears from the ROI list in the right pane but the ROI statistics are still there until the user does something else in the new window or goes back to the first one and unselects the ROI. Clicking into a different subwindow should automatically unselect any selected ROI (and the statistics in the right pane should be cleared)
 - [ ] See qi-assessment recommendations
@@ -182,3 +183,17 @@
   - Users may expect reversible workflows; once new DICOMs are created and stored, “undo” in the filesystem sense is not straightforward.
 - **Other notes**
   - A dedicated `dev-docs` plan for processing and DICOM output could spell out which operations are supported, how they are validated, and what guarantees the tool makes about metadata and clinical appropriateness.
+
+### Integrating Pylinac and Other Automated QC Tools
+
+- **Suggestions / best approaches**
+  - Start with a clearly scoped subset of QC tasks (e.g. basic imaging QA tests that pylinac already supports well) and expose them as optional tools within the viewer rather than tightly coupling them to the core workflow.
+  - Design a generic “QC engine” interface in your codebase that can wrap pylinac and other libraries, so that adding/removing tools or swapping implementations does not ripple through the UI or data model.
+  - Provide simple, guided UIs for each QC task (file/series selection, parameter inputs, run button, results summary with clear pass/fail indicators and key metrics) and allow exporting of structured reports (PDF/CSV/JSON).
+  - Where existing tools fall short, prototype your own algorithms in a separate module that follows the same QC interface, enabling side‑by‑side comparison with pylinac or others on the same datasets.
+- **Concerns / difficulties**
+  - Version compatibility and dependencies (e.g. pylinac’s reliance on specific NumPy/Matplotlib versions) can complicate packaging and distribution, especially for standalone executables.
+  - Automatic QC in a clinical context carries expectations around validation and regulatory awareness; any in‑house tools should be clearly labeled as research/QA aids and not diagnostic devices unless formally validated.
+  - DICOM handling expectations for QC (phantom recognition, geometry assumptions, field sizes) may differ from your viewer’s general‑purpose handling and may need specialized loading paths.
+- **Other notes**
+  - A separate `dev-docs` plan for QC integration could list targeted tests, required phantoms, validation datasets, and acceptance thresholds, as well as how QC results integrate with logs or external systems (e.g. exporting to a QA archive).

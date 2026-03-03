@@ -1415,69 +1415,65 @@ class DICOMViewerApp(QObject):
                 )
     
     def _connect_signals(self) -> None:
-        """
-        Connect all application-level signals by delegating to feature-area sub-methods.
-
-        Call order matters: layout and file signals are wired before dialogs so that
-        subwindow and focus state is ready when dialogs are first triggered.
-        """
-        self._connect_layout_signals()
-        self._connect_file_signals()
-        self._connect_dialog_signals()
-        self._connect_undo_redo_and_annotation_signals()
-        self._connect_cine_signals()
-        self._connect_view_signals()
-        self._connect_customization_signals()
-        # Per-subwindow and focused-subwindow signals are wired last so all shared
-        # components are already connected when subwindow state is established.
-        self._connect_subwindow_signals()
-        self._connect_focused_subwindow_signals()
-
-    # ------------------------------------------------------------------
-    # Signal connection sub-methods (called exclusively from _connect_signals)
-    # ------------------------------------------------------------------
-
-    def _connect_layout_signals(self) -> None:
-        """Wire multi-window layout and main-window layout-change signals."""
+        """Connect signals between components."""
+        # Multi-window layout signals
         self.multi_window_layout.focused_subwindow_changed.connect(self._on_focused_subwindow_changed)
         self.multi_window_layout.layout_changed.connect(self._on_layout_changed)
+        
+        # Main window layout signal
         self.main_window.layout_changed.connect(self._on_main_window_layout_changed)
-
-    def _connect_file_signals(self) -> None:
-        """Wire file open/close and application-quit signals."""
+        
+        # File operations
         self.main_window.open_file_requested.connect(self._open_files)
         self.main_window.open_folder_requested.connect(self._open_folder)
         self.main_window.open_recent_file_requested.connect(self._open_recent_file)
         self.main_window.open_files_from_paths_requested.connect(self._open_files_from_paths)
-        # Files-dropped signals are connected per subwindow in _connect_subwindow_signals.
+        # Files dropped will be connected per subwindow
         self.main_window.close_requested.connect(self._close_files)
         self.app.aboutToQuit.connect(self._on_app_about_to_quit)
-
-    def _connect_dialog_signals(self) -> None:
-        """Wire signals that open shared dialogs and panels (settings, overlays, export, etc.)."""
+        
+        # Settings (shared, not per-subwindow)
         self.main_window.settings_requested.connect(self._open_settings)
         self.main_window.overlay_settings_requested.connect(self._open_overlay_settings)
+        
+        # Tag viewer (shared)
         self.main_window.tag_viewer_requested.connect(self._open_tag_viewer)
+        
+        # Overlay configuration (shared)
         self.main_window.overlay_config_requested.connect(self._open_overlay_config)
+        
+        # Annotation options (shared)
         self.main_window.annotation_options_requested.connect(self._open_annotation_options)
+        
+        # Quick Start Guide (shared)
         self.main_window.quick_start_guide_requested.connect(self._open_quick_start_guide)
+        
+        # Fusion Technical Documentation (shared)
         self.main_window.fusion_technical_doc_requested.connect(self._open_fusion_technical_doc)
+        
+        # Tag Export (shared)
         self.main_window.tag_export_requested.connect(self._open_tag_export)
+        
+        # Histogram (shared)
         self.main_window.histogram_requested.connect(self.dialog_coordinator.open_histogram)
+
+        # Export ROI Statistics (shared – main window menu entry)
         self.main_window.export_roi_statistics_requested.connect(self._open_export_roi_statistics)
+
+        # Export (shared)
         self.main_window.export_requested.connect(self._open_export)
         self.main_window.export_screenshots_requested.connect(self._open_export_screenshots)
-        self.main_window.about_this_file_requested.connect(self._open_about_this_file)
-
-    def _connect_undo_redo_and_annotation_signals(self) -> None:
-        """Wire undo/redo (tag edits and annotations) and annotation copy/paste signals."""
+        
+        # Undo/Redo tag edits (shared)
+        # Undo/redo signals (for both tag edits and annotations)
         self.main_window.undo_tag_edit_requested.connect(self._on_undo_requested)
         self.main_window.redo_tag_edit_requested.connect(self._on_redo_requested)
+        
+        # Annotation copy/paste (shared)
         self.main_window.copy_annotation_requested.connect(self._copy_annotations)
         self.main_window.paste_annotation_requested.connect(self._paste_annotations)
-
-    def _connect_cine_signals(self) -> None:
-        """Wire cine controls widget and cine player signals."""
+        
+        # Cine controls widget signals
         self.cine_controls_widget.play_requested.connect(self._on_cine_play)
         self.cine_controls_widget.pause_requested.connect(self._on_cine_pause)
         self.cine_controls_widget.stop_requested.connect(self._on_cine_stop)
@@ -1487,21 +1483,36 @@ class DICOMViewerApp(QObject):
         self.cine_controls_widget.loop_start_set.connect(self._on_cine_loop_start_set)
         self.cine_controls_widget.loop_end_set.connect(self._on_cine_loop_end_set)
         self.cine_controls_widget.loop_bounds_cleared.connect(self._on_cine_loop_bounds_cleared)
+
+        # Cine player signals
         self.cine_player.frame_advance_requested.connect(self._on_cine_frame_advance)
         self.cine_player.playback_state_changed.connect(self._on_cine_playback_state_changed)
-
-    def _connect_view_signals(self) -> None:
-        """Wire privacy, image-smoothing, and theme-change view signals."""
+        
+        # Privacy view toggle (shared)
         self.main_window.privacy_view_toggled.connect(self._on_privacy_view_toggled)
-        self.main_window.smooth_when_zoomed_toggled.connect(self._on_smooth_when_zoomed_toggled)
-        self.main_window.theme_changed.connect(self.fusion_controls_widget.update_status_text_colors)
 
-    def _connect_customization_signals(self) -> None:
-        """Wire import/export signals for app customizations and tag-export presets."""
+        # Smooth when zoomed toggle (shared)
+        self.main_window.smooth_when_zoomed_toggled.connect(self._on_smooth_when_zoomed_toggled)
+
+        # Theme change (shared) - update fusion status text colors
+        self.main_window.theme_changed.connect(self.fusion_controls_widget.update_status_text_colors)
+        
+        # About this File (shared)
+        self.main_window.about_this_file_requested.connect(self._open_about_this_file)
+        
+        # Customizations export/import (shared)
         self.main_window.export_customizations_requested.connect(self._on_export_customizations)
         self.main_window.import_customizations_requested.connect(self._on_import_customizations)
+
+        # Tag export presets export/import (shared)
         self.main_window.export_tag_presets_requested.connect(self._on_export_tag_presets)
         self.main_window.import_tag_presets_requested.connect(self._on_import_tag_presets)
+        
+        # Connect signals for all subwindows
+        self._connect_subwindow_signals()
+        
+        # Connect signals for focused subwindow (initial)
+        self._connect_focused_subwindow_signals()
     
     def _on_focused_subwindow_changed(self, subwindow: SubWindowContainer) -> None:
         """Handle focused subwindow change. Delegates to subwindow lifecycle controller."""
