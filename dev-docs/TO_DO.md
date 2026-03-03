@@ -21,11 +21,12 @@
 - [ ] see Swap_all_layouts... plan md file:
     - [ ] add a very small 2x2 thumbnail somewhere so can see all window assignments even when not in 2x2 mode? perhaps far right of navigator, separated from series/studies by a separator? or make it only appear when you go to swap in the context menu?
 - [ ] make window map thumbnail in navigator interactive? so clicking on a square sets focus and makes it visible if not already
+- [ ] make show/hide left pane/right pane an option from the view menu
 - [ ] sometimes when navigating slices an image seems to drift up (or the window is panning down)
-- [ ] Allow syncing slices - based on ImagePositionPatient
+- [ ] Allow syncing slices when orientations not orthogonal (or maybe within 45 deg?) - based on ImagePositionPatient
 - [ ] Show line for current slice location on different views (eg axial slice in one window show as line on a coronal view in another window)
 - [ ] Differentiate between frame # and slice #?
 - [ ] See qi-assessment recommendations
-
-## More minor
 - [ ] When an ROI is selected in one subwindow and we click into another subwindow, the ROI disappears from the ROI list in the right pane but the ROI statistics are still there until the user does something else in the new window or goes back to the first one and unselects the ROI. Clicking into a different subwindow should automatically unselect any selected ROI (and the statistics in the right pane should be cleared)
+
+- [ ] make right pane minimum width before collapsing 250 instead of 200?
