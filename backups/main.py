@@ -1342,8 +1342,25 @@ class DICOMViewerApp(QObject):
         
         right_layout.addWidget(tab_widget)
         
-        # Add series navigator to main window
+        # Add series navigator and window-slot thumbnail to main window
         self.main_window.set_series_navigator(self.series_navigator)
+
+        # Wire callbacks for window-slot thumbnail widget (if present)
+        if hasattr(self.main_window, "set_window_slot_map_callbacks"):
+            try:
+                self.main_window.set_window_slot_map_callbacks(
+                    get_slot_to_view=self.multi_window_layout.get_slot_to_view,
+                    get_layout_mode=self.multi_window_layout.get_layout_mode,
+                    get_focused_view_index=self.get_focused_subwindow_index,
+                    get_thumbnail_for_view=self._get_thumbnail_for_view,
+                )
+            except Exception:
+                pass
+            # Apply initial visibility from the View menu toggle if available
+            if hasattr(self.main_window, "show_window_slot_map_action"):
+                self.main_window.set_window_slot_map_visible(
+                    self.main_window.show_window_slot_map_action.isChecked()
+                )
     
     def _connect_signals(self) -> None:
         """Connect signals between components."""
@@ -1448,6 +1465,19 @@ class DICOMViewerApp(QObject):
     def _on_focused_subwindow_changed(self, subwindow: SubWindowContainer) -> None:
         """Handle focused subwindow change. Delegates to subwindow lifecycle controller."""
         self._subwindow_lifecycle_controller.on_focused_subwindow_changed(subwindow)
+        # Refresh window-slot thumbnail(s) so focus outline updates.
+        widget = getattr(self.main_window, "window_slot_map_widget", None)
+        if widget is not None:
+            try:
+                widget.refresh()
+            except Exception:
+                pass
+        popup_widget = getattr(self, "_window_slot_map_widget_popup", None)
+        if popup_widget is not None:
+            try:
+                popup_widget.refresh()
+            except Exception:
+                pass
     
     def _update_series_navigator_highlighting(self) -> None:
         """Update series navigator highlighting based on focused subwindow's series."""
@@ -1465,6 +1495,13 @@ class DICOMViewerApp(QObject):
     def _on_layout_changed(self, layout_mode: str) -> None:
         """Handle layout mode change from multi-window layout. Delegates to subwindow lifecycle controller."""
         self._subwindow_lifecycle_controller.on_layout_changed(layout_mode)
+        # Refresh window-slot thumbnail if present
+        widget = getattr(self.main_window, "window_slot_map_widget", None)
+        if widget is not None:
+            try:
+                widget.refresh()
+            except Exception:
+                pass
     
     def _on_main_window_layout_changed(self, layout_mode: str) -> None:
         """Handle layout mode change from main window menu. Delegates to subwindow lifecycle controller."""
@@ -1511,12 +1548,77 @@ class DICOMViewerApp(QObject):
             self.multi_window_layout.set_layout("1x1")
     
     def _on_swap_view_requested(self, other_index: int) -> None:
-        """Handle Swap with View X from context menu: swap grid positions in 2x2; no-op if not 2x2."""
-        if self.multi_window_layout.get_layout_mode() != "2x2":
-            return
+        """Handle Swap with View X from context menu: swap slot positions in all layouts; focus stays unchanged."""
         sender = self.sender()
-        if isinstance(sender, ImageViewer) and sender.subwindow_index is not None:
-            self.multi_window_layout.swap_views(sender.subwindow_index, other_index)
+        if not isinstance(sender, ImageViewer) or sender.subwindow_index is None:
+            return
+        if other_index < 0 or other_index >= 4 or other_index == sender.subwindow_index:
+            return
+        self.multi_window_layout.swap_views(sender.subwindow_index, other_index)
+        # Resize images in visible panes so any view that was last in a smaller
+        # layout (e.g. 2x2) fits the current window.
+        self._subwindow_lifecycle_controller.schedule_viewport_resized()
+        if self.multi_window_layout.get_layout_mode() != "2x2":
+            self.main_window.update_status("Slot order updated; switch to 2x2 to see positions.")
+        # Refresh window-slot thumbnail if present
+        widget = getattr(self.main_window, "window_slot_map_widget", None)
+        if widget is not None:
+            try:
+                widget.refresh()
+            except Exception:
+                pass
+
+    def _on_window_slot_map_popup_requested(self) -> None:
+        """Show or hide a small popup with the window-slot map near the cursor (toggle)."""
+        # Reuse callbacks from the main window's thumbnail widget if available.
+        from PySide6.QtWidgets import QDialog, QVBoxLayout
+        from PySide6.QtCore import Qt, QPoint
+        from PySide6.QtGui import QCursor
+        from gui.window_slot_map_widget import WindowSlotMapWidget
+
+        base_widget = getattr(self.main_window, "window_slot_map_widget", None)
+        if base_widget is None:
+            return
+
+        # If dialog already exists and is visible, treat this as a toggle and close it.
+        if hasattr(self, "_window_slot_map_dialog") and self._window_slot_map_dialog is not None:
+            dlg = self._window_slot_map_dialog
+            if dlg.isVisible():
+                dlg.close()
+                return
+
+        # Lazily create dialog and embedded widget
+        if not hasattr(self, "_window_slot_map_dialog") or self._window_slot_map_dialog is None:
+            dlg = QDialog(self.main_window)
+            dlg.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint)
+            dlg.setModal(False)
+            layout = QVBoxLayout(dlg)
+            layout.setContentsMargins(4, 4, 4, 4)
+            layout.setSpacing(0)
+            widget = WindowSlotMapWidget(dlg)
+            layout.addWidget(widget)
+            self._window_slot_map_dialog = dlg
+            self._window_slot_map_widget_popup = widget
+        else:
+            dlg = self._window_slot_map_dialog
+            widget = self._window_slot_map_widget_popup
+
+        # Configure callbacks to mirror the main thumbnail (including thumbnails)
+        try:
+            widget.set_callbacks(
+                get_slot_to_view=self.multi_window_layout.get_slot_to_view,
+                get_layout_mode=self.multi_window_layout.get_layout_mode,
+                get_focused_view_index=self.get_focused_subwindow_index,
+                get_thumbnail_for_view=self._get_thumbnail_for_view,
+            )
+        except Exception:
+            pass
+
+        widget.refresh()
+        global_pos = QCursor.pos()
+        dlg.move(global_pos + QPoint(16, 16))
+        dlg.show()
+        dlg.raise_()
     
     def _on_assign_series_requested(self, series_uid: str, slice_index: int) -> None:
         """Handle series assignment request from subwindow; sender() identifies which subwindow."""
@@ -3067,7 +3169,34 @@ class DICOMViewerApp(QObject):
     def _get_focused_subwindow(self) -> Optional[SubWindowContainer]:
         """Get the currently focused subwindow. Delegates to subwindow lifecycle controller."""
         return self._subwindow_lifecycle_controller.get_focused_subwindow()
-    
+
+    def _get_thumbnail_for_view(self, view_index: int):
+        """
+        Return a small pixmap of the current image displayed in the given view (0–3),
+        for use in the window-slot map thumbnail. Returns None if the view has no image.
+        """
+        from PySide6.QtGui import QPixmap
+        from PySide6.QtCore import Qt
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        if view_index < 0 or view_index >= len(subwindows):
+            return None
+        sub = subwindows[view_index]
+        if not sub or not sub.image_viewer:
+            return None
+        view = sub.image_viewer
+        vp = view.viewport()
+        if vp is None or vp.width() <= 0 or vp.height() <= 0:
+            return None
+        pix = vp.grab(vp.rect())
+        if pix.isNull():
+            return None
+        cell = 40
+        return pix.scaled(
+            cell, cell,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+
     def _get_selected_rois(self, subwindow: SubWindowContainer) -> list:
         """
         Get selected ROI items from the scene.
