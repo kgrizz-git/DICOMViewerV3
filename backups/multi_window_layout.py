@@ -551,18 +551,9 @@ class MultiWindowLayout(QWidget):
 
     def swap_views(self, view_index_a: int, view_index_b: int) -> None:
         """
-        Swap the slot positions of two views (updates slot_to_view).
-        Effective in all layouts:
-        - 2x2: all four positions update.
-        - 1x2 / 2x1: slot order is updated and visible panes are re-arranged.
-        - 1x1: slot order is updated for when the user switches layouts; visible
-          content stays bound to the focused view.
-        
-        View data (slice, ROIs, etc.) stays with the same logical view index.
-        After swapping slot_to_view, focus is re-applied to the **same window
-        (grid slot)** that was focused before the swap, so ROI list/statistics,
-        slice navigator, metadata, and cine controls follow the content now
-        occupying that window.
+        Swap the grid positions of two views in 2x2 layout.
+        View data (slice, ROIs, etc.) stays with the same view index; only
+        widget positions change.
         
         Args:
             view_index_a: View index (0-3)
@@ -572,18 +563,6 @@ class MultiWindowLayout(QWidget):
             return
         if view_index_a == view_index_b:
             return
-
-        # Remember which slot (window) is currently focused so we can keep
-        # focus on that window after the swap and have panels follow the
-        # swapped-in view.
-        focused_slot = None
-        if self.focused_subwindow is not None and self.focused_subwindow in self.subwindows:
-            focused_view_idx = self.subwindows.index(self.focused_subwindow)
-            for s in range(4):
-                if s < len(self.slot_to_view) and self.slot_to_view[s] == focused_view_idx:
-                    focused_slot = s
-                    break
-
         # Find slots that currently show these views
         s_a = s_b = None
         for s in range(4):
@@ -604,26 +583,8 @@ class MultiWindowLayout(QWidget):
                 self.config_manager.set_view_slot_order(self.slot_to_view)
             except Exception:
                 pass
-
-        # Re-apply focus to the same window (slot) that was focused before the
-        # swap so that _arrange_subwindows (which uses focused view/slot in 1x2
-        # and 2x1) keeps showing the row/column containing that window, and all
-        # panels follow the swapped-in view in that window.
-        if focused_slot is not None:
-            new_view_index = self.slot_to_view[focused_slot] if focused_slot < len(self.slot_to_view) else None
-            if new_view_index is not None and 0 <= new_view_index < len(self.subwindows):
-                self.set_focused_subwindow(self.subwindows[new_view_index])
-
-        # Re-arrange visible panes so layout reflects new slot order (including 1x1
-        # so the single visible pane is the swapped-in view for the focused window).
         if self.current_layout == "2x2":
             self._arrange_subwindows("2x2")
-        elif self.current_layout == "1x2":
-            self._arrange_subwindows("1x2")
-        elif self.current_layout == "2x1":
-            self._arrange_subwindows("2x1")
-        elif self.current_layout == "1x1":
-            self._arrange_subwindows("1x1")
 
     def reset_slot_to_view_default(self) -> None:
         """

@@ -18,8 +18,8 @@
 - [ ] See if I can make executables smaller especially on Mac
 - [ ] Try to make code faster
 - [ ] Maybe label windows? And then allow swapping windows in any layout
-- [ ] make swap work on all layouts but don't make focus follow view, instead make it stay on current window (this means content like ROI statistics/list, frame slider bar, tag browser in left pane, etc, will need to be updated)
-- [ ] add a very small 2x2 thumbnail somewhere so can see all window assignments even when not in 2x2 mode? perhaps far right of navigator, separated from series/studies by a separator? or make it only appear when you go to swap in the context menu?
+- [ ] see Swap_all_layouts... plan md file:
+    - [ ] add a very small 2x2 thumbnail somewhere so can see all window assignments even when not in 2x2 mode? perhaps far right of navigator, separated from series/studies by a separator? or make it only appear when you go to swap in the context menu?
 - [ ] sometimes when navigating slices an image seems to drift up (or the window is panning down)
 - [ ] Allow syncing slices - based on ImagePositionPatient
 - [ ] Show line for current slice location on different views (eg axial slice in one window show as line on a coronal view in another window)

@@ -1511,12 +1511,18 @@ class DICOMViewerApp(QObject):
             self.multi_window_layout.set_layout("1x1")
     
     def _on_swap_view_requested(self, other_index: int) -> None:
-        """Handle Swap with View X from context menu: swap grid positions in 2x2; no-op if not 2x2."""
-        if self.multi_window_layout.get_layout_mode() != "2x2":
-            return
+        """Handle Swap with View X from context menu: swap slot positions in all layouts; focus stays unchanged."""
         sender = self.sender()
-        if isinstance(sender, ImageViewer) and sender.subwindow_index is not None:
-            self.multi_window_layout.swap_views(sender.subwindow_index, other_index)
+        if not isinstance(sender, ImageViewer) or sender.subwindow_index is None:
+            return
+        if other_index < 0 or other_index >= 4 or other_index == sender.subwindow_index:
+            return
+        self.multi_window_layout.swap_views(sender.subwindow_index, other_index)
+        # Resize images in visible panes so any view that was last in a smaller
+        # layout (e.g. 2x2) fits the current window.
+        self._subwindow_lifecycle_controller.schedule_viewport_resized()
+        if self.multi_window_layout.get_layout_mode() != "2x2":
+            self.main_window.update_status("Slot order updated; switch to 2x2 to see positions.")
     
     def _on_assign_series_requested(self, series_uid: str, slice_index: int) -> None:
         """Handle series assignment request from subwindow; sender() identifies which subwindow."""
