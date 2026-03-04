@@ -17,11 +17,11 @@
 
 ## Phase 0 – Planning and Scoping
 
-- [ ] Review this plan and confirm approach with user before starting.
-- [ ] Confirm exact line ranges for each signal group in `_connect_signals`.
-- [ ] Confirm which `FileOperationsHandler` methods share common infrastructure (progress dialog, animated loading, cancellation).
-- [ ] List all `ConfigManager` methods and assign each to a feature domain mixin.
-- [ ] Back up all files to be modified: `src/main.py`, `src/core/file_operations_handler.py`, `src/utils/config_manager.py`.
+- [x] Review this plan and confirm approach with user before starting.
+- [x] Confirm exact line ranges for each signal group in `_connect_signals`.
+- [x] Confirm which `FileOperationsHandler` methods share common infrastructure (progress dialog, animated loading, cancellation).
+- [x] List all `ConfigManager` methods and assign each to a feature domain mixin.
+- [x] Back up all files to be modified: `src/main.py`, `src/core/file_operations_handler.py`, `src/utils/config_manager.py`.
 
 ---
 
@@ -33,36 +33,36 @@
 
 ### Phase 1.1 – Design
 
-- [ ] Identify signal groups and define sub-method names:
-  - [ ] `_connect_layout_signals()` – multi-window layout focus/layout-change, main window layout.
-  - [ ] `_connect_file_signals()` – open files/folder/recent, open from paths, close, app quit.
-  - [ ] `_connect_dialog_signals()` – settings, overlay settings, tag viewer, overlay config, annotation options, quick-start guide, fusion tech doc, tag export, histogram, ROI stats export, about-this-file, export/export-screenshots.
-  - [ ] `_connect_undo_redo_and_annotation_signals()` – undo/redo tag edits, annotation copy/paste.
-  - [ ] `_connect_cine_signals()` – cine controls widget (play, pause, stop, speed, loop, frame slider, loop bounds), cine player (frame advance, state change).
-  - [ ] `_connect_view_signals()` – privacy toggle, smooth-when-zoomed toggle, theme change.
-  - [ ] `_connect_customization_signals()` – export/import customizations, export/import tag presets.
-  - [ ] `_connect_subwindow_signals()` already exists; keep the existing call.
-  - [ ] `_connect_focused_subwindow_signals()` already exists; keep the existing call.
-- [ ] Confirm that `_connect_signals` becomes only a sequence of calls to these sub-methods.
+- [x] Identify signal groups and define sub-method names:
+  - [x] `_connect_layout_signals()` – multi-window layout focus/layout-change, main window layout.
+  - [x] `_connect_file_signals()` – open files/folder/recent, open from paths, close, app quit.
+  - [x] `_connect_dialog_signals()` – settings, overlay settings, tag viewer, overlay config, annotation options, quick-start guide, fusion tech doc, tag export, histogram, ROI stats export, about-this-file, export/export-screenshots.
+  - [x] `_connect_undo_redo_and_annotation_signals()` – undo/redo tag edits, annotation copy/paste.
+  - [x] `_connect_cine_signals()` – cine controls widget (play, pause, stop, speed, loop, frame slider, loop bounds), cine player (frame advance, state change).
+  - [x] `_connect_view_signals()` – privacy toggle, smooth-when-zoomed toggle, theme change.
+  - [x] `_connect_customization_signals()` – export/import customizations, export/import tag presets.
+  - [x] `_connect_subwindow_signals()` already exists; keep the existing call.
+  - [x] `_connect_focused_subwindow_signals()` already exists; keep the existing call.
+- [x] Confirm that `_connect_signals` becomes only a sequence of calls to these sub-methods.
 
 ### Phase 1.2 – Implementation
 
-- [ ] Back up `src/main.py` to `backups/main.py` (or timestamped) before editing.
-- [ ] Extract each signal group block into its private sub-method with a clear docstring.
-- [ ] Replace the full body of `_connect_signals` with ordered calls to each sub-method.
-- [ ] Verify no signals were accidentally omitted or duplicated.
+- [x] Back up `src/main.py` to `backups/main.py` (or timestamped) before editing.
+- [x] Extract each signal group block into its private sub-method with a clear docstring.
+- [x] Replace the full body of `_connect_signals` with ordered calls to each sub-method.
+- [x] Verify no signals were accidentally omitted or duplicated.
 
 ### Phase 1.3 – Testing
 
-- [ ] Identify any existing signal-wiring tests.
-- [ ] Run full automated test suite; confirm no regressions: `python -m pytest tests/ -v`
-- [ ] Manual smoke tests:
-  - [ ] Open files via menu and drag-and-drop.
-  - [ ] Toggle privacy view, smoothing, and theme.
-  - [ ] Trigger cine play/pause/stop.
-  - [ ] Trigger undo/redo (tag edit and annotation).
-  - [ ] Open settings, overlay config, tag viewer, quick start guide.
-  - [ ] Change layout (1x1, 1x2, 2x1, 2x2).
+- [x] Identify any existing signal-wiring tests.
+- [x] Run full automated test suite; confirm no regressions: `python -m pytest tests/ -v`
+- [x] Manual smoke tests:
+  - [x] Open files via menu and drag-and-drop.
+  - [x] Toggle privacy view, smoothing, and theme.
+  - [x] Trigger cine play/pause/stop.
+  - [x] Trigger undo/redo (tag edit and annotation).
+  - [x] Open settings, overlay config, tag viewer, quick start guide.
+  - [x] Change layout (1x1, 1x2, 2x1, 2x2).
 
 ---
 

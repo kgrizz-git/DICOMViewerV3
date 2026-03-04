@@ -178,9 +178,6 @@ class ROICommand(Command):
         self.scene = scene
         self.key = (study_uid, series_uid, instance_identifier)
         self.update_statistics_callback = update_statistics_callback
-        # Capture overlay visibility before execute() or handle_roi_deleted() mutate it.
-        # Required so undo("remove") can restore the flag to its pre-deletion state.
-        self._saved_overlay_visible: bool = getattr(roi_item, 'statistics_overlay_visible', True)
     
     def execute(self) -> None:
         """Execute the command."""
@@ -234,21 +231,16 @@ class ROICommand(Command):
                 self.roi_manager.rois[self.key].append(self.roi_item)
                 if self.roi_item.item.scene() != self.scene:
                     self.scene.addItem(self.roi_item.item)
-                # Restore the overlay visibility flag to its pre-deletion value so
-                # that the subsequent overlay re-add and statistics callback work
-                # correctly (handle_roi_deleted sets the flag to False during deletion).
-                self.roi_item.statistics_overlay_visible = self._saved_overlay_visible
-                # Re-add existing overlay item to scene if it survived deletion
-                if (hasattr(self.roi_item, 'statistics_overlay_item') and
-                        self.roi_item.statistics_overlay_item is not None and
-                        self.roi_item.statistics_overlay_visible):
+                # Restore statistics overlay if it was visible
+                if (hasattr(self.roi_item, 'statistics_overlay_visible') and 
+                    self.roi_item.statistics_overlay_visible and
+                    hasattr(self.roi_item, 'statistics_overlay_item') and 
+                    self.roi_item.statistics_overlay_item is not None):
                     overlay_item = self.roi_item.statistics_overlay_item
                     if overlay_item.scene() != self.scene:
                         self.scene.addItem(overlay_item)
                     overlay_item.setVisible(True)
-                # Trigger statistics overlay update to recalculate and refresh text;
-                # update_roi_statistics_overlays checks statistics_overlay_visible, so
-                # the flag must be restored (above) before this call.
+                # Trigger statistics overlay update to recalculate and refresh text
                 if self.update_statistics_callback:
                     self.update_statistics_callback()
 

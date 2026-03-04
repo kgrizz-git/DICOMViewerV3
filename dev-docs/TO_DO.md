@@ -16,6 +16,7 @@
 - [ ] Allow syncing slices when orientations not orthogonal (or maybe within 45 deg?) so that scrolling slices on one also causes the synced one to change slices accordingly - based on ImagePositionPatient
 - [ ] Show line for current slice location on different views (eg axial slice in one window show as line on a coronal view in another window) - use ImagePositionPatient and orientation
 - [ ] Integrate pylinac and other automated QC analysis tools, and consider writing our own
+- [ ] Make it possible to open files/folder without closing currently open ones, including with drag and drop onto running app
 - [ ] Differentiate between frame # and slice #?
 - [ ] When an ROI is selected in one subwindow and we click into another subwindow, the ROI disappears from the ROI list in the right pane but the ROI statistics are still there until the user does something else in the new window or goes back to the first one and unselects the ROI. Clicking into a different subwindow should automatically unselect any selected ROI (and the statistics in the right pane should be cleared)
 - [ ] See qi-assessment recommendations
