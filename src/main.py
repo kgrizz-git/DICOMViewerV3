@@ -153,12 +153,17 @@ class DICOMViewerApp(QObject):
     def _init_core_managers(self) -> None:
         """
         Create the Qt application, all data managers, and application-wide state.
-
+        
         This is the very first initialization step. No widgets may be created
         before QApplication exists.
         """
-        # Qt application (must precede any widget creation)
-        self.app = QApplication(sys.argv)
+        # Qt application (must precede any widget creation). Reuse an existing
+        # QApplication instance when running under tests or embedded contexts.
+        existing_app = QApplication.instance()
+        if existing_app is None:
+            self.app = QApplication(sys.argv)
+        else:
+            self.app = existing_app
         self.app.setApplicationName("DICOM Viewer V3")
         self.app.setStyle(QStyleFactory.create("Fusion"))
 
@@ -1475,6 +1480,10 @@ class DICOMViewerApp(QObject):
         self.main_window.redo_tag_edit_requested.connect(self._on_redo_requested)
         self.main_window.copy_annotation_requested.connect(self._copy_annotations)
         self.main_window.paste_annotation_requested.connect(self._paste_annotations)
+        # Connect metadata panel tag_edited so that editing a tag in the left panel
+        # enables the Undo action via _update_undo_redo_state, just as editing in
+        # the tag viewer dialog does via dialog_coordinator.tag_edited_callback.
+        self.metadata_panel.tag_edited.connect(self._on_tag_edited)
 
     def _connect_cine_signals(self) -> None:
         """Wire cine controls widget and cine player signals."""
