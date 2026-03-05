@@ -25,6 +25,7 @@ Requirements:
 
 import warnings
 from datetime import datetime
+from utils.debug_flags import DEBUG_LAYOUT
 from typing import Optional, Dict, Any
 from pydicom.dataset import Dataset
 from PySide6.QtCore import Qt, QPointF, QRectF, QSize, QTimer
@@ -143,10 +144,10 @@ class SubwindowLifecycleController:
         if focused_subwindow not in subwindows:
             return
         focused_idx = subwindows.index(focused_subwindow)
-        # Debug: trace focus switch for W/L and viewport investigation
-        vsm = app.subwindow_managers.get(focused_idx, {}).get('view_state_manager')
-        ts = datetime.now().strftime("%H:%M:%S.%f")
-        print(f"[DEBUG-LAYOUT] [{ts}] update_focused_subwindow_references: focused_idx={focused_idx} view_state_manager id={id(vsm) if vsm else None}")
+        if DEBUG_LAYOUT:
+            vsm = app.subwindow_managers.get(focused_idx, {}).get('view_state_manager')
+            ts = datetime.now().strftime("%H:%M:%S.%f")
+            print(f"[DEBUG-LAYOUT] [{ts}] update_focused_subwindow_references: focused_idx={focused_idx} view_state_manager id={id(vsm) if vsm else None}")
         app.focused_subwindow_index = focused_idx
         if focused_idx in app.subwindow_managers:
             managers = app.subwindow_managers[focused_idx]
@@ -786,9 +787,9 @@ class SubwindowLifecycleController:
         subwindows_list = app.multi_window_layout.get_all_subwindows()
         focused = app.multi_window_layout.get_focused_subwindow()
         focused_idx = subwindows_list.index(focused) if (focused is not None and focused.isVisible() and focused in subwindows_list) else None
-        # Debug: trace which subwindow is focused at 100ms (drift investigation)
-        ts = datetime.now().strftime("%H:%M:%S.%f")
-        print(f"[DEBUG-LAYOUT] [{ts}] trigger_viewport_resized (100ms): focused_idx={focused_idx} view_state_manager id={id(app.subwindow_managers.get(focused_idx, {}).get('view_state_manager')) if focused_idx is not None and focused_idx in app.subwindow_managers else None}")
+        if DEBUG_LAYOUT:
+            ts = datetime.now().strftime("%H:%M:%S.%f")
+            print(f"[DEBUG-LAYOUT] [{ts}] trigger_viewport_resized (100ms): focused_idx={focused_idx} view_state_manager id={id(app.subwindow_managers.get(focused_idx, {}).get('view_state_manager')) if focused_idx is not None and focused_idx in app.subwindow_managers else None}")
         # Call handle_viewport_resized for every visible subwindow so unfocused panes (e.g. second pane in 1x2) also rescale after layout change
         for idx, subwindow in enumerate(subwindows_list):
             if subwindow and subwindow.isVisible() and idx in app.subwindow_managers:
@@ -876,8 +877,9 @@ class SubwindowLifecycleController:
         eventFilter and exceed the recursion limit.
         """
         mode = layout_mode
-        ts = datetime.now().strftime("%H:%M:%S.%f")
-        print(f"[DEBUG-LAYOUT] [{ts}] on_main_window_layout_changed: scheduling deferred set_layout({mode!r})")
+        if DEBUG_LAYOUT:
+            ts = datetime.now().strftime("%H:%M:%S.%f")
+            print(f"[DEBUG-LAYOUT] [{ts}] on_main_window_layout_changed: scheduling deferred set_layout({mode!r})")
         QTimer.singleShot(0, lambda: self.app.multi_window_layout.set_layout(mode))
 
     def capture_subwindow_view_states(self) -> Dict[int, Dict]:

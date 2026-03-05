@@ -108,6 +108,10 @@ class DialogCoordinator:
         """Handle overlay settings dialog request."""
         dialog = OverlaySettingsDialog(self.config_manager, self.main_window)
         if self.settings_applied_callback:
+            # Both signals trigger the same overlay-refresh pipeline:
+            # settings_changed fires on every live adjustment; settings_applied
+            # fires once on OK (after which the dialog closes).
+            dialog.settings_changed.connect(self.settings_applied_callback)
             dialog.settings_applied.connect(self.settings_applied_callback)
         dialog.exec()
     
@@ -159,6 +163,9 @@ class DialogCoordinator:
         """
         dialog = OverlayConfigDialog(self.config_manager, self.main_window, initial_modality=current_modality)
         if self.overlay_config_applied_callback:
+            # config_changed fires on every live adjustment; config_applied fires
+            # once on OK after all modalities are saved to ConfigManager.
+            dialog.config_changed.connect(self.overlay_config_applied_callback)
             dialog.config_applied.connect(self.overlay_config_applied_callback)
         dialog.exec()
     

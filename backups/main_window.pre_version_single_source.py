@@ -39,7 +39,6 @@ import re
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.config_manager import ConfigManager
-from version import __version__ as APP_VERSION
 from utils.debug_flags import DEBUG_LAYOUT
 from gui.dialogs.edit_recent_list_dialog import EditRecentListDialog
 from gui.main_window_menu_builder import build_menu_bar
@@ -649,7 +648,6 @@ class MainWindow(QMainWindow):
 </head>
 <body>
     <h2>{icon_html}Medical Physics DICOM Viewer</h2>
-    <p><b>Version {APP_VERSION}</b></p>
     <p><b>Made by Kevin Grizzard</b><br>
     Available at <a href='https://github.com/kgrizz-git/DICOMViewerV3'>https://github.com/kgrizz-git/DICOMViewerV3</a></p>
     <hr>
