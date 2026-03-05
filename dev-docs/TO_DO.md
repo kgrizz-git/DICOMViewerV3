@@ -30,9 +30,15 @@
     - [ ] Ask AI agent to estimate difference in registration for some sample points of PET study registered to CT in 2D vs 3D mode and take screenshots (cloud agents)
     - [ ] Check fusion with some other studies
     - [ ] Improve Window/Leveling preset/auto in fusion mode
-  - [ ] make it possible to move the layout map thumbnail when opened from context menu
+- [ ] make it possible to move the layout map thumbnail when opened from context menu
+- [ ] add a "quick window/level" context menu item/shortcut that opens a dialog where user can type window, hit tab or click over, and then type a level, then hit enter or click OK
+- [ ] when loading PET CT study there is a ~10 second lag before the loading progress window pops up - what is happening then?
+- [ ] make default histogram plot and window smaller and allow resizing much smaller
+- [ ] make series number labels like "S01" in navigator a bit smaller
+
 
 - [ ] make right pane minimum width before collapsing 250 instead of 200?
+
 
 - [ ] Could consider more sophisticated smoothing but would need to use PIL/numpy rather than Qt (" If you want something “better” (e.g. bicubic or Lanczos), you’d have to do the resize yourself (e.g. with PIL/NumPy) and then hand the result to Qt for display.")
 

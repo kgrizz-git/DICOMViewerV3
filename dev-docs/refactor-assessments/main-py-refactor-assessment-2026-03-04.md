@@ -217,40 +217,40 @@ Execute in order. After each opportunity: backup (if not already done), implemen
 **Goal**: One place that builds the per-subwindow `managers` dict; remove duplication between `_initialize_subwindow_managers` and `_create_managers_for_subwindow`.
 
 #### Pre-work
-- [ ] Back up `src/main.py` to `backups/main.py` (or `backups/main_pre_subwindow_factory_YYYY-MM-DD.py`). Confirm backup exists and has content.
-- [ ] Run full test suite and record baseline (e.g. “all 90 tests pass”). Document any known flakiness.
+- [x] Back up `src/main.py` to `backups/main.py` (or `backups/main_pre_subwindow_factory_YYYY-MM-DD.py`). Confirm backup exists and has content.
+- [x] Run full test suite and record baseline (e.g. “all 90 tests pass”). Document any known flakiness.
 
 #### Step 1.1: Add the single builder method
 - [ ] In `main.py`, add a new private method:  
   `_build_managers_for_subwindow(self, idx: int, subwindow: SubWindowContainer) -> Dict`
-- [ ] Implement it by copying the **loop body** from `_initialize_subwindow_managers` (the block that creates `managers` for one `(idx, subwindow)`). Use the version that includes **CrosshairManager** and **CrosshairCoordinator** so both code paths get the same set of managers.
-- [ ] Ensure all lambdas and callbacks use `idx` correctly (e.g. `lambda idx=idx: ...` where needed to avoid closure issues).
-- [ ] Do **not** yet remove or shorten `_initialize_subwindow_managers` or `_create_managers_for_subwindow`; only add the new method.
-- [ ] Run tests. Fix any issues (e.g. missing imports inside the new method if you moved any).
+- [x] Implement it by copying the **loop body** from `_initialize_subwindow_managers` (the block that creates `managers` for one `(idx, subwindow)`). Use the version that includes **CrosshairManager** and **CrosshairCoordinator** so both code paths get the same set of managers.
+- [x] Ensure all lambdas and callbacks use `idx` correctly (e.g. `lambda idx=idx: ...` where needed to avoid closure issues).
+- [x] Do **not** yet remove or shorten `_initialize_subwindow_managers` or `_create_managers_for_subwindow`; only add the new method.
+- [x] Run tests. Fix any issues (e.g. missing imports inside the new method if you moved any).
 
 #### Step 1.2: Use the builder in _initialize_subwindow_managers
-- [ ] In `_initialize_subwindow_managers`, replace the inner loop body (that builds `managers` and fills `subwindow_data[idx]`) with:
+- [x] In `_initialize_subwindow_managers`, replace the inner loop body (that builds `managers` and fills `subwindow_data[idx]`) with:
   - Call `managers = self._build_managers_for_subwindow(idx, subwindow)`.
   - Store: `self.subwindow_managers[idx] = managers`.
   - Initialize: `self.subwindow_data[idx] = { 'current_dataset': None, 'current_slice_index': 0, 'current_series_uid': '', 'current_study_uid': '', 'current_datasets': [] }`.
-- [ ] Keep the rest of `_initialize_subwindow_managers` unchanged (scroll wheel mode, loop over subwindows, skip None subwindows, call `_connect_all_subwindow_transform_signals()` at the end).
-- [ ] Run full test suite. Manually: start app, open files, switch layouts (1x1, 2x2), add ROI, change slice. Confirm no regressions.
-- [ ] Commit (e.g. “refactor(main): use _build_managers_for_subwindow in _initialize_subwindow_managers”).
+- [x] Keep the rest of `_initialize_subwindow_managers` unchanged (scroll wheel mode, loop over subwindows, skip None subwindows, call `_connect_all_subwindow_transform_signals()` at the end).
+- [x] Run full test suite. Manually: start app, open files, switch layouts (1x1, 2x2), add ROI, change slice. Confirm no regressions.
+- [x] Commit (e.g. “refactor(main): use _build_managers_for_subwindow in _initialize_subwindow_managers”).
 
 #### Step 1.3: Use the builder in _create_managers_for_subwindow
-- [ ] In `_create_managers_for_subwindow`, replace the entire manager-creation block with:
+- [x] In `_create_managers_for_subwindow`, replace the entire manager-creation block with:
   - Call `managers = self._build_managers_for_subwindow(idx, subwindow)`.
   - Store: `self.subwindow_managers[idx] = managers`.
   - Initialize `self.subwindow_data[idx]` if `idx not in self.subwindow_data` (same dict as in Step 1.2).
   - Keep the one-off steps that are specific to “single subwindow” path: set scroll wheel mode, `set_smooth_when_zoomed_state`, set `image_viewer.get_file_path_callback`, set pan mode.
-- [ ] Ensure `_build_managers_for_subwindow` is used for **both** initial bulk creation and dynamic creation from `SubwindowLifecycleController`; confirm `SubwindowLifecycleController` still calls `app._create_managers_for_subwindow(idx, subwindow)` and that that method now delegates to the builder.
+- [x] Ensure `_build_managers_for_subwindow` is used for **both** initial bulk creation and dynamic creation from `SubwindowLifecycleController`; confirm `SubwindowLifecycleController` still calls `app._create_managers_for_subwindow(idx, subwindow)` and that that method now delegates to the builder.
 - [x] Run full test suite. Manually: open files, change layout from 2x2 to 1x1 and back, trigger creation of a new subwindow (e.g. 1x1 → 2x1), add ROI in each pane. Verify crosshair and overlay in both code paths.
-- [ ] Commit (e.g. “refactor(main): dedupe subwindow manager creation via _build_managers_for_subwindow”).
+- [x] Commit (e.g. “refactor(main): dedupe subwindow manager creation via _build_managers_for_subwindow”).
 
 #### Step 1.4: Cleanup and final check
-- [ ] Remove any dead code or duplicated comments left in `_initialize_subwindow_managers` or `_create_managers_for_subwindow`.
-- [ ] Run tests again. Update changelog: note refactor (no user-facing behavior change). Bump version if per project policy (e.g. patch).
-- [ ] Mark Opportunity 1 complete in this document (optional checklist at end of plan).
+- [x] Remove any dead code or duplicated comments left in `_initialize_subwindow_managers` or `_create_managers_for_subwindow`.
+- [x] Run tests again. Update changelog: note refactor (no user-facing behavior change). Bump version if per project policy (e.g. patch).
+- [x] Mark Opportunity 1 complete in this document (optional checklist at end of plan).
 
 ---
 
@@ -259,27 +259,27 @@ Execute in order. After each opportunity: backup (if not already done), implemen
 **Goal**: Move all `_connect_*` logic from `main.py` into `src/core/app_signal_wiring.py`; `_connect_signals()` in main.py becomes a thin dispatcher.
 
 #### Pre-work
-- [ ] Back up `src/main.py` to `backups/` (e.g. `main_pre_signal_wiring_YYYY-MM-DD.py`). Confirm backup.
-- [ ] Run tests; ensure baseline is green after Opportunity 1.
+- [x] Back up `src/main.py` to `backups/` (e.g. `main_pre_signal_wiring_YYYY-MM-DD.py`). Confirm backup.
+- [x] Run tests; ensure baseline is green after Opportunity 1.
 
 #### Step 2.1: Create wiring module and move first block
-- [ ] Create `src/core/app_signal_wiring.py` with module docstring (purpose: connect all Qt signals for DICOMViewerApp; takes `app` and wires layout, file, dialog, etc.).
-- [ ] Add a function, e.g. `wire_all_signals(app: "DICOMViewerApp") -> None`, that will eventually call all sub-functions. For now, implement only **layout** wiring:
+- [x] Create `src/core/app_signal_wiring.py` with module docstring (purpose: connect all Qt signals for DICOMViewerApp; takes `app` and wires layout, file, dialog, etc.).
+- [x] Add a function, e.g. `wire_all_signals(app: "DICOMViewerApp") -> None`, that will eventually call all sub-functions. For now, implement only **layout** wiring:
   - Move the body of `_connect_layout_signals` from main.py into a function e.g. `_wire_layout_signals(app)` in the new module (connect `multi_window_layout.focused_subwindow_changed`, `layout_changed`; `main_window.layout_changed`).
   - In main.py, replace the body of `_connect_layout_signals` with a call to the new function (e.g. `from core.app_signal_wiring import wire_layout_signals` then `wire_layout_signals(self)`). Keep `_connect_signals()` calling `self._connect_layout_signals()` so call order is unchanged.
-- [ ] Run tests. Manually: change layout, change focus; confirm layout and focus still work.
+- [x] Run tests. Manually: change layout, change focus; confirm layout and focus still work.
 - [ ] Commit (e.g. “refactor(signals): add app_signal_wiring, move layout signals”).
 
 #### Step 2.2: Move remaining _connect_* bodies
-- [ ] In `app_signal_wiring.py`, add functions (or a single class with static methods) for: file, dialog, undo/redo+annotation, cine, view, customization. Move each corresponding block from main.py into the new module. Each function receives `app` and performs the same `app.xxx.connect(app._on_yyy)` (or equivalent) calls. Handlers remain methods on `DICOMViewerApp`; only the **connection** code moves.
-- [ ] In main.py, replace each `_connect_*` method body with a single call to the wiring module (e.g. `wire_file_signals(self)`). Preserve the order of calls in `_connect_signals()` (layout → file → dialog → undo/redo → cine → view → customization → subwindow → focused subwindow).
-- [ ] Add wiring for subwindow and focused-subwindow: move the logic that calls `_subwindow_lifecycle_controller.connect_subwindow_signals()` and `connect_focused_subwindow_signals()` into the wiring module (e.g. `wire_subwindow_signals(app)`, `wire_focused_subwindow_signals(app)`), or keep those two as one-liners in main.py that call the controller — either way, the **call** to them can be from the wiring module’s `wire_all_signals(app)` so that main.py’s `_connect_signals` is just one line: `wire_all_signals(self)`.
-- [ ] Run full test suite. Manually: open/close files, open dialogs (settings, overlay, tag viewer, export), cine, privacy toggle, layout/focus, subwindow-specific actions. Confirm all signals still fire correctly.
+- [x] In `app_signal_wiring.py`, add functions (or a single class with static methods) for: file, dialog, undo/redo+annotation, cine, view, customization. Move each corresponding block from main.py into the new module. Each function receives `app` and performs the same `app.xxx.connect(app._on_yyy)` (or equivalent) calls. Handlers remain methods on `DICOMViewerApp`; only the **connection** code moves.
+- [x] In main.py, replace each `_connect_*` method body with a single call to the wiring module (e.g. `wire_file_signals(self)`). Preserve the order of calls in `_connect_signals()` (layout → file → dialog → undo/redo → cine → view → customization → subwindow → focused subwindow).
+- [x] Add wiring for subwindow and focused-subwindow: move the logic that calls `_subwindow_lifecycle_controller.connect_subwindow_signals()` and `connect_focused_subwindow_signals()` into the wiring module (e.g. `wire_subwindow_signals(app)`, `wire_focused_subwindow_signals(app)`), or keep those two as one-liners in main.py that call the controller — either way, the **call** to them can be from the wiring module’s `wire_all_signals(app)` so that main.py’s `_connect_signals` is just one line: `wire_all_signals(self)`.
+- [x] Run full test suite. Manually: open/close files, open dialogs (settings, overlay, tag viewer, export), cine, privacy toggle, layout/focus, subwindow-specific actions. Confirm all signals still fire correctly.
 - [ ] Commit (e.g. “refactor(signals): move all app signal wiring to app_signal_wiring.py”).
 
 #### Step 2.3: Thin out main.py _connect_signals
-- [ ] Simplify `_connect_signals()` to a single call: `wire_all_signals(self)`. Remove the now-redundant `_connect_layout_signals`, `_connect_file_signals`, etc. from main.py (their bodies are in the wiring module; the dispatcher can be removed so that `_connect_signals` only invokes `wire_all_signals(self)`).
-- [ ] Run tests again. Update changelog; bump version if needed. Mark Opportunity 2 complete.
+- [x] Simplify `_connect_signals()` to a single call: `wire_all_signals(self)`. Remove the now-redundant `_connect_layout_signals`, `_connect_file_signals`, etc. from main.py (their bodies are in the wiring module; the dispatcher can be removed so that `_connect_signals` only invokes `wire_all_signals(self)`).
+- [x] Run tests again. Update changelog; bump version if needed. Mark Opportunity 2 complete.
 
 ---
 

@@ -21,6 +21,7 @@ from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QPen, QColor, QFont, QPainter, QTransform
 from typing import Optional, Dict, List, Tuple, Callable
 from utils.config_manager import ConfigManager
+from utils.debug_flags import DEBUG_CROSSHAIR
 
 
 class DraggableCrosshairText(QGraphicsTextItem):
@@ -109,7 +110,8 @@ class CrosshairItem(QGraphicsItemGroup):
             y: Y coordinate (row)
             z: Z coordinate (slice index)
             config_manager: Optional ConfigManager for annotation settings
-            privacy_mode: Whether privacy mode is enabled (hides pixel values)
+            privacy_mode: Whether privacy mode is enabled (stored but not used for display;
+                crosshairs always show pixel value and patient coordinates)
         """
         super().__init__()
         
@@ -155,11 +157,9 @@ class CrosshairItem(QGraphicsItemGroup):
         v_line.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations, True)
         self.addToGroup(v_line)
         
-        # Create text label (draggable, independent of crosshair)
-        if privacy_mode:
-            text = f"({x}, {y}, {z})"
-        else:
-            text = f"Pixel Value: {pixel_value_str}\n({x}, {y}, {z})"
+        # Create text label (draggable, independent of crosshair).
+        # Always show full content (pixel value, patient coords if present, index coords).
+        text = f"Pixel Value: {pixel_value_str}\n({x}, {y}, {z})"
         
         # Create draggable text item (not added to group - independent item)
         def update_offset(offset_x: float, offset_y: float) -> None:
@@ -236,6 +236,8 @@ class CrosshairItem(QGraphicsItemGroup):
     def update_privacy_mode(self, privacy_mode: bool) -> None:
         """
         Update privacy mode and refresh text.
+        Crosshairs always show full content (pixel value, patient coords); privacy_mode
+        is stored for API compatibility but does not hide crosshair text.
         
         Args:
             privacy_mode: New privacy mode state
@@ -245,12 +247,9 @@ class CrosshairItem(QGraphicsItemGroup):
         
         self.privacy_mode = privacy_mode
         
-        # Update text content
+        # Refresh text (always full content)
         if self.text_item is not None:
-            if privacy_mode:
-                text = f"({self.x_coord}, {self.y_coord}, {self.z_coord})"
-            else:
-                text = f"{self.pixel_value_str}\n({self.x_coord}, {self.y_coord}, {self.z_coord})"
+            text = f"Pixel Value: {self.pixel_value_str}\n({self.x_coord}, {self.y_coord}, {self.z_coord})"
             self.text_item.setPlainText(text)
     
     def update_pixel_values(self, pixel_value_str: str, x: int, y: int, z: int) -> None:
@@ -268,12 +267,9 @@ class CrosshairItem(QGraphicsItemGroup):
         self.y_coord = y
         self.z_coord = z
         
-        # Update text display based on privacy mode
+        # Update text display (always show full content: pixel value, patient coords, index coords)
         if self.text_item is not None:
-            if self.privacy_mode:
-                text = f"({x}, {y}, {z})"
-            else:
-                text = f"Pixel Value: {pixel_value_str}\n({x}, {y}, {z})"
+            text = f"Pixel Value: {pixel_value_str}\n({x}, {y}, {z})"
             self.text_item.setPlainText(text)
     
     def itemChange(self, change: QGraphicsItem.GraphicsItemChange, value) -> object:
@@ -401,18 +397,22 @@ class CrosshairManager:
         if crosshair.text_item is not None:
             text_scene = crosshair.text_item.scene()
             if text_scene is not None:
-                print(f"[DEBUG-CROSSHAIR] Warning: Text item already in scene {text_scene} before adding to {scene}")
+                if DEBUG_CROSSHAIR:
+                    print(f"[DEBUG-CROSSHAIR] Warning: Text item already in scene {text_scene} before adding to {scene}")
                 # Don't add if already in this scene
                 if text_scene == scene:
-                    print(f"[DEBUG-CROSSHAIR] Text item already in correct scene, skipping add")
+                    if DEBUG_CROSSHAIR:
+                        print(f"[DEBUG-CROSSHAIR] Text item already in correct scene, skipping add")
                 else:
                     # Remove from old scene first
                     text_scene.removeItem(crosshair.text_item)
                     scene.addItem(crosshair.text_item)
-                    print(f"[DEBUG-CROSSHAIR] Moved text item from {text_scene} to {scene}")
+                    if DEBUG_CROSSHAIR:
+                        print(f"[DEBUG-CROSSHAIR] Moved text item from {text_scene} to {scene}")
             else:
                 scene.addItem(crosshair.text_item)
-                print(f"[DEBUG-CROSSHAIR] Added text item to scene. Text item scene: {crosshair.text_item.scene()}, Crosshair scene: {crosshair.scene()}")
+                if DEBUG_CROSSHAIR:
+                    print(f"[DEBUG-CROSSHAIR] Added text item to scene. Text item scene: {crosshair.text_item.scene()}, Crosshair scene: {crosshair.scene()}")
             # Position text initially
             view = scene.views()[0] if scene.views() else None
             if view is not None:
@@ -437,11 +437,13 @@ class CrosshairManager:
         # Remove text item from scene
         if crosshair_item.text_item is not None:
             text_scene = crosshair_item.text_item.scene()
-            print(f"[DEBUG-CROSSHAIR] Deleting text item from scene: {text_scene}")
+            if DEBUG_CROSSHAIR:
+                print(f"[DEBUG-CROSSHAIR] Deleting text item from scene: {text_scene}")
             if hasattr(crosshair_item.text_item, 'mark_deleted'):
                 crosshair_item.text_item.mark_deleted()
             scene.removeItem(crosshair_item.text_item)
-            print(f"[DEBUG-CROSSHAIR] Text item removed. Text item scene after removal: {crosshair_item.text_item.scene()}")
+            if DEBUG_CROSSHAIR:
+                print(f"[DEBUG-CROSSHAIR] Text item removed. Text item scene after removal: {crosshair_item.text_item.scene()}")
         
         # Remove crosshair from scene
         scene.removeItem(crosshair_item)
