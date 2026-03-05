@@ -30,7 +30,7 @@
     - [ ] Ask AI agent to estimate difference in registration for some sample points of PET study registered to CT in 2D vs 3D mode and take screenshots (cloud agents)
     - [ ] Check fusion with some other studies
     - [ ] Improve Window/Leveling preset/auto in fusion mode
-  - [ ] use semantic versioning - changelog etc
+  - [ ] make it possible to move the layout map thumbnail when opened from context menu
 
 - [ ] make right pane minimum width before collapsing 250 instead of 200?
 
