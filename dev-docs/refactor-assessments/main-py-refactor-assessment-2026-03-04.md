@@ -275,7 +275,7 @@ Execute in order. After each opportunity: backup (if not already done), implemen
 - [x] In main.py, replace each `_connect_*` method body with a single call to the wiring module (e.g. `wire_file_signals(self)`). Preserve the order of calls in `_connect_signals()` (layout → file → dialog → undo/redo → cine → view → customization → subwindow → focused subwindow).
 - [x] Add wiring for subwindow and focused-subwindow: move the logic that calls `_subwindow_lifecycle_controller.connect_subwindow_signals()` and `connect_focused_subwindow_signals()` into the wiring module (e.g. `wire_subwindow_signals(app)`, `wire_focused_subwindow_signals(app)`), or keep those two as one-liners in main.py that call the controller — either way, the **call** to them can be from the wiring module’s `wire_all_signals(app)` so that main.py’s `_connect_signals` is just one line: `wire_all_signals(self)`.
 - [x] Run full test suite. Manually: open/close files, open dialogs (settings, overlay, tag viewer, export), cine, privacy toggle, layout/focus, subwindow-specific actions. Confirm all signals still fire correctly.
-- [ ] Commit (e.g. “refactor(signals): move all app signal wiring to app_signal_wiring.py”).
+- [x] Commit (e.g. “refactor(signals): move all app signal wiring to app_signal_wiring.py”).
 
 #### Step 2.3: Thin out main.py _connect_signals
 - [x] Simplify `_connect_signals()` to a single call: `wire_all_signals(self)`. Remove the now-redundant `_connect_layout_signals`, `_connect_file_signals`, etc. from main.py (their bodies are in the wiring module; the dispatcher can be removed so that `_connect_signals` only invokes `wire_all_signals(self)`).
@@ -288,25 +288,25 @@ Execute in order. After each opportunity: backup (if not already done), implemen
 **Goal**: Move `_on_export_customizations`, `_on_import_customizations`, `_on_export_tag_presets`, `_on_import_tag_presets` into a helper (e.g. `src/core/customization_handlers.py`); main.py keeps only thin slots that call the helper.
 
 #### Pre-work
-- [ ] Back up `src/main.py` to `backups/` (e.g. `main_pre_customization_handlers_YYYY-MM-DD.py`). Confirm backup.
-- [ ] Run tests; ensure baseline is green after Opportunity 2.
+- [x] Back up `src/main.py` to `backups/` (e.g. `main_pre_customization_handlers_YYYY-MM-DD.py`). Confirm backup.
+- [x] Run tests; ensure baseline is green after Opportunity 2.
 
 #### Step 3.1: Create helper and move export customizations
-- [ ] Create `src/core/customization_handlers.py` with a class or set of functions that will handle export/import customizations and export/import tag presets. The helper needs: `config_manager`, `main_window` (parent for dialogs), and for import customizations: callbacks for “after import” (e.g. refresh overlay, apply theme, update metadata panel column widths, annotation options). Design the constructor or function signature so main.py can pass these in.
-- [ ] Implement `export_customizations()` in the helper: resolve default path (last export path or cwd), file save dialog, `config_manager.export_customizations(file_path)`, update last export path, show success/failure message. Match current behavior of `_on_export_customizations` exactly.
-- [ ] In main.py, replace the body of `_on_export_customizations` with a call to the helper (e.g. `self._customization_handlers.export_customizations()`). Create the helper in `_initialize_handlers` (or earlier if it has no dependency on handlers) and store as `self._customization_handlers`.
-- [ ] Run tests. Manually: Export Customizations, choose path, confirm file is created and message shown. Commit (e.g. “refactor(main): extract export customizations to customization_handlers”).
+- [x] Create `src/core/customization_handlers.py` with a class or set of functions that will handle export/import customizations and export/import tag presets. The helper needs: `config_manager`, `main_window` (parent for dialogs), and for import customizations: callbacks for “after import” (e.g. refresh overlay, apply theme, update metadata panel column widths, annotation options). Design the constructor or function signature so main.py can pass these in.
+- [x] Implement `export_customizations()` in the helper: resolve default path (last export path or cwd), file save dialog, `config_manager.export_customizations(file_path)`, update last export path, show success/failure message. Match current behavior of `_on_export_customizations` exactly.
+- [x] In main.py, replace the body of `_on_export_customizations` with a call to the helper (e.g. `self._customization_handlers.export_customizations()`). Create the helper in `_initialize_handlers` (or earlier if it has no dependency on handlers) and store as `self._customization_handlers`.
+- [x] Run tests. Manually: Export Customizations, choose path, confirm file is created and message shown. Commit (e.g. “refactor(main): extract export customizations to customization_handlers”).
 
 #### Step 3.2: Move import customizations
-- [ ] Implement `import_customizations()` in the helper: resolve path, file open dialog, `config_manager.import_customizations(file_path)`. On success: apply overlay font size/color, call “overlay config applied” callback, call “annotation options applied” callback, apply theme, update metadata panel column widths, show success message. On failure: show failure message. Pass in the necessary callbacks from main.py (e.g. `overlay_coordinator.handle_overlay_config_applied`, a method that triggers `_on_annotation_options_applied`, `main_window._set_theme`, and metadata panel column width update).
-- [ ] In main.py, replace the body of `_on_import_customizations` with a call to the helper’s `import_customizations()`.
-- [ ] Run tests. Manually: Import Customizations from a known-good export file; confirm overlay, theme, metadata columns, and annotations update. Commit.
+- [x] Implement `import_customizations()` in the helper: resolve path, file open dialog, `config_manager.import_customizations(file_path)`. On success: apply overlay font size/color, call “overlay config applied” callback, call “annotation options applied” callback, apply theme, update metadata panel column widths, show success message. On failure: show failure message. Pass in the necessary callbacks from main.py (e.g. `overlay_coordinator.handle_overlay_config_applied`, a method that triggers `_on_annotation_options_applied`, `main_window._set_theme`, and metadata panel column width update).
+- [x] In main.py, replace the body of `_on_import_customizations` with a call to the helper’s `import_customizations()`.
+- [x] Run tests. Manually: Import Customizations from a known-good export file; confirm overlay, theme, metadata columns, and annotations update. Commit.
 
 #### Step 3.3: Move export and import tag presets
-- [ ] Implement `export_tag_presets()` in the helper: get presets via `config_manager.get_tag_export_presets()`; if empty, show “No Tag Presets” message and return. Otherwise resolve path, file save dialog, `config_manager.export_tag_export_presets(file_path)`, update last export path, show success/failure message.
-- [ ] Implement `import_tag_presets()` in the helper: resolve path, file open dialog, `config_manager.import_tag_export_presets(file_path)`; show success/failure message. If you have UI that must refresh after import (e.g. tag export dialog), pass a callback and call it after successful import.
-- [ ] In main.py, replace the bodies of `_on_export_tag_presets` and `_on_import_tag_presets` with calls to the helper.
-- [ ] Run full test suite. Manually: export/import customizations and export/import tag presets. Confirm dialogs, paths, and messages match previous behavior.
+- [x] Implement `export_tag_presets()` in the helper: get presets via `config_manager.get_tag_export_presets()`; if empty, show “No Tag Presets” message and return. Otherwise resolve path, file save dialog, `config_manager.export_tag_export_presets(file_path)`, update last export path, show success/failure message.
+- [x] Implement `import_tag_presets()` in the helper: resolve path, file open dialog, `config_manager.import_tag_export_presets(file_path)`; show success/failure message. If you have UI that must refresh after import (e.g. tag export dialog), pass a callback and call it after successful import.
+- [x] In main.py, replace the bodies of `_on_export_tag_presets` and `_on_import_tag_presets` with calls to the helper.
+- [x] Run full test suite. Manually: export/import customizations and export/import tag presets. Confirm dialogs, paths, and messages match previous behavior.
 - [ ] Commit (e.g. “refactor(main): extract customization and tag-preset handlers to customization_handlers”). Update changelog; mark Opportunity 3 complete.
 
 ---

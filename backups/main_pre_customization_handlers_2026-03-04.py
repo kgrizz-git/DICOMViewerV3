@@ -31,7 +31,7 @@ from pathlib import Path
 src_dir = Path(__file__).parent
 sys.path.insert(0, str(src_dir))
 
-from PySide6.QtWidgets import QApplication, QMessageBox, QStyleFactory
+from PySide6.QtWidgets import QApplication, QMessageBox, QStyleFactory, QFileDialog
 from PySide6.QtCore import Qt, QPointF, QObject, QTimer, QRectF, QSize
 from PySide6.QtGui import QKeyEvent
 from typing import Optional, Dict, List, Tuple
@@ -83,7 +83,6 @@ from core.slice_display_manager import SliceDisplayManager
 from core.annotation_paste_handler import AnnotationPasteHandler
 from core.file_series_loading_coordinator import FileSeriesLoadingCoordinator
 from core.subwindow_lifecycle_controller import SubwindowLifecycleController
-from core.customization_handlers import CustomizationHandlers
 from gui.roi_coordinator import ROICoordinator
 from gui.measurement_coordinator import MeasurementCoordinator
 from gui.crosshair_coordinator import CrosshairCoordinator
@@ -725,13 +724,6 @@ class DICOMViewerApp(QObject):
             lambda: self._on_redo_requested(),
             lambda: self.undo_redo_manager.can_undo() if self.undo_redo_manager else False,
             lambda: self.undo_redo_manager.can_redo() if self.undo_redo_manager else False
-        )
-        
-        # Customization and tag-preset export/import (callbacks run after import; need app state)
-        self._customization_handlers = CustomizationHandlers(
-            self.config_manager,
-            self.main_window,
-            after_import_customizations=self._apply_imported_customizations,
         )
         
         # Initialize MouseModeHandler
@@ -1868,39 +1860,221 @@ class DICOMViewerApp(QObject):
         subwindows = self.multi_window_layout.get_all_subwindows()
         self.dialog_coordinator.open_export_screenshots(subwindows)
 
-    def _apply_imported_customizations(self) -> None:
-        """Apply imported customization settings: overlay font, overlay refresh, annotations, theme, metadata columns."""
-        font_size = self.config_manager.get_overlay_font_size()
-        font_color = self.config_manager.get_overlay_font_color()
-        self.overlay_manager.set_font_size(font_size)
-        self.overlay_manager.set_font_color(*font_color)
-        self.overlay_coordinator.handle_overlay_config_applied()
-        self._on_annotation_options_applied()
-        theme = self.config_manager.get_theme()
-        self.main_window._set_theme(theme)
-        widths = self.config_manager.get_metadata_panel_column_widths()
-        if len(widths) == 4:
-            self.metadata_panel.tree_widget.setColumnWidth(0, widths[0])
-            self.metadata_panel.tree_widget.setColumnWidth(1, widths[1])
-            self.metadata_panel.tree_widget.setColumnWidth(2, widths[2])
-            self.metadata_panel.tree_widget.setColumnWidth(3, widths[3])
-
     def _on_export_customizations(self) -> None:
         """Handle Export Customizations request."""
-        self._customization_handlers.export_customizations()
-
+        # Get last export path or use current directory
+        last_export_path = self.config_manager.get_last_export_path()
+        if not last_export_path or not os.path.exists(last_export_path):
+            last_export_path = os.getcwd()
+        
+        # If last path is a file, use its directory
+        if os.path.isfile(last_export_path):
+            last_export_path = os.path.dirname(last_export_path)
+        
+        # Default filename
+        default_filename = os.path.join(last_export_path, "dicom_viewer_customizations.json")
+        
+        # Show file save dialog
+        file_path, _ = QFileDialog.getSaveFileName(
+            self.main_window,
+            "Export Customizations",
+            default_filename,
+            "JSON Files (*.json);;All Files (*)"
+        )
+        
+        if not file_path:
+            return
+        
+        # Ensure .json extension
+        if not file_path.endswith('.json'):
+            file_path += '.json'
+        
+        # Export customizations
+        if self.config_manager.export_customizations(file_path):
+            # Update last export path
+            self.config_manager.set_last_export_path(os.path.dirname(file_path))
+            QMessageBox.information(
+                self.main_window,
+                "Export Successful",
+                f"Customizations exported successfully to:\n{file_path}"
+            )
+        else:
+            QMessageBox.warning(
+                self.main_window,
+                "Export Failed",
+                f"Failed to export customizations to:\n{file_path}\n\nPlease check file permissions and try again."
+            )
+    
     def _on_import_customizations(self) -> None:
         """Handle Import Customizations request."""
-        self._customization_handlers.import_customizations()
+        # Get last path or use current directory
+        last_path = self.config_manager.get_last_path()
+        if not last_path or not os.path.exists(last_path):
+            last_path = os.getcwd()
+        
+        # If last path is a file, use its directory
+        if os.path.isfile(last_path):
+            last_path = os.path.dirname(last_path)
+        
+        # Show file open dialog
+        file_path, _ = QFileDialog.getOpenFileName(
+            self.main_window,
+            "Import Customizations",
+            last_path,
+            "JSON Files (*.json);;All Files (*)"
+        )
+        
+        if not file_path:
+            return
+        
+        # Import customizations
+        if self.config_manager.import_customizations(file_path):
+            # Apply imported settings
+            # Update overlay manager with new settings
+            font_size = self.config_manager.get_overlay_font_size()
+            font_color = self.config_manager.get_overlay_font_color()
+            self.overlay_manager.set_font_size(font_size)
+            self.overlay_manager.set_font_color(*font_color)
+            
+            # Recreate overlay
+            self.overlay_coordinator.handle_overlay_config_applied()
+            
+            # Update annotation styles
+            self._on_annotation_options_applied()
+            
+            # Apply theme
+            theme = self.config_manager.get_theme()
+            self.main_window._set_theme(theme)
+            
+            # Update metadata panel column widths
+            widths = self.config_manager.get_metadata_panel_column_widths()
+            if len(widths) == 4:
+                self.metadata_panel.tree_widget.setColumnWidth(0, widths[0])
+                self.metadata_panel.tree_widget.setColumnWidth(1, widths[1])
+                self.metadata_panel.tree_widget.setColumnWidth(2, widths[2])
+                self.metadata_panel.tree_widget.setColumnWidth(3, widths[3])
+            
+            QMessageBox.information(
+                self.main_window,
+                "Import Successful",
+                "Customizations imported successfully.\n\nAll settings have been applied."
+            )
+        else:
+            QMessageBox.warning(
+                self.main_window,
+                "Import Failed",
+                f"Failed to import customizations from:\n{file_path}\n\nPlease check that the file is a valid customization file and try again."
+            )
 
     def _on_export_tag_presets(self) -> None:
         """Handle Export Tag Presets request."""
-        self._customization_handlers.export_tag_presets()
+        # Get current presets
+        presets = self.config_manager.get_tag_export_presets()
+        if not presets:
+            QMessageBox.information(
+                self.main_window,
+                "No Tag Presets",
+                "There are no tag export presets to export."
+            )
+            return
+
+        # Get last export path or use current directory
+        last_export_path = self.config_manager.get_last_export_path()
+        if not last_export_path or not os.path.exists(last_export_path):
+            last_export_path = os.getcwd()
+
+        # If last path is a file, use its directory
+        if os.path.isfile(last_export_path):
+            last_export_path = os.path.dirname(last_export_path)
+
+        # Default filename
+        default_filename = os.path.join(last_export_path, "tag_export_presets.json")
+
+        # Show file save dialog
+        file_path, _ = QFileDialog.getSaveFileName(
+            self.main_window,
+            "Export Tag Presets",
+            default_filename,
+            "JSON Files (*.json);;All Files (*)"
+        )
+
+        if not file_path:
+            return
+
+        # Ensure .json extension
+        if not file_path.endswith(".json"):
+            file_path += ".json"
+
+        # Export presets
+        if self.config_manager.export_tag_export_presets(file_path):
+            # Update last export path
+            self.config_manager.set_last_export_path(os.path.dirname(file_path))
+            QMessageBox.information(
+                self.main_window,
+                "Export Successful",
+                f"Tag export presets exported successfully to:\n{file_path}"
+            )
+        else:
+            QMessageBox.warning(
+                self.main_window,
+                "Export Failed",
+                f"Failed to export tag export presets to:\n{file_path}\n\nPlease check file permissions and try again."
+            )
 
     def _on_import_tag_presets(self) -> None:
         """Handle Import Tag Presets request."""
-        self._customization_handlers.import_tag_presets()
+        # Get last path or use current directory
+        last_path = self.config_manager.get_last_path()
+        if not last_path or not os.path.exists(last_path):
+            last_path = os.getcwd()
 
+        # If last path is a file, use its directory
+        if os.path.isfile(last_path):
+            last_path = os.path.dirname(last_path)
+
+        # Show file open dialog
+        file_path, _ = QFileDialog.getOpenFileName(
+            self.main_window,
+            "Import Tag Presets",
+            last_path,
+            "JSON Files (*.json);;All Files (*)"
+        )
+
+        if not file_path:
+            return
+
+        result = self.config_manager.import_tag_export_presets(file_path)
+        if result is None:
+            QMessageBox.critical(
+                self.main_window,
+                "Import Failed",
+                "Failed to import tag export presets.\n\n"
+                "Please verify that the file is a valid DICOM Viewer V3 tag presets file."
+            )
+            return
+
+        imported = result.get("imported", 0)
+        skipped = result.get("skipped_conflicts", 0)
+
+        if imported == 0 and skipped == 0:
+            QMessageBox.information(
+                self.main_window,
+                "No Presets Imported",
+                "The selected file did not contain any tag export presets."
+            )
+        else:
+            details_lines = [f"Presets imported: {imported}"]
+            if skipped > 0:
+                details_lines.append(
+                    f"Presets skipped (already exist and were not overwritten): {skipped}"
+                )
+            details = "\n".join(details_lines)
+            QMessageBox.information(
+                self.main_window,
+                "Import Complete",
+                f"Tag export presets import completed.\n\n{details}"
+            )
+    
     def _on_overlay_config_applied(self) -> None:
         """Handle overlay configuration being applied."""
         self.overlay_coordinator.handle_overlay_config_applied()

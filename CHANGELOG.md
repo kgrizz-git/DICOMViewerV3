@@ -8,7 +8,7 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 - (Add new changes here before a release.)
 
 ### Changed
-- (Add changed behavior here.)
+- **Refactor (main.py)**: Customization and tag-preset export/import logic moved to `src/core/customization_handlers.py`. `_on_export_customizations`, `_on_import_customizations`, `_on_export_tag_presets`, and `_on_import_tag_presets` now delegate to a `CustomizationHandlers` helper; post-import apply logic remains in main via `_apply_imported_customizations` callback. Behavior unchanged.
 
 ### Fixed
 - (Add bug fixes here.)
