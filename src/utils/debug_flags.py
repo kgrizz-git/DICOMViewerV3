@@ -19,3 +19,7 @@ DEBUG_LAYOUT: bool = False
 # Enables verbose file/series loading tracing (stale-data clearing, etc.).
 # Affects: file_series_loading_coordinator.
 DEBUG_LOADING: bool = False
+
+# Enables verbose crosshair text-item / scene tracing.
+# Affects: crosshair_manager.
+DEBUG_CROSSHAIR: bool = False

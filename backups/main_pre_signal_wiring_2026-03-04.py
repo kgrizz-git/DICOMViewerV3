@@ -96,7 +96,6 @@ from core.fusion_handler import FusionHandler
 from core.fusion_processor import FusionProcessor
 from gui.fusion_controls_widget import FusionControlsWidget
 from gui.fusion_coordinator import FusionCoordinator
-from core.app_signal_wiring import wire_all_signals
 
 
 class DICOMViewerApp(QObject):
@@ -1168,9 +1167,98 @@ class DICOMViewerApp(QObject):
                 )
     
     def _connect_signals(self) -> None:
-        """Connect all application-level Qt signals. Implemented in core.app_signal_wiring."""
-        wire_all_signals(self)
+        """
+        Connect all application-level signals by delegating to feature-area sub-methods.
 
+        Call order matters: layout and file signals are wired before dialogs so that
+        subwindow and focus state is ready when dialogs are first triggered.
+        """
+        self._connect_layout_signals()
+        self._connect_file_signals()
+        self._connect_dialog_signals()
+        self._connect_undo_redo_and_annotation_signals()
+        self._connect_cine_signals()
+        self._connect_view_signals()
+        self._connect_customization_signals()
+        # Per-subwindow and focused-subwindow signals are wired last so all shared
+        # components are already connected when subwindow state is established.
+        self._connect_subwindow_signals()
+        self._connect_focused_subwindow_signals()
+
+    # ------------------------------------------------------------------
+    # Signal connection sub-methods (called exclusively from _connect_signals)
+    # ------------------------------------------------------------------
+
+    def _connect_layout_signals(self) -> None:
+        """Wire multi-window layout and main-window layout-change signals."""
+        self.multi_window_layout.focused_subwindow_changed.connect(self._on_focused_subwindow_changed)
+        self.multi_window_layout.layout_changed.connect(self._on_layout_changed)
+        self.main_window.layout_changed.connect(self._on_main_window_layout_changed)
+
+    def _connect_file_signals(self) -> None:
+        """Wire file open/close and application-quit signals."""
+        self.main_window.open_file_requested.connect(self._open_files)
+        self.main_window.open_folder_requested.connect(self._open_folder)
+        self.main_window.open_recent_file_requested.connect(self._open_recent_file)
+        self.main_window.open_files_from_paths_requested.connect(self._open_files_from_paths)
+        # Files-dropped signals are connected per subwindow in _connect_subwindow_signals.
+        self.main_window.close_requested.connect(self._close_files)
+        self.app.aboutToQuit.connect(self._on_app_about_to_quit)
+
+    def _connect_dialog_signals(self) -> None:
+        """Wire signals that open shared dialogs and panels (settings, overlays, export, etc.)."""
+        self.main_window.settings_requested.connect(self._open_settings)
+        self.main_window.overlay_settings_requested.connect(self._open_overlay_settings)
+        self.main_window.tag_viewer_requested.connect(self._open_tag_viewer)
+        self.main_window.overlay_config_requested.connect(self._open_overlay_config)
+        self.main_window.annotation_options_requested.connect(self._open_annotation_options)
+        self.main_window.quick_start_guide_requested.connect(self._open_quick_start_guide)
+        self.main_window.fusion_technical_doc_requested.connect(self._open_fusion_technical_doc)
+        self.main_window.tag_export_requested.connect(self._open_tag_export)
+        self.main_window.histogram_requested.connect(self.dialog_coordinator.open_histogram)
+        self.main_window.export_roi_statistics_requested.connect(self._open_export_roi_statistics)
+        self.main_window.export_requested.connect(self._open_export)
+        self.main_window.export_screenshots_requested.connect(self._open_export_screenshots)
+        self.main_window.about_this_file_requested.connect(self._open_about_this_file)
+
+    def _connect_undo_redo_and_annotation_signals(self) -> None:
+        """Wire undo/redo (tag edits and annotations) and annotation copy/paste signals."""
+        self.main_window.undo_tag_edit_requested.connect(self._on_undo_requested)
+        self.main_window.redo_tag_edit_requested.connect(self._on_redo_requested)
+        self.main_window.copy_annotation_requested.connect(self._copy_annotations)
+        self.main_window.paste_annotation_requested.connect(self._paste_annotations)
+        # Connect metadata panel tag_edited so that editing a tag in the left panel
+        # enables the Undo action via _update_undo_redo_state, just as editing in
+        # the tag viewer dialog does via dialog_coordinator.tag_edited_callback.
+        self.metadata_panel.tag_edited.connect(self._on_tag_edited)
+
+    def _connect_cine_signals(self) -> None:
+        """Wire cine controls widget and cine player signals."""
+        self.cine_controls_widget.play_requested.connect(self._on_cine_play)
+        self.cine_controls_widget.pause_requested.connect(self._on_cine_pause)
+        self.cine_controls_widget.stop_requested.connect(self._on_cine_stop)
+        self.cine_controls_widget.speed_changed.connect(self._on_cine_speed_changed)
+        self.cine_controls_widget.loop_toggled.connect(self._on_cine_loop_toggled)
+        self.cine_controls_widget.frame_position_changed.connect(self._on_frame_slider_changed)
+        self.cine_controls_widget.loop_start_set.connect(self._on_cine_loop_start_set)
+        self.cine_controls_widget.loop_end_set.connect(self._on_cine_loop_end_set)
+        self.cine_controls_widget.loop_bounds_cleared.connect(self._on_cine_loop_bounds_cleared)
+        self.cine_player.frame_advance_requested.connect(self._on_cine_frame_advance)
+        self.cine_player.playback_state_changed.connect(self._on_cine_playback_state_changed)
+
+    def _connect_view_signals(self) -> None:
+        """Wire privacy, image-smoothing, and theme-change view signals."""
+        self.main_window.privacy_view_toggled.connect(self._on_privacy_view_toggled)
+        self.main_window.smooth_when_zoomed_toggled.connect(self._on_smooth_when_zoomed_toggled)
+        self.main_window.theme_changed.connect(self.fusion_controls_widget.update_status_text_colors)
+
+    def _connect_customization_signals(self) -> None:
+        """Wire import/export signals for app customizations and tag-export presets."""
+        self.main_window.export_customizations_requested.connect(self._on_export_customizations)
+        self.main_window.import_customizations_requested.connect(self._on_import_customizations)
+        self.main_window.export_tag_presets_requested.connect(self._on_export_tag_presets)
+        self.main_window.import_tag_presets_requested.connect(self._on_import_tag_presets)
+    
     def _on_focused_subwindow_changed(self, subwindow: SubWindowContainer) -> None:
         """Handle focused subwindow change. Delegates to subwindow lifecycle controller."""
         self._subwindow_lifecycle_controller.on_focused_subwindow_changed(subwindow)
@@ -1227,6 +1315,10 @@ class DICOMViewerApp(QObject):
     def _ensure_all_subwindows_have_managers(self) -> None:
         """Ensure all visible subwindows have managers. Delegates to subwindow lifecycle controller."""
         self._subwindow_lifecycle_controller.ensure_all_subwindows_have_managers()
+    
+    def _connect_subwindow_signals(self) -> None:
+        """Connect signals that apply to all subwindows. Delegates to subwindow lifecycle controller."""
+        self._subwindow_lifecycle_controller.connect_subwindow_signals()
     
     def _connect_all_subwindow_transform_signals(self) -> None:
         """Connect transform/zoom signals for all subwindows. Delegates to subwindow lifecycle controller."""
@@ -1338,11 +1430,11 @@ class DICOMViewerApp(QObject):
     def _disconnect_focused_subwindow_signals(self) -> None:
         """Disconnect signals from previously focused subwindow. Delegates to subwindow lifecycle controller."""
         self._subwindow_lifecycle_controller.disconnect_focused_subwindow_signals()
-
+    
     def _connect_focused_subwindow_signals(self) -> None:
         """Connect signals for the currently focused subwindow. Delegates to subwindow lifecycle controller."""
         self._subwindow_lifecycle_controller.connect_focused_subwindow_signals()
-
+    
     def _open_files(self) -> None:
         """Handle open files request. Delegates to file/series loading coordinator."""
         # Open flow closes current files; reset views A–D to default windows 1–4
@@ -1722,8 +1814,17 @@ class DICOMViewerApp(QObject):
             if subwindow and subwindow.image_viewer:
                 subwindow.image_viewer.set_privacy_view_state(enabled)
         
-        # Refresh overlays for all subwindows that have loaded data
-        self._refresh_overlays_after_privacy_change()
+        # Refresh overlays if datasets are loaded
+        if self.current_dataset is not None:
+            # Trigger overlay refresh for focused subwindow
+            focused_subwindow = self.multi_window_layout.get_focused_subwindow()
+            if focused_subwindow and focused_subwindow.image_viewer:
+                # Get current dataset from focused subwindow
+                focused_idx = self.multi_window_layout.get_all_subwindows().index(focused_subwindow)
+                if focused_idx in self.subwindow_data:
+                    current_dataset = self.subwindow_data[focused_idx].get('current_dataset')
+                    if current_dataset:
+                        self._refresh_overlays_after_privacy_change()
 
     def _on_smooth_when_zoomed_toggled(self, enabled: bool) -> None:
         """
@@ -1741,44 +1842,44 @@ class DICOMViewerApp(QObject):
         self.main_window.set_smooth_when_zoomed_checked(enabled)
 
     def _refresh_overlays_after_privacy_change(self) -> None:
-        """Refresh overlays after privacy view change for all subwindows that have loaded data."""
-        subwindows = self.multi_window_layout.get_all_subwindows()
-        for idx, subwindow in enumerate(subwindows):
-            if not subwindow or not subwindow.image_viewer:
-                continue
-            if idx not in self.subwindow_data or idx not in self.subwindow_managers:
-                continue
-            current_dataset = self.subwindow_data[idx].get('current_dataset')
-            if not current_dataset:
-                continue
-            managers = self.subwindow_managers[idx]
-            slice_display_manager = managers.get('slice_display_manager')
-            if not slice_display_manager or not hasattr(slice_display_manager, 'current_dataset'):
-                continue
-            if (slice_display_manager.current_dataset is None or
-                not hasattr(slice_display_manager, 'current_studies') or
-                not hasattr(slice_display_manager, 'current_study_uid') or
-                not hasattr(slice_display_manager, 'current_series_uid') or
-                not hasattr(slice_display_manager, 'current_slice_index')):
-                continue
-            try:
-                slice_display_manager.display_slice(
-                    slice_display_manager.current_dataset,
-                    slice_display_manager.current_studies,
-                    slice_display_manager.current_study_uid,
-                    slice_display_manager.current_series_uid,
-                    slice_display_manager.current_slice_index,
-                    update_metadata=(idx == self.get_focused_subwindow_index())
-                )
-            except Exception:
-                overlay_manager = managers.get('overlay_manager')
-                if overlay_manager and slice_display_manager.current_dataset:
-                    from core.dicom_parser import DICOMParser
-                    parser = DICOMParser(slice_display_manager.current_dataset)
-                    overlay_manager.create_overlay_items(
-                        subwindow.image_viewer.scene,
-                        parser
-                    )
+        """Refresh overlays after privacy view change (extracted for reuse)."""
+        if self.current_dataset is None:
+            return
+        focused_subwindow = self.multi_window_layout.get_focused_subwindow()
+        if focused_subwindow and focused_subwindow.image_viewer:
+            focused_idx = self.multi_window_layout.get_all_subwindows().index(focused_subwindow)
+            if focused_idx in self.subwindow_data:
+                current_dataset = self.subwindow_data[focused_idx].get('current_dataset')
+                if current_dataset:
+                    # Refresh overlay by re-displaying the current slice
+                    if focused_idx in self.subwindow_managers:
+                        slice_display_manager = self.subwindow_managers[focused_idx].get('slice_display_manager')
+                        if slice_display_manager and hasattr(slice_display_manager, 'current_dataset'):
+                            # Re-display current slice to refresh overlays with privacy mode
+                            if (slice_display_manager.current_dataset is not None and
+                                hasattr(slice_display_manager, 'current_studies') and
+                                hasattr(slice_display_manager, 'current_study_uid') and
+                                hasattr(slice_display_manager, 'current_series_uid') and
+                                hasattr(slice_display_manager, 'current_slice_index')):
+                                try:
+                                    slice_display_manager.display_slice(
+                                        slice_display_manager.current_dataset,
+                                        slice_display_manager.current_studies,
+                                        slice_display_manager.current_study_uid,
+                                        slice_display_manager.current_series_uid,
+                                        slice_display_manager.current_slice_index,
+                                        update_metadata=False  # Don't update metadata panel (already updated above)
+                                    )
+                                except Exception:
+                                    # If display_slice fails, just refresh overlays directly
+                                    overlay_manager = self.subwindow_managers[focused_idx].get('overlay_manager')
+                                    if overlay_manager and slice_display_manager.current_dataset:
+                                        from core.dicom_parser import DICOMParser
+                                        parser = DICOMParser(slice_display_manager.current_dataset)
+                                        overlay_manager.create_overlay_items(
+                                            focused_subwindow.image_viewer.scene,
+                                            parser
+                                        )
 
     def _open_tag_viewer(self) -> None:
         """Handle tag viewer dialog request."""
