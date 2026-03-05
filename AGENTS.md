@@ -21,6 +21,7 @@ If no venv exists, create one: `python -m venv venv`, activate it, then `pip ins
 
 - See `.cursor/rules` and user rules for backup-before-modify, testing, and commit guidelines.
 - Project layout: `src/` (application), `tests/` (tests), `dev-docs/` (plans, assessments).
+- **Versioning**: Application version is defined in a single place, `src/version.py` (`__version__`). Use semantic versioning; release steps are in `dev-docs/RELEASING.md`, with full rules in `dev-docs/info/SEMANTIC_VERSIONING_GUIDE.md`.
 
 ## Source module structure (`src/`)
 
@@ -32,9 +33,26 @@ src/
 ├── roi/                           # ROI / measurement feature controllers
 │   └── roi_measurement_controller.py  # Owns ROIManager, MeasurementTool, AnnotationManager, panels
 ├── core/                          # Core processing, loading, and coordination logic
+│   └── loading_progress_manager.py    # Animated loading dots, QProgressDialog, cancellation (used by FileOperationsHandler)
 ├── gui/                           # All Qt widgets, dialogs, and layout components
 ├── tools/                         # Interactive tools (ROI, measurement, annotation, crosshair)
 └── utils/                         # Utilities (config, undo/redo, DICOM helpers, etc.)
+    ├── config_manager.py          # Thin facade: inherits all config mixins; owns __init__, _load_config, save_config, get, set
+    ├── debug_flags.py             # Central on/off switches for diagnostic print statements (DEBUG_LAYOUT, DEBUG_LOADING)
+    └── config/                    # Feature-domain config mixin package
+        ├── __init__.py
+        ├── paths_config.py        # last_path, last_export_path, recent_files, normalize_path
+        ├── display_config.py      # theme, smooth_image_when_zoomed, privacy_view, scroll_wheel_mode
+        ├── overlay_config.py      # overlay mode/visibility/font/tags, get_all_modalities
+        ├── layout_config.py       # multi_window_layout, view_slot_order
+        ├── roi_config.py          # ROI font/line/default_visible_statistics
+        ├── measurement_config.py  # measurement font/line
+        ├── annotation_config.py   # text/arrow annotation appearance
+        ├── cine_config.py         # cine speed/loop defaults
+        ├── metadata_ui_config.py  # metadata panel column widths/order
+        ├── tag_export_config.py   # tag export presets (CRUD + file I/O)
+        ├── customizations_config.py  # bulk export/import of all visual settings
+        └── app_config.py          # disclaimer_accepted
 ```
 
 ### Key controller responsibilities

@@ -26,6 +26,7 @@ from datetime import datetime
 
 from gui.sub_window_container import SubWindowContainer
 from gui.image_viewer import ImageViewer
+from utils.debug_flags import DEBUG_LAYOUT
 
 
 LayoutMode = Literal["1x1", "1x2", "2x1", "2x2"]
@@ -145,14 +146,14 @@ class MultiWindowLayout(QWidget):
         # deferred set_layout again (for 1x1 we never early-return, so we used to always re-emit).
         previous_layout = getattr(self, 'current_layout', None)
         
-        # Debug: trace who called set_layout and with what focus (for shuffle/drift investigation)
-        import traceback
-        focused_idx = self._get_focused_view_index()
-        current = getattr(self, 'current_layout', None)
-        stack = traceback.extract_stack()[-6:-1]
-        callers = " <- ".join([f"{f.name}:{f.lineno}" for f in stack])
-        ts = datetime.now().strftime("%H:%M:%S.%f")
-        print(f"[DEBUG-LAYOUT] [{ts}] set_layout: mode={layout_mode!r} current_layout={current!r} focused_view_index={focused_idx} callers={callers}")
+        if DEBUG_LAYOUT:
+            import traceback
+            focused_idx = self._get_focused_view_index()
+            current = getattr(self, 'current_layout', None)
+            stack = traceback.extract_stack()[-6:-1]
+            callers = " <- ".join([f"{f.name}:{f.lineno}" for f in stack])
+            ts = datetime.now().strftime("%H:%M:%S.%f")
+            print(f"[DEBUG-LAYOUT] [{ts}] set_layout: mode={layout_mode!r} current_layout={current!r} focused_view_index={focused_idx} callers={callers}")
         
         num_subwindows = self._get_num_subwindows(layout_mode)
         

@@ -12,14 +12,9 @@
 # For detailed build instructions, see docs/BUILDING_EXECUTABLES.md
 
 import os
-import sys
 from pathlib import Path
 
 block_cipher = None
-
-# Load application version from single source of truth (used for macOS bundle and consistency)
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from src.version import __version__ as _app_version
 
 # Construct absolute path to main.py
 # PyInstaller is run from the project root directory
@@ -146,7 +141,6 @@ a = Analysis(
         'PySide6.QtGui',
         'PySide6.QtWidgets',
         'PySide6.QtOpenGL',
-        'version',
     ],
     hookspath=[],
     hooksconfig={},
@@ -207,8 +201,8 @@ app = BUNDLE(
     info_plist={
         'NSPrincipalClass': 'NSApplication',
         'NSHighResolutionCapable': 'True',
-        'CFBundleShortVersionString': _app_version,
-        'CFBundleVersion': _app_version,
+        'CFBundleShortVersionString': '3.0.0',
+        'CFBundleVersion': '3.0.0',
         'CFBundleIconFile': 'dvv6ldvv6ldvv6ld_edit-removebg-preview',  # Icon name without .icns extension
     },
 )

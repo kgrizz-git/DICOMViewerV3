@@ -19,34 +19,20 @@ Requirements:
     - DICOMOrganizer for organizing
     - FileDialog for user dialogs
     - ConfigManager for configuration
+    - LoadingProgressManager for animated status, progress dialog and cancellation
 """
 
 import os
 import gc
-from typing import Callable, Optional
-from PySide6.QtWidgets import QApplication, QProgressDialog
-from PySide6.QtCore import QTimer, Qt, QEvent, QObject
+from typing import Callable
+from PySide6.QtWidgets import QApplication
 from core.dicom_loader import DICOMLoader
 from core.dicom_organizer import DICOMOrganizer
+from core.loading_progress_manager import LoadingProgressManager
 from gui.dialogs.file_dialog import FileDialog
 from utils.config_manager import ConfigManager
 from gui.main_window import MainWindow
 
-
-class ProgressDialogEventFilter(QObject):
-    """Event filter for progress dialog to handle Escape key."""
-    
-    def __init__(self, cancel_callback: Callable):
-        super().__init__()
-        self.cancel_callback = cancel_callback
-    
-    def eventFilter(self, obj, event) -> bool:
-        """Filter Escape key presses to trigger cancellation."""
-        if event.type() == QEvent.Type.KeyPress:
-            if event.key() == Qt.Key.Key_Escape:
-                self.cancel_callback()
-                return True
-        return False
 
 class FileOperationsHandler:
     """
@@ -93,103 +79,12 @@ class FileOperationsHandler:
         self.clear_data_callback = clear_data_callback
         self.load_first_slice_callback = load_first_slice_callback
         self.update_status_callback = update_status_callback
-        
-        # Timer for animated loading dots
-        self._loading_timer: Optional[QTimer] = None
-        self._loading_base_message: str = ""
-        self._loading_dot_state: int = 0
-        
-        # Progress dialog for loading operations
-        self._progress_dialog: Optional[QProgressDialog] = None
-        self._progress_event_filter: Optional[ProgressDialogEventFilter] = None
-        
-        # Track explicit user cancellation (not just dialog state)
-        self._user_cancelled: bool = False
-    
-    def _start_animated_loading(self, base_message: str) -> None:
-        """
-        Start animated loading dots for status bar.
-        
-        Args:
-            base_message: Base message to animate (dots will be appended)
-        """
-        self._stop_animated_loading()
-        self._loading_base_message = base_message
-        self._loading_dot_state = 0
-        
-        def update_dots() -> None:
-            """Update dots animation."""
-            dots = ["...", "..", "."][self._loading_dot_state % 3]
-            self.update_status_callback(f"{self._loading_base_message}{dots}")
-            self._loading_dot_state += 1
-            QApplication.processEvents()
-        
-        # Update immediately
-        update_dots()
-        
-        # Create timer to update every 500ms
-        self._loading_timer = QTimer()
-        self._loading_timer.timeout.connect(update_dots)
-        self._loading_timer.start(500)  # Update every 500ms
-    
-    def _stop_animated_loading(self) -> None:
-        """Stop animated loading dots."""
-        if self._loading_timer is not None:
-            self._loading_timer.stop()
-            self._loading_timer = None
-        self._loading_base_message = ""
-        self._loading_dot_state = 0
-    
-    def _create_progress_dialog(self, total_files: int, message: str) -> QProgressDialog:
-        """
-        Create a progress dialog for loading operations.
-        
-        Args:
-            total_files: Total number of files to load
-            message: Initial message to display
-            
-        Returns:
-            QProgressDialog instance
-        """
-        # Close any existing progress dialog
-        self._close_progress_dialog()
-        
-        # Ensure total_files is at least 1 to avoid QProgressDialog issues
-        if total_files <= 0:
-            total_files = 1
-        
-        # Create progress dialog
-        progress = QProgressDialog(message, "Cancel", 0, total_files, self.main_window)
-        progress.setWindowModality(Qt.WindowModality.WindowModal)
-        progress.setMinimumDuration(0)  # Show immediately
-        progress.setWindowTitle("Loading DICOM Files")
-        
-        # Don't connect canceled signal directly - it can fire automatically in compiled apps
-        # Instead, we'll check for cancellation manually in the progress callback
-        # progress.canceled.connect(self._on_cancel_loading)  # Disabled to prevent auto-cancellation
-        
-        # Install event filter to handle Escape key (this is safe as it only triggers on actual key press)
-        self._progress_event_filter = ProgressDialogEventFilter(self._on_cancel_loading)
-        progress.installEventFilter(self._progress_event_filter)
-        
-        self._progress_dialog = progress
-        return progress
-    
-    def _on_cancel_loading(self) -> None:
-        """Handle cancellation request from progress dialog."""
-        self._user_cancelled = True  # Mark as explicit user cancellation
-        self.dicom_loader.cancel()
-        self.update_status_callback("Cancelling...")
-        self._stop_animated_loading()
-    
-    def _close_progress_dialog(self) -> None:
-        """Safely close and cleanup progress dialog."""
-        if self._progress_dialog is not None:
-            if self._progress_event_filter is not None:
-                self._progress_dialog.removeEventFilter(self._progress_event_filter)
-            self._progress_dialog.close()
-            self._progress_dialog = None
-            self._progress_event_filter = None
+
+        # Centralised loading progress infrastructure (animated dots, progress dialog, cancellation).
+        self._loading_manager = LoadingProgressManager(
+            update_status_callback=update_status_callback,
+            cancel_loader_callback=dicom_loader.cancel,
+        )
     
     def _check_large_files(self, file_paths: list[str], threshold_mb: float = 25.0) -> None:
         """
@@ -298,12 +193,12 @@ class FileOperationsHandler:
         self._check_large_files(file_paths)
         
         try:
-            # Reset cancellation flags
-            self._user_cancelled = False
+            # Reset loading manager state (cancellation flag, animation, dialog)
+            self._loading_manager.reset()
             self.dicom_loader.reset_cancellation()
             
             # Create progress dialog for all loads
-            progress_dialog = self._create_progress_dialog(
+            progress_dialog = self._loading_manager.create_progress_dialog(self.main_window,
                 len(file_paths),
                 f"Loading files from {source_name}..."
             )
@@ -321,24 +216,24 @@ class FileOperationsHandler:
                     loading_started[0] = True
                 
                 # Update progress dialog
-                if self._progress_dialog:
-                    self._progress_dialog.setValue(current)
+                if self._loading_manager.get_dialog():
+                    self._loading_manager.get_dialog().setValue(current)
                     if filename:
                         # Update dialog label with current filename
                         if filename.startswith("Deferring"):
-                            self._progress_dialog.setLabelText(filename)
+                            self._loading_manager.get_dialog().setLabelText(filename)
                         else:
-                            self._progress_dialog.setLabelText(f"Loading file {current}/{total}: {filename}...")
+                            self._loading_manager.get_dialog().setLabelText(f"Loading file {current}/{total}: {filename}...")
                     else:
-                        self._progress_dialog.setLabelText(f"Loaded {total} file(s). Organizing into studies/series...")
+                        self._loading_manager.get_dialog().setLabelText(f"Loaded {total} file(s). Organizing into studies/series...")
                     
                     # Manually check if Cancel button was clicked (only after loading has actually started)
                     # This prevents false cancellation when dialog is first shown
-                    if not self._user_cancelled and loading_started[0] and self._progress_dialog.wasCanceled():
-                        self._on_cancel_loading()
+                    if not self._loading_manager.is_cancelled() and loading_started[0] and self._loading_manager.was_dialog_cancelled():
+                        self._loading_manager.on_cancel_loading()
                 
                 # Check for explicit user cancellation
-                if self._user_cancelled:
+                if self._loading_manager.is_cancelled():
                     # Already handled by _on_cancel_loading
                     pass
                 
@@ -348,10 +243,10 @@ class FileOperationsHandler:
             datasets = self.dicom_loader.load_files(file_paths, progress_callback=progress_callback)
             
             # Close progress dialog
-            self._close_progress_dialog()
+            self._loading_manager.close_progress_dialog()
             
             # Check for cancellation (use explicit user cancellation flag)
-            was_cancelled = self._user_cancelled
+            was_cancelled = self._loading_manager.is_cancelled()
             if was_cancelled:
                 num_loaded = len(datasets) if datasets else 0
                 if num_loaded > 0:
@@ -365,7 +260,7 @@ class FileOperationsHandler:
                     return None, None
             
             # Stop animation after loading completes
-            self._stop_animated_loading()
+            self._loading_manager.stop_animated_loading()
             
             if not datasets:
                 # Check if there were specific errors
@@ -490,18 +385,18 @@ class FileOperationsHandler:
             return datasets, studies
         
         except SystemExit:
-            self._stop_animated_loading()
-            self._close_progress_dialog()
+            self._loading_manager.stop_animated_loading()
+            self._loading_manager.close_progress_dialog()
             self.dicom_loader.reset_cancellation()
             raise  # Don't catch system exit
         except KeyboardInterrupt:
-            self._stop_animated_loading()
-            self._close_progress_dialog()
+            self._loading_manager.stop_animated_loading()
+            self._loading_manager.close_progress_dialog()
             self.dicom_loader.reset_cancellation()
             raise  # Don't catch Ctrl+C
         except MemoryError as e:
-            self._stop_animated_loading()
-            self._close_progress_dialog()
+            self._loading_manager.stop_animated_loading()
+            self._loading_manager.close_progress_dialog()
             self.dicom_loader.reset_cancellation()
             self.file_dialog.show_error(
                 self.main_window,
@@ -511,8 +406,8 @@ class FileOperationsHandler:
             )
             return None, None
         except BaseException as e:
-            self._stop_animated_loading()
-            self._close_progress_dialog()
+            self._loading_manager.stop_animated_loading()
+            self._loading_manager.close_progress_dialog()
             self.dicom_loader.reset_cancellation()
             # Catch everything else including C extension errors that make it to Python
             error_type = type(e).__name__
@@ -565,8 +460,8 @@ class FileOperationsHandler:
             pass
         
         try:
-            # Reset cancellation flags
-            self._user_cancelled = False
+            # Reset loading manager state (cancellation flag, animation, dialog)
+            self._loading_manager.reset()
             self.dicom_loader.reset_cancellation()
             
             # Estimate total files for progress dialog (we'll update it when we know the actual count)
@@ -580,7 +475,7 @@ class FileOperationsHandler:
                 estimated_total = 100  # Fallback estimate
             
             # Create progress dialog
-            progress_dialog = self._create_progress_dialog(
+            progress_dialog = self._loading_manager.create_progress_dialog(self.main_window,
                 estimated_total,
                 f"Loading files from {source_name}..."
             )
@@ -605,31 +500,31 @@ class FileOperationsHandler:
                     loading_started[0] = True
                 
                 # Update progress dialog with throttling
-                if self._progress_dialog:
+                if self._loading_manager.get_dialog():
                     # Always update maximum if needed (infrequent operation)
-                    if total > self._progress_dialog.maximum():
-                        self._progress_dialog.setMaximum(total)
+                    if total > self._loading_manager.get_dialog().maximum():
+                        self._loading_manager.get_dialog().setMaximum(total)
                     
                     # Throttle progress bar updates (every 100ms)
                     if current_time - last_progress_update[0] >= progress_update_interval:
-                        self._progress_dialog.setValue(current)
+                        self._loading_manager.get_dialog().setValue(current)
                         last_progress_update[0] = current_time
                     
                     # Throttle label text updates (every 500ms) - this is more expensive
                     if current_time - last_label_update[0] >= label_update_interval:
                         if filename:
-                            self._progress_dialog.setLabelText(f"Loading file {current}/{total}: {filename}...")
+                            self._loading_manager.get_dialog().setLabelText(f"Loading file {current}/{total}: {filename}...")
                         else:
-                            self._progress_dialog.setLabelText(f"Loaded {total} file(s). Organizing into studies/series...")
+                            self._loading_manager.get_dialog().setLabelText(f"Loaded {total} file(s). Organizing into studies/series...")
                         last_label_update[0] = current_time
                     
                     # Manually check if Cancel button was clicked (only after loading has actually started)
                     # This prevents false cancellation when dialog is first shown
-                    if not self._user_cancelled and loading_started[0] and self._progress_dialog.wasCanceled():
-                        self._on_cancel_loading()
+                    if not self._loading_manager.is_cancelled() and loading_started[0] and self._loading_manager.was_dialog_cancelled():
+                        self._loading_manager.on_cancel_loading()
                 
                 # Check for explicit user cancellation
-                if self._user_cancelled:
+                if self._loading_manager.is_cancelled():
                     # Already handled by _on_cancel_loading
                     pass
                 
@@ -641,10 +536,10 @@ class FileOperationsHandler:
             datasets = self.dicom_loader.load_directory(folder_path, recursive=True, progress_callback=progress_callback)
             
             # Close progress dialog
-            self._close_progress_dialog()
+            self._loading_manager.close_progress_dialog()
             
             # Check for cancellation (use explicit user cancellation flag)
-            was_cancelled = self._user_cancelled
+            was_cancelled = self._loading_manager.is_cancelled()
             if was_cancelled:
                 num_loaded = len(datasets) if datasets else 0
                 if num_loaded > 0:
@@ -733,15 +628,15 @@ class FileOperationsHandler:
             return datasets, studies
         
         except SystemExit:
-            self._close_progress_dialog()
+            self._loading_manager.close_progress_dialog()
             self.dicom_loader.reset_cancellation()
             raise  # Don't catch system exit
         except KeyboardInterrupt:
-            self._close_progress_dialog()
+            self._loading_manager.close_progress_dialog()
             self.dicom_loader.reset_cancellation()
             raise  # Don't catch Ctrl+C
         except MemoryError as e:
-            self._close_progress_dialog()
+            self._loading_manager.close_progress_dialog()
             self.dicom_loader.reset_cancellation()
             self.file_dialog.show_error(
                 self.main_window,
@@ -751,7 +646,7 @@ class FileOperationsHandler:
             )
             return None, None
         except BaseException as e:
-            self._close_progress_dialog()
+            self._loading_manager.close_progress_dialog()
             self.dicom_loader.reset_cancellation()
             # Catch everything else including C extension errors that make it to Python
             error_type = type(e).__name__
@@ -809,11 +704,11 @@ class FileOperationsHandler:
             
             try:
                 # Reset cancellation flags
-                self._user_cancelled = False
+                self._loading_manager.reset()
                 self.dicom_loader.reset_cancellation()
                 
                 # Create progress dialog
-                progress_dialog = self._create_progress_dialog(
+                progress_dialog = self._loading_manager.create_progress_dialog(self.main_window,
                     1,
                     f"Loading {source_name}..."
                 )
@@ -830,23 +725,23 @@ class FileOperationsHandler:
                         loading_started[0] = True
                     
                     # Update progress dialog
-                    if self._progress_dialog:
-                        self._progress_dialog.setValue(current)
+                    if self._loading_manager.get_dialog():
+                        self._loading_manager.get_dialog().setValue(current)
                         if filename:
                             if filename.startswith("Deferring"):
-                                self._progress_dialog.setLabelText(filename)
+                                self._loading_manager.get_dialog().setLabelText(filename)
                             else:
-                                self._progress_dialog.setLabelText(filename.rstrip('.'))
+                                self._loading_manager.get_dialog().setLabelText(filename.rstrip('.'))
                         else:
-                            self._progress_dialog.setLabelText(f"Loaded {total} file(s). Organizing into studies/series...")
+                            self._loading_manager.get_dialog().setLabelText(f"Loaded {total} file(s). Organizing into studies/series...")
                         
                         # Manually check if Cancel button was clicked (only after loading has actually started)
                         # This prevents false cancellation when dialog is first shown
-                        if not self._user_cancelled and loading_started[0] and self._progress_dialog.wasCanceled():
-                            self._on_cancel_loading()
+                        if not self._loading_manager.is_cancelled() and loading_started[0] and self._loading_manager.was_dialog_cancelled():
+                            self._loading_manager.on_cancel_loading()
                     
                     # Check for explicit user cancellation
-                    if self._user_cancelled:
+                    if self._loading_manager.is_cancelled():
                         # Already handled by _on_cancel_loading
                         pass
                         
@@ -855,10 +750,10 @@ class FileOperationsHandler:
                 datasets = self.dicom_loader.load_files([file_path], progress_callback=progress_callback)
                 
                 # Close progress dialog
-                self._close_progress_dialog()
+                self._loading_manager.close_progress_dialog()
                 
                 # Check for cancellation (use explicit user cancellation flag)
-                was_cancelled = self._user_cancelled
+                was_cancelled = self._loading_manager.is_cancelled()
                 if was_cancelled:
                     num_loaded = len(datasets) if datasets else 0
                     if num_loaded > 0:
@@ -872,7 +767,7 @@ class FileOperationsHandler:
                         return None, None
                 
                 # Stop animation after loading completes
-                self._stop_animated_loading()
+                self._loading_manager.stop_animated_loading()
                 
                 if not datasets:
                     # Check if there were specific errors
@@ -956,7 +851,7 @@ class FileOperationsHandler:
                 return datasets, studies
                 
             except MemoryError as e:
-                self._close_progress_dialog()
+                self._loading_manager.close_progress_dialog()
                 self.dicom_loader.reset_cancellation()
                 self.file_dialog.show_error(
                     self.main_window,
@@ -966,7 +861,7 @@ class FileOperationsHandler:
                 )
                 return None, None
             except Exception as e:
-                self._close_progress_dialog()
+                self._loading_manager.close_progress_dialog()
                 self.dicom_loader.reset_cancellation()
                 error_type = type(e).__name__
                 error_msg = f"Error loading file: {str(e)}"
@@ -995,7 +890,7 @@ class FileOperationsHandler:
             
             try:
                 # Reset cancellation flags
-                self._user_cancelled = False
+                self._loading_manager.reset()
                 self.dicom_loader.reset_cancellation()
                 
                 # Estimate total files for progress dialog
@@ -1007,7 +902,7 @@ class FileOperationsHandler:
                     estimated_total = 100  # Fallback estimate
                 
                 # Create progress dialog
-                progress_dialog = self._create_progress_dialog(
+                progress_dialog = self._loading_manager.create_progress_dialog(self.main_window,
                     estimated_total,
                     f"Loading files from {source_name}..."
                 )
@@ -1024,23 +919,23 @@ class FileOperationsHandler:
                         loading_started[0] = True
                     
                     # Update progress dialog
-                    if self._progress_dialog:
+                    if self._loading_manager.get_dialog():
                         # Update maximum if total changed
-                        if total > self._progress_dialog.maximum():
-                            self._progress_dialog.setMaximum(total)
-                        self._progress_dialog.setValue(current)
+                        if total > self._loading_manager.get_dialog().maximum():
+                            self._loading_manager.get_dialog().setMaximum(total)
+                        self._loading_manager.get_dialog().setValue(current)
                         if filename:
-                            self._progress_dialog.setLabelText(f"Loading file {current}/{total}: {filename}...")
+                            self._loading_manager.get_dialog().setLabelText(f"Loading file {current}/{total}: {filename}...")
                         else:
-                            self._progress_dialog.setLabelText(f"Loaded {total} file(s). Organizing into studies/series...")
+                            self._loading_manager.get_dialog().setLabelText(f"Loaded {total} file(s). Organizing into studies/series...")
                         
                         # Manually check if Cancel button was clicked (only after loading has actually started)
                         # This prevents false cancellation when dialog is first shown
-                        if not self._user_cancelled and loading_started[0] and self._progress_dialog.wasCanceled():
-                            self._on_cancel_loading()
+                        if not self._loading_manager.is_cancelled() and loading_started[0] and self._loading_manager.was_dialog_cancelled():
+                            self._loading_manager.on_cancel_loading()
                 
                 # Check for explicit user cancellation
-                if self._user_cancelled:
+                if self._loading_manager.is_cancelled():
                     # Already handled by _on_cancel_loading
                     pass
                 
@@ -1049,10 +944,10 @@ class FileOperationsHandler:
                 datasets = self.dicom_loader.load_directory(file_path, recursive=True, progress_callback=progress_callback)
                 
                 # Close progress dialog
-                self._close_progress_dialog()
+                self._loading_manager.close_progress_dialog()
                 
                 # Check for cancellation (use explicit user cancellation flag)
-                was_cancelled = self._user_cancelled
+                was_cancelled = self._loading_manager.is_cancelled()
                 if was_cancelled:
                     num_loaded = len(datasets) if datasets else 0
                     if num_loaded > 0:
@@ -1144,7 +1039,7 @@ class FileOperationsHandler:
                 return datasets, studies
                 
             except MemoryError as e:
-                self._close_progress_dialog()
+                self._loading_manager.close_progress_dialog()
                 self.dicom_loader.reset_cancellation()
                 self.file_dialog.show_error(
                     self.main_window,
@@ -1154,7 +1049,7 @@ class FileOperationsHandler:
                 )
                 return None, None
             except Exception as e:
-                self._close_progress_dialog()
+                self._loading_manager.close_progress_dialog()
                 self.dicom_loader.reset_cancellation()
                 error_type = type(e).__name__
                 error_msg = f"Error loading folder: {str(e)}"
@@ -1220,7 +1115,7 @@ class FileOperationsHandler:
             
             try:
                 # Reset cancellation flags
-                self._user_cancelled = False
+                self._loading_manager.reset()
                 self.dicom_loader.reset_cancellation()
                 
                 # Estimate total files for progress dialog
@@ -1232,7 +1127,7 @@ class FileOperationsHandler:
                     estimated_total = 100  # Fallback estimate
                 
                 # Create progress dialog
-                progress_dialog = self._create_progress_dialog(
+                progress_dialog = self._loading_manager.create_progress_dialog(self.main_window,
                     estimated_total,
                     f"Loading files from {source_name}..."
                 )
@@ -1249,23 +1144,23 @@ class FileOperationsHandler:
                         loading_started[0] = True
                     
                     # Update progress dialog
-                    if self._progress_dialog:
+                    if self._loading_manager.get_dialog():
                         # Update maximum if total changed
-                        if total > self._progress_dialog.maximum():
-                            self._progress_dialog.setMaximum(total)
-                        self._progress_dialog.setValue(current)
+                        if total > self._loading_manager.get_dialog().maximum():
+                            self._loading_manager.get_dialog().setMaximum(total)
+                        self._loading_manager.get_dialog().setValue(current)
                         if filename:
-                            self._progress_dialog.setLabelText(f"Loading file {current}/{total}: {filename}...")
+                            self._loading_manager.get_dialog().setLabelText(f"Loading file {current}/{total}: {filename}...")
                         else:
-                            self._progress_dialog.setLabelText(f"Loaded {total} file(s). Organizing into studies/series...")
+                            self._loading_manager.get_dialog().setLabelText(f"Loaded {total} file(s). Organizing into studies/series...")
                         
                         # Manually check if Cancel button was clicked (only after loading has actually started)
                         # This prevents false cancellation when dialog is first shown
-                        if not self._user_cancelled and loading_started[0] and self._progress_dialog.wasCanceled():
-                            self._on_cancel_loading()
+                        if not self._loading_manager.is_cancelled() and loading_started[0] and self._loading_manager.was_dialog_cancelled():
+                            self._loading_manager.on_cancel_loading()
                 
                 # Check for explicit user cancellation
-                if self._user_cancelled:
+                if self._loading_manager.is_cancelled():
                     # Already handled by _on_cancel_loading
                     pass
                 
@@ -1275,10 +1170,10 @@ class FileOperationsHandler:
                 datasets = self.dicom_loader.load_directory(folder_path, recursive=True, progress_callback=progress_callback)
                 
                 # Close progress dialog
-                self._close_progress_dialog()
+                self._loading_manager.close_progress_dialog()
                 
                 # Check for cancellation (use explicit user cancellation flag)
-                was_cancelled = self._user_cancelled
+                was_cancelled = self._loading_manager.is_cancelled()
                 if was_cancelled:
                     num_loaded = len(datasets) if datasets else 0
                     if num_loaded > 0:
@@ -1361,15 +1256,15 @@ class FileOperationsHandler:
                 return datasets, studies
             
             except SystemExit:
-                self._close_progress_dialog()
+                self._loading_manager.close_progress_dialog()
                 self.dicom_loader.reset_cancellation()
                 raise  # Don't catch system exit
             except KeyboardInterrupt:
-                self._close_progress_dialog()
+                self._loading_manager.close_progress_dialog()
                 self.dicom_loader.reset_cancellation()
                 raise  # Don't catch Ctrl+C
             except MemoryError as e:
-                self._close_progress_dialog()
+                self._loading_manager.close_progress_dialog()
                 self.dicom_loader.reset_cancellation()
                 self.file_dialog.show_error(
                     self.main_window,
@@ -1379,7 +1274,7 @@ class FileOperationsHandler:
                 )
                 return None, None
             except BaseException as e:
-                self._close_progress_dialog()
+                self._loading_manager.close_progress_dialog()
                 self.dicom_loader.reset_cancellation()
                 # Catch everything else including C extension errors that make it to Python
                 error_type = type(e).__name__
@@ -1416,11 +1311,11 @@ class FileOperationsHandler:
             
             try:
                 # Reset cancellation flags
-                self._user_cancelled = False
+                self._loading_manager.reset()
                 self.dicom_loader.reset_cancellation()
                 
                 # Create progress dialog
-                progress_dialog = self._create_progress_dialog(
+                progress_dialog = self._loading_manager.create_progress_dialog(self.main_window,
                     len(files),
                     f"Loading files from {source_name}..."
                 )
@@ -1437,23 +1332,23 @@ class FileOperationsHandler:
                         loading_started[0] = True
                     
                     # Update progress dialog
-                    if self._progress_dialog:
-                        self._progress_dialog.setValue(current)
+                    if self._loading_manager.get_dialog():
+                        self._loading_manager.get_dialog().setValue(current)
                         if filename:
                             if filename.startswith("Deferring"):
-                                self._progress_dialog.setLabelText(filename)
+                                self._loading_manager.get_dialog().setLabelText(filename)
                             else:
-                                self._progress_dialog.setLabelText(f"Loading file {current}/{total}: {filename}...")
+                                self._loading_manager.get_dialog().setLabelText(f"Loading file {current}/{total}: {filename}...")
                         else:
-                            self._progress_dialog.setLabelText(f"Loaded {total} file(s). Organizing into studies/series...")
+                            self._loading_manager.get_dialog().setLabelText(f"Loaded {total} file(s). Organizing into studies/series...")
                         
                         # Manually check if Cancel button was clicked (only after loading has actually started)
                         # This prevents false cancellation when dialog is first shown
-                        if not self._user_cancelled and loading_started[0] and self._progress_dialog.wasCanceled():
-                            self._on_cancel_loading()
+                        if not self._loading_manager.is_cancelled() and loading_started[0] and self._loading_manager.was_dialog_cancelled():
+                            self._loading_manager.on_cancel_loading()
                     
                     # Check for explicit user cancellation
-                    if self._user_cancelled:
+                    if self._loading_manager.is_cancelled():
                         # Already handled by _on_cancel_loading
                         pass
                         
@@ -1463,10 +1358,10 @@ class FileOperationsHandler:
                 datasets = self.dicom_loader.load_files(files, progress_callback=progress_callback)
                 
                 # Close progress dialog
-                self._close_progress_dialog()
+                self._loading_manager.close_progress_dialog()
                 
                 # Check for cancellation (use explicit user cancellation flag)
-                was_cancelled = self._user_cancelled
+                was_cancelled = self._loading_manager.is_cancelled()
                 if was_cancelled:
                     num_loaded = len(datasets) if datasets else 0
                     if num_loaded > 0:
@@ -1593,15 +1488,15 @@ class FileOperationsHandler:
                 return datasets, studies
             
             except SystemExit:
-                self._close_progress_dialog()
+                self._loading_manager.close_progress_dialog()
                 self.dicom_loader.reset_cancellation()
                 raise  # Don't catch system exit
             except KeyboardInterrupt:
-                self._close_progress_dialog()
+                self._loading_manager.close_progress_dialog()
                 self.dicom_loader.reset_cancellation()
                 raise  # Don't catch Ctrl+C
             except MemoryError as e:
-                self._close_progress_dialog()
+                self._loading_manager.close_progress_dialog()
                 self.dicom_loader.reset_cancellation()
                 self.file_dialog.show_error(
                     self.main_window,
@@ -1611,7 +1506,7 @@ class FileOperationsHandler:
                 )
                 return None, None
             except BaseException as e:
-                self._close_progress_dialog()
+                self._loading_manager.close_progress_dialog()
                 self.dicom_loader.reset_cancellation()
                 # Catch everything else including C extension errors that make it to Python
                 error_type = type(e).__name__

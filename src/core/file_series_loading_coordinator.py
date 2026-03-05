@@ -42,6 +42,7 @@ from typing import Dict, List, Optional, Tuple, Any
 from pydicom.dataset import Dataset
 
 from utils.dicom_utils import get_composite_series_key
+from utils.debug_flags import DEBUG_LOADING
 
 
 class FileSeriesLoadingCoordinator:
@@ -141,7 +142,7 @@ class FileSeriesLoadingCoordinator:
                             'current_datasets': []
                         }
                         stale_count += 1
-            if stale_count > 0:
+            if stale_count > 0 and DEBUG_LOADING:
                 print(f"[DEBUG] Cleared stale data from {stale_count} subwindow(s)")
 
             # Load Presentation States and Key Objects into annotation manager

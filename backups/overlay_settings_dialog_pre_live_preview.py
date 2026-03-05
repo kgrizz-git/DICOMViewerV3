@@ -27,87 +27,73 @@ from utils.config_manager import ConfigManager
 class OverlaySettingsDialog(QDialog):
     """
     Dialog for customizing overlay font size and color.
-
+    
     Provides:
-    - Overlay font size customization (live preview as value changes)
-    - Overlay font color customization (live preview after color picker closes)
-
-    Signals:
-        settings_applied: Emitted when the user confirms with OK.
-        settings_changed: Emitted on every interactive change (live preview).
-            Both signals trigger the same overlay-refresh pipeline; the caller
-            should connect both to the same callback.
-
-    Cancel behaviour: on reject() the original values are restored to
-    ConfigManager and settings_changed is emitted once so the overlay reverts.
+    - Overlay font size customization
+    - Overlay font color customization
     """
-
-    # Emitted on OK (final confirmation)
+    
+    # Signal emitted when settings are applied
     settings_applied = Signal()
-    # Emitted on every live change (font-size step, colour pick)
-    settings_changed = Signal()
-
+    
     def __init__(self, config_manager: ConfigManager, parent=None):
         """
         Initialize the overlay settings dialog.
-
+        
         Args:
             config_manager: ConfigManager instance
             parent: Parent widget
         """
         super().__init__(parent)
-
+        
         self.config_manager = config_manager
         self.setWindowTitle("Overlay Settings")
         self.setModal(True)
         self.resize(400, 200)
-
-        # Store original values so we can revert on Cancel
-        self._original_font_size = config_manager.get_overlay_font_size()
-        self._original_font_color = config_manager.get_overlay_font_color()
-
+        
+        # Store original values for cancel
+        self.original_font_size = config_manager.get_overlay_font_size()
+        self.original_font_color = config_manager.get_overlay_font_color()
+        
         self._create_ui()
         self._load_settings()
-
-        # Live preview: update overlay as font size is adjusted
-        self.font_size_spinbox.valueChanged.connect(self._on_live_update)
-
+    
     def _create_ui(self) -> None:
         """Create the UI components."""
         layout = QVBoxLayout(self)
-
+        
         # Overlay Settings Group
         overlay_group = QGroupBox("Overlay Settings")
         overlay_layout = QFormLayout()
-
+        
         # Font Size
         self.font_size_spinbox = QSpinBox()
         self.font_size_spinbox.setRange(1, 24)
         self.font_size_spinbox.setValue(10)
         self.font_size_spinbox.setSuffix(" pt")
         overlay_layout.addRow("Font Size:", self.font_size_spinbox)
-
+        
         # Font Color
         color_layout = QHBoxLayout()
         self.color_label = QLabel()
         self.color_label.setMinimumSize(50, 30)
         self.color_label.setStyleSheet("background-color: rgb(255, 255, 0); border: 1px solid black;")
         self.color_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
+        
         color_button = QPushButton("Choose Color...")
         color_button.clicked.connect(self._choose_color)
-
+        
         color_layout.addWidget(self.color_label)
         color_layout.addWidget(color_button)
         color_layout.addStretch()
-
+        
         overlay_layout.addRow("Font Color:", color_layout)
-
+        
         overlay_group.setLayout(overlay_layout)
         layout.addWidget(overlay_group)
-
+        
         layout.addStretch()
-
+        
         # Buttons
         button_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
@@ -115,23 +101,22 @@ class OverlaySettingsDialog(QDialog):
         button_box.accepted.connect(self._apply_settings)
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
-
+    
     def _load_settings(self) -> None:
         """Load current settings into the dialog."""
-        # Block valueChanged so the initial load does not trigger a live update
-        self.font_size_spinbox.blockSignals(True)
+        # Font size
         font_size = self.config_manager.get_overlay_font_size()
         self.font_size_spinbox.setValue(font_size)
-        self.font_size_spinbox.blockSignals(False)
-
+        
+        # Font color
         r, g, b = self.config_manager.get_overlay_font_color()
         self._update_color_display(r, g, b)
         self.current_color = (r, g, b)
-
+    
     def _update_color_display(self, r: int, g: int, b: int) -> None:
         """
         Update the color display label.
-
+        
         Args:
             r: Red component
             g: Green component
@@ -140,41 +125,28 @@ class OverlaySettingsDialog(QDialog):
         self.color_label.setStyleSheet(
             f"background-color: rgb({r}, {g}, {b}); border: 1px solid black;"
         )
-
+    
     def _choose_color(self) -> None:
-        """Open color picker dialog and apply the chosen color as a live preview."""
+        """Open color picker dialog."""
         r, g, b = self.current_color
         color = QColorDialog.getColor(QColor(r, g, b), self, "Choose Overlay Font Color")
-
+        
         if color.isValid():
             self.current_color = (color.red(), color.green(), color.blue())
             self._update_color_display(*self.current_color)
-            # Apply live preview immediately after the colour is chosen
-            self._on_live_update()
-
-    def _on_live_update(self) -> None:
-        """
-        Save current values to config and emit settings_changed for live preview.
-
-        Called on every spinbox step and immediately after a colour is picked.
-        """
-        self.config_manager.set_overlay_font_size(self.font_size_spinbox.value())
-        r, g, b = self.current_color
-        self.config_manager.set_overlay_font_color(r, g, b)
-        self.settings_changed.emit()
-
+    
     def _apply_settings(self) -> None:
-        """Persist settings, emit settings_applied, and close the dialog."""
-        self.config_manager.set_overlay_font_size(self.font_size_spinbox.value())
+        """Apply settings and close dialog."""
+        # Save font size
+        font_size = self.font_size_spinbox.value()
+        self.config_manager.set_overlay_font_size(font_size)
+        
+        # Save font color
         r, g, b = self.current_color
         self.config_manager.set_overlay_font_color(r, g, b)
+        
+        # Emit signal to notify that settings were applied
         self.settings_applied.emit()
+        
         self.accept()
 
-    def reject(self) -> None:
-        """Restore original values on Cancel so the live preview is reverted."""
-        self.config_manager.set_overlay_font_size(self._original_font_size)
-        r, g, b = self._original_font_color
-        self.config_manager.set_overlay_font_color(r, g, b)
-        self.settings_changed.emit()
-        super().reject()
