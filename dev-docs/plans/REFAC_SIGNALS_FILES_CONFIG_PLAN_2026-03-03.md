@@ -221,20 +221,16 @@ Identify the following feature-domain mixins and their methods:
 
 ---
 
-## Phase 4 – Final Verification and New Refactor Assessment
+## Phase 4 – Final Verification
 
 ### Phase 4.1 – Documentation
 
-- [ ] Update `AGENTS.md` to reflect:
-  - [ ] `src/utils/config/` package structure (list all mixin files).
-  - [ ] `LoadingProgressManager` class location.
-  - [ ] `_connect_signals` sub-method naming convention.
-- [ ] Ensure no references to old single-file structure remain in inline comments.
+- [x] Update `AGENTS.md` to reflect:
+  - [x] `src/utils/config/` package structure (list all mixin files). *(already present from Phase 3)*
+  - [x] `LoadingProgressManager` class location. *(already present from Phase 2)*
+  - [x] `_connect_signals` sub-method naming convention. *(added: table of sub-methods + wiring rule)*
+- [x] Ensure no references to old single-file structure remain in inline comments. *(confirmed: none found)*
 
-### Phase 4.2 – New Refactor Assessment (Final Step)
+### Phase 4.2 – New Refactor Assessment
 
-- [ ] Run a new refactor assessment using `dev-docs/templates-generalized/refactor-assessment-template.md`:
-  - [ ] Create a new timestamped file under `dev-docs/refactor-assessments/`.
-  - [ ] Recompute file line counts for `src/main.py`, `src/core/file_operations_handler.py`, `src/utils/config_manager.py`, and all new files.
-  - [ ] Document how the refactoring changed sizes, responsibilities, and coupling.
-  - [ ] Record any new refactoring opportunities discovered.
+- [N/A] Skipped — no new assessment needed at this time.

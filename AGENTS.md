@@ -74,6 +74,24 @@ The constructor delegates to five helpers in strict order (each step depends on 
 4. `_init_view_widgets()` – navigators, cine, fusion, overlays, scroll-wheel mode.
 5. `_post_init_subwindows_and_handlers()` – UI assembly, per-subwindow managers, handlers, signals, pan mode.
 
+### Signal-wiring convention (`_connect_signals`)
+
+All Qt signal connections for `DICOMViewerApp` are wired in a single call to `_connect_signals()` (invoked from `_post_init_subwindows_and_handlers`). That method delegates to a set of focused sub-methods, each responsible for one feature area:
+
+| Sub-method | Responsibility |
+|---|---|
+| `_connect_layout_signals()` | Multi-window layout and main-window layout-change signals |
+| `_connect_file_signals()` | File open/close and application-quit signals |
+| `_connect_dialog_signals()` | Dialog/panel open signals (settings, overlays, export, etc.) |
+| `_connect_undo_redo_and_annotation_signals()` | Undo/redo stack and annotation signals |
+| `_connect_cine_signals()` | Cine playback control signals |
+| `_connect_view_signals()` | View-mode, privacy, smoothing, and scroll-wheel signals |
+| `_connect_customization_signals()` | Theme/customization applied signals |
+| `_connect_subwindow_signals()` | Per-subwindow signals (files dropped, etc.) |
+| `_connect_focused_subwindow_signals()` | Focused-subwindow state change signals |
+
+**Rule**: signal connections live only in the `_connect_signals` family. No `connect()` calls should be scattered across other `_init_*` helpers. The call order within `_connect_signals` is intentional: layout and file signals are wired before dialog signals so that subwindow/focus state is ready when dialogs are first triggered.
+
 ## View and display options
 
 - **Image Smoothing**: User-configurable option in the **View** menu and in the **image viewer context menu** (right-click on image). When enabled, the image uses smooth scaling when idle after zoom/pan; during zoom/pan it uses fast scaling for responsiveness. Default is **off** (no enhancement). Setting is persisted in config.
