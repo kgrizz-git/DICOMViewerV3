@@ -307,15 +307,15 @@ Execute in order. After each opportunity: backup (if not already done), implemen
 - [x] Implement `import_tag_presets()` in the helper: resolve path, file open dialog, `config_manager.import_tag_export_presets(file_path)`; show success/failure message. If you have UI that must refresh after import (e.g. tag export dialog), pass a callback and call it after successful import.
 - [x] In main.py, replace the bodies of `_on_export_tag_presets` and `_on_import_tag_presets` with calls to the helper.
 - [x] Run full test suite. Manually: export/import customizations and export/import tag presets. Confirm dialogs, paths, and messages match previous behavior.
-- [ ] Commit (e.g. “refactor(main): extract customization and tag-preset handlers to customization_handlers”). Update changelog; mark Opportunity 3 complete.
+- [x] Commit (e.g. “refactor(main): extract customization and tag-preset handlers to customization_handlers”). Update changelog; mark Opportunity 3 complete.
 
 ---
 
 ### Post–Phase 3: Verification
 
-- [ ] Run full test suite (with timeout if applicable). All tests must pass.
-- [ ] Manual smoke test: start app, open files, switch layouts and focus, open/close dialogs, export/import customizations and tag presets, toggle privacy, use cine and projection. No regressions.
-- [ ] Re-run line count on `src/main.py`. Expect a reduction on the order of 430–500 lines from the start of the plan. Record the new line count in this document or in a follow-up note.
+- [x] Run full test suite (with timeout if applicable). All tests must pass.
+- [x] Manual smoke test: start app, open files, switch layouts and focus, open/close dialogs, export/import customizations and tag presets, toggle privacy, use cine and projection. No regressions.
+- [x] Re-run line count on `src/main.py`. Expect a reduction on the order of 430–500 lines from the start of the plan. Record the new line count in this document or in a follow-up note. NEW COUNT: about 3025
 
 ---
 
