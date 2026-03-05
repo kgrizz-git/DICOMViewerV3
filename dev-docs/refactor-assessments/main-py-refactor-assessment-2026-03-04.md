@@ -206,6 +206,154 @@ Doing **1 + 2 + 3** first is a smart order: biggest duplication fix, then wiring
 
 ---
 
+## Detailed Implementation Plan (Opportunities 1–3)
+
+Execute in order. After each opportunity: backup (if not already done), implement, run tests, commit, then proceed. Do not implement the next opportunity until the current one is complete and verified.
+
+---
+
+### Phase 1: Opportunity 1 — Single subwindow manager factory
+
+**Goal**: One place that builds the per-subwindow `managers` dict; remove duplication between `_initialize_subwindow_managers` and `_create_managers_for_subwindow`.
+
+#### Pre-work
+- [ ] Back up `src/main.py` to `backups/main.py` (or `backups/main_pre_subwindow_factory_YYYY-MM-DD.py`). Confirm backup exists and has content.
+- [ ] Run full test suite and record baseline (e.g. “all 90 tests pass”). Document any known flakiness.
+
+#### Step 1.1: Add the single builder method
+- [ ] In `main.py`, add a new private method:  
+  `_build_managers_for_subwindow(self, idx: int, subwindow: SubWindowContainer) -> Dict`
+- [ ] Implement it by copying the **loop body** from `_initialize_subwindow_managers` (the block that creates `managers` for one `(idx, subwindow)`). Use the version that includes **CrosshairManager** and **CrosshairCoordinator** so both code paths get the same set of managers.
+- [ ] Ensure all lambdas and callbacks use `idx` correctly (e.g. `lambda idx=idx: ...` where needed to avoid closure issues).
+- [ ] Do **not** yet remove or shorten `_initialize_subwindow_managers` or `_create_managers_for_subwindow`; only add the new method.
+- [ ] Run tests. Fix any issues (e.g. missing imports inside the new method if you moved any).
+
+#### Step 1.2: Use the builder in _initialize_subwindow_managers
+- [ ] In `_initialize_subwindow_managers`, replace the inner loop body (that builds `managers` and fills `subwindow_data[idx]`) with:
+  - Call `managers = self._build_managers_for_subwindow(idx, subwindow)`.
+  - Store: `self.subwindow_managers[idx] = managers`.
+  - Initialize: `self.subwindow_data[idx] = { 'current_dataset': None, 'current_slice_index': 0, 'current_series_uid': '', 'current_study_uid': '', 'current_datasets': [] }`.
+- [ ] Keep the rest of `_initialize_subwindow_managers` unchanged (scroll wheel mode, loop over subwindows, skip None subwindows, call `_connect_all_subwindow_transform_signals()` at the end).
+- [ ] Run full test suite. Manually: start app, open files, switch layouts (1x1, 2x2), add ROI, change slice. Confirm no regressions.
+- [ ] Commit (e.g. “refactor(main): use _build_managers_for_subwindow in _initialize_subwindow_managers”).
+
+#### Step 1.3: Use the builder in _create_managers_for_subwindow
+- [ ] In `_create_managers_for_subwindow`, replace the entire manager-creation block with:
+  - Call `managers = self._build_managers_for_subwindow(idx, subwindow)`.
+  - Store: `self.subwindow_managers[idx] = managers`.
+  - Initialize `self.subwindow_data[idx]` if `idx not in self.subwindow_data` (same dict as in Step 1.2).
+  - Keep the one-off steps that are specific to “single subwindow” path: set scroll wheel mode, `set_smooth_when_zoomed_state`, set `image_viewer.get_file_path_callback`, set pan mode.
+- [ ] Ensure `_build_managers_for_subwindow` is used for **both** initial bulk creation and dynamic creation from `SubwindowLifecycleController`; confirm `SubwindowLifecycleController` still calls `app._create_managers_for_subwindow(idx, subwindow)` and that that method now delegates to the builder.
+- [x] Run full test suite. Manually: open files, change layout from 2x2 to 1x1 and back, trigger creation of a new subwindow (e.g. 1x1 → 2x1), add ROI in each pane. Verify crosshair and overlay in both code paths.
+- [ ] Commit (e.g. “refactor(main): dedupe subwindow manager creation via _build_managers_for_subwindow”).
+
+#### Step 1.4: Cleanup and final check
+- [ ] Remove any dead code or duplicated comments left in `_initialize_subwindow_managers` or `_create_managers_for_subwindow`.
+- [ ] Run tests again. Update changelog: note refactor (no user-facing behavior change). Bump version if per project policy (e.g. patch).
+- [ ] Mark Opportunity 1 complete in this document (optional checklist at end of plan).
+
+---
+
+### Phase 2: Opportunity 2 — Extract signal wiring to a dedicated module
+
+**Goal**: Move all `_connect_*` logic from `main.py` into `src/core/app_signal_wiring.py`; `_connect_signals()` in main.py becomes a thin dispatcher.
+
+#### Pre-work
+- [ ] Back up `src/main.py` to `backups/` (e.g. `main_pre_signal_wiring_YYYY-MM-DD.py`). Confirm backup.
+- [ ] Run tests; ensure baseline is green after Opportunity 1.
+
+#### Step 2.1: Create wiring module and move first block
+- [ ] Create `src/core/app_signal_wiring.py` with module docstring (purpose: connect all Qt signals for DICOMViewerApp; takes `app` and wires layout, file, dialog, etc.).
+- [ ] Add a function, e.g. `wire_all_signals(app: "DICOMViewerApp") -> None`, that will eventually call all sub-functions. For now, implement only **layout** wiring:
+  - Move the body of `_connect_layout_signals` from main.py into a function e.g. `_wire_layout_signals(app)` in the new module (connect `multi_window_layout.focused_subwindow_changed`, `layout_changed`; `main_window.layout_changed`).
+  - In main.py, replace the body of `_connect_layout_signals` with a call to the new function (e.g. `from core.app_signal_wiring import wire_layout_signals` then `wire_layout_signals(self)`). Keep `_connect_signals()` calling `self._connect_layout_signals()` so call order is unchanged.
+- [ ] Run tests. Manually: change layout, change focus; confirm layout and focus still work.
+- [ ] Commit (e.g. “refactor(signals): add app_signal_wiring, move layout signals”).
+
+#### Step 2.2: Move remaining _connect_* bodies
+- [ ] In `app_signal_wiring.py`, add functions (or a single class with static methods) for: file, dialog, undo/redo+annotation, cine, view, customization. Move each corresponding block from main.py into the new module. Each function receives `app` and performs the same `app.xxx.connect(app._on_yyy)` (or equivalent) calls. Handlers remain methods on `DICOMViewerApp`; only the **connection** code moves.
+- [ ] In main.py, replace each `_connect_*` method body with a single call to the wiring module (e.g. `wire_file_signals(self)`). Preserve the order of calls in `_connect_signals()` (layout → file → dialog → undo/redo → cine → view → customization → subwindow → focused subwindow).
+- [ ] Add wiring for subwindow and focused-subwindow: move the logic that calls `_subwindow_lifecycle_controller.connect_subwindow_signals()` and `connect_focused_subwindow_signals()` into the wiring module (e.g. `wire_subwindow_signals(app)`, `wire_focused_subwindow_signals(app)`), or keep those two as one-liners in main.py that call the controller — either way, the **call** to them can be from the wiring module’s `wire_all_signals(app)` so that main.py’s `_connect_signals` is just one line: `wire_all_signals(self)`.
+- [ ] Run full test suite. Manually: open/close files, open dialogs (settings, overlay, tag viewer, export), cine, privacy toggle, layout/focus, subwindow-specific actions. Confirm all signals still fire correctly.
+- [ ] Commit (e.g. “refactor(signals): move all app signal wiring to app_signal_wiring.py”).
+
+#### Step 2.3: Thin out main.py _connect_signals
+- [ ] Simplify `_connect_signals()` to a single call: `wire_all_signals(self)`. Remove the now-redundant `_connect_layout_signals`, `_connect_file_signals`, etc. from main.py (their bodies are in the wiring module; the dispatcher can be removed so that `_connect_signals` only invokes `wire_all_signals(self)`).
+- [ ] Run tests again. Update changelog; bump version if needed. Mark Opportunity 2 complete.
+
+---
+
+### Phase 3: Opportunity 3 — Customization and tag-preset handlers
+
+**Goal**: Move `_on_export_customizations`, `_on_import_customizations`, `_on_export_tag_presets`, `_on_import_tag_presets` into a helper (e.g. `src/core/customization_handlers.py`); main.py keeps only thin slots that call the helper.
+
+#### Pre-work
+- [ ] Back up `src/main.py` to `backups/` (e.g. `main_pre_customization_handlers_YYYY-MM-DD.py`). Confirm backup.
+- [ ] Run tests; ensure baseline is green after Opportunity 2.
+
+#### Step 3.1: Create helper and move export customizations
+- [ ] Create `src/core/customization_handlers.py` with a class or set of functions that will handle export/import customizations and export/import tag presets. The helper needs: `config_manager`, `main_window` (parent for dialogs), and for import customizations: callbacks for “after import” (e.g. refresh overlay, apply theme, update metadata panel column widths, annotation options). Design the constructor or function signature so main.py can pass these in.
+- [ ] Implement `export_customizations()` in the helper: resolve default path (last export path or cwd), file save dialog, `config_manager.export_customizations(file_path)`, update last export path, show success/failure message. Match current behavior of `_on_export_customizations` exactly.
+- [ ] In main.py, replace the body of `_on_export_customizations` with a call to the helper (e.g. `self._customization_handlers.export_customizations()`). Create the helper in `_initialize_handlers` (or earlier if it has no dependency on handlers) and store as `self._customization_handlers`.
+- [ ] Run tests. Manually: Export Customizations, choose path, confirm file is created and message shown. Commit (e.g. “refactor(main): extract export customizations to customization_handlers”).
+
+#### Step 3.2: Move import customizations
+- [ ] Implement `import_customizations()` in the helper: resolve path, file open dialog, `config_manager.import_customizations(file_path)`. On success: apply overlay font size/color, call “overlay config applied” callback, call “annotation options applied” callback, apply theme, update metadata panel column widths, show success message. On failure: show failure message. Pass in the necessary callbacks from main.py (e.g. `overlay_coordinator.handle_overlay_config_applied`, a method that triggers `_on_annotation_options_applied`, `main_window._set_theme`, and metadata panel column width update).
+- [ ] In main.py, replace the body of `_on_import_customizations` with a call to the helper’s `import_customizations()`.
+- [ ] Run tests. Manually: Import Customizations from a known-good export file; confirm overlay, theme, metadata columns, and annotations update. Commit.
+
+#### Step 3.3: Move export and import tag presets
+- [ ] Implement `export_tag_presets()` in the helper: get presets via `config_manager.get_tag_export_presets()`; if empty, show “No Tag Presets” message and return. Otherwise resolve path, file save dialog, `config_manager.export_tag_export_presets(file_path)`, update last export path, show success/failure message.
+- [ ] Implement `import_tag_presets()` in the helper: resolve path, file open dialog, `config_manager.import_tag_export_presets(file_path)`; show success/failure message. If you have UI that must refresh after import (e.g. tag export dialog), pass a callback and call it after successful import.
+- [ ] In main.py, replace the bodies of `_on_export_tag_presets` and `_on_import_tag_presets` with calls to the helper.
+- [ ] Run full test suite. Manually: export/import customizations and export/import tag presets. Confirm dialogs, paths, and messages match previous behavior.
+- [ ] Commit (e.g. “refactor(main): extract customization and tag-preset handlers to customization_handlers”). Update changelog; mark Opportunity 3 complete.
+
+---
+
+### Post–Phase 3: Verification
+
+- [ ] Run full test suite (with timeout if applicable). All tests must pass.
+- [ ] Manual smoke test: start app, open files, switch layouts and focus, open/close dialogs, export/import customizations and tag presets, toggle privacy, use cine and projection. No regressions.
+- [ ] Re-run line count on `src/main.py`. Expect a reduction on the order of 430–500 lines from the start of the plan. Record the new line count in this document or in a follow-up note.
+
+---
+
+## Evaluation Step for Opportunities 4–6
+
+After Opportunities 1–3 are fully implemented and committed, perform a short evaluation before implementing 4, 5, or 6.
+
+### Objectives
+- Decide whether to implement opportunities 4 (projection handlers), 5 (privacy controller), and 6 (_setup_ui) and in what order, if at all.
+- Base the decision on: current main.py line count, remaining pain points, test coverage, and available time.
+
+### Steps
+
+1. **Re-measure and document**
+   - Run line count on `src/main.py` (excluding backups). Record the value.
+   - Note how much was reduced by 1–3 (e.g. “reduced from ~3552 to ~3050”).
+
+2. **Re-read the assessment for 4–6**
+   - Opportunity 4 (projection): ~100–120 lines; moderate risk; improves cohesion with SliceDisplayManager.
+   - Opportunity 5 (privacy): ~50–80 lines; low–medium risk; centralizes privacy logic.
+   - Opportunity 6 (_setup_ui): ~70 lines; low risk; moves layout assembly to MainWindow or helper.
+
+3. **Decide**
+   - If main.py is still above your target (e.g. 1000 lines), consider implementing 4, 5, and 6 in order of priority (4 → 5 → 6) or by risk (6 → 5 → 4 if you prefer the safest first).
+   - If main.py is at or below target, you may defer 4–6 or do only one (e.g. 6 for clarity) as a follow-up.
+   - If you have projection or privacy bugs in the backlog, favor 4 or 5 to get logic into a single place.
+
+4. **Document the decision**
+   - In this file (below) or in a short follow-up note (e.g. “Evaluation 4–6, YYYY-MM-DD”):
+     - Record: “Post–1–3 main.py line count: N.”
+     - Record: “Decision: [Implement 4 / 5 / 6 in order X] or [Defer 4–6] or [Implement only N].”
+     - Optionally: “Rationale: …”
+
+5. **If implementing 4–6**
+   - For each chosen opportunity, follow the same discipline: backup main.py, implement incrementally, run tests and manual checks, commit, then proceed. Use the “Migration” and “Proposed structure” text in the assessment (sections 4, 5, 6) as the implementation guide. Add a short “Phase 4 / 5 / 6” plan in this document if you want a step-by-step checklist similar to 1–3.
+
+---
+
 ## Safety and process notes
 
 - **No code changes in this assessment** — only this document was added.
