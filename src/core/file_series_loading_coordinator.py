@@ -291,6 +291,15 @@ class FileSeriesLoadingCoordinator:
                 app.current_series_uid,
             )
             app.series_navigator.set_subwindow_assignments(app._get_subwindow_assignments())
+            total = merge_result.skipped_file_count
+            app.main_window.statusBar().showMessage(
+                f"No new files — all {total} already loaded" if total else "No new files loaded"
+            )
+            if merge_result.skipped_file_count > 0:
+                app.main_window.show_toast_message(
+                    f"{merge_result.skipped_file_count} file(s) already loaded and skipped",
+                    3000,
+                )
             return
 
         # Load PS/KO additively for brand-new study UIDs only
@@ -431,6 +440,24 @@ class FileSeriesLoadingCoordinator:
                 fusion_coordinator = app.subwindow_managers[focused_idx].get('fusion_coordinator')
                 if fusion_coordinator:
                     fusion_coordinator.update_fusion_controls_series_list()
+
+        # Status bar and toast feedback
+        if merge_result.new_series:
+            n = len(merge_result.new_series)
+            m = len({s[0] for s in merge_result.new_series})
+            app.main_window.statusBar().showMessage(
+                f"Loaded {n} new series across {m} studies"
+            )
+        elif merge_result.appended_series:
+            k = merge_result.added_file_count
+            app.main_window.statusBar().showMessage(
+                f"Added {k} slice(s) to existing series"
+            )
+        if merge_result.skipped_file_count > 0:
+            app.main_window.show_toast_message(
+                f"{merge_result.skipped_file_count} file(s) already loaded and skipped",
+                3000,
+            )
 
     def open_files(self) -> None:
         """Handle open files request. Delegates to file_operations_handler and updates app state."""

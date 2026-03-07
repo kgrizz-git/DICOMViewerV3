@@ -41,6 +41,7 @@
 - [ ] Fix typo in status bar after loading: "studyies"
 - [ ] Put same little colored dot on layout map thumbnails that is on series thumbnails in navigator?
 - [ ] Make highlight border for focused window match color of dot on navigator series thumbnail
+- [ ] check status bar accuracy when adding 2nd+
 
 
 - [ ] make right pane minimum width before collapsing 250 instead of 200?

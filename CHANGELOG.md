@@ -5,6 +5,7 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ## [Unreleased]
 
 ### Added
+- **Multi-study loading (Phase 6)**: File menu item renamed from "Close" to "Close All" with status tip. After additive load (Open Files, Open Folder, Recents, drag-and-drop), status bar shows: "Loaded {n} new series across {m} studies", "Added {k} slice(s) to existing series", or "No new files — all {total} already loaded". When any files were skipped as duplicates, a toast message "{n} file(s) already loaded and skipped" appears at bottom-center and auto-dismisses after 3 seconds (implemented via `MainWindow.show_toast_message()`).
 - **Export (anonymized DICOM)**: When "Anonymize patient information" is enabled, the export folder structure (Patient ID / Study Date - Study Description / Series Number - Series Description) is now built from anonymized tag values so folder paths do not leak patient data.
 - **SliceDisplayManager.clear_display_state()**: Clears current_dataset, current_studies, and UIDs so no stale cached state is used after close/open.
 - **View menu and image context menu**: "Show/Hide Left Pane" and "Show/Hide Right Pane". When the pane is visible, toggling hides it (width 0); when hidden, toggling shows it at default 250 px. State is persisted via existing `splitter_sizes` config. View menu check state stays in sync when the user drags the splitter.

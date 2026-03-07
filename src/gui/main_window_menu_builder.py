@@ -95,8 +95,9 @@ def build_menu_bar(main_window) -> None:
 
     file_menu.addSeparator()
 
-    close_action = QAction("&Close", main_window)
+    close_action = QAction("Close &All", main_window)
     close_action.setShortcut(QKeySequence("Ctrl+W"))
+    close_action.setStatusTip("Close all loaded studies and series")
     close_action.triggered.connect(main_window.close_requested.emit)
     file_menu.addAction(close_action)
 

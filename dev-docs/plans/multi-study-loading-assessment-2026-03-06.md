@@ -635,22 +635,20 @@ The goal is a small colored circle in the top-right corner of each thumbnail tha
 
 ### Phase 6 — Menu Rename and Load Feedback
 
-**Files:** `src/gui/main_window_menu_builder.py`, `src/main.py`
+**Files:** `src/gui/main_window_menu_builder.py`, `src/gui/main_window.py`, `src/core/file_series_loading_coordinator.py`
 
 #### 6.1 — Rename Close → Close All
 
-- [ ] In `src/gui/main_window_menu_builder.py`, change `QAction("&Close", main_window)` to `QAction("Close &All", main_window)`.
-- [ ] Update the tooltip/status tip if one is set.
+- [x] In `src/gui/main_window_menu_builder.py`, changed `QAction("&Close", main_window)` to `QAction("Close &All", main_window)`.
+- [x] Added `setStatusTip("Close all loaded studies and series")` for the Close All action.
 
 #### 6.2 — Status bar and toast feedback on additive load
 
-- [ ] In `handle_additive_load()`, after all state updates, set a status bar message:
-  - If `merge_result.new_series`: `"Loaded {n} new series across {m} studies"`
-  - If only `merge_result.appended_series` (no new series): `"Added {k} slice(s) to existing series"`
-  - If nothing was new: `"No new files — all {total} already loaded"`
-- [ ] Implement or reuse a toast/banner widget for the "skipped files" notification. Show the toast only when `merge_result.skipped_file_count > 0`. Text: `"{n} file(s) already loaded and skipped"`. Toast should auto-dismiss after 3 seconds.
-
-  > ⚠️ If no toast/banner widget exists in the codebase, implement a minimal one: a `QLabel` with a semi-transparent rounded background that fades out via a `QPropertyAnimation`. Keep it under 50 lines. Place it as an overlay on the main window, anchored to the top-center or bottom-center.
+- [x] In `handle_additive_load()` (file_series_loading_coordinator.py):
+  - Early-exit path: status `"No new files — all {total} already loaded"` (or `"No new files loaded"` when total is 0); toast when `skipped_file_count > 0`.
+  - Main path: if `merge_result.new_series` → `"Loaded {n} new series across {m} studies"`; elif only `appended_series` → `"Added {k} slice(s) to existing series"`.
+  - Toast shown only when `merge_result.skipped_file_count > 0`: `"{n} file(s) already loaded and skipped"`, auto-dismiss after 3 seconds.
+- [x] Implemented minimal toast in `MainWindow.show_toast_message()` (main_window.py): `QLabel` with semi-transparent rounded background, `QGraphicsOpacityEffect` + `QPropertyAnimation` for fade-out, bottom-center overlay, single-shot `QTimer` for 3 s then 300 ms fade.
 
 ---
 

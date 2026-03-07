@@ -21,8 +21,8 @@ from PySide6.QtWidgets import (QMainWindow, QMenuBar, QToolBar, QStatusBar,
                                 QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
                                 QMessageBox, QComboBox, QLabel, QSizePolicy, QColorDialog,
                                 QApplication, QDialog, QTextBrowser, QPushButton, QDialogButtonBox, QMenu,
-                                QScrollArea, QFrame)
-from PySide6.QtCore import Qt, Signal, QEvent, QBuffer, QByteArray, QIODevice, QDir
+                                QScrollArea, QFrame, QGraphicsOpacityEffect)
+from PySide6.QtCore import Qt, Signal, QEvent, QBuffer, QByteArray, QIODevice, QDir, QTimer, QPropertyAnimation
 from PySide6.QtGui import QAction, QIcon, QKeySequence, QColor, QDragEnterEvent, QDropEvent, QPixmap
 from typing import Optional, TYPE_CHECKING
 
@@ -388,6 +388,54 @@ class MainWindow(QMainWindow):
         self.pixel_info_label = QLabel("")
         self.pixel_info_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.statusBar().addPermanentWidget(self.pixel_info_label, stretch=1)
+
+    def show_toast_message(self, message: str, timeout_ms: int = 3000) -> None:
+        """
+        Show a temporary toast/banner message at the bottom-center of the window.
+        Auto-dismisses after timeout_ms, then fades out over 300 ms.
+
+        Args:
+            message: Text to display.
+            timeout_ms: Time in milliseconds before starting fade-out (default 3000).
+        """
+        if getattr(self, "_toast_timer", None) and self._toast_timer.isActive():
+            self._toast_timer.stop()
+        if getattr(self, "_toast_label", None):
+            self._toast_label.deleteLater()
+        label = QLabel(message, self)
+        label.setStyleSheet(
+            "background-color: rgba(0, 0, 0, 0.75); color: white; padding: 8px 12px; "
+            "border-radius: 6px; font-size: 12px;"
+        )
+        label.setWordWrap(True)
+        label.setMinimumWidth(200)
+        label.setMaximumWidth(400)
+        label.adjustSize()
+        effect = QGraphicsOpacityEffect(label)
+        label.setGraphicsEffect(effect)
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        x = (self.width() - label.width()) // 2
+        y = self.height() - 60
+        label.setGeometry(max(0, x), max(0, y), label.width(), label.height())
+        label.show()
+        label.raise_()
+        self._toast_label = label
+        self._toast_effect = effect
+
+        def start_fade():
+            self._toast_timer = None
+            anim = QPropertyAnimation(effect, b"opacity")
+            anim.setDuration(300)
+            anim.setStartValue(1.0)
+            anim.setEndValue(0.0)
+            anim.finished.connect(lambda: (label.deleteLater(), setattr(self, "_toast_label", None)))
+            anim.start()
+            self._toast_animation = anim
+
+        self._toast_timer = QTimer(self)
+        self._toast_timer.setSingleShot(True)
+        self._toast_timer.timeout.connect(start_fade)
+        self._toast_timer.start(timeout_ms)
     
     def _create_central_widget(self) -> None:
         """Create the central widget area."""
