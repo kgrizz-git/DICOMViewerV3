@@ -388,12 +388,20 @@ class ExportManager:
                 if first_dataset is None:
                     continue
                 
+                # Use anonymized tags for folder structure when anonymize is True (so folder path doesn't leak patient info)
+                if anonymize:
+                    from utils.dicom_anonymizer import DICOMAnonymizer
+                    anonymizer = DICOMAnonymizer()
+                    folder_dataset = anonymizer.anonymize_dataset(first_dataset)
+                else:
+                    folder_dataset = first_dataset
+                
                 # Extract DICOM tags for folder structure: Patient ID / Study Date - Study Description / Series Number - Series Description
-                patient_id = getattr(first_dataset, 'PatientID', 'UNKNOWN_PATIENT')
-                study_date = getattr(first_dataset, 'StudyDate', 'UNKNOWN_DATE')
-                study_description = getattr(first_dataset, 'StudyDescription', 'UNKNOWN_STUDY')
-                series_number = getattr(first_dataset, 'SeriesNumber', None)
-                series_description = getattr(first_dataset, 'SeriesDescription', 'UNKNOWN_SERIES')
+                patient_id = getattr(folder_dataset, 'PatientID', 'UNKNOWN_PATIENT')
+                study_date = getattr(folder_dataset, 'StudyDate', 'UNKNOWN_DATE')
+                study_description = getattr(folder_dataset, 'StudyDescription', 'UNKNOWN_STUDY')
+                series_number = getattr(folder_dataset, 'SeriesNumber', None)
+                series_description = getattr(folder_dataset, 'SeriesDescription', 'UNKNOWN_SERIES')
                 
                 # Handle missing or empty SeriesNumber
                 if series_number is None or series_number == '':

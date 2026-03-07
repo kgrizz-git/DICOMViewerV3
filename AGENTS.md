@@ -33,7 +33,8 @@ src/
 ├── roi/                           # ROI / measurement feature controllers
 │   └── roi_measurement_controller.py  # Owns ROIManager, MeasurementTool, AnnotationManager, panels
 ├── core/                          # Core processing, loading, and coordination logic
-│   └── loading_progress_manager.py    # Animated loading dots, QProgressDialog, cancellation (used by FileOperationsHandler)
+│   ├── loading_progress_manager.py    # Animated loading dots, QProgressDialog, cancellation (used by FileOperationsHandler)
+│   └── privacy_controller.py          # Privacy-mode propagation and overlay refresh (called from main on privacy toggle)
 ├── gui/                           # All Qt widgets, dialogs, and layout components
 ├── tools/                         # Interactive tools (ROI, measurement, annotation, crosshair)
 └── utils/                         # Utilities (config, undo/redo, DICOM helpers, etc.)
@@ -63,6 +64,7 @@ src/
 | `MetadataController` | `src/metadata/metadata_controller.py` | `MetadataPanel`, `TagEditHistoryManager`, undo/redo callbacks, privacy mode for metadata |
 | `ROIMeasurementController` | `src/roi/roi_measurement_controller.py` | `ROIManager`, `MeasurementTool`, `AnnotationManager`, `ROIStatisticsPanel`, `ROIListPanel`; tracks active (focused-subwindow) managers via `update_focused_managers()` |
 | `SubwindowLifecycleController` | `src/core/subwindow_lifecycle_controller.py` | Per-subwindow manager creation, focus changes, display updates |
+| `PrivacyController` | `src/core/privacy_controller.py` | Privacy-mode propagation (metadata, overlay/crosshair managers, image viewers) and overlay refresh after privacy change; called from `DICOMViewerApp._on_privacy_view_toggled` |
 
 ### `DICOMViewerApp.__init__` initialization order
 

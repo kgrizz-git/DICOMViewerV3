@@ -247,10 +247,15 @@ class CrosshairItem(QGraphicsItemGroup):
         
         self.privacy_mode = privacy_mode
         
-        # Refresh text (always full content)
+        # Refresh text (always full content). Guard against Qt C++ object already deleted
+        # (e.g. scene was cleared when loading a different exam but crosshair list not cleaned).
         if self.text_item is not None:
-            text = f"Pixel Value: {self.pixel_value_str}\n({self.x_coord}, {self.y_coord}, {self.z_coord})"
-            self.text_item.setPlainText(text)
+            try:
+                text = f"Pixel Value: {self.pixel_value_str}\n({self.x_coord}, {self.y_coord}, {self.z_coord})"
+                self.text_item.setPlainText(text)
+            except RuntimeError:
+                # Internal C++ object (DraggableCrosshairText) already deleted
+                self.text_item = None
     
     def update_pixel_values(self, pixel_value_str: str, x: int, y: int, z: int) -> None:
         """
