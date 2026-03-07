@@ -1738,6 +1738,10 @@ class ImageViewer(QGraphicsView):
                         show_hide_right_pane_action = context_menu.addAction("Show/Hide Right Pane")
                         show_hide_right_pane_action.triggered.connect(self.right_pane_toggle_requested.emit)
 
+                        # Show/Hide Series Navigator (right after pane toggles)
+                        show_hide_series_navigator_action = context_menu.addAction("Show/Hide Series Navigator")
+                        show_hide_series_navigator_action.triggered.connect(self.toggle_series_navigator_requested.emit)
+
                         context_menu.addSeparator()
 
                         # Series navigation actions
@@ -1746,11 +1750,6 @@ class ImageViewer(QGraphicsView):
                         
                         next_series_action = context_menu.addAction("Next Series (→)")
                         next_series_action.triggered.connect(lambda: self.series_navigation_requested.emit(1))
-                        
-                        # Series Navigator toggle action
-                        # Note: Text will be updated dynamically by main window based on visibility
-                        toggle_navigator_action = context_menu.addAction("Toggle Series Navigator (N)")
-                        toggle_navigator_action.triggered.connect(self.toggle_series_navigator_requested.emit)
                         
                         # Assign Series submenu (for multi-window layout)
                         assign_series_menu = context_menu.addMenu("Assign Series to Focused Window")

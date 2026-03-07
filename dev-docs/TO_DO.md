@@ -35,6 +35,7 @@
 - [ ] when loading PET CT study there is a ~10 second lag before the loading progress window pops up - what is happening then?
 - [ ] make default histogram plot and window smaller and allow resizing much smaller
 - [ ] make series number labels like "S01" in navigator a bit smaller
+- [ ] make toolbar customizable
 
 
 - [ ] make right pane minimum width before collapsing 250 instead of 200?

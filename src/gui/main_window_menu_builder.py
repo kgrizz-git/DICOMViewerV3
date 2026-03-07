@@ -183,6 +183,13 @@ def build_menu_bar(main_window) -> None:
     main_window.show_right_pane_action.triggered.connect(main_window._toggle_right_pane)
     view_menu.addAction(main_window.show_right_pane_action)
 
+    # Show/Hide Series Navigator (check state synced in MainWindow.toggle_series_navigator)
+    main_window.show_series_navigator_action = QAction("Show/Hide Series Navigator", main_window)
+    main_window.show_series_navigator_action.setCheckable(True)
+    main_window.show_series_navigator_action.setChecked(False)  # Navigator starts hidden
+    main_window.show_series_navigator_action.triggered.connect(main_window.toggle_series_navigator)
+    view_menu.addAction(main_window.show_series_navigator_action)
+
     view_menu.addSeparator()
 
     # Window assignment thumbnail toggle
