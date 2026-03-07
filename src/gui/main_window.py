@@ -1239,6 +1239,11 @@ class MainWindow(QMainWindow):
             # Fallback for safety: toggle navigator alone if container missing
             self.series_navigator.setVisible(self.series_navigator_visible)
 
+        # Sync View menu check state
+        if hasattr(self, "show_series_navigator_action"):
+            self.show_series_navigator_action.setChecked(self.series_navigator_visible)
+        self.series_navigator_visibility_changed.emit(self.series_navigator_visible)
+
     def set_window_slot_map_visible(self, visible: bool) -> None:
         """
         Show or hide the window-slot thumbnail widget (when series navigator is visible).

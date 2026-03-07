@@ -6,6 +6,7 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 
 ### Added
 - **View menu and image context menu**: "Show/Hide Left Pane" and "Show/Hide Right Pane". When the pane is visible, toggling hides it (width 0); when hidden, toggling shows it at default 250 px. State is persisted via existing `splitter_sizes` config. View menu check state stays in sync when the user drags the splitter.
+- **View menu and context menu**: "Show/Hide Series Navigator" added to the View menu (checkable) and to the image right-click context menu (immediately after "Show/Hide Right Pane"). Toggles the series navigator bar; View menu check state is kept in sync when toggling.
 
 ### Changed
 - **Refactor (main.py)**: Main-window panel layout assembly moved to `src/gui/main_window_layout_helper.py`. `_setup_ui` now delegates to `setup_main_window_content()`; behavior unchanged (center/left/right panels, tabs, series navigator, window-slot map callbacks).
