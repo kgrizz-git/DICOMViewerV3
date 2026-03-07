@@ -1,4 +1,4 @@
-# Refactor Assessment: src/main.py
+﻿# Refactor Assessment: src/main.py
 
 **Document**: main-py-refactor-assessment-2026-03-04  
 **Date**: 2026-03-04  
