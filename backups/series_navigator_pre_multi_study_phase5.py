@@ -23,20 +23,12 @@ from PySide6.QtWidgets import (QWidget, QHBoxLayout, QScrollArea, QVBoxLayout,
                                 QLabel, QFrame, QStyleOption)
 from PySide6.QtCore import Qt, Signal, QSize, QPoint, QMimeData, QTimer
 from PySide6.QtGui import QPixmap, QImage, QPainter, QFont, QColor, QDrag, QMouseEvent, QKeyEvent, QPalette
-from typing import Optional, Dict, List, Tuple
+from typing import Optional, Dict, List
 from pydicom.dataset import Dataset
 from core.dicom_processor import DICOMProcessor
 from PIL import Image
 import numpy as np
 import time
-
-# Colored dot per open subwindow slot: blue, green, orange, magenta
-SUBWINDOW_DOT_COLORS: Dict[int, str] = {
-    0: "#2196F3",  # blue
-    1: "#4CAF50",  # green
-    2: "#FF9800",  # orange
-    3: "#E91E63",  # magenta
-}
 
 
 class StudyDivider(QFrame):
@@ -142,9 +134,7 @@ class SeriesThumbnail(QFrame):
     clicked = Signal(str)  # Emitted with series_uid when clicked
     show_file_requested = Signal(str, str)  # Emitted with (study_uid, series_uid) when "Show file" is requested
     about_this_file_requested = Signal(str, str)  # Emitted with (study_uid, series_uid) when "About This File" is requested
-    close_series_signal = Signal(str, str)  # Emitted with (study_uid, series_uid) when "Close This Series" is selected
-    close_study_signal = Signal(str)  # Emitted with study_uid when "Close This Study" is selected
-
+    
     def __init__(self, series_uid: str, series_number: int, thumbnail_image: Optional[Image.Image], study_uid: str = "", parent=None):
         """
         Initialize series thumbnail.
@@ -162,9 +152,7 @@ class SeriesThumbnail(QFrame):
         self.thumbnail_image = thumbnail_image
         self.study_uid = study_uid
         self.is_current = False
-        # Subwindow slot indices whose series is displayed here (for dot indicators)
-        self._dot_slots: List[int] = []
-
+        
         # Set fixed size for thumbnails (85% of 80x80 to fit smaller navigator height)
         self.setFixedSize(68, 68)
         self.setFrameStyle(QFrame.Shape.Box)
@@ -190,18 +178,6 @@ class SeriesThumbnail(QFrame):
             self.setStyleSheet("QFrame { border: 1px solid #444444; }")
         self.update()
     
-    def set_subwindow_dots(self, slot_indices: List[int]) -> None:
-        """
-        Set which subwindow slot indices are currently displaying this series.
-        Each occupied slot will render a small colored dot in the top-right corner.
-
-        Args:
-            slot_indices: List of subwindow slot indices (0–3) currently showing
-                          this series.  Pass an empty list to clear all dots.
-        """
-        self._dot_slots = list(slot_indices)
-        self.update()  # Trigger repaint
-
     def mousePressEvent(self, event: QMouseEvent) -> None:
         """Handle mouse press and start possible drag operation."""
         if event.button() == Qt.MouseButton.LeftButton:
@@ -267,20 +243,7 @@ class SeriesThumbnail(QFrame):
             return
         
         context_menu = QMenu(self)
-
-        # Close actions (top of menu — primary new feature)
-        close_series_action = context_menu.addAction("Close This Series")
-        close_series_action.triggered.connect(
-            lambda: self.close_series_signal.emit(self.study_uid, self.series_uid)
-        )
-
-        close_study_action = context_menu.addAction("Close This Study")
-        close_study_action.triggered.connect(
-            lambda: self.close_study_signal.emit(self.study_uid)
-        )
-
-        context_menu.addSeparator()
-
+        
         # Add "About This File" action
         about_this_file_action = context_menu.addAction("About This File...")
         about_this_file_action.triggered.connect(
@@ -420,20 +383,6 @@ class SeriesThumbnail(QFrame):
         # Draw text
         painter.drawText(bg_rect, Qt.AlignmentFlag.AlignCenter, series_text)
 
-        # Draw colored subwindow-assignment dots in the top-right corner.
-        # Each dot is 8 px diameter; consecutive dots are spaced 10 px apart leftward.
-        DOT_DIAMETER = 8
-        DOT_SPACING = 10
-        DOT_MARGIN = 3  # distance from right/top edge
-        for i, slot_idx in enumerate(self._dot_slots):
-            color_str = SUBWINDOW_DOT_COLORS.get(slot_idx, "#FFFFFF")
-            dot_color = QColor(color_str)
-            x = self.width() - DOT_MARGIN - DOT_DIAMETER - i * DOT_SPACING
-            y = DOT_MARGIN
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(dot_color)
-            painter.drawEllipse(x, y, DOT_DIAMETER, DOT_DIAMETER)
-
 
 class SeriesNavigator(QWidget):
     """
@@ -447,9 +396,7 @@ class SeriesNavigator(QWidget):
     series_navigation_requested = Signal(int)  # Emitted when arrow keys are pressed (-1 for prev, 1 for next)
     show_file_requested = Signal(str, str)  # Emitted with (study_uid, series_uid) when "Show file" is requested
     about_this_file_requested = Signal(str, str)  # Emitted with (study_uid, series_uid) when "About This File" is requested
-    close_series_requested = Signal(str, str)  # (study_uid, series_key) — forwarded from thumbnail
-    close_study_requested = Signal(str)         # (study_uid) — forwarded from thumbnail
-
+    
     def __init__(self, dicom_processor: DICOMProcessor, parent=None):
         """
         Initialize series navigator.
@@ -464,16 +411,13 @@ class SeriesNavigator(QWidget):
         self.current_study_uid = ""
         self.current_series_uid = ""
         self.thumbnails: Dict[str, SeriesThumbnail] = {}
-
+        
         # Store study labels and dividers for cleanup
         self.study_labels: List[StudyLabel] = []
         self.study_dividers: List[StudyDivider] = []
-
+        
         # Thumbnail cache: (study_uid, series_uid) -> PIL Image
         self.thumbnail_cache: Dict[tuple, Image.Image] = {}
-
-        # Current subwindow slot → (study_uid, series_key) assignments for dot indicators
-        self._subwindow_assignments: Dict[int, Tuple[str, str]] = {}
         
         # Enable keyboard focus so we can receive key events
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
@@ -674,9 +618,6 @@ class SeriesNavigator(QWidget):
                 thumbnail.show_file_requested.connect(self.show_file_requested.emit)
                 # Connect about_this_file_requested signal to SeriesNavigator signal
                 thumbnail.about_this_file_requested.connect(self.about_this_file_requested.emit)
-                # Forward close signals to navigator-level signals
-                thumbnail.close_series_signal.connect(self.close_series_requested.emit)
-                thumbnail.close_study_signal.connect(self.close_study_requested.emit)
                 # Highlight if this is the current series AND current study
                 is_current = (series_uid == current_series_uid and study_uid == current_study_uid)
                 thumbnail.set_current(is_current)
@@ -694,35 +635,6 @@ class SeriesNavigator(QWidget):
             
             first_study = False
     
-    def set_subwindow_assignments(self, assignments: Dict[int, Tuple[str, str]]) -> None:
-        """
-        Update which subwindow slots are currently displaying which series, then
-        repaint the dot indicators on all thumbnails.
-
-        Must be called **after** update_series_list() so thumbnails exist.
-
-        Args:
-            assignments: Mapping of subwindow_idx → (study_uid, series_key) for
-                         every occupied subwindow.  Pass an empty dict to clear all dots.
-        """
-        self._subwindow_assignments = dict(assignments)
-        self._refresh_dot_indicators()
-
-    def _refresh_dot_indicators(self) -> None:
-        """
-        Rebuild the reverse map from (study_uid, series_key) → [slot_indices] and
-        push the appropriate slot list to every thumbnail's set_subwindow_dots().
-        """
-        # Build reverse map: composite_key → list of slot indices
-        reverse: Dict[str, List[int]] = {}
-        for slot_idx, (study_uid, series_key) in self._subwindow_assignments.items():
-            composite_key = f"{study_uid}:{series_key}"
-            reverse.setdefault(composite_key, []).append(slot_idx)
-
-        # Apply to thumbnails — thumbnails not in the map get empty list (no dots)
-        for composite_key, thumbnail in self.thumbnails.items():
-            thumbnail.set_subwindow_dots(reverse.get(composite_key, []))
-
     def _generate_thumbnail(self, dataset: Dataset) -> Optional[Image.Image]:
         """
         Generate thumbnail image from first slice of series.

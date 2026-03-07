@@ -1020,11 +1020,16 @@ class ROIManager:
                 overlay_item.roi = None
             if hasattr(overlay_item, 'mark_deleted'):
                 overlay_item.mark_deleted()
-            # Remove from scene if it's in the scene
-            if scene and overlay_item.scene() == scene:
-                # print(f"[DEBUG-OVERLAY] Removing overlay from scene")
-                scene.removeItem(overlay_item)
-                removed_any = True
+            # Remove from scene if it's in the scene.
+            # Guard against RuntimeError if the C++ object was already destroyed
+            # (e.g. when scene.clear() was called externally before this method).
+            try:
+                if scene and overlay_item.scene() == scene:
+                    scene.removeItem(overlay_item)
+                    removed_any = True
+            except RuntimeError:
+                # C++ object already deleted; nothing left to remove
+                pass
         else:
             # print(f"[DEBUG-OVERLAY] No overlay item reference to remove")
             pass

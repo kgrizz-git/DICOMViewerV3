@@ -577,7 +577,7 @@ Do not begin a later phase until all checklist items for the current phase are c
 #### 4.3 — Targeted test after Phase 4
 
 - All 233 automated tests pass.
-- Manual smoke test (4.3): right-click Close This Series / Close This Study with real DICOM data — to be performed manually.
+- Manual smoke test (4.3 + 5 combined): right-click Close This Series / Close This Study with real DICOM data once Phase 5 UI wiring is complete — to be performed manually.
 
 ---
 
@@ -591,20 +591,18 @@ Do not begin a later phase until all checklist items for the current phase are c
 
 #### 5.1 — Signals on `SeriesNavigator`
 
-- [ ] Add two new signals to `SeriesNavigator`:
+- [x] Add two new signals to `SeriesNavigator`:
   ```python
   close_series_requested = Signal(str, str)  # (study_uid, series_key)
   close_study_requested = Signal(str)         # (study_uid)
   ```
+  Added to `SeriesNavigator` class definition in `src/gui/series_navigator.py`.
 
 #### 5.2 — Right-click context menu on `SeriesThumbnail`
 
-- [ ] In `SeriesThumbnail`, override `contextMenuEvent(self, event)`:
-  - Create a `QMenu`.
-  - Add action "Close This Series" → emit `self._close_series_signal(self.study_uid, self.series_uid)`.
-  - Add action "Close This Study" → emit `self._close_study_signal(self.study_uid)`.
-  - Exec the menu at `event.globalPos()`.
-- [ ] `SeriesThumbnail` needs two new signals: `close_series_signal(str, str)` and `close_study_signal(str)`. These are connected in `SeriesNavigator.update_series_list()` (where thumbnails are created) to forward to the navigator-level signals `close_series_requested` and `close_study_requested`.
+- [x] In `SeriesThumbnail`, override `contextMenuEvent(self, event)`:
+  - "Close This Series" and "Close This Study" actions added at the top of the existing context menu (above a separator), followed by the existing "About This File" and "Show File in File Explorer" actions.
+- [x] `SeriesThumbnail` has two new signals: `close_series_signal(str, str)` and `close_study_signal(str)`. Connected inside `SeriesNavigator.update_series_list()` to forward to navigator-level signals.
 
   > ⚠️ **CAUTION:** `SeriesThumbnail` widgets are destroyed and recreated on every `update_series_list()` call. Signal connections made at creation time are severed when the widget is destroyed. This is fine as long as connections are made inside `update_series_list()` for each newly created thumbnail.
 
@@ -612,33 +610,24 @@ Do not begin a later phase until all checklist items for the current phase are c
 
 The goal is a small colored circle in the top-right corner of each thumbnail that is currently displayed in a subwindow. The four subwindow slot colors are: **blue** (slot 0), **green** (slot 1), **orange** (slot 2), **magenta** (slot 3).
 
-- [ ] Define a `SUBWINDOW_DOT_COLORS` constant in `series_navigator.py`:
-  ```python
-  SUBWINDOW_DOT_COLORS = {0: "#2196F3", 1: "#4CAF50", 2: "#FF9800", 3: "#E91E63"}
-  ```
-- [ ] Add method `SeriesNavigator.set_subwindow_assignments(assignments: Dict[int, Tuple[str, str]]) -> None`:
-  - `assignments` maps `subwindow_idx → (study_uid, series_key)` for every occupied subwindow.
-  - Stores assignments internally: `self._subwindow_assignments: Dict[int, Tuple[str, str]] = {}`.
-  - Calls `_refresh_dot_indicators()`.
-- [ ] Add `_refresh_dot_indicators()`:
-  - Builds a reverse map: `{(study_uid, series_key): List[int]}` (which slot indices display this series).
-  - Calls `thumbnail.set_subwindow_dots(slot_indices)` on every thumbnail in the current layout.
-- [ ] In `SeriesThumbnail`:
-  - Add `set_subwindow_dots(slot_indices: List[int]) -> None` that stores `self._dot_slots = slot_indices` and calls `update()` to repaint.
-  - Override `paintEvent`: after the existing paint, for each slot index in `self._dot_slots`, draw a filled circle (8px diameter) using `SUBWINDOW_DOT_COLORS[slot_idx]` at the top-right corner, offset by `slot_idx * 10px` leftward so dots don't overlap.
+- [x] Defined `SUBWINDOW_DOT_COLORS` module-level constant in `series_navigator.py`.
+- [x] Added `SeriesNavigator.set_subwindow_assignments()` and `_refresh_dot_indicators()`.
+- [x] Added `SeriesThumbnail.set_subwindow_dots()` and dot drawing in `paintEvent` (8 px filled circles, 10 px spacing, top-right corner).
 
   > ⚠️ **CAUTION:** `update_series_list()` rebuilds all thumbnail widgets. After any rebuild, `set_subwindow_assignments()` must be called again to re-apply dots. The caller (app) must always pass the current assignments when updating the navigator. Add `subwindow_assignments` as an additional optional parameter to `update_series_list()`, or call `set_subwindow_assignments()` immediately after `update_series_list()` wherever `update_series_list()` is called.
 
-- [ ] Update all existing call sites of `series_navigator.update_series_list(...)` in `file_series_loading_coordinator.py` and `main.py` to also pass or immediately follow with the current subwindow assignments.
+- [x] Updated all call sites of `series_navigator.update_series_list(...)` in `file_series_loading_coordinator.py` and `main.py` to immediately follow with `set_subwindow_assignments(app._get_subwindow_assignments())`. Also added call at end of `assign_series_to_subwindow`.
 
 #### 5.4 — Signal connections
 
-- [ ] In `src/core/app_signal_wiring.py` (in the appropriate `_connect_*` sub-method, likely `_connect_dialog_signals` or a new `_connect_navigator_signals`):
+- [x] In `src/core/app_signal_wiring.py`, added in `_wire_dialog_signals()`:
   ```python
   app.series_navigator.close_series_requested.connect(app._close_series)
   app.series_navigator.close_study_requested.connect(app._close_study)
   ```
-- [ ] After any call that changes `subwindow_data` (load, series drag-assign, close-series), call `series_navigator.set_subwindow_assignments(self._get_subwindow_assignments())` where `_get_subwindow_assignments()` is a small helper on `DICOMViewerApp` that builds the `Dict[int, Tuple[str, str]]` from `subwindow_data`.
+- [x] `_get_subwindow_assignments()` helper added to `DICOMViewerApp` in `main.py`. Called after every `update_series_list()` and after `assign_series_to_subwindow`.
+- All 233 automated tests pass.
+- Manual smoke test: right-click Close This Series / Close This Study with real DICOM data, and verify colored dots appear on thumbnails open in subwindows — to be performed manually.
 
   > ⚠️ **CAUTION:** `set_subwindow_assignments` and `_refresh_dot_indicators` must be called **after** the navigator has been rebuilt (i.e., after `update_series_list()`), never before, or the thumbnails to update won't exist yet.
 
