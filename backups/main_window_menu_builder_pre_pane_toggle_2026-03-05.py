@@ -170,19 +170,6 @@ def build_menu_bar(main_window) -> None:
     main_window.smooth_when_zoomed_action.triggered.connect(main_window._on_smooth_when_zoomed_toggled)
     view_menu.addAction(main_window.smooth_when_zoomed_action)
 
-    # Show/Hide Left Pane and Right Pane (initial check state default True; MainWindow syncs from splitter after central widget is created)
-    main_window.show_left_pane_action = QAction("Show/Hide Left Pane", main_window)
-    main_window.show_left_pane_action.setCheckable(True)
-    main_window.show_left_pane_action.setChecked(True)
-    main_window.show_left_pane_action.triggered.connect(main_window._toggle_left_pane)
-    view_menu.addAction(main_window.show_left_pane_action)
-
-    main_window.show_right_pane_action = QAction("Show/Hide Right Pane", main_window)
-    main_window.show_right_pane_action.setCheckable(True)
-    main_window.show_right_pane_action.setChecked(True)
-    main_window.show_right_pane_action.triggered.connect(main_window._toggle_right_pane)
-    view_menu.addAction(main_window.show_right_pane_action)
-
     view_menu.addSeparator()
 
     # Window assignment thumbnail toggle

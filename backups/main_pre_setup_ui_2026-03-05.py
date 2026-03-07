@@ -39,7 +39,6 @@ import pydicom
 from pydicom.dataset import Dataset
 
 from gui.main_window import MainWindow
-from gui.main_window_layout_helper import setup_main_window_content
 from gui.dialogs.file_dialog import FileDialog
 from gui.dialogs.settings_dialog import SettingsDialog
 from gui.dialogs.tag_viewer_dialog import TagViewerDialog
@@ -1103,25 +1102,79 @@ class DICOMViewerApp(QObject):
             self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
     
     def _setup_ui(self) -> None:
-        """Assemble main-window panel layout. Implemented in gui.main_window_layout_helper."""
-        setup_main_window_content(
-            self.main_window,
-            self.multi_window_layout,
-            self.cine_controls_widget,
-            self.metadata_panel,
-            self.window_level_controls,
-            self.zoom_display_widget,
-            self.roi_list_panel,
-            self.roi_statistics_panel,
-            self.intensity_projection_controls_widget,
-            self.fusion_controls_widget,
-            self.series_navigator,
-            get_slot_to_view=self.multi_window_layout.get_slot_to_view,
-            get_layout_mode=self.multi_window_layout.get_layout_mode,
-            get_focused_view_index=self.get_focused_subwindow_index,
-            get_thumbnail_for_view=self._get_thumbnail_for_view,
-        )
+        """Set up the user interface layout."""
+        # Add multi-window layout to center panel
+        center_layout = self.main_window.center_panel.layout()
+        if center_layout is None:
+            from PySide6.QtWidgets import QVBoxLayout
+            center_layout = QVBoxLayout(self.main_window.center_panel)
+        center_layout.addWidget(self.multi_window_layout)
+        
+        # Add cine controls widget and metadata panel to left panel
+        left_layout = self.main_window.left_panel.layout()
+        if left_layout is None:
+            from PySide6.QtWidgets import QVBoxLayout
+            left_layout = QVBoxLayout(self.main_window.left_panel)
+        # Add cine controls widget first (above metadata panel) with stretch 0
+        left_layout.addWidget(self.cine_controls_widget, 0)
+        # Add metadata panel below cine controls with stretch 1 to make it ~1.5x its current height
+        left_layout.addWidget(self.metadata_panel, 1)
+        
+        # Add controls to right panel with tabbed interface
+        right_layout = self.main_window.right_panel.layout()
+        if right_layout is None:
+            from PySide6.QtWidgets import QVBoxLayout
+            right_layout = QVBoxLayout(self.main_window.right_panel)
+        
+        # Create tab widget
+        from PySide6.QtWidgets import QTabWidget, QWidget
+        tab_widget = QTabWidget()
+        tab_widget.setObjectName("right_panel_tabs")
+        
+        # Tab 1: Window/Zoom/ROI
+        tab1_widget = QWidget()
+        tab1_layout = QVBoxLayout(tab1_widget)
+        tab1_layout.setContentsMargins(0, 0, 0, 0)
+        tab1_layout.setSpacing(0)
+        tab1_layout.addWidget(self.window_level_controls)
+        tab1_layout.addWidget(self.zoom_display_widget)
+        tab1_layout.addStretch()  # Push ROI sections to bottom
+        tab1_layout.addWidget(self.roi_list_panel)
+        tab1_layout.addWidget(self.roi_statistics_panel)
+        tab_widget.addTab(tab1_widget, "Window/Zoom/ROI")
+        
+        # Tab 2: Combine/Fuse
+        tab2_widget = QWidget()
+        tab2_layout = QVBoxLayout(tab2_widget)
+        tab2_layout.setContentsMargins(0, 0, 0, 0)
+        tab2_layout.setSpacing(0)
+        tab2_layout.addWidget(self.intensity_projection_controls_widget)
+        tab2_layout.addWidget(self.fusion_controls_widget)
+        tab2_layout.addStretch()
+        tab_widget.addTab(tab2_widget, "Combine/Fuse")
+        
+        right_layout.addWidget(tab_widget)
+        
+        # Add series navigator and window-slot thumbnail to main window
+        self.main_window.set_series_navigator(self.series_navigator)
 
+        # Wire callbacks for window-slot thumbnail widget (if present)
+        if hasattr(self.main_window, "set_window_slot_map_callbacks"):
+            try:
+                self.main_window.set_window_slot_map_callbacks(
+                    get_slot_to_view=self.multi_window_layout.get_slot_to_view,
+                    get_layout_mode=self.multi_window_layout.get_layout_mode,
+                    get_focused_view_index=self.get_focused_subwindow_index,
+                    get_thumbnail_for_view=self._get_thumbnail_for_view,
+                )
+            except Exception:
+                pass
+            # Apply initial visibility from the View menu toggle if available
+            if hasattr(self.main_window, "show_window_slot_map_action"):
+                self.main_window.set_window_slot_map_visible(
+                    self.main_window.show_window_slot_map_action.isChecked()
+                )
+    
     def _connect_signals(self) -> None:
         """Connect all application-level Qt signals. Implemented in core.app_signal_wiring."""
         wire_all_signals(self)

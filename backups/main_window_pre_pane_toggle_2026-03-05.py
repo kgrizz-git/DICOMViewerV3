@@ -452,12 +452,6 @@ class MainWindow(QMainWindow):
         # Also save splitter positions when moved
         self.splitter.splitterMoved.connect(self._on_splitter_moved)
         
-        # Sync View menu pane toggle check state from actual sizes (e.g. restored saved layout with a pane hidden)
-        if hasattr(self, "show_left_pane_action"):
-            self.show_left_pane_action.setChecked(self.splitter.sizes()[0] > 0)
-        if hasattr(self, "show_right_pane_action"):
-            self.show_right_pane_action.setChecked(self.splitter.sizes()[2] > 0)
-        
         # Series navigator (initially hidden, will be set by main.py)
         self.series_navigator = None  # Will be set by set_series_navigator method
         self.series_navigator_visible = False
@@ -1096,56 +1090,10 @@ class MainWindow(QMainWindow):
         self.config_manager.set("splitter_sizes", sizes)
         self.config_manager.save_config()
         
-        # Sync View menu pane toggle check state when user drags splitter to 0 or expands
-        if hasattr(self, "show_left_pane_action"):
-            self.show_left_pane_action.setChecked(sizes[0] > 0)
-        if hasattr(self, "show_right_pane_action"):
-            self.show_right_pane_action.setChecked(sizes[2] > 0)
-        
         # Emit signal to notify that viewport size changed
         # Use QTimer to batch rapid splitter movements
         from PySide6.QtCore import QTimer
         QTimer.singleShot(10, lambda: self.viewport_resized.emit())
-    
-    def _toggle_left_pane(self) -> None:
-        """
-        Toggle left pane visibility: hide (width 0) if visible, show at default 250px if hidden.
-        Saves splitter_sizes and syncs View menu check state.
-        """
-        from PySide6.QtCore import QTimer
-        sizes = self.splitter.sizes()
-        left, center, right = sizes[0], sizes[1], sizes[2]
-        if left > 0:
-            self.splitter.setSizes([0, center + left, right])
-        else:
-            self.splitter.setSizes([250, max(0, center - 250), right])
-        new_sizes = self.splitter.sizes()
-        self.config_manager.set("splitter_sizes", new_sizes)
-        self.config_manager.save_config()
-        self.viewport_resizing.emit()
-        QTimer.singleShot(10, lambda: self.viewport_resized.emit())
-        if hasattr(self, "show_left_pane_action"):
-            self.show_left_pane_action.setChecked(new_sizes[0] > 0)
-    
-    def _toggle_right_pane(self) -> None:
-        """
-        Toggle right pane visibility: hide (width 0) if visible, show at default 250px if hidden.
-        Saves splitter_sizes and syncs View menu check state.
-        """
-        from PySide6.QtCore import QTimer
-        sizes = self.splitter.sizes()
-        left, center, right = sizes[0], sizes[1], sizes[2]
-        if right > 0:
-            self.splitter.setSizes([left, center + right, 0])
-        else:
-            self.splitter.setSizes([left, max(0, center - 250), 250])
-        new_sizes = self.splitter.sizes()
-        self.config_manager.set("splitter_sizes", new_sizes)
-        self.config_manager.save_config()
-        self.viewport_resizing.emit()
-        QTimer.singleShot(10, lambda: self.viewport_resized.emit())
-        if hasattr(self, "show_right_pane_action"):
-            self.show_right_pane_action.setChecked(new_sizes[2] > 0)
     
     def update_status(self, message: str) -> None:
         """

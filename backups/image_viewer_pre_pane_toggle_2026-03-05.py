@@ -89,8 +89,6 @@ class ImageViewer(QGraphicsView):
     toggle_overlay_requested = Signal()  # Emitted when toggle overlay is requested
     privacy_view_toggled = Signal(bool)  # Emitted when privacy view is toggled from context menu (True = enabled)
     smooth_when_zoomed_toggled = Signal(bool)  # Emitted when smooth when zoomed is toggled from context menu (True = enabled)
-    left_pane_toggle_requested = Signal()  # Emitted when Show/Hide Left Pane is requested from context menu
-    right_pane_toggle_requested = Signal()  # Emitted when Show/Hide Right Pane is requested from context menu
     annotation_options_requested = Signal()  # Emitted when annotation options dialog is requested
     crosshair_clicked = Signal(QPointF, str, int, int, int)  # Emitted when crosshair tool is clicked (pos, pixel_value_str, x, y, z)
     about_this_file_requested = Signal()  # Emitted when About this File is requested from context menu
@@ -1731,12 +1729,6 @@ class ImageViewer(QGraphicsView):
                         smooth_when_zoomed_action.setCheckable(True)
                         smooth_when_zoomed_action.setChecked(self._smooth_when_zoomed)
                         smooth_when_zoomed_action.triggered.connect(lambda checked: self.smooth_when_zoomed_toggled.emit(checked))
-
-                        # Show/Hide Left Pane and Right Pane
-                        show_hide_left_pane_action = context_menu.addAction("Show/Hide Left Pane")
-                        show_hide_left_pane_action.triggered.connect(self.left_pane_toggle_requested.emit)
-                        show_hide_right_pane_action = context_menu.addAction("Show/Hide Right Pane")
-                        show_hide_right_pane_action.triggered.connect(self.right_pane_toggle_requested.emit)
 
                         context_menu.addSeparator()
 
