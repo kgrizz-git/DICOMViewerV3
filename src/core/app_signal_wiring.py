@@ -68,6 +68,9 @@ def _wire_dialog_signals(app: "DICOMViewerApp") -> None:
     app.main_window.export_requested.connect(app._open_export)
     app.main_window.export_screenshots_requested.connect(app._open_export_screenshots)
     app.main_window.about_this_file_requested.connect(app._open_about_this_file)
+    # Series navigator close actions
+    app.series_navigator.close_series_requested.connect(app._close_series)
+    app.series_navigator.close_study_requested.connect(app._close_study)
 
 
 def _wire_undo_redo_and_annotation_signals(app) -> None:

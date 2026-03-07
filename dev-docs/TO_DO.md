@@ -39,6 +39,8 @@
 - [ ] make it possible to window/level by holding W and dragging mouse or by holding middle mouse button and dragging or something
 - [ ] make it possible to zoom in/out with pinch on trackpad
 - [ ] Fix typo in status bar after loading: "studyies"
+- [ ] Put same little colored dot on layout map thumbnails that is on series thumbnails in navigator?
+- [ ] Make highlight border for focused window match color of dot on navigator series thumbnail
 
 
 - [ ] make right pane minimum width before collapsing 250 instead of 200?

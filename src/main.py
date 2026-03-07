@@ -926,8 +926,9 @@ class DICOMViewerApp(QObject):
         self.slice_navigator.set_total_slices(0)
         self.slice_navigator.set_current_slice(0)
         
-        # Clear series navigator (shared)
+        # Clear series navigator (shared) and dot indicators
         self.series_navigator.update_series_list({}, "", "")
+        self.series_navigator.set_subwindow_assignments({})
         
         # Clear tag edit history
         if hasattr(self, 'metadata_controller') and self.metadata_controller:
@@ -958,6 +959,23 @@ class DICOMViewerApp(QObject):
     # Per-series / per-study close helpers (used by navigator right-click menu)
     # -------------------------------------------------------------------------
 
+    def _get_subwindow_assignments(self) -> dict:
+        """
+        Build a mapping of subwindow slot index → (study_uid, series_key) for every
+        subwindow that currently has a dataset loaded.
+
+        Used to drive the colored dot indicators in SeriesNavigator.
+
+        Returns:
+            Dict[int, Tuple[str, str]] — keys are subwindow indices (0–3), values are
+            (current_study_uid, current_series_uid) for that slot.
+        """
+        return {
+            idx: (data['current_study_uid'], data['current_series_uid'])
+            for idx, data in self.subwindow_data.items()
+            if data.get('current_dataset') is not None
+        }
+
     def _clear_subwindow(self, idx: int) -> None:
         """
         Clear scene, overlays, ROIs, measurements, and annotations for a single
@@ -972,23 +990,13 @@ class DICOMViewerApp(QObject):
         subwindow = self.multi_window_layout.get_subwindow(idx)
         if subwindow and subwindow.image_viewer:
             scene = subwindow.image_viewer.scene
-            scene.clear()
-            subwindow.image_viewer.image_item = None
-            subwindow.image_viewer.viewport().update()
 
-            # Clear overlays
+            # Clear ROIs, measurements, and annotations BEFORE scene.clear().
+            # scene.clear() destroys all C++ graphics objects; the managers must
+            # remove their items first while those objects are still alive.
             if idx in self.subwindow_managers:
                 managers = self.subwindow_managers[idx]
-                overlay_manager = managers.get('overlay_manager')
-                if overlay_manager:
-                    overlay_manager.clear_overlay_items(scene)
 
-                # Clear slice display state
-                slice_display_manager = managers.get('slice_display_manager')
-                if slice_display_manager and hasattr(slice_display_manager, 'clear_display_state'):
-                    slice_display_manager.clear_display_state()
-
-                # Clear ROIs, measurements, annotations (mirror _clear_data pattern)
                 roi_manager = managers.get('roi_manager')
                 measurement_tool = managers.get('measurement_tool')
                 text_annotation_tool = managers.get('text_annotation_tool')
@@ -1001,6 +1009,20 @@ class DICOMViewerApp(QObject):
                     text_annotation_tool.clear_annotations(scene)
                 if arrow_annotation_tool:
                     arrow_annotation_tool.clear_arrows(scene)
+
+                overlay_manager = managers.get('overlay_manager')
+                if overlay_manager:
+                    overlay_manager.clear_overlay_items(scene)
+
+                # Clear slice display state
+                slice_display_manager = managers.get('slice_display_manager')
+                if slice_display_manager and hasattr(slice_display_manager, 'clear_display_state'):
+                    slice_display_manager.clear_display_state()
+
+            # Now safe to call scene.clear() — all managed items have been removed
+            scene.clear()
+            subwindow.image_viewer.image_item = None
+            subwindow.image_viewer.viewport().update()
 
         # Reset subwindow_data to the empty template
         self.subwindow_data[idx] = {
@@ -1083,12 +1105,13 @@ class DICOMViewerApp(QObject):
         if self.focused_subwindow_index in affected_indices:
             self._reset_focused_subwindow_state_after_close()
 
-        # 7. Update series navigator
+        # 7. Update series navigator and dot indicators
         self.series_navigator.update_series_list(
             self.current_studies,
             self.current_study_uid,
             self.current_series_uid,
         )
+        self.series_navigator.set_subwindow_assignments(self._get_subwindow_assignments())
 
     def _close_study(self, study_uid: str) -> None:
         """
@@ -1132,12 +1155,13 @@ class DICOMViewerApp(QObject):
         if self.focused_subwindow_index in affected_indices:
             self._reset_focused_subwindow_state_after_close()
 
-        # 7. Update series navigator (single pass — no intermediate refreshes)
+        # 7. Update series navigator and dot indicators (single pass — no intermediate refreshes)
         self.series_navigator.update_series_list(
             self.current_studies,
             self.current_study_uid,
             self.current_series_uid,
         )
+        self.series_navigator.set_subwindow_assignments(self._get_subwindow_assignments())
 
     def _reset_fusion_for_all_subwindows(self) -> None:
         """

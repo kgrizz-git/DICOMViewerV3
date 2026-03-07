@@ -254,6 +254,7 @@ class FileSeriesLoadingCoordinator:
                 app.current_study_uid,
                 app.current_series_uid
             )
+            app.series_navigator.set_subwindow_assignments(app._get_subwindow_assignments())
 
             navigator_was_hidden = not app.main_window.series_navigator_visible
             if navigator_was_hidden:
@@ -289,6 +290,7 @@ class FileSeriesLoadingCoordinator:
                 app.current_study_uid,
                 app.current_series_uid,
             )
+            app.series_navigator.set_subwindow_assignments(app._get_subwindow_assignments())
             return
 
         # Load PS/KO additively for brand-new study UIDs only
@@ -404,12 +406,13 @@ class FileSeriesLoadingCoordinator:
                     if view_state_manager:
                         QTimer.singleShot(100, view_state_manager.store_initial_view_state)
 
-        # Refresh series navigator
+        # Refresh series navigator and dot indicators
         app.series_navigator.update_series_list(
             app.current_studies,
             app.current_study_uid,
             app.current_series_uid,
         )
+        app.series_navigator.set_subwindow_assignments(app._get_subwindow_assignments())
 
         # Show the series navigator if it was hidden and new series were added
         if merge_result.new_series and not app.main_window.series_navigator_visible:
@@ -555,6 +558,9 @@ class FileSeriesLoadingCoordinator:
             app._update_right_panel_for_focused_subwindow()
             # Ensure cine player context and frame slider are updated when series changes
             app._update_cine_player_context()
+
+        # Update dot indicators to reflect the new subwindow assignment
+        app.series_navigator.set_subwindow_assignments(app._get_subwindow_assignments())
 
     def on_series_navigator_selected(self, series_uid: str) -> None:
         """Handle series selection from series navigator (assigns to focused subwindow)."""
