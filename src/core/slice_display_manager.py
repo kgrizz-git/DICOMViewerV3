@@ -141,6 +141,20 @@ class SliceDisplayManager:
         self.projection_enabled = False
         self.projection_type = "aip"
         self.projection_slice_count = 4
+
+    def clear_display_state(self) -> None:
+        """
+        Clear current display state (dataset, studies, UIDs, slice index).
+        
+        Called when closing files or opening new folder/files so that refresh_overlays
+        and other code do not redisplay from stale cached state in non-focused windows.
+        """
+        self.current_studies = {}
+        self.current_study_uid = ""
+        self.current_series_uid = ""
+        self.current_slice_index = 0
+        self.current_dataset = None
+        self.reset_projection_state()
     
     def set_projection_enabled(self, enabled: bool) -> None:
         """

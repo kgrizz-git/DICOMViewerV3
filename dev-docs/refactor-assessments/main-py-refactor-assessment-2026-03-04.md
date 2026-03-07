@@ -458,27 +458,27 @@ In `main.py`:
 - `_refresh_overlays_after_privacy_change()` → calls `self._privacy_controller.refresh_overlays()`.
 
 #### Pre-work
-- [ ] Back up `src/main.py` to `backups/main_pre_privacy_controller_YYYY-MM-DD.py`. Confirm backup.
-- [ ] Run full test suite; confirm all tests pass (baseline after Phase 6).
+- [x] Back up `src/main.py` to `backups/main_pre_privacy_controller_YYYY-MM-DD.py`. Confirm backup.
+- [x] Run full test suite; confirm all tests pass (baseline after Phase 6).
 
 #### Step 5.1: Create PrivacyController and implement apply_privacy
-- [ ] Create `src/core/privacy_controller.py` with module docstring (purpose: owns privacy-mode propagation; called from `DICOMViewerApp._on_privacy_view_toggled`).
-- [ ] Implement `PrivacyController.__init__` accepting `config_manager`, `metadata_controller`, `overlay_manager`, `get_subwindow_managers`, `get_all_subwindows`, `get_focused_subwindow_index`.
-- [ ] Implement `apply_privacy(self, enabled: bool) -> None`:
+- [x] Create `src/core/privacy_controller.py` with module docstring (purpose: owns privacy-mode propagation; called from `DICOMViewerApp._on_privacy_view_toggled`).
+- [x] Implement `PrivacyController.__init__` accepting `config_manager`, `metadata_controller`, `overlay_manager`, `get_subwindow_managers`, `get_all_subwindows`, `get_focused_subwindow_index`.
+- [x] Implement `apply_privacy(self, enabled: bool) -> None`:
   - Call `self._metadata_controller.set_privacy_mode(enabled)` (guard with `hasattr` check as in current code).
   - Call `self._overlay_manager.set_privacy_mode(enabled)` (guard).
   - Iterate `self._get_subwindow_managers()` items; for each manager dict set `overlay_manager.set_privacy_mode(enabled)` and `crosshair_manager.set_privacy_mode(enabled)` (guard each).
   - Iterate `self._get_all_subwindows()`; for each non-None subwindow call `subwindow.image_viewer.set_privacy_view_state(enabled)`.
   - Call `self.refresh_overlays()`.
-- [ ] Do **not** yet change `main.py`. Run `python -m py_compile src/core/privacy_controller.py`.
+- [x] Do **not** yet change `main.py`. Run `python -m py_compile src/core/privacy_controller.py`.
 
 #### Step 5.2: Implement refresh_overlays
-- [ ] Implement `refresh_overlays(self) -> None` in `PrivacyController`: copy the full logic of `_refresh_overlays_after_privacy_change` from `main.py` — enumerate all subwindows, skip those without loaded data, call `slice_display_manager.display_slice(...)` with `update_metadata=(idx == self._get_focused_subwindow_index())`, fall back to `create_overlay_items` on exception (using a local `DICOMParser` import inside the method, matching the current `from core.dicom_parser import DICOMParser` inline import).
-- [ ] Run `python -m py_compile src/core/privacy_controller.py`. No lint errors.
+- [x] Implement `refresh_overlays(self) -> None` in `PrivacyController`: copy the full logic of `_refresh_overlays_after_privacy_change` from `main.py` — enumerate all subwindows, skip those without loaded data, call `slice_display_manager.display_slice(...)` with `update_metadata=(idx == self._get_focused_subwindow_index())`, fall back to `create_overlay_items` on exception (using a local `DICOMParser` import inside the method, matching the current `from core.dicom_parser import DICOMParser` inline import).
+- [x] Run `python -m py_compile src/core/privacy_controller.py`. No lint errors.
 
 #### Step 5.3: Wire PrivacyController in main.py
-- [ ] In `main.py`, add import: `from core.privacy_controller import PrivacyController`.
-- [ ] In `_initialize_handlers` (after `dialog_coordinator` is created, when `overlay_manager`, `metadata_controller`, `multi_window_layout` are available), instantiate:
+- [x] In `main.py`, add import: `from core.privacy_controller import PrivacyController`.
+- [x] In `_initialize_handlers` (after `dialog_coordinator` is created, when `overlay_manager`, `metadata_controller`, `multi_window_layout` are available), instantiate:
   ```python
   self._privacy_controller = PrivacyController(
       config_manager=self.config_manager,
@@ -489,17 +489,17 @@ In `main.py`:
       get_focused_subwindow_index=self.get_focused_subwindow_index,
   )
   ```
-- [ ] Replace the body of `_on_privacy_view_toggled` with:
+- [x] Replace the body of `_on_privacy_view_toggled` with:
   ```python
   self.privacy_view_enabled = enabled
   self._privacy_controller.apply_privacy(enabled)
   ```
-- [ ] Replace the body of `_refresh_overlays_after_privacy_change` with:
+- [x] Replace the body of `_refresh_overlays_after_privacy_change` with:
   ```python
   self._privacy_controller.refresh_overlays()
   ```
-- [ ] Run full test suite. Manually: toggle privacy mode (enable and disable); confirm overlay text hides/shows patient tags, metadata panel hides/shows patient fields, crosshairs remain fully visible in both modes, all four panes update when in 2x2 layout. Re-enable and re-disable to confirm no state residue.
-- [ ] Update changelog. Commit (e.g. `refactor(main): extract privacy propagation to PrivacyController`). Mark Opportunity 5 complete.
+- [x] Run full test suite. Manually: toggle privacy mode (enable and disable); confirm overlay text hides/shows patient tags, metadata panel hides/shows patient fields, crosshairs remain fully visible in both modes, all four panes update when in 2x2 layout. Re-enable and re-disable to confirm no state residue.
+- [x] Update changelog. Commit (e.g. `refactor(main): extract privacy propagation to PrivacyController`). Mark Opportunity 5 complete.
 
 ---
 

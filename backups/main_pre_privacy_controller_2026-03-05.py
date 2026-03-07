@@ -85,7 +85,6 @@ from core.annotation_paste_handler import AnnotationPasteHandler
 from core.file_series_loading_coordinator import FileSeriesLoadingCoordinator
 from core.subwindow_lifecycle_controller import SubwindowLifecycleController
 from core.customization_handlers import CustomizationHandlers
-from core.privacy_controller import PrivacyController
 from gui.roi_coordinator import ROICoordinator
 from gui.measurement_coordinator import MeasurementCoordinator
 from gui.crosshair_coordinator import CrosshairCoordinator
@@ -729,17 +728,6 @@ class DICOMViewerApp(QObject):
             lambda: self.undo_redo_manager.can_redo() if self.undo_redo_manager else False
         )
         
-        # Privacy controller (propagates privacy mode and refreshes overlays)
-        self._privacy_controller = PrivacyController(
-            config_manager=self.config_manager,
-            metadata_controller=self.metadata_controller,
-            overlay_manager=self.overlay_manager,
-            get_subwindow_managers=lambda: self.subwindow_managers,
-            get_all_subwindows=self.multi_window_layout.get_all_subwindows,
-            get_focused_subwindow_index=self.get_focused_subwindow_index,
-            get_subwindow_data=lambda: self.subwindow_data,
-        )
-        
         # Customization and tag-preset export/import (callbacks run after import; need app state)
         self._customization_handlers = CustomizationHandlers(
             self.config_manager,
@@ -812,13 +800,6 @@ class DICOMViewerApp(QObject):
     
     def _clear_data(self) -> None:
         """Clear all ROIs, measurements, and related data for all subwindows."""
-        # Clear slice_display_manager state for all subwindows so no stale cached state
-        # is used when opening new folder/files (e.g. by refresh_overlays on privacy toggle).
-        for idx in self.subwindow_managers:
-            managers = self.subwindow_managers[idx]
-            slice_display_manager = managers.get("slice_display_manager")
-            if slice_display_manager and hasattr(slice_display_manager, "clear_display_state"):
-                slice_display_manager.clear_display_state()
         # Clear data for ALL subwindows, not just focused one
         subwindows = self.multi_window_layout.get_all_subwindows()
         for idx, subwindow in enumerate(subwindows):
@@ -879,7 +860,7 @@ class DICOMViewerApp(QObject):
         # Clear metadata panel (shared)
         self.metadata_panel.set_dataset(None)
         
-        # Reset view state and clear display state for all subwindows
+        # Reset view state for all subwindows
         for idx in self.subwindow_managers:
             managers = self.subwindow_managers[idx]
             view_state_manager = managers.get('view_state_manager')
@@ -887,8 +868,8 @@ class DICOMViewerApp(QObject):
             if view_state_manager:
                 view_state_manager.reset_window_level_state()
                 view_state_manager.reset_series_tracking()
-            if slice_display_manager and hasattr(slice_display_manager, "clear_display_state"):
-                slice_display_manager.clear_display_state()
+            if slice_display_manager:
+                slice_display_manager.reset_projection_state()
         
         # Update shared widget state
         self.intensity_projection_controls_widget.set_enabled(False)
@@ -1667,14 +1648,37 @@ class DICOMViewerApp(QObject):
         """
         Handle privacy view toggle.
         
-        Propagates privacy mode state to all components that display tags
-        via the privacy controller.
+        Propagates privacy mode state to all components that display tags.
         
         Args:
             enabled: True if privacy view is enabled, False otherwise
         """
+        # Update state
         self.privacy_view_enabled = enabled
-        self._privacy_controller.apply_privacy(enabled)
+        
+        # Propagate to metadata panel via controller
+        if hasattr(self, 'metadata_controller') and self.metadata_controller:
+            self.metadata_controller.set_privacy_mode(enabled)
+        
+        # Propagate to overlay manager (shared)
+        if hasattr(self, 'overlay_manager') and self.overlay_manager:
+            self.overlay_manager.set_privacy_mode(enabled)
+        
+        # Propagate to all subwindow overlay managers
+        for subwindow_idx, managers in self.subwindow_managers.items():
+            if 'overlay_manager' in managers and managers['overlay_manager']:
+                managers['overlay_manager'].set_privacy_mode(enabled)
+            if 'crosshair_manager' in managers and managers['crosshair_manager']:
+                managers['crosshair_manager'].set_privacy_mode(enabled)
+        
+        # Update privacy view state on all image viewers (for context menu synchronization)
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        for subwindow in subwindows:
+            if subwindow and subwindow.image_viewer:
+                subwindow.image_viewer.set_privacy_view_state(enabled)
+        
+        # Refresh overlays for all subwindows that have loaded data
+        self._refresh_overlays_after_privacy_change()
 
     def _on_smooth_when_zoomed_toggled(self, enabled: bool) -> None:
         """
@@ -1692,8 +1696,44 @@ class DICOMViewerApp(QObject):
         self.main_window.set_smooth_when_zoomed_checked(enabled)
 
     def _refresh_overlays_after_privacy_change(self) -> None:
-        """Refresh overlays after privacy view change for all subwindows that have loaded data. Delegates to privacy controller."""
-        self._privacy_controller.refresh_overlays()
+        """Refresh overlays after privacy view change for all subwindows that have loaded data."""
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        for idx, subwindow in enumerate(subwindows):
+            if not subwindow or not subwindow.image_viewer:
+                continue
+            if idx not in self.subwindow_data or idx not in self.subwindow_managers:
+                continue
+            current_dataset = self.subwindow_data[idx].get('current_dataset')
+            if not current_dataset:
+                continue
+            managers = self.subwindow_managers[idx]
+            slice_display_manager = managers.get('slice_display_manager')
+            if not slice_display_manager or not hasattr(slice_display_manager, 'current_dataset'):
+                continue
+            if (slice_display_manager.current_dataset is None or
+                not hasattr(slice_display_manager, 'current_studies') or
+                not hasattr(slice_display_manager, 'current_study_uid') or
+                not hasattr(slice_display_manager, 'current_series_uid') or
+                not hasattr(slice_display_manager, 'current_slice_index')):
+                continue
+            try:
+                slice_display_manager.display_slice(
+                    slice_display_manager.current_dataset,
+                    slice_display_manager.current_studies,
+                    slice_display_manager.current_study_uid,
+                    slice_display_manager.current_series_uid,
+                    slice_display_manager.current_slice_index,
+                    update_metadata=(idx == self.get_focused_subwindow_index())
+                )
+            except Exception:
+                overlay_manager = managers.get('overlay_manager')
+                if overlay_manager and slice_display_manager.current_dataset:
+                    from core.dicom_parser import DICOMParser
+                    parser = DICOMParser(slice_display_manager.current_dataset)
+                    overlay_manager.create_overlay_items(
+                        subwindow.image_viewer.scene,
+                        parser
+                    )
 
     def _open_tag_viewer(self) -> None:
         """Handle tag viewer dialog request."""

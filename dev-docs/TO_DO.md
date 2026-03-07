@@ -36,6 +36,8 @@
 - [ ] make default histogram plot and window smaller and allow resizing much smaller
 - [ ] make series number labels like "S01" in navigator a bit smaller
 - [ ] make toolbar customizable
+- [ ] make it possible to window/level by holding W and dragging mouse or by holding middle mouse button and dragging or something
+- [ ] make it possible to zoom in/out with pinch on trackpad
 
 
 - [ ] make right pane minimum width before collapsing 250 instead of 200?
