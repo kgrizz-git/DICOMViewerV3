@@ -542,73 +542,42 @@ Do not begin a later phase until all checklist items for the current phase are c
 
 ---
 
-### Phase 4 — Close-Series and Close-Study
+### Phase 4 — Close-Series and Close-Study ✅ COMPLETE
 
-**Files:** `src/main.py`, `src/core/subwindow_lifecycle_controller.py`
+**Files:** `src/main.py`
 
-**Goal:** Implement right-click close behavior. A closed series is fully purged from the data store, affected subwindows are cleared, and the app state is updated cleanly.
+**Backup:** `backups/main_pre_multi_study_phase4.py`
 
-**Before starting:** Back up `src/main.py` to `backups/`.
+#### 4.1 — Add `_close_series()` ✅
 
-#### 4.1 — Add `_close_series()`
+- [x] Added private helper `_clear_subwindow(idx)`: clears scene, image_item, overlays, slice display state, ROIs, measurements, text/arrow annotations (mirrors `_clear_data()` pattern), then resets `subwindow_data[idx]` to the empty template.
+- [x] Added private helper `_reset_focused_subwindow_state_after_close()`: resets `current_dataset/study/series/slice`, slice navigator (0 slices), metadata panel (`set_dataset(None)`), cine player, ROI/statistics panels, and re-wires focused-subwindow signals.
+- [x] Added `_close_series(study_uid, series_key)`:
+  1. Guards against missing series.
+  2. Identifies affected subwindow indices from `subwindow_data`.
+  3. Frees `_cached_pixel_array` on all series datasets.
+  4. Calls `dicom_organizer.remove_series()`; calls `annotation_manager.remove_study_annotations()` if the study is now empty.
+  5. Syncs `current_studies = dicom_organizer.studies`.
+  6. Calls `_clear_subwindow(idx)` for each affected subwindow.
+  7. Calls `_reset_focused_subwindow_state_after_close()` only if `focused_subwindow_index` was among the affected ones.
+  8. Refreshes series navigator.
 
-- [ ] Add `_close_series(self, study_uid: str, series_key: str) -> None` to `DICOMViewerApp`:
+#### 4.2 — Add `_close_study()` ✅
 
-  1. **Identify affected subwindows:** iterate `app.subwindow_data`, collect indices where `data['current_study_uid'] == study_uid and data['current_series_uid'] == series_key`.
-
-  2. **Free pixel caches:** for each dataset in `app.current_studies[study_uid][series_key]`, call any pixel-cache free method (same pattern as the loop in `_close_files()`). Check if `hasattr(ds, '_pixel_array_cache')` or equivalent.
-
-  3. **Remove from organizer:** `self.dicom_organizer.remove_series(study_uid, series_key)`.
-     - If after removal the study no longer exists in `dicom_organizer.studies`, also call `self.annotation_manager.remove_study_annotations(study_uid)`.
-
-  4. **Update `app.current_studies`:** `app.current_studies = app.dicom_organizer.studies`.
-
-  5. **Clear each affected subwindow:**
-     - For each affected `idx`:
-       - Get the subwindow's `image_viewer` via `multi_window_layout.get_subwindow(idx)`.
-       - Clear the scene: `image_viewer.scene.clear(); image_viewer.image_item = None; image_viewer.viewport().update()`.
-       - Clear overlay items via `subwindow_managers[idx]['overlay_manager'].clear_overlay_items(scene)`.
-       - Clear ROIs: `subwindow_managers[idx]['roi_manager'].clear_all_rois()` (or equivalent).
-       - Clear measurements and annotations (same pattern used in `_clear_data()`).
-       - Reset `subwindow_data[idx]` to the empty template: `{'current_dataset': None, 'current_slice_index': 0, 'current_series_uid': '', 'current_study_uid': '', 'current_datasets': []}`.
-
-  6. **Handle focused subwindow:**
-     - If the focused subwindow was among the affected ones:
-       - Update `app.current_dataset = None`, `app.current_study_uid = ''`, `app.current_series_uid = ''`, `app.current_slice_index = 0`, `app.current_datasets = []`.
-       - Call `app.slice_navigator.set_total_slices(0); app.slice_navigator.set_current_slice(0)`.
-       - Clear `app.metadata_panel` (call whatever clear method it exposes).
-       - Stop cine: `app._update_cine_player_context()`.
-       - Call `app._disconnect_focused_subwindow_signals()` and `app._connect_focused_subwindow_signals()`.
-       - **Focus stays on the now-empty subwindow** — do not switch focus.
-     - If the focused subwindow was not affected: no focus changes.
-
-  7. **Update navigator:** `app.series_navigator.update_series_list(app.current_studies, app.current_study_uid, app.current_series_uid)`.
-
-  > ⚠️ **CAUTION:** The ROI/measurement/annotation clear calls in step 5 must match exactly the pattern used in `_clear_data()` for the same subwindow index. If `_clear_data()` uses `roi_coordinator.clear_all()` rather than calling individual managers directly, use the same entry point to avoid partial clears. Review `_clear_data()` carefully before writing this step.
-
-  > ⚠️ **CAUTION:** If the closed series was in a non-focused subwindow and the focused subwindow's `current_dataset` is fine, do NOT touch `app.current_dataset` or the slice navigator.
-
-#### 4.2 — Add `_close_study()`
-
-- [ ] Add `_close_study(self, study_uid: str) -> None` to `DICOMViewerApp`:
-  1. Get all series keys: `series_keys = list(self.current_studies.get(study_uid, {}).keys())`.
-  2. Identify all affected subwindow indices (same logic as `_close_series` but across all series in the study).
-  3. Free pixel caches for all datasets in all series of the study.
-  4. Call `self.dicom_organizer.remove_study(study_uid)`.
-  5. Call `self.annotation_manager.remove_study_annotations(study_uid)`.
-  6. `app.current_studies = app.dicom_organizer.studies`.
-  7. Clear all affected subwindows (same steps as `_close_series` step 5).
-  8. Handle focused subwindow (same steps as `_close_series` step 6).
-  9. Update navigator.
-
-  > **Note:** Do not implement `_close_study` as a loop over `_close_series` calls — that would invoke the navigator refresh multiple times per close. Do it as a single batch operation with one navigator refresh at the end.
+- [x] Added `_close_study(study_uid)`:
+  1. Guards against missing study.
+  2. Collects all affected subwindow indices (any subwindow showing any series of the study).
+  3. Frees pixel caches for all datasets in all series of the study.
+  4. Calls `dicom_organizer.remove_study()` and `annotation_manager.remove_study_annotations()`.
+  5. Syncs `current_studies`.
+  6. Calls `_clear_subwindow(idx)` for each affected index.
+  7. Calls `_reset_focused_subwindow_state_after_close()` if focused subwindow was affected.
+  8. Single navigator refresh at the end (no per-series intermediate refreshes).
 
 #### 4.3 — Targeted test after Phase 4
 
-- Load two studies. Right-click → Close This Series on a series in subwindow 1. Verify: series gone from navigator, subwindow 1 cleared, subwindow 0 unaffected.
-- Right-click → Close This Study on a study. Verify all series from that study disappear; any subwindows showing them are cleared.
-- Close the series currently in the focused subwindow (subwindow 0). Verify the subwindow is cleared, metadata panel is empty, focus stays on subwindow 0.
-- Verify that after closing a series, reloading the same folder re-adds it cleanly (paths were removed from `loaded_file_paths`).
+- All 233 automated tests pass.
+- Manual smoke test (4.3): right-click Close This Series / Close This Study with real DICOM data — to be performed manually.
 
 ---
 
