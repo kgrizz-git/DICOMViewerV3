@@ -700,7 +700,7 @@ class DICOMViewerApp(QObject):
             self.config_manager,
             self.main_window,
             clear_data_callback=self._clear_data,
-            load_first_slice_callback=self._file_series_coordinator.handle_additive_load,
+            load_first_slice_callback=self._file_series_coordinator.handle_load_first_slice,
             update_status_callback=self.main_window.update_status
         )
         
@@ -909,12 +909,7 @@ class DICOMViewerApp(QObject):
                         # Remove cached pixel arrays if they exist
                         if hasattr(dataset, '_cached_pixel_array'):
                             delattr(dataset, '_cached_pixel_array')
-
-        # Reset organizer state (loaded_file_paths, series_source_dirs, disambiguation_counters, etc.)
-        self.dicom_organizer.clear()
-        # Clear all PS/KO from annotation manager (studies gone)
-        self.annotation_manager.clear_all_ps_ko()
-
+        
         # Clear current dataset references (legacy, points to focused subwindow)
         self.current_dataset = None
         self.current_studies = {}
@@ -1324,10 +1319,14 @@ class DICOMViewerApp(QObject):
 
     def _open_files(self) -> None:
         """Handle open files request. Delegates to file/series loading coordinator."""
+        # Open flow closes current files; reset views A–D to default windows 1–4
+        self.multi_window_layout.reset_slot_to_view_default()
         self._file_series_coordinator.open_files()
 
     def _open_folder(self) -> None:
         """Handle open folder request. Delegates to file/series loading coordinator."""
+        # Open flow closes current files; reset views A–D to default windows 1–4
+        self.multi_window_layout.reset_slot_to_view_default()
         self._file_series_coordinator.open_folder()
 
     def _open_recent_file(self, file_path: str) -> None:
@@ -1337,6 +1336,8 @@ class DICOMViewerApp(QObject):
         Args:
             file_path: Path to file or folder to open
         """
+        # Open flow closes current files; reset views A–D to default windows 1–4
+        self.multi_window_layout.reset_slot_to_view_default()
         self._file_series_coordinator.open_recent_file(file_path)
 
     def _open_files_from_paths(self, paths: list[str]) -> None:

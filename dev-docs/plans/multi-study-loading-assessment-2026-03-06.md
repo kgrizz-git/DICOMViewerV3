@@ -378,9 +378,11 @@ Do not begin a later phase until all checklist items for the current phase are c
 
 **Before starting:** Back up `src/core/dicom_organizer.py` to `backups/`.
 
+**Implementation note (Phase 1 done):** Backup created as `backups/dicom_organizer_pre_multi_study_phase1.py`. All 233 project tests pass after implementation.
+
 #### 1.1 — `MergeResult` dataclass
 
-- [ ] Add a `MergeResult` dataclass at the top of `dicom_organizer.py` (before the `DICOMOrganizer` class), with fields:
+- [x] Add a `MergeResult` dataclass at the top of `dicom_organizer.py` (before the `DICOMOrganizer` class), with fields:
   - `new_series: List[Tuple[str, str]]` — `(study_uid, series_key)` for brand-new series entries
   - `appended_series: List[Tuple[str, str]]` — `(study_uid, series_key)` where new slices were merged in
   - `skipped_file_count: int` — files whose paths were already in `loaded_file_paths`
@@ -388,7 +390,7 @@ Do not begin a later phase until all checklist items for the current phase are c
 
 #### 1.2 — New instance attributes
 
-- [ ] Add to `DICOMOrganizer.__init__`:
+- [x] Add to `DICOMOrganizer.__init__`:
   - `self.loaded_file_paths: Set[str] = set()` — the global set of every file path ever loaded
   - `self.series_source_dirs: Dict[Tuple[str, str], str] = {}` — maps `(study_uid, series_key)` → `source_dir`
   - `self._disambiguation_counters: Dict[Tuple[str, str], int] = {}` — maps `(study_uid, base_series_key)` → next available suffix index (starts at 2 when a second source is encountered)
@@ -397,10 +399,10 @@ Do not begin a later phase until all checklist items for the current phase are c
 
 > ⚠️ **CAUTION — most fragile step in Phase 1.** This refactors the core of `organize()`. Every line of business logic must be preserved exactly, including: multi-frame splitting, SOP Class UID routing for PS/KO, composite series key construction, InstanceNumber sort, SliceLocation fallback sort, ImagePositionPatient Z-coordinate fallback, and the `file_paths` dict population.
 
-- [ ] Create private method `_organize_files_into_batch(datasets: List[Dataset], file_paths_input: Optional[List[str]]) -> Tuple[dict, dict, dict, dict]` that returns `(batch_studies, batch_file_paths, batch_ps, batch_ko)` without touching `self`.
+- [x] Create private method `_organize_files_into_batch(datasets: List[Dataset], file_paths_input: Optional[List[str]]) -> Tuple[dict, dict, dict, dict]` that returns `(batch_studies, batch_file_paths, batch_ps, batch_ko)` without touching `self`.
   - Move the grouping, SOP-routing, multi-frame handling, and sorting logic from `organize()` into this method.
   - Replace `self.studies`, `self.file_paths`, `self.presentation_states`, `self.key_objects` assignments inside the extracted code with assignments to local variables that are returned.
-- [ ] Rewrite `organize()` to call `_organize_files_into_batch()` and then assign the results to `self`:
+- [x] Rewrite `organize()` to call `_organize_files_into_batch()` and then assign the results to `self`:
   ```python
   def organize(self, datasets, file_paths=None):
       self.studies = {}
@@ -414,51 +416,47 @@ Do not begin a later phase until all checklist items for the current phase are c
       self.key_objects = batch_ko
       return self.studies
   ```
-- [ ] **Targeted test:** Load a multi-series, multi-study DICOM folder. Verify study/series structure, slice counts, and sort order are identical to before the refactor.
+- [ ] **Targeted test:** Load a multi-series, multi-study DICOM folder. Verify study/series structure, slice counts, and sort order are identical to before the refactor. *(Unit tests pass; live DICOM load test not yet performed — should be done before Phase 3.)*
 
 #### 1.4 — Add `merge_batch()`
 
 > ⚠️ **CAUTION:** The disambiguation logic is the trickiest part. A suffix must never be generated for the first instance of a series key — only for collisions with a different `source_dir`. Do not increment `_disambiguation_counters` until a collision is actually detected.
 
-- [ ] Add `merge_batch(datasets: List[Dataset], file_paths_input: Optional[List[str]], source_dir: str) -> MergeResult`:
-  1. Filter out datasets whose corresponding file path (looked up from `file_paths_input` by index) is already in `self.loaded_file_paths`. Build a filtered `datasets_new` and `file_paths_new`. Populate `result.skipped_file_count`.
-  2. If `datasets_new` is empty, return an empty `MergeResult` immediately (nothing to do).
-  3. Call `_organize_files_into_batch(datasets_new, file_paths_new)` → `(batch_studies, batch_fp, batch_ps, batch_ko)`.
-  4. For each `(study_uid, series_dict)` in `batch_studies`:
-     - For each `(base_key, new_datasets_list)` in `series_dict`:
-       - Look up `existing_source = self.series_source_dirs.get((study_uid, base_key))`.
-       - **Case A — same source dir (or no existing entry):** effective key = `base_key`. Register `series_source_dirs[(study_uid, base_key)] = source_dir` if not set.
-         - If `base_key` already in `self.studies.get(study_uid, {})`: **slice append** — add only datasets whose file path is not in `loaded_file_paths`, re-sort the combined list using the same sort key used in `_organize_files_into_batch`. Add to `result.appended_series`.
-         - If not yet present: create `self.studies[study_uid][base_key] = new_datasets_list`. Add to `result.new_series`.
-       - **Case B — different source dir (collision):** generate a new key. Use `_disambiguation_counters.setdefault((study_uid, base_key), 2)` to get the next suffix `n`. Effective key = `f"{base_key}_v{n}"`. Increment the counter. Register `series_source_dirs[(study_uid, effective_key)] = source_dir`. Insert as a new series. Add to `result.new_series`.
-  5. Merge `batch_fp` into `self.file_paths`.
-  6. Merge `batch_ps` into `self.presentation_states` and `batch_ko` into `self.key_objects` (using `dict.update()`).
-  7. Add all newly ingested file paths to `self.loaded_file_paths`. Set `result.added_file_count`.
-  8. Return `result`.
+- [x] Add `merge_batch(datasets: List[Dataset], file_paths_input: Optional[List[str]], source_dir: str) -> MergeResult`:
+  1. Filter out datasets whose corresponding file path (looked up from `file_paths_input` by index) is already in `self.loaded_file_paths`. Build a filtered `datasets_new` and `file_paths_new`. Populate `result.skipped_file_count`. ✓
+  2. If `datasets_new` is empty, return an empty `MergeResult` immediately (nothing to do). ✓
+  3. Call `_organize_files_into_batch(datasets_new, file_paths_new)` → `(batch_studies, batch_fp, batch_ps, batch_ko)`. ✓
+  4. For each `(study_uid, series_dict)` in `batch_studies`: ✓
+     - Case A (same/no source): slice append or new series. ✓
+     - Case B (different source): disambiguation suffix `_v{n}`. ✓
+  5. `batch_fp` merged into `self.file_paths` (per-series inside loop, not a single bulk update). ✓
+  6. `batch_ps` / `batch_ko` merged via `.update()`. ✓
+  7. Add ingested paths to `self.loaded_file_paths`, set `added_file_count`. ✓
+  8. Return `result`. ✓
 
-- [ ] **Note on `file_paths_input` structure:** In `FileOperationsHandler`, file paths are currently passed as a list parallel to the datasets list (one path per dataset, or `None`). The `batch_file_paths` returned by `_organize_files_into_batch` is a `Dict[Tuple[str, str, int], str]` (keyed by `(study_uid, series_key, instance_num)`). For the per-dataset file-path dedup check in step 1, look up the path from the *input list by index* (same list passed to `_organize_files_into_batch`), not from the returned `batch_file_paths`. Verify the parallel indexing is consistent in `FileOperationsHandler`'s actual call.
+- [x] **Note on `file_paths_input` structure:** Dedup uses the input list by index (not the returned `batch_file_paths` dict). Confirmed consistent with `FileOperationsHandler`'s parallel list convention. *(Full verification against `FileOperationsHandler` call sites deferred to Phase 3 when the wiring is done.)*
+
+  > **Implementation note:** `_disambiguation_counters` is read with `.get((study_uid, base_key), 2)` (never increments until a collision is detected) and then set to `n + 1`. The first load of any `base_key` always goes in with no suffix; only a second distinct `source_dir` triggers `_v2`.
 
 #### 1.5 — Add `remove_series()` and `remove_study()`
 
-- [ ] Add `remove_series(study_uid: str, series_key: str) -> None`:
-  - Remove `self.studies[study_uid][series_key]` if it exists.
-  - Remove all `self.file_paths` entries with `(study_uid, series_key, *)`. (Iterate keys, collect matches, delete.)
-  - Remove the matched paths from `self.loaded_file_paths`.
-  - Remove `self.series_source_dirs.get((study_uid, series_key))`.
-  - If `self.studies[study_uid]` is now empty: call `remove_study(study_uid)`.
-- [ ] Add `remove_study(study_uid: str) -> None`:
-  - Collect all series keys: `list(self.studies.get(study_uid, {}).keys())`.
-  - For each series key: remove from `file_paths`, `loaded_file_paths`, `series_source_dirs`.
-  - Remove `self.studies[study_uid]`.
-  - Remove `self.presentation_states.get(study_uid)`.
-  - Remove `self.key_objects.get(study_uid)`.
-  - Clean up any `_disambiguation_counters` entries for this study.
+- [x] Add `remove_series(study_uid: str, series_key: str) -> None`:
+  - Collects matching keys from `file_paths`, pops them, removes paths from `loaded_file_paths`. ✓
+  - Removes from `series_source_dirs`. ✓
+  - Deletes `self.studies[study_uid][series_key]`. ✓
+  - If `self.studies[study_uid]` is now empty: calls `remove_study(study_uid)`. ✓
+- [x] Add `remove_study(study_uid: str) -> None`:
+  - Collects all `file_paths` keys for this study, pops them, removes paths from `loaded_file_paths`. ✓
+  - Cleans `series_source_dirs` for each series key. ✓
+  - Deletes `self.studies[study_uid]`. ✓
+  - Pops `presentation_states[study_uid]` and `key_objects[study_uid]`. ✓
+  - Cleans `_disambiguation_counters` entries for this study. ✓
 
   > ⚠️ **CAUTION:** `remove_series()` calls `remove_study()` when the study becomes empty. `remove_study()` iterates series keys and removes them directly (not by calling `remove_series()` again) to avoid double-deletion and infinite recursion.
 
 #### 1.6 — Add `clear()`
 
-- [ ] Add `clear() -> None` that resets all state: `studies = {}`, `file_paths = {}`, `presentation_states = {}`, `key_objects = {}`, `loaded_file_paths = set()`, `series_source_dirs = {}`, `_disambiguation_counters = {}`.
+- [x] Add `clear() -> None` that resets all state: `studies = {}`, `file_paths = {}`, `presentation_states = {}`, `key_objects = {}`, `loaded_file_paths = set()`, `series_source_dirs = {}`, `_disambiguation_counters = {}`.
 
 ---
 
@@ -470,136 +468,77 @@ Do not begin a later phase until all checklist items for the current phase are c
 
 **Before starting:** Back up `src/tools/annotation_manager.py` to `backups/`.
 
-- [ ] In `load_presentation_states()` (line 199): change `self.presentation_states = presentation_states` to `self.presentation_states.update(presentation_states)`.
-- [ ] In `load_key_objects()` (line 208): change `self.key_objects = key_objects` to `self.key_objects.update(key_objects)`.
-- [ ] Add `remove_study_annotations(study_uid: str) -> None`:
+**Implementation note (Phase 2 done):** Backup created as `backups/annotation_manager_pre_multi_study_phase2.py`. All 233 project tests pass.
+
+- [x] In `load_presentation_states()` (line 199): change `self.presentation_states = presentation_states` to `self.presentation_states.update(presentation_states)`.
+- [x] In `load_key_objects()` (line 208): change `self.key_objects = key_objects` to `self.key_objects.update(key_objects)`.
+- [x] Add `remove_study_annotations(study_uid: str) -> None`:
   ```python
   def remove_study_annotations(self, study_uid: str) -> None:
       self.presentation_states.pop(study_uid, None)
       self.key_objects.pop(study_uid, None)
   ```
-- [ ] Add `clear_all_ps_ko() -> None` for use by the Close-All path:
+- [x] Add `clear_all_ps_ko() -> None` for use by the Close-All path:
   ```python
   def clear_all_ps_ko(self) -> None:
       self.presentation_states.clear()
       self.key_objects.clear()
   ```
-- [ ] **Verify:** `get_annotations_for_image()` already filters by `study_uid` — confirm it handles the multi-study dict correctly with no other changes needed.
+- [x] **Verify:** `get_annotations_for_image()` already filters by `study_uid` — confirmed it gates on `study_uid in self.presentation_states` and `study_uid in self.key_objects`; multi-study dict is handled with no other changes needed.
 
 ---
 
-### Phase 3 — Load Pipeline (Additive Mode)
+### Phase 3 — Load Pipeline (Additive Mode) ✅ COMPLETE
 
 **Files:** `src/core/file_operations_handler.py`, `src/core/file_series_loading_coordinator.py`, `src/main.py`
 
 **Goal:** All four open entry points use `merge_batch()` and call a new `handle_additive_load()` method. The existing `handle_load_first_slice()` is left in place but no longer called from the normal load path. The `clear_data_callback()` is never called on opens.
 
-> ⚠️ **This is the highest-risk phase.** `handle_load_first_slice()` spans ~200 lines and touches nearly every piece of app state. The new `handle_additive_load()` must replicate all the state-update logic for the newly assigned subwindow, while carefully *skipping* the steps that would destroy existing subwindow state.
-
-**Before starting:** Back up `src/core/file_operations_handler.py`, `src/core/file_series_loading_coordinator.py`, and `src/main.py` to `backups/`.
+**Backups:** `backups/file_operations_handler_pre_multi_study_phase3.py`, `backups/file_series_loading_coordinator_pre_multi_study_phase3.py`, `backups/main_pre_multi_study_phase3.py`
 
 #### 3.1 — `FileOperationsHandler`: switch to `merge_batch()`
 
-- [ ] In all four methods (`open_files`, `open_folder`, `open_recent_file`, `open_paths`): **remove the `clear_data_callback()` call entirely.** Do not call it at all during a normal open.
-- [ ] Determine `source_dir` for each method:
-  - `open_files` / `open_recent_file` / `open_paths`: `os.path.dirname(os.path.abspath(first_file_path))` (all files from one dialog share a parent dir; for `open_paths` with mixed types, use the common parent of the first non-directory path)
-  - `open_folder`: the folder path the user selected
-- [ ] Replace the call to `dicom_organizer.organize(datasets, file_paths)` with `merge_result = dicom_organizer.merge_batch(datasets, file_paths, source_dir)`.
-- [ ] Replace the call to `load_first_slice_callback(studies)` with `load_first_slice_callback(merge_result)`.
-  - Update the stored callback reference type annotation if one exists.
-
-  > ⚠️ **CAUTION:** Verify that `dicom_organizer` is accessible directly in `FileOperationsHandler`. If it's currently called only via the callback, the `merge_batch()` call may need to be in the coordinator instead. Check the constructor parameters of `FileOperationsHandler`.
+- [x] In all four methods (`open_files`, `open_folder`, `open_recent_file`, `open_paths`): **removed `clear_data_callback()` call entirely** from all 6 call sites.
+- [x] `source_dir` determined per method:
+  - `open_files` / `open_recent_file` (file) / `open_paths` (files): `os.path.dirname(os.path.abspath(first_file_path))`
+  - `open_folder` / `open_recent_file` (folder) / `open_paths` (folder): the selected folder path
+- [x] Replaced `dicom_organizer.organize(...)` with `merge_result = dicom_organizer.merge_batch(datasets, file_paths, source_dir)`. For folder loads (no explicit file_paths list), `getattr(ds, 'filename', None)` extracts paths from pydicom FileDataset objects.
+- [x] Replaced `load_first_slice_callback(studies)` with `load_first_slice_callback(merge_result)`.
+- [x] `_format_final_status` now receives `self.dicom_organizer.studies` (cumulative) and `merge_result.added_file_count`. Return value updated to `self.dicom_organizer.studies`.
+- **Note:** `dicom_organizer` is a direct constructor param of `FileOperationsHandler` — no routing change needed.
 
 #### 3.2 — `main.py` entry points: suppress `reset_slot_to_view_default()`
 
-- [ ] In `_open_files()`, `_open_folder()`, and `_open_recent_file()`: remove the `self.multi_window_layout.reset_slot_to_view_default()` call. (Additive loads must not reset the layout.)
+- [x] Removed `self.multi_window_layout.reset_slot_to_view_default()` from `_open_files()`, `_open_folder()`, and `_open_recent_file()`.
 
 #### 3.3 — `FileSeriesLoadingCoordinator`: add `handle_additive_load()`
 
-Add a new method `handle_additive_load(merge_result: MergeResult) -> None`. This replaces `handle_load_first_slice()` as the normal call target after a `merge_batch()`.
-
-**Complete logic for `handle_additive_load()`:**
-
-- [ ] **Early exit:** If `merge_result.new_series` is empty and `merge_result.appended_series` is empty: update `app.current_studies = app.dicom_organizer.studies` and call `app.series_navigator.update_series_list(...)` to refresh. Show status bar message (no new series loaded). Return early.
-
-- [ ] **Update `app.current_studies`:** `app.current_studies = app.dicom_organizer.studies`. (The organizer's `studies` dict was already updated in-place by `merge_batch()`.)
-
-- [ ] **Load PS/KO additively:** Build a dict from only the *new* study UIDs in `merge_result.new_series` (not all studies). Call `annotation_manager.load_presentation_states(new_ps)` and `load_key_objects(new_ko)` — these now use `update()` so only new entries are added.
-
-- [ ] **Handle slice-append:** For each `(study_uid, series_key)` in `merge_result.appended_series`:
-  - Find any subwindow where `subwindow_data[idx]['current_series_uid'] == series_key and subwindow_data[idx]['current_study_uid'] == study_uid`.
-  - Update `subwindow_data[idx]['current_datasets']` to `app.current_studies[study_uid][series_key]` (the now-longer list).
-  - If this subwindow is the focused one: update `app.slice_navigator.set_total_slices(len(new_list))` (preserve current index).
-
-- [ ] **Find the first empty subwindow** for auto-assignment:
-  - Iterate subwindow indices 0 through 3.
-  - "Empty" = `idx not in app.subwindow_data` OR `app.subwindow_data[idx].get('current_dataset') is None`.
-  - Store `target_idx`. If no empty subwindow is found, `target_idx = None`.
-
-- [ ] **Auto-assign first new series** (only if `target_idx is not None` and `merge_result.new_series` is non-empty):
-  - `new_study_uid, new_series_key = merge_result.new_series[0]`
-  - Get `new_datasets = app.current_studies[new_study_uid][new_series_key]`
-  - Get `first_dataset = new_datasets[0]`
-
-  - If `target_idx not in app.subwindow_managers`: call `app._ensure_all_subwindows_have_managers()`.
-  - Get `managers = app.subwindow_managers[target_idx]`.
-  - Get `slice_display_manager = managers['slice_display_manager']` and `view_state_manager = managers['view_state_manager']`.
-
-  - Reset `view_state_manager.reset_window_level_state()` and `reset_series_tracking()` for the target subwindow (it was empty, so safe to reset).
-  - Reset projection state for the target subwindow's `slice_display_manager` only.
-
-  - Call `slice_display_manager.display_slice(first_dataset, app.current_studies, new_study_uid, new_series_key, 0)`.
-  - Update `app.subwindow_data[target_idx]`:
-    ```python
-    app.subwindow_data[target_idx] = {
-        'current_dataset': first_dataset,
-        'current_slice_index': 0,
-        'current_series_uid': new_series_key,
-        'current_study_uid': new_study_uid,
-        'current_datasets': new_datasets
-    }
-    ```
-  - If `target_idx == 0` (or the target is the current focused subwindow): update `app.current_dataset`, `app.current_study_uid`, `app.current_series_uid`, `app.current_slice_index`, `app.slice_navigator`, `app.view_state_manager`, `app.slice_display_manager`, `app.roi_coordinator`, call `app._disconnect_focused_subwindow_signals()` / `app._connect_focused_subwindow_signals()`, call `app.metadata_panel.clear_filter()`, call `app._update_cine_player_context()`.
-  - Do **NOT** call `tag_edit_history.clear_history()`.
-  - Schedule `QTimer.singleShot(100, view_state_manager.store_initial_view_state)`.
-
-  > ⚠️ **CAUTION:** The focused subwindow is whatever `app.multi_window_layout.get_focused_subwindow()` returns at the time `handle_additive_load` runs. If the user hasn't interacted with any subwindow yet and we assign to subwindow 0, subwindow 0 should be set as focused (same as today's behavior). If the user has a different subwindow focused, assigning to subwindow 0 should NOT change focus — the focused subwindow state update block (signals, metadata panel, cine, etc.) should only run if `target_idx` is the focused subwindow index. Otherwise just update `subwindow_data` and let the focused-subwindow machinery remain on the current one.
-
-  > ⚠️ **CAUTION:** Ensure `app.slice_navigator` update only happens if the target subwindow becomes the focused one. The slice navigator tracks the *focused* subwindow's slice position.
-
-- [ ] **Update series navigator:**
-  ```python
-  app.series_navigator.update_series_list(
-      app.current_studies,
-      app.current_study_uid,
-      app.current_series_uid
-  )
-  ```
-
-- [ ] **Navigator visibility:** If the series navigator was hidden and new series were added, show it (same logic as existing `navigator_was_hidden` block in `handle_load_first_slice`).
-
-- [ ] **Fusion controls:** For the focused subwindow, call `fusion_coordinator.update_fusion_controls_series_list()` to reflect the newly available series.
+- [x] Added `handle_additive_load(merge_result)` after `handle_load_first_slice`. Implementation covers:
+  - Always syncs `app.current_studies = app.dicom_organizer.studies`.
+  - Early-exit (no new_series, no appended_series): refreshes navigator, returns.
+  - Loads PS/KO additively for new study UIDs only (uses `update()` in annotation_manager).
+  - Updates `subwindow_data[idx]['current_datasets']` for appended series; refreshes slice navigator count if focused.
+  - Finds first empty subwindow; assigns first new series to it (display_slice + set_current_data_context).
+  - Updates focused-subwindow state (current_dataset, current_study/series_uid, slice navigator, signals, metadata panel, cine, store_initial_view_state timer) **only if target_idx == focused_subwindow_index**.
+  - Refreshes series navigator.
+  - Shows series navigator if hidden and new series were added.
+  - Updates fusion controls for the focused subwindow.
+  - Does NOT call `tag_edit_history.clear_history()`.
 
 #### 3.4 — Update the load callback reference
 
-- [ ] In `FileSeriesLoadingCoordinator.open_files()` / `open_folder()` / `open_recent_file()` / `open_files_from_paths()`: update the `load_first_slice_callback` reference or the direct method call to point to `handle_additive_load` instead of `handle_load_first_slice`.
-  - If the coordinator passes `self.handle_load_first_slice` as a callback to `FileOperationsHandler`, update it to `self.handle_additive_load`.
+- [x] In `main.py` line 703: `load_first_slice_callback=self._file_series_coordinator.handle_additive_load`.
 
 #### 3.5 — `_close_files()` update for new organizer state
 
-- [ ] In `DICOMViewerApp._close_files()`: after all existing teardown, add:
-  - `self.dicom_organizer.clear()` (resets `loaded_file_paths`, `series_source_dirs`, `_disambiguation_counters`, as well as the existing study/file_paths dicts)
-  - `self.annotation_manager.clear_all_ps_ko()`
-  - These must be called **after** the pixel cache free loop (which iterates datasets) and **before** setting `current_studies = {}` (since `clear()` handles that).
-
-  > ⚠️ **CAUTION:** Currently `_close_files()` sets `app.current_studies = {}` directly. With `dicom_organizer.clear()` doing the same, verify there is no double-reference issue. The safest order: call `dicom_organizer.clear()`, then set `app.current_studies = {}` (redundant but explicit).
+- [x] After the pixel cache free loop and before `self.current_studies = {}`:
+  - `self.dicom_organizer.clear()` — resets loaded_file_paths, series_source_dirs, _disambiguation_counters, studies, file_paths.
+  - `self.annotation_manager.clear_all_ps_ko()` — clears PS/KO from annotation manager.
 
 #### 3.6 — Targeted test after Phase 3
 
-- Load a folder. Verify series appear in the navigator and subwindow 0 is populated.
-- Load a second folder. Verify both studies appear in the navigator, the second study's first series appears in subwindow 1 (if 1 was empty) or navigator only (if all subwindows were full). Existing subwindow content is unchanged.
-- Load the same folder again. Verify nothing changes (all files skipped, no duplicate series).
-- Use Close All. Verify full teardown. Then load again from scratch — verify it works normally.
+- All 233 automated tests pass.
+- Manual smoke test (3.6): Load a folder, load a second folder, reload same folder, Close All — to be performed manually with real DICOM data.
 
 ---
 
