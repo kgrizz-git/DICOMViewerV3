@@ -221,7 +221,7 @@ Execute in order. After each opportunity: backup (if not already done), implemen
 - [x] Run full test suite and record baseline (e.g. “all 90 tests pass”). Document any known flakiness.
 
 #### Step 1.1: Add the single builder method
-- [ ] In `main.py`, add a new private method:  
+- [x] In `main.py`, add a new private method:  
   `_build_managers_for_subwindow(self, idx: int, subwindow: SubWindowContainer) -> Dict`
 - [x] Implement it by copying the **loop body** from `_initialize_subwindow_managers` (the block that creates `managers` for one `(idx, subwindow)`). Use the version that includes **CrosshairManager** and **CrosshairCoordinator** so both code paths get the same set of managers.
 - [x] Ensure all lambdas and callbacks use `idx` correctly (e.g. `lambda idx=idx: ...` where needed to avoid closure issues).
@@ -268,7 +268,7 @@ Execute in order. After each opportunity: backup (if not already done), implemen
   - Move the body of `_connect_layout_signals` from main.py into a function e.g. `_wire_layout_signals(app)` in the new module (connect `multi_window_layout.focused_subwindow_changed`, `layout_changed`; `main_window.layout_changed`).
   - In main.py, replace the body of `_connect_layout_signals` with a call to the new function (e.g. `from core.app_signal_wiring import wire_layout_signals` then `wire_layout_signals(self)`). Keep `_connect_signals()` calling `self._connect_layout_signals()` so call order is unchanged.
 - [x] Run tests. Manually: change layout, change focus; confirm layout and focus still work.
-- [ ] Commit (e.g. “refactor(signals): add app_signal_wiring, move layout signals”).
+- [x] Commit (e.g. “refactor(signals): add app_signal_wiring, move layout signals”).
 
 #### Step 2.2: Move remaining _connect_* bodies
 - [x] In `app_signal_wiring.py`, add functions (or a single class with static methods) for: file, dialog, undo/redo+annotation, cine, view, customization. Move each corresponding block from main.py into the new module. Each function receives `app` and performs the same `app.xxx.connect(app._on_yyy)` (or equivalent) calls. Handlers remain methods on `DICOMViewerApp`; only the **connection** code moves.
@@ -315,7 +315,7 @@ Execute in order. After each opportunity: backup (if not already done), implemen
 
 - [x] Run full test suite (with timeout if applicable). All tests must pass.
 - [x] Manual smoke test: start app, open files, switch layouts and focus, open/close dialogs, export/import customizations and tag presets, toggle privacy, use cine and projection. No regressions.
-- [x] Re-run line count on `src/main.py`. Expect a reduction on the order of 430–500 lines from the start of the plan. Record the new line count in this document or in a follow-up note. NEW COUNT: about 3025
+- [x] Re-run line count on `src/main.py`. Expect a reduction on the order of 430–500 lines from the start of the plan. Record the new line count in this document or in a follow-up note. **Post–1–3 count: 3,024 lines** (reduced from 3,552; –528 lines).
 
 ---
 
@@ -351,6 +351,164 @@ After Opportunities 1–3 are fully implemented and committed, perform a short e
 
 5. **If implementing 4–6**
    - For each chosen opportunity, follow the same discipline: backup main.py, implement incrementally, run tests and manual checks, commit, then proceed. Use the “Migration” and “Proposed structure” text in the assessment (sections 4, 5, 6) as the implementation guide. Add a short “Phase 4 / 5 / 6” plan in this document if you want a step-by-step checklist similar to 1–3.
+
+---
+
+## Evaluation Step Result (2026-03-04)
+
+- **Post–1–3 main.py line count**: 3,024 lines.
+- **Reduction from start**: ~528 lines (from 3,552).
+- **Decision**: Implement Opportunity 6 first (lowest risk, purely structural), then Opportunity 5 (privacy controller, low–medium risk). Opportunity 4 (projection handlers) deferred; no projection bugs in backlog and the remaining wins from 5 and 6 alone are meaningful.
+- **Order**: Phase 6 → Phase 5.
+
+---
+
+## Detailed Implementation Plan (Opportunities 5–6)
+
+Execute in order. After each phase: backup, implement, run tests, commit, then proceed.
+
+---
+
+### Phase 6: Opportunity 6 — Move _setup_ui to a layout helper
+
+**Goal**: Extract the body of `_setup_ui` (~73 lines) from `main.py` into a standalone helper function in `src/gui/main_window_layout_helper.py`. `_setup_ui` in main.py becomes a single call to that function. No behavior change.
+
+**What the function receives**: `main_window`, and the widgets it places — `multi_window_layout`, `cine_controls_widget`, `metadata_panel`, `window_level_controls`, `zoom_display_widget`, `roi_list_panel`, `roi_statistics_panel`, `intensity_projection_controls_widget`, `fusion_controls_widget`, `series_navigator`, plus the callbacks needed for the window-slot map wiring (`get_slot_to_view`, `get_layout_mode`, `get_focused_view_index`, `get_thumbnail_for_view`).
+
+**Why a free function rather than `MainWindow.setup_content(app)`**: Avoids giving `MainWindow` a dependency on `DICOMViewerApp`; all necessary widgets are explicit parameters, keeping the helper independently testable.
+
+#### Pre-work
+- [x] Back up `src/main.py` to `backups/main_pre_setup_ui_YYYY-MM-DD.py`. Confirm backup.
+
+#### Step 6.1: Create the helper and move _setup_ui body
+- [x] Create `src/gui/main_window_layout_helper.py` with module docstring (purpose: assemble the main-window panel layout; called once from `DICOMViewerApp._setup_ui`).
+- [x] Add a single public function:  
+  ```python
+  def setup_main_window_content(
+      main_window,
+      multi_window_layout,
+      cine_controls_widget,
+      metadata_panel,
+      window_level_controls,
+      zoom_display_widget,
+      roi_list_panel,
+      roi_statistics_panel,
+      intensity_projection_controls_widget,
+      fusion_controls_widget,
+      series_navigator,
+      *,
+      get_slot_to_view,
+      get_layout_mode,
+      get_focused_view_index,
+      get_thumbnail_for_view,
+  ) -> None:
+  ```
+- [x] Copy the full body of `_setup_ui` (center panel, left panel, right panel with two tabs, series navigator, window-slot map callbacks and visibility) into this function, replacing `self.xxx` with the corresponding parameter names. The `QVBoxLayout`, `QTabWidget`, and `QWidget` imports should be local inside the function (matching the current pattern in `_setup_ui`).
+- [x] Do **not** yet change `main.py`; only add the new file.
+- [x] Verify the new file has no syntax or lint errors (`python -m py_compile src/gui/main_window_layout_helper.py`).
+
+#### Step 6.2: Thin out _setup_ui in main.py
+- [x] In `main.py`, add the import:  
+  `from gui.main_window_layout_helper import setup_main_window_content`
+- [x] Replace the body of `_setup_ui` with a single call:
+  ```python
+  def _setup_ui(self) -> None:
+      """Assemble main-window panel layout. Implemented in gui.main_window_layout_helper."""
+      setup_main_window_content(
+          self.main_window,
+          self.multi_window_layout,
+          self.cine_controls_widget,
+          self.metadata_panel,
+          self.window_level_controls,
+          self.zoom_display_widget,
+          self.roi_list_panel,
+          self.roi_statistics_panel,
+          self.intensity_projection_controls_widget,
+          self.fusion_controls_widget,
+          self.series_navigator,
+          get_slot_to_view=self.multi_window_layout.get_slot_to_view,
+          get_layout_mode=self.multi_window_layout.get_layout_mode,
+          get_focused_view_index=self.get_focused_subwindow_index,
+          get_thumbnail_for_view=self._get_thumbnail_for_view,
+      )
+  ```
+- [x] Run full test suite. Manually: start app, open a file, confirm panels (left/center/right), cine controls, metadata panel, tabs (Window/Zoom/ROI and Combine/Fuse), series navigator, and window-slot map thumbnail all display correctly. Confirm layout switch (1x1, 2x2).
+- [x] Update changelog. Commit (e.g. `refactor(main): move _setup_ui body to main_window_layout_helper`). Mark Opportunity 6 complete.
+
+---
+
+### Phase 5: Opportunity 5 — Privacy controller
+
+**Goal**: Extract `_on_privacy_view_toggled` and `_refresh_overlays_after_privacy_change` from `main.py` into `src/core/privacy_controller.py`. main.py keeps thin slots that delegate to the controller. `self.privacy_view_enabled` stays on `DICOMViewerApp` as the authoritative boolean (it is read in many places).
+
+**What the controller receives**:
+- `config_manager` — to persist and load the privacy flag.
+- `metadata_controller` — to call `set_privacy_mode(enabled)`.
+- `overlay_manager` — the shared (focused) overlay manager.
+- `get_subwindow_managers` — a callable returning the `subwindow_managers` dict (so the controller stays up-to-date without holding a stale reference).
+- `get_all_subwindows` — a callable (e.g. `multi_window_layout.get_all_subwindows`).
+- `get_focused_subwindow_index` — callable returning the current focused index.
+
+**What the controller exposes**:
+- `apply_privacy(enabled: bool)` — full propagation: metadata_controller, shared overlay_manager, all per-subwindow overlay/crosshair managers, all image-viewer states; then calls `refresh_overlays()`.
+- `refresh_overlays()` — loops all subwindows with loaded data and calls `slice_display_manager.display_slice(...)` (falling back to `create_overlay_items` on exception), using `update_metadata=(idx == get_focused_subwindow_index())`.
+
+In `main.py`:
+- `_on_privacy_view_toggled(enabled)` → sets `self.privacy_view_enabled = enabled` then calls `self._privacy_controller.apply_privacy(enabled)`.
+- `_refresh_overlays_after_privacy_change()` → calls `self._privacy_controller.refresh_overlays()`.
+
+#### Pre-work
+- [ ] Back up `src/main.py` to `backups/main_pre_privacy_controller_YYYY-MM-DD.py`. Confirm backup.
+- [ ] Run full test suite; confirm all tests pass (baseline after Phase 6).
+
+#### Step 5.1: Create PrivacyController and implement apply_privacy
+- [ ] Create `src/core/privacy_controller.py` with module docstring (purpose: owns privacy-mode propagation; called from `DICOMViewerApp._on_privacy_view_toggled`).
+- [ ] Implement `PrivacyController.__init__` accepting `config_manager`, `metadata_controller`, `overlay_manager`, `get_subwindow_managers`, `get_all_subwindows`, `get_focused_subwindow_index`.
+- [ ] Implement `apply_privacy(self, enabled: bool) -> None`:
+  - Call `self._metadata_controller.set_privacy_mode(enabled)` (guard with `hasattr` check as in current code).
+  - Call `self._overlay_manager.set_privacy_mode(enabled)` (guard).
+  - Iterate `self._get_subwindow_managers()` items; for each manager dict set `overlay_manager.set_privacy_mode(enabled)` and `crosshair_manager.set_privacy_mode(enabled)` (guard each).
+  - Iterate `self._get_all_subwindows()`; for each non-None subwindow call `subwindow.image_viewer.set_privacy_view_state(enabled)`.
+  - Call `self.refresh_overlays()`.
+- [ ] Do **not** yet change `main.py`. Run `python -m py_compile src/core/privacy_controller.py`.
+
+#### Step 5.2: Implement refresh_overlays
+- [ ] Implement `refresh_overlays(self) -> None` in `PrivacyController`: copy the full logic of `_refresh_overlays_after_privacy_change` from `main.py` — enumerate all subwindows, skip those without loaded data, call `slice_display_manager.display_slice(...)` with `update_metadata=(idx == self._get_focused_subwindow_index())`, fall back to `create_overlay_items` on exception (using a local `DICOMParser` import inside the method, matching the current `from core.dicom_parser import DICOMParser` inline import).
+- [ ] Run `python -m py_compile src/core/privacy_controller.py`. No lint errors.
+
+#### Step 5.3: Wire PrivacyController in main.py
+- [ ] In `main.py`, add import: `from core.privacy_controller import PrivacyController`.
+- [ ] In `_initialize_handlers` (after `dialog_coordinator` is created, when `overlay_manager`, `metadata_controller`, `multi_window_layout` are available), instantiate:
+  ```python
+  self._privacy_controller = PrivacyController(
+      config_manager=self.config_manager,
+      metadata_controller=self.metadata_controller,
+      overlay_manager=self.overlay_manager,
+      get_subwindow_managers=lambda: self.subwindow_managers,
+      get_all_subwindows=self.multi_window_layout.get_all_subwindows,
+      get_focused_subwindow_index=self.get_focused_subwindow_index,
+  )
+  ```
+- [ ] Replace the body of `_on_privacy_view_toggled` with:
+  ```python
+  self.privacy_view_enabled = enabled
+  self._privacy_controller.apply_privacy(enabled)
+  ```
+- [ ] Replace the body of `_refresh_overlays_after_privacy_change` with:
+  ```python
+  self._privacy_controller.refresh_overlays()
+  ```
+- [ ] Run full test suite. Manually: toggle privacy mode (enable and disable); confirm overlay text hides/shows patient tags, metadata panel hides/shows patient fields, crosshairs remain fully visible in both modes, all four panes update when in 2x2 layout. Re-enable and re-disable to confirm no state residue.
+- [ ] Update changelog. Commit (e.g. `refactor(main): extract privacy propagation to PrivacyController`). Mark Opportunity 5 complete.
+
+---
+
+### Post–Phase 5–6: Verification
+
+- [ ] Run full test suite. All tests must pass.
+- [ ] Manual smoke test: start app, open files in multiple panes; toggle privacy on/off; export/import customizations; switch layouts; use cine; check all four tabs in right panel; verify window-slot map thumbnail.
+- [ ] Re-run line count on `src/main.py`. Record here: **Post–5–6 count: ___**.
+- [ ] Review `src/main.py` against opportunities 4 (projection) and any new candidates. Document decision on opportunity 4 or defer.
 
 ---
 

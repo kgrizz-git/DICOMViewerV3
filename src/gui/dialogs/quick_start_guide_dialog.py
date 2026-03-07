@@ -272,6 +272,7 @@ class QuickStartGuideDialog(QDialog):
                 <li><strong>Reset View:</strong> Press <code>V</code> or <code>Shift+V</code>, or use <strong>View → Reset View</strong>, the toolbar button, or right-click context menu → "Reset View (V, Shift+V)" to restore initial zoom, pan, and window/level for the focused subwindow</li>
                 <li><strong>Reset All Views:</strong> Press <code>Shift+A</code> or use the toolbar to reset zoom, pan, and window/level for all subwindows simultaneously</li>
                 <li><strong>Image Smoothing:</strong> When enabled (<strong>View → Image Smoothing</strong> or context menu), the viewer uses bilinear smoothing when the image is zoomed (after a short idle); during zoom/pan it uses fast scaling for responsiveness. The magnifier follows the same setting. Off by default.</li>
+                <li><strong>Show/Hide Left Pane and Right Pane:</strong> Use <strong>View → Show/Hide Left Pane</strong> or <strong>Show/Hide Right Pane</strong>, or right-click on image → same items, to collapse or restore the left (metadata/cine) or right (tools) side panels. State is saved with the layout.</li>
             </ul>
             
             <h2 id="histogram">Histogram Display</h2>
