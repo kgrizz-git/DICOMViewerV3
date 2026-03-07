@@ -178,13 +178,13 @@ class FileOperationsHandler:
         if not file_paths:
             return None, None
         
+        # Clear all ROIs when opening new files
+        self.clear_data_callback()
+        
         # Add first file to recent files (representing this file selection)
         if file_paths:
             self.config_manager.add_recent_file(file_paths[0])
             self.main_window.update_recent_menu()
-        
-        # Determine source directory for dedup/disambiguation
-        source_dir = os.path.dirname(os.path.abspath(file_paths[0]))
         
         # Format source name for status display
         source_name = self._format_source_name(file_paths)
@@ -323,14 +323,14 @@ class FileOperationsHandler:
                 # print(f"[ORGANIZE DEBUG] Pre-organize GC: {gc_time:.3f}s")
                 QApplication.processEvents()
             
-            # Merge into existing organizer state (additive)
+            # Organize into studies/series
             try:
                 import time
                 organize_start = time.time()
-                # print(f"[ORGANIZE DEBUG] Starting merge_batch of {len(datasets)} datasets...")
-                merge_result = self.dicom_organizer.merge_batch(datasets, file_paths, source_dir)
+                # print(f"[ORGANIZE DEBUG] Starting organize of {len(datasets)} datasets...")
+                studies = self.dicom_organizer.organize(datasets, file_paths)
                 organize_time = time.time() - organize_start
-                # print(f"[ORGANIZE DEBUG] merge_batch completed in {organize_time:.2f}s")
+                # print(f"[ORGANIZE DEBUG] Organize completed in {organize_time:.2f}s")
             except MemoryError as e:
                 self.file_dialog.show_error(
                     self.main_window,
@@ -347,9 +347,9 @@ class FileOperationsHandler:
                 )
                 return None, None
             
-            # Update UI with additive load result
+            # Display first slice
             try:
-                self.load_first_slice_callback(merge_result)
+                self.load_first_slice_callback(studies)
             except MemoryError as e:
                 self.file_dialog.show_error(
                     self.main_window,
@@ -367,9 +367,7 @@ class FileOperationsHandler:
                 return None, None
             
             # Format and display final status
-            final_status = self._format_final_status(
-                self.dicom_organizer.studies, merge_result.added_file_count, source_name
-            )
+            final_status = self._format_final_status(studies, len(datasets), source_name)
             
             # Check for compression errors and append guidance if needed
             failed = self.dicom_loader.get_failed_files()
@@ -384,7 +382,7 @@ class FileOperationsHandler:
             # Reset cancellation flag
             self.dicom_loader.reset_cancellation()
             
-            return datasets, self.dicom_organizer.studies
+            return datasets, studies
         
         except SystemExit:
             self._loading_manager.stop_animated_loading()
@@ -439,12 +437,12 @@ class FileOperationsHandler:
         if not folder_path:
             return None, None
         
+        # Clear all ROIs when opening new folder
+        self.clear_data_callback()
+        
         # Add folder to recent files
         self.config_manager.add_recent_file(folder_path)
         self.main_window.update_recent_menu()
-        
-        # Source directory for dedup/disambiguation
-        source_dir = folder_path
         
         # Format source name for status display
         source_name = os.path.basename(folder_path)
@@ -581,11 +579,9 @@ class FileOperationsHandler:
                 gc.collect()
                 QApplication.processEvents()
             
-            # Merge into existing organizer state (additive)
-            # Extract file paths from datasets for path-based dedup
-            folder_file_paths = [getattr(ds, 'filename', None) for ds in datasets]
+            # Organize
             try:
-                merge_result = self.dicom_organizer.merge_batch(datasets, folder_file_paths, source_dir)
+                studies = self.dicom_organizer.organize(datasets)
             except MemoryError as e:
                 self.file_dialog.show_error(
                     self.main_window,
@@ -602,9 +598,9 @@ class FileOperationsHandler:
                 )
                 return None, None
             
-            # Update UI with additive load result
+            # Display first slice
             try:
-                self.load_first_slice_callback(merge_result)
+                self.load_first_slice_callback(studies)
             except MemoryError as e:
                 self.file_dialog.show_error(
                     self.main_window,
@@ -622,16 +618,14 @@ class FileOperationsHandler:
                 return None, None
             
             # Format and display final status
-            final_status = self._format_final_status(
-                self.dicom_organizer.studies, merge_result.added_file_count, source_name
-            )
+            final_status = self._format_final_status(studies, len(datasets), source_name)
             self.update_status_callback(final_status)
             QApplication.processEvents()
             
             # Reset cancellation flag
             self.dicom_loader.reset_cancellation()
             
-            return datasets, self.dicom_organizer.studies
+            return datasets, studies
         
         except SystemExit:
             self._loading_manager.close_progress_dialog()
@@ -681,6 +675,9 @@ class FileOperationsHandler:
         Returns:
             Tuple of (datasets list, studies dict) or (None, None) if cancelled/error
         """
+        # Clear all ROIs when opening new file/folder
+        self.clear_data_callback()
+        
         # Check if path exists
         if not os.path.exists(file_path):
             self.file_dialog.show_error(
@@ -701,8 +698,6 @@ class FileOperationsHandler:
         if os.path.isfile(file_path):
             # Open as file
             source_name = os.path.basename(file_path)
-            # Source directory for dedup/disambiguation
-            source_dir = os.path.dirname(os.path.abspath(file_path))
             
             # Check for large file and show warning
             self._check_large_files([file_path])
@@ -799,9 +794,9 @@ class FileOperationsHandler:
                     gc.collect()
                     QApplication.processEvents()
                 
-                # Merge into existing organizer state (additive)
+                # Organize into studies/series
                 try:
-                    merge_result = self.dicom_organizer.merge_batch(datasets, [file_path], source_dir)
+                    studies = self.dicom_organizer.organize(datasets, [file_path])
                 except MemoryError as e:
                     self.file_dialog.show_error(
                         self.main_window,
@@ -818,9 +813,9 @@ class FileOperationsHandler:
                     )
                     return None, None
                 
-                # Update UI with additive load result
+                # Display first slice
                 try:
-                    self.load_first_slice_callback(merge_result)
+                    self.load_first_slice_callback(studies)
                 except MemoryError as e:
                     self.file_dialog.show_error(
                         self.main_window,
@@ -833,14 +828,12 @@ class FileOperationsHandler:
                     self.file_dialog.show_error(
                         self.main_window,
                         "Error",
-                        f"Error displaying first slice: {str(e)}"
-                    )
+                    f"Error displaying first slice: {str(e)}"
+                )
                     return None, None
                 
                 # Format and display final status
-                final_status = self._format_final_status(
-                    self.dicom_organizer.studies, merge_result.added_file_count, source_name
-                )
+                final_status = self._format_final_status(studies, len(datasets), source_name)
                 
                 # Check for compression errors and append guidance if needed
                 failed = self.dicom_loader.get_failed_files()
@@ -855,7 +848,7 @@ class FileOperationsHandler:
                 # Reset cancellation flag
                 self.dicom_loader.reset_cancellation()
                 
-                return datasets, self.dicom_organizer.studies
+                return datasets, studies
                 
             except MemoryError as e:
                 self._loading_manager.close_progress_dialog()
@@ -883,8 +876,6 @@ class FileOperationsHandler:
         else:
             # Open as folder
             source_name = os.path.basename(file_path)
-            # Source directory for dedup/disambiguation
-            source_dir = file_path
             
             # Check for large files in folder before loading
             try:
@@ -994,16 +985,14 @@ class FileOperationsHandler:
                     # print(f"[ORGANIZE DEBUG] Pre-organize GC: {gc_time:.3f}s")
                     QApplication.processEvents()
                 
-                # Merge into existing organizer state (additive)
-                # Extract file paths from datasets for path-based dedup
-                folder_file_paths = [getattr(ds, 'filename', None) for ds in datasets]
+                # Organize
                 try:
                     import time
                     organize_start = time.time()
-                    # print(f"[ORGANIZE DEBUG] Starting merge_batch of {len(datasets)} datasets...")
-                    merge_result = self.dicom_organizer.merge_batch(datasets, folder_file_paths, source_dir)
+                    # print(f"[ORGANIZE DEBUG] Starting organize of {len(datasets)} datasets...")
+                    studies = self.dicom_organizer.organize(datasets)
                     organize_time = time.time() - organize_start
-                    # print(f"[ORGANIZE DEBUG] merge_batch completed in {organize_time:.2f}s")
+                    # print(f"[ORGANIZE DEBUG] Organize completed in {organize_time:.2f}s")
                 except MemoryError as e:
                     self.file_dialog.show_error(
                         self.main_window,
@@ -1020,9 +1009,9 @@ class FileOperationsHandler:
                     )
                     return None, None
                 
-                # Update UI with additive load result
+                # Display first slice
                 try:
-                    self.load_first_slice_callback(merge_result)
+                    self.load_first_slice_callback(studies)
                 except MemoryError as e:
                     self.file_dialog.show_error(
                         self.main_window,
@@ -1035,21 +1024,19 @@ class FileOperationsHandler:
                     self.file_dialog.show_error(
                         self.main_window,
                         "Error",
-                        f"Error displaying first slice: {str(e)}"
-                    )
+                    f"Error displaying first slice: {str(e)}"
+                )
                     return None, None
                 
                 # Format and display final status
-                final_status = self._format_final_status(
-                    self.dicom_organizer.studies, merge_result.added_file_count, source_name
-                )
+                final_status = self._format_final_status(studies, len(datasets), source_name)
                 self.update_status_callback(final_status)
                 QApplication.processEvents()
                 
                 # Reset cancellation flag
                 self.dicom_loader.reset_cancellation()
                 
-                return datasets, self.dicom_organizer.studies
+                return datasets, studies
                 
             except MemoryError as e:
                 self._loading_manager.close_progress_dialog()
@@ -1105,12 +1092,12 @@ class FileOperationsHandler:
             # Process first folder (prioritize folders)
             folder_path = folders[0]
             
+            # Clear all ROIs when opening new folder
+            self.clear_data_callback()
+            
             # Add folder to recent files
             self.config_manager.add_recent_file(folder_path)
             self.main_window.update_recent_menu()
-            
-            # Source directory for dedup/disambiguation
-            source_dir = folder_path
             
             # Format source name for status display
             source_name = os.path.basename(folder_path)
@@ -1220,11 +1207,9 @@ class FileOperationsHandler:
                     warning_msg = f"Warning: {len(failed)} file(s) could not be loaded."
                     self.file_dialog.show_warning(self.main_window, "Loading Warnings", warning_msg)
                 
-                # Merge into existing organizer state (additive)
-                # Extract file paths from datasets for path-based dedup
-                folder_file_paths = [getattr(ds, 'filename', None) for ds in datasets]
+                # Organize
                 try:
-                    merge_result = self.dicom_organizer.merge_batch(datasets, folder_file_paths, source_dir)
+                    studies = self.dicom_organizer.organize(datasets)
                 except MemoryError as e:
                     self.file_dialog.show_error(
                         self.main_window,
@@ -1241,9 +1226,9 @@ class FileOperationsHandler:
                     )
                     return None, None
                 
-                # Update UI with additive load result
+                # Display first slice
                 try:
-                    self.load_first_slice_callback(merge_result)
+                    self.load_first_slice_callback(studies)
                 except MemoryError as e:
                     self.file_dialog.show_error(
                         self.main_window,
@@ -1261,16 +1246,14 @@ class FileOperationsHandler:
                     return None, None
                 
                 # Format and display final status
-                final_status = self._format_final_status(
-                    self.dicom_organizer.studies, merge_result.added_file_count, source_name
-                )
+                final_status = self._format_final_status(studies, len(datasets), source_name)
                 self.update_status_callback(final_status)
                 QApplication.processEvents()
                 
                 # Reset cancellation flag
                 self.dicom_loader.reset_cancellation()
                 
-                return datasets, self.dicom_organizer.studies
+                return datasets, studies
             
             except SystemExit:
                 self._loading_manager.close_progress_dialog()
@@ -1312,13 +1295,13 @@ class FileOperationsHandler:
         
         elif files:
             # Process all files together
+            # Clear all ROIs when opening new files
+            self.clear_data_callback()
+            
             # Add first file to recent files (representing this file selection)
             if files:
                 self.config_manager.add_recent_file(files[0])
                 self.main_window.update_recent_menu()
-            
-            # Source directory for dedup/disambiguation (parent of first file)
-            source_dir = os.path.dirname(os.path.abspath(files[0])) if files else ""
             
             # Format source name for status display
             source_name = self._format_source_name(files)
@@ -1448,9 +1431,9 @@ class FileOperationsHandler:
                     gc.collect()
                     QApplication.processEvents()
                 
-                # Merge into existing organizer state (additive)
+                # Organize into studies/series
                 try:
-                    merge_result = self.dicom_organizer.merge_batch(datasets, files, source_dir)
+                    studies = self.dicom_organizer.organize(datasets, files)
                 except MemoryError as e:
                     self.file_dialog.show_error(
                         self.main_window,
@@ -1467,9 +1450,9 @@ class FileOperationsHandler:
                     )
                     return None, None
                 
-                # Update UI with additive load result
+                # Display first slice
                 try:
-                    self.load_first_slice_callback(merge_result)
+                    self.load_first_slice_callback(studies)
                 except MemoryError as e:
                     self.file_dialog.show_error(
                         self.main_window,
@@ -1487,9 +1470,7 @@ class FileOperationsHandler:
                     return None, None
                 
                 # Format and display final status
-                final_status = self._format_final_status(
-                    self.dicom_organizer.studies, merge_result.added_file_count, source_name
-                )
+                final_status = self._format_final_status(studies, len(datasets), source_name)
                 
                 # Check for compression errors and append guidance if needed
                 failed = self.dicom_loader.get_failed_files()
@@ -1504,7 +1485,7 @@ class FileOperationsHandler:
                 # Reset cancellation flag
                 self.dicom_loader.reset_cancellation()
                 
-                return datasets, self.dicom_organizer.studies
+                return datasets, studies
             
             except SystemExit:
                 self._loading_manager.close_progress_dialog()

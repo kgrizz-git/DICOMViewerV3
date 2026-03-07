@@ -17,28 +17,12 @@ Requirements:
     - typing for type hints
 """
 
-import os
-from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from collections import defaultdict
 import pydicom
 from pydicom.dataset import Dataset
 from core.multiframe_handler import is_multiframe, get_frame_count, create_frame_dataset
 from utils.dicom_utils import get_composite_series_key
-
-
-@dataclass
-class MergeResult:
-    """
-    Result of merging a new batch of DICOM files into the organizer.
-
-    Used for additive loading: new_series and appended_series tell the caller
-    what changed so the UI can update only affected subwindows.
-    """
-    new_series: List[Tuple[str, str]]  # (study_uid, series_key) for brand-new series
-    appended_series: List[Tuple[str, str]]  # (study_uid, series_key) where slices were merged in
-    skipped_file_count: int  # files whose paths were already in loaded_file_paths
-    added_file_count: int  # files actually ingested
 
 
 class DICOMOrganizer:
@@ -62,11 +46,7 @@ class DICOMOrganizer:
         # Storage for Presentation State and Key Object files
         self.presentation_states: Dict[str, List[Dataset]] = {}  # Keyed by StudyInstanceUID
         self.key_objects: Dict[str, List[Dataset]] = {}  # Keyed by StudyInstanceUID
-        # Multi-study additive loading: track loaded paths and source dirs per series
-        self.loaded_file_paths: Set[str] = set()
-        self.series_source_dirs: Dict[Tuple[str, str], str] = {}  # (study_uid, series_key) -> source_dir
-        self._disambiguation_counters: Dict[Tuple[str, str], int] = {}  # (study_uid, base_series_key) -> next suffix
-
+    
     def organize(self, datasets: List[Dataset], file_paths: Optional[List[str]] = None) -> Dict[str, Dict[str, List[Dataset]]]:
         """
         Organize datasets into studies and series.
@@ -79,32 +59,15 @@ class DICOMOrganizer:
             Dictionary structure: {StudyInstanceUID: {composite_series_key: [sorted_datasets]}}
             where composite_series_key is "SeriesInstanceUID_SeriesNumber" or "SeriesInstanceUID"
         """
+        import time
+        organize_start = time.time()
+        
         self.studies = {}
         self.file_paths = {}
         self.presentation_states = {}
         self.key_objects = {}
-        batch_studies, batch_fp, batch_ps, batch_ko = self._organize_files_into_batch(datasets, file_paths)
-        self.studies = batch_studies
-        self.file_paths = batch_fp
-        self.presentation_states = batch_ps
-        self.key_objects = batch_ko
-        return self.studies
-
-    def _organize_files_into_batch(
-        self,
-        datasets: List[Dataset],
-        file_paths_input: Optional[List[str]] = None,
-    ) -> Tuple[
-        Dict[str, Dict[str, List[Dataset]]],
-        Dict[Tuple[str, str, int], str],
-        Dict[str, List[Dataset]],
-        Dict[str, List[Dataset]],
-    ]:
-        """Organize a batch without modifying instance state. Returns (batch_studies, batch_file_paths, batch_ps, batch_ko)."""
-        batch_studies: Dict[str, Dict[str, List[Dataset]]] = {}
-        batch_file_paths: Dict[Tuple[str, str, int], str] = {}
-        batch_ps: Dict[str, List[Dataset]] = {}
-        batch_ko: Dict[str, List[Dataset]] = {}
+        
+        # Group by StudyInstanceUID and SeriesInstanceUID
         study_dict: Dict[str, Dict[str, List[Tuple[Dataset, Optional[str]]]]] = defaultdict(
             lambda: defaultdict(list)
         )
@@ -114,18 +77,32 @@ class DICOMOrganizer:
         COLOR_PRESENTATION_STATE_UID = '1.2.840.10008.5.1.4.1.1.11.2'
         KEY_OBJECT_SELECTION_UID = '1.2.840.10008.5.1.4.1.1.88.59'
         
+        # Track SOP Class UIDs encountered
+        sop_class_counts = {}
+        ps_count = 0
+        ko_count = 0
+        
+        grouping_start = time.time()
+        multiframe_count = 0
+        total_frames_created = 0
+        
         for idx, dataset in enumerate(datasets):
             # Check SOP Class UID to identify file type
             sop_class_uid = self._get_tag_value(dataset, "SOPClassUID", "")
             sop_class_uid_str = str(sop_class_uid)
             
+            # Track SOP Class UIDs for debugging
+            if sop_class_uid_str:
+                sop_class_counts[sop_class_uid_str] = sop_class_counts.get(sop_class_uid_str, 0) + 1
+            
             # Handle Presentation State files - use exact match
             if sop_class_uid_str == GRAYSCALE_PRESENTATION_STATE_UID or sop_class_uid_str == COLOR_PRESENTATION_STATE_UID:
                 study_uid = self._get_tag_value(dataset, "StudyInstanceUID", "")
                 if study_uid:
-                    if study_uid not in batch_ps:
-                        batch_ps[study_uid] = []
-                    batch_ps[study_uid].append(dataset)
+                    if study_uid not in self.presentation_states:
+                        self.presentation_states[study_uid] = []
+                    self.presentation_states[study_uid].append(dataset)
+                    ps_count += 1
                     # print(f"[ANNOTATIONS] Detected Presentation State file (SOP Class: {sop_class_uid_str[:50]}...)")
                 # Skip adding to image series (they're metadata files)
                 continue
@@ -134,9 +111,10 @@ class DICOMOrganizer:
             if sop_class_uid_str == KEY_OBJECT_SELECTION_UID:
                 study_uid = self._get_tag_value(dataset, "StudyInstanceUID", "")
                 if study_uid:
-                    if study_uid not in batch_ko:
-                        batch_ko[study_uid] = []
-                    batch_ko[study_uid].append(dataset)
+                    if study_uid not in self.key_objects:
+                        self.key_objects[study_uid] = []
+                    self.key_objects[study_uid].append(dataset)
+                    ko_count += 1
                     # print(f"[ANNOTATIONS] Detected Key Object file (SOP Class: {sop_class_uid_str[:50]}...)")
                 # Skip adding to image series (they're metadata files)
                 continue
@@ -174,10 +152,14 @@ class DICOMOrganizer:
             # Generate composite series key (includes SeriesNumber if available)
             composite_series_key = get_composite_series_key(dataset)
             
-            file_path = file_paths_input[idx] if file_paths_input and idx < len(file_paths_input) else None
-
+            file_path = file_paths[idx] if file_paths and idx < len(file_paths) else None
+            
+            # Check if this is a multi-frame file
             if is_multiframe(dataset):
+                # Split multi-frame file into individual frames
                 num_frames = get_frame_count(dataset)
+                multiframe_count += 1
+                total_frames_created += num_frames
                 # print(f"[ORGANIZE] Splitting multi-frame file into {num_frames} frames...")
                 
                 for frame_index in range(num_frames):
@@ -196,169 +178,84 @@ class DICOMOrganizer:
                 # Single-frame file - add as-is using composite key
                 study_dict[study_uid][composite_series_key].append((dataset, file_path))
         
+        grouping_time = time.time() - grouping_start
+        sorting_start = time.time()
+        
+        # Sort slices within each series and organize
         for study_uid, series_dict in study_dict.items():
-            batch_studies[study_uid] = {}
+            self.studies[study_uid] = {}
+            
             for composite_series_key, slice_list in series_dict.items():
+                # Sort slices by InstanceNumber or SliceLocation
                 sorted_slices = self._sort_slices(slice_list)
-                batch_studies[study_uid][composite_series_key] = [ds for ds, _ in sorted_slices]
+                
+                # DEBUG: Log dataset ordering when stored in current_studies
+                # if sorted_slices and len(sorted_slices) > 0:
+                #     print(f"[3D RESAMPLE DEBUG] dicom_organizer: Storing datasets in current_studies")
+                #     print(f"[3D RESAMPLE DEBUG]   Series: {composite_series_key[:30]}...")
+                #     print(f"[3D RESAMPLE DEBUG]   Total slices: {len(sorted_slices)}")
+                #     # Log first 3 and last 3 slice locations
+                #     for i in [0, 1, 2] if len(sorted_slices) > 2 else range(len(sorted_slices)):
+                #         ds, _ = sorted_slices[i]
+                #         slice_loc = getattr(ds, 'SliceLocation', None)
+                #         instance_num = getattr(ds, 'InstanceNumber', None)
+                #         print(f"[3D RESAMPLE DEBUG]   Sorted slice[{i}]: InstanceNumber={instance_num}, SliceLocation={slice_loc}")
+                #     if len(sorted_slices) > 3:
+                #         for i in range(max(3, len(sorted_slices)-3), len(sorted_slices)):
+                #             ds, _ = sorted_slices[i]
+                #             slice_loc = getattr(ds, 'SliceLocation', None)
+                #             instance_num = getattr(ds, 'InstanceNumber', None)
+                #             print(f"[3D RESAMPLE DEBUG]   Sorted slice[{i}]: InstanceNumber={instance_num}, SliceLocation={slice_loc}")
+                
+                # Store datasets using composite series key
+                self.studies[study_uid][composite_series_key] = [ds for ds, _ in sorted_slices]
+                
+                # Store file paths if available (using composite series key)
                 for idx, (ds, path) in enumerate(sorted_slices):
                     if path:
+                        # For multi-frame files, use frame index as part of instance identifier
                         if hasattr(ds, '_frame_index') and hasattr(ds, '_original_dataset'):
+                            # This is a frame from a multi-frame file
+                            # Use a combination of InstanceNumber and frame index
                             base_instance = self._get_tag_value(ds._original_dataset, "InstanceNumber", 0)
                             frame_index = ds._frame_index
+                            # Create a unique instance number: base * 10000 + frame_index
+                            # This ensures frames are properly ordered
                             instance_num = int(base_instance) * 10000 + frame_index
                         else:
                             instance_num = self._get_tag_value(ds, "InstanceNumber", idx)
-                        batch_file_paths[(study_uid, composite_series_key, instance_num)] = path
-        return (batch_studies, batch_file_paths, batch_ps, batch_ko)
-
-    def _get_instance_identifier(self, ds: Dataset, idx_fallback: int) -> int:
-        """Return the instance number used as part of the file_paths key for this dataset."""
-        if hasattr(ds, '_frame_index') and hasattr(ds, '_original_dataset'):
-            base_instance = self._get_tag_value(ds._original_dataset, "InstanceNumber", 0)
-            return int(base_instance) * 10000 + ds._frame_index
-        return self._get_tag_value(ds, "InstanceNumber", idx_fallback)
-
-    def merge_batch(
-        self,
-        datasets: List[Dataset],
-        file_paths_input: Optional[List[str]] = None,
-        source_dir: str = "",
-    ) -> MergeResult:
-        """
-        Merge a new batch of DICOM files into existing organizer state.
-        Skips files whose path is already in loaded_file_paths.
-        Same series from a different source_dir becomes a separate series (disambiguation suffix).
-        """
-        result = MergeResult(
-            new_series=[],
-            appended_series=[],
-            skipped_file_count=0,
-            added_file_count=0,
-        )
-        if not datasets:
-            return result
-
-        # Normalize paths for dedup; build parallel lists of new-only datasets/paths
-        def norm(p: str) -> str:
-            return os.path.normpath(os.path.abspath(p))
-
-        datasets_new: List[Dataset] = []
-        file_paths_new: List[Optional[str]] = []
-        for idx, ds in enumerate(datasets):
-            path = file_paths_input[idx] if file_paths_input and idx < len(file_paths_input) else None
-            if path and norm(path) in self.loaded_file_paths:
-                result.skipped_file_count += 1
-                continue
-            datasets_new.append(ds)
-            file_paths_new.append(path)
-
-        if not datasets_new:
-            return result
-
-        batch_studies, batch_fp, batch_ps, batch_ko = self._organize_files_into_batch(datasets_new, file_paths_new)
-
-        for study_uid, series_dict in batch_studies.items():
-            if study_uid not in self.studies:
-                self.studies[study_uid] = {}
-            for base_key, new_datasets_list in series_dict.items():
-                existing_source = self.series_source_dirs.get((study_uid, base_key))
-                if existing_source is None or existing_source == source_dir:
-                    effective_key = base_key
-                    self.series_source_dirs[(study_uid, base_key)] = source_dir
-                    if base_key in self.studies.get(study_uid, {}):
-                        # Slice append: merge and re-sort; existing file_paths stay, add only new from batch_fp
-                        existing_list = self.studies[study_uid][base_key]
-                        existing_tuples = [
-                            (ds, self.file_paths.get((study_uid, base_key, self._get_instance_identifier(ds, i)), None))
-                            for i, ds in enumerate(existing_list)
-                        ]
-                        new_tuples = [
-                            (ds, batch_fp.get((study_uid, base_key, self._get_instance_identifier(ds, i)), None))
-                            for i, ds in enumerate(new_datasets_list)
-                        ]
-                        combined = existing_tuples + new_tuples
-                        sorted_slices = self._sort_slices(combined)
-                        self.studies[study_uid][base_key] = [ds for ds, _ in sorted_slices]
-                        for k, v in batch_fp.items():
-                            if k[0] == study_uid and k[1] == base_key:
-                                self.file_paths[k] = v
-                        result.appended_series.append((study_uid, base_key))
-                    else:
-                        self.studies[study_uid][base_key] = new_datasets_list
-                        for k, v in batch_fp.items():
-                            if k[0] == study_uid and k[1] == base_key:
-                                self.file_paths[k] = v
-                        result.new_series.append((study_uid, base_key))
-                else:
-                    n = self._disambiguation_counters.get((study_uid, base_key), 2)
-                    effective_key = f"{base_key}_v{n}"
-                    self._disambiguation_counters[(study_uid, base_key)] = n + 1
-                    self.series_source_dirs[(study_uid, effective_key)] = source_dir
-                    self.studies[study_uid][effective_key] = new_datasets_list
-                    for k, v in batch_fp.items():
-                        if k[0] == study_uid and k[1] == base_key:
-                            self.file_paths[(study_uid, effective_key, k[2])] = v
-                    result.new_series.append((study_uid, effective_key))
-
-        self.presentation_states.update(batch_ps)
-        self.key_objects.update(batch_ko)
-
-        added_paths = set()
-        for idx, path in enumerate(file_paths_new):
-            if path:
-                added_paths.add(norm(path))
-        self.loaded_file_paths.update(added_paths)
-        result.added_file_count = len(added_paths)
-        return result
-
-    def remove_series(self, study_uid: str, series_key: str) -> None:
-        """Remove one series and its file_paths; if study becomes empty, remove the study."""
-        if study_uid not in self.studies or series_key not in self.studies[study_uid]:
-            return
-        paths_to_remove: Set[str] = set()
-        keys_to_del = [k for k in self.file_paths if k[0] == study_uid and k[1] == series_key]
-        for k in keys_to_del:
-            path = self.file_paths.pop(k)
-            if path:
-                paths_to_remove.add(os.path.normpath(os.path.abspath(path)))
-        self.loaded_file_paths -= paths_to_remove
-        self.series_source_dirs.pop((study_uid, series_key), None)
-        del self.studies[study_uid][series_key]
-        if not self.studies[study_uid]:
-            self.remove_study(study_uid)
-
-    def remove_study(self, study_uid: str) -> None:
-        """Remove a study and all its series, file_paths, PS/KO."""
-        if study_uid not in self.studies:
-            return
-        series_keys = list(self.studies[study_uid].keys())
-        paths_to_remove: Set[str] = set()
-        keys_to_del = [k for k in self.file_paths if k[0] == study_uid]
-        for k in keys_to_del:
-            path = self.file_paths.pop(k)
-            if path:
-                paths_to_remove.add(os.path.normpath(os.path.abspath(path)))
-        self.loaded_file_paths -= paths_to_remove
-        for sk in series_keys:
-            self.series_source_dirs.pop((study_uid, sk), None)
-        del self.studies[study_uid]
-        self.presentation_states.pop(study_uid, None)
-        self.key_objects.pop(study_uid, None)
-        for key in list(self._disambiguation_counters.keys()):
-            if key[0] == study_uid:
-                del self._disambiguation_counters[key]
-
-    def clear(self) -> None:
-        """Reset all organizer state (studies, file_paths, PS/KO, loaded paths, source dirs)."""
-        self.studies = {}
-        self.file_paths = {}
-        self.presentation_states = {}
-        self.key_objects = {}
-        self.loaded_file_paths = set()
-        self.series_source_dirs = {}
-        self._disambiguation_counters = {}
-
+                        self.file_paths[(study_uid, composite_series_key, instance_num)] = path
+        
+        sorting_time = time.time() - sorting_start
+        total_time = time.time() - organize_start
+        
+        # Debug summary
+        total_series = sum(len(series_dict) for series_dict in self.studies.values())
+        total_slices = sum(len(slices) for study_dict in self.studies.values() for slices in study_dict.values())
+        
+        # print(f"[ORGANIZE DEBUG] ===== Organize Summary =====")
+        # print(f"[ORGANIZE DEBUG] Input datasets: {len(datasets)}")
+        # print(f"[ORGANIZE DEBUG] Multi-frame files: {multiframe_count}")
+        # print(f"[ORGANIZE DEBUG] Total frames created: {total_frames_created}")
+        # print(f"[ORGANIZE DEBUG] Output studies: {len(self.studies)}")
+        # print(f"[ORGANIZE DEBUG] Output series: {total_series}")
+        # print(f"[ORGANIZE DEBUG] Total slices: {total_slices}")
+        # print(f"[ORGANIZE DEBUG] Grouping time: {grouping_time:.2f}s")
+        # print(f"[ORGANIZE DEBUG] Sorting time: {sorting_time:.2f}s")
+        # print(f"[ORGANIZE DEBUG] Total time: {total_time:.2f}s")
+        # print(f"[ORGANIZE DEBUG] ===========================")
+        
+        # Print summary of detected annotation files
+        # print(f"[ANNOTATIONS] Organization complete: {ps_count} Presentation State(s), {ko_count} Key Object(s)")
+        # if sop_class_counts:
+        #     print(f"[ANNOTATIONS] SOP Class UIDs encountered: {len(sop_class_counts)} unique types")
+        #     # Print top 10 most common SOP Class UIDs
+        #     sorted_sop = sorted(sop_class_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+        #     for uid, count in sorted_sop:
+        #         print(f"  {uid[:60]}... : {count} file(s)")
+        
+        return self.studies
+    
     def _sort_slices(self, slice_list: List[Tuple[Dataset, Optional[str]]]) -> List[Tuple[Dataset, Optional[str]]]:
         """
         Sort slices by InstanceNumber or SliceLocation.

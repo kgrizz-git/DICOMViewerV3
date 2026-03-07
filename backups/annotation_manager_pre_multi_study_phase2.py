@@ -192,39 +192,21 @@ class AnnotationManager:
     def load_presentation_states(self, presentation_states: Dict[str, List[Dataset]]) -> None:
         """
         Store Presentation State files for later matching.
-        Merges into existing state (additive) so multiple studies' PS can coexist.
         
         Args:
             presentation_states: Dictionary keyed by StudyInstanceUID containing lists of Presentation State datasets
         """
-        self.presentation_states.update(presentation_states)
-
+        self.presentation_states = presentation_states
+    
     def load_key_objects(self, key_objects: Dict[str, List[Dataset]]) -> None:
         """
         Store Key Object files for later matching.
-        Merges into existing state (additive) so multiple studies' KO can coexist.
         
         Args:
             key_objects: Dictionary keyed by StudyInstanceUID containing lists of Key Object datasets
         """
-        self.key_objects.update(key_objects)
-
-    def remove_study_annotations(self, study_uid: str) -> None:
-        """
-        Remove Presentation State and Key Object data for a single study.
-        Used when a study is closed (e.g. right-click Close This Study).
-        """
-        self.presentation_states.pop(study_uid, None)
-        self.key_objects.pop(study_uid, None)
-
-    def clear_all_ps_ko(self) -> None:
-        """
-        Clear all Presentation State and Key Object data.
-        Used by the Close All path.
-        """
-        self.presentation_states.clear()
-        self.key_objects.clear()
-
+        self.key_objects = key_objects
+    
     def get_annotations_for_image(self, dataset: Dataset, study_uid: str) -> List[Dict]:
         """
         Get annotations for a specific image from Presentation States, Key Objects, and embedded annotations.

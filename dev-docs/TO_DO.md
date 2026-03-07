@@ -38,6 +38,7 @@
 - [ ] make toolbar customizable
 - [ ] make it possible to window/level by holding W and dragging mouse or by holding middle mouse button and dragging or something
 - [ ] make it possible to zoom in/out with pinch on trackpad
+- [ ] Fix typo in status bar after loading: "studyies"
 
 
 - [ ] make right pane minimum width before collapsing 250 instead of 200?
