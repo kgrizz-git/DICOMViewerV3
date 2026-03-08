@@ -24,7 +24,7 @@ Requirements:
 
 import os
 import gc
-from typing import Callable, Optional, Tuple
+from typing import Callable, Optional
 from PySide6.QtWidgets import QApplication
 from core.dicom_loader import DICOMLoader, should_skip_path_for_dicom
 from core.dicom_organizer import DICOMOrganizer
@@ -1677,62 +1677,50 @@ class FileOperationsHandler:
         # No valid files or folders
         return None, None
     
-    def _get_first_study_series_by_dicom(self, studies: dict) -> Optional[Tuple[str, str]]:
-        """
-        Return (study_uid, series_uid) for the first study/series using the same
-        logic as the series navigator: first study in dict iteration order, then
-        series with lowest SeriesNumber in that study. So the auto-loaded series
-        is always from the first study shown in the navigator.
-
-        Args:
-            studies: Dictionary of organized studies/series (study_uid -> series_key -> [datasets]).
-
-        Returns:
-            (study_uid, series_uid) or None if no studies/series.
-        """
-        if not studies:
-            return None
-        for study_uid in studies.keys():
-            series_dict = studies[study_uid]
-            if not series_dict:
-                continue
-            series_list = []
-            for series_uid, datasets in series_dict.items():
-                if not datasets:
-                    continue
-                sn = getattr(datasets[0], 'SeriesNumber', None)
-                try:
-                    sn = int(sn) if sn is not None else 0
-                except (ValueError, TypeError):
-                    sn = 0
-                series_list.append((sn, series_uid, datasets))
-            series_list.sort(key=lambda x: x[0])
-            if not series_list:
-                continue
-            return (study_uid, series_list[0][1])
-        return None
-
     def load_first_slice(self, studies: dict) -> dict:
         """
         Load and return information about the first slice.
-        First study/series uses the same order as the series navigator (first study, lowest SeriesNumber).
-
+        
         Args:
             studies: Dictionary of organized studies/series
-
+            
         Returns:
             Dictionary with first slice information: study_uid, series_uid, slice_index, dataset
             or None if no studies available
         """
         if not studies:
             return None
-        pair = self._get_first_study_series_by_dicom(studies)
-        if not pair:
+        
+        # Get first study
+        study_uid = list(studies.keys())[0]
+        
+        # Get all series for this study and sort by SeriesNumber
+        series_list = []
+        for series_uid, datasets in studies[study_uid].items():
+            if datasets:
+                # Extract SeriesNumber from first dataset
+                first_dataset = datasets[0]
+                series_number = getattr(first_dataset, 'SeriesNumber', None)
+                # Convert to int if possible, otherwise use 0 (or a large number to put at end)
+                try:
+                    series_num = int(series_number) if series_number is not None else 0
+                except (ValueError, TypeError):
+                    series_num = 0
+                series_list.append((series_num, series_uid, datasets))
+        
+        # Sort by SeriesNumber (ascending)
+        series_list.sort(key=lambda x: x[0])
+        
+        # Select series with lowest SeriesNumber (first in sorted list)
+        if not series_list:
             return None
-        study_uid, series_uid = pair
-        datasets = studies[study_uid][series_uid]
+        
+        _, series_uid, datasets = series_list[0]
+        
         if not datasets:
             return None
+        
+        # Return the first slice information
         return {
             'study_uid': study_uid,
             'series_uid': series_uid,
