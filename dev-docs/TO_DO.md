@@ -14,18 +14,14 @@
 - [ ] See if I can make executables smaller especially on Mac
 - [ ] Try to make code faster, especially initial load, loading files, fusion, but also anywhere else
 - [ ] make window map thumbnail in navigator interactive? so clicking on a square sets focus and makes it visible if not already
-- [ ] make show/hide left pane, right pane and toolbar an option from the view menu
-- [ ] sometimes when navigating slices an image seems to drift up (or the window is panning down)
 - [ ] Allow syncing slices when orientations not orthogonal (or maybe within 45 deg?) so that scrolling slices on one also causes the synced one to change slices accordingly - based on ImagePositionPatient
 - [ ] Show line for current slice location on different views (eg axial slice in one window show as line on a coronal view in another window) - use ImagePositionPatient and orientation
 - [ ] Integrate pylinac and other automated QC analysis tools, and consider writing our own
-- [ ] Make it possible to open files/folder without closing currently open ones, including with drag and drop onto running app
 - [ ] Differentiate between frame # and slice #?
 - [ ] When an ROI is selected in one subwindow and we click into another subwindow, the ROI disappears from the ROI list in the right pane but the ROI statistics are still there until the user does something else in the new window or goes back to the first one and unselects the ROI. Clicking into a different subwindow should automatically unselect any selected ROI (and the statistics in the right pane should be cleared)
 - [ ] See qi-assessment recommendations
 - [ ] Eventually add MPRs, oblique reconstructions
 - [ ] Add basic image processing for creating new DICOMs - applying kernels, smoothing, edge enhancing, sharpening, custom kernels (drawn or using matrix of numbers)
-** See below for some info on many of these **
 - [ ] Build a technical guide
 - [ ] Double check fusion
     - [ ] Code not very responsive on Parallels with 3D fusion
@@ -37,12 +33,38 @@
 - [ ] when loading PET CT study there is a ~10 second lag before the loading progress window pops up - what is happening then?
 - [ ] make default histogram plot and window smaller and allow resizing much smaller
 - [ ] make toolbar customizable
-- [ ] make it possible to window/level by holding W and dragging mouse or by holding middle mouse button and dragging or something
+- [ ] make it possible to window/level by holding W and dragging mouse or by holding middle or right mouse button and dragging or something
 - [ ] make it possible to zoom in/out with pinch on trackpad
 - [ ] Put same little colored dot on layout map thumbnails that is on series thumbnails in navigator?
 - [ ] Make highlight border for focused window match color of dot on navigator series thumbnail
   - [ ] and make color of highlight in layout thumbnail for focused window match
 - [ ] make the min/max window width/level based on the min/max pixel value (raw or rescaled) based on bit depth and rescaling equation?
+- [ ] also see to-dos on Unpushed Edits google sheet
+- [ ] Name - DICOM Viewer + ?
+- [ ] tighten "hitboxes" or whatever for annotations and ROIS - eg, for a large ellipse ROI, would be better if only the ellipse boundary (with some tolerance) was hitbox, not entire interior as well, so you could draw an ellipse inside an existing ellipse, for instance
+- Check target/filter tag on mammo overlay option
+- Make it easier to position distance measurements - easier to see ends, hide handles while dragging - magnify around end when dragging handle (or maybe if shift+click and drag handle)
+- Crosshair ROIs not disappearing or updating values when changing series by clicking in navigator - FIXED?
+- Add measure angle
+- Make magnifier show annotations/measurements?
+- Make default line thicknesses and font sizes for annotations a bit smaller
+- Check fusion more
+- integrate analysis (pylinac, etc)
+-  Klaus said he got an error about some file with gemini in the name on windows
+- overlay configuration not in right click context menu (at least linux)
+- See IMAIOS (ios) disclaimer as example
+- Check for any other hardcoded absolute paths including to resources like images or icons
+- Delete weird path/to/affected thing
+- Consider adding PACS-like capabilities - query server, build database etc
+- Reduce old backup files
+- Make versioned release
+- Announce on linked in, share with people
+- Allow contouring?
+- Add sort of auto detect ROI?
+- Allow 3D ROIs/structures/contours - drawn on multiple slices, shown and editable on different views (axial, sagittal, coronal, oblique)
+- Figure out license
+
+** See below for some info on many of these **
 
 ## More to consider
 - [ ] make right pane minimum width before collapsing 250 instead of 200?
