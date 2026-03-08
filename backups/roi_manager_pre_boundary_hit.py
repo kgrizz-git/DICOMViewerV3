@@ -23,7 +23,7 @@ import math
 from PySide6.QtWidgets import (QGraphicsEllipseItem, QGraphicsRectItem, QGraphicsItem, 
                                QGraphicsTextItem, QGraphicsSceneMouseEvent)
 from PySide6.QtCore import Qt, QRectF, QPointF
-from PySide6.QtGui import QPen, QColor, QFont, QTransform, QPainterPath, QPainterPathStroker
+from PySide6.QtGui import QPen, QColor, QFont, QTransform
 from typing import List, Optional, Tuple, Dict, Set, Callable
 import numpy as np
 from PIL import Image
@@ -71,21 +71,6 @@ class ROIGraphicsEllipseItem(QGraphicsEllipseItem):
                         # print(f"[DEBUG-ROI] Error in ROI movement callback from mouseMoveEvent: {e}")
                         pass
 
-    def shape(self) -> QPainterPath:
-        """Return shape for hit testing - ellipse boundary plus tolerance, not filled interior.
-
-        Overrides the default (filled ellipse) so that clicks inside the ellipse interior
-        do not register as hits on this item. Only the outline region (stroke + tolerance)
-        is hit-testable, allowing users to draw or interact with items inside a large ellipse.
-        """
-        path = QPainterPath()
-        path.addEllipse(self.rect())
-        tolerance = max(self.pen().widthF(), 1.0) + 5.0
-        pen = QPen(Qt.PenStyle.SolidLine)
-        pen.setWidthF(tolerance)
-        stroker = QPainterPathStroker(pen)
-        return stroker.createStroke(path)
-
 
 class ROIGraphicsRectItem(QGraphicsRectItem):
     """
@@ -128,21 +113,6 @@ class ROIGraphicsRectItem(QGraphicsRectItem):
                     except Exception as e:
                         # print(f"[DEBUG-ROI] Error in ROI movement callback from mouseMoveEvent: {e}")
                         pass
-
-    def shape(self) -> QPainterPath:
-        """Return shape for hit testing - rectangle boundary plus tolerance, not filled interior.
-
-        Overrides the default (filled rectangle) so that clicks inside the rectangle interior
-        do not register as hits on this item. Only the outline region (stroke + tolerance)
-        is hit-testable, allowing users to draw or interact with items inside a large rectangle.
-        """
-        path = QPainterPath()
-        path.addRect(self.rect())
-        tolerance = max(self.pen().widthF(), 1.0) + 5.0
-        pen = QPen(Qt.PenStyle.SolidLine)
-        pen.setWidthF(tolerance)
-        stroker = QPainterPathStroker(pen)
-        return stroker.createStroke(path)
 
 
 class DraggableStatisticsOverlay(QGraphicsTextItem):
