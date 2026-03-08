@@ -23,10 +23,24 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 - **Refactor (main.py)**: Customization and tag-preset export/import logic moved to `src/core/customization_handlers.py`. `_on_export_customizations`, `_on_import_customizations`, `_on_export_tag_presets`, and `_on_import_tag_presets` now delegate to a `CustomizationHandlers` helper; post-import apply logic remains in main via `_apply_imported_customizations` callback. Behavior unchanged.
 
 ### Fixed
+- **First series auto-loaded**: The series auto-displayed when opening a batch is chosen using the same logic as the series navigator: first study in navigator order (dict iteration), then series with lowest SeriesNumber in that study. So the auto-loaded series is always from the first study shown in the navigator; both additive and replace load paths use this logic.
+- **Toast**: Toast message now stays visible longer (default 5 s), uses a larger font (14px) and padding, and is positioned higher (100px from bottom) for better visibility.
+- **Fit-to-view on cancel/partial load**: When loading is cancelled but some files were already loaded, a deferred fit-to-view is now applied to the subwindow that received the loaded series so the image is correctly fitted after layout is stable.
+- **Fit-to-view for new series**: Additive load schedules a deferred fit-to-view on the target subwindow's viewer so fit is applied reliably for newly loaded series (including when the new series goes to a non-focused subwindow).
+- **Window/level wrong subwindow**: When a new series is added to a non-focused subwindow, the global window/level controls and metadata panel are no longer updated with the new series' values; only the subwindow that received the new series is updated, so the focused subwindow's W/L is not overwritten.
 - **Status bar**: Corrected typo "studyies" to "study" / "studies" in the final load status message. Status bar now shows only the current batch’s study/series/file counts (from `MergeResult`), so counts are accurate when loading is cancelled (partial load) or when duplicate files are skipped.
 - **Progress dialog on cancel**: When loading is cancelled before all files are loaded, the progress dialog and status bar now show the number of files actually loaded (e.g. 6) instead of the batch total (e.g. 11). Loader final progress uses `len(loaded_files)`; handler uses the callback’s current (actual) count for the "Loaded X file(s). Organizing..." message.
 - **Privacy + crosshair**: Toggling privacy after drawing a crosshair and then loading a different exam no longer raises `RuntimeError: Internal C++ object (DraggableCrosshairText) already deleted`. CrosshairItem.update_privacy_mode now catches RuntimeError when the Qt text item was already deleted; PrivacyController also catches RuntimeError when calling crosshair_manager.set_privacy_mode.
 - **Privacy + reload study**: Toggling privacy after loading a different study and then reloading the first study no longer redisplays stale series in non-focused windows. PrivacyController.refresh_overlays now only refreshes subwindows that have an entry in subwindow_data (i.e. have loaded data), so windows that were not updated when the other study was loaded are skipped.
+
+---
+
+## [0.1.1] - (not yet released)
+
+### Fixed
+- **Toast**: Longer visibility (5 s default), larger font (14px) and padding, position moved up (100px from bottom).
+- **Fit-to-view**: Deferred fit applied to target subwindow after additive load (including cancel-with-partial-load).
+- **Window/level**: New series in non-focused subwindow no longer overwrites global W/L controls or focused subwindow.
 
 ---
 
@@ -39,5 +53,6 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ### Notes
 - No official release has been made yet. Version 0.1.0 marks initial development; move to 1.0.0 when the public API is stable (see dev-docs/info/SEMANTIC_VERSIONING_GUIDE.md).
 
-[Unreleased]: https://github.com/kgrizz-git/DICOMViewerV3/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/kgrizz-git/DICOMViewerV3/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/kgrizz-git/DICOMViewerV3/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/kgrizz-git/DICOMViewerV3/releases/tag/v0.1.0

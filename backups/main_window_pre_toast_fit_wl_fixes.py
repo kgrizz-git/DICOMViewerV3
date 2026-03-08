@@ -389,14 +389,14 @@ class MainWindow(QMainWindow):
         self.pixel_info_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.statusBar().addPermanentWidget(self.pixel_info_label, stretch=1)
 
-    def show_toast_message(self, message: str, timeout_ms: int = 5000) -> None:
+    def show_toast_message(self, message: str, timeout_ms: int = 3000) -> None:
         """
         Show a temporary toast/banner message at the bottom-center of the window.
         Auto-dismisses after timeout_ms, then fades out over 300 ms.
 
         Args:
             message: Text to display.
-            timeout_ms: Time in milliseconds before starting fade-out (default 5000).
+            timeout_ms: Time in milliseconds before starting fade-out (default 3000).
         """
         if getattr(self, "_toast_timer", None) and self._toast_timer.isActive():
             self._toast_timer.stop()
@@ -404,18 +404,18 @@ class MainWindow(QMainWindow):
             self._toast_label.deleteLater()
         label = QLabel(message, self)
         label.setStyleSheet(
-            "background-color: rgba(0, 0, 0, 0.75); color: white; padding: 10px 16px; "
-            "border-radius: 6px; font-size: 14px;"
+            "background-color: rgba(0, 0, 0, 0.75); color: white; padding: 8px 12px; "
+            "border-radius: 6px; font-size: 12px;"
         )
         label.setWordWrap(True)
-        label.setMinimumWidth(240)
-        label.setMaximumWidth(480)
+        label.setMinimumWidth(200)
+        label.setMaximumWidth(400)
         label.adjustSize()
         effect = QGraphicsOpacityEffect(label)
         label.setGraphicsEffect(effect)
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         x = (self.width() - label.width()) // 2
-        y = self.height() - 100
+        y = self.height() - 60
         label.setGeometry(max(0, x), max(0, y), label.width(), label.height())
         label.show()
         label.raise_()

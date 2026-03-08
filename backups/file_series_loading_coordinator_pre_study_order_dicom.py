@@ -51,10 +51,9 @@ def _get_first_new_series_by_dicom(
 ) -> Optional[Tuple[str, str]]:
     """
     From the list of (study_uid, series_key) newly added in a batch, return the one
-    that is "first" using the same logic as the series navigator: first study in
-    navigator order (dict iteration of current_studies), then series with lowest
-    SeriesNumber in that study. So the auto-loaded series is always from the
-    first study shown in the navigator.
+    that is "first" by DICOM order: StudyDate, StudyTime, then SeriesNumber.
+    Ensures additive load auto-displays the same series as would be chosen by
+    load_first_slice (replace path).
 
     Args:
         new_series: List of (study_uid, series_key) from MergeResult.new_series.
@@ -65,28 +64,24 @@ def _get_first_new_series_by_dicom(
     """
     if not new_series or not current_studies:
         return None
-    new_series_by_study: Dict[str, List[str]] = {}
+    order_keys = []
     for study_uid, series_key in new_series:
-        new_series_by_study.setdefault(study_uid, []).append(series_key)
-    for study_uid in current_studies.keys():
-        if study_uid not in new_series_by_study:
+        datasets = current_studies.get(study_uid, {}).get(series_key, [])
+        if not datasets:
             continue
-        candidates = []
-        for series_key in new_series_by_study[study_uid]:
-            datasets = current_studies.get(study_uid, {}).get(series_key, [])
-            if not datasets:
-                continue
-            sn = getattr(datasets[0], 'SeriesNumber', None)
-            try:
-                sn = int(sn) if sn is not None else 0
-            except (ValueError, TypeError):
-                sn = 0
-            candidates.append((sn, series_key))
-        if not candidates:
-            continue
-        candidates.sort(key=lambda x: x[0])
-        return (study_uid, candidates[0][1])
-    return None
+        ds = datasets[0]
+        study_date = getattr(ds, 'StudyDate', None) or ''
+        study_time = getattr(ds, 'StudyTime', None) or ''
+        sn = getattr(ds, 'SeriesNumber', None)
+        try:
+            sn = int(sn) if sn is not None else 0
+        except (ValueError, TypeError):
+            sn = 0
+        order_keys.append(((str(study_date), str(study_time), sn), study_uid, series_key))
+    order_keys.sort(key=lambda x: x[0])
+    if not order_keys:
+        return None
+    return (order_keys[0][1], order_keys[0][2])
 
 
 class FileSeriesLoadingCoordinator:

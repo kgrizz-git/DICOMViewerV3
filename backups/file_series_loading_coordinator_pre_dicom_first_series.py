@@ -45,50 +45,6 @@ from utils.dicom_utils import get_composite_series_key
 from utils.debug_flags import DEBUG_LOADING, DEBUG_NAV
 
 
-def _get_first_new_series_by_dicom(
-    new_series: List[Tuple[str, str]],
-    current_studies: dict,
-) -> Optional[Tuple[str, str]]:
-    """
-    From the list of (study_uid, series_key) newly added in a batch, return the one
-    that is "first" using the same logic as the series navigator: first study in
-    navigator order (dict iteration of current_studies), then series with lowest
-    SeriesNumber in that study. So the auto-loaded series is always from the
-    first study shown in the navigator.
-
-    Args:
-        new_series: List of (study_uid, series_key) from MergeResult.new_series.
-        current_studies: Organized studies dict (study_uid -> series_key -> [datasets]).
-
-    Returns:
-        (study_uid, series_key) or None if new_series is empty or no datasets.
-    """
-    if not new_series or not current_studies:
-        return None
-    new_series_by_study: Dict[str, List[str]] = {}
-    for study_uid, series_key in new_series:
-        new_series_by_study.setdefault(study_uid, []).append(series_key)
-    for study_uid in current_studies.keys():
-        if study_uid not in new_series_by_study:
-            continue
-        candidates = []
-        for series_key in new_series_by_study[study_uid]:
-            datasets = current_studies.get(study_uid, {}).get(series_key, [])
-            if not datasets:
-                continue
-            sn = getattr(datasets[0], 'SeriesNumber', None)
-            try:
-                sn = int(sn) if sn is not None else 0
-            except (ValueError, TypeError):
-                sn = 0
-            candidates.append((sn, series_key))
-        if not candidates:
-            continue
-        candidates.sort(key=lambda x: x[0])
-        return (study_uid, candidates[0][1])
-    return None
-
-
 class FileSeriesLoadingCoordinator:
     """
     Coordinates file/series loading and first-slice display.
@@ -383,10 +339,9 @@ class FileSeriesLoadingCoordinator:
                 target_idx = idx
                 break
 
-        # Auto-assign first new series (by DICOM: StudyDate, StudyTime, SeriesNumber) to the first empty subwindow
-        first_pair = _get_first_new_series_by_dicom(merge_result.new_series, app.current_studies)
-        if target_idx is not None and first_pair is not None:
-            new_study_uid, new_series_key = first_pair
+        # Auto-assign first new series to the first empty subwindow (if any)
+        if target_idx is not None and merge_result.new_series:
+            new_study_uid, new_series_key = merge_result.new_series[0]
             new_datasets = app.current_studies.get(new_study_uid, {}).get(new_series_key, [])
 
             if new_datasets:
