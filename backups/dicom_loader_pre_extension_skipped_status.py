@@ -107,20 +107,11 @@ class DICOMLoader:
         self._compression_error_files: set = set()  # Track files that have shown compression errors
         self._cancelled: bool = False  # Flag to track cancellation request
         self.attempted_file_count: int = 0  # Set at start of load_files/load_directory for status bar
-        self.extension_skipped_count: int = 0  # Files skipped by extension (handler or directory scan)
 
     def get_attempted_file_count(self) -> int:
         """Return the number of files attempted in the last load (for status bar 'X files processed')."""
         return getattr(self, "attempted_file_count", 0)
-
-    def set_extension_skipped_count(self, count: int) -> None:
-        """Set the number of files skipped by extension before load (handler sets this when filtering file list)."""
-        self.extension_skipped_count = count
-
-    def get_extension_skipped_count(self) -> int:
-        """Return the number of files skipped by extension in the last load (directory scan or handler filter)."""
-        return getattr(self, "extension_skipped_count", 0)
-
+    
     def validate_dicom_file(self, file_path: str) -> tuple[bool, Optional[str]]:
         """
         Validate DICOM file before loading pixel data.
@@ -476,7 +467,6 @@ class DICOMLoader:
         
         self.loaded_files = []
         self.failed_files = []
-        # extension_skipped_count is left as set by handler when it filtered the file list (if any)
 
         total_files = len(file_paths)
         self.attempted_file_count = total_files
@@ -659,7 +649,6 @@ class DICOMLoader:
 
         total_files = len(file_paths)
         self.attempted_file_count = total_files
-        self.extension_skipped_count = len(candidates) - len(file_paths)
 
         last_update_time = time.time()
         update_interval = 0.05  # Update every 50ms

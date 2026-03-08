@@ -25,7 +25,6 @@ from PySide6.QtCore import Qt, QRectF, Signal, QPointF, QTimer, QEvent
 from PySide6.QtGui import (QPixmap, QImage, QWheelEvent, QKeyEvent, QMouseEvent,
                           QPainter, QColor, QTransform, QDragEnterEvent, QDropEvent)
 from PIL import Image
-from utils.debug_flags import DEBUG_NAV
 import numpy as np
 import os
 import time
@@ -2114,12 +2113,10 @@ class ImageViewer(QGraphicsView):
             event.accept()
         elif event.key() == Qt.Key.Key_Left:
             # Left arrow: previous series
-            if DEBUG_NAV:
-                timestamp = time.time()
-                focused_widget = QApplication.focusWidget()
-                focus_info = f"focused={focused_widget.objectName() if focused_widget else 'None'}"
-                print(f"[DEBUG-NAV] [{timestamp:.6f}] ImageViewer.keyPressEvent: LEFT arrow, {focus_info}")
+            timestamp = time.time()
             focused_widget = QApplication.focusWidget()
+            focus_info = f"focused={focused_widget.objectName() if focused_widget else 'None'}"
+            print(f"[DEBUG-NAV] [{timestamp:.6f}] ImageViewer.keyPressEvent: LEFT arrow, {focus_info}")
             # Only handle if series navigator doesn't have focus
             if focused_widget:
                 # Check if focused widget is the series navigator or one of its children
@@ -2127,24 +2124,18 @@ class ImageViewer(QGraphicsView):
                 while widget:
                     if widget.objectName() == "series_navigator" or widget.objectName() == "series_navigator_scroll_area" or widget.objectName() == "series_navigator_container":
                         # Series navigator has focus, let it handle the event
-                        if DEBUG_NAV:
-                            timestamp = time.time()
-                            print(f"[DEBUG-NAV] [{timestamp:.6f}] ImageViewer: Series navigator has focus, skipping emit")
+                        print(f"[DEBUG-NAV] [{timestamp:.6f}] ImageViewer: Series navigator has focus, skipping emit")
                         return
                     widget = widget.parent()
-            if DEBUG_NAV:
-                timestamp = time.time()
-                print(f"[DEBUG-NAV] [{timestamp:.6f}] ImageViewer: Emitting series_navigation_requested(-1)")
+            print(f"[DEBUG-NAV] [{timestamp:.6f}] ImageViewer: Emitting series_navigation_requested(-1)")
             self.series_navigation_requested.emit(-1)
             event.accept()
         elif event.key() == Qt.Key.Key_Right:
             # Right arrow: next series
-            if DEBUG_NAV:
-                timestamp = time.time()
-                focused_widget = QApplication.focusWidget()
-                focus_info = f"focused={focused_widget.objectName() if focused_widget else 'None'}"
-                print(f"[DEBUG-NAV] [{timestamp:.6f}] ImageViewer.keyPressEvent: RIGHT arrow, {focus_info}")
+            timestamp = time.time()
             focused_widget = QApplication.focusWidget()
+            focus_info = f"focused={focused_widget.objectName() if focused_widget else 'None'}"
+            print(f"[DEBUG-NAV] [{timestamp:.6f}] ImageViewer.keyPressEvent: RIGHT arrow, {focus_info}")
             # Only handle if series navigator doesn't have focus
             if focused_widget:
                 # Check if focused widget is the series navigator or one of its children
@@ -2152,14 +2143,10 @@ class ImageViewer(QGraphicsView):
                 while widget:
                     if widget.objectName() == "series_navigator" or widget.objectName() == "series_navigator_scroll_area" or widget.objectName() == "series_navigator_container":
                         # Series navigator has focus, let it handle the event
-                        if DEBUG_NAV:
-                            timestamp = time.time()
-                            print(f"[DEBUG-NAV] [{timestamp:.6f}] ImageViewer: Series navigator has focus, skipping emit")
+                        print(f"[DEBUG-NAV] [{timestamp:.6f}] ImageViewer: Series navigator has focus, skipping emit")
                         return
                     widget = widget.parent()
-            if DEBUG_NAV:
-                timestamp = time.time()
-                print(f"[DEBUG-NAV] [{timestamp:.6f}] ImageViewer: Emitting series_navigation_requested(1)")
+            print(f"[DEBUG-NAV] [{timestamp:.6f}] ImageViewer: Emitting series_navigation_requested(1)")
             self.series_navigation_requested.emit(1)
             event.accept()
         else:
