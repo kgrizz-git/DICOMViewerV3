@@ -34,10 +34,8 @@
     - [ ] Check fusion with some other studies
     - [ ] Improve Window/Leveling preset/auto in fusion mode
 - [ ] make it possible to move the layout map thumbnail when opened from context menu
-- [ ] add a "quick window/level" context menu item/shortcut that opens a dialog where user can type window, hit tab or click over, and then type a level, then hit enter or click OK
 - [ ] when loading PET CT study there is a ~10 second lag before the loading progress window pops up - what is happening then?
 - [ ] make default histogram plot and window smaller and allow resizing much smaller
-- [ ] make series number labels like "S01" in navigator a bit smaller
 - [ ] make toolbar customizable
 - [ ] make it possible to window/level by holding W and dragging mouse or by holding middle mouse button and dragging or something
 - [ ] make it possible to zoom in/out with pinch on trackpad
@@ -45,7 +43,6 @@
 - [ ] Make highlight border for focused window match color of dot on navigator series thumbnail
   - [ ] and make color of highlight in layout thumbnail for focused window match
 - [ ] make the min/max window width/level based on the min/max pixel value (raw or rescaled) based on bit depth and rescaling equation?
-- [ ] default window/level sometimes not being applied correctly when switching between series from different studies (may have to do with rescale)
 
 ## More to consider
 - [ ] make right pane minimum width before collapsing 250 instead of 200?
