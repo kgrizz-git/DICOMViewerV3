@@ -27,3 +27,8 @@ DEBUG_CROSSHAIR: bool = False
 # Enables series-navigation key/request/lock tracing.
 # Affects: series_navigator, image_viewer, file_series_loading_coordinator.
 DEBUG_NAV: bool = False
+
+# Enables window/level and rescale tracing when switching series (e.g. cross-study).
+# Use when investigating default WL not applied correctly when switching between series from different studies.
+# Affects: slice_display_manager.
+DEBUG_WL: bool = False

@@ -45,6 +45,7 @@ from gui.dialogs.settings_dialog import SettingsDialog
 from gui.dialogs.tag_viewer_dialog import TagViewerDialog
 from gui.dialogs.overlay_config_dialog import OverlayConfigDialog
 from gui.dialogs.annotation_options_dialog import AnnotationOptionsDialog
+from gui.dialogs.quick_window_level_dialog import QuickWindowLevelDialog
 from gui.image_viewer import ImageViewer
 from gui.multi_window_layout import MultiWindowLayout
 from gui.sub_window_container import SubWindowContainer
@@ -807,7 +808,8 @@ class DICOMViewerApp(QObject):
             delete_text_annotation_callback=None,  # Will be set when coordinators are available
             delete_arrow_annotation_callback=None,  # Will be set when coordinators are available
             change_layout_callback=self.main_window.set_layout_mode,
-            is_focus_ok_for_reset_view=lambda: self._is_widget_allowed_for_layout_shortcuts(QApplication.focusWidget())
+            is_focus_ok_for_reset_view=lambda: self._is_widget_allowed_for_layout_shortcuts(QApplication.focusWidget()),
+            open_quick_window_level_callback=self._open_quick_window_level,
         )
     
     def _clear_data(self) -> None:
@@ -1927,6 +1929,29 @@ class DICOMViewerApp(QObject):
     def _open_annotation_options(self) -> None:
         """Handle annotation options dialog request."""
         self.dialog_coordinator.open_annotation_options()
+
+    def _open_quick_window_level(self) -> None:
+        """Open Quick Window/Level dialog for the focused subwindow. Apply entered center/width via view_state_manager.handle_window_changed."""
+        if not self.view_state_manager:
+            return
+        initial_center = self.view_state_manager.current_window_center
+        initial_width = self.view_state_manager.current_window_width
+        center_range = self.window_level_controls.center_range
+        width_range = self.window_level_controls.width_range
+        unit = getattr(self.view_state_manager, "rescale_type", None) or None
+        apply_callback = self.view_state_manager.handle_window_changed
+        dlg = QuickWindowLevelDialog(
+            parent=self.main_window,
+            initial_center=initial_center,
+            initial_width=initial_width,
+            center_range=center_range,
+            width_range=width_range,
+            apply_callback=apply_callback,
+            unit=unit,
+        )
+        dlg.raise_()
+        dlg.activateWindow()
+        dlg.exec()
     
     def _open_quick_start_guide(self) -> None:
         """Handle Quick Start Guide dialog request."""

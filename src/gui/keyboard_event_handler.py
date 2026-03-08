@@ -61,7 +61,8 @@ class KeyboardEventHandler:
         delete_text_annotation_callback: Optional[Callable[[object], None]] = None,
         delete_arrow_annotation_callback: Optional[Callable[[object], None]] = None,
         change_layout_callback: Optional[Callable[[str], None]] = None,
-        is_focus_ok_for_reset_view: Optional[Callable[[], bool]] = None
+        is_focus_ok_for_reset_view: Optional[Callable[[], bool]] = None,
+        open_quick_window_level_callback: Optional[Callable[[], None]] = None
     ):
         """
         Initialize the keyboard event handler.
@@ -90,6 +91,7 @@ class KeyboardEventHandler:
             get_privacy_view_state_callback: Optional callback to get current privacy view state (returns bool)
             change_layout_callback: Optional callback to change layout mode (takes layout_mode string: "1x1", "1x2", "2x1", or "2x2")
             is_focus_ok_for_reset_view: Optional callback returning True if focus is in a widget where V should trigger Reset View (e.g. image viewer, navigator)
+            open_quick_window_level_callback: Optional callback to open Quick Window/Level dialog for the focused subwindow (shortcut Q)
         """
         self.roi_manager = roi_manager
         self.measurement_tool = measurement_tool
@@ -116,6 +118,7 @@ class KeyboardEventHandler:
         self.delete_arrow_annotation_callback = delete_arrow_annotation_callback
         self.change_layout_callback = change_layout_callback
         self.is_focus_ok_for_reset_view = is_focus_ok_for_reset_view
+        self.open_quick_window_level_callback = open_quick_window_level_callback
     
     def handle_key_event(self, event: QKeyEvent) -> bool:
         """
@@ -288,6 +291,15 @@ class KeyboardEventHandler:
             # so that typing "V" in text annotations still inserts the character
             if self.reset_view_callback and self.is_focus_ok_for_reset_view and self.is_focus_ok_for_reset_view():
                 self.reset_view_callback()
+                return True
+            return False
+        
+        # Q key for Quick Window/Level dialog
+        elif event.key() == Qt.Key.Key_Q:
+            if event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier):
+                return False  # Let Qt handle Ctrl+Q / Cmd+Q
+            if self.open_quick_window_level_callback and self.is_focus_ok_for_reset_view and self.is_focus_ok_for_reset_view():
+                self.open_quick_window_level_callback()
                 return True
             return False
         

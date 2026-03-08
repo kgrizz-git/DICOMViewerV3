@@ -501,6 +501,10 @@ class SubwindowLifecycleController:
             except (TypeError, RuntimeError):
                 pass
             try:
+                app.image_viewer.quick_window_level_requested.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+            try:
                 app.image_viewer.projection_enabled_changed.disconnect()
                 app.image_viewer.projection_type_changed.disconnect()
                 app.image_viewer.projection_slice_count_changed.disconnect()
@@ -693,6 +697,7 @@ class SubwindowLifecycleController:
         app.window_level_controls.window_changed.connect(app.view_state_manager.handle_window_changed)
         app.window_level_controls.window_changed.connect(app._update_histogram_for_focused_subwindow)
         app.image_viewer.window_level_preset_selected.connect(app._on_window_level_preset_selected)
+        app.image_viewer.quick_window_level_requested.connect(app._open_quick_window_level)
         app.intensity_projection_controls_widget.enabled_changed.connect(app._on_projection_enabled_changed)
         app.intensity_projection_controls_widget.projection_type_changed.connect(app._on_projection_type_changed)
         app.intensity_projection_controls_widget.slice_count_changed.connect(app._on_projection_slice_count_changed)

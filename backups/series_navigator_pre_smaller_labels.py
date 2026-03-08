@@ -405,7 +405,7 @@ class SeriesThumbnail(QFrame):
         painter.setBrush(QColor(0, 0, 0, 180))  # Semi-transparent black background
         font = QFont()
         font.setBold(True)
-        font.setPointSize(9)
+        font.setPointSize(12)
         painter.setFont(font)
         
         series_text = f"S{self.series_number}"

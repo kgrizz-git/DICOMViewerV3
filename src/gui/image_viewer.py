@@ -73,6 +73,7 @@ class ImageViewer(QGraphicsView):
     cine_stop_requested = Signal()  # Emitted when cine stop is requested from context menu
     cine_loop_toggled = Signal(bool)  # Emitted when cine loop is toggled from context menu (True = enabled)
     histogram_requested = Signal()  # Emitted when histogram dialog is requested from context menu
+    quick_window_level_requested = Signal()  # Emitted when Quick Window/Level dialog is requested (context menu or shortcut Q)
     export_roi_statistics_requested = Signal()  # Emitted when Export ROI Statistics is requested from context menu
     measurement_started = Signal(QPointF)  # Emitted when measurement starts (start position)
     measurement_updated = Signal(QPointF)  # Emitted when measurement is updated (current position)
@@ -1853,10 +1854,14 @@ class ImageViewer(QGraphicsView):
                                 invert_action.triggered.connect(self.invert_image)
                                 
                                 context_menu.addSeparator()
-                            # else:
-                            #     print(f"[DEBUG-WL-PRESETS] ImageViewer context menu: No presets to show (presets={presets}, len={len(presets) if presets else 0})")
+                        # else:
+                        #     print(f"[DEBUG-WL-PRESETS] ImageViewer context menu: No presets to show (presets={presets}, len={len(presets) if presets else 0})")
                         # else:
                         #     print(f"[DEBUG-WL-PRESETS] ImageViewer context menu: Callback missing or not set (hasattr={hasattr(self, 'get_window_level_presets_callback')}, callback={getattr(self, 'get_window_level_presets_callback', None)})")
+                        
+                        # Quick Window/Level (Q) - type center, tab to width, Enter or OK to apply
+                        quick_wl_action = context_menu.addAction("Quick Window/Level (Q)")
+                        quick_wl_action.triggered.connect(self.quick_window_level_requested.emit)
                         
                         # Cine playback actions (only if enabled)
                         if self.cine_controls_enabled:
