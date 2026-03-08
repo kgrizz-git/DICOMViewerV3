@@ -3084,12 +3084,8 @@ class DICOMViewerApp(QObject):
             # User cancelled, exit application
             return 0
         
-        # Show window maximized (full-screen) and bring it to the foreground.
-        # activateWindow() + raise_() ensure the window appears on top of other
-        # open applications regardless of how the process was launched.
+        # Show window maximized (full-screen)
         self.main_window.showMaximized()
-        self.main_window.activateWindow()
-        self.main_window.raise_()
         
         # Set keyboard focus after window is shown
         # Use QTimer to ensure window is fully visible before setting focus
