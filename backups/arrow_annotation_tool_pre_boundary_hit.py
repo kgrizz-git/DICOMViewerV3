@@ -17,7 +17,7 @@ Requirements:
 
 from PySide6.QtWidgets import QGraphicsItemGroup, QGraphicsLineItem, QGraphicsPathItem, QGraphicsItem, QGraphicsEllipseItem, QGraphicsSceneMouseEvent
 from PySide6.QtCore import Qt, QPointF, QLineF, QRectF
-from PySide6.QtGui import QPen, QColor, QBrush, QPainterPath, QPainterPathStroker
+from PySide6.QtGui import QPen, QColor, QBrush, QPainterPath
 from typing import List, Optional, Tuple, Dict
 import math
 from utils.config_manager import ConfigManager
@@ -335,45 +335,6 @@ class ArrowAnnotationItem(QGraphicsItemGroup):
         # Clear drag flag
         self._drag_in_progress = False
         super().mouseReleaseEvent(event)
-
-    def shape(self) -> QPainterPath:
-        """Return shape for hit testing - stroked shaft line plus arrowhead tip area.
-
-        Overrides the default group bounding rect so that only the visible arrow
-        (shaft line and arrowhead region) is hit-testable, not the entire bounding
-        rectangle of the group. This prevents the invisible interior of the bounding
-        box from capturing clicks.
-        """
-        # --- Shaft line (in group-local coords; group origin = start_point) ---
-        line = self.line_item.line()
-        shaft_path = QPainterPath()
-        shaft_path.moveTo(line.p1())
-        shaft_path.lineTo(line.p2())
-
-        tolerance = 6.0
-        pen = QPen(Qt.PenStyle.SolidLine)
-        pen.setWidthF(tolerance)
-        stroker = QPainterPathStroker(pen)
-        result = stroker.createStroke(shaft_path)
-
-        # --- Arrowhead tip region ---
-        # ArrowHeadItem uses ItemIgnoresTransformations (viewport-fixed size), so its
-        # scene rect doesn't transform with the view. We approximate the tip with a
-        # small fixed rect in group-local coords centered on the arrowhead position
-        # (which equals relative_end = end_point - start_point).
-        relative_end = self.end_point - self.start_point
-        tip_half = tolerance
-        tip_rect = QRectF(
-            relative_end.x() - tip_half,
-            relative_end.y() - tip_half,
-            tip_half * 2,
-            tip_half * 2,
-        )
-        tip_path = QPainterPath()
-        tip_path.addRect(tip_rect)
-        result = result.united(tip_path)
-
-        return result
 
 
 class ArrowAnnotationTool:
