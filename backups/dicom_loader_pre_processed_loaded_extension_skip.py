@@ -32,7 +32,7 @@ import time
 import gc
 import sys
 from pathlib import Path
-from typing import List, Tuple, Optional, Callable, Union
+from typing import List, Tuple, Optional, Callable
 import pydicom
 from pydicom.errors import InvalidDicomError
 from PySide6.QtWidgets import QApplication
@@ -46,47 +46,20 @@ DEFAULT_DEFER_SIZE = 262144000  # 250 MB in bytes
 _SKIP_BASENAMES = frozenset({".ds_store"})  # macOS folder metadata (case-insensitive match)
 _SKIP_BASENAME_PREFIX = "~$"  # Office/temp lock files (e.g. ~$document.docx)
 
-# Extensions to skip (never attempt as DICOM). Lowercase. DICOM often uses .dcm or no extension.
-_SKIP_EXTENSIONS = frozenset({
-    "pdf", "png", "jpg", "jpeg", "mp3", "m4a", "epub", "txt", "doc", "docx", "xls", "xlsx",
-    "ppt", "pptx", "rtf", "py", "md", "csv", "json", "xml", "html", "htm", "zip", "exe", "dll",
-    "bat", "sh", "js", "ts", "jsx", "tsx", "vb", "java", "c", "cpp", "h", "hpp", "rs", "go",
-    "swift", "kt", "rb", "php", "mov", "avi", "mp4", "wav", "wmv", "gif", "bmp", "tiff", "tif",
-    "ico", "webp", "svg",
-})
 
-
-def _should_skip_path(path: Union[str, Path]) -> bool:
+def _should_skip_file_for_dicom(path: Path) -> bool:
     """
-    Return True if this path should not be tried as DICOM (system/temp files or known non-DICOM extensions).
+    Return True if this path should not be tried as DICOM when loading a folder.
+    Excludes system and temporary files (e.g. .DS_Store, ~$*.docx).
     """
-    p = Path(path) if isinstance(path, str) else path
-    name = p.name
+    name = path.name
     if not name:
         return True
     if name.lower() in _SKIP_BASENAMES:
         return True
     if name.startswith(_SKIP_BASENAME_PREFIX):
         return True
-    ext = p.suffix
-    if ext and ext.lstrip(".").lower() in _SKIP_EXTENSIONS:
-        return True
     return False
-
-
-def _should_skip_file_for_dicom(path: Path) -> bool:
-    """
-    Return True if this path should not be tried as DICOM when loading a folder.
-    Excludes system/temp files and known non-DICOM extensions.
-    """
-    return _should_skip_path(path)
-
-
-def should_skip_path_for_dicom(path: Union[str, Path]) -> bool:
-    """
-    Public API: return True if this path should be skipped for DICOM loading (handler uses this to filter file lists).
-    """
-    return _should_skip_path(path)
 
 
 class DICOMLoader:
@@ -106,21 +79,7 @@ class DICOMLoader:
         self.failed_files: List[Tuple[str, str]] = []  # (path, error_message)
         self._compression_error_files: set = set()  # Track files that have shown compression errors
         self._cancelled: bool = False  # Flag to track cancellation request
-        self.attempted_file_count: int = 0  # Set at start of load_files/load_directory for status bar
-        self.extension_skipped_count: int = 0  # Files skipped by extension (handler or directory scan)
-
-    def get_attempted_file_count(self) -> int:
-        """Return the number of files attempted in the last load (for status bar 'X files processed')."""
-        return getattr(self, "attempted_file_count", 0)
-
-    def set_extension_skipped_count(self, count: int) -> None:
-        """Set the number of files skipped by extension before load (handler sets this when filtering file list)."""
-        self.extension_skipped_count = count
-
-    def get_extension_skipped_count(self) -> int:
-        """Return the number of files skipped by extension in the last load (directory scan or handler filter)."""
-        return getattr(self, "extension_skipped_count", 0)
-
+    
     def validate_dicom_file(self, file_path: str) -> tuple[bool, Optional[str]]:
         """
         Validate DICOM file before loading pixel data.
@@ -476,25 +435,22 @@ class DICOMLoader:
         
         self.loaded_files = []
         self.failed_files = []
-        # extension_skipped_count is left as set by handler when it filtered the file list (if any)
-
+        
         total_files = len(file_paths)
-        self.attempted_file_count = total_files
-
         last_update_time = time.time()
         update_interval = 0.05  # Update every 50ms
-
+        
         # Debugging: Track loading performance
         load_start_time = time.time()
         slow_files = []  # Track files that take > 0.5 seconds
         file_times = []  # Track all file load times
         gc_times = []  # Track GC overhead
-
+        
         # print(f"[LOAD DEBUG] Starting load of {total_files} files (defer_size={defer_size/1024/1024:.1f}MB)")
-
+        
         # Reset cancellation flag at start of loading
         self._cancelled = False
-
+        
         for idx, file_path in enumerate(file_paths):
             # Check for cancellation at start of each iteration
             if self._cancelled:
@@ -656,11 +612,8 @@ class DICOMLoader:
         file_paths = [str(p) for p in candidates if not _should_skip_file_for_dicom(p)]
         scan_time = time.time() - scan_start
         # print(f"[LOAD DEBUG] Scanned directory in {scan_time:.2f}s, found {len(file_paths)} files")
-
+        
         total_files = len(file_paths)
-        self.attempted_file_count = total_files
-        self.extension_skipped_count = len(candidates) - len(file_paths)
-
         last_update_time = time.time()
         update_interval = 0.05  # Update every 50ms
         

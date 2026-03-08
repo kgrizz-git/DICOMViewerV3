@@ -38,13 +38,16 @@
 - [ ] make toolbar customizable
 - [ ] make it possible to window/level by holding W and dragging mouse or by holding middle mouse button and dragging or something
 - [ ] make it possible to zoom in/out with pinch on trackpad
-- [ ] Fix typo in status bar after loading: "studyies"
 - [ ] Put same little colored dot on layout map thumbnails that is on series thumbnails in navigator?
 - [ ] Make highlight border for focused window match color of dot on navigator series thumbnail
   - [ ] and make color of highlight in layout thumbnail for focused window match
-- [ ] check status bar accuracy when adding 2nd+
-- [ ] make sure status bar reflects actual number of files/series/studies loaded when loading is canceled or when duplicate files are attempted to be loaded (number of files actually loaded into the view should be accurate and only series/studies from loaded files should be counted)
+- [ ] Fix typo in status bar after loading: "studyies" should be "studies" when plural, "study" for single study is correct
+- [ ] make sure status bar reflects actual number of files/series/studies loaded when loading is canceled or when duplicate files are attempted to be loaded (number of files actually loaded into the view should be accurate and only series/studies from the most recent "batch" of actually loaded files should be counted)
 - [ ] when loading is canceled but some files were loaded before canceling, is fit to view being applied to the loaded series?
+- [ ] make code skip over trying to load files with irrelevant extensions (pdf, png, jpg, jpeg, mp3, m4a, epub, txt, doc, docx, xls, xlsx, ppt, pptx, rtf, py, md... others suggested?)
+- [ ] add the update about files already being loaded and so being skipped to the status bar (after the status bar text already being displayed) as well as the toast - also make the toast stay visible longer and position it in the middle of the screen if possible
+- [ ] make the min/max window width/level based on the min/max pixel value (raw or rescaled) based on bit depth and rescaling equation?
+- [ ] it seems we are not always applying fit to view on newly loaded series, and if a series was already loaded and a new one is added, the window/level for the new one is being applied to the already loaded one in window 1
 
 
 

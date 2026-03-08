@@ -155,20 +155,18 @@ class FileOperationsHandler:
         num_processed: Optional[int] = None,
         non_dicom_count: int = 0,
         duplicate_count: int = 0,
-        extension_skipped_count: int = 0,
     ) -> str:
         """
-        Format final status message with loaded counts and optional skipped breakdown.
+        Format final status message with processed/loaded counts and optional skipped breakdown.
 
         Args:
             num_studies: Number of studies in the batch
             num_series: Number of series in the batch
             num_files: Number of files loaded in the batch
             source_name: Name of source (folder or file)
-            num_processed: Unused; kept for call-site compatibility
-            non_dicom_count: Number of files that failed to load (attempted but not DICOM or errors)
+            num_processed: Number of files attempted (for "X files processed"); if None, omit that prefix
+            non_dicom_count: Number of files that failed to load (non-DICOM or errors)
             duplicate_count: Number of duplicate files not added
-            extension_skipped_count: Number of files skipped by extension (not attempted)
 
         Returns:
             Formatted status message
@@ -177,16 +175,22 @@ class FileOperationsHandler:
         series_text = f"{num_series} series"
         file_text = f"{num_files} file" + ("s" if num_files != 1 else "")
 
-        main = f"{study_text}, {series_text}, {file_text} loaded from {source_name}"
+        if num_processed is not None and num_processed >= 0:
+            main = f"{num_processed} files processed - {study_text}, {series_text}, {file_text} loaded from {source_name}"
+        else:
+            main = f"{study_text}, {series_text}, {file_text} loaded from {source_name}"
 
-        total_non_dicom = extension_skipped_count + non_dicom_count
-        if total_non_dicom > 0 or duplicate_count > 0:
-            parts = []
-            if total_non_dicom > 0:
-                parts.append(f"{total_non_dicom} non-DICOM")
-            if duplicate_count > 0:
-                parts.append(f"{duplicate_count} duplicate" + ("s" if duplicate_count != 1 else ""))
-            main += " (" + ", ".join(parts) + " skipped)"
+        suffix_parts = []
+        if non_dicom_count > 0:
+            suffix_parts.append(
+                f"{non_dicom_count} non-DICOM file" + ("s" if non_dicom_count != 1 else "") + " not loaded"
+            )
+        if duplicate_count > 0:
+            suffix_parts.append(
+                f"{duplicate_count} duplicate file" + ("s" if duplicate_count != 1 else "") + " not loaded"
+            )
+        if suffix_parts:
+            main += " (" + " and ".join(suffix_parts) + ")"
 
         return main
 
@@ -222,9 +226,7 @@ class FileOperationsHandler:
             return None, None
 
         # Skip known non-DICOM extensions so they are not attempted or counted as failed
-        original_count = len(file_paths)
         file_paths = [p for p in file_paths if not should_skip_path_for_dicom(p)]
-        self.dicom_loader.set_extension_skipped_count(max(0, original_count - len(file_paths)))
         if not file_paths:
             self.file_dialog.show_warning(
                 self.main_window,
@@ -423,8 +425,7 @@ class FileOperationsHandler:
             
             # Format and display final status (batch-only counts + processed/non-DICOM/duplicate)
             num_studies, num_series, num_files = self._batch_counts_from_merge_result(merge_result)
-            extension_skipped = self.dicom_loader.get_extension_skipped_count()
-            num_processed = self.dicom_loader.get_attempted_file_count() + extension_skipped
+            num_processed = self.dicom_loader.get_attempted_file_count()
             non_dicom_count = len(self.dicom_loader.get_failed_files())
             duplicate_count = merge_result.skipped_file_count
             final_status = self._format_final_status(
@@ -432,7 +433,6 @@ class FileOperationsHandler:
                 num_processed=num_processed,
                 non_dicom_count=non_dicom_count,
                 duplicate_count=duplicate_count,
-                extension_skipped_count=extension_skipped,
             )
 
             # Check for compression errors and append guidance if needed
@@ -687,8 +687,7 @@ class FileOperationsHandler:
             
             # Format and display final status (batch-only counts + processed/non-DICOM/duplicate)
             num_studies, num_series, num_files = self._batch_counts_from_merge_result(merge_result)
-            extension_skipped = self.dicom_loader.get_extension_skipped_count()
-            num_processed = self.dicom_loader.get_attempted_file_count() + extension_skipped
+            num_processed = self.dicom_loader.get_attempted_file_count()
             non_dicom_count = len(self.dicom_loader.get_failed_files())
             duplicate_count = merge_result.skipped_file_count
             final_status = self._format_final_status(
@@ -696,7 +695,6 @@ class FileOperationsHandler:
                 num_processed=num_processed,
                 non_dicom_count=non_dicom_count,
                 duplicate_count=duplicate_count,
-                extension_skipped_count=extension_skipped,
             )
             self.update_status_callback(final_status)
             QApplication.processEvents()
@@ -792,8 +790,7 @@ class FileOperationsHandler:
                 # Reset cancellation flags
                 self._loading_manager.reset()
                 self.dicom_loader.reset_cancellation()
-                self.dicom_loader.set_extension_skipped_count(0)  # Single file, no extension filter applied
-
+                
                 # Create progress dialog
                 progress_dialog = self._loading_manager.create_progress_dialog(self.main_window,
                     1,
@@ -921,8 +918,7 @@ class FileOperationsHandler:
                 
                 # Format and display final status (batch-only counts + processed/non-DICOM/duplicate)
                 num_studies, num_series, num_files = self._batch_counts_from_merge_result(merge_result)
-                extension_skipped = self.dicom_loader.get_extension_skipped_count()
-                num_processed = self.dicom_loader.get_attempted_file_count() + extension_skipped
+                num_processed = self.dicom_loader.get_attempted_file_count()
                 non_dicom_count = len(self.dicom_loader.get_failed_files())
                 duplicate_count = merge_result.skipped_file_count
                 final_status = self._format_final_status(
@@ -930,7 +926,6 @@ class FileOperationsHandler:
                     num_processed=num_processed,
                     non_dicom_count=non_dicom_count,
                     duplicate_count=duplicate_count,
-                    extension_skipped_count=extension_skipped,
                 )
 
                 # Check for compression errors and append guidance if needed
@@ -1132,8 +1127,7 @@ class FileOperationsHandler:
                 
                 # Format and display final status (batch-only counts + processed/non-DICOM/duplicate)
                 num_studies, num_series, num_files = self._batch_counts_from_merge_result(merge_result)
-                extension_skipped = self.dicom_loader.get_extension_skipped_count()
-                num_processed = self.dicom_loader.get_attempted_file_count() + extension_skipped
+                num_processed = self.dicom_loader.get_attempted_file_count()
                 non_dicom_count = len(self.dicom_loader.get_failed_files())
                 duplicate_count = merge_result.skipped_file_count
                 final_status = self._format_final_status(
@@ -1141,7 +1135,6 @@ class FileOperationsHandler:
                     num_processed=num_processed,
                     non_dicom_count=non_dicom_count,
                     duplicate_count=duplicate_count,
-                    extension_skipped_count=extension_skipped,
                 )
                 self.update_status_callback(final_status)
                 QApplication.processEvents()
@@ -1362,8 +1355,7 @@ class FileOperationsHandler:
                 
                 # Format and display final status (batch-only counts + processed/non-DICOM/duplicate)
                 num_studies, num_series, num_files = self._batch_counts_from_merge_result(merge_result)
-                extension_skipped = self.dicom_loader.get_extension_skipped_count()
-                num_processed = self.dicom_loader.get_attempted_file_count() + extension_skipped
+                num_processed = self.dicom_loader.get_attempted_file_count()
                 non_dicom_count = len(self.dicom_loader.get_failed_files())
                 duplicate_count = merge_result.skipped_file_count
                 final_status = self._format_final_status(
@@ -1371,7 +1363,6 @@ class FileOperationsHandler:
                     num_processed=num_processed,
                     non_dicom_count=non_dicom_count,
                     duplicate_count=duplicate_count,
-                    extension_skipped_count=extension_skipped,
                 )
                 self.update_status_callback(final_status)
                 QApplication.processEvents()
@@ -1421,9 +1412,7 @@ class FileOperationsHandler:
         
         elif files:
             # Skip known non-DICOM extensions
-            original_count = len(files)
             files = [p for p in files if not should_skip_path_for_dicom(p)]
-            self.dicom_loader.set_extension_skipped_count(max(0, original_count - len(files)))
             if not files:
                 self.file_dialog.show_warning(
                     self.main_window,
@@ -1609,8 +1598,7 @@ class FileOperationsHandler:
                 
                 # Format and display final status (batch-only counts + processed/non-DICOM/duplicate)
                 num_studies, num_series, num_files = self._batch_counts_from_merge_result(merge_result)
-                extension_skipped = self.dicom_loader.get_extension_skipped_count()
-                num_processed = self.dicom_loader.get_attempted_file_count() + extension_skipped
+                num_processed = self.dicom_loader.get_attempted_file_count()
                 non_dicom_count = len(self.dicom_loader.get_failed_files())
                 duplicate_count = merge_result.skipped_file_count
                 final_status = self._format_final_status(
@@ -1618,7 +1606,6 @@ class FileOperationsHandler:
                     num_processed=num_processed,
                     non_dicom_count=non_dicom_count,
                     duplicate_count=duplicate_count,
-                    extension_skipped_count=extension_skipped,
                 )
 
                 # Check for compression errors and append guidance if needed

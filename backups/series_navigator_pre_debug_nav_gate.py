@@ -27,7 +27,6 @@ from typing import Optional, Dict, List, Tuple
 from pydicom.dataset import Dataset
 from core.dicom_processor import DICOMProcessor
 from PIL import Image
-from utils.debug_flags import DEBUG_NAV
 import numpy as np
 import time
 
@@ -949,18 +948,16 @@ class SeriesNavigator(QWidget):
         
         if event.key() == Qt.Key.Key_Left:
             # Left arrow: previous series
-            if DEBUG_NAV:
-                timestamp = time.time()
-                print(f"[DEBUG-NAV] [{timestamp:.6f}] SeriesNavigator.keyPressEvent: LEFT arrow pressed, hasFocus={self.hasFocus()}")
-                print(f"[DEBUG-NAV] [{timestamp:.6f}] SeriesNavigator: Emitting series_navigation_requested(-1)")
+            timestamp = time.time()
+            print(f"[DEBUG-NAV] [{timestamp:.6f}] SeriesNavigator.keyPressEvent: LEFT arrow pressed, hasFocus={self.hasFocus()}")
+            print(f"[DEBUG-NAV] [{timestamp:.6f}] SeriesNavigator: Emitting series_navigation_requested(-1)")
             self.series_navigation_requested.emit(-1)
             event.accept()
         elif event.key() == Qt.Key.Key_Right:
             # Right arrow: next series
-            if DEBUG_NAV:
-                timestamp = time.time()
-                print(f"[DEBUG-NAV] [{timestamp:.6f}] SeriesNavigator.keyPressEvent: RIGHT arrow pressed, hasFocus={self.hasFocus()}")
-                print(f"[DEBUG-NAV] [{timestamp:.6f}] SeriesNavigator: Emitting series_navigation_requested(1)")
+            timestamp = time.time()
+            print(f"[DEBUG-NAV] [{timestamp:.6f}] SeriesNavigator.keyPressEvent: RIGHT arrow pressed, hasFocus={self.hasFocus()}")
+            print(f"[DEBUG-NAV] [{timestamp:.6f}] SeriesNavigator: Emitting series_navigation_requested(1)")
             self.series_navigation_requested.emit(1)
             event.accept()
         else:

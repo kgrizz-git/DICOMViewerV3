@@ -23,7 +23,3 @@ DEBUG_LOADING: bool = False
 # Enables verbose crosshair text-item / scene tracing.
 # Affects: crosshair_manager.
 DEBUG_CROSSHAIR: bool = False
-
-# Enables series-navigation key/request/lock tracing.
-# Affects: series_navigator, image_viewer, file_series_loading_coordinator.
-DEBUG_NAV: bool = False

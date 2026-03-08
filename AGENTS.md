@@ -19,7 +19,7 @@ If no venv exists, create one: `python -m venv venv`, activate it, then `pip ins
 
 ## Other conventions
 
-- See `.cursor/rules` and user rules for backup-before-modify, testing, and commit guidelines.
+- See `.cursor/rules` and user rules for backup-before-modify, testing, and commit guidelines. **Backups:** If a plan or task requires backing up a file before modifying it, do not proceed with edits until the backup is verified (e.g. file exists and has content) or the user has been asked; never assume a backup succeeded without verification.
 - Project layout: `src/` (application), `tests/` (tests), `dev-docs/` (plans, assessments).
 - **Versioning**: Application version is defined in a single place, `src/version.py` (`__version__`). Use semantic versioning; release steps are in `dev-docs/RELEASING.md`, with full rules in `dev-docs/info/SEMANTIC_VERSIONING_GUIDE.md`.
 
@@ -39,7 +39,7 @@ src/
 ├── tools/                         # Interactive tools (ROI, measurement, annotation, crosshair)
 └── utils/                         # Utilities (config, undo/redo, DICOM helpers, etc.)
     ├── config_manager.py          # Thin facade: inherits all config mixins; owns __init__, _load_config, save_config, get, set
-    ├── debug_flags.py             # Central on/off switches for diagnostic print statements (DEBUG_LAYOUT, DEBUG_LOADING)
+    ├── debug_flags.py             # Central on/off switches for diagnostic print statements (DEBUG_LAYOUT, DEBUG_LOADING, DEBUG_NAV)
     └── config/                    # Feature-domain config mixin package
         ├── __init__.py
         ├── paths_config.py        # last_path, last_export_path, recent_files, normalize_path
