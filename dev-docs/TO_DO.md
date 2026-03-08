@@ -41,7 +41,11 @@
 - [ ] Fix typo in status bar after loading: "studyies"
 - [ ] Put same little colored dot on layout map thumbnails that is on series thumbnails in navigator?
 - [ ] Make highlight border for focused window match color of dot on navigator series thumbnail
+  - [ ] and make color of highlight in layout thumbnail for focused window match
 - [ ] check status bar accuracy when adding 2nd+
+- [ ] make sure status bar reflects actual number of files/series/studies loaded when loading is canceled or when duplicate files are attempted to be loaded (number of files actually loaded into the view should be accurate and only series/studies from loaded files should be counted)
+- [ ] when loading is canceled but some files were loaded before canceling, is fit to view being applied to the loaded series?
+
 
 
 - [ ] make right pane minimum width before collapsing 250 instead of 200?

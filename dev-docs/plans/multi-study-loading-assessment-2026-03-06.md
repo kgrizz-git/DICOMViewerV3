@@ -656,16 +656,7 @@ The goal is a small colored circle in the top-right corner of each thumbnail tha
 
 The following small helper method on `DICOMViewerApp` is needed by multiple phases (Phase 3, 4, 5):
 
-- [ ] Add `_get_subwindow_assignments(self) -> Dict[int, Tuple[str, str]]`:
-  ```python
-  def _get_subwindow_assignments(self) -> Dict[int, Tuple[str, str]]:
-      return {
-          idx: (data['current_study_uid'], data['current_series_uid'])
-          for idx, data in self.subwindow_data.items()
-          if data.get('current_dataset') is not None
-      }
-  ```
-  Call this wherever `series_navigator.set_subwindow_assignments()` is needed.
+- [x] Add `_get_subwindow_assignments(self) -> Dict[int, Tuple[str, str]]`: Implemented in `src/main.py` (Phase 5). Returns `{idx: (current_study_uid, current_series_uid)}` for each subwindow with loaded data. Called after every `update_series_list()` and after `assign_series_to_subwindow()` in `file_series_loading_coordinator.py`, and in `_close_series`/`_close_study`/`_close_files` in main.py.
 
 ---
 
