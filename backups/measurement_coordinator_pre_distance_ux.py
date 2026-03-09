@@ -130,10 +130,6 @@ class MeasurementCoordinator:
                 measurement.on_moved_callback = lambda m=measurement: self._on_measurement_moved(m)
                 # Set up mouse release callback for immediate finalization
                 measurement.on_mouse_release_callback = lambda m=measurement: self.finalize_measurement_move_immediately(m)
-                # Handle-drag callbacks: hide handles during drag; optional magnifier when Shift+drag
-                measurement.on_handle_drag_start_callback = self._on_handle_drag_start
-                measurement.on_handle_drag_move_callback = self._on_handle_drag_move
-                measurement.on_handle_drag_end_callback = self._on_handle_drag_end
     
     def handle_measurement_delete_requested(self, measurement_item) -> None:
         """
@@ -367,11 +363,11 @@ class MeasurementCoordinator:
     def finalize_measurement_move_immediately(self, measurement_item) -> None:
         """
         Finalize measurement move immediately (called on mouse release).
-
+        
         This ensures the undo command is created right away when the mouse is released,
         rather than waiting for the timer to fire. This fixes the issue where pressing
         undo before the timer fires would undo the wrong operation.
-
+        
         Args:
             measurement_item: MeasurementItem that was moved
         """
@@ -379,28 +375,7 @@ class MeasurementCoordinator:
         if self._move_batch_timer is not None:
             self._move_batch_timer.stop()
             self._move_batch_timer = None
-
+        
         # Finalize the move immediately
         self._finalize_measurement_move(measurement_item)
-
-    def _on_handle_drag_start(self, scene_pos: QPointF, shift_held: bool) -> None:
-        """
-        Handle start of measurement handle drag. Show magnifier only if Shift was held (Shift+drag).
-
-        Args:
-            scene_pos: Scene position of the handle (start of drag).
-            shift_held: True if Shift was held when the user started dragging the handle.
-        """
-        if shift_held and self.image_viewer is not None:
-            self.image_viewer.show_handle_drag_magnifier(scene_pos)
-
-    def _on_handle_drag_move(self, scene_pos: QPointF) -> None:
-        """Update handle-drag magnifier position/content during handle drag."""
-        if self.image_viewer is not None:
-            self.image_viewer.update_handle_drag_magnifier(scene_pos)
-
-    def _on_handle_drag_end(self) -> None:
-        """Hide handle-drag magnifier when handle drag ends."""
-        if self.image_viewer is not None:
-            self.image_viewer.hide_handle_drag_magnifier()
 

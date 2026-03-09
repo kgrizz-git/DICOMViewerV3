@@ -33,25 +33,6 @@ from PySide6.QtCore import Qt, QPointF, QLineF, QRectF
 from PySide6.QtGui import QPen, QColor, QBrush, QPainter, QPainterPath, QPainterPathStroker
 from typing import Optional, Tuple, Callable
 import math
-import json
-import os
-import time
-
-# Callback types for handle-drag magnifier (scene_pos, shift_held for start; scene_pos for move)
-HandleDragStartCallback = Callable[[QPointF, bool], None]
-HandleDragMoveCallback = Callable[[QPointF], None]
-HandleDragEndCallback = Callable[[], None]
-
-# #region agent log
-def _debug_log(location: str, message: str, data: dict, hypothesis_id: str) -> None:
-    try:
-        log_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "debug-e25587.log"))
-        payload = {"sessionId": "e25587", "location": location, "message": message, "data": data, "timestamp": int(time.time() * 1000), "hypothesisId": hypothesis_id}
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(payload) + "\n")
-    except Exception:
-        pass
-# #endregion
 
 
 class DraggableMeasurementText(QGraphicsTextItem):
@@ -181,37 +162,24 @@ class MeasurementHandle(QGraphicsEllipseItem):
         self.setPen(handle_pen)
         self.setBrush(handle_brush)
 
-        # Flags: not ItemIsSelectable so clicking the handle does not deselect the measurement (Qt clears
-        # selection when a new item is selected; we need the measurement to stay selected so handles stay in scene).
+        # Flags
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
-        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, False)
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemSendsGeometryChanges, True)  # CRITICAL: Enable itemChange() notifications
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations, True)  # Keep handle size fixed on screen
-        self.setZValue(200)  # Above measurement (150) so handle gets the click
+        self.setZValue(200)  # Above measurement (150) for priority selection
 
         # Cursor for better UX
         self.setCursor(Qt.CursorShape.SizeAllCursor)
 
-    def shape(self) -> QPainterPath:
-        """Return a larger hit area than the visible ellipse so clicks near the endpoint register on the handle."""
-        path = QPainterPath()
-        # With ItemIgnoresTransformations this is in view pixels; use a large radius so the handle is easy to grab
-        hit_radius = 18.0  # ~36px hit area (visual ellipse stays 12px); boundingRect unchanged for painting
-        path.addEllipse(QRectF(-hit_radius, -hit_radius, hit_radius * 2, hit_radius * 2))
-        return path
-
     def mousePressEvent(self, event: 'QGraphicsSceneMouseEvent') -> None:
         """
         Handle mouse press to keep measurement selected and set drag flag.
-        Hides handles during drag so the line end is visible; notifies callback for optional magnifier (Shift+drag).
 
         Args:
             event: Mouse press event
         """
         event.accept()
-        # #region agent log
-        _debug_log("measurement_items.py:MeasurementHandle.mousePressEvent", "handle press", {"is_start": self.is_start, "pos": (round(self.pos().x(), 2), round(self.pos().y(), 2))}, "B")
-        # #endregion
 
         # Set flag on parent to indicate handle drag is in progress
         if self.parent_measurement is not None:
@@ -221,17 +189,6 @@ class MeasurementHandle(QGraphicsEllipseItem):
             self.parent_measurement._handle_drag_in_progress = True
             self.parent_measurement._dragging_handle = self
 
-            # Hide handles visually during drag (keep in scene so they still receive move/release)
-            self.parent_measurement.hide_handles_during_drag()
-
-            # Notify for optional handle-drag magnifier (Shift+drag)
-            shift_held = (event.modifiers() & Qt.KeyboardModifier.ShiftModifier) != 0
-            if getattr(self.parent_measurement, 'on_handle_drag_start_callback', None):
-                try:
-                    self.parent_measurement.on_handle_drag_start_callback(self.pos(), shift_held)
-                except Exception:
-                    pass
-
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event: 'QGraphicsSceneMouseEvent') -> None:
@@ -240,22 +197,14 @@ class MeasurementHandle(QGraphicsEllipseItem):
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event: 'QGraphicsSceneMouseEvent') -> None:
-        """Handle mouse release after drag; show handles again and notify end of drag."""
+        """Handle mouse release after drag."""
         event.accept()
 
         if self.parent_measurement is not None:
-            # Notify end of handle drag (e.g. hide handle-drag magnifier)
-            if getattr(self.parent_measurement, 'on_handle_drag_end_callback', None):
-                try:
-                    self.parent_measurement.on_handle_drag_end_callback()
-                except Exception:
-                    pass
             if hasattr(self.parent_measurement, '_handle_drag_in_progress'):
                 self.parent_measurement._handle_drag_in_progress = False
             if hasattr(self.parent_measurement, '_dragging_handle'):
                 self.parent_measurement._dragging_handle = None
-            # Show handles again now that drag is over (measurement remains selected)
-            self.parent_measurement.show_handles_after_drag()
 
         super().mouseReleaseEvent(event)
 
@@ -283,10 +232,6 @@ class MeasurementHandle(QGraphicsEllipseItem):
                         return value
 
                 scene_pos = self.pos()
-                m = self.parent_measurement
-                # #region agent log
-                _debug_log("measurement_items.py:MeasurementHandle.itemChange", "position changed before", {"is_start": self.is_start, "scene_pos": (round(scene_pos.x(), 2), round(scene_pos.y(), 2)), "start_point": (round(m.start_point.x(), 2), round(m.start_point.y(), 2)), "end_point": (round(m.end_point.x(), 2), round(m.end_point.y(), 2))}, "D")
-                # #endregion
 
                 self.parent_measurement._updating_handles = True
 
@@ -330,31 +275,9 @@ class MeasurementHandle(QGraphicsEllipseItem):
                 finally:
                     self.parent_measurement._updating_handles = False
 
-                # Keep the other handle in sync during drag so the line doesn't jump (update_handle_positions is skipped)
-                was_updating = getattr(m, '_updating_handles', False)
-                m._updating_handles = True
-                try:
-                    if self.is_start and m.end_handle is not None and m.end_handle.scene() is not None:
-                        m.end_handle.setPos(m.end_point)
-                    elif not self.is_start and m.start_handle is not None and m.start_handle.scene() is not None:
-                        m.start_handle.setPos(m.start_point)
-                finally:
-                    m._updating_handles = was_updating
-
-                # #region agent log
-                _debug_log("measurement_items.py:MeasurementHandle.itemChange", "position changed after", {"is_start": self.is_start, "start_point": (round(m.start_point.x(), 2), round(m.start_point.y(), 2)), "end_point": (round(m.end_point.x(), 2), round(m.end_point.y(), 2))}, "E")
-                # #endregion
-
                 if self.parent_measurement.on_moved_callback:
                     try:
                         self.parent_measurement.on_moved_callback()
-                    except Exception:
-                        pass
-
-                # Notify handle-drag move for magnifier update (e.g. Shift+drag)
-                if getattr(self.parent_measurement, 'on_handle_drag_move_callback', None):
-                    try:
-                        self.parent_measurement.on_handle_drag_move_callback(self.pos())
                     except Exception:
                         pass
 
@@ -426,10 +349,6 @@ class MeasurementItem(QGraphicsItemGroup):
 
         self.on_moved_callback: Optional[Callable[[], None]] = None
         self.on_mouse_release_callback: Optional[Callable[[], None]] = None
-        # Optional callbacks for handle-drag magnifier (Shift+drag on handle)
-        self.on_handle_drag_start_callback: Optional[HandleDragStartCallback] = None
-        self.on_handle_drag_move_callback: Optional[HandleDragMoveCallback] = None
-        self.on_handle_drag_end_callback: Optional[HandleDragEndCallback] = None
 
         self.update_distance()
 
@@ -470,24 +389,10 @@ class MeasurementItem(QGraphicsItemGroup):
             painter.setPen(selection_pen)
             line = self.line_item.line()
             painter.drawLine(line)
-            # Endpoint markers so line ends stay visible when handles are hidden during drag
-            marker_half = 3.0
-            end_marker_pen = QPen(QColor(255, 255, 0), 1.5)
-            painter.setPen(end_marker_pen)
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-            # Start point (group local 0,0)
-            painter.drawLine(QPointF(-marker_half, 0), QPointF(marker_half, 0))
-            painter.drawLine(QPointF(0, -marker_half), QPointF(0, marker_half))
-            # End point (group local = end_relative)
-            p2 = line.p2()
-            painter.drawLine(QPointF(p2.x() - marker_half, p2.y()), QPointF(p2.x() + marker_half, p2.y()))
-            painter.drawLine(QPointF(p2.x(), p2.y() - marker_half), QPointF(p2.x(), p2.y() + marker_half))
             painter.restore()
 
     def show_handles(self) -> None:
-        """Show handles when measurement is selected (add to scene and position). Skip during handle drag."""
-        if getattr(self, '_handle_drag_in_progress', False):
-            return
+        """Show handles when measurement is selected (add to scene and position)."""
         if self.scene() is None:
             return
         if self.start_handle is None or self.end_handle is None:
@@ -507,36 +412,8 @@ class MeasurementItem(QGraphicsItemGroup):
         if self.end_handle is not None and self.end_handle.scene() is not None:
             self.end_handle.scene().removeItem(self.end_handle)
 
-    def hide_handles_during_drag(self) -> None:
-        """
-        Hide only the *other* handle during a handle drag (the one not being dragged).
-        The handle being dragged stays visible so it continues to receive mouse move/release events.
-        """
-        dragging = getattr(self, '_dragging_handle', None)
-        if self.start_handle is not None and self.start_handle.scene() is not None and self.start_handle is not dragging:
-            self.start_handle.setVisible(False)
-        if self.end_handle is not None and self.end_handle.scene() is not None and self.end_handle is not dragging:
-            self.end_handle.setVisible(False)
-
-    def show_handles_after_drag(self) -> None:
-        """Show handles again after a handle drag ends (they stay in scene; just restore visibility)."""
-        if self.start_handle is not None and self.start_handle.scene() is not None:
-            self.start_handle.setVisible(True)
-        if self.end_handle is not None and self.end_handle.scene() is not None:
-            self.end_handle.setVisible(True)
-        self.update_handle_positions(force=True)
-
     def update_handle_positions(self, force: bool = False) -> None:
-        """Set both handles' scene positions to start_point and end_point (so the line and handles stay in sync).
-        Called when: measurement is selected (show_handles), whole measurement is moved (group itemChange),
-        distance is recalculated (update_distance), and when a handle drag ends (show_handles_after_drag).
-        Skipped only during an active handle drag so we don't fight the user's drag; the other handle
-        is moved explicitly in the dragging handle's itemChange."""
-        if getattr(self, '_handle_drag_in_progress', False):
-            # #region agent log
-            _debug_log("measurement_items.py:MeasurementItem.update_handle_positions", "skip during drag", {"force": force}, "D")
-            # #endregion
-            return
+        """Update handle positions in scene coordinates."""
         if self.scene() is None or self.start_handle is None or self.end_handle is None:
             return
         if not force and hasattr(self, '_updating_handles') and self._updating_handles:
@@ -789,16 +666,11 @@ class MeasurementItem(QGraphicsItemGroup):
                     self.update_handle_positions(force=True)
 
         elif change == QGraphicsItem.GraphicsItemChange.ItemSelectedHasChanged:
+            if hasattr(self, '_handle_drag_in_progress') and self._handle_drag_in_progress:
+                return value
             if value:
-                if hasattr(self, '_handle_drag_in_progress') and self._handle_drag_in_progress:
-                    return value
                 self.show_handles()
             else:
-                # Clear drag state on deselect so we never get stuck (e.g. if release was lost)
-                if hasattr(self, '_handle_drag_in_progress'):
-                    self._handle_drag_in_progress = False
-                if hasattr(self, '_dragging_handle'):
-                    self._dragging_handle = None
                 self.hide_handles()
             self.update()
 

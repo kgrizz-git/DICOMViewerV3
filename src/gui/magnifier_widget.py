@@ -20,6 +20,11 @@ from PySide6.QtCore import Qt, QPoint
 from PySide6.QtGui import QPixmap, QPainter, QColor, QPen
 from typing import Optional
 
+try:
+    from utils.debug_flags import DEBUG_MAGNIFIER
+except ImportError:
+    DEBUG_MAGNIFIER = False
+
 
 class MagnifierWidget(QWidget):
     """
@@ -90,7 +95,8 @@ class MagnifierWidget(QWidget):
             self.image_label.clear()
             return
         
-        print(f"[DEBUG-MAGNIFIER] update_magnified_region: input_pixmap_size=({pixmap.width()}x{pixmap.height()}), widget_size={self.magnifier_size}")
+        if DEBUG_MAGNIFIER:
+            print(f"[DEBUG-MAGNIFIER] update_magnified_region: input_pixmap_size=({pixmap.width()}x{pixmap.height()}), widget_size={self.magnifier_size}")
         
         # Scale pixmap to fit label while maintaining aspect ratio
         target_size = self.magnifier_size - 4  # Account for border
@@ -101,7 +107,8 @@ class MagnifierWidget(QWidget):
             Qt.TransformationMode.SmoothTransformation
         )
         
-        print(f"[DEBUG-MAGNIFIER] update_magnified_region: final_display_size=({scaled_pixmap.width()}x{scaled_pixmap.height()}), effective_zoom={target_size / pixmap.width():.3f}x")
+        if DEBUG_MAGNIFIER:
+            print(f"[DEBUG-MAGNIFIER] update_magnified_region: final_display_size=({scaled_pixmap.width()}x{scaled_pixmap.height()}), effective_zoom={target_size / pixmap.width():.3f}x")
         
         self.image_label.setPixmap(scaled_pixmap)
     
