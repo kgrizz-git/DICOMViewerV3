@@ -32,3 +32,7 @@ DEBUG_NAV: bool = False
 # Use when investigating default WL not applied correctly when switching between series from different studies.
 # Affects: slice_display_manager.
 DEBUG_WL: bool = False
+
+# Enables magnifier-related print logging (cursor magnifier and handle-drag magnifier).
+# Affects: image_viewer (_extract_image_region, magnifier paths), magnifier_widget.
+DEBUG_MAGNIFIER: bool = False

@@ -21,27 +21,15 @@ Requirements:
 
 from PySide6.QtWidgets import (QGraphicsView, QGraphicsScene, QGraphicsPixmapItem,
                                 QWidget, QVBoxLayout, QMenu, QApplication)
-from PySide6.QtCore import Qt, QRectF, Signal, QPointF, QPoint, QTimer, QEvent
+from PySide6.QtCore import Qt, QRectF, Signal, QPointF, QTimer, QEvent
 from PySide6.QtGui import (QPixmap, QImage, QWheelEvent, QKeyEvent, QMouseEvent,
                           QPainter, QColor, QTransform, QDragEnterEvent, QDropEvent)
 from PIL import Image
-from utils.debug_flags import DEBUG_NAV, DEBUG_MAGNIFIER
+from utils.debug_flags import DEBUG_NAV
 import numpy as np
 import os
 import time
-import json
 from typing import Optional, Callable, Any, List, Tuple
-
-# #region agent log
-def _debug_log_view(location: str, message: str, data: dict, hypothesis_id: str) -> None:
-    try:
-        log_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "debug-e25587.log"))
-        payload = {"sessionId": "e25587", "location": location, "message": message, "data": data, "timestamp": int(time.time() * 1000), "hypothesisId": hypothesis_id}
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(payload) + "\n")
-    except Exception:
-        pass
-# #endregion
 
 
 class ImageViewer(QGraphicsView):
@@ -202,10 +190,6 @@ class ImageViewer(QGraphicsView):
         self.magnifier_widget: Optional[MagnifierWidget] = None
         self.magnifier_active: bool = False
         # Note: magnifier zoom is calculated dynamically as 1.5 * current_zoom
-        # Handle-drag magnifier: separate widget for Shift+drag on measurement handle
-        self.handle_drag_magnifier_widget: Optional[MagnifierWidget] = None
-        self.handle_drag_magnifier_active: bool = False
-        self._handle_drag_magnifier_size = 200
         
         # Scroll wheel mode
         self.scroll_wheel_mode = "slice"  # "slice" or "zoom"
@@ -1025,10 +1009,7 @@ class ImageViewer(QGraphicsView):
                             is_measurement_child = True
                             break
                         parent = parent.parentItem()
-                # #region agent log
-                _take_deselect = is_empty_space and not (is_roi_item or is_measurement_item or is_handle or is_measurement_text or is_measurement_child or is_text_annotation_item or is_arrow_annotation_item)
-                _debug_log_view("image_viewer.py:select_mode_press", "item at click", {"item_type": type(item).__name__ if item else None, "is_handle": is_handle, "is_measurement_item": is_measurement_item, "is_measurement_child": is_measurement_child, "is_empty_space": is_empty_space, "branch": "deselect" if _take_deselect else "pass_to_qt", "scene_pos": (round(scene_pos.x(), 2), round(scene_pos.y(), 2))}, "A")
-                # #endregion
+                
                 if is_empty_space and not (is_roi_item or is_measurement_item or is_handle or is_measurement_text or is_measurement_child or is_text_annotation_item or is_arrow_annotation_item):
                     # Clicking on empty space - deselect everything
                     # print(f"[DEBUG-DESELECT] Empty space click detected in Select mode")
@@ -1198,12 +1179,11 @@ class ImageViewer(QGraphicsView):
                         # So: region_size = 200 / magnifier_zoom = 200 / (2.0 * current_zoom)
                         # This ensures the extracted region, when scaled, fills the 200px widget at 2.0x zoom
                         adjusted_region_size = 200.0 / (2.0 * current_zoom) if current_zoom > 0 else 200.0 / 2.0
-                        if DEBUG_MAGNIFIER:
-                            print(f"[DEBUG-MAGNIFIER] Press: current_zoom={current_zoom:.3f}, magnifier_zoom={magnifier_zoom:.3f}, adjusted_region_size={adjusted_region_size:.3f}")
+                        print(f"[DEBUG-MAGNIFIER] Press: current_zoom={current_zoom:.3f}, magnifier_zoom={magnifier_zoom:.3f}, adjusted_region_size={adjusted_region_size:.3f}")
                         magnified_pixmap = self._extract_image_region(
                             scene_pos.x(), scene_pos.y(), adjusted_region_size, magnifier_zoom
                         )
-                        if magnified_pixmap is not None and DEBUG_MAGNIFIER:
+                        if magnified_pixmap is not None:
                             print(f"[DEBUG-MAGNIFIER] Press: extracted_region_size=({int(adjusted_region_size):d}x{int(adjusted_region_size):d}), scaled_pixmap_size=({magnified_pixmap.width()}x{magnified_pixmap.height()})")
                         if magnified_pixmap is not None:
                             self.magnifier_widget.update_magnified_region(magnified_pixmap)
@@ -1618,7 +1598,7 @@ class ImageViewer(QGraphicsView):
                 magnified_pixmap = self._extract_image_region(
                     scene_pos.x(), scene_pos.y(), adjusted_region_size, magnifier_zoom
                 )
-                if magnified_pixmap is not None and DEBUG_MAGNIFIER:
+                if magnified_pixmap is not None:
                     print(f"[DEBUG-MAGNIFIER] Move: current_zoom={current_zoom:.3f}, magnifier_zoom={magnifier_zoom:.3f}, adjusted_region_size={adjusted_region_size:.3f}, scaled_pixmap_size=({magnified_pixmap.width()}x{magnified_pixmap.height()})")
                 if magnified_pixmap is not None and self.magnifier_widget is not None:
                     self.magnifier_widget.update_magnified_region(magnified_pixmap)
@@ -2406,9 +2386,8 @@ class ImageViewer(QGraphicsView):
         extracted_height = y2 - y1
         region = source_pixmap.copy(x1, y1, extracted_width, extracted_height)
         
-        if DEBUG_MAGNIFIER:
-            print(f"[DEBUG-MAGNIFIER] _extract_image_region: center=({center_x:.1f}, {center_y:.1f}), size={size:.3f}, zoom_factor={zoom_factor:.3f}")
-            print(f"[DEBUG-MAGNIFIER] _extract_image_region: extracted_region=({x1}, {y1}) to ({x2}, {y2}), dimensions=({extracted_width}x{extracted_height})")
+        print(f"[DEBUG-MAGNIFIER] _extract_image_region: center=({center_x:.1f}, {center_y:.1f}), size={size:.3f}, zoom_factor={zoom_factor:.3f}")
+        print(f"[DEBUG-MAGNIFIER] _extract_image_region: extracted_region=({x1}, {y1}) to ({x2}, {y2}), dimensions=({extracted_width}x{extracted_height})")
         
         # Apply zoom factor; use same smooth/fast setting as main view
         if zoom_factor != 1.0:
@@ -2419,86 +2398,19 @@ class ImageViewer(QGraphicsView):
                 if self._smooth_when_zoomed
                 else Qt.TransformationMode.FastTransformation
             )
-            if DEBUG_MAGNIFIER:
-                print(f"[DEBUG-MAGNIFIER] _extract_image_region: scaling to ({scaled_width}x{scaled_height})")
+            print(f"[DEBUG-MAGNIFIER] _extract_image_region: scaling to ({scaled_width}x{scaled_height})")
             region = region.scaled(
                 scaled_width,
                 scaled_height,
                 Qt.AspectRatioMode.KeepAspectRatio,
                 transform_mode
             )
-            if DEBUG_MAGNIFIER:
-                print(f"[DEBUG-MAGNIFIER] _extract_image_region: final_pixmap_size=({region.width()}x{region.height()})")
+            print(f"[DEBUG-MAGNIFIER] _extract_image_region: final_pixmap_size=({region.width()}x{region.height()})")
         else:
-            if DEBUG_MAGNIFIER:
-                print(f"[DEBUG-MAGNIFIER] _extract_image_region: no scaling, final_pixmap_size=({region.width()}x{region.height()})")
+            print(f"[DEBUG-MAGNIFIER] _extract_image_region: no scaling, final_pixmap_size=({region.width()}x{region.height()})")
         
         return region
-
-    def show_handle_drag_magnifier(self, scene_pos: QPointF) -> None:
-        """
-        Show the handle-drag magnifier centered on the given scene position.
-        Used when the user Shift+drags a measurement handle for precise endpoint placement.
-        Widget is positioned with an offset so it does not cover the handle.
-        """
-        if self.handle_drag_magnifier_active:
-            self.update_handle_drag_magnifier(scene_pos)
-            return
-        if self.handle_drag_magnifier_widget is None:
-            from gui.magnifier_widget import MagnifierWidget
-            self.handle_drag_magnifier_widget = MagnifierWidget()
-        self.handle_drag_magnifier_active = True
-        current_zoom = self.transform().m11()
-        magnifier_zoom = 2.0 * current_zoom
-        adjusted_region_size = (
-            float(self._handle_drag_magnifier_size) / (2.0 * current_zoom)
-            if current_zoom > 0
-            else float(self._handle_drag_magnifier_size) / 2.0
-        )
-        magnified_pixmap = self._extract_image_region(
-            scene_pos.x(), scene_pos.y(), adjusted_region_size, magnifier_zoom
-        )
-        if magnified_pixmap is not None and self.handle_drag_magnifier_widget is not None:
-            self.handle_drag_magnifier_widget.update_magnified_region(magnified_pixmap)
-            view_pos = self.mapFromScene(scene_pos)
-            global_pos = self.mapToGlobal(view_pos.toPoint())
-            # Offset so magnifier appears above-right of the handle and does not cover it
-            offset_x = 20
-            offset_y = -self._handle_drag_magnifier_size - 10
-            self.handle_drag_magnifier_widget.show_at_position(
-                QPoint(global_pos.x() + offset_x, global_pos.y() + offset_y)
-            )
-
-    def update_handle_drag_magnifier(self, scene_pos: QPointF) -> None:
-        """Update handle-drag magnifier content and position (called on handle move)."""
-        if not self.handle_drag_magnifier_active or self.handle_drag_magnifier_widget is None:
-            return
-        current_zoom = self.transform().m11()
-        magnifier_zoom = 2.0 * current_zoom
-        adjusted_region_size = (
-            float(self._handle_drag_magnifier_size) / (2.0 * current_zoom)
-            if current_zoom > 0
-            else float(self._handle_drag_magnifier_size) / 2.0
-        )
-        magnified_pixmap = self._extract_image_region(
-            scene_pos.x(), scene_pos.y(), adjusted_region_size, magnifier_zoom
-        )
-        if magnified_pixmap is not None:
-            self.handle_drag_magnifier_widget.update_magnified_region(magnified_pixmap)
-            view_pos = self.mapFromScene(scene_pos)
-            global_pos = self.mapToGlobal(view_pos.toPoint())
-            offset_x = 20
-            offset_y = -self._handle_drag_magnifier_size - 10
-            self.handle_drag_magnifier_widget.show_at_position(
-                QPoint(global_pos.x() + offset_x, global_pos.y() + offset_y)
-            )
-
-    def hide_handle_drag_magnifier(self) -> None:
-        """Hide the handle-drag magnifier (called when handle drag ends)."""
-        self.handle_drag_magnifier_active = False
-        if self.handle_drag_magnifier_widget is not None:
-            self.handle_drag_magnifier_widget.hide()
-
+    
     def _get_pixel_value_at_coords(
         self,
         dataset,

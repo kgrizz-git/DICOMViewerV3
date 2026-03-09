@@ -5,7 +5,7 @@
 **Related TO_DO:** dev-docs/TO_DO.md (line 46): *"Make it easier to position distance measurements - easier to see ends, hide handles while dragging - magnify around end when dragging handle (or maybe if shift+click and drag handle)"*.
 
 **Date:** 2026-03-08  
-**Status:** Plan
+**Status:** Implemented
 
 ---
 
