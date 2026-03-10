@@ -36,3 +36,8 @@ DEBUG_WL: bool = False
 # Enables magnifier-related print logging (cursor magnifier and handle-drag magnifier).
 # Affects: image_viewer (_extract_image_region, magnifier paths), magnifier_widget.
 DEBUG_MAGNIFIER: bool = False
+
+# Enables verbose tracing of handle drag: handle/group positions, end_relative, and line p1/p2
+# at each step of MeasurementHandle.itemChange so you can see exactly what moves and why.
+# Affects: measurement_items.py (MeasurementHandle.itemChange).
+DEBUG_MEASUREMENT_DRAG: bool = True

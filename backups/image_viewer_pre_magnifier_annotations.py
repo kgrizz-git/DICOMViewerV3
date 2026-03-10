@@ -881,7 +881,7 @@ class ImageViewer(QGraphicsView):
         elif mode == "measure":
             self.roi_drawing_mode = None
             self.setDragMode(QGraphicsView.DragMode.NoDrag)
-            # Cursor set by _apply_cursor_for_mouse_mode() below
+            self.setCursor(Qt.CursorShape.CrossCursor)  # Could use different cursor
             # Reset measurement state when switching to measure mode
             self.measuring = False
             self.measurement_start_pos = None
@@ -930,7 +930,6 @@ class ImageViewer(QGraphicsView):
         # Keep SubWindowContainer cursor in sync so hit-test on container border shows tool cursor.
         # Also set cursor on the layout parent chain (layout_widget, MultiWindowLayout) so in 1x1
         # any background region shows the tool cursor and doesn't flicker to arrow.
-        self._apply_cursor_for_mouse_mode()
         from gui.sub_window_container import SubWindowContainer
         parent = self.parent()
         if isinstance(parent, SubWindowContainer):
@@ -942,35 +941,7 @@ class ImageViewer(QGraphicsView):
                 layout_grandparent = layout_parent.parent()
                 if layout_grandparent is not None:
                     layout_grandparent.setCursor(self.cursor())
-
-    def _apply_cursor_for_mouse_mode(self) -> None:
-        """Set cursor to the one appropriate for the current mouse_mode (used by set_mouse_mode and restore_cursor_for_current_mode)."""
-        mode = self.mouse_mode
-        if mode == "select":
-            self.setCursor(Qt.CursorShape.ArrowCursor)
-        elif mode in ("roi_ellipse", "roi_rectangle", "measure", "magnifier", "crosshair", "arrow_annotation") or mode == "auto_window_level":
-            self.setCursor(Qt.CursorShape.CrossCursor)
-        elif mode == "zoom":
-            self.setCursor(Qt.CursorShape.PointingHandCursor)
-        elif mode == "text_annotation":
-            self.setCursor(Qt.CursorShape.IBeamCursor)
-        else:  # pan
-            self.setCursor(Qt.CursorShape.OpenHandCursor)
-
-    def restore_cursor_for_current_mode(self) -> None:
-        """Restore the cursor to match the current mouse mode (e.g. after hiding it during measurement draw or handle drag)."""
-        self._apply_cursor_for_mouse_mode()
-        from gui.sub_window_container import SubWindowContainer
-        parent = self.parent()
-        if isinstance(parent, SubWindowContainer):
-            parent.setCursor(self.cursor())
-            layout_parent = parent.parent()
-            if layout_parent is not None:
-                layout_parent.setCursor(self.cursor())
-                layout_grandparent = layout_parent.parent()
-                if layout_grandparent is not None:
-                    layout_grandparent.setCursor(self.cursor())
-
+    
     def set_roi_drawing_mode(self, mode: Optional[str]) -> None:
         """
         Set ROI drawing mode (legacy method for backward compatibility).
@@ -1196,10 +1167,9 @@ class ImageViewer(QGraphicsView):
                 elif self.mouse_mode == "measure":
                     # Measurement mode - start or finish measurement
                     if not self.measuring:
-                        # Start new measurement (first end placed); hide cursor while drawing line
+                        # Start new measurement
                         self.measuring = True
                         self.measurement_start_pos = scene_pos
-                        self.setCursor(Qt.CursorShape.BlankCursor)
                         self.measurement_started.emit(scene_pos)
                     else:
                         # Finish current measurement
@@ -1230,7 +1200,7 @@ class ImageViewer(QGraphicsView):
                         adjusted_region_size = 200.0 / (2.0 * current_zoom) if current_zoom > 0 else 200.0 / 2.0
                         if DEBUG_MAGNIFIER:
                             print(f"[DEBUG-MAGNIFIER] Press: current_zoom={current_zoom:.3f}, magnifier_zoom={magnifier_zoom:.3f}, adjusted_region_size={adjusted_region_size:.3f}")
-                        magnified_pixmap = self._render_scene_region(
+                        magnified_pixmap = self._extract_image_region(
                             scene_pos.x(), scene_pos.y(), adjusted_region_size, magnifier_zoom
                         )
                         if magnified_pixmap is not None and DEBUG_MAGNIFIER:
@@ -1604,9 +1574,7 @@ class ImageViewer(QGraphicsView):
                 self.zoom_changed.emit(self.current_zoom)
                 self._check_transform_changed()
         elif self.mouse_mode == "measure" and self.measuring and self.measurement_start_pos is not None:
-            # Measurement mode - update measurement while dragging; keep cursor hidden
-            if self.cursor().shape() != Qt.CursorShape.BlankCursor:
-                self.setCursor(Qt.CursorShape.BlankCursor)
+            # Measurement mode - update measurement while dragging
             if self.dragMode() == QGraphicsView.DragMode.ScrollHandDrag:
                 self.setDragMode(QGraphicsView.DragMode.NoDrag)
             
@@ -1647,7 +1615,7 @@ class ImageViewer(QGraphicsView):
                 # So: region_size = 200 / magnifier_zoom = 200 / (2.0 * current_zoom)
                 # This ensures the extracted region, when scaled, fills the 200px widget at 2.0x zoom
                 adjusted_region_size = 200.0 / (2.0 * current_zoom) if current_zoom > 0 else 200.0 / 2.0
-                magnified_pixmap = self._render_scene_region(
+                magnified_pixmap = self._extract_image_region(
                     scene_pos.x(), scene_pos.y(), adjusted_region_size, magnifier_zoom
                 )
                 if magnified_pixmap is not None and DEBUG_MAGNIFIER:
@@ -1693,10 +1661,9 @@ class ImageViewer(QGraphicsView):
                 if self.mouse_mode == "pan":
                     self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
             elif self.mouse_mode == "measure" and self.measuring:
-                # Finish measurement (if not already finished by second click); restore cursor
+                # Finish measurement (if not already finished by second click)
                 self.measuring = False
                 self.measurement_start_pos = None
-                self.setCursor(Qt.CursorShape.CrossCursor)
                 self.measurement_finished.emit()
             elif self.mouse_mode == "text_annotation" and self.text_annotating:
                 # Text annotation finishing is handled by the text item's editing callback
@@ -2468,46 +2435,6 @@ class ImageViewer(QGraphicsView):
         
         return region
 
-    def _render_scene_region(self, center_x: float, center_y: float, size: float, zoom_factor: float) -> Optional[QPixmap]:
-        """
-        Render a region of the graphics scene (image + annotations) for the magnifier.
-        Uses QGraphicsScene.render() so measurements, ROIs, and other scene items are visible.
-
-        Args:
-            center_x: Scene X coordinate of center point
-            center_y: Scene Y coordinate of center point
-            size: Size of region to extract (in scene coordinates before zoom)
-            zoom_factor: Magnification factor to apply
-
-        Returns:
-            QPixmap of the rendered region, or None if rendering fails
-        """
-        if self.scene is None:
-            return None
-        half_size = size / 2.0
-        source_rect = QRectF(center_x - half_size, center_y - half_size, size, size)
-        # Clamp to image bounds when available so we don't render empty scene area
-        if self.image_item is not None:
-            image_rect = self.image_item.boundingRect()
-            source_rect = source_rect.intersected(image_rect)
-        else:
-            source_rect = source_rect.intersected(self.scene.sceneRect())
-        if source_rect.isEmpty() or source_rect.width() <= 0 or source_rect.height() <= 0:
-            return None
-        out_w = max(1, int(source_rect.width() * zoom_factor))
-        out_h = max(1, int(source_rect.height() * zoom_factor))
-        image = QImage(out_w, out_h, QImage.Format.Format_ARGB32_Premultiplied)
-        image.fill(QColor(0, 0, 0))
-        painter = QPainter(image)
-        try:
-            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, self._smooth_when_zoomed)
-            target_rect = QRectF(0, 0, out_w, out_h)
-            self.scene.render(painter, target_rect, source_rect)
-        finally:
-            painter.end()
-        return QPixmap.fromImage(image)
-
     def show_handle_drag_magnifier(self, scene_pos: QPointF) -> None:
         """
         Show the handle-drag magnifier centered on the given scene position.
@@ -2528,7 +2455,7 @@ class ImageViewer(QGraphicsView):
             if current_zoom > 0
             else float(self._handle_drag_magnifier_size) / 2.0
         )
-        magnified_pixmap = self._render_scene_region(
+        magnified_pixmap = self._extract_image_region(
             scene_pos.x(), scene_pos.y(), adjusted_region_size, magnifier_zoom
         )
         if magnified_pixmap is not None and self.handle_drag_magnifier_widget is not None:
@@ -2553,7 +2480,7 @@ class ImageViewer(QGraphicsView):
             if current_zoom > 0
             else float(self._handle_drag_magnifier_size) / 2.0
         )
-        magnified_pixmap = self._render_scene_region(
+        magnified_pixmap = self._extract_image_region(
             scene_pos.x(), scene_pos.y(), adjusted_region_size, magnifier_zoom
         )
         if magnified_pixmap is not None:

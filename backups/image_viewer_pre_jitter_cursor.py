@@ -881,7 +881,7 @@ class ImageViewer(QGraphicsView):
         elif mode == "measure":
             self.roi_drawing_mode = None
             self.setDragMode(QGraphicsView.DragMode.NoDrag)
-            # Cursor set by _apply_cursor_for_mouse_mode() below
+            self.setCursor(Qt.CursorShape.CrossCursor)  # Could use different cursor
             # Reset measurement state when switching to measure mode
             self.measuring = False
             self.measurement_start_pos = None
@@ -930,7 +930,6 @@ class ImageViewer(QGraphicsView):
         # Keep SubWindowContainer cursor in sync so hit-test on container border shows tool cursor.
         # Also set cursor on the layout parent chain (layout_widget, MultiWindowLayout) so in 1x1
         # any background region shows the tool cursor and doesn't flicker to arrow.
-        self._apply_cursor_for_mouse_mode()
         from gui.sub_window_container import SubWindowContainer
         parent = self.parent()
         if isinstance(parent, SubWindowContainer):
@@ -942,35 +941,7 @@ class ImageViewer(QGraphicsView):
                 layout_grandparent = layout_parent.parent()
                 if layout_grandparent is not None:
                     layout_grandparent.setCursor(self.cursor())
-
-    def _apply_cursor_for_mouse_mode(self) -> None:
-        """Set cursor to the one appropriate for the current mouse_mode (used by set_mouse_mode and restore_cursor_for_current_mode)."""
-        mode = self.mouse_mode
-        if mode == "select":
-            self.setCursor(Qt.CursorShape.ArrowCursor)
-        elif mode in ("roi_ellipse", "roi_rectangle", "measure", "magnifier", "crosshair", "arrow_annotation") or mode == "auto_window_level":
-            self.setCursor(Qt.CursorShape.CrossCursor)
-        elif mode == "zoom":
-            self.setCursor(Qt.CursorShape.PointingHandCursor)
-        elif mode == "text_annotation":
-            self.setCursor(Qt.CursorShape.IBeamCursor)
-        else:  # pan
-            self.setCursor(Qt.CursorShape.OpenHandCursor)
-
-    def restore_cursor_for_current_mode(self) -> None:
-        """Restore the cursor to match the current mouse mode (e.g. after hiding it during measurement draw or handle drag)."""
-        self._apply_cursor_for_mouse_mode()
-        from gui.sub_window_container import SubWindowContainer
-        parent = self.parent()
-        if isinstance(parent, SubWindowContainer):
-            parent.setCursor(self.cursor())
-            layout_parent = parent.parent()
-            if layout_parent is not None:
-                layout_parent.setCursor(self.cursor())
-                layout_grandparent = layout_parent.parent()
-                if layout_grandparent is not None:
-                    layout_grandparent.setCursor(self.cursor())
-
+    
     def set_roi_drawing_mode(self, mode: Optional[str]) -> None:
         """
         Set ROI drawing mode (legacy method for backward compatibility).
@@ -1196,10 +1167,9 @@ class ImageViewer(QGraphicsView):
                 elif self.mouse_mode == "measure":
                     # Measurement mode - start or finish measurement
                     if not self.measuring:
-                        # Start new measurement (first end placed); hide cursor while drawing line
+                        # Start new measurement
                         self.measuring = True
                         self.measurement_start_pos = scene_pos
-                        self.setCursor(Qt.CursorShape.BlankCursor)
                         self.measurement_started.emit(scene_pos)
                     else:
                         # Finish current measurement
@@ -1604,9 +1574,7 @@ class ImageViewer(QGraphicsView):
                 self.zoom_changed.emit(self.current_zoom)
                 self._check_transform_changed()
         elif self.mouse_mode == "measure" and self.measuring and self.measurement_start_pos is not None:
-            # Measurement mode - update measurement while dragging; keep cursor hidden
-            if self.cursor().shape() != Qt.CursorShape.BlankCursor:
-                self.setCursor(Qt.CursorShape.BlankCursor)
+            # Measurement mode - update measurement while dragging
             if self.dragMode() == QGraphicsView.DragMode.ScrollHandDrag:
                 self.setDragMode(QGraphicsView.DragMode.NoDrag)
             
@@ -1693,10 +1661,9 @@ class ImageViewer(QGraphicsView):
                 if self.mouse_mode == "pan":
                     self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
             elif self.mouse_mode == "measure" and self.measuring:
-                # Finish measurement (if not already finished by second click); restore cursor
+                # Finish measurement (if not already finished by second click)
                 self.measuring = False
                 self.measurement_start_pos = None
-                self.setCursor(Qt.CursorShape.CrossCursor)
                 self.measurement_finished.emit()
             elif self.mouse_mode == "text_annotation" and self.text_annotating:
                 # Text annotation finishing is handled by the text item's editing callback

@@ -15,7 +15,7 @@ Requirements:
     - ImageViewer for scene operations
 """
 
-from PySide6.QtCore import QPointF, QTimer, Qt
+from PySide6.QtCore import QPointF, QTimer
 from typing import Optional, Callable, TYPE_CHECKING, Dict
 from pydicom.dataset import Dataset
 from tools.measurement_tool import MeasurementTool
@@ -385,18 +385,12 @@ class MeasurementCoordinator:
 
     def _on_handle_drag_start(self, scene_pos: QPointF, shift_held: bool) -> None:
         """
-        Handle start of measurement handle drag. Hide cursor and show magnifier only if Shift was held (Shift+drag).
+        Handle start of measurement handle drag. Show magnifier only if Shift was held (Shift+drag).
 
         Args:
             scene_pos: Scene position of the handle (start of drag).
             shift_held: True if Shift was held when the user started dragging the handle.
         """
-        # Use QApplication.setOverrideCursor so the blank cursor takes priority over both the
-        # view widget cursor and any QGraphicsItem cursor (e.g. the handle's SizeAllCursor).
-        # A plain setCursor() on the view widget is overridden by Qt each mouse-move event when
-        # the item under the cursor has its own cursor set.
-        from PySide6.QtWidgets import QApplication
-        QApplication.setOverrideCursor(Qt.CursorShape.BlankCursor)
         if shift_held and self.image_viewer is not None:
             self.image_viewer.show_handle_drag_magnifier(scene_pos)
 
@@ -406,12 +400,7 @@ class MeasurementCoordinator:
             self.image_viewer.update_handle_drag_magnifier(scene_pos)
 
     def _on_handle_drag_end(self) -> None:
-        """Hide handle-drag magnifier and restore cursor when handle drag ends."""
+        """Hide handle-drag magnifier when handle drag ends."""
         if self.image_viewer is not None:
             self.image_viewer.hide_handle_drag_magnifier()
-            self.image_viewer.restore_cursor_for_current_mode()
-        # Restore the override cursor set in _on_handle_drag_start.
-        from PySide6.QtWidgets import QApplication
-        if QApplication.overrideCursor() is not None:
-            QApplication.restoreOverrideCursor()
 
