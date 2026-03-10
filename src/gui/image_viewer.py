@@ -2515,6 +2515,11 @@ class ImageViewer(QGraphicsView):
         Widget is positioned with an offset so it does not cover the handle.
         """
         if self.handle_drag_magnifier_active:
+            if DEBUG_MAGNIFIER:
+                print(
+                    "[DEBUG-MAGNIFIER] ImageViewer.show_handle_drag_magnifier: "
+                    "already active; delegating to update_handle_drag_magnifier()"
+                )
             self.update_handle_drag_magnifier(scene_pos)
             return
         if self.handle_drag_magnifier_widget is None:
@@ -2528,19 +2533,30 @@ class ImageViewer(QGraphicsView):
             if current_zoom > 0
             else float(self._handle_drag_magnifier_size) / 2.0
         )
+        if DEBUG_MAGNIFIER:
+            print(
+                "[DEBUG-MAGNIFIER] ImageViewer.show_handle_drag_magnifier: "
+                f"scene_pos=({scene_pos.x():.1f},{scene_pos.y():.1f}), "
+                f"current_zoom={current_zoom:.3f}, "
+                f"adjusted_region_size={adjusted_region_size:.3f}, "
+                f"magnifier_zoom={magnifier_zoom:.3f}"
+            )
         magnified_pixmap = self._render_scene_region(
             scene_pos.x(), scene_pos.y(), adjusted_region_size, magnifier_zoom
         )
         if magnified_pixmap is not None and self.handle_drag_magnifier_widget is not None:
             self.handle_drag_magnifier_widget.update_magnified_region(magnified_pixmap)
-            view_pos = self.mapFromScene(scene_pos)
-            global_pos = self.mapToGlobal(view_pos.toPoint())
-            # Offset so magnifier appears above-right of the handle and does not cover it
-            offset_x = 20
-            offset_y = -self._handle_drag_magnifier_size - 10
-            self.handle_drag_magnifier_widget.show_at_position(
-                QPoint(global_pos.x() + offset_x, global_pos.y() + offset_y)
-            )
+            # Use the actual cursor position in global screen coordinates – identical to how
+            # the main Magnifier tool positions its widget, and avoids any silent exceptions
+            # from mapFromScene/mapToGlobal on QGraphicsView during a drag event.
+            from PySide6.QtGui import QCursor
+            global_pos = QCursor.pos()
+            if DEBUG_MAGNIFIER:
+                print(
+                    "[DEBUG-MAGNIFIER] ImageViewer.show_handle_drag_magnifier: "
+                    f"cursor_global_pos=({global_pos.x()},{global_pos.y()})"
+                )
+            self.handle_drag_magnifier_widget.show_at_position(global_pos)
 
     def update_handle_drag_magnifier(self, scene_pos: QPointF) -> None:
         """Update handle-drag magnifier content and position (called on handle move)."""
@@ -2553,23 +2569,34 @@ class ImageViewer(QGraphicsView):
             if current_zoom > 0
             else float(self._handle_drag_magnifier_size) / 2.0
         )
+        if DEBUG_MAGNIFIER:
+            print(
+                "[DEBUG-MAGNIFIER] ImageViewer.update_handle_drag_magnifier: "
+                f"scene_pos=({scene_pos.x():.1f},{scene_pos.y():.1f}), "
+                f"current_zoom={current_zoom:.3f}, "
+                f"adjusted_region_size={adjusted_region_size:.3f}, "
+                f"magnifier_zoom={magnifier_zoom:.3f}"
+            )
         magnified_pixmap = self._render_scene_region(
             scene_pos.x(), scene_pos.y(), adjusted_region_size, magnifier_zoom
         )
         if magnified_pixmap is not None:
             self.handle_drag_magnifier_widget.update_magnified_region(magnified_pixmap)
-            view_pos = self.mapFromScene(scene_pos)
-            global_pos = self.mapToGlobal(view_pos.toPoint())
-            offset_x = 20
-            offset_y = -self._handle_drag_magnifier_size - 10
-            self.handle_drag_magnifier_widget.show_at_position(
-                QPoint(global_pos.x() + offset_x, global_pos.y() + offset_y)
-            )
+            from PySide6.QtGui import QCursor
+            global_pos = QCursor.pos()
+            if DEBUG_MAGNIFIER:
+                print(
+                    "[DEBUG-MAGNIFIER] ImageViewer.update_handle_drag_magnifier: "
+                    f"cursor_global_pos=({global_pos.x()},{global_pos.y()})"
+                )
+            self.handle_drag_magnifier_widget.show_at_position(global_pos)
 
     def hide_handle_drag_magnifier(self) -> None:
         """Hide the handle-drag magnifier (called when handle drag ends)."""
         self.handle_drag_magnifier_active = False
         if self.handle_drag_magnifier_widget is not None:
+            if DEBUG_MAGNIFIER:
+                print("[DEBUG-MAGNIFIER] ImageViewer.hide_handle_drag_magnifier: hiding widget")
             self.handle_drag_magnifier_widget.hide()
 
     def _get_pixel_value_at_coords(

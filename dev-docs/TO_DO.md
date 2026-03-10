@@ -32,7 +32,7 @@
 - [ ] make it possible to move the layout map thumbnail when opened from context menu
 - [ ] when loading PET CT study there is a ~10 second lag before the loading progress window pops up - what is happening then?
 - [ ] make default histogram plot and window smaller and allow resizing much smaller
-- [ ] make toolbar customizable
+- [ ] make toolbar contents, ordering customizable
 - [ ] make it possible to window/level by holding W and dragging mouse or by holding middle or right mouse button and dragging or something
 - [ ] make it possible to zoom in/out with pinch on trackpad
 - [ ] Put same little colored dot on layout map thumbnails that is on series thumbnails in navigator?
@@ -41,10 +41,9 @@
 - [ ] make the min/max window width/level based on the min/max pixel value (raw or rescaled) based on bit depth and rescaling equation?
 - [ ] also see to-dos on Unpushed Edits google sheet
 - [ ] Name - DICOM Viewer + ?
-- [ ] tighten "hitboxes" or whatever for annotations and ROIS - eg, for a large ellipse ROI, would be better if only the ellipse boundary (with some tolerance) was hitbox, not entire interior as well, so you could draw an ellipse inside an existing ellipse, for instance
 - Check target/filter tag on mammo overlay option
 - Make it easier to position distance measurements - easier to see ends, hide handles while dragging - magnify around end when dragging handle (or maybe if shift+click and drag handle)
-- Crosshair ROIs not disappearing or updating values when changing series by clicking in navigator - FIXED?
+- Crosshair ROIs not disappearing or updating values when changing series by clicking in navigator
 - Add measure angle
 - Make magnifier show annotations/measurements?
 - Make default line thicknesses and font sizes for annotations a bit smaller
