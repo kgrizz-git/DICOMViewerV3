@@ -34,7 +34,6 @@
 - [ ] make default histogram plot and window smaller and allow resizing much smaller
 - [ ] make toolbar contents, ordering customizable
 - [ ] make it possible to window/level by holding W and dragging mouse or by holding middle or right mouse button and dragging or something
-- [ ] make it possible to zoom in/out with pinch on trackpad
 - [ ] make the min/max window width/level based on the min/max pixel value (raw or rescaled) based on bit depth and rescaling equation?
 - [ ] also see to-dos on Unpushed Edits google sheet
 - [ ] Name - DICOM Viewer + ?
