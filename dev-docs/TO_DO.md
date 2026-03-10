@@ -35,8 +35,6 @@
 - [ ] make toolbar contents, ordering customizable
 - [ ] make it possible to window/level by holding W and dragging mouse or by holding middle or right mouse button and dragging or something
 - [ ] make it possible to zoom in/out with pinch on trackpad
-- [ ] Put same little colored dot on layout map thumbnails that is on series thumbnails in navigator
-- [ ] make color of border highlight in layout thumbnail for focused window match the border highlight in the main viewer (light blue)
 - [ ] make the min/max window width/level based on the min/max pixel value (raw or rescaled) based on bit depth and rescaling equation?
 - [ ] also see to-dos on Unpushed Edits google sheet
 - [ ] Name - DICOM Viewer + ?

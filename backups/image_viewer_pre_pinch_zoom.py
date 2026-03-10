@@ -23,8 +23,7 @@ from PySide6.QtWidgets import (QGraphicsView, QGraphicsScene, QGraphicsPixmapIte
                                 QWidget, QVBoxLayout, QMenu, QApplication)
 from PySide6.QtCore import Qt, QRectF, Signal, QPointF, QPoint, QTimer, QEvent
 from PySide6.QtGui import (QPixmap, QImage, QWheelEvent, QKeyEvent, QMouseEvent,
-                          QPainter, QColor, QTransform, QDragEnterEvent, QDropEvent,
-                          QNativeGestureEvent)
+                          QPainter, QColor, QTransform, QDragEnterEvent, QDropEvent)
 from PIL import Image
 from utils.debug_flags import DEBUG_NAV, DEBUG_MAGNIFIER
 import numpy as np
@@ -830,52 +829,14 @@ class ImageViewer(QGraphicsView):
             enabled: True if privacy view is enabled, False otherwise
         """
         self._privacy_view_enabled = enabled
-
-    def event(self, event: QEvent) -> bool:
-        """
-        Handle native gesture events (e.g. trackpad pinch-to-zoom).
-        Pinch zoom is independent of scroll wheel mode: pinch always zooms the image
-        without affecting slice navigation or other wheel behavior.
-        """
-        if event.type() == QEvent.Type.NativeGesture and isinstance(event, QNativeGestureEvent):
-            if event.gestureType() == Qt.NativeGestureType.ZoomNativeGesture:
-                self._apply_pinch_zoom(event.value())
-                event.accept()
-                return True
-        return super().event(event)
-
-    def _apply_pinch_zoom(self, value: float) -> None:
-        """
-        Apply incremental zoom from a native pinch gesture.
-        value is the scale delta: new_scale = current_scale * (1 + value).
-        Called only when an image is displayed; no-op otherwise.
-        """
-        if self.image_item is None:
-            return
-        # Qt: item.scale = item.scale * (1 + event.value()); value is typically small
-        new_zoom = self.current_zoom * (1.0 + value)
-        new_zoom = max(self.min_zoom, min(self.max_zoom, new_zoom))
-        current_scale = self.transform().m11()
-        scale_factor = new_zoom / current_scale
-        self.scale(scale_factor, scale_factor)
-        self.current_zoom = new_zoom
-        self.zoom_changed.emit(self.current_zoom)
-        self._check_transform_changed()
-        self._restart_smooth_idle_timer()
-
+    
     def wheelEvent(self, event: QWheelEvent) -> None:
         """
         Handle mouse wheel events for zooming or slice navigation.
-        Ctrl+wheel is always treated as zoom (e.g. Windows trackpad pinch sent as Ctrl+wheel).
+        
+        Args:
+            event: Wheel event
         """
-        # Ctrl+wheel: always zoom (common for trackpad pinch on Windows)
-        if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
-            if event.angleDelta().y() > 0:
-                self.zoom_in()
-            elif event.angleDelta().y() < 0:
-                self.zoom_out()
-            event.accept()
-            return
         # Use scroll wheel mode to determine behavior
         if self.scroll_wheel_mode == "zoom":
             # Perform zoom - AnchorViewCenter is set in __init__ and ensures zooming is centered on viewport center
