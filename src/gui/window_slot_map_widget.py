@@ -22,9 +22,9 @@ Requirements:
 
 from typing import Callable, List, Optional
 
-from PySide6.QtCore import Qt, QRect, QSize
+from PySide6.QtCore import Qt, QPoint, QRect, QSize
 from PySide6.QtGui import QColor, QPainter, QPen, QPixmap
-from PySide6.QtWidgets import QWidget, QSizePolicy
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QWidget, QSizePolicy
 
 from gui.style_constants import FOCUS_BORDER_COLOR
 from gui.navigator_colors import SUBWINDOW_DOT_COLORS
@@ -245,4 +245,102 @@ class WindowSlotMapWidget(QWidget):
             painter.restore()
 
         painter.end()
+
+
+class _DraggableWindowSlotMapContainer(QWidget):
+    """
+    Container that holds a WindowSlotMapWidget and implements drag-to-move
+    for its parent window (used when shown as a popup from the context menu).
+    Mouse press/move/release on this widget move the parent QDialog and
+    constrain position to the boundary widget (e.g. main window).
+    """
+
+    def __init__(
+        self,
+        parent: QWidget,
+        boundary_widget: QWidget,
+        on_position_changed: Optional[Callable[[int, int], None]] = None,
+    ) -> None:
+        super().__init__(parent)
+        self._boundary_widget = boundary_widget
+        self._on_position_changed = on_position_changed
+        self._drag_start_global: Optional[QPoint] = None
+        self._window_start_pos: Optional[QPoint] = None
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(0)
+        self._map_widget = WindowSlotMapWidget(self)
+        layout.addWidget(self._map_widget)
+
+    def get_map_widget(self) -> WindowSlotMapWidget:
+        """Return the embedded WindowSlotMapWidget for setting callbacks and refresh."""
+        return self._map_widget
+
+    def _boundary_rect_global(self) -> QRect:
+        """Return the boundary widget's frame geometry in global coordinates."""
+        return self._boundary_widget.frameGeometry()
+
+    def mousePressEvent(self, event) -> None:  # type: ignore[override]
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_start_global = event.globalPosition().toPoint()
+            win = self.window()
+            self._window_start_pos = win.mapToGlobal(QPoint(0, 0)) if win else QPoint(0, 0)
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event) -> None:  # type: ignore[override]
+        if (
+            self._drag_start_global is not None
+            and self._window_start_pos is not None
+            and event.buttons() & Qt.MouseButton.LeftButton
+        ):
+            win = self.window()
+            if win is not None:
+                delta = event.globalPosition().toPoint() - self._drag_start_global
+                new_pos = self._window_start_pos + delta
+                boundary = self._boundary_rect_global()
+                # Clamp so the whole popup stays within the boundary
+                w, h = win.width(), win.height()
+                new_x = max(boundary.left(), min(new_pos.x(), boundary.right() - w))
+                new_y = max(boundary.top(), min(new_pos.y(), boundary.bottom() - h))
+                win.move(new_x, new_y)
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event) -> None:  # type: ignore[override]
+        if event.button() == Qt.MouseButton.LeftButton and self._drag_start_global is not None:
+            win = self.window()
+            if win is not None and self._on_position_changed is not None:
+                pos = win.mapToGlobal(QPoint(0, 0))
+                self._on_position_changed(pos.x(), pos.y())
+            self._drag_start_global = None
+            self._window_start_pos = None
+        super().mouseReleaseEvent(event)
+
+
+class WindowSlotMapPopupDialog(QDialog):
+    """
+    Frameless dialog that shows the window-slot map thumbnail (from context menu).
+    Contains a draggable container so the user can move the popup; position
+    is constrained to the boundary widget (main window) and can be persisted.
+    """
+
+    def __init__(
+        self,
+        parent: QWidget,
+        boundary_widget: QWidget,
+        on_position_changed: Optional[Callable[[int, int], None]] = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint)
+        self.setModal(False)
+        self._container = _DraggableWindowSlotMapContainer(
+            self, boundary_widget, on_position_changed
+        )
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._container)
+
+    def get_map_widget(self) -> WindowSlotMapWidget:
+        """Return the embedded WindowSlotMapWidget for setting callbacks and refresh."""
+        return self._container.get_map_widget()
 

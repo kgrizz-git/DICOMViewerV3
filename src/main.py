@@ -1465,11 +1465,9 @@ class DICOMViewerApp(QObject):
 
     def _on_window_slot_map_popup_requested(self) -> None:
         """Show or hide a small popup with the window-slot map near the cursor (toggle)."""
-        # Reuse callbacks from the main window's thumbnail widget if available.
-        from PySide6.QtWidgets import QDialog, QVBoxLayout
-        from PySide6.QtCore import Qt, QPoint
+        from PySide6.QtCore import QPoint
         from PySide6.QtGui import QCursor
-        from gui.window_slot_map_widget import WindowSlotMapWidget
+        from gui.window_slot_map_widget import WindowSlotMapPopupDialog
 
         base_widget = getattr(self.main_window, "window_slot_map_widget", None)
         if base_widget is None:
@@ -1482,21 +1480,26 @@ class DICOMViewerApp(QObject):
                 dlg.close()
                 return
 
-        # Lazily create dialog and embedded widget
+        # Lazily create draggable popup dialog
         if not hasattr(self, "_window_slot_map_dialog") or self._window_slot_map_dialog is None:
-            dlg = QDialog(self.main_window)
-            dlg.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint)
-            dlg.setModal(False)
-            layout = QVBoxLayout(dlg)
-            layout.setContentsMargins(4, 4, 4, 4)
-            layout.setSpacing(0)
-            widget = WindowSlotMapWidget(dlg)
-            layout.addWidget(widget)
+
+            def on_position_changed(x: int, y: int) -> None:
+                try:
+                    self.config_manager.set_layout_map_popup_position(x, y)
+                except Exception:
+                    pass
+
+            dlg = WindowSlotMapPopupDialog(
+                self.main_window,
+                boundary_widget=self.main_window,
+                on_position_changed=on_position_changed,
+            )
             self._window_slot_map_dialog = dlg
-            self._window_slot_map_widget_popup = widget
+            self._window_slot_map_widget_popup = dlg.get_map_widget()
         else:
             dlg = self._window_slot_map_dialog
-            widget = self._window_slot_map_widget_popup
+
+        widget = self._window_slot_map_widget_popup
 
         # Configure callbacks to mirror the main thumbnail (including thumbnails)
         try:
@@ -1510,8 +1513,21 @@ class DICOMViewerApp(QObject):
             pass
 
         widget.refresh()
-        global_pos = QCursor.pos()
-        dlg.move(global_pos + QPoint(16, 16))
+
+        # Restore saved position if valid and within main window; otherwise place near cursor
+        saved = self.config_manager.get_layout_map_popup_position()
+        boundary = self.main_window.frameGeometry()
+        if saved is not None:
+            x, y = saved
+            # Clamp so popup stays within main window
+            w, h = dlg.width(), dlg.height()
+            x = max(boundary.left(), min(x, boundary.right() - w))
+            y = max(boundary.top(), min(y, boundary.bottom() - h))
+            dlg.move(x, y)
+        else:
+            global_pos = QCursor.pos()
+            dlg.move(global_pos + QPoint(16, 16))
+
         dlg.show()
         dlg.raise_()
     
@@ -2306,8 +2322,20 @@ class DICOMViewerApp(QObject):
             self.dialog_coordinator.update_histogram_for_subwindow(self.focused_subwindow_index)
     
     def _update_histogram_for_focused_subwindow(self) -> None:
-        """Update the histogram dialog for the currently focused subwindow, if it is open."""
-        if hasattr(self, 'dialog_coordinator'):
+        """Schedule a throttled update of the histogram dialog so W/L and slice changes stay responsive."""
+        if not hasattr(self, "dialog_coordinator"):
+            return
+        if not hasattr(self, "_histogram_update_timer") or self._histogram_update_timer is None:
+            self._histogram_update_timer = QTimer(self)
+            self._histogram_update_timer.setSingleShot(True)
+            self._histogram_update_timer.setInterval(300)
+            self._histogram_update_timer.timeout.connect(self._do_update_histogram_for_focused_subwindow)
+        self._histogram_update_timer.stop()
+        self._histogram_update_timer.start()
+
+    def _do_update_histogram_for_focused_subwindow(self) -> None:
+        """Update the histogram dialog for the currently focused subwindow (called after throttle delay)."""
+        if hasattr(self, "dialog_coordinator"):
             self.dialog_coordinator.update_histogram_for_subwindow(self.focused_subwindow_index)
     
     def _on_reset_all_views(self) -> None:

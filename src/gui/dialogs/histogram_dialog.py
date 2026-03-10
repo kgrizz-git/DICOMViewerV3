@@ -20,7 +20,8 @@ Requirements:
 """
 
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QHBoxLayout, QPushButton
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QRect
+from PySide6.QtGui import QResizeEvent, QCloseEvent
 from typing import Optional, Callable
 from pydicom.dataset import Dataset
 from tools.histogram_widget import HistogramWidget
@@ -52,7 +53,9 @@ class HistogramDialog(QDialog):
         get_series_uid: Optional[Callable[[], Optional[str]]] = None,
         get_series_datasets: Optional[Callable[[], Optional[list]]] = None,
         get_all_studies: Optional[Callable[[], Optional[dict]]] = None,
-        title_suffix: str = ""
+        title_suffix: str = "",
+        get_restore_geometry: Optional[Callable[[], Optional[tuple]]] = None,
+        save_geometry_callback: Optional[Callable[[int, int, int, int], None]] = None,
     ):
         """
         Initialize the histogram dialog.
@@ -66,15 +69,20 @@ class HistogramDialog(QDialog):
             get_use_rescaled: Callback to get use_rescaled_values flag
             get_rescale_params: Callback to get (slope, intercept, type) tuple
             title_suffix: Optional suffix for window title (e.g. " (View 1)")
+            get_restore_geometry: Optional callback returning (x, y, width, height) to restore
+            save_geometry_callback: Optional callback (x, y, width, height) to persist geometry
         """
         super().__init__(parent)
-        
+        self.get_restore_geometry = get_restore_geometry
+        self.save_geometry_callback = save_geometry_callback
+        self._geometry_restored = False
+
         base_title = "Pixel Value Histogram"
         self.setWindowTitle(base_title + title_suffix if title_suffix else base_title)
         self.setModal(False)  # Non-modal so it can stay open
-        # Ensure the dialog is large enough to show the full histogram and labels
-        self.resize(800, 600)
-        self.setMinimumSize(700, 500)
+        # Default smaller size; user can resize down to minimum with font scaling
+        self.resize(520, 400)
+        self.setMinimumSize(280, 220)
         
         self.get_current_dataset = get_current_dataset
         self.get_current_slice_index = get_current_slice_index
@@ -330,8 +338,35 @@ class HistogramDialog(QDialog):
         self.log_scale_button.setText("Linear Scale" if self.use_log_scale else "Log Scale")
         self.histogram_widget.set_log_scale(self.use_log_scale)
     
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        """On resize, update histogram widget font sizes and persist geometry."""
+        super().resizeEvent(event)
+        if hasattr(self, "histogram_widget"):
+            w, h = event.size().width(), event.size().height()
+            self.histogram_widget.update_font_sizes_for_size(w, h)
+        if self.save_geometry_callback is not None:
+            geo = self.geometry()
+            self.save_geometry_callback(geo.x(), geo.y(), geo.width(), geo.height())
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        """Persist window geometry when closing."""
+        if self.save_geometry_callback is not None:
+            geo = self.geometry()
+            self.save_geometry_callback(geo.x(), geo.y(), geo.width(), geo.height())
+        super().closeEvent(event)
+
     def showEvent(self, event) -> None:
-        """Handle show event to update histogram when dialog is shown."""
+        """Restore saved geometry on first show; update histogram when dialog is shown."""
         super().showEvent(event)
+        if not self._geometry_restored and self.get_restore_geometry is not None:
+            geom = self.get_restore_geometry()
+            if isinstance(geom, (list, tuple)) and len(geom) >= 4:
+                try:
+                    x, y, w, h = int(geom[0]), int(geom[1]), int(geom[2]), int(geom[3])
+                    if w >= self.minimumWidth() and h >= self.minimumHeight():
+                        self.setGeometry(QRect(x, y, w, h))
+                except (TypeError, ValueError):
+                    pass
+            self._geometry_restored = True
         self.update_histogram()
 

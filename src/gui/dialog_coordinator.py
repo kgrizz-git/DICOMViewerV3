@@ -304,9 +304,11 @@ class DialogCoordinator:
         if idx < 0 or idx > 3:
             return
         if self.histogram_dialogs.get(idx) is None:
-            callbacks = self.get_histogram_callbacks_for_subwindow(idx)
+            callbacks = dict(self.get_histogram_callbacks_for_subwindow(idx)) if self.get_histogram_callbacks_for_subwindow else {}
             if not callbacks:
                 return
+            callbacks["get_restore_geometry"] = self.config_manager.get_histogram_window_geometry
+            callbacks["save_geometry_callback"] = self.config_manager.set_histogram_window_geometry
             self.histogram_dialogs[idx] = HistogramDialog(
                 self.main_window,
                 title_suffix=f" (View {idx + 1})",

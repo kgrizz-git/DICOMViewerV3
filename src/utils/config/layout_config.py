@@ -1,14 +1,15 @@
 """
 Layout Config Mixin
 
-Manages multi-window layout settings: layout mode and view-slot order.
+Manages multi-window layout settings: layout mode, view-slot order,
+and layout map popup position.
 
 Mixin contract:
     Expects `self.config` (dict) and `self.save_config()` to be provided by
     the concrete ConfigManager class that inherits this mixin.
 """
 
-from typing import List
+from typing import List, Optional, Tuple
 
 
 class LayoutConfigMixin:
@@ -59,3 +60,30 @@ class LayoutConfigMixin:
         ):
             self.config["view_slot_order"] = list(order)
             self.save_config()
+
+    def get_layout_map_popup_position(self) -> Optional[Tuple[int, int]]:
+        """
+        Get the last saved position (x, y) of the layout map thumbnail popup,
+        in global/screen coordinates. Used when opening the popup from the context menu.
+
+        Returns:
+            (x, y) tuple or None if not set (e.g. first use)
+        """
+        raw = self.config.get("layout_map_popup_position")
+        if isinstance(raw, (list, tuple)) and len(raw) >= 2:
+            try:
+                return (int(raw[0]), int(raw[1]))
+            except (TypeError, ValueError):
+                pass
+        return None
+
+    def set_layout_map_popup_position(self, x: int, y: int) -> None:
+        """
+        Save the position of the layout map thumbnail popup (e.g. after user drag).
+
+        Args:
+            x: Global x coordinate
+            y: Global y coordinate
+        """
+        self.config["layout_map_popup_position"] = [x, y]
+        self.save_config()
