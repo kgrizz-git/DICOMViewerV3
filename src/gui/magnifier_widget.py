@@ -107,8 +107,7 @@ class MagnifierWidget(QWidget):
             Qt.TransformationMode.SmoothTransformation
         )
         
-        if DEBUG_MAGNIFIER:
-            print(f"[DEBUG-MAGNIFIER] update_magnified_region: final_display_size=({scaled_pixmap.width()}x{scaled_pixmap.height()}), effective_zoom={target_size / pixmap.width():.3f}x")
+        # Keep this debug lightweight: only log input size above, not every derived metric.
         
         self.image_label.setPixmap(scaled_pixmap)
     
@@ -121,13 +120,16 @@ class MagnifierWidget(QWidget):
         Args:
             global_pos: Global screen position (QPoint)
         """
-        # Center the magnifier on the cursor
+        # Center the magnifier on the requested global position
         x = global_pos.x() - self.magnifier_size // 2
         y = global_pos.y() - self.magnifier_size // 2
         
-        # Ensure widget stays on screen
+        # Ensure widget stays on screen – use the screen that contains the target point
         from PySide6.QtWidgets import QApplication
-        screen = QApplication.primaryScreen().geometry()
+        app = QApplication.instance()
+        screen_obj = app.screenAt(global_pos) if app is not None else None
+        screen = (screen_obj.geometry() if screen_obj is not None
+                  else QApplication.primaryScreen().geometry())
         
         # Adjust if would go off left edge
         if x < screen.left():
@@ -145,6 +147,14 @@ class MagnifierWidget(QWidget):
         if y + self.magnifier_size > screen.bottom():
             y = screen.bottom() - self.magnifier_size
         
+        if DEBUG_MAGNIFIER:
+            print(
+                "[DEBUG-MAGNIFIER] MagnifierWidget.show_at_position: "
+                f"requested_global=({global_pos.x()},{global_pos.y()}), "
+                f"screen=({screen.left()},{screen.top()})-({screen.right()},{screen.bottom()}), "
+                f"final_pos=({x},{y}), size={self.magnifier_size}"
+            )
+
         self.move(x, y)
         self.show()
         self.raise_()

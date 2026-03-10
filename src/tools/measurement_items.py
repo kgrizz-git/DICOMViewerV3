@@ -43,9 +43,10 @@ HandleDragMoveCallback = Callable[[QPointF], None]
 HandleDragEndCallback = Callable[[], None]
 
 try:
-    from utils.debug_flags import DEBUG_MEASUREMENT_DRAG
+    from utils.debug_flags import DEBUG_MEASUREMENT_DRAG, DEBUG_MAGNIFIER
 except ImportError:
     DEBUG_MEASUREMENT_DRAG = False
+    DEBUG_MAGNIFIER = False
 
 # #region agent log
 def _debug_log(location: str, message: str, data: dict, hypothesis_id: str) -> None:
@@ -234,7 +235,16 @@ class MeasurementHandle(QGraphicsEllipseItem):
             self.update()  # Repaint so this handle is hidden during drag
 
             # Notify for optional handle-drag magnifier (Shift+drag)
-            shift_held = (event.modifiers() & Qt.KeyboardModifier.ShiftModifier) != 0
+            modifiers = event.modifiers()
+            shift_held = (modifiers & Qt.KeyboardModifier.ShiftModifier) != 0
+            if DEBUG_MAGNIFIER:
+                print(
+                    f"[DEBUG-MAGNIFIER] MeasurementHandle.mousePressEvent: "
+                    f"is_start={self.is_start}, shift_held={shift_held}, "
+                    f"modifiers={modifiers}, "
+                    f"handle_scene_pos=({self.pos().x():.1f},{self.pos().y():.1f}), "
+                    f"has_start_cb={bool(getattr(self.parent_measurement, 'on_handle_drag_start_callback', None))}"
+                )
             if getattr(self.parent_measurement, 'on_handle_drag_start_callback', None):
                 try:
                     self.parent_measurement.on_handle_drag_start_callback(self.pos(), shift_held)
@@ -527,18 +537,22 @@ class MeasurementItem(QGraphicsItemGroup):
             painter.setPen(selection_pen)
             line = self.line_item.line()
             painter.drawLine(line)
-            # Endpoint markers so line ends stay visible when handles are hidden during drag
+            # Endpoint markers so line ends stay visible when handles are hidden during drag.
+            # Skip the crosshair at the end being dragged so it does not overlay the cursor.
+            dragging = getattr(self, '_dragging_handle', None)
             marker_half = 3.0
             end_marker_pen = QPen(QColor(255, 255, 0), 1.5)
             painter.setPen(end_marker_pen)
             painter.setBrush(Qt.BrushStyle.NoBrush)
-            # Start point (group local 0,0)
-            painter.drawLine(QPointF(-marker_half, 0), QPointF(marker_half, 0))
-            painter.drawLine(QPointF(0, -marker_half), QPointF(0, marker_half))
-            # End point (group local = end_relative)
+            # Start point (group local 0,0) – skip if start handle is being dragged
+            if dragging is None or not dragging.is_start:
+                painter.drawLine(QPointF(-marker_half, 0), QPointF(marker_half, 0))
+                painter.drawLine(QPointF(0, -marker_half), QPointF(0, marker_half))
+            # End point (group local = end_relative) – skip if end handle is being dragged
             p2 = line.p2()
-            painter.drawLine(QPointF(p2.x() - marker_half, p2.y()), QPointF(p2.x() + marker_half, p2.y()))
-            painter.drawLine(QPointF(p2.x(), p2.y() - marker_half), QPointF(p2.x(), p2.y() + marker_half))
+            if dragging is None or dragging.is_start:
+                painter.drawLine(QPointF(p2.x() - marker_half, p2.y()), QPointF(p2.x() + marker_half, p2.y()))
+                painter.drawLine(QPointF(p2.x(), p2.y() - marker_half), QPointF(p2.x(), p2.y() + marker_half))
             painter.restore()
 
     def show_handles(self) -> None:
