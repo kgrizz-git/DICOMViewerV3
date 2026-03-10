@@ -1,3 +1,8 @@
+---
+description: 
+alwaysApply: true
+---
+
 # Agent instructions – DICOM Viewer V3
 
 Guidance for AI agents and developers working in this repository.
@@ -19,7 +24,7 @@ If no venv exists, create one: `python -m venv venv`, activate it, then `pip ins
 
 ## Other conventions
 
-- See `.cursor/rules` and user rules for backup-before-modify, testing, and commit guidelines. **Backups:** If a plan or task requires backing up a file before modifying it, do not proceed with edits until the backup is verified (e.g. file exists and has content) or the user has been asked; never assume a backup succeeded without verification.
+- See `.cursor/rules` and user rules.  Before major refactors only, backup files before changing. Do not proceed with edits until the backup is verified (e.g. file exists and has content) or the user has been asked.
 - Project layout: `src/` (application), `tests/` (tests), `dev-docs/` (plans, assessments).
 - **Versioning**: Application version is defined in a single place, `src/version.py` (`__version__`). Use semantic versioning; release steps are in `dev-docs/RELEASING.md`, with full rules in `dev-docs/info/SEMANTIC_VERSIONING_GUIDE.md`.
 

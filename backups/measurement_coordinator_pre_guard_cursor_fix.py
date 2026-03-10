@@ -391,12 +391,8 @@ class MeasurementCoordinator:
             scene_pos: Scene position of the handle (start of drag).
             shift_held: True if Shift was held when the user started dragging the handle.
         """
-        # Use QApplication.setOverrideCursor so the blank cursor takes priority over both the
-        # view widget cursor and any QGraphicsItem cursor (e.g. the handle's SizeAllCursor).
-        # A plain setCursor() on the view widget is overridden by Qt each mouse-move event when
-        # the item under the cursor has its own cursor set.
-        from PySide6.QtWidgets import QApplication
-        QApplication.setOverrideCursor(Qt.CursorShape.BlankCursor)
+        if self.image_viewer is not None:
+            self.image_viewer.setCursor(Qt.CursorShape.BlankCursor)
         if shift_held and self.image_viewer is not None:
             self.image_viewer.show_handle_drag_magnifier(scene_pos)
 
@@ -410,8 +406,4 @@ class MeasurementCoordinator:
         if self.image_viewer is not None:
             self.image_viewer.hide_handle_drag_magnifier()
             self.image_viewer.restore_cursor_for_current_mode()
-        # Restore the override cursor set in _on_handle_drag_start.
-        from PySide6.QtWidgets import QApplication
-        if QApplication.overrideCursor() is not None:
-            QApplication.restoreOverrideCursor()
 
