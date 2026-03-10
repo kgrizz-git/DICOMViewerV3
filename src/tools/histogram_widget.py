@@ -56,15 +56,23 @@ class HistogramWidget(QWidget):
         self.global_x_min: Optional[float] = None
         self.global_x_max: Optional[float] = None
     
+    # Font size tiers for responsive scaling (min width threshold -> (title_pt, label_pt, tick_pt))
+    _FONT_TIERS = [
+        (0, (7, 7, 6)),    # very small
+        (360, (8, 8, 7)),  # small
+        (500, (10, 9, 8)), # medium
+        (700, (12, 10, 9)), # default/large
+    ]
+
     def _create_ui(self) -> None:
         """Create the UI components."""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(5, 5, 5, 5)
         
-        # Title
-        title_label = QLabel("Histogram")
-        title_label.setStyleSheet("font-weight: bold; font-size: 12pt;")
-        layout.addWidget(title_label)
+        # Title (stored for font scaling on resize)
+        self._title_label = QLabel("Histogram")
+        self._title_label.setStyleSheet("font-weight: bold; font-size: 12pt;")
+        layout.addWidget(self._title_label)
         
         # Matplotlib figure
         self.figure = Figure(figsize=(5, 4), dpi=100)
@@ -131,7 +139,7 @@ class HistogramWidget(QWidget):
     def set_global_pixel_range(self, x_min: Optional[float], x_max: Optional[float]) -> None:
         """
         Set an optional global pixel value range for the x-axis.
-        
+
         Args:
             x_min: Minimum pixel value across the series (or None to use per-slice range)
             x_max: Maximum pixel value across the series (or None to use per-slice range)
@@ -139,6 +147,30 @@ class HistogramWidget(QWidget):
         self.global_x_min = x_min
         self.global_x_max = x_max
         self._update_histogram()
+
+    def update_font_sizes_for_size(self, width: int, height: int) -> None:
+        """
+        Update title, axis labels, tick labels, and legend font sizes based on
+        the current widget/dialog size so the plot remains readable when resized smaller.
+        Uses size tiers with a minimum cap so fonts do not shrink below legibility.
+        """
+        # Use the smaller dimension to pick tier so narrow or short windows get smaller fonts
+        size_key = min(width, height) if width > 0 and height > 0 else 700
+        title_pt, label_pt, tick_pt = (12, 10, 9)  # default
+        for threshold, (t_pt, l_pt, k_pt) in reversed(self._FONT_TIERS):
+            if size_key >= threshold:
+                title_pt, label_pt, tick_pt = t_pt, l_pt, k_pt
+                break
+        self._title_label.setStyleSheet(f"font-weight: bold; font-size: {title_pt}pt;")
+        self.axes.tick_params(axis="both", labelsize=tick_pt)
+        for ax_label in [self.axes.xaxis.get_label(), self.axes.yaxis.get_label()]:
+            ax_label.set_fontsize(label_pt)
+        legend = self.axes.get_legend()
+        if legend is not None:
+            legend.get_frame().set_linewidth(0.5)
+            for t in legend.get_texts():
+                t.set_fontsize(tick_pt)
+        self.canvas.draw_idle()
     
     def _update_histogram(self) -> None:
         """Update the histogram display."""
@@ -237,6 +269,7 @@ class HistogramWidget(QWidget):
         self.axes.legend(loc='upper right')
         self.axes.grid(True, alpha=0.3)
         
-        # Refresh canvas
+        # Apply current size-based font scaling so labels and legend match tier
+        self.update_font_sizes_for_size(self.size().width(), self.size().height())
         self.canvas.draw()
 

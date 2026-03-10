@@ -2,12 +2,14 @@
 Display Config Mixin
 
 Manages visual display settings: theme, image smoothing, privacy view,
-and scroll-wheel mode.
+scroll-wheel mode, and histogram window geometry.
 
 Mixin contract:
     Expects `self.config` (dict) and `self.save_config()` to be provided by
     the concrete ConfigManager class that inherits this mixin.
 """
+
+from typing import Optional, Tuple
 
 
 class DisplayConfigMixin:
@@ -90,3 +92,30 @@ class DisplayConfigMixin:
         if mode in ["slice", "zoom"]:
             self.config["scroll_wheel_mode"] = mode
             self.save_config()
+
+    def get_histogram_window_geometry(self) -> Optional[Tuple[int, int, int, int]]:
+        """
+        Get the last saved histogram dialog geometry (x, y, width, height).
+        Used to restore the histogram window position and size when reopened.
+
+        Returns:
+            (x, y, width, height) or None if not set
+        """
+        raw = self.config.get("histogram_window_geometry")
+        if isinstance(raw, (list, tuple)) and len(raw) >= 4:
+            try:
+                return (int(raw[0]), int(raw[1]), int(raw[2]), int(raw[3]))
+            except (TypeError, ValueError):
+                pass
+        return None
+
+    def set_histogram_window_geometry(self, x: int, y: int, width: int, height: int) -> None:
+        """
+        Save the histogram dialog geometry for next time.
+
+        Args:
+            x, y: Window position (global/screen)
+            width, height: Window size
+        """
+        self.config["histogram_window_geometry"] = [x, y, width, height]
+        self.save_config()
