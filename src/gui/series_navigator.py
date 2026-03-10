@@ -28,17 +28,9 @@ from pydicom.dataset import Dataset
 from core.dicom_processor import DICOMProcessor
 from PIL import Image
 from utils.debug_flags import DEBUG_NAV
+from gui.navigator_colors import SUBWINDOW_DOT_COLORS
 import numpy as np
 import time
-
-# Colored dot per open subwindow slot: blue, green, orange, magenta
-SUBWINDOW_DOT_COLORS: Dict[int, str] = {
-    0: "#2196F3",  # blue
-    1: "#4CAF50",  # green
-    2: "#FF9800",  # orange
-    3: "#E91E63",  # magenta
-}
-
 
 class StudyDivider(QFrame):
     """

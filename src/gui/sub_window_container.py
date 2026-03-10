@@ -26,6 +26,7 @@ from PySide6.QtGui import QDragEnterEvent, QDropEvent, QColor, QPainter, QPen
 from typing import Optional
 
 from gui.image_viewer import ImageViewer
+from gui.style_constants import FOCUS_BORDER_COLOR
 
 
 class SubWindowContainer(QFrame):
@@ -65,7 +66,7 @@ class SubWindowContainer(QFrame):
         # Border highlighting
         self.focus_border_width = 3
         self.normal_border_width = 1
-        self.focus_border_color = QColor(0, 170, 255)  # Blue highlight
+        self.focus_border_color = FOCUS_BORDER_COLOR  # Shared blue highlight
         self.normal_border_color = QColor(128, 128, 128)  # Gray
         
         # Set size policy to expand
