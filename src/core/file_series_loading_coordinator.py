@@ -637,6 +637,10 @@ class FileSeriesLoadingCoordinator:
             # Ensure cine player context and frame slider are updated when series changes
             app._update_cine_player_context()
 
+            # Update crosshairs for the newly selected series/slice in the focused subwindow
+            if 'crosshair_coordinator' in managers and managers['crosshair_coordinator']:
+                managers['crosshair_coordinator'].update_crosshairs_for_slice()
+
         # Update dot indicators to reflect the new subwindow assignment
         app.series_navigator.set_subwindow_assignments(app._get_subwindow_assignments())
 
