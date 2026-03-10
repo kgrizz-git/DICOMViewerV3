@@ -784,6 +784,11 @@ class FileSeriesLoadingCoordinator:
                     focused_study_uid = data.get('current_study_uid', '')
                     if focused_series_uid and focused_study_uid:
                         app.series_navigator.set_current_series(focused_series_uid, focused_study_uid)
+                        # Refresh colored dot indicators so the slot-to-series
+                        # mapping follows the newly selected series.
+                        app.series_navigator.set_subwindow_assignments(
+                            app._get_subwindow_assignments()
+                        )
                 app._update_cine_player_context()
                 return
 
@@ -889,6 +894,11 @@ class FileSeriesLoadingCoordinator:
                 focused_study_uid = data.get('current_study_uid', '')
                 if focused_series_uid and focused_study_uid:
                     app.series_navigator.set_current_series(focused_series_uid, focused_study_uid)
+                    # Also update dot indicators to follow the new assignment
+                    # of series to subwindows after keyboard navigation.
+                    app.series_navigator.set_subwindow_assignments(
+                        app._get_subwindow_assignments()
+                    )
             app._update_right_panel_for_focused_subwindow()
             app._update_cine_player_context()
         finally:

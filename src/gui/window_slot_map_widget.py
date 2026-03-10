@@ -26,6 +26,9 @@ from PySide6.QtCore import Qt, QRect, QSize
 from PySide6.QtGui import QColor, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QWidget, QSizePolicy
 
+from gui.style_constants import FOCUS_BORDER_COLOR
+from gui.navigator_colors import SUBWINDOW_DOT_COLORS
+
 
 # Fixed size for the whole widget so it stays small and square in the navigator bar.
 WINDOW_SLOT_MAP_SIZE = 80
@@ -165,8 +168,8 @@ class WindowSlotMapWidget(QWidget):
         border_color = QColor(180, 180, 180)
         text_color = QColor(255, 255, 255)
         bg_color = QColor(40, 40, 40, 255)
-        display_overlay_color = QColor(80, 130, 200, 140)
-        focused_border_color = QColor(255, 220, 120)
+        display_overlay_color = QColor(255, 220, 100, 140)  # semi-transparent yellow for displayed slots
+        focused_border_color = FOCUS_BORDER_COLOR
 
         painter.fillRect(ox, oy, side, side, bg_color)
 
@@ -224,6 +227,22 @@ class WindowSlotMapWidget(QWidget):
                 Qt.AlignTop | Qt.AlignLeft,
                 str(slot_num),
             )
+
+            # Colored dot per slot (matches series navigator legend).
+            # Draw as a small filled circle in the top-right corner without
+            # affecting the rest of the cell painting.
+            DOT_DIAMETER = 8
+            DOT_MARGIN = 3
+            color_str = SUBWINDOW_DOT_COLORS.get(slot, "#FFFFFF")
+            dot_color = QColor(color_str)
+            x = cell_rect.right() - DOT_MARGIN - DOT_DIAMETER
+            y = cell_rect.top() + DOT_MARGIN
+
+            painter.save()
+            painter.setPen(QPen(Qt.PenStyle.NoPen))
+            painter.setBrush(dot_color)
+            painter.drawEllipse(x, y, DOT_DIAMETER, DOT_DIAMETER)
+            painter.restore()
 
         painter.end()
 
