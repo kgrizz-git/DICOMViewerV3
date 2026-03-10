@@ -1,5 +1,5 @@
 """
-Overlay Configuration Dialog
+Overlay Tags Configuration Dialog
 
 This module provides a dialog for configuring overlay tags per corner
 and per modality.
@@ -55,6 +55,8 @@ COMMON_TAGS = [
     "RevolutionTime", "KVP", "ExposureTime", "Exposure", "XRayTubeCurrent", "ExposureInmAs",
     "ExposureIndex", "DeviationIndex", "HelicalPitch", "SpiralPitchFactor",
     "TableHeight", "GantryDetectorTilt",
+    # CT/XA tube and filter details
+    "AnodeTargetMaterial", "FilterMaterial",
     # US-specific tags
     "TransducerFrequency", "MechanicalIndex", "ThermalIndex",
     # XA/CR/DX/RF-specific tags (some overlap with CT)
@@ -102,7 +104,7 @@ class OverlayConfigDialog(QDialog):
         super().__init__(parent)
 
         self.config_manager = config_manager
-        self.setWindowTitle("Overlay Configuration")
+        self.setWindowTitle("Overlay Tags Configuration")
         self.setModal(True)
         self.resize(700, 600)
 

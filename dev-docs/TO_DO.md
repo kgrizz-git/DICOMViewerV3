@@ -41,11 +41,8 @@
 - [ ] make the min/max window width/level based on the min/max pixel value (raw or rescaled) based on bit depth and rescaling equation?
 - [ ] also see to-dos on Unpushed Edits google sheet
 - [ ] Name - DICOM Viewer + ?
-- Check target/filter tag on mammo overlay option
-- Make it easier to position distance measurements - easier to see ends, hide handles while dragging - magnify around end when dragging handle (or maybe if shift+click and drag handle)
-- Crosshair ROIs not disappearing or updating values when changing series by clicking in navigator
+- Make magnify around end when dragging measurement handle by default? (not just if shift+click)
 - Add measure angle
-- Make magnifier show annotations/measurements?
 - Make default line thicknesses and font sizes for annotations a bit smaller
 - Check fusion more
 - integrate analysis (pylinac, etc)

@@ -206,7 +206,7 @@ def build_menu_bar(main_window) -> None:
     settings_action.triggered.connect(main_window.settings_requested.emit)
     view_menu.addAction(settings_action)
 
-    overlay_config_action = QAction("Overlay &Configuration...", main_window)
+    overlay_config_action = QAction("Overlay &Tags Configuration...", main_window)
     overlay_config_action.setShortcut(QKeySequence("Ctrl+O"))
     overlay_config_action.triggered.connect(main_window.overlay_config_requested.emit)
     view_menu.addAction(overlay_config_action)

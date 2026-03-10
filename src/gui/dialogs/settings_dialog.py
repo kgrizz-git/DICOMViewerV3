@@ -58,11 +58,11 @@ class SettingsDialog(QDialog):
         # Placeholder message
         message_label = QLabel(
             "Settings dialog.\n\n"
-            "Overlay preferences are available via View → Overlay Settings.\n"
+            "Overlay preferences are available via View → Overlay Settings and View → Overlay Tags Configuration.\n"
             "Additional options are available via:\n"
             "• View → Annotation Options\n"
             "• View → Privacy Mode\n"
-            "• View → Overlay Configuration"
+            "• View → Overlay Tags Configuration"
         )
         message_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(message_label)
