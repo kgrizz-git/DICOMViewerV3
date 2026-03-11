@@ -695,7 +695,7 @@ class SubwindowLifecycleController:
             if hasattr(app, 'arrow_annotation_coordinator') and app.arrow_annotation_coordinator:
                 app.keyboard_event_handler.delete_arrow_annotation_callback = app.arrow_annotation_coordinator.handle_arrow_annotation_delete_requested
         app.window_level_controls.window_changed.connect(app.view_state_manager.handle_window_changed)
-        app.window_level_controls.window_changed.connect(app._update_histogram_for_focused_subwindow)
+        app.window_level_controls.window_changed.connect(app._schedule_histogram_wl_only)
         app.image_viewer.window_level_preset_selected.connect(app._on_window_level_preset_selected)
         app.image_viewer.quick_window_level_requested.connect(app._open_quick_window_level)
         app.intensity_projection_controls_widget.enabled_changed.connect(app._on_projection_enabled_changed)

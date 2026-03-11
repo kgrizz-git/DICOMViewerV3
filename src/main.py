@@ -2321,8 +2321,27 @@ class DICOMViewerApp(QObject):
         if hasattr(self, 'dialog_coordinator'):
             self.dialog_coordinator.update_histogram_for_subwindow(self.focused_subwindow_index)
     
+    def _schedule_histogram_wl_only(self) -> None:
+        """Schedule a light W/L-only histogram update (no pixel refetch) so W/L sliders stay responsive."""
+        if not hasattr(self, "dialog_coordinator"):
+            return
+        if not hasattr(self, "_histogram_wl_update_timer") or self._histogram_wl_update_timer is None:
+            self._histogram_wl_update_timer = QTimer(self)
+            self._histogram_wl_update_timer.setSingleShot(True)
+            self._histogram_wl_update_timer.setInterval(100)
+            self._histogram_wl_update_timer.timeout.connect(self._do_update_histogram_wl_only)
+        self._histogram_wl_update_timer.stop()
+        self._histogram_wl_update_timer.start()
+
+    def _do_update_histogram_wl_only(self) -> None:
+        """Update only the W/L overlay in the histogram (called after W/L throttle delay)."""
+        if hasattr(self, "dialog_coordinator"):
+            self.dialog_coordinator.update_histogram_window_level_only_for_subwindow(
+                self.focused_subwindow_index
+            )
+
     def _update_histogram_for_focused_subwindow(self) -> None:
-        """Schedule a throttled update of the histogram dialog so W/L and slice changes stay responsive."""
+        """Schedule a throttled full histogram update (pixel refetch) for slice/series changes."""
         if not hasattr(self, "dialog_coordinator"):
             return
         if not hasattr(self, "_histogram_update_timer") or self._histogram_update_timer is None:

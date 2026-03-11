@@ -324,6 +324,17 @@ class HistogramDialog(QDialog):
         # Update info label
         self.info_label.setText(f"Histogram of current image (Slice {slice_index + 1})")
         self.value_type_label.setText(value_type_text)
+
+    def update_window_level_only(self) -> None:
+        """
+        Update only the window/level overlay (no pixel refetch or rescale).
+        Use when only W/L changed so the histogram stays responsive during slider drag.
+        """
+        if not self.get_window_center or not self.get_window_width:
+            return
+        window_center = self.get_window_center()
+        window_width = self.get_window_width()
+        self.histogram_widget.set_window_level(window_center, window_width)
     
     def _on_log_scale_toggled(self, checked: bool = False) -> None:
         """Handle log scale toggle.

@@ -327,6 +327,14 @@ class DialogCoordinator:
         dialog = self.histogram_dialogs.get(idx)
         if dialog is not None and dialog.isVisible():
             dialog.update_histogram()
+
+    def update_histogram_window_level_only_for_subwindow(self, idx: int) -> None:
+        """Update only the W/L overlay in the histogram (no pixel refetch). Keeps W/L drag responsive."""
+        if idx < 0 or idx > 3:
+            return
+        dialog = self.histogram_dialogs.get(idx)
+        if dialog is not None and dialog.isVisible():
+            dialog.update_window_level_only()
     
     def open_export_roi_statistics(self, subwindow_managers: dict) -> None:
         """
