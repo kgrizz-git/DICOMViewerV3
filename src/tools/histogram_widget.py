@@ -271,5 +271,6 @@ class HistogramWidget(QWidget):
         
         # Apply current size-based font scaling so labels and legend match tier
         self.update_font_sizes_for_size(self.size().width(), self.size().height())
-        self.canvas.draw()
+        # draw_idle() schedules redraw so main thread stays responsive (e.g. during W/L drag)
+        self.canvas.draw_idle()
 

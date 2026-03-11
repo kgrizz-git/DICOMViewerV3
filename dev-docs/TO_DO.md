@@ -30,8 +30,7 @@
     - [ ] Check fusion with some other studies
     - [ ] Improve Window/Leveling preset/auto in fusion mode
 - [ ] when loading PET CT study there is a ~10 second lag before the loading progress window pops up - what is happening then?
-- [x] make it possible to move the layout map thumbnail when opened from context menu
-- [x] make default histogram plot and window smaller and allow resizing smaller still (shrink plot + label fonts size to fit, at least down to some minimum)
+- add X to close out layout map?
 - [ ] make toolbar contents, ordering customizable
 - [ ] make it possible to window/level by holding W and dragging mouse or by holding middle or right mouse button and dragging or something
 - [ ] make the min/max window width/level based on the min/max pixel value (raw or rescaled) based on bit depth and rescaling equation?
