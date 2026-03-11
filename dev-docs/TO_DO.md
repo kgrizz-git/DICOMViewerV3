@@ -38,6 +38,8 @@
 - [ ] Name - DICOM Viewer + ?
 - Make magnify around end when dragging measurement handle by default? (not just if shift+click)
 - Add measure angle
+- Add direction labels? A=anterior, P=posterior, L=left, R=right, S=superior, I=inferior
+- Allow flipping and rotating image
 - Make default line thicknesses and font sizes for annotations a bit smaller
 - Check fusion more
 - integrate analysis (pylinac, etc)
@@ -54,6 +56,8 @@
 - Add sort of auto detect ROI?
 - Allow 3D ROIs/structures/contours - drawn on multiple slices, shown and editable on different views (axial, sagittal, coronal, oblique)
 - Figure out license
+- Allow multiple tabs with different windows, sets of studies loaded, etc? Or the user can probably just open 
+- Add database with option to only index files where they are originally loaded from or to copy to a set directory, automatically scan set directory for new files at startup, search database by name, MRN, modality, date, station name, A#, study description...
 
 ** See below for some info on many of these **
 
@@ -95,19 +99,6 @@
   - Heavy caching can increase memory footprint significantly, particularly for large multi-series or 4D studies.
 - **Other notes**
   - It may be useful to maintain a small benchmark suite (e.g. representative studies with timing scripts) to track the impact of performance changes over time.
-
-### Interactive Window Map Thumbnail in Navigator
-
-- **Suggestions / best approaches**
-  - Treat the thumbnail as a lightweight overlay view whose cells represent subwindows; clicking a cell updates the focused subwindow index and ensures that the corresponding pane is scrolled into view and visible in the current layout.
-  - Use simple hit-testing (mapping click coordinates to grid indices) without adding heavy graphics objects; rely on Qt’s existing painting for the thumbnail rectangles.
-  - Provide clear visual feedback in the thumbnail (e.g. highlight the focused window, different color or border for hidden/occluded panes).
-  - Consider tooltips or status bar hints when hovering over cells to indicate which series/study is in that slot.
-- **Concerns / difficulties**
-  - Keeping the thumbnail fully in sync with complex layouts (1x1, 1x2, 2x1, 2x2, swaps) can be tricky; the mapping logic should be centralized and re-used from the main layout code to avoid divergence.
-  - Need to ensure that clicks on the thumbnail do not accidentally interfere with other navigation controls or keyboard focus behavior.
-- **Other notes**
-  - This feature can also serve as a compact “mini-map” when many panes are present but only some are visible due to layout; documenting expected behavior across layouts will avoid user confusion.
 
 ### View Menu Options: Show/Hide Left Pane, Right Pane, Toolbar
 
