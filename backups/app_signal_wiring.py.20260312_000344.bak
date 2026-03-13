@@ -98,12 +98,10 @@ def _wire_cine_signals(app) -> None:
 
 
 def _wire_view_signals(app: "DICOMViewerApp") -> None:
-    """Wire privacy, image-smoothing, theme-change, and slice-sync view signals."""
+    """Wire privacy, image-smoothing, and theme-change view signals."""
     app.main_window.privacy_view_toggled.connect(app._on_privacy_view_toggled)
     app.main_window.smooth_when_zoomed_toggled.connect(app._on_smooth_when_zoomed_toggled)
     app.main_window.theme_changed.connect(app.fusion_controls_widget.update_status_text_colors)
-    app.main_window.slice_sync_toggled.connect(app._on_slice_sync_toggled)
-    app.main_window.slice_sync_manage_requested.connect(app._open_slice_sync_dialog)
 
 
 def _wire_customization_signals(app) -> None:

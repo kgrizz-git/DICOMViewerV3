@@ -40,6 +40,7 @@ from utils.config.metadata_ui_config import MetadataUIConfigMixin
 from utils.config.tag_export_config import TagExportConfigMixin
 from utils.config.customizations_config import CustomizationsConfigMixin
 from utils.config.app_config import AppConfigMixin
+from utils.config.slice_sync_config import SliceSyncConfigMixin
 
 
 class ConfigManager(
@@ -55,6 +56,7 @@ class ConfigManager(
     TagExportConfigMixin,
     CustomizationsConfigMixin,
     AppConfigMixin,
+    SliceSyncConfigMixin,
 ):
     """
     Manages application configuration and user preferences.
@@ -70,7 +72,7 @@ class ConfigManager(
         - Persist configuration to JSON via ``save_config()``.
         - Provide generic ``get`` / ``set`` accessors for ad-hoc keys.
 
-    Feature-domain mixins (in ``src/utils/config/``):
+        Feature-domain mixins (in ``src/utils/config/``):
         PathsConfigMixin        – last path, export path, recent files
         DisplayConfigMixin      – theme, smoothing, privacy view, scroll mode
         OverlayConfigMixin      – overlay mode, visibility, font, tags
@@ -83,6 +85,7 @@ class ConfigManager(
         TagExportConfigMixin    – tag export presets (CRUD + file I/O)
         CustomizationsConfigMixin – bulk export/import of all visual settings
         AppConfigMixin          – disclaimer acceptance flag
+        SliceSyncConfigMixin    – slice sync enabled flag and linked groups
     """
 
     def __init__(self, config_filename: str = "dicom_viewer_config.json"):
@@ -158,6 +161,11 @@ class ConfigManager(
             "window_width_default": None,
             # App
             "disclaimer_accepted": False,
+            # Slice sync
+            "slice_sync_enabled": False,
+            "slice_sync_groups": [],
+            # MPR cache
+            "mpr_cache_max_mb": 500,
         }
 
         self.config = self._load_config()

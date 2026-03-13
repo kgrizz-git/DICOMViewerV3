@@ -243,27 +243,6 @@ def build_menu_bar(main_window) -> None:
     main_window.layout_2x2_action.triggered.connect(lambda: main_window._on_layout_changed("2x2"))
     layout_menu.addAction(main_window.layout_2x2_action)
 
-    view_menu.addSeparator()
-
-    # Slice Sync submenu
-    slice_sync_menu = view_menu.addMenu("Slice &Sync")
-
-    main_window.slice_sync_action = QAction("Enable Slice Sync", main_window)
-    main_window.slice_sync_action.setCheckable(True)
-    main_window.slice_sync_action.setChecked(
-        main_window.config_manager.get_slice_sync_enabled()
-    )
-    main_window.slice_sync_action.triggered.connect(
-        lambda checked: main_window.slice_sync_toggled.emit(checked)
-    )
-    slice_sync_menu.addAction(main_window.slice_sync_action)
-
-    manage_sync_groups_action = QAction("Manage Sync Groups...", main_window)
-    manage_sync_groups_action.triggered.connect(
-        main_window.slice_sync_manage_requested.emit
-    )
-    slice_sync_menu.addAction(manage_sync_groups_action)
-
     # --- Tools menu ---
     tools_menu = menubar.addMenu("&Tools")
 

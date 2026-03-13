@@ -118,7 +118,9 @@ class ImageViewer(QGraphicsView):
     layout_change_requested = Signal(str)  # Emitted when layout change is requested from context menu ("1x1", "1x2", "2x1", "2x2")
     swap_view_requested = Signal(int)  # Emitted when user chooses Swap with View X (argument = other view index 0-3)
     window_slot_map_popup_requested = Signal()  # Emitted when user requests window-slot map popup from Swap menu
-    
+    create_mpr_view_requested = Signal()  # Emitted when "Create MPR view…" is chosen from context menu
+    clear_mpr_view_requested = Signal()  # Emitted when "Clear MPR view" is chosen from context menu
+
     def __init__(self, parent: Optional[QWidget] = None, config_manager=None):
         """
         Initialize the image viewer.
@@ -134,6 +136,10 @@ class ImageViewer(QGraphicsView):
         self.subwindow_index: Optional[int] = None
         # Callback to get current slot_to_view [4 ints] for Swap menu (Window 1-4 = slot 0-3). Set by app.
         self.get_slot_to_view_callback: Optional[Callable[[], List[int]]] = None
+        # Callback returning True when this subwindow is in MPR mode (used to show Clear vs Create).
+        self.is_mpr_view_callback: Optional[Callable[[], bool]] = None
+        # Per-subwindow override flag set by MprController to suppress tool activation in MPR mode.
+        self._mpr_mode_override: bool = False
         
         # Set transformation anchor to viewport center for consistent zoom behavior
         # This anchor should remain constant - when set, scale() automatically centers zooming on viewport center
@@ -896,6 +902,11 @@ class ImageViewer(QGraphicsView):
         Args:
             mode: "select", "roi_ellipse", "roi_rectangle", "measure", "zoom", "pan", or "auto_window_level"
         """
+        if getattr(self, "_mpr_mode_override", False):
+            allowed_modes = {"pan", "zoom", "magnifier", "select"}
+            if mode not in allowed_modes:
+                mode = "pan"
+
         self.mouse_mode = mode
         
         # Update ROI drawing mode based on mouse mode
@@ -1906,9 +1917,24 @@ class ImageViewer(QGraphicsView):
                                     )
                         
                         # Note: Checkmarks will be updated by main.py based on current layout
-                        
+
+                        # MPR view actions (Create or Clear, depending on current mode).
                         context_menu.addSeparator()
-                        
+                        _is_mpr = False
+                        if self.is_mpr_view_callback is not None:
+                            try:
+                                _is_mpr = bool(self.is_mpr_view_callback())
+                            except Exception:
+                                pass
+                        if _is_mpr:
+                            clear_mpr_action = context_menu.addAction("Clear MPR View")
+                            clear_mpr_action.triggered.connect(self.clear_mpr_view_requested.emit)
+                        else:
+                            create_mpr_action = context_menu.addAction("Create MPR View…")
+                            create_mpr_action.triggered.connect(self.create_mpr_view_requested.emit)
+
+                        context_menu.addSeparator()
+
                         # Annotation Options action
                         annotation_options_action = context_menu.addAction("Annotation Options...")
                         annotation_options_action.triggered.connect(self.annotation_options_requested.emit)
@@ -1993,15 +2019,26 @@ class ImageViewer(QGraphicsView):
                             "Text Annotation (T)": "text_annotation",
                             "Window/Level ROI (W)": "auto_window_level"
                         }
+                        # Drawing/annotation modes are disabled in MPR mode.
+                        _mpr_disabled_modes = {
+                            "roi_ellipse", "roi_rectangle", "crosshair",
+                            "measure", "arrow_annotation", "text_annotation",
+                            "auto_window_level",
+                        } if self._mpr_mode_override else set()
                         for action_text, mode in left_mouse_actions.items():
                             action = context_menu.addAction(action_text)
                             action.setCheckable(True)
-                            # Check the current mode
-                            if self.mouse_mode == mode:
-                                action.setChecked(True)
-                            action.triggered.connect(
-                                lambda checked, m=mode: self.context_menu_mouse_mode_changed.emit(m)
-                            )
+                            if mode in _mpr_disabled_modes:
+                                action.setEnabled(False)
+                                action.setToolTip(
+                                    "ROIs and annotations are not available on MPR views."
+                                )
+                            else:
+                                if self.mouse_mode == mode:
+                                    action.setChecked(True)
+                                action.triggered.connect(
+                                    lambda checked, m=mode: self.context_menu_mouse_mode_changed.emit(m)
+                                )
                         
                         context_menu.addSeparator()
                         
