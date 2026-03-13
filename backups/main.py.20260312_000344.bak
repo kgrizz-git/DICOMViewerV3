@@ -102,9 +102,6 @@ from gui.fusion_controls_widget import FusionControlsWidget
 from gui.fusion_coordinator import FusionCoordinator
 from core.app_signal_wiring import wire_all_signals
 
-# Import slice sync components
-from core.slice_sync_coordinator import SliceSyncCoordinator
-
 
 class DICOMViewerApp(QObject):
     """
@@ -284,19 +281,6 @@ class DICOMViewerApp(QObject):
 
         # Create per-subwindow managers for every current subwindow slot
         self._initialize_subwindow_managers()
-
-        # Slice sync coordinator: holds no Qt objects; safe to create here.
-        self._slice_sync_coordinator = SliceSyncCoordinator(self)
-        self._slice_sync_coordinator.set_enabled(
-            self.config_manager.get_slice_sync_enabled()
-        )
-        self._slice_sync_coordinator.set_groups(
-            self.config_manager.get_slice_sync_groups()
-        )
-
-        # MPR controller: manages MPR views across all subwindows.
-        from core.mpr_controller import MprController
-        self._mpr_controller = MprController(self)
 
         self._annotation_paste_handler = AnnotationPasteHandler(self)
 
@@ -1131,9 +1115,6 @@ class DICOMViewerApp(QObject):
         )
         self.series_navigator.set_subwindow_assignments(self._get_subwindow_assignments())
 
-        # 8. Invalidate slice-sync geometry cache for the closed series.
-        self._slice_sync_coordinator.invalidate_cache(study_uid, series_key)
-
     def _close_study(self, study_uid: str) -> None:
         """
         Close an entire study: free pixel caches for all its series, remove it
@@ -1183,9 +1164,6 @@ class DICOMViewerApp(QObject):
             self.current_series_uid,
         )
         self.series_navigator.set_subwindow_assignments(self._get_subwindow_assignments())
-
-        # 8. Invalidate all cached geometry for this study.
-        self._slice_sync_coordinator.invalidate_cache(study_uid)
 
     def _reset_fusion_for_all_subwindows(self) -> None:
         """
@@ -1924,40 +1902,6 @@ class DICOMViewerApp(QObject):
         self.privacy_view_enabled = enabled
         self._privacy_controller.apply_privacy(enabled)
 
-    def _on_slice_sync_toggled(self, enabled: bool) -> None:
-        """
-        Handle the View → Slice Sync → Enable Slice Sync toggle.
-
-        Persists the new state and pushes it to the coordinator.
-
-        Args:
-            enabled: True to enable anatomic slice sync, False to disable.
-        """
-        self.config_manager.set_slice_sync_enabled(enabled)
-        self._slice_sync_coordinator.set_enabled(enabled)
-
-    def _open_slice_sync_dialog(self) -> None:
-        """Open the Manage Sync Groups dialog."""
-        from gui.dialogs.slice_sync_dialog import SliceSyncDialog
-        current_groups = self.config_manager.get_slice_sync_groups()
-        dlg = SliceSyncDialog(current_groups, parent=self.main_window)
-        dlg.groups_changed.connect(self._on_slice_sync_groups_changed)
-        dlg.exec()
-
-    def _on_slice_sync_groups_changed(self, groups) -> None:
-        """
-        Receive updated group assignments from the Slice Sync dialog.
-
-        Persists to config, updates the coordinator, and invalidates the
-        geometry cache so stale stacks aren't reused.
-
-        Args:
-            groups: List[List[int]] — new group assignments.
-        """
-        self.config_manager.set_slice_sync_groups(groups)
-        self._slice_sync_coordinator.set_groups(groups)
-        self._slice_sync_coordinator.invalidate_cache()
-
     def _on_smooth_when_zoomed_toggled(self, enabled: bool) -> None:
         """
         Handle smooth-when-zoomed toggle from View menu or image viewer context menu.
@@ -2656,23 +2600,9 @@ class DICOMViewerApp(QObject):
         """
         # Check if this slice change was from a cine advance before processing
         was_cine_advancing = self.cine_player.is_cine_advancing()
-
-        # MPR subwindow: route slice change to MPR controller.
-        focused_idx = self.focused_subwindow_index
-        if (
-            hasattr(self, "_mpr_controller")
-            and self._mpr_controller.is_mpr(focused_idx)
-        ):
-            self._mpr_controller.display_mpr_slice(focused_idx, slice_index)
-            result = self.subwindow_data.get(focused_idx, {}).get("mpr_result")
-            if result is not None:
-                self.cine_controls_widget.update_frame_position(slice_index, result.n_slices)
-            self._slice_sync_coordinator.on_slice_changed(focused_idx)
-            if was_cine_advancing:
-                QTimer.singleShot(0, self.cine_player.reset_cine_advancing_flag)
-            return
-
+        
         # Update focused subwindow's slice
+        focused_idx = self.focused_subwindow_index
         if focused_idx in self.subwindow_data and focused_idx in self.subwindow_managers:
             data = self.subwindow_data[focused_idx]
             managers = self.subwindow_managers[focused_idx]
@@ -2726,9 +2656,6 @@ class DICOMViewerApp(QObject):
         # Reset cine advancing flag after all slice change processing is complete
         if was_cine_advancing:
             QTimer.singleShot(0, self.cine_player.reset_cine_advancing_flag)
-
-        # Notify slice sync coordinator (no-op if sync is disabled or no groups).
-        self._slice_sync_coordinator.on_slice_changed(self.focused_subwindow_index)
     
     def _on_manual_slice_navigation(self, slice_index: int) -> None:
         """

@@ -2,10 +2,10 @@
 
 This document outlines an implementation plan for two related features from `dev-docs/TO_DO.md`:
 
-1. **Syncing slices for non-orthogonal orientations** using `ImagePositionPatient` and `ImageOrientationPatient`, so that scrolling in one view updates the “anatomically corresponding” slice in other views (e.g. axial ↔ coronal ↔ sagittal, or angled stacks).
-2. **Multi-planar reconstructions (MPRs) and oblique reconstructions**, allowing resampled views on arbitrary planes (orthogonal or oblique) from a 3D volume in patient space.
+1. **Syncing slices for non-orthogonal orientations** using `ImagePositionPatient` and `ImageOrientationPatient`, so that scrolling in one view updates the "anatomically corresponding" slice in other views. Sync works for any angle between stacks — for near-parallel stacks (e.g. 90°) the mapped slice simply does not change when the source window is scrolled.
+2. **Multi-planar reconstructions (MPRs) and oblique reconstructions**, allowing a user to recompute a view of any loaded series at a chosen orientation (axial, coronal, sagittal, or arbitrary oblique) and display it in any subwindow.
 
-Both features depend on a **unified 3D geometric model** of slice stacks and planes. The plan recommends implementing that geometry layer first, then slice sync, then MPR/oblique, with clear decision points and risk areas called out.
+Both features depend on a **unified 3D geometric model** of slice stacks and planes. The plan builds that geometry layer first, then slice sync, then MPR/oblique.
 
 ---
 
@@ -13,23 +13,43 @@ Both features depend on a **unified 3D geometric model** of slice stacks and pla
 
 | Phase | Scope | Delivers |
 |-------|--------|----------|
-| **Phase 1** | Shared geometry module | Plane/stack representation, plane–plane intersection, “nearest slice” in patient space |
-| **Phase 2** | Slice sync for non-orthogonal | Cross-window slice sync when orientations differ, optional sync mode, tolerance handling |
-| **Phase 3** | MPR and oblique | Orthogonal MPR (axial/coronal/sagittal), then arbitrary oblique planes; resampling, caching, UI |
+| **Phase 1** | Shared geometry module | Plane/stack representation, plane–plane intersection, "nearest slice" in patient space |
+| **Phase 2** | Slice sync for user-linked groups | Cross-window slice sync for any orientation, user-configurable linked groups, tolerance based on slice thickness |
+| **Phase 3** | MPR and oblique | Per-subwindow MPR via dialog; volume building, resampling, persistent cache, overlays, "MPR" label |
 | **Future** | Slice location line across views | Line showing current slice plane on other views (reuses Phase 1 geometry) |
 
-**Recommended order**: Phase 1 → Phase 2 → Phase 3. The “Slice Location Line Across Views” item from TO_DO naturally reuses the same geometry and can be planned after Phase 2.
+**Recommended order**: Phase 1 → Phase 2 → Phase 3. Slice location line is deferred and reuses Phase 1 unchanged.
+
+---
+
+## Resolved Decisions
+
+The following design decisions have been made and are reflected throughout this plan:
+
+| Topic | Decision |
+|-------|----------|
+| Sync default | **Off by default** |
+| Sync scope | **User-selectable linked group** per subwindow (not all windows, not Frame of Reference–based) |
+| Angle restriction | **No angular restriction** — sync works for any angle; near-perpendicular pairs will simply produce few or no slice changes when the source is scrolled |
+| Tolerance | **Based on slice thickness** of the target stack (see Phase 2 for details) |
+| MPR entry point | **Per-subwindow via a dedicated MPR dialog**; user picks source series, view orientation, and optional slice thickness |
+| MPR overlays | **Enabled** — use DICOM metadata from the underlying source series (e.g. modality, institution, patient info); **slice location tag is not shown**; slice number shows the MPR stack index |
+| MPR label | `MPR` banner displayed across the top of the subwindow |
+| MPR interactive tools | **ROIs, annotations, and measurements disabled** on MPR subwindows |
+| MPR cache | **Persistent disk cache** for computed MPR stacks |
+| Slice location line | **Deferred** to a later, separate task; will reuse Phase 1 geometry |
 
 ---
 
 ## Current State and Overlap
 
-- **Fusion** (`fusion_handler`, `fusion_coordinator`, `image_resampler`): Uses **1D slice location** (e.g. `SliceLocation` or `ImagePositionPatient[2]`) for matching base and overlay slices. Works for same-orientation stacks; does not model full 3D plane or non-orthogonal sync. 3D fusion resampling already uses `ImagePositionPatient` / `ImageOrientationPatient` in `image_resampler`.
-- **Multi-window**: Each subwindow has its own `current_slice_index` and series; there is **no cross-window slice synchronization** today.
-- **`dicom_utils`**: Already has `get_image_position`, `get_image_orientation`, and `pixel_to_patient_coordinates` (including slice normal from row×column cosines). Good foundation; no explicit “slice plane” or “stack geometry” abstraction yet.
-- **`dicom_organizer`**: Sorts by `InstanceNumber` or `SliceLocation` (and falls back to `ImagePositionPatient` Z). No notion of orientation or 3D plane.
+- **Fusion** (`fusion_handler`, `fusion_coordinator`, `image_resampler`): Uses **1D slice location** (e.g. `SliceLocation` or `ImagePositionPatient[2]`) for matching base and overlay slices within one subwindow. 3D fusion resampling in `image_resampler` already uses `ImagePositionPatient` / `ImageOrientationPatient` and SimpleITK. Neither touches cross-window sync.
+- **Multi-window**: Each subwindow has its own `current_slice_index` and series dict (`subwindow_data`). There is **no cross-window slice synchronization** today.
+- **`dicom_utils`**: Already has `get_image_position`, `get_image_orientation`, and `pixel_to_patient_coordinates` (including slice normal from row × column cosines). Solid foundation; no explicit "slice plane" or "stack geometry" abstraction yet.
+- **`dicom_organizer`**: Sorts by `InstanceNumber` or `SliceLocation` (falls back to `ImagePositionPatient` Z). No notion of 3D plane.
+- **`image_resampler`**: Builds SimpleITK image from DICOM stack using full direction cosines and spacing; used today for 3D fusion. Contains the resampling logic MPR will reuse/extend.
 
-**Key overlap (TO_DO)**: Slice sync “overlaps conceptually with MPR”; long term, a single geometric model should support both slice sync and full MPR views.
+**Key overlap**: Slice sync "overlaps conceptually with MPR" (TO_DO). Both rely on Phase 1 geometry. Phase 2 sync can later be extended to include MPR subwindows.
 
 ---
 
@@ -37,113 +57,153 @@ Both features depend on a **unified 3D geometric model** of slice stacks and pla
 
 ### Goal
 
-Introduce a small, testable core that:
+Introduce a small, pure-math, well-tested module in patient space (mm) that:
 
-- Represents a **slice plane** in patient coordinates (from one instance: `ImagePositionPatient`, `ImageOrientationPatient`, optional `PixelSpacing` for in-plane axes).
-- Represents a **slice stack** (ordered list of planes with spacing / ordering along the stack normal).
-- Computes **intersection** of one plane with another (line in 3D) and projects that line into a view’s 2D coordinates.
-- Given a plane A and a stack B, computes the **nearest slice index** in B to plane A (distance along B’s normal), with configurable tolerance.
-
-All in **patient space (mm)**, so it is independent of window/level, overlays, and fusion blending.
+- Represents a **slice plane** (from one DICOM instance).
+- Represents a **slice stack** (ordered planes + spacing along normal).
+- Computes the **nearest slice index** in a stack for a given reference plane.
+- Computes **plane–plane intersection** (for the deferred slice location line feature).
+- Is independent of any Qt, display, or fusion code.
 
 ### Prerequisites
 
-- [ ] Confirm `numpy` (and optionally `scipy`) are acceptable for geometry (no new heavy deps).
-- [ ] Review `src/utils/dicom_utils.py` (`get_image_position`, `get_image_orientation`, `pixel_to_patient_coordinates`) to avoid duplication and to reuse parsing.
+- [ ] Confirm `numpy` is available (already a dependency). `scipy` is optional; Phase 1 geometry can be pure NumPy.
+- [ ] Review `src/utils/dicom_utils.py` (`get_image_position`, `get_image_orientation`) to avoid duplication.
 
 ### Tasks
 
-#### 1.1 Slice plane and stack representation
+#### 1.1 SlicePlane and SliceStack types
 
-**Location**: New module, e.g. `src/core/slice_geometry.py` (or under `src/utils/` if preferred).
+**File**: `src/core/slice_geometry.py`
 
-- [ ] Define a **slice plane** type (e.g. `SlicePlane` or dataclass) holding:
-  - Origin in patient coords (from `ImagePositionPatient`).
-  - Row and column direction cosines (from `ImageOrientationPatient`).
-  - Optional in-plane spacing (`PixelSpacing`) for 2D↔patient mapping.
-  - Derived: normal vector (row × column), normalized.
-- [ ] Provide a constructor from a single pydicom `Dataset` (using existing `dicom_utils` where possible).
-- [ ] Define a **slice stack** type (e.g. `SliceStack`) holding:
-  - List of `SlicePlane` (or origin + shared orientation and spacing).
-  - Ordering along the stack normal (slice index → position along normal).
-  - Optional: spacing between slices (from `SliceThickness` / `SpacingBetweenSlices` or from consecutive `ImagePositionPatient`).
-- [ ] Build stack from list of datasets (reusing or delegating to `dicom_organizer` for sort order if needed; document that geometry assumes already-sorted-by-position along normal).
+- [ ] Define `SlicePlane` (dataclass or named tuple) holding:
+  - `origin`: `np.ndarray` shape `(3,)` — `ImagePositionPatient` of this slice.
+  - `row_cosine`: `np.ndarray` shape `(3,)` — first three values of `ImageOrientationPatient`.
+  - `col_cosine`: `np.ndarray` shape `(3,)` — last three values of `ImageOrientationPatient`.
+  - `row_spacing`: `float` — row pixel spacing (mm).
+  - `col_spacing`: `float` — column pixel spacing (mm).
+  - Derived property `normal`: `np.ndarray` shape `(3,)` = `row_cosine × col_cosine`, normalized.
+- [ ] Provide class method `SlicePlane.from_dataset(ds: Dataset) -> Optional[SlicePlane]` (uses `dicom_utils.get_image_position` / `get_image_orientation` / `get_pixel_spacing`; returns `None` if required tags are missing).
+- [ ] Define `SliceStack` holding:
+  - `planes`: list of `SlicePlane`, **sorted** by position along stack normal (ascending).
+  - `slice_thickness`: `float` — nominal slice thickness in mm (from `SliceThickness` tag if available; fallback: median consecutive distance between origins along normal).
+  - `original_indices`: list of `int` — original dataset indices before sorting (to map back to `current_slice_index`).
+  - Method `position_along_normal(plane: SlicePlane) -> float`: dot product of `plane.origin` with `self.planes[0].normal` (use stack normal, computed once).
+- [ ] Provide class method `SliceStack.from_datasets(datasets: List[Dataset]) -> Optional[SliceStack]` (returns `None` if fewer than 2 datasets or geometry is insufficient).
 
-#### 1.2 Plane–plane intersection and projection
+#### 1.2 Nearest-slice computation
 
-- [ ] Implement **plane–plane intersection**: given two planes, return the 3D line (or “nearly parallel” / degenerate handling).
-- [ ] Implement **project line into view**: given a 3D line and a target slice plane (view), compute the 2D line segment in that view’s row/column coordinates (for drawing “slice location line” in a future phase).
-- [ ] Add unit tests (synthetic planes: e.g. axial at Z=0, coronal at Y=0) to avoid regressions and document expected behavior for edge cases (parallel, coincident).
+This is the core function used by Phase 2 sync.
 
-#### 1.3 Nearest-slice in patient space
+- [ ] Implement `find_nearest_slice(ref_plane: SlicePlane, stack: SliceStack, tolerance_mm: Optional[float] = None) -> Optional[int]`:
+  - Project `ref_plane.origin` onto `stack` normal → signed distance along normal.
+  - Find the stack plane whose position along normal is closest.
+  - If `tolerance_mm` is given and the gap between the reference position and the nearest plane exceeds that tolerance, return `None` ("no match within tolerance").
+  - Return the **stack-original dataset index** (via `original_indices`), not the sorted position, so the result can be used directly as `current_slice_index` in the app.
+- [ ] Document the "near-perpendicular" case: if the source and target stacks are ~90° apart, many reference planes will map to the same nearest target slice, so scrolling in the source may produce little or no change in the target — this is correct and expected behavior.
+- [ ] Add unit tests in `tests/test_slice_geometry.py`:
+  - Axial source → coronal target: scrolling source updates coronal correctly.
+  - Near-perpendicular stacks: multiple source positions map to the same target slice.
+  - Reference outside stack extent with tolerance: returns `None`.
+  - Missing metadata: `from_dataset` / `from_datasets` return `None` gracefully.
 
-- [ ] Implement **nearest slice index**: given a reference plane (e.g. “current slice in window A”) and a slice stack (e.g. “series in window B”), compute the slice index in B whose plane is closest to the reference plane (distance along B’s normal), and the signed distance in mm.
-- [ ] Support a **tolerance** (mm): if the reference plane is outside the stack extent by more than tolerance, return a sentinel or clamp and document behavior.
-- [ ] Handle **oblique stacks**: “nearest” is defined along the stack’s normal; document that for very oblique or helical acquisitions the mapping may not be one-to-one and the UI may need a “best effort” or “sync disabled” state.
+#### 1.3 Plane–plane intersection (for future slice location line)
 
-#### 1.4 Integration points (no UI yet)
+- [ ] Implement `plane_plane_intersection(a: SlicePlane, b: SlicePlane) -> Optional[Tuple[np.ndarray, np.ndarray]]`:
+  - Returns `(point_on_line, direction_vector)` or `None` for degenerate (parallel/coincident) planes.
+  - Use `abs(dot(a.normal, b.normal)) > 1 - epsilon` to detect parallelism.
+- [ ] Implement `project_line_to_2d(point: np.ndarray, direction: np.ndarray, plane: SlicePlane) -> Optional[Tuple[float, float, float, float]]`:
+  - Returns `(row1, col1, row2, col2)` in the plane's 2D coordinate system by parameterizing the 3D line and projecting two points.
+  - Returns `None` if line is parallel to the plane normal.
+- [ ] Unit tests (axial + coronal planes producing a known horizontal line; parallel planes returning `None`).
+- [ ] **Note**: these functions are implemented now for completeness and testability but will only be wired to UI in the separate "slice location line" task.
 
-- [ ] Provide a thin facade that takes “current dataset (or slice index + list of datasets) for view A” and “list of datasets for view B” and returns “suggested slice index for view B” and optional “distance in mm”. This will be used by Phase 2.
-- [ ] Document when the module returns `None` or invalid (e.g. missing `ImagePositionPatient` / `ImageOrientationPatient`, empty list, inconsistent orientations).
+### Potential problems
 
-### Potential problems and decisions
-
-| Area | Risk / conflict | Recommendation |
-|------|------------------|----------------|
-| **Metadata quality** | Noisy or missing `ImagePositionPatient` / `ImageOrientationPatient` in older or vendor-specific data | Use tolerances and fallbacks; allow “sync disabled” when geometry is unreliable; log warnings. |
-| **Definition of “slice index”** | Stack ordering may differ from current navigator (e.g. InstanceNumber vs position along normal) | Define stack order explicitly (e.g. by position along stack normal) and map to/from navigator index in one place (e.g. in Phase 2 coordinator). |
-| **Numerical stability** | Near-parallel planes, very small angles | Use epsilon in dot products; document and test degenerate cases; avoid division by very small numbers. |
+| Area | Risk | Recommendation |
+|------|------|----------------|
+| **Metadata quality** | Missing `ImagePositionPatient` / `ImageOrientationPatient` | `from_dataset` returns `None`; Phase 2 disables sync for that subwindow with a brief status message. |
+| **Stack sort order** | Geometry sort order may differ from `dicom_organizer` / navigator order | Store `original_indices` in `SliceStack` to map geometry position back to navigator slice index; document clearly. |
+| **Numerical stability** | Cross product near-zero for collinear cosines | Normalize carefully; check for very small normal magnitude and return `None` from `from_dataset`. |
 
 ---
 
-## Phase 2: Syncing Slices for Non-Orthogonal Orientations
+## Phase 2: Slice Sync for User-Linked Groups
 
 ### Goal
 
-When the user scrolls slices in one subwindow, optionally update the slice index in other subwindows so that the displayed slices correspond to the same anatomic location, using the Phase 1 geometry (plane + nearest slice).
+When slice sync is enabled and the user scrolls in a subwindow that belongs to a **linked group**, all other subwindows in the same group automatically advance to the anatomically closest slice, using Phase 1 geometry. Sync works for any orientation; near-perpendicular pairs simply don't update.
 
 ### Prerequisites
 
-- [ ] Phase 1 geometry module available and tested.
-- [ ] Clear definition of “sync scope”: which subwindows participate (e.g. all 2×2, or only “linked” ones), and whether sync is per-study or global.
+- [ ] Phase 1 geometry (`SlicePlane`, `SliceStack`, `find_nearest_slice`) available and tested.
+- [ ] Understanding of how `current_slice_index` is updated in subwindow lifecycle (`src/core/subwindow_lifecycle_controller.py`).
 
 ### Tasks
 
-#### 2.1 Sync mode and scope (decisions)
+#### 2.1 Linked-group model
 
-- [ ] **Decision**: Sync on by default or off? Suggestion: **off by default**, with a View menu or toolbar option “Sync slices across views” (or “Anatomic slice sync”) so users can enable when they have multiple orientations.
-- [ ] **Decision**: When sync is on, which windows sync? Options: (a) all subwindows that have a series loaded, (b) only windows that share the same Frame of Reference UID, (c) user-selectable “linked” group. Recommendation: start with (a) or (b); document and optionally add (c) later.
-- [ ] **Decision**: Strict orthogonal only vs “angled within 45°”? TO_DO suggests optional/mode-based. Recommendation: support both “strict orthogonal only” and “angled within N°” (e.g. 45°) with a small tolerance (mm) for slice selection; if orientation difference exceeds threshold, show a message or disable sync for that pair.
+- [ ] A **linked group** is a named set of subwindow indices (e.g. indices 0–3 for the 2×2 layout).
+- [ ] Support **multiple independent groups** (e.g. group A = windows 0 and 1; group B = windows 2 and 3), though a single default group is the common case.
+- [ ] A subwindow can belong to at most one group at a time.
+- [ ] Persist group assignments in config (new `slice_sync_config.py` mixin or in `display_config`): serialize as a list of lists of subwindow indices.
 
-#### 2.2 Slice sync coordinator
+#### 2.2 UI for managing groups
 
-**Location**: New or existing coordinator (e.g. `SliceSyncCoordinator` in `src/core/` or under a dedicated `slice_sync` module).
+- [ ] Add a **"Slice Sync" submenu** under the **View** menu (and optionally the image viewer context menu):
+  - "Enable slice sync" — master toggle (default: off).
+  - "Manage sync groups..." — opens a small dialog (see below).
+- [ ] **Sync Groups dialog** (`src/gui/dialogs/slice_sync_dialog.py`):
+  - Lists current groups (each group shown as a set of subwindow labels, e.g. "Window 1, Window 2").
+  - "Create group" — user picks which subwindows to link (checkboxes).
+  - "Dissolve group" — remove a group (subwindows become unlinked).
+  - "Add to group / Remove from window" — quick toggle per subwindow.
+  - OK/Apply/Cancel; changes take effect immediately on Apply.
+- [ ] Optionally: show a small colored dot or icon on each subwindow title bar to indicate which group it belongs to (group color), so the user can see at a glance which windows are linked.
 
-- [ ] On “current slice changed” in subwindow A: get A’s current dataset (or slice index + stack).
-- [ ] For each other subwindow B that participates in sync: get B’s stack (same study/Frame of Reference or per policy). Use Phase 1 to compute suggested slice index for B.
-- [ ] If suggested index is valid and within bounds, set B’s slice index (via existing subwindow/lifecycle APIs) and trigger display update.
-- [ ] Avoid feedback loops: when B’s slice is set programmatically, do not trigger “slice changed” that would again update A (e.g. “source” of the change is the user scroll in A only).
+#### 2.3 Tolerance (slice thickness–based)
 
-#### 2.3 Wiring to existing app
+- [ ] The tolerance for "match within range" is defined per **target stack**: `tolerance = stack.slice_thickness * 0.5` (i.e. match if the reference plane falls within half a slice thickness of the nearest stack plane). This is sensible because it means a reference plane that falls "between" two target slices will still update the target (to whichever is closer).
+- [ ] If `SliceStack.slice_thickness` could not be determined (returns `None`), fall back to a default tolerance of `1.0 mm`.
+- [ ] If the reference plane is further than one full slice thickness from the nearest target plane (i.e. outside the stack extent or in a gap), return no update (leave target slice unchanged).
 
-- [ ] Hook “slice changed” from the slice navigator / `SliceDisplayManager` / subwindow lifecycle so the coordinator is notified for the focused (or “source”) subwindow.
-- [ ] When sync is enabled, after changing slice in the source window, call coordinator to update other windows; ensure only one “source” per user action to avoid circular updates.
-- [ ] Persist “sync enabled” in config (e.g. `display_config` or new `slice_sync_config`) so the setting is restored on restart.
+#### 2.4 SliceSyncCoordinator
 
-#### 2.4 Edge cases and UX
+**File**: `src/core/slice_sync_coordinator.py`
 
-- [ ] If geometry is missing or invalid for A or B, do not change B’s slice; optionally show a brief status message (“Sync unavailable: missing geometry”).
-- [ ] If stacks have different Frame of Reference UIDs, sync may be meaningless; either exclude such pairs or show “Sync not available (different frame of reference)”.
-- [ ] Document in release notes and (if present) user guide: sync is anatomic best-effort; for oblique/helical data the “nearest slice” may not be unique.
+- [ ] `SliceSyncCoordinator` class holding:
+  - Reference to app's `subwindow_data` and lifecycle controller.
+  - A geometry cache: `Dict[(study_uid, series_uid), Optional[SliceStack]]`.
+  - Current group assignments.
+- [ ] Method `on_slice_changed(source_subwindow_idx: int)`:
+  - If sync is disabled or no group contains `source_subwindow_idx`, return immediately.
+  - Get source subwindow's current slice index and datasets; build or retrieve `SliceStack` for source.
+  - Get current `SlicePlane` for the source's current slice.
+  - For each other subwindow in the same group: build/retrieve `SliceStack` for its series; call `find_nearest_slice`; if a valid index is returned, update that subwindow's slice (programmatically, without triggering another sync event — use a `_syncing: bool` guard).
+- [ ] Cache `SliceStack` per `(study_uid, series_uid)` in the coordinator; invalidate when a series is closed or reassigned.
+- [ ] Gracefully handle subwindows with no series loaded (skip silently).
+
+#### 2.5 Wiring into app
+
+- [ ] In `src/main.py` (or `_post_init_subwindows_and_handlers`): instantiate `SliceSyncCoordinator` and call `on_slice_changed(idx)` from the slice-changed signal / callback. The "source" is always the focused subwindow (or the subwindow that fired the slice change signal).
+- [ ] Wire master toggle to `SliceSyncCoordinator.enabled` flag and persist in config.
+- [ ] Add `_connect_slice_sync_signals()` to `_connect_signals` family (following existing pattern in `src/main.py`).
+
+#### 2.6 Edge cases and UX
+
+- [ ] **Sync unavailable (missing geometry)**: if either the source or a target stack has no geometry (returns `None` from `from_datasets`), silently skip that target; optionally show a small tooltip or status bar message ("Sync unavailable for Window N: missing DICOM geometry").
+- [ ] **Near-perpendicular stacks**: correct behavior is no change in target; no message needed.
+- [ ] **Feedback loop guard**: set `_syncing = True` before programmatic slice updates and check it at the top of `on_slice_changed`; reset to `False` after all updates.
+- [ ] **Subwindow reassigned to different series**: clear its `SliceStack` from cache and, if it was the only member of a group, dissolve the group automatically or leave it "pending" until a series is loaded.
 
 ### Potential problems and conflicts
 
 | Area | Risk / conflict | Recommendation |
 |------|------------------|----------------|
-| **Fusion** | Fusion already matches slices by 1D `SliceLocation`/IPP Z within one subwindow. | Leave fusion logic as-is for base/overlay in a single view. Cross-window sync is independent: it only changes which slice index is shown in each subwindow. If a subwindow has fusion on, fusion will still match overlay to base within that window using existing logic. |
-| **Multiple series per study** | Different series (e.g. axial vs coronal) may have different slice counts and ordering. | Sync by anatomic position (Phase 1 nearest-slice), not by index. Each window’s navigator shows its own slice index; the coordinator maps “plane of current slice in A” → “slice index in B.” |
-| **Performance** | Recomputing geometry on every scroll could be costly for many windows. | Cache stack geometry per (study, series) and invalidate on series change; keep Phase 1 functions lightweight (no heavy resampling). |
-| **ROI / annotations** | Changing slice in B programmatically may change “current slice” for ROIs/annotations in B. | Use existing “current slice” semantics: ROIs/annotations in B remain tied to slice index in B; sync only updates that index. No special ROI handling unless product decision is to “link” ROIs across views (out of scope here). |
+| **Fusion** | Fusion matches overlay to base within one subwindow using 1D `SliceLocation`. Cross-window sync only changes `current_slice_index` in each subwindow; fusion re-matches overlay on each display update — no conflict. | No change to fusion logic. |
+| **Cine playback** | Cine advances slice index in a controlled loop; sync would also try to update linked windows. | Disable sync-triggered updates while cine is playing (check cine state in coordinator), or allow it (simpler) and let the linked windows scroll freely — needs UX review. |
+| **MPR subwindows** | Once MPR is implemented (Phase 3), MPR subwindows have their own slice stack. | MPR stack can participate in sync using the same `SliceStack`/`find_nearest_slice` — Phase 3 wires this. |
+| **Performance** | Recomputing geometry on every scroll. | Geometry cache per `(study, series)` makes repeated lookups O(n log n) once, then O(log n) per scroll. |
 
 ---
 
@@ -151,85 +211,160 @@ When the user scrolls slices in one subwindow, optionally update the slice index
 
 ### Goal
 
-- **Orthogonal MPR**: Resample the 3D volume onto axial, coronal, and sagittal planes (or standardize existing stacks to a single volume and resample).
-- **Oblique MPR**: Allow an arbitrary plane (normal + in-plane axes); resample volume onto that plane with configurable resolution and interpolation.
-
-All driven from a **single 3D volume in patient space** built from `ImagePositionPatient`, `ImageOrientationPatient`, and spacing, so that MPR views are consistent with Phase 1 geometry and Phase 2 sync.
+Allow a user to designate any subwindow as an **MPR view**: they choose the source series, the viewing plane orientation (standard axial / coronal / sagittal preset, or custom angles), and optional output slice thickness. The app resamples the 3D volume of that series onto the chosen plane family, produces an ordered MPR slice stack, and displays it in the subwindow like a regular series — but with clear UI indicators and restricted interactive tools.
 
 ### Prerequisites
 
-- [ ] Phase 1 geometry available (plane and stack representation).
-- [ ] Decision on whether MPR is a **separate mode** (e.g. “MPR layout” with 3–4 views) or integrated into existing subwindows. TO_DO suggests treating MPR as a distinct mode with its own expectations and controls.
+- [ ] Phase 1 geometry available.
+- [ ] `image_resampler.py` reviewed for reusability (especially `_build_sitk_image_from_datasets` and spacing/direction logic).
+- [ ] Decision: MPR per-subwindow (confirmed — not a global layout mode).
 
 ### Tasks
 
-#### 3.1 Volume representation
+#### 3.1 MPR Dialog
 
-- [ ] Build a **3D volume** (e.g. `PatientVolume` or reuse/extend logic in `image_resampler`) from a list of DICOM datasets: one volume per Frame of Reference (or per series, with clear documentation). Use Phase 1 for orientation and spacing; reuse `image_resampler`’s use of SimpleITK or NumPy where it already does 3D.
-- [ ] Handle **anisotropic voxels** and **non–axis-aligned** acquisitions: use full direction cosines and spacing (no naïve axis-aligned assumption).
-- [ ] Document when volume building fails (e.g. inconsistent orientation, gaps, duplicate positions) and how the UI should react (e.g. “MPR not available for this series”).
+**File**: `src/gui/dialogs/mpr_dialog.py`
 
-#### 3.2 Orthogonal MPR
+This dialog appears when the user selects "Create MPR view…" from the subwindow context menu or View menu.
 
-- [ ] Implement resampling of the volume onto **axial / coronal / sagittal** planes (standard LPS or RAS, consistent with DICOM). Use NumPy/scipy or SimpleITK; prefer reusing `image_resampler` if it already supports “reslice to plane.”
-- [ ] Define output spacing (e.g. isotropic at 1 mm or match in-plane spacing of the volume) and extent (bounding box of the volume in patient space).
-- [ ] Expose as a **view type** or **layout**: e.g. “MPR” mode with three (or four) panes showing axial, coronal, sagittal, and optionally one oblique. Each pane has its own slice index along the corresponding axis.
+- [ ] **Source series selection**: dropdown list of all currently loaded series (grouped by study; show series description, modality, slice count). Pre-fills to the focused subwindow's series.
+- [ ] **View orientation**: radio buttons or dropdown:
+  - Axial (standard, normal = S-I / LPS Z)
+  - Coronal (standard, normal = A-P / LPS Y)
+  - Sagittal (standard, normal = L-R / LPS X)
+  - Custom (enables angle inputs: two rotation angles, e.g. yaw and pitch in degrees; or normal vector as three text fields)
+- [ ] **Output slice thickness**: numeric input in mm, defaulting to `SliceThickness` of the source series (or computed inter-slice spacing).
+- [ ] **Output pixel spacing**: numeric input in mm, defaulting to in-plane pixel spacing of the source series (or isotropic 1 mm for oblique; user can override).
+- [ ] **Interpolation**: dropdown: nearest, linear (default), cubic.
+- [ ] **Estimated slices / extent**: read-only, computed from volume bounding box and chosen orientation (updated live as user changes orientation/thickness).
+- [ ] Warn if source series lacks full `ImagePositionPatient` / `ImageOrientationPatient` geometry ("MPR requires complete DICOM spatial metadata").
+- [ ] OK / Cancel. On OK, trigger `MprBuilder.build()` asynchronously and display progress.
 
-#### 3.3 Oblique reconstructions
+#### 3.2 Volume representation (MprVolume)
 
-- [ ] Parameterize an **arbitrary plane** by normal and in-plane axes (or two angles + offset). Use Phase 1 `SlicePlane` representation for consistency.
-- [ ] Resample volume onto that plane (same interpolation options as orthogonal).
-- [ ] **Performance**: Use caching and, if needed, reduced resolution during interactive drag/rotate; full resolution on mouse release or after a short idle. Consider GPU later if volumes are large and interaction is slow.
-- [ ] **UI**: Draggable crosshairs or rotation handles in orthogonal views to define the oblique plane; optional numeric angle/offset inputs. Visual feedback (e.g. preview line or shaded region on other views) improves usability.
+**File**: `src/core/mpr_volume.py`
 
-#### 3.4 Integration with existing features
+- [ ] `MprVolume` class wrapping a SimpleITK image (reusing `image_resampler._build_sitk_image_from_datasets` where possible):
+  - Constructor from `List[Dataset]`: sort slices by position along normal (using `SliceStack`), build SimpleITK image with correct origin, spacing, and direction cosines.
+  - Handle **anisotropic voxels** and **non-axis-aligned** acquisitions using full direction cosines.
+  - Raise `MprVolumeError` (custom exception) on failure: inconsistent orientations, < 2 slices, missing geometry tags, all-duplicate positions.
+- [ ] Provide `MprVolume.available(datasets: List[Dataset]) -> bool` (quick pre-check before opening dialog).
 
-- [ ] **Window/level**: Apply per MPR view; reuse existing W/L infrastructure where possible.
-- [ ] **Overlays**: Define whether overlays are drawn on MPR views (e.g. same overlay logic, but metadata may need to be mapped to MPR slice). Likely Phase 3.2+.
-- [ ] **ROIs / measurements**: ROIs are currently in 2D slice space. Decide: (a) MPR views are read-only for ROIs, (b) ROIs can be drawn on MPR and stored in patient coordinates, or (c) ROIs only on original slices. Document and implement consistently.
-- [ ] **Fusion**: MPR of a fused volume (e.g. CT+PET) would require fusing in 3D then reslicing; defer or scope to a later phase.
-- [ ] **Slice sync**: Once MPR views exist, Phase 2 sync can be extended so that scrolling in one MPR pane updates the corresponding slice in other MPR panes (and optionally in “original” subwindows if same Frame of Reference).
+#### 3.3 MprBuilder / resampler
+
+**File**: `src/core/mpr_builder.py`
+
+- [ ] `MprBuilder` class: takes `MprVolume`, `SlicePlane` (output plane definition), output spacing, slice thickness, interpolation method.
+- [ ] `MprBuilder.build() -> List[np.ndarray]`: resamples the volume onto the entire family of parallel planes separated by `slice_thickness` along the output normal, spanning the bounding box of the volume. Returns ordered list of 2D NumPy arrays (one per output slice).
+- [ ] Use SimpleITK `Resample` for both orthogonal and oblique planes (avoids implementing a custom resampling loop; leverages existing `image_resampler` investment).
+- [ ] Return output pixel spacing (mm), extent, and a `SliceStack` representing the MPR planes (for Phase 2 sync integration).
+- [ ] Run in a background thread (or `QThread`) to avoid blocking the UI; emit progress signals.
+
+#### 3.4 Persistent MPR cache
+
+**File**: New cache module, e.g. `src/core/mpr_cache.py`, or extend an existing cache if present.
+
+- [ ] Cache MPR stacks on disk (e.g. NumPy `.npz` files in a subdirectory of the app's config/cache dir, similar to where fusion or other derived data is stored). Use a **cache key** derived from:
+  - Source series UID.
+  - Output orientation (normal vector, quantized to 4 decimal places).
+  - Output pixel spacing and slice thickness.
+  - Interpolation method.
+  - A hash or count of source datasets (to invalidate if series is reloaded with different content).
+- [ ] On MPR request: check cache first; if hit, skip resampling and load arrays from disk. Show "Loaded from cache" in progress feedback.
+- [ ] Cache expiry / invalidation: invalidate on series reload or when source series changes. Provide a "Clear MPR cache" option in Settings.
+- [ ] Cap disk usage (e.g. configurable max size in MB; evict LRU entries on overflow). Default cap: 500 MB. Add `mpr_cache_max_mb` to config.
+
+#### 3.5 MPR subwindow display
+
+Once `MprBuilder.build()` completes, load the resulting stack into the target subwindow like a synthetic series:
+
+- [ ] Store the MPR arrays and `SliceStack` in `subwindow_data` for the target subwindow (use a flag, e.g. `is_mpr: True`, to distinguish from real DICOM series).
+- [ ] The **slice navigator** counts: MPR stack size (number of output slices), not the source DICOM series length. The navigator label and scrollbar use the MPR stack index.
+- [ ] **"MPR" banner**: Draw a banner reading `MPR` (and optionally the orientation, e.g. `MPR – Coronal`) across the top of the subwindow image area, inside the image viewport. Use the existing overlay rendering path for positioning; ensure it is never hidden by other overlay elements. Style: bold, semi-transparent background, color distinct from clinical overlays.
+- [ ] **Overlays**: enable the existing overlay system for the MPR subwindow, but using metadata from the **source series** first dataset (e.g. PatientName, Modality, StudyDate). Explicitly **exclude** any overlay fields that would show a meaningless value for the resampled plane: `SliceLocation`, `InstanceNumber` (DICOM tag), `ImagePositionPatient` raw values. The slice counter shown in overlays should be the MPR stack index, sourced from the navigator's `current_slice_index`, not from the DICOM `InstanceNumber` or `SliceLocation` tag.
+- [ ] **Window/level**: enable fully; use the source series' window/level presets as initial values.
+- [ ] **Zoom, pan**: enable fully.
+- [ ] **ROIs, measurements, annotations**: **disabled** on any subwindow where `is_mpr = True`. If the user tries to draw an ROI or annotation, silently ignore (no tool activation). Consider showing a brief tooltip or status bar message "ROIs and annotations are not available on MPR views."
+- [ ] **Right-click context menu**: show "Convert MPR to…" options later (out of scope); for now, show "Clear MPR" to reset the subwindow to its previous series (or empty).
+
+#### 3.6 Sync integration for MPR subwindows
+
+- [ ] When the target subwindow is an MPR view, its `SliceStack` (from `MprBuilder.build`) is already in Phase 1 format. Register it in `SliceSyncCoordinator`'s geometry cache under a synthetic key (e.g. `("__mpr__", subwindow_idx)`).
+- [ ] MPR subwindows can participate in linked groups like any other subwindow. Scrolling an MPR subwindow can update linked original subwindows (and vice versa).
+
+#### 3.7 Entry point (UI wiring)
+
+- [ ] Add **"Create MPR view…"** to the subwindow context menu (right-click on image → "Create MPR view…").
+- [ ] Optionally add to the **View** menu as well.
+- [ ] Show **"Clear MPR view"** in the same menu when the subwindow already contains an MPR (with confirmation dialog).
+- [ ] While MPR is building, show a `QProgressDialog` (reuse `LoadingProgressManager` pattern if applicable) with a Cancel button that aborts the background thread.
 
 ### Potential problems and conflicts
 
 | Area | Risk / conflict | Recommendation |
 |------|------------------|----------------|
-| **Accuracy** | Naïve resampling can distort anatomy or distances with anisotropic or oblique data | Use full DICOM geometry in resampling; validate on known datasets; consider documenting “for viewing only” if not validated for measurement. |
-| **Performance** | Large volumes, real-time oblique rotation | Cache resampled slices; reduce resolution during interaction; consider GPU (e.g. CuPy, OpenCL) in a later iteration if needed. |
-| **Complexity** | MPR + W/L + overlays + ROIs + fusion is a large matrix | Implement orthogonal MPR first with basic W/L; add oblique and other integrations incrementally. Treat MPR as a distinct “mode” in UI and code to limit coupling. |
-| **Slice location line** | Drawing current slice line on other views (TO_DO) | Use Phase 1 plane–plane intersection and projection; implement as a separate, smaller feature after Phase 2, reusing the same geometry. |
-
----
-
-## Decisions to Be Made (Summary)
-
-1. **Slice sync default**: On or off by default; and which subwindows participate (all vs same Frame of Reference vs user-linked).
-2. **Strictness**: “Strict orthogonal only” vs “angled within N°” and tolerance (mm) for slice matching.
-3. **MPR mode**: Separate “MPR layout/mode” vs integrated into current subwindows; and which features (ROIs, overlays, fusion) apply in MPR.
-4. **Stack ordering**: Single definition of “slice index” for geometry (e.g. by position along stack normal) and how it maps to series navigator index.
-5. **Slice location line**: Implement in same release as Phase 2 or as a follow-on; same geometry, different UI (draw line in 2D from projected intersection).
+| **Accuracy** | Resampling distortion with anisotropic or oblique data | Use full direction cosines in SimpleITK; document "for viewing only" until measurements are validated. |
+| **Performance** | Large volumes; real-time oblique re-build on angle change | No real-time dragging in Phase 3 (angles set in dialog, not interactively). If interactive rotation is added later: cache intermediate volume, reduce resolution while dragging, full resolution on release. |
+| **Memory** | Multiple MPR stacks (one per subwindow) could be memory-intensive | Store built stacks in persistent disk cache; load only the displayed slice range into RAM at a time (lazy loading for large stacks). |
+| **Cache key collisions** | Series UID alone is not unique if server re-uses UIDs (rare but possible) | Include dataset count and a checksum in key; document limitation. |
+| **Overlay metadata** | Source dataset metadata may not be appropriate for resampled plane (e.g. `ImagePositionPatient`) | Explicitly whitelist which overlay tags are shown (see 3.5); do not blindly pass source dataset as "current dataset" to overlay logic. |
+| **Fusion on MPR** | MPR of a fused volume would require fusing in 3D | **Out of scope** for Phase 3; disable fusion controls when a subwindow is in MPR mode and show a tooltip explaining why. |
+| **Slice navigator** | Navigator uses `current_datasets` list for bounds; MPR has a list of NumPy arrays, not Datasets | Add an abstraction layer or special case in the navigator so it can count MPR frames from the array list. |
+| **Cine on MPR** | Cine could technically loop through MPR slices | Allow it (no harm); or disable cine on MPR (simpler initial implementation). |
 
 ---
 
 ## File and Module Sketch
 
-- **Phase 1**: `src/core/slice_geometry.py` (or `src/utils/slice_geometry.py`) — planes, stacks, intersection, nearest slice. Unit tests in `tests/` (e.g. `test_slice_geometry.py`).
-- **Phase 2**: `src/core/slice_sync_coordinator.py` (or under `src/core/`) — responds to slice changes, uses geometry, updates other subwindows; config key in `display_config` or new mixin.
-- **Phase 3**: New module(s) for volume building and MPR resampling (may extend `image_resampler`); MPR-specific UI (layout, controls) in `src/gui/`; possibly `src/core/mpr_volume.py` and `src/gui/mpr_*.py`.
+```
+src/
+  core/
+    slice_geometry.py         # Phase 1: SlicePlane, SliceStack, find_nearest_slice,
+                              #          plane_plane_intersection, project_line_to_2d
+    slice_sync_coordinator.py # Phase 2: SliceSyncCoordinator
+    mpr_volume.py             # Phase 3: MprVolume (wraps SimpleITK volume)
+    mpr_builder.py            # Phase 3: MprBuilder (resampling, threading, progress)
+    mpr_cache.py              # Phase 3: MprCache (disk-based, keyed, LRU eviction)
+  gui/
+    dialogs/
+      slice_sync_dialog.py    # Phase 2: Manage linked groups
+      mpr_dialog.py           # Phase 3: Series/orientation/thickness selection
+  utils/
+    config/
+      slice_sync_config.py    # Phase 2: Config mixin for sync enabled + group assignments
+                              # (or add fields to display_config.py)
+
+tests/
+  test_slice_geometry.py      # Phase 1 unit tests (pure geometry, no Qt)
+  test_slice_sync.py          # Phase 2 unit tests (coordinator logic, mock subwindows)
+  test_mpr_builder.py         # Phase 3 unit tests (resampling on synthetic volumes)
+```
+
+---
+
+## Decisions Remaining
+
+1. **Cine + sync**: Allow sync-triggered updates while cine is active (simplest) or suppress them? Needs UX input.
+2. **MPR lazy loading**: Load full MPR stack into RAM on build, or lazy-load per slice? Large volumes may require lazy loading.
+3. **MPR cache location**: Use existing app config/cache directory, or a user-configurable path? Add to Settings dialog.
+4. **MPR measurement (future)**: When measurements on MPR are eventually enabled, pixel-to-patient mapping must account for the output plane geometry, not the source dataset. Needs a separate design.
+5. **Interactive oblique rotation (future)**: Not in Phase 3. When added, will require real-time resampling or a multi-resolution strategy.
 
 ---
 
 ## Changelog and Versioning
 
-- **Changelog**: When Phase 1 or 2 is merged, add an entry (e.g. “Added slice geometry module and optional anatomic slice sync across views”). Phase 3 is a larger feature and should get its own entry.
-- **Semantic versioning**: Phase 1–2 can be minor (e.g. 3.x.0) as new optional behavior; Phase 3 (MPR) is a significant feature — minor or major depending on project policy (see `dev-docs/RELEASING.md` and `dev-docs/info/SEMANTIC_VERSIONING_GUIDE.md`).
+- **Phase 1**: Small internal addition (no user-visible change); can be bundled into the next patch or minor release without a dedicated changelog entry, or noted as an internal improvement.
+- **Phase 2**: New optional feature (sync off by default) — **minor version bump** (e.g. `3.x.0`). Changelog: "Added optional anatomic slice sync for user-defined linked groups."
+- **Phase 3**: Significant new feature — **minor or major version bump** depending on release policy (see `dev-docs/RELEASING.md`). Changelog: "Added MPR / oblique reconstruction view; persistent cache; overlays and W/L on MPR subwindows; ROIs/annotations/measurements not available in MPR mode."
 
 ---
 
 ## References
 
-- `dev-docs/TO_DO.md` — “Syncing Slices for Non-Orthogonal Orientations (Using ImagePositionPatient)”, “Slice Location Line Across Views”, “Multi-Planar Reconstructions (MPRs) and Oblique Reconstructions”.
+- `dev-docs/TO_DO.md` — "Syncing Slices for Non-Orthogonal Orientations (Using ImagePositionPatient)", "Slice Location Line Across Views", "Multi-Planar Reconstructions (MPRs) and Oblique Reconstructions".
 - `src/utils/dicom_utils.py` — `get_image_position`, `get_image_orientation`, `pixel_to_patient_coordinates`.
-- `src/core/fusion_handler.py` — `get_slice_location`, `find_matching_slice` (current 1D matching).
-- `src/core/image_resampler.py` — 3D resampling with `ImagePositionPatient`, `ImageOrientationPatient`, spacing.
-- `dev-docs/plans/IMAGE_FUSION_IMPLEMENTATION_PLAN.md` — structure and style for phased plans.
+- `src/core/fusion_handler.py` — `get_slice_location`, `find_matching_slice` (current 1D matching; not changed).
+- `src/core/image_resampler.py` — 3D resampling with `ImagePositionPatient`, `ImageOrientationPatient`, SimpleITK; basis for `MprBuilder`.
+- `src/core/loading_progress_manager.py` — progress/cancel dialog pattern for long operations; reuse for MPR build.
+- `dev-docs/plans/IMAGE_FUSION_IMPLEMENTATION_PLAN.md` — phased plan structure and style.

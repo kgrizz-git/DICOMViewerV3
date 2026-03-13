@@ -5,6 +5,7 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ## [Unreleased]
 
 ### Added
+- **Slice sync and MPR groundwork**: Added patient-space slice geometry primitives, optional linked-group slice synchronisation, MPR volume/build/cache modules, an MPR creation dialog, and initial subwindow wiring for synthetic MPR views with on-image `MPR` banner rendering and MPR-aware slice navigation.
 - **Trackpad pinch-to-zoom**: Pinch on a trackpad zooms the image in/out without changing scroll-wheel behavior. On macOS and Wayland, native pinch gestures are handled via `QNativeGestureEvent` (ZoomNativeGesture). On Windows, Ctrl+wheel is treated as zoom so trackpad pinch (when the OS sends it as Ctrl+wheel) also zooms. Scroll wheel mode (Slice vs Zoom) continues to apply only to the physical wheel; pinch always zooms.
 - **Distance measurement positioning UX**: When a measurement is selected, small yellow cross markers show at both line endpoints so ends stay visible. While dragging a measurement handle, handles are hidden so the endpoint and image are unobstructed; handles reappear on release. **Shift+drag** on a handle shows a magnifier centered on the handle for precise placement; the magnifier hides when the drag ends. Cursor is hidden during initial measurement (after first click until second click) and during measurement handle drag. See `dev-docs/plans/distance-measurement-positioning-ux-plan.md`.
 - **Quick Window/Level (Q)**: Context menu item "Quick Window/Level (Q)" and keyboard shortcut **Q** open a small dialog to enter window center and width (Tab between fields, Enter or OK to apply). Applies to the focused subwindow; values and ranges match the right-panel WL controls (rescaled or raw).
@@ -48,6 +49,9 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 - **Progress dialog on cancel**: When loading is cancelled before all files are loaded, the progress dialog and status bar now show the number of files actually loaded (e.g. 6) instead of the batch total (e.g. 11). Loader final progress uses `len(loaded_files)`; handler uses the callback’s current (actual) count for the "Loaded X file(s). Organizing..." message.
 - **Privacy + crosshair**: Toggling privacy after drawing a crosshair and then loading a different exam no longer raises `RuntimeError: Internal C++ object (DraggableCrosshairText) already deleted`. CrosshairItem.update_privacy_mode now catches RuntimeError when the Qt text item was already deleted; PrivacyController also catches RuntimeError when calling crosshair_manager.set_privacy_mode.
 - **Privacy + reload study**: Toggling privacy after loading a different study and then reloading the first study no longer redisplays stale series in non-focused windows. PrivacyController.refresh_overlays now only refreshes subwindows that have an entry in subwindow_data (i.e. have loaded data), so windows that were not updated when the other study was loaded are skipped.
+
+### Notes
+- **Semantic version impact**: The slice-sync and MPR work is a user-visible, backward-compatible feature addition, so it should ship in the next **minor** release rather than a patch release.
 
 ---
 

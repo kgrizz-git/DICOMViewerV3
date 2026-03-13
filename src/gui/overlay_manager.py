@@ -90,7 +90,42 @@ class ViewportOverlayWidget(QWidget):
         
         # Margin in viewport pixels
         self.margin = 10
-    
+
+        # MPR banner label (top-centre, shown only in MPR mode).
+        self.mpr_banner_label = QLabel("", self)
+        mpr_font = QFont("Arial", max(font_size + 4, 12))
+        mpr_font.setBold(True)
+        self.mpr_banner_label.setFont(mpr_font)
+        self.mpr_banner_label.setStyleSheet(
+            "color: rgb(255, 220, 50); background: rgba(0,0,0,140);"
+            " padding: 2px 10px 2px 10px; border-radius: 3px;"
+        )
+        self.mpr_banner_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self.mpr_banner_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.mpr_banner_label.hide()
+
+    def set_mpr_banner(self, text: Optional[str]) -> None:
+        """
+        Show or hide the MPR banner at the top-centre of the viewport.
+
+        Args:
+            text: Banner text (e.g. "MPR – Coronal"), or None to hide.
+        """
+        if text:
+            self.mpr_banner_label.setText(text)
+            self.mpr_banner_label.adjustSize()
+            self._position_mpr_banner()
+            self.mpr_banner_label.show()
+        else:
+            self.mpr_banner_label.hide()
+
+    def _position_mpr_banner(self) -> None:
+        """Centre the MPR banner horizontally near the top of the viewport."""
+        w = self.width()
+        label_w = self.mpr_banner_label.width()
+        x = max(0, (w - label_w) // 2)
+        self.mpr_banner_label.move(x, self.margin)
+
     def resizeEvent(self, event) -> None:
         """
         Handle resize events to update label positions.
@@ -105,7 +140,9 @@ class ViewportOverlayWidget(QWidget):
         # Debug logging commented out to reduce noise (uncomment if debugging overlay resize issues)
         # print(f"[DEBUG-WIDGET] resizeEvent: widget resized to {event.size().width()}x{event.size().height()}")
         self.update_positions(event.size().width(), event.size().height())
-    
+        if self.mpr_banner_label.isVisible():
+            self._position_mpr_banner()
+
     def set_corner_text(self, corner_key: str, text: str, alignment: Qt.AlignmentFlag) -> None:
         """
         Set text for a corner label.
@@ -178,6 +215,9 @@ class ViewportOverlayWidget(QWidget):
         font.setBold(True)
         for label in self.corner_labels.values():
             label.setFont(font)
+        mpr_font = QFont("Arial", max(font_size + 4, 12))
+        mpr_font.setBold(True)
+        self.mpr_banner_label.setFont(mpr_font)
     
     def set_font_color(self, font_color: tuple) -> None:
         """
@@ -345,6 +385,21 @@ class OverlayManager:
             enabled: True to enable privacy mode, False to disable
         """
         self.privacy_mode = enabled
+
+    def set_mpr_banner(self, text: Optional[str]) -> None:
+        """
+        Show or hide the MPR banner on this overlay's viewport widget.
+
+        Delegates to ``ViewportOverlayWidget.set_mpr_banner`` if the
+        viewport overlay widget is available.
+
+        Args:
+            text: Banner text (e.g. "MPR – Coronal"), or None to hide.
+        """
+        if self.viewport_overlay_widget is not None and hasattr(
+            self.viewport_overlay_widget, "set_mpr_banner"
+        ):
+            self.viewport_overlay_widget.set_mpr_banner(text)
     
     def get_overlay_text(self, parser: DICOMParser) -> str:
         """

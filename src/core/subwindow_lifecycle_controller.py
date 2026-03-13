@@ -53,6 +53,8 @@ class SubwindowLifecycleController:
         # Store histogram slot per image_viewer so we can disconnect before reconnecting
         # (connect_subwindow_signals is called on every layout change; without disconnect we accumulate duplicates)
         self._histogram_slots: Dict[int, Any] = {}  # id(image_viewer) -> callable
+        self._mpr_open_slots: Dict[int, Any] = {}   # id(image_viewer) -> callable
+        self._mpr_clear_slots: Dict[int, Any] = {}  # id(image_viewer) -> callable
         # Single restartable timer for 100ms viewport-resized callback; coalesces rapid layout changes.
         self._viewport_resized_timer: Optional[QTimer] = None
 
@@ -190,7 +192,15 @@ class SubwindowLifecycleController:
             app.current_series_uid = data.get('current_series_uid', '')
             app.current_study_uid = data.get('current_study_uid', '')
             app.current_datasets = data.get('current_datasets', [])
-            if app.current_datasets:
+            if data.get("is_mpr") and data.get("mpr_result") is not None:
+                total_slices = data["mpr_result"].n_slices
+                app.slice_navigator.set_total_slices(total_slices)
+                focused_slice_index = data.get('current_slice_index', 0)
+                if 0 <= focused_slice_index < total_slices:
+                    app.slice_navigator.blockSignals(True)
+                    app.slice_navigator.current_slice_index = focused_slice_index
+                    app.slice_navigator.blockSignals(False)
+            elif app.current_datasets:
                 total_slices = len(app.current_datasets)
                 app.slice_navigator.set_total_slices(total_slices)
                 focused_slice_index = data.get('current_slice_index', 0)
@@ -214,9 +224,14 @@ class SubwindowLifecycleController:
             app.keyboard_event_handler.image_viewer = app.image_viewer
         if hasattr(app, 'mouse_mode_handler') and app.image_viewer:
             app.mouse_mode_handler.image_viewer = app.image_viewer
-            current_mode = app.main_window.get_current_mouse_mode()
-            if current_mode:
-                app.image_viewer.set_mouse_mode(current_mode)
+            if hasattr(app, "_mpr_controller") and app._mpr_controller.is_mpr(focused_idx):
+                app.image_viewer.set_mouse_mode("pan")
+                if hasattr(app.main_window, "set_mouse_mode_checked"):
+                    app.main_window.set_mouse_mode_checked("pan")
+            else:
+                current_mode = app.main_window.get_current_mouse_mode()
+                if current_mode:
+                    app.image_viewer.set_mouse_mode(current_mode)
         if app.image_viewer:
             app.image_viewer.setFocus()
 
@@ -289,6 +304,11 @@ class SubwindowLifecycleController:
         """Redisplay slice for a specific subwindow using its managers and data."""
         app = self.app
         if idx not in app.subwindow_managers:
+            return
+        if hasattr(app, "_mpr_controller") and app._mpr_controller.is_mpr(idx):
+            app._mpr_controller.display_mpr_slice(
+                idx, app.subwindow_data.get(idx, {}).get("current_slice_index", 0)
+            )
             return
         managers = app.subwindow_managers[idx]
         view_state_manager = managers.get('view_state_manager')
@@ -368,6 +388,18 @@ class SubwindowLifecycleController:
                         except (TypeError, RuntimeError):
                             pass
                         del self._histogram_slots[vid]
+                    if vid in self._mpr_open_slots:
+                        try:
+                            image_viewer.create_mpr_view_requested.disconnect(self._mpr_open_slots[vid])
+                        except (TypeError, RuntimeError):
+                            pass
+                        del self._mpr_open_slots[vid]
+                    if vid in self._mpr_clear_slots:
+                        try:
+                            image_viewer.clear_mpr_view_requested.disconnect(self._mpr_clear_slots[vid])
+                        except (TypeError, RuntimeError):
+                            pass
+                        del self._mpr_clear_slots[vid]
                     try:
                         subwindow.assign_series_requested.disconnect(app._on_assign_series_requested)
                     except (TypeError, RuntimeError):
@@ -408,6 +440,16 @@ class SubwindowLifecycleController:
                 subwindow.expand_to_1x1_requested.connect(app._on_expand_to_1x1_requested)
                 image_viewer.swap_view_requested.connect(app._on_swap_view_requested)
                 image_viewer.window_slot_map_popup_requested.connect(app._on_window_slot_map_popup_requested)
+
+                # MPR view actions.
+                if hasattr(app, "_mpr_controller"):
+                    open_mpr_slot = lambda i=idx: app._mpr_controller.open_mpr_dialog(i)
+                    clear_mpr_slot = lambda i=idx: app._mpr_controller.clear_mpr(i)
+                    image_viewer.create_mpr_view_requested.connect(open_mpr_slot)
+                    image_viewer.clear_mpr_view_requested.connect(clear_mpr_slot)
+                    self._mpr_open_slots[vid] = open_mpr_slot
+                    self._mpr_clear_slots[vid] = clear_mpr_slot
+                    image_viewer.is_mpr_view_callback = lambda i=idx: app._mpr_controller.is_mpr(i)
         self.connect_all_subwindow_transform_signals()
 
     def connect_all_subwindow_transform_signals(self) -> None:
