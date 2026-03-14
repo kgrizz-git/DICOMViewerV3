@@ -386,8 +386,10 @@ class MprDialog(QDialog):
             interpolation=interp,
             orientation_label=label,
         )
-        self.mpr_requested.emit(req)
+        # Close the dialog first so the orientation-choice or error dialogs
+        # opened by the handler are visible on top and the user is not stuck.
         self.accept()
+        self.mpr_requested.emit(req)
 
     # ------------------------------------------------------------------
     # Helpers

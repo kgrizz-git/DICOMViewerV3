@@ -278,6 +278,34 @@ def get_image_position(dataset: Dataset) -> Optional[np.ndarray]:
     return None
 
 
+def get_slice_location(dataset: Dataset) -> Optional[float]:
+    """
+    Get SliceLocation (0018,0050) from DICOM dataset.
+
+    Used as a fallback for slice ordering when ImagePositionPatient is missing.
+    The value is typically in mm along the slice normal.
+
+    Args:
+        dataset: pydicom Dataset.
+
+    Returns:
+        Slice location as float, or None if missing or invalid.
+    """
+    try:
+        if hasattr(dataset, "SliceLocation"):
+            val = dataset.SliceLocation
+            if val is None:
+                return None
+            if isinstance(val, (int, float)):
+                return float(val)
+            s = str(val).strip()
+            if s:
+                return float(s)
+    except (ValueError, TypeError):
+        pass
+    return None
+
+
 def get_image_orientation(dataset: Dataset) -> Optional[Tuple[np.ndarray, np.ndarray]]:
     """
     Get ImageOrientationPatient from DICOM dataset.
