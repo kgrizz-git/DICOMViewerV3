@@ -377,6 +377,10 @@ class SubwindowLifecycleController:
                     except (TypeError, RuntimeError):
                         pass
                     try:
+                        image_viewer.slice_location_lines_toggled.disconnect(app._on_slice_location_lines_toggled)
+                    except (TypeError, RuntimeError):
+                        pass
+                    try:
                         image_viewer.left_pane_toggle_requested.disconnect(app.main_window._toggle_left_pane)
                     except (TypeError, RuntimeError):
                         pass
@@ -435,6 +439,7 @@ class SubwindowLifecycleController:
                 image_viewer.smooth_when_zoomed_toggled.connect(app._on_smooth_when_zoomed_toggled)
                 image_viewer.slice_sync_toggled.connect(app._on_slice_sync_toggled)
                 image_viewer.slice_sync_manage_requested.connect(app._open_slice_sync_dialog)
+                image_viewer.slice_location_lines_toggled.connect(app._on_slice_location_lines_toggled)
                 image_viewer.left_pane_toggle_requested.connect(app.main_window._toggle_left_pane)
                 image_viewer.right_pane_toggle_requested.connect(app.main_window._toggle_right_pane)
                 image_viewer.about_this_file_requested.connect(app._open_about_this_file)
@@ -442,6 +447,9 @@ class SubwindowLifecycleController:
                 image_viewer.histogram_requested.connect(hist_slot)
                 self._histogram_slots[vid] = hist_slot
                 image_viewer.get_file_path_callback = lambda i=idx: app._get_current_slice_file_path(i)
+                image_viewer.get_slice_location_lines_visible_callback = (
+                    lambda: app.config_manager.get_slice_location_lines_visible()
+                )
                 image_viewer.set_subwindow_index(idx)
                 layout = app.multi_window_layout
                 image_viewer.get_slot_to_view_callback = lambda l=layout: l.get_slot_to_view()

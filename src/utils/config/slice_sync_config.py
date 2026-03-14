@@ -4,6 +4,8 @@ Slice Sync Config Mixin
 Persists settings for the anatomic slice-sync feature:
   - whether sync is globally enabled (default: off)
   - user-defined linked groups (list of lists of subwindow indices)
+  - slice location lines visibility (default: off)
+  - slice location lines same-group-only (default: True when sync enabled)
 
 Mixin contract:
     Expects ``self.config`` (dict) and ``self.save_config()`` from ConfigManager.
@@ -14,6 +16,8 @@ slice_sync_enabled  : bool  – master on/off toggle (default False)
 slice_sync_groups   : list of list[int]  – each inner list is one linked group
                       of subwindow indices, e.g. [[0, 1], [2, 3]].
                       Default: [] (no groups defined).
+slice_location_lines_visible : bool  – show slice location lines across views (default False)
+slice_location_lines_same_group_only : bool  – only show lines from same linked group (default True)
 """
 
 from typing import List
@@ -84,4 +88,45 @@ class SliceSyncConfigMixin:
             if isinstance(group, list) and len(group) >= 2
         ]
         self.config["slice_sync_groups"] = cleaned
+        self.save_config()
+
+    # ------------------------------------------------------------------
+    # Slice location lines
+    # ------------------------------------------------------------------
+
+    def get_slice_location_lines_visible(self) -> bool:
+        """
+        Return whether slice location lines are visible across views.
+
+        Default is ``False`` (off).
+        """
+        return bool(self.config.get("slice_location_lines_visible", False))
+
+    def set_slice_location_lines_visible(self, visible: bool) -> None:
+        """
+        Set slice location lines visibility and persist.
+
+        Args:
+            visible: True to show lines, False to hide.
+        """
+        self.config["slice_location_lines_visible"] = bool(visible)
+        self.save_config()
+
+    def get_slice_location_lines_same_group_only(self) -> bool:
+        """
+        Return whether slice location lines are scoped to the same linked group.
+
+        When True, only subwindows in the same sync group show their slice
+        line on the target. Default is ``True``.
+        """
+        return bool(self.config.get("slice_location_lines_same_group_only", True))
+
+    def set_slice_location_lines_same_group_only(self, same_group_only: bool) -> None:
+        """
+        Set slice location lines same-group-only and persist.
+
+        Args:
+            same_group_only: True to scope to linked group only.
+        """
+        self.config["slice_location_lines_same_group_only"] = bool(same_group_only)
         self.save_config()

@@ -93,6 +93,28 @@ class SliceSyncCoordinator:
         """
         self.groups = [g for g in groups if isinstance(g, list) and len(g) >= 2]
 
+    def get_current_plane(self, idx: int) -> Optional[SlicePlane]:
+        """
+        Return the SlicePlane for the current slice in subwindow ``idx``.
+
+        Used by the slice location line feature to compute plane-plane
+        intersections. Returns None if geometry is unavailable.
+
+        Args:
+            idx: Subwindow index (0–3).
+
+        Returns:
+            SlicePlane for the current slice, or None.
+        """
+        stack = self._get_stack(idx)
+        if stack is None:
+            return None
+        slice_idx = self._get_slice_index(idx)
+        sorted_pos = self._dataset_idx_to_sorted_pos(idx, slice_idx, stack)
+        if sorted_pos is None:
+            return None
+        return stack.planes[sorted_pos]
+
     def invalidate_cache(self, study_uid: str = "", series_uid: str = "") -> None:
         """
         Remove one or all entries from the geometry cache.
