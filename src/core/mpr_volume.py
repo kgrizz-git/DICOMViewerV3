@@ -37,9 +37,18 @@ except ImportError:
     _SITK_AVAILABLE = False
     sitk = None  # type: ignore
 
-from core.slice_geometry import SliceStack
-from utils.dicom_utils import get_image_orientation, get_image_position
+from core.slice_geometry import SlicePlane, SliceStack
+from utils.dicom_utils import (
+    get_image_orientation,
+    get_image_position,
+    get_slice_location,
+)
 from utils.debug_flags import DEBUG_MPR
+
+# Tolerance for treating two normals as the same orientation (dot product).
+_ORIENTATION_GROUP_DOT_TOLERANCE = 0.99
+# Tolerance for labeling a normal as a standard axis (Axial/Coronal/Sagittal).
+_ORIENTATION_LABEL_DOT_TOLERANCE = 0.9
 
 
 def _mpr_log(message: str) -> None:
@@ -50,6 +59,112 @@ def _mpr_log(message: str) -> None:
 
 class MprVolumeError(RuntimeError):
     """Raised when a 3-D MPR volume cannot be constructed."""
+
+
+def normal_to_orientation_label(normal: np.ndarray) -> str:
+    """
+    Return a human-readable orientation label for a slice-plane normal.
+
+    Standard DICOM patient orientations: Axial (normal ≈ ±Z), Coronal (≈ ±Y),
+    Sagittal (≈ ±X). Otherwise returns "Oblique (x, y, z)".
+
+    Args:
+        normal: Unit normal vector (3,) from SlicePlane.normal.
+
+    Returns:
+        Label string, e.g. "Axial", "Coronal", "Sagittal", or "Oblique (0.0, 0.7, 0.7)".
+    """
+    n = np.asarray(normal, dtype=float).ravel()
+    if n.size < 3:
+        return "Oblique (unknown)"
+    n = n[:3] / (float(np.linalg.norm(n[:3])) or 1e-10)
+    if abs(float(np.dot(n, [0, 0, 1]))) >= _ORIENTATION_LABEL_DOT_TOLERANCE:
+        return "Axial"
+    if abs(float(np.dot(n, [0, 1, 0]))) >= _ORIENTATION_LABEL_DOT_TOLERANCE:
+        return "Coronal"
+    if abs(float(np.dot(n, [1, 0, 0]))) >= _ORIENTATION_LABEL_DOT_TOLERANCE:
+        return "Sagittal"
+    return f"Oblique ({n[0]:.2f}, {n[1]:.2f}, {n[2]:.2f})"
+
+
+def has_slice_location_fallback_available(datasets: List[Dataset]) -> bool:
+    """
+    Return True if every dataset has ImageOrientationPatient and SliceLocation.
+
+    Used to decide whether we can offer the user a fallback when
+    ImagePositionPatient is missing (use SliceLocation for slice order/position).
+
+    Args:
+        datasets: List of pydicom Datasets.
+
+    Returns:
+        True if all have orientation and SliceLocation; False if empty or any lack them.
+    """
+    if not datasets:
+        return False
+    for ds in datasets:
+        if get_image_orientation(ds) is None or get_slice_location(ds) is None:
+            return False
+    return True
+
+
+def get_orientation_groups(
+    datasets: List[Dataset],
+    use_slice_location_if_no_position: bool = False,
+) -> List[Tuple[str, List[Dataset]]]:
+    """
+    Partition datasets by slice orientation (ImageOrientationPatient).
+
+    Slices with the same orientation (parallel or anti-parallel normals) are
+    grouped together. Used when a series has mixed orientations so the user
+    can choose which group to use for MPR.
+
+    Args:
+        datasets: List of pydicom Datasets (e.g. one series).
+
+    Returns:
+        List of (label, list_of_datasets), where label is from
+        normal_to_orientation_label (e.g. "Axial", "Coronal (12 images)" is
+        not in the label; the caller adds count when displaying).
+        Slices that fail SlicePlane.from_dataset are skipped and not included
+        in any group. Groups are ordered by label for stable dialog ordering.
+        use_slice_location_if_no_position: If True, planes without
+            ImagePositionPatient are built using SliceLocation (0018,0050).
+    """
+    pairs: List[Tuple[Dataset, SlicePlane]] = []
+    for ds in datasets:
+        plane = SlicePlane.from_dataset(
+            ds,
+            use_slice_location_if_no_position=use_slice_location_if_no_position,
+        )
+        if plane is not None:
+            pairs.append((ds, plane))
+
+    if not pairs:
+        return []
+
+    # Group by orientation: two normals are same if |dot| >= tolerance.
+    groups: List[List[Tuple[Dataset, SlicePlane]]] = []
+    for ds, plane in pairs:
+        n = plane.normal
+        placed = False
+        for g in groups:
+            ref_n = g[0][1].normal
+            if abs(float(np.dot(n, ref_n))) >= _ORIENTATION_GROUP_DOT_TOLERANCE:
+                g.append((ds, plane))
+                placed = True
+                break
+        if not placed:
+            groups.append([(ds, plane)])
+
+    # Build (label, datasets) and sort by label for stable ordering.
+    result: List[Tuple[str, List[Dataset]]] = []
+    for g in groups:
+        label = normal_to_orientation_label(g[0][1].normal)
+        ds_list = [ds for ds, _ in g]
+        result.append((label, ds_list))
+    result.sort(key=lambda x: x[0])
+    return result
 
 
 class MprVolume:
@@ -113,7 +228,11 @@ class MprVolume:
     # ------------------------------------------------------------------
 
     @classmethod
-    def from_datasets(cls, datasets: List[Dataset]) -> "MprVolume":
+    def from_datasets(
+        cls,
+        datasets: List[Dataset],
+        use_slice_location_if_no_position: bool = False,
+    ) -> "MprVolume":
         """
         Build an MprVolume from a list of pydicom Datasets.
 
@@ -126,6 +245,8 @@ class MprVolume:
 
         Args:
             datasets: Pydicom Datasets for one DICOM series (any order).
+            use_slice_location_if_no_position: If True, slices without
+                ImagePositionPatient are positioned using SliceLocation (0018,0050).
 
         Returns:
             MprVolume instance.
@@ -138,20 +259,23 @@ class MprVolume:
                 "SimpleITK is not installed. MPR requires SimpleITK."
             )
 
-        if len(datasets) < 2:
+        if len(datasets) < 1:
             raise MprVolumeError(
-                f"MPR requires at least 2 slices; got {len(datasets)}."
+                "MPR requires at least one slice with valid geometry."
             )
 
         _mpr_log(f"MprVolume.from_datasets: received {len(datasets)} dataset(s)")
 
         # Step 1: Build initial stack to get sorted order and positions.
-        initial_stack = SliceStack.from_datasets(datasets)
+        initial_stack = SliceStack.from_datasets(
+            datasets,
+            use_slice_location_if_no_position=use_slice_location_if_no_position,
+        )
         if initial_stack is None:
             raise MprVolumeError(
                 "Could not build 3-D geometry from this series. "
-                "Ensure all slices have ImagePositionPatient and "
-                "ImageOrientationPatient."
+                "Ensure all slices have ImagePositionPatient (or SliceLocation if "
+                "using the fallback) and ImageOrientationPatient."
             )
 
         _mpr_log(
@@ -160,6 +284,18 @@ class MprVolume:
             f"normal={np.round(initial_stack.stack_normal, 4).tolist()} "
             f"slice_thickness={initial_stack.slice_thickness:.4f} mm"
         )
+
+        # Step 1b: Reject series with mixed orientations (e.g. axial + coronal).
+        # All slices must be parallel; otherwise the volume would be invalid.
+        normal_ref = initial_stack.stack_normal
+        for i, plane in enumerate(initial_stack.planes):
+            dot = float(np.dot(plane.normal, normal_ref))
+            if abs(dot) < 0.99:
+                raise MprVolumeError(
+                    "This series contains slices in different orientations. "
+                    "MPR requires a single orientation (e.g. all axial). "
+                    "Use a series where every slice has the same ImageOrientationPatient."
+                )
 
         # Step 2: Reorder datasets to match sorted order.
         # initial_stack.original_indices[i] is the index into `datasets` for
@@ -173,9 +309,9 @@ class MprVolume:
         deduped_datasets, deduped_positions = cls._deduplicate_sorted(
             sorted_datasets, sorted_positions
         )
-        if len(deduped_datasets) < 2:
+        if len(deduped_datasets) < 1:
             raise MprVolumeError(
-                "All slices have the same position — cannot build a volume."
+                "No slices with valid position remained after deduplication."
             )
 
         removed_duplicates = len(sorted_datasets) - len(deduped_datasets)
@@ -186,7 +322,10 @@ class MprVolume:
 
         # Step 4: Rebuild SliceStack from deduplicated list so geometry is
         # self-consistent (positions, slice_thickness, etc.).
-        final_stack = SliceStack.from_datasets(deduped_datasets)
+        final_stack = SliceStack.from_datasets(
+            deduped_datasets,
+            use_slice_location_if_no_position=use_slice_location_if_no_position,
+        )
         if final_stack is None:
             raise MprVolumeError(
                 "Failed to rebuild geometry after deduplication."
@@ -244,7 +383,8 @@ class MprVolume:
         Return True if datasets have the spatial metadata required for MPR.
 
         This is a fast pre-check used to enable/disable the MPR dialog button.
-        It does NOT attempt to build the full volume.
+        Considers ImagePositionPatient, or ImageOrientationPatient + SliceLocation
+        (fallback when position is missing). It does NOT attempt to build the volume.
 
         Args:
             datasets: Candidate dataset list.
@@ -254,17 +394,15 @@ class MprVolume:
         """
         if not _SITK_AVAILABLE:
             return False
-        if len(datasets) < 2:
+        if len(datasets) < 1:
             return False
-        count = 0
         for ds in datasets:
-            if (
-                get_image_position(ds) is not None
-                and get_image_orientation(ds) is not None
-            ):
-                count += 1
-                if count >= 2:
-                    return True
+            if get_image_orientation(ds) is None:
+                continue
+            if get_image_position(ds) is not None:
+                return True
+            if get_slice_location(ds) is not None:
+                return True
         return False
 
     # ------------------------------------------------------------------

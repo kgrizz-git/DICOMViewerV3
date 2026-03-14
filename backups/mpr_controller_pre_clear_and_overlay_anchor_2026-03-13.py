@@ -34,18 +34,12 @@ from typing import TYPE_CHECKING, Dict, Optional
 import numpy as np
 from PIL import Image
 from PySide6.QtCore import QObject
-from PySide6.QtWidgets import QDialog, QMessageBox, QProgressDialog
+from PySide6.QtWidgets import QMessageBox, QProgressDialog
 
 from core.mpr_builder import MprBuilder, MprBuilderWorker, MprResult
 from core.mpr_cache import MprCache
-from core.mpr_volume import (
-    MprVolume,
-    MprVolumeError,
-    get_orientation_groups,
-    has_slice_location_fallback_available,
-)
+from core.mpr_volume import MprVolume, MprVolumeError
 from core.dicom_parser import DICOMParser
-from gui.dialogs.mpr_orientation_choice_dialog import MprOrientationChoiceDialog
 from utils.dicom_utils import get_composite_series_key
 from utils.debug_flags import DEBUG_MPR
 
@@ -175,7 +169,6 @@ class MprController(QObject):
             return
 
         previous_state = data.get("mpr_previous_state")
-        image_viewer = self._get_image_viewer(idx)
 
         # Remove MPR-specific keys.
         for key in (
@@ -226,40 +219,6 @@ class MprController(QObject):
                 self._app.current_study_uid = previous_study_uid
                 self._app.current_series_uid = previous_series_uid
                 self._app.current_datasets = previous_state.get("current_datasets", [])
-        else:
-            data["current_dataset"] = None
-            data["current_slice_index"] = 0
-            data["current_study_uid"] = ""
-            data["current_series_uid"] = ""
-            data["current_datasets"] = []
-
-        # If there was no prior regular-series state to restore, actively clear
-        # the view so the last rendered MPR slice does not remain visible.
-        if data.get("current_dataset") is None and image_viewer is not None:
-            try:
-                if overlay_manager is not None:
-                    overlay_manager.clear_overlay_items(image_viewer.scene)
-                image_viewer.scene.clear()
-                image_viewer.image_item = None
-                image_viewer.original_image = None
-                image_viewer.viewport().update()
-            except Exception as exc:
-                print(f"[MprController] Failed to clear MPR view in window {idx}: {exc}")
-
-            view_state_manager = self._app.subwindow_managers.get(idx, {}).get("view_state_manager")
-            if view_state_manager is not None:
-                try:
-                    view_state_manager.set_current_data_context(None, {}, "", "", 0)
-                    view_state_manager.set_current_series_identifier(None)
-                except Exception as exc:
-                    print(f"[MprController] Failed to reset view state for window {idx}: {exc}")
-
-            if idx == getattr(self._app, "focused_subwindow_index", -1):
-                self._app.current_dataset = None
-                self._app.current_slice_index = 0
-                self._app.current_study_uid = ""
-                self._app.current_series_uid = ""
-                self._app.current_datasets = []
 
         # Reset shared slice navigator if this is the focused window.
         try:
@@ -296,7 +255,6 @@ class MprController(QObject):
 
         image_viewer = self._get_image_viewer(idx)
         wl_controls = getattr(self._app, "window_level_controls", None)
-        managers = self._app.subwindow_managers.get(idx, {})
 
         if image_viewer is None:
             return
@@ -316,32 +274,11 @@ class MprController(QObject):
         data["current_slice_index"] = slice_index
         data["current_dataset"] = overlay_dataset
         data["mpr_source_dataset"] = result.source_volume.source_datasets[0]
-        current_study_uid = data.get("current_study_uid", "")
-        current_series_uid = data.get("current_series_uid", "")
-
-        # Keep the normal view-state pipeline informed even though MPR bypasses
-        # SliceDisplayManager. This preserves overlay anchoring on pan/zoom and
-        # keeps viewer state in sync with what is on screen.
-        view_state_manager = managers.get("view_state_manager")
-        if view_state_manager is not None:
-            try:
-                view_state_manager.set_current_data_context(
-                    overlay_dataset,
-                    self._app.current_studies,
-                    current_study_uid,
-                    current_series_uid,
-                    slice_index,
-                )
-                view_state_manager.set_current_series_identifier(
-                    view_state_manager.get_series_identifier(overlay_dataset)
-                )
-            except Exception as exc:
-                print(f"[MprController] Failed to update MPR view state in window {idx}: {exc}")
 
         is_same_series = True  # Always preserve zoom when scrolling MPR.
         image_viewer.set_image(pil_image, preserve_view=is_same_series)
 
-        overlay_manager = managers.get("overlay_manager")
+        overlay_manager = self._app.subwindow_managers.get(idx, {}).get("overlay_manager")
         if overlay_manager is not None:
             try:
                 overlay_manager.create_overlay_items(
@@ -384,50 +321,9 @@ class MprController(QObject):
             old_worker.quit()
             old_worker.wait(1000)
 
-        # If the series has no valid geometry, offer SliceLocation fallback when available.
-        use_slice_location_fallback = False
-        groups = get_orientation_groups(request.datasets)
-        if len(groups) == 0:
-            if has_slice_location_fallback_available(request.datasets):
-                reply = QMessageBox.question(
-                    self._app.main_window,
-                    "MPR — Use SliceLocation?",
-                    "This series has no ImagePositionPatient. Use SliceLocation for "
-                    "slice order and MPR? (SliceLocation is populated for these images.)",
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                    QMessageBox.StandardButton.No,
-                )
-                if reply == QMessageBox.StandardButton.Yes:
-                    use_slice_location_fallback = True
-                    groups = get_orientation_groups(
-                        request.datasets,
-                        use_slice_location_if_no_position=True,
-                    )
-            if len(groups) == 0:
-                QMessageBox.critical(
-                    self._app.main_window,
-                    "MPR Error",
-                    "No slices with valid orientation could be used. "
-                    "Ensure the series has ImagePositionPatient (or SliceLocation) and "
-                    "ImageOrientationPatient.",
-                )
-                return
-        if len(groups) > 1:
-            dlg = MprOrientationChoiceDialog(groups, self._app.main_window)
-            if dlg.exec() != QDialog.DialogCode.Accepted:
-                return
-            datasets_to_use = dlg.get_selected_datasets()
-            if not datasets_to_use:
-                return
-        else:
-            datasets_to_use = groups[0][1]
-
-        # Build the source volume from the chosen (single-orientation) slice set.
+        # Build the source volume.
         try:
-            volume = MprVolume.from_datasets(
-                datasets_to_use,
-                use_slice_location_if_no_position=use_slice_location_fallback,
-            )
+            volume = MprVolume.from_datasets(request.datasets)
         except MprVolumeError as exc:
             QMessageBox.critical(
                 self._app.main_window,
@@ -443,16 +339,16 @@ class MprController(QObject):
             f"spacing={request.output_spacing_mm:.4f} mm "
             f"thickness={request.output_thickness_mm:.4f} mm "
             f"interpolation={request.interpolation} "
-            f"source_slices={len(datasets_to_use)}"
+            f"source_slices={len(request.datasets)}"
         )
 
         # Check disk cache.
         if self._cache is not None:
             try:
                 cache_normal = request.output_plane.normal
-                n_ds = len(datasets_to_use)
+                n_ds = len(request.datasets)
                 try:
-                    series_uid = str(datasets_to_use[0].SeriesInstanceUID)
+                    series_uid = str(request.datasets[0].SeriesInstanceUID)
                 except (AttributeError, IndexError):
                     series_uid = "__unknown__"
                 from core.mpr_cache import _make_cache_key

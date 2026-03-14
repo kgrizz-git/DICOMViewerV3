@@ -40,6 +40,7 @@ from utils.dicom_utils import (
     get_image_orientation,
     get_image_position,
     get_pixel_spacing,
+    get_slice_location,
 )
 
 
@@ -92,24 +93,31 @@ class SlicePlane:
         return n / mag
 
     @classmethod
-    def from_dataset(cls, ds: Dataset) -> Optional["SlicePlane"]:
+    def from_dataset(
+        cls,
+        ds: Dataset,
+        use_slice_location_if_no_position: bool = False,
+    ) -> Optional["SlicePlane"]:
         """
         Build a SlicePlane from a pydicom Dataset.
 
-        Returns None if ImagePositionPatient or ImageOrientationPatient are
-        missing or invalid (e.g. near-zero cosines).  Pixel spacing is filled
-        in where available but is not required for construction.
+        Returns None if position (ImagePositionPatient or SliceLocation fallback)
+        or ImageOrientationPatient are missing or invalid.  Pixel spacing is
+        filled in where available but is not required for construction.
+
+        When use_slice_location_if_no_position is True and ImagePositionPatient
+        is missing, origin is synthesized as SliceLocation * slice_normal so
+        slice order and spacing can still be derived.
 
         Args:
             ds: pydicom Dataset for one slice.
+            use_slice_location_if_no_position: If True and ImagePositionPatient
+                is missing, use SliceLocation (0018,0050) to set origin along
+                the slice normal (origin = SliceLocation * normal).
 
         Returns:
             SlicePlane instance, or None on failure.
         """
-        origin = get_image_position(ds)
-        if origin is None:
-            return None
-
         orient = get_image_orientation(ds)
         if orient is None:
             return None
@@ -118,6 +126,21 @@ class SlicePlane:
         # Reject degenerate direction cosines.
         if float(np.linalg.norm(row_cosine)) < 0.5 or float(np.linalg.norm(col_cosine)) < 0.5:
             return None
+
+        origin = get_image_position(ds)
+        if origin is None:
+            if use_slice_location_if_no_position:
+                slice_loc = get_slice_location(ds)
+                if slice_loc is not None:
+                    n = np.cross(row_cosine, col_cosine)
+                    mag = float(np.linalg.norm(n))
+                    if mag >= 1e-10:
+                        normal = n / mag
+                        origin = float(slice_loc) * normal
+                else:
+                    return None
+            else:
+                return None
 
         spacing = get_pixel_spacing(ds)
         row_spacing = float(spacing[0]) if spacing else None
@@ -181,32 +204,45 @@ class SliceStack:
         self.slice_thickness = slice_thickness
 
     @classmethod
-    def from_datasets(cls, datasets: List[Dataset]) -> Optional["SliceStack"]:
+    def from_datasets(
+        cls,
+        datasets: List[Dataset],
+        use_slice_location_if_no_position: bool = False,
+    ) -> Optional["SliceStack"]:
         """
         Build a SliceStack from a list of pydicom Datasets.
 
-        Datasets that lack ImagePositionPatient or ImageOrientationPatient are
-        silently skipped.  Returns None if fewer than 2 valid planes remain.
+        Datasets that lack position (and SliceLocation when fallback is used)
+        or ImageOrientationPatient are silently skipped.  Returns None if no
+        valid planes remain.  A single valid plane is allowed (e.g. for a
+        one-slice MPR volume).
 
         The stack normal is taken from the first valid plane; all planes are
         assumed to share the same orientation (standard for a DICOM series).
+        Callers that build a 3-D volume (e.g. MPR) should reject or filter
+        series where slices have different ImageOrientationPatient.
 
         Args:
             datasets: Ordered list of pydicom Datasets for one series.
+            use_slice_location_if_no_position: If True, planes without
+                ImagePositionPatient can be built using SliceLocation (0018,0050).
 
         Returns:
             SliceStack instance, or None on failure.
         """
-        if len(datasets) < 2:
+        if len(datasets) < 1:
             return None
 
         planes_with_idx: List[Tuple[int, SlicePlane]] = []
         for i, ds in enumerate(datasets):
-            plane = SlicePlane.from_dataset(ds)
+            plane = SlicePlane.from_dataset(
+                ds,
+                use_slice_location_if_no_position=use_slice_location_if_no_position,
+            )
             if plane is not None:
                 planes_with_idx.append((i, plane))
 
-        if len(planes_with_idx) < 2:
+        if len(planes_with_idx) < 1:
             return None
 
         stack_normal = planes_with_idx[0][1].normal

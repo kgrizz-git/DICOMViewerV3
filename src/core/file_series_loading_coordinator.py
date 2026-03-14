@@ -44,6 +44,9 @@ from pydicom.dataset import Dataset
 from utils.dicom_utils import get_composite_series_key
 from utils.debug_flags import DEBUG_LOADING, DEBUG_NAV
 
+# Human-readable window labels for error messages (1-based).
+_WINDOW_LABELS = ["Window 1", "Window 2", "Window 3", "Window 4"]
+
 
 def _get_first_new_series_by_dicom(
     new_series: List[Tuple[str, str]],
@@ -581,6 +584,13 @@ class FileSeriesLoadingCoordinator:
         if subwindow not in subwindows:
             return
         idx = subwindows.index(subwindow)
+        if hasattr(app, "_mpr_controller") and app._mpr_controller.is_mpr(idx):
+            label = _WINDOW_LABELS[idx] if idx < len(_WINDOW_LABELS) else f"Window {idx + 1}"
+            app.main_window.show_toast_message(
+                f"Please clear MPR before assigning a new series to {label}.",
+                timeout_ms=4500,
+            )
+            return
         if idx not in app.subwindow_managers:
             app._subwindow_lifecycle_controller.ensure_all_subwindows_have_managers()
         if not app.current_studies:
@@ -647,6 +657,14 @@ class FileSeriesLoadingCoordinator:
     def on_series_navigator_selected(self, series_uid: str) -> None:
         """Handle series selection from series navigator (assigns to focused subwindow)."""
         app = self.app
+        focused_idx = getattr(app, "focused_subwindow_index", -1)
+        if hasattr(app, "_mpr_controller") and app._mpr_controller.is_mpr(focused_idx):
+            label = _WINDOW_LABELS[focused_idx] if 0 <= focused_idx < len(_WINDOW_LABELS) else f"Window {focused_idx + 1}"
+            app.main_window.show_toast_message(
+                f"Please clear MPR before assigning a new series to {label}.",
+                timeout_ms=4500,
+            )
+            return
         if not app.current_studies:
             return
         target_study_uid = None
@@ -687,12 +705,19 @@ class FileSeriesLoadingCoordinator:
             if DEBUG_NAV:
                 print(f"[DEBUG-NAV] [{timestamp:.6f}] Series navigation: Navigation already in progress, ignoring request")
             return
+        focused_idx = app.focused_subwindow_index
+        if hasattr(app, "_mpr_controller") and app._mpr_controller.is_mpr(focused_idx):
+            label = _WINDOW_LABELS[focused_idx] if 0 <= focused_idx < len(_WINDOW_LABELS) else f"Window {focused_idx + 1}"
+            app.main_window.show_toast_message(
+                f"Please clear MPR before assigning a new series to {label}.",
+                timeout_ms=4500,
+            )
+            return
         app._series_navigation_in_progress = True
         if DEBUG_NAV:
             print(f"[DEBUG-NAV] [{timestamp:.6f}] Series navigation: Lock acquired")
 
         try:
-            focused_idx = app.focused_subwindow_index
             if focused_idx not in app.subwindow_data:
                 if DEBUG_NAV:
                     print(f"[DEBUG] Series navigation: subwindow {focused_idx} not in subwindow_data")

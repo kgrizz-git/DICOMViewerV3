@@ -869,6 +869,13 @@ class DICOMViewerApp(QObject):
     
     def _close_files(self) -> None:
         """Close currently open files/folder and clear all data."""
+        # Clear MPR from any subwindow before clearing overlays and data.
+        # This removes the MPR banner and restores or clears the view.
+        if hasattr(self, "_mpr_controller"):
+            for idx in list(self.subwindow_data.keys()):
+                if self.subwindow_data.get(idx, {}).get("is_mpr"):
+                    self._mpr_controller.clear_mpr(idx)
+
         # Clear all ROIs, measurements, and related data for all subwindows
         self._clear_data()
         

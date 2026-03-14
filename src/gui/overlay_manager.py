@@ -232,10 +232,12 @@ class ViewportOverlayWidget(QWidget):
             label.setStyleSheet(style)
     
     def clear_all(self) -> None:
-        """Clear all corner labels."""
+        """Clear all corner labels and the MPR banner."""
         for label in self.corner_labels.values():
             label.clear()
             label.hide()
+        self.mpr_banner_label.clear()
+        self.mpr_banner_label.hide()
 
 
 class OverlayManager:
