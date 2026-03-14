@@ -125,21 +125,9 @@
 - **Other notes**
   - Once root cause is identified, it may be worth adding a regression test (e.g. simulated scroll steps) that asserts pan offsets remain within tolerance across many slice changes.
 
-### Syncing Slices for Non-Orthogonal Orientations (Using ImagePositionPatient)
-
-- **Suggestions / best approaches**
-  - Use `ImagePositionPatient` and `ImageOrientationPatient` (plus `PixelSpacing` and `SliceThickness` / spacing between slices) to map from slice index to a physical 3D plane in patient coordinates.
-  - To sync slices, compute the intersection of the primary view’s plane with the secondary view’s slice stack and choose the nearest slice based on distance along the normal of the secondary orientation.
-  - Implement a small tolerance (e.g. within a few mm or degrees) when matching slices so that minor inconsistencies in DICOM metadata don’t prevent sync.
-  - Allow sync to be optional or mode-based (e.g. “strict orthogonal only” vs. “angled within 45°”) to avoid confusing users when stacks are very oblique.
-- **Concerns / difficulties**
-  - DICOM metadata can be noisy or inconsistent, especially in older or vendor-specific acquisitions; relying purely on `ImagePositionPatient` may produce surprising results.
-  - For very oblique or helical acquisitions, mapping between stacks may not be one-to-one, and “closest slice” logic must be clearly defined.
-- **Other notes**
-  - This feature overlaps conceptually with multi-planar reconstruction (MPR); long term it might make sense to converge on a unified geometric model that also supports full MPR views.
-
 ### Slice Location Line Across Views
 
+- **Implementation plan**: See `dev-docs/plans/SLICE_LOCATION_LINE_PLAN.md` for a detailed phased plan (geometry/clip helper, drawing/coordinator, UI/config, edge cases). The feature reuses Phase 1 geometry from `SLICE_SYNC_AND_MPR_PLAN.md` (`plane_plane_intersection`, `project_line_to_2d`).
 - **Suggestions / best approaches**
   - For each view, use the 3D plane equation derived from `ImagePositionPatient` and `ImageOrientationPatient` to compute the intersection line with other views’ planes, then project that line into the secondary view’s 2D coordinates.
   - Use distinct colors or styles for the cross-view slice lines (e.g. axial slice line on coronal view) and include a legend or tooltip to clarify which line corresponds to which view.

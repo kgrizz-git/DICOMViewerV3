@@ -264,6 +264,21 @@ def build_menu_bar(main_window) -> None:
     )
     slice_sync_menu.addAction(manage_sync_groups_action)
 
+    slice_sync_menu.addSeparator()
+
+    main_window.slice_location_lines_action = QAction("Show Slice Location Lines", main_window)
+    main_window.slice_location_lines_action.setCheckable(True)
+    main_window.slice_location_lines_action.setChecked(
+        main_window.config_manager.get_slice_location_lines_visible()
+    )
+    main_window.slice_location_lines_action.setStatusTip(
+        "Show the intersection of other views' slice planes on the current image"
+    )
+    main_window.slice_location_lines_action.triggered.connect(
+        lambda checked: main_window.slice_location_lines_toggled.emit(checked)
+    )
+    slice_sync_menu.addAction(main_window.slice_location_lines_action)
+
     # --- Tools menu ---
     tools_menu = menubar.addMenu("&Tools")
 

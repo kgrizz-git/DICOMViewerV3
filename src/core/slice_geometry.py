@@ -28,6 +28,7 @@ plane_plane_intersection  – 3-D line where two planes meet (used by the deferr
                              slice-location-line feature)
 project_line_to_2d  – convert that 3-D line to (col1, row1, col2, row2) pixel
                       coordinates in a target plane
+clip_line_to_rect   – clip a 2-D segment to [0, width] x [0, height]
 """
 
 import bisect
@@ -495,3 +496,59 @@ def project_line_to_2d(
     col2, row2 = _to_pixel(p2)
 
     return (col1, row1, col2, row2)
+
+
+def clip_line_to_rect(
+    col1: float,
+    row1: float,
+    col2: float,
+    row2: float,
+    width: float,
+    height: float,
+) -> Optional[Tuple[float, float, float, float]]:
+    """
+    Clip a line segment to a rectangle [0, width] x [0, height].
+
+    Uses Liang-Barsky parametric clipping. Returns the clipped segment
+    (c1, r1, c2, r2) if the segment intersects the rectangle, else None.
+
+    Args:
+        col1, row1: First endpoint of the segment (pixel coordinates).
+        col2, row2: Second endpoint of the segment.
+        width, height: Rectangle dimensions (columns, rows). Must be > 0.
+
+    Returns:
+        (c1, r1, c2, r2) clipped to the rect, or None if no intersection.
+    """
+    if width <= 0 or height <= 0:
+        return None
+
+    dx = col2 - col1
+    dy = row2 - row1
+
+    # Parametric: P(t) = (col1, row1) + t * (dx, dy), t in [0, 1]
+    # Liang-Barsky: p1=-dx, q1=col1; p2=dx, q2=width-col1;
+    #               p3=-dy, q3=row1; p4=dy, q4=height-row1
+    p = [-dx, dx, -dy, dy]
+    q = [col1, width - col1, row1, height - row1]
+
+    t0, t1 = 0.0, 1.0
+    for pi, qi in zip(p, q):
+        if abs(pi) < 1e-12:
+            if qi < 0:
+                return None
+            continue
+        t = qi / pi
+        if pi < 0:
+            t0 = max(t0, t)
+        else:
+            t1 = min(t1, t)
+        if t0 > t1:
+            return None
+
+    c1_out = col1 + t0 * dx
+    r1_out = row1 + t0 * dy
+    c2_out = col1 + t1 * dx
+    r2_out = row1 + t1 * dy
+
+    return (c1_out, r1_out, c2_out, r2_out)

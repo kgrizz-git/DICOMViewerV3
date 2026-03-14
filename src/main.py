@@ -104,6 +104,7 @@ from core.app_signal_wiring import wire_all_signals
 
 # Import slice sync components
 from core.slice_sync_coordinator import SliceSyncCoordinator
+from core.slice_location_line_coordinator import SliceLocationLineCoordinator
 
 
 class DICOMViewerApp(QObject):
@@ -293,6 +294,9 @@ class DICOMViewerApp(QObject):
         self._slice_sync_coordinator.set_groups(
             self.config_manager.get_slice_sync_groups()
         )
+
+        # Slice location line coordinator: shows intersection of other views' slice planes.
+        self._slice_location_line_coordinator = SliceLocationLineCoordinator(self)
 
         # MPR controller: manages MPR views across all subwindows.
         from core.mpr_controller import MprController
@@ -680,6 +684,7 @@ class DICOMViewerApp(QObject):
     def _redisplay_subwindow_slice(self, idx: int, preserve_view: bool = False) -> None:
         """Redisplay slice for a specific subwindow. Delegates to subwindow lifecycle controller."""
         self._subwindow_lifecycle_controller.redisplay_subwindow_slice(idx, preserve_view)
+        self._slice_location_line_coordinator.refresh_all()
     
     def _initialize_handlers(self) -> None:
         """Initialize all handler classes."""
@@ -1429,6 +1434,7 @@ class DICOMViewerApp(QObject):
     def _on_layout_changed(self, layout_mode: str) -> None:
         """Handle layout mode change from multi-window layout. Delegates to subwindow lifecycle controller."""
         self._subwindow_lifecycle_controller.on_layout_changed(layout_mode)
+        QTimer.singleShot(0, self._slice_location_line_coordinator.refresh_all)
         # Refresh window-slot thumbnail if present
         widget = getattr(self.main_window, "window_slot_map_widget", None)
         if widget is not None:
@@ -1440,6 +1446,7 @@ class DICOMViewerApp(QObject):
     def _on_main_window_layout_changed(self, layout_mode: str) -> None:
         """Handle layout mode change from main window menu. Delegates to subwindow lifecycle controller."""
         self._subwindow_lifecycle_controller.on_main_window_layout_changed(layout_mode)
+        QTimer.singleShot(0, self._slice_location_line_coordinator.refresh_all)
     
     def _capture_subwindow_view_states(self) -> Dict[int, Dict]:
         """Capture view state for all subwindows before layout change. Delegates to subwindow lifecycle controller."""
@@ -1974,6 +1981,21 @@ class DICOMViewerApp(QObject):
         self.config_manager.set_slice_sync_groups(groups)
         self._slice_sync_coordinator.set_groups(groups)
         self._slice_sync_coordinator.invalidate_cache()
+        self._slice_location_line_coordinator.refresh_all()
+
+    def _on_slice_location_lines_toggled(self, visible: bool) -> None:
+        """
+        Handle View → Slice Sync → Show Slice Location Lines toggle.
+
+        Persists the setting and refreshes all subwindows.
+
+        Args:
+            visible: True to show slice location lines, False to hide.
+        """
+        self.config_manager.set_slice_location_lines_visible(visible)
+        self._slice_location_line_coordinator.refresh_all()
+        if hasattr(self.main_window, "slice_location_lines_action"):
+            self.main_window.slice_location_lines_action.setChecked(visible)
 
     def _on_smooth_when_zoomed_toggled(self, enabled: bool) -> None:
         """
@@ -2685,6 +2707,7 @@ class DICOMViewerApp(QObject):
             if result is not None:
                 self.cine_controls_widget.update_frame_position(slice_index, result.n_slices)
             self._slice_sync_coordinator.on_slice_changed(focused_idx)
+            self._slice_location_line_coordinator.refresh_all()
             if was_cine_advancing:
                 QTimer.singleShot(0, self.cine_player.reset_cine_advancing_flag)
             return
@@ -2746,7 +2769,8 @@ class DICOMViewerApp(QObject):
 
         # Notify slice sync coordinator (no-op if sync is disabled or no groups).
         self._slice_sync_coordinator.on_slice_changed(self.focused_subwindow_index)
-    
+        self._slice_location_line_coordinator.refresh_all()
+
     def _on_manual_slice_navigation(self, slice_index: int) -> None:
         """
         Handle manual slice navigation (pause cine if playing).

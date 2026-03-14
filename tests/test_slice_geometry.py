@@ -30,6 +30,7 @@ from pydicom.dataset import Dataset
 from core.slice_geometry import (
     SlicePlane,
     SliceStack,
+    clip_line_to_rect,
     find_nearest_slice,
     plane_plane_intersection,
     project_line_to_2d,
@@ -190,8 +191,8 @@ class TestSliceStack(unittest.TestCase):
         self.assertAlmostEqual(stack.slice_thickness, 3.0, places=5)
 
     def test_fewer_than_two_datasets_returns_none(self):
-        datasets = _axial_stack(1)
-        self.assertIsNone(SliceStack.from_datasets(datasets))
+        # Zero datasets returns None; one dataset is allowed (e.g. one-slice MPR).
+        self.assertIsNone(SliceStack.from_datasets([]))
 
     def test_all_missing_ipp_returns_none(self):
         ds1 = Dataset()
@@ -472,6 +473,59 @@ class TestProjectLineTo2d(unittest.TestCase):
         col1, row1, col2, row2 = result
         # col2 - col1 = 1000 mm / 2 mm/pixel = 500 pixels
         self.assertAlmostEqual(abs(col2 - col1), 500.0, places=4)
+
+
+# ---------------------------------------------------------------------------
+# clip_line_to_rect tests
+# ---------------------------------------------------------------------------
+
+class TestClipLineToRect(unittest.TestCase):
+    """Tests for clip_line_to_rect."""
+
+    def test_segment_fully_inside(self):
+        result = clip_line_to_rect(10, 10, 50, 50, 100, 100)
+        self.assertIsNotNone(result)
+        self.assertEqual(result, (10.0, 10.0, 50.0, 50.0))
+
+    def test_segment_crosses_one_edge(self):
+        # Line from (10, 10) to (150, 50) crosses right edge at x=100
+        result = clip_line_to_rect(10, 10, 150, 50, 100, 100)
+        self.assertIsNotNone(result)
+        c1, r1, c2, r2 = result
+        self.assertAlmostEqual(c2, 100.0, places=5)
+        self.assertTrue(0 <= c1 <= 100 and 0 <= c2 <= 100)
+        self.assertTrue(0 <= r1 <= 100 and 0 <= r2 <= 100)
+
+    def test_segment_crosses_two_edges(self):
+        # Line from (-10, 50) to (110, 50) crosses left and right
+        result = clip_line_to_rect(-10, 50, 110, 50, 100, 100)
+        self.assertIsNotNone(result)
+        c1, r1, c2, r2 = result
+        self.assertAlmostEqual(c1, 0.0, places=5)
+        self.assertAlmostEqual(c2, 100.0, places=5)
+        self.assertAlmostEqual(r1, 50.0, places=5)
+        self.assertAlmostEqual(r2, 50.0, places=5)
+
+    def test_segment_fully_outside(self):
+        result = clip_line_to_rect(-50, -50, -10, -10, 100, 100)
+        self.assertIsNone(result)
+
+    def test_segment_fully_outside_right(self):
+        result = clip_line_to_rect(150, 50, 200, 50, 100, 100)
+        self.assertIsNone(result)
+
+    def test_degenerate_zero_length_inside(self):
+        result = clip_line_to_rect(50, 50, 50, 50, 100, 100)
+        self.assertIsNotNone(result)
+        self.assertEqual(result, (50.0, 50.0, 50.0, 50.0))
+
+    def test_degenerate_zero_length_outside(self):
+        result = clip_line_to_rect(150, 50, 150, 50, 100, 100)
+        self.assertIsNone(result)
+
+    def test_invalid_rect_returns_none(self):
+        self.assertIsNone(clip_line_to_rect(0, 0, 10, 10, 0, 100))
+        self.assertIsNone(clip_line_to_rect(0, 0, 10, 10, 100, 0))
 
 
 # ---------------------------------------------------------------------------

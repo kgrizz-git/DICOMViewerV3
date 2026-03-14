@@ -106,6 +106,7 @@ class ImageViewer(QGraphicsView):
     smooth_when_zoomed_toggled = Signal(bool)  # Emitted when smooth when zoomed is toggled from context menu (True = enabled)
     slice_sync_toggled = Signal(bool)  # Emitted when slice sync is toggled from context menu (True = enabled)
     slice_sync_manage_requested = Signal()  # Emitted when slice sync group management is requested from context menu
+    slice_location_lines_toggled = Signal(bool)  # Emitted when slice location lines toggled from context menu (True = show)
     left_pane_toggle_requested = Signal()  # Emitted when Show/Hide Left Pane is requested from context menu
     right_pane_toggle_requested = Signal()  # Emitted when Show/Hide Right Pane is requested from context menu
     annotation_options_requested = Signal()  # Emitted when annotation options dialog is requested
@@ -1861,6 +1862,18 @@ class ImageViewer(QGraphicsView):
                         manage_sync_groups_action = slice_sync_menu.addAction("Manage Sync Groups...")
                         manage_sync_groups_action.triggered.connect(
                             self.slice_sync_manage_requested.emit
+                        )
+                        slice_sync_menu.addSeparator()
+                        slice_location_lines_action = slice_sync_menu.addAction("Show Slice Location Lines")
+                        slice_location_lines_action.setCheckable(True)
+                        slice_location_lines_action.setChecked(
+                            self.get_slice_location_lines_visible_callback()
+                            if hasattr(self, "get_slice_location_lines_visible_callback")
+                            and self.get_slice_location_lines_visible_callback
+                            else False
+                        )
+                        slice_location_lines_action.triggered.connect(
+                            lambda checked: self.slice_location_lines_toggled.emit(checked)
                         )
 
                         # Show/Hide Left Pane and Right Pane

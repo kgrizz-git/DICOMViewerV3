@@ -122,6 +122,7 @@ class MainWindow(QMainWindow):
     smooth_when_zoomed_toggled = Signal(bool)  # Emitted when smooth-when-zoomed is toggled (True = enabled)
     slice_sync_toggled = Signal(bool)  # Emitted when slice sync enabled state changes (True = enabled)
     slice_sync_manage_requested = Signal()  # Emitted when "Manage Sync Groups…" is chosen
+    slice_location_lines_toggled = Signal(bool)  # Emitted when slice location lines toggle (True = show)
     about_this_file_requested = Signal()  # Emitted when About this File is requested
     histogram_requested = Signal()  # Emitted when Histogram dialog is requested
     export_roi_statistics_requested = Signal()  # Emitted when Export ROI Statistics is requested

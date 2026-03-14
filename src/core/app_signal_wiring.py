@@ -104,6 +104,7 @@ def _wire_view_signals(app: "DICOMViewerApp") -> None:
     app.main_window.theme_changed.connect(app.fusion_controls_widget.update_status_text_colors)
     app.main_window.slice_sync_toggled.connect(app._on_slice_sync_toggled)
     app.main_window.slice_sync_manage_requested.connect(app._open_slice_sync_dialog)
+    app.main_window.slice_location_lines_toggled.connect(app._on_slice_location_lines_toggled)
 
 
 def _wire_customization_signals(app) -> None:
