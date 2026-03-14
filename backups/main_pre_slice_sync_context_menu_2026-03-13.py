@@ -307,11 +307,6 @@ class DICOMViewerApp(QObject):
                 subwindow.image_viewer.set_privacy_view_state(self.privacy_view_enabled)
         for subwindow in subwindows:
             if subwindow and subwindow.image_viewer:
-                subwindow.image_viewer.set_slice_sync_enabled_state(
-                    self.config_manager.get_slice_sync_enabled()
-                )
-        for subwindow in subwindows:
-            if subwindow and subwindow.image_viewer:
                 subwindow.image_viewer.set_smooth_when_zoomed_state(
                     self.config_manager.get_smooth_image_when_zoomed()
                 )
@@ -591,7 +586,6 @@ class DICOMViewerApp(QObject):
             return
         managers = self._build_managers_for_subwindow(idx, subwindow)
         image_viewer = subwindow.image_viewer
-        image_viewer.set_slice_sync_enabled_state(self.config_manager.get_slice_sync_enabled())
         image_viewer.set_smooth_when_zoomed_state(self.config_manager.get_smooth_image_when_zoomed())
         image_viewer.get_file_path_callback = lambda i=idx: self._get_current_slice_file_path(i)
         self.subwindow_managers[idx] = managers
@@ -1941,10 +1935,6 @@ class DICOMViewerApp(QObject):
         """
         self.config_manager.set_slice_sync_enabled(enabled)
         self._slice_sync_coordinator.set_enabled(enabled)
-        subwindows = self.multi_window_layout.get_all_subwindows()
-        for subwindow in subwindows:
-            if subwindow and subwindow.image_viewer:
-                subwindow.image_viewer.set_slice_sync_enabled_state(enabled)
 
     def _open_slice_sync_dialog(self) -> None:
         """Open the Manage Sync Groups dialog."""

@@ -369,14 +369,6 @@ class SubwindowLifecycleController:
                     except (TypeError, RuntimeError):
                         pass
                     try:
-                        image_viewer.slice_sync_toggled.disconnect(app._on_slice_sync_toggled)
-                    except (TypeError, RuntimeError):
-                        pass
-                    try:
-                        image_viewer.slice_sync_manage_requested.disconnect(app._open_slice_sync_dialog)
-                    except (TypeError, RuntimeError):
-                        pass
-                    try:
                         image_viewer.left_pane_toggle_requested.disconnect(app.main_window._toggle_left_pane)
                     except (TypeError, RuntimeError):
                         pass
@@ -433,8 +425,6 @@ class SubwindowLifecycleController:
                 image_viewer.layout_change_requested.connect(app._on_layout_change_requested)
                 image_viewer.privacy_view_toggled.connect(app._on_privacy_view_toggled)
                 image_viewer.smooth_when_zoomed_toggled.connect(app._on_smooth_when_zoomed_toggled)
-                image_viewer.slice_sync_toggled.connect(app._on_slice_sync_toggled)
-                image_viewer.slice_sync_manage_requested.connect(app._open_slice_sync_dialog)
                 image_viewer.left_pane_toggle_requested.connect(app.main_window._toggle_left_pane)
                 image_viewer.right_pane_toggle_requested.connect(app.main_window._toggle_right_pane)
                 image_viewer.about_this_file_requested.connect(app._open_about_this_file)

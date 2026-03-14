@@ -366,20 +366,15 @@ class MprVolume:
         slice_sp = max(stack.slice_thickness, 1e-6)  # guard against zero
         sitk_image.SetSpacing([col_sp, row_sp, slice_sp])
 
-        # Direction cosines:
-        #   SimpleITK expects a 3x3 direction matrix flattened in row-major
-        #   order, where each COLUMN is the physical direction of one image
-        #   axis.  For our volume:
-        #     x-axis (columns) -> row_cosine
-        #     y-axis (rows)    -> col_cosine
-        #     z-axis (slices)  -> stack normal
+        # Direction cosines: row, col, normal — each as 3-element rows
+        # (row-major 3×3 matrix stored as a flat 9-tuple).
         rc = plane0.row_cosine
         cc = plane0.col_cosine
         sn = stack.stack_normal
         direction = [
-            rc[0], cc[0], sn[0],
-            rc[1], cc[1], sn[1],
-            rc[2], cc[2], sn[2],
+            rc[0], rc[1], rc[2],
+            cc[0], cc[1], cc[2],
+            sn[0], sn[1], sn[2],
         ]
         sitk_image.SetDirection(direction)
 

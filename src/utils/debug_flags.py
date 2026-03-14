@@ -37,6 +37,10 @@ DEBUG_WL: bool = False
 # Affects: image_viewer (_extract_image_region, magnifier paths), magnifier_widget.
 DEBUG_MAGNIFIER: bool = False
 
+# Enables MPR volume/build/display/cache tracing.
+# Affects: mpr_volume, mpr_builder, mpr_controller.
+DEBUG_MPR: bool = True
+
 # Enables verbose tracing of handle drag: handle/group positions, end_relative, and line p1/p2
 # at each step of MeasurementHandle.itemChange so you can see exactly what moves and why.
 # Affects: measurement_items.py (MeasurementHandle.itemChange).
