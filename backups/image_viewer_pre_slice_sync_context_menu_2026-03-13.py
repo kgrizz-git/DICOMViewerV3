@@ -104,8 +104,6 @@ class ImageViewer(QGraphicsView):
     toggle_overlay_requested = Signal()  # Emitted when toggle overlay is requested
     privacy_view_toggled = Signal(bool)  # Emitted when privacy view is toggled from context menu (True = enabled)
     smooth_when_zoomed_toggled = Signal(bool)  # Emitted when smooth when zoomed is toggled from context menu (True = enabled)
-    slice_sync_toggled = Signal(bool)  # Emitted when slice sync is toggled from context menu (True = enabled)
-    slice_sync_manage_requested = Signal()  # Emitted when slice sync group management is requested from context menu
     left_pane_toggle_requested = Signal()  # Emitted when Show/Hide Left Pane is requested from context menu
     right_pane_toggle_requested = Signal()  # Emitted when Show/Hide Right Pane is requested from context menu
     annotation_options_requested = Signal()  # Emitted when annotation options dialog is requested
@@ -248,8 +246,6 @@ class ImageViewer(QGraphicsView):
 
         # Smooth image when zoomed (display option; applied to view and image item)
         self._smooth_when_zoomed: bool = False
-        # Slice sync state (for context menu synchronization)
-        self._slice_sync_enabled: bool = False
         # When True, we are in "interacting" state (zoom/pan just happened); use fast transform until idle timer fires
         self._smooth_idle_interacting: bool = False
         # Single-shot timer: when it fires, we leave "interacting" state and apply smooth mode if enabled
@@ -369,15 +365,6 @@ class ImageViewer(QGraphicsView):
         self._smooth_idle_interacting = False
         self._smooth_idle_timer.stop()
         self._apply_smoothing_mode()
-
-    def set_slice_sync_enabled_state(self, enabled: bool) -> None:
-        """
-        Set the slice-sync enabled state for this viewer's context menu.
-
-        Args:
-            enabled: True if global slice sync is enabled, False otherwise
-        """
-        self._slice_sync_enabled = enabled
 
     def _apply_inversion(self, image: Image.Image) -> Image.Image:
         """
@@ -1849,19 +1836,6 @@ class ImageViewer(QGraphicsView):
                         smooth_when_zoomed_action.setCheckable(True)
                         smooth_when_zoomed_action.setChecked(self._smooth_when_zoomed)
                         smooth_when_zoomed_action.triggered.connect(lambda checked: self.smooth_when_zoomed_toggled.emit(checked))
-
-                        # Slice Sync submenu
-                        slice_sync_menu = context_menu.addMenu("Slice Sync")
-                        slice_sync_action = slice_sync_menu.addAction("Enable Slice Sync")
-                        slice_sync_action.setCheckable(True)
-                        slice_sync_action.setChecked(self._slice_sync_enabled)
-                        slice_sync_action.triggered.connect(
-                            lambda checked: self.slice_sync_toggled.emit(checked)
-                        )
-                        manage_sync_groups_action = slice_sync_menu.addAction("Manage Sync Groups...")
-                        manage_sync_groups_action.triggered.connect(
-                            self.slice_sync_manage_requested.emit
-                        )
 
                         # Show/Hide Left Pane and Right Pane
                         show_hide_left_pane_action = context_menu.addAction("Show/Hide Left Pane")

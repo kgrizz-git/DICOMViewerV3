@@ -47,6 +47,8 @@ from core.slice_geometry import SlicePlane, SliceStack
 # Cache key helpers
 # ---------------------------------------------------------------------------
 
+_MPR_CACHE_FORMAT_VERSION = "2"
+
 def _quantise_float(value: float, decimals: int = 4) -> str:
     """Round a float and return its string representation for stable keys."""
     return str(round(float(value), decimals))
@@ -79,6 +81,7 @@ def _make_cache_key(
         32-character hex digest string.
     """
     parts = [
+        _MPR_CACHE_FORMAT_VERSION,
         series_uid.strip(),
         _quantise_float(float(normal[0])),
         _quantise_float(float(normal[1])),
@@ -276,6 +279,7 @@ class MprCache:
         normal = result.slice_stack.stack_normal
         meta = {
             "key": key,
+            "cache_format_version": _MPR_CACHE_FORMAT_VERSION,
             "created": time.time(),
             "last_access": time.time(),
             "series_uid": series_uid,

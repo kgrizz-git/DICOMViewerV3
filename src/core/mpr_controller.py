@@ -41,6 +41,13 @@ from core.mpr_cache import MprCache
 from core.mpr_volume import MprVolume, MprVolumeError
 from core.dicom_parser import DICOMParser
 from utils.dicom_utils import get_composite_series_key
+from utils.debug_flags import DEBUG_MPR
+
+
+def _mpr_log(message: str) -> None:
+    """Print an MPR debug message when DEBUG_MPR is enabled."""
+    if DEBUG_MPR:
+        print(f"[DEBUG-MPR] {message}")
 
 if TYPE_CHECKING:
     from main import DICOMViewerApp
@@ -82,6 +89,7 @@ class MprController(QObject):
             cache_dir = self._app.config_manager.config_dir / "mpr_cache"
             max_mb = int(self._app.config_manager.get("mpr_cache_max_mb", 500))
             self._cache = MprCache(cache_dir=cache_dir, max_size_mb=max_mb)
+            _mpr_log(f"Cache initialised: dir={cache_dir} max_mb={max_mb}")
         except Exception as exc:
             print(f"[MprController] Cache init failed: {exc}; caching disabled.")
             self._cache = None
@@ -113,6 +121,10 @@ class MprController(QObject):
         from gui.dialogs.mpr_dialog import MprDialog
 
         loaded_series = self._collect_loaded_series()
+        _mpr_log(
+            f"Open MPR dialog for window {target_subwindow_idx}: "
+            f"loaded_series={len(loaded_series)}"
+        )
         if not loaded_series:
             QMessageBox.information(
                 self._app.main_window,
@@ -283,6 +295,12 @@ class MprController(QObject):
         if idx == getattr(self._app, "focused_subwindow_index", -1):
             self._app.current_dataset = overlay_dataset
             self._app.current_slice_index = slice_index
+        _mpr_log(
+            f"Display slice window={idx} "
+            f"index={slice_index + 1}/{result.n_slices} "
+            f"shape={array.shape} min={float(np.min(array)):.4f} "
+            f"max={float(np.max(array)):.4f} mean={float(np.mean(array)):.4f}"
+        )
 
     # ------------------------------------------------------------------
     # Internal: dialog response handler
@@ -314,6 +332,16 @@ class MprController(QObject):
             )
             return
 
+        _mpr_log(
+            "MPR request: "
+            f"target_window={target_idx} "
+            f"orientation={request.orientation_label} "
+            f"spacing={request.output_spacing_mm:.4f} mm "
+            f"thickness={request.output_thickness_mm:.4f} mm "
+            f"interpolation={request.interpolation} "
+            f"source_slices={len(request.datasets)}"
+        )
+
         # Check disk cache.
         if self._cache is not None:
             try:
@@ -334,6 +362,7 @@ class MprController(QObject):
                 )
                 hit = self._cache.load(key)
                 if hit is not None:
+                    _mpr_log(f"Cache hit: key={key[:12]}...")
                     slices, stack, meta = hit
                     # Reconstruct MprResult from cache hit.
                     cached_result = MprResult(
@@ -348,6 +377,7 @@ class MprController(QObject):
                     )
                     self._activate_mpr(target_idx, cached_result, request.orientation_label)
                     return
+                _mpr_log(f"Cache miss: key={key[:12]}...")
             except Exception as exc:
                 print(f"[MprController] Cache lookup error: {exc}")
 
@@ -383,6 +413,10 @@ class MprController(QObject):
         def on_finished(result: MprResult) -> None:
             progress_dlg.close()
             self._workers.pop(target_idx, None)
+            _mpr_log(
+                f"Build finished for window {target_idx}: "
+                f"slices={result.n_slices} interpolation={result.interpolation}"
+            )
             # Save to cache.
             if self._cache is not None:
                 try:
@@ -447,6 +481,13 @@ class MprController(QObject):
         data["current_study_uid"] = str(getattr(source_ds, "StudyInstanceUID", ""))
         data["current_series_uid"] = get_composite_series_key(source_ds)
         data["current_datasets"] = result.source_volume.source_datasets
+        _mpr_log(
+            f"Activate MPR in window {idx}: "
+            f"orientation={orientation_label} "
+            f"output_slices={result.n_slices} "
+            f"output_spacing={result.output_spacing_mm} "
+            f"output_thickness={result.output_thickness_mm:.4f}"
+        )
 
         managers = self._app.subwindow_managers.get(idx, {})
 

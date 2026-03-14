@@ -382,14 +382,12 @@ class MprBuilderWorker(QThread):
         out_col = self._output_plane.col_cosine
         out_n = self._output_plane.normal
 
-        # row_cosine is the physical direction of increasing image x/column.
-        # col_cosine is the physical direction of increasing image y/row.
-        proj_col_axis = corners @ out_row   # image x / columns
-        proj_row_axis = corners @ out_col   # image y / rows
+        proj_row = corners @ out_row
+        proj_col = corners @ out_col
         proj_n = corners @ out_n
 
-        col_min, col_max = float(proj_col_axis.min()), float(proj_col_axis.max())
-        row_min, row_max = float(proj_row_axis.min()), float(proj_row_axis.max())
+        row_min, row_max = float(proj_row.min()), float(proj_row.max())
+        col_min, col_max = float(proj_col.min()), float(proj_col.max())
         n_min, n_max = float(proj_n.min()), float(proj_n.max())
 
         sp = max(self._output_spacing, 1e-6)
@@ -408,15 +406,15 @@ class MprBuilderWorker(QThread):
 
         # Output origin: corner of the bounding rectangle in patient space.
         out_origin = (
-            out_row * col_min
-            + out_col * row_min
+            out_row * row_min
+            + out_col * col_min
             + out_n * n_min
         )
 
         _mpr_log(
             "Projected source bounding box: "
-            f"row_axis=({row_min:.4f},{row_max:.4f}) "
-            f"col_axis=({col_min:.4f},{col_max:.4f}) "
+            f"row=({row_min:.4f},{row_max:.4f}) "
+            f"col=({col_min:.4f},{col_max:.4f}) "
             f"normal=({n_min:.4f},{n_max:.4f})"
         )
 
@@ -454,9 +452,9 @@ class MprBuilderWorker(QThread):
         cc = self._output_plane.col_cosine
         sn = self._output_plane.normal
         direction = [
-            rc[0], cc[0], sn[0],
-            rc[1], cc[1], sn[1],
-            rc[2], cc[2], sn[2],
+            rc[0], rc[1], rc[2],
+            cc[0], cc[1], cc[2],
+            sn[0], sn[1], sn[2],
         ]
         ref.SetDirection(direction)
 
