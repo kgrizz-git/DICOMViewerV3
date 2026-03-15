@@ -166,7 +166,7 @@ class ConfigManager(
             "slice_sync_groups": [],
             # Slice location lines
             "slice_location_lines_visible": False,
-            "slice_location_lines_same_group_only": True,
+            "slice_location_lines_same_group_only": False,
             # MPR cache
             "mpr_cache_max_mb": 500,
         }

@@ -78,7 +78,8 @@ class SliceLocationLineCoordinator:
         """
         if self._refreshing:
             return
-        if not self._is_visible():
+        visible = self._is_visible()
+        if not visible:
             self._clear_all_visible()
             return
 

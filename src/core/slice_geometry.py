@@ -489,8 +489,12 @@ def project_line_to_2d(
         row = float(np.dot(dp, plane.col_cosine)) / plane.row_spacing
         return col, row
 
-    p1 = np.asarray(point, dtype=float)
-    p2 = p1 + np.asarray(direction, dtype=float) * 1000.0  # 1000 mm span
+    # Extend the line in both directions so clipping yields the full
+    # intersection across the image (the point may be near one edge).
+    p_center = np.asarray(point, dtype=float)
+    d = np.asarray(direction, dtype=float) * 2000.0  # 2000 mm total span
+    p1 = p_center - d
+    p2 = p_center + d
 
     col1, row1 = _to_pixel(p1)
     col2, row2 = _to_pixel(p2)

@@ -30,19 +30,7 @@ from utils.debug_flags import DEBUG_NAV, DEBUG_MAGNIFIER
 import numpy as np
 import os
 import time
-import json
 from typing import Optional, Callable, Any, List, Tuple
-
-# #region agent log
-def _debug_log_view(location: str, message: str, data: dict, hypothesis_id: str) -> None:
-    try:
-        log_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "debug-e25587.log"))
-        payload = {"sessionId": "e25587", "location": location, "message": message, "data": data, "timestamp": int(time.time() * 1000), "hypothesisId": hypothesis_id}
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(payload) + "\n")
-    except Exception:
-        pass
-# #endregion
 
 
 class ImageViewer(QGraphicsView):
@@ -107,6 +95,7 @@ class ImageViewer(QGraphicsView):
     slice_sync_toggled = Signal(bool)  # Emitted when slice sync is toggled from context menu (True = enabled)
     slice_sync_manage_requested = Signal()  # Emitted when slice sync group management is requested from context menu
     slice_location_lines_toggled = Signal(bool)  # Emitted when slice location lines toggled from context menu (True = show)
+    slice_location_lines_same_group_only_toggled = Signal(bool)  # Emitted when same-group-only toggled (True = only same group)
     left_pane_toggle_requested = Signal()  # Emitted when Show/Hide Left Pane is requested from context menu
     right_pane_toggle_requested = Signal()  # Emitted when Show/Hide Right Pane is requested from context menu
     annotation_options_requested = Signal()  # Emitted when annotation options dialog is requested
@@ -1118,10 +1107,6 @@ class ImageViewer(QGraphicsView):
                             is_measurement_child = True
                             break
                         parent = parent.parentItem()
-                # #region agent log
-                _take_deselect = is_empty_space and not (is_roi_item or is_measurement_item or is_handle or is_measurement_text or is_measurement_child or is_text_annotation_item or is_arrow_annotation_item)
-                _debug_log_view("image_viewer.py:select_mode_press", "item at click", {"item_type": type(item).__name__ if item else None, "is_handle": is_handle, "is_measurement_item": is_measurement_item, "is_measurement_child": is_measurement_child, "is_empty_space": is_empty_space, "branch": "deselect" if _take_deselect else "pass_to_qt", "scene_pos": (round(scene_pos.x(), 2), round(scene_pos.y(), 2))}, "A")
-                # #endregion
                 if is_empty_space and not (is_roi_item or is_measurement_item or is_handle or is_measurement_text or is_measurement_child or is_text_annotation_item or is_arrow_annotation_item):
                     # Clicking on empty space - deselect everything
                     # print(f"[DEBUG-DESELECT] Empty space click detected in Select mode")
@@ -1863,17 +1848,30 @@ class ImageViewer(QGraphicsView):
                         manage_sync_groups_action.triggered.connect(
                             self.slice_sync_manage_requested.emit
                         )
-                        slice_sync_menu.addSeparator()
-                        slice_location_lines_action = slice_sync_menu.addAction("Show Slice Location Lines")
-                        slice_location_lines_action.setCheckable(True)
-                        slice_location_lines_action.setChecked(
+
+                        # Show Lines submenu (slice location lines across views)
+                        show_lines_menu = context_menu.addMenu("Show Lines")
+                        enable_lines_action = show_lines_menu.addAction("Enable/Disable")
+                        enable_lines_action.setCheckable(True)
+                        enable_lines_action.setChecked(
                             self.get_slice_location_lines_visible_callback()
                             if hasattr(self, "get_slice_location_lines_visible_callback")
                             and self.get_slice_location_lines_visible_callback
                             else False
                         )
-                        slice_location_lines_action.triggered.connect(
+                        enable_lines_action.triggered.connect(
                             lambda checked: self.slice_location_lines_toggled.emit(checked)
+                        )
+                        same_group_action = show_lines_menu.addAction("Only Show For Same Group")
+                        same_group_action.setCheckable(True)
+                        same_group_action.setChecked(
+                            self.get_slice_location_lines_same_group_only_callback()
+                            if hasattr(self, "get_slice_location_lines_same_group_only_callback")
+                            and self.get_slice_location_lines_same_group_only_callback
+                            else False
+                        )
+                        same_group_action.triggered.connect(
+                            lambda checked: self.slice_location_lines_same_group_only_toggled.emit(checked)
                         )
 
                         # Show/Hide Left Pane and Right Pane

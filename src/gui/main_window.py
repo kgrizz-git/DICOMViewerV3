@@ -123,6 +123,7 @@ class MainWindow(QMainWindow):
     slice_sync_toggled = Signal(bool)  # Emitted when slice sync enabled state changes (True = enabled)
     slice_sync_manage_requested = Signal()  # Emitted when "Manage Sync Groups…" is chosen
     slice_location_lines_toggled = Signal(bool)  # Emitted when slice location lines toggle (True = show)
+    slice_location_lines_same_group_only_toggled = Signal(bool)  # Emitted when same-group-only toggle changes (True = only same group)
     about_this_file_requested = Signal()  # Emitted when About this File is requested
     histogram_requested = Signal()  # Emitted when Histogram dialog is requested
     export_roi_statistics_requested = Signal()  # Emitted when Export ROI Statistics is requested
@@ -606,6 +607,22 @@ class MainWindow(QMainWindow):
         self.smooth_when_zoomed_action.blockSignals(True)
         self.smooth_when_zoomed_action.setChecked(checked)
         self.smooth_when_zoomed_action.blockSignals(False)
+
+    def set_slice_location_lines_checked(self, checked: bool) -> None:
+        """Sync the View menu Show Lines → Enable/Disable action check state without emitting triggered."""
+        if not hasattr(self, 'slice_location_lines_enable_action') or self.slice_location_lines_enable_action is None:
+            return
+        self.slice_location_lines_enable_action.blockSignals(True)
+        self.slice_location_lines_enable_action.setChecked(checked)
+        self.slice_location_lines_enable_action.blockSignals(False)
+
+    def set_slice_location_lines_same_group_only_checked(self, checked: bool) -> None:
+        """Sync the View menu Show Lines → Only Show For Same Group action check state without emitting triggered."""
+        if not hasattr(self, 'slice_location_lines_same_group_only_action') or self.slice_location_lines_same_group_only_action is None:
+            return
+        self.slice_location_lines_same_group_only_action.blockSignals(True)
+        self.slice_location_lines_same_group_only_action.setChecked(checked)
+        self.slice_location_lines_same_group_only_action.blockSignals(False)
 
     def _update_privacy_mode_button(self) -> None:
         """Update privacy mode button text and appearance based on current state."""

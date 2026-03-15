@@ -29,7 +29,7 @@ _SOURCE_COLORS = [
     (0, 255, 128),   # Green
     (255, 165, 0),   # Orange
 ]
-_LINE_WIDTH = 2
+_LINE_WIDTH = 1
 _Z_VALUE = 100
 
 
