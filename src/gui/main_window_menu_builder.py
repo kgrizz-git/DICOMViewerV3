@@ -293,6 +293,19 @@ def build_menu_bar(main_window) -> None:
     )
     show_lines_menu.addAction(main_window.slice_location_lines_same_group_only_action)
 
+    main_window.slice_location_lines_focused_only_action = QAction("Show Only For Focused Window", main_window)
+    main_window.slice_location_lines_focused_only_action.setCheckable(True)
+    main_window.slice_location_lines_focused_only_action.setChecked(
+        main_window.config_manager.get_slice_location_lines_focused_only()
+    )
+    main_window.slice_location_lines_focused_only_action.setStatusTip(
+        "Only show slice location lines from the currently focused subwindow"
+    )
+    main_window.slice_location_lines_focused_only_action.triggered.connect(
+        lambda checked: main_window.slice_location_lines_focused_only_toggled.emit(checked)
+    )
+    show_lines_menu.addAction(main_window.slice_location_lines_focused_only_action)
+
     # --- Tools menu ---
     tools_menu = menubar.addMenu("&Tools")
 

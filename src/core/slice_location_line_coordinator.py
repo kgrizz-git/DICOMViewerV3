@@ -135,6 +135,15 @@ class SliceLocationLineCoordinator:
             self.app,
             only_same_group=only_same_group,
         )
+
+        # Filter to focused subwindow only when that option is enabled.
+        if self._get_focused_only():
+            focused_idx = getattr(self.app, "focused_subwindow_index", -1)
+            if focused_idx >= 0:
+                segments = [s for s in segments if s.get("source_idx") == focused_idx]
+            else:
+                segments = []
+
         manager.set_visible(True)
         manager.update_lines(segments)
 
@@ -157,6 +166,13 @@ class SliceLocationLineCoordinator:
         if cm is None:
             return False
         return cm.get_slice_location_lines_same_group_only()
+
+    def _get_focused_only(self) -> bool:
+        """Return whether to show only the focused subwindow's line."""
+        cm = getattr(self.app, "config_manager", None)
+        if cm is None:
+            return False
+        return cm.get_slice_location_lines_focused_only()
 
     def _get_subwindow_container(self, idx: int) -> Optional[Any]:
         """Return the SubWindowContainer for subwindow idx."""

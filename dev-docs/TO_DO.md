@@ -14,13 +14,12 @@
 - [ ] See if I can make executables smaller especially on Mac
 - [ ] Try to make code faster, especially initial load, loading files, fusion, but also anywhere else
 - [ ] make window map thumbnail in navigator interactive? so clicking on a square sets focus and makes it visible if not already
-- [ ] Allow syncing slices when orientations not orthogonal (or maybe within 45 deg?) so that scrolling slices on one also causes the synced one to change slices accordingly - based on ImagePositionPatient
-- [ ] Show line for current slice location on different views (eg axial slice in one window show as line on a coronal view in another window) - use ImagePositionPatient and orientation
 - [ ] Integrate pylinac and other automated QC analysis tools, and consider writing our own
 - [ ] Differentiate between frame # and slice #?
 - [ ] When an ROI is selected in one subwindow and we click into another subwindow, the ROI disappears from the ROI list in the right pane but the ROI statistics are still there until the user does something else in the new window or goes back to the first one and unselects the ROI. Clicking into a different subwindow should automatically unselect any selected ROI (and the statistics in the right pane should be cleared)
 - [ ] See qi-assessment recommendations
-- [ ] Eventually add MPRs, oblique reconstructions
+- add top bar to layout map added from context menu with X button in corner to close out
+- Make magnify around end when dragging measurement handle by default (not just if shift+click)
 - [ ] Add basic image processing for creating new DICOMs - applying kernels, smoothing, edge enhancing, sharpening, custom kernels (drawn or using matrix of numbers)
 - [ ] Build a technical guide
 - [ ] Double check fusion
@@ -30,14 +29,16 @@
     - [ ] Check fusion with some other studies
     - [ ] Improve Window/Leveling preset/auto in fusion mode
 - [ ] when loading PET CT study there is a ~10 second lag before the loading progress window pops up - what is happening then?
-- add X to close out layout map?
 - [ ] make toolbar contents, ordering customizable
 - [ ] make it possible to window/level by holding W and dragging mouse or by holding middle or right mouse button and dragging or something
 - [ ] make the min/max window width/level based on the min/max pixel value (raw or rescaled) based on bit depth and rescaling equation?
 - [ ] also see to-dos on Unpushed Edits google sheet
 - [ ] Name - DICOM Viewer + ?
-- Make magnify around end when dragging measurement handle by default? (not just if shift+click)
+- support showing lines for and on MPRs
+- support most features on MPRs that normal images support - ROIs, slice combining
+- enable export mpg, gif, avi for cine
 - Add measure angle
+- Add scale markers on left and bottom (eg, small ticks every image mm, large every image cm)
 - Add direction labels? A=anterior, P=posterior, L=left, R=right, S=superior, I=inferior
 - Allow flipping and rotating image
 - Make default line thicknesses and font sizes for annotations a bit smaller
@@ -47,7 +48,6 @@
 - overlay configuration not in right click context menu - add it?
 - See IMAIOS (ios) disclaimer as example
 - Check for any other hardcoded absolute paths including to resources like images or icons
-- Delete weird path/to/affected thing
 - Consider adding PACS-like capabilities - query server, build database etc
 - Reduce old backup files
 - Make versioned release
@@ -124,19 +124,6 @@
   - Multi-monitor or high-DPI configurations can introduce additional rounding behavior, making it harder to reproduce the issue consistently.
 - **Other notes**
   - Once root cause is identified, it may be worth adding a regression test (e.g. simulated scroll steps) that asserts pan offsets remain within tolerance across many slice changes.
-
-### Slice Location Line Across Views
-
-- **Implementation plan**: See `dev-docs/plans/SLICE_LOCATION_LINE_PLAN.md` for a detailed phased plan (geometry/clip helper, drawing/coordinator, UI/config, edge cases). The feature reuses Phase 1 geometry from `SLICE_SYNC_AND_MPR_PLAN.md` (`plane_plane_intersection`, `project_line_to_2d`).
-- **Suggestions / best approaches**
-  - For each view, use the 3D plane equation derived from `ImagePositionPatient` and `ImageOrientationPatient` to compute the intersection line with other views’ planes, then project that line into the secondary view’s 2D coordinates.
-  - Use distinct colors or styles for the cross-view slice lines (e.g. axial slice line on coronal view) and include a legend or tooltip to clarify which line corresponds to which view.
-  - Allow users to toggle these lines on/off per view to avoid clutter when many windows are open.
-- **Concerns / difficulties**
-  - Numerical stability and rounding in the intersection math can cause jittering of the line when scrolling quickly or at extreme zoom levels.
-  - Handling cases where planes are nearly parallel (or coincide) requires special care to avoid degenerate or misleading lines.
-- **Other notes**
-  - This feature pairs naturally with synchronized slice scrolling and could share the same underlying geometry utilities.
 
 ### Differentiating Frame # vs. Slice #
 
