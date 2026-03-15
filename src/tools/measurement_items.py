@@ -33,9 +33,6 @@ from PySide6.QtCore import Qt, QPointF, QLineF, QRectF
 from PySide6.QtGui import QPen, QColor, QBrush, QPainter, QPainterPath, QPainterPathStroker
 from typing import Optional, Tuple, Callable
 import math
-import json
-import os
-import time
 
 # Callback types for handle-drag magnifier (scene_pos, shift_held for start; scene_pos for move)
 HandleDragStartCallback = Callable[[QPointF, bool], None]
@@ -47,17 +44,6 @@ try:
 except ImportError:
     DEBUG_MEASUREMENT_DRAG = False
     DEBUG_MAGNIFIER = False
-
-# #region agent log
-def _debug_log(location: str, message: str, data: dict, hypothesis_id: str) -> None:
-    try:
-        log_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "debug-e25587.log"))
-        payload = {"sessionId": "e25587", "location": location, "message": message, "data": data, "timestamp": int(time.time() * 1000), "hypothesisId": hypothesis_id}
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(payload) + "\n")
-    except Exception:
-        pass
-# #endregion
 
 
 class DraggableMeasurementText(QGraphicsTextItem):
@@ -221,9 +207,6 @@ class MeasurementHandle(QGraphicsEllipseItem):
             event: Mouse press event
         """
         event.accept()
-        # #region agent log
-        _debug_log("measurement_items.py:MeasurementHandle.mousePressEvent", "handle press", {"is_start": self.is_start, "pos": (round(self.pos().x(), 2), round(self.pos().y(), 2))}, "B")
-        # #endregion
 
         # Set flag on parent to indicate handle drag is in progress
         if self.parent_measurement is not None:
@@ -304,9 +287,6 @@ class MeasurementHandle(QGraphicsEllipseItem):
 
                 scene_pos = self.pos()
                 m = self.parent_measurement
-                # #region agent log
-                _debug_log("measurement_items.py:MeasurementHandle.itemChange", "position changed before", {"is_start": self.is_start, "scene_pos": (round(scene_pos.x(), 2), round(scene_pos.y(), 2)), "start_point": (round(m.start_point.x(), 2), round(m.start_point.y(), 2)), "end_point": (round(m.end_point.x(), 2), round(m.end_point.y(), 2))}, "D")
-                # #endregion
 
                 def _fmt(pt) -> str:
                     return f"({pt.x():.1f}, {pt.y():.1f})"
@@ -385,10 +365,6 @@ class MeasurementHandle(QGraphicsEllipseItem):
                         m.start_handle.setPos(m.start_point)
                 finally:
                     m._updating_handles = was_updating
-
-                # #region agent log
-                _debug_log("measurement_items.py:MeasurementHandle.itemChange", "position changed after", {"is_start": self.is_start, "start_point": (round(m.start_point.x(), 2), round(m.start_point.y(), 2)), "end_point": (round(m.end_point.x(), 2), round(m.end_point.y(), 2))}, "E")
-                # #endregion
 
                 if DEBUG_MEASUREMENT_DRAG:
                     h_label = "START" if self.is_start else "END"
@@ -606,9 +582,6 @@ class MeasurementItem(QGraphicsItemGroup):
         Skipped only during an active handle drag so we don't fight the user's drag; the other handle
         is moved explicitly in the dragging handle's itemChange."""
         if getattr(self, '_handle_drag_in_progress', False):
-            # #region agent log
-            _debug_log("measurement_items.py:MeasurementItem.update_handle_positions", "skip during drag", {"force": force}, "D")
-            # #endregion
             return
         if self.scene() is None or self.start_handle is None or self.end_handle is None:
             return

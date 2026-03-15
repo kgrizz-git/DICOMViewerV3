@@ -77,10 +77,10 @@ def get_slice_location_line_segments(
         return segments
 
     # Determine source indices.
+    all_indices = list(app.subwindow_data.keys() if hasattr(app, "subwindow_data") else [])
     if other_indices is not None:
         source_indices = [i for i in other_indices if i != target_idx]
     else:
-        all_indices = list(app.subwindow_data.keys() if hasattr(app, "subwindow_data") else [])
         if only_same_group and hasattr(app, "config_manager"):
             groups = app.config_manager.get_slice_sync_groups()
             target_group = None
@@ -95,7 +95,13 @@ def get_slice_location_line_segments(
         else:
             source_indices = [i for i in all_indices if i != target_idx]
 
+    target_for_uid = _get_frame_of_reference_uid(app, target_idx)
+
     for source_idx in source_indices:
+        source_for_uid = _get_frame_of_reference_uid(app, source_idx)
+        if target_for_uid is not None and source_for_uid is not None and target_for_uid != source_for_uid:
+            continue  # Different Frame of Reference: coordinates not comparable; skip
+
         source_plane = coordinator.get_current_plane(source_idx)
         if source_plane is None:
             continue
@@ -126,7 +132,6 @@ def get_slice_location_line_segments(
             "col2": c2,
             "row2": r2,
         })
-
     return segments
 
 
@@ -156,3 +161,19 @@ def _get_image_size(app: Any, idx: int) -> Tuple[Optional[float], Optional[float
         return (float(cols), float(rows))
     except (AttributeError, TypeError, ValueError):
         return (None, None)
+
+
+def _get_frame_of_reference_uid(app: Any, idx: int) -> Optional[str]:
+    """Return FrameOfReferenceUID for a subwindow's current series, or None."""
+    data = getattr(app, "subwindow_data", {}).get(idx, {})
+    if data.get("is_mpr") and data.get("mpr_result") is not None:
+        mpr = data["mpr_result"]
+        if hasattr(mpr, "source_volume") and mpr.source_volume is not None:
+            src = getattr(mpr.source_volume, "source_datasets", None)
+            if src and len(src) > 0:
+                return getattr(src[0], "FrameOfReferenceUID", None)
+        return None
+    ds = data.get("current_dataset")
+    if ds is None:
+        return None
+    return getattr(ds, "FrameOfReferenceUID", None)

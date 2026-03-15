@@ -460,8 +460,8 @@ class TestProjectLineTo2d(unittest.TestCase):
 
     def test_pixel_spacing_scaling_applied(self):
         """
-        With pixel spacing = 2.0 mm/pixel, a 1000-mm line along X should
-        produce 500 pixel columns of separation.
+        With pixel spacing = 2.0 mm/pixel, a 4000-mm line along X (2000 mm
+        each direction from center) should produce 2000 pixel columns of separation.
         """
         plane = SlicePlane.from_dataset(
             _make_dataset((0.0, 0.0, 0.0), pixel_spacing=(2.0, 2.0))
@@ -471,8 +471,8 @@ class TestProjectLineTo2d(unittest.TestCase):
         result = project_line_to_2d(point, direction, plane)
         self.assertIsNotNone(result)
         col1, row1, col2, row2 = result
-        # col2 - col1 = 1000 mm / 2 mm/pixel = 500 pixels
-        self.assertAlmostEqual(abs(col2 - col1), 500.0, places=4)
+        # col2 - col1 = 4000 mm / 2 mm/pixel = 2000 pixels
+        self.assertAlmostEqual(abs(col2 - col1), 2000.0, places=4)
 
 
 # ---------------------------------------------------------------------------

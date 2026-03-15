@@ -958,6 +958,12 @@ class DICOMViewerApp(QObject):
         self.current_series_uid = ""
         self.current_slice_index = 0
         
+        # Dissolve slice sync groups (no linked groups when no files loaded)
+        self.config_manager.set_slice_sync_groups([])
+        self._slice_sync_coordinator.set_groups([])
+        self._slice_sync_coordinator.invalidate_cache()
+        self._slice_location_line_coordinator.refresh_all()
+
         # Reset slice navigator (shared)
         self.slice_navigator.set_total_slices(0)
         self.slice_navigator.set_current_slice(0)
@@ -988,8 +994,11 @@ class DICOMViewerApp(QObject):
         self.multi_window_layout.reset_slot_to_view_default()
 
     def _on_app_about_to_quit(self) -> None:
-        """Reset view–slot mapping to default when the application is exiting."""
+        """Reset view–slot mapping and dissolve slice sync groups when the application is exiting."""
         self.multi_window_layout.reset_slot_to_view_default()
+        self.config_manager.set_slice_sync_groups([])
+        self._slice_sync_coordinator.set_groups([])
+        self._slice_sync_coordinator.invalidate_cache()
 
     # -------------------------------------------------------------------------
     # Per-series / per-study close helpers (used by navigator right-click menu)
@@ -1985,7 +1994,7 @@ class DICOMViewerApp(QObject):
 
     def _on_slice_location_lines_toggled(self, visible: bool) -> None:
         """
-        Handle View → Slice Sync → Show Slice Location Lines toggle.
+        Handle View → Show Lines → Enable/Disable toggle.
 
         Persists the setting and refreshes all subwindows.
 
@@ -1994,8 +2003,20 @@ class DICOMViewerApp(QObject):
         """
         self.config_manager.set_slice_location_lines_visible(visible)
         self._slice_location_line_coordinator.refresh_all()
-        if hasattr(self.main_window, "slice_location_lines_action"):
-            self.main_window.slice_location_lines_action.setChecked(visible)
+        self.main_window.set_slice_location_lines_checked(visible)
+
+    def _on_slice_location_lines_same_group_only_toggled(self, same_group_only: bool) -> None:
+        """
+        Handle View → Show Lines → Only Show For Same Group toggle.
+
+        Persists the setting and refreshes all subwindows.
+
+        Args:
+            same_group_only: True to show lines only from same linked group, False for all views.
+        """
+        self.config_manager.set_slice_location_lines_same_group_only(same_group_only)
+        self._slice_location_line_coordinator.refresh_all()
+        self.main_window.set_slice_location_lines_same_group_only_checked(same_group_only)
 
     def _on_smooth_when_zoomed_toggled(self, enabled: bool) -> None:
         """

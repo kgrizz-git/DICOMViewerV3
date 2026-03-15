@@ -264,20 +264,34 @@ def build_menu_bar(main_window) -> None:
     )
     slice_sync_menu.addAction(manage_sync_groups_action)
 
-    slice_sync_menu.addSeparator()
+    # Show Lines submenu (slice location lines across views)
+    show_lines_menu = view_menu.addMenu("Show &Lines")
 
-    main_window.slice_location_lines_action = QAction("Show Slice Location Lines", main_window)
-    main_window.slice_location_lines_action.setCheckable(True)
-    main_window.slice_location_lines_action.setChecked(
+    main_window.slice_location_lines_enable_action = QAction("Enable/Disable", main_window)
+    main_window.slice_location_lines_enable_action.setCheckable(True)
+    main_window.slice_location_lines_enable_action.setChecked(
         main_window.config_manager.get_slice_location_lines_visible()
     )
-    main_window.slice_location_lines_action.setStatusTip(
+    main_window.slice_location_lines_enable_action.setStatusTip(
         "Show the intersection of other views' slice planes on the current image"
     )
-    main_window.slice_location_lines_action.triggered.connect(
+    main_window.slice_location_lines_enable_action.triggered.connect(
         lambda checked: main_window.slice_location_lines_toggled.emit(checked)
     )
-    slice_sync_menu.addAction(main_window.slice_location_lines_action)
+    show_lines_menu.addAction(main_window.slice_location_lines_enable_action)
+
+    main_window.slice_location_lines_same_group_only_action = QAction("Only Show For Same Group", main_window)
+    main_window.slice_location_lines_same_group_only_action.setCheckable(True)
+    main_window.slice_location_lines_same_group_only_action.setChecked(
+        main_window.config_manager.get_slice_location_lines_same_group_only()
+    )
+    main_window.slice_location_lines_same_group_only_action.setStatusTip(
+        "Only show slice location lines from subwindows in the same linked group"
+    )
+    main_window.slice_location_lines_same_group_only_action.triggered.connect(
+        lambda checked: main_window.slice_location_lines_same_group_only_toggled.emit(checked)
+    )
+    show_lines_menu.addAction(main_window.slice_location_lines_same_group_only_action)
 
     # --- Tools menu ---
     tools_menu = menubar.addMenu("&Tools")

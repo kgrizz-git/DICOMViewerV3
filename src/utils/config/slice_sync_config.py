@@ -17,7 +17,7 @@ slice_sync_groups   : list of list[int]  – each inner list is one linked group
                       of subwindow indices, e.g. [[0, 1], [2, 3]].
                       Default: [] (no groups defined).
 slice_location_lines_visible : bool  – show slice location lines across views (default False)
-slice_location_lines_same_group_only : bool  – only show lines from same linked group (default True)
+slice_location_lines_same_group_only : bool  – only show lines from same linked group (default False)
 """
 
 from typing import List
@@ -117,9 +117,10 @@ class SliceSyncConfigMixin:
         Return whether slice location lines are scoped to the same linked group.
 
         When True, only subwindows in the same sync group show their slice
-        line on the target. Default is ``True``.
+        line on the target. Default is ``False`` so all views show lines from
+        all other views; enable for linked-group-only behavior.
         """
-        return bool(self.config.get("slice_location_lines_same_group_only", True))
+        return bool(self.config.get("slice_location_lines_same_group_only", False))
 
     def set_slice_location_lines_same_group_only(self, same_group_only: bool) -> None:
         """
