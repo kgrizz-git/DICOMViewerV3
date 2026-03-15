@@ -41,6 +41,8 @@ import inspect
 from typing import Dict, List, Optional, Tuple, Any
 from pydicom.dataset import Dataset
 
+from PySide6.QtCore import QTimer
+
 from utils.dicom_utils import get_composite_series_key
 from utils.debug_flags import DEBUG_LOADING, DEBUG_NAV
 
@@ -293,7 +295,6 @@ class FileSeriesLoadingCoordinator:
                 app.tag_edit_history.clear_history(app.current_dataset)
             app._update_undo_redo_state()
 
-            from PySide6.QtCore import QTimer
             QTimer.singleShot(100, app.view_state_manager.store_initial_view_state)
 
             app.series_navigator.update_series_list(
@@ -309,6 +310,10 @@ class FileSeriesLoadingCoordinator:
             if navigator_was_hidden:
                 QTimer.singleShot(50, lambda: app.image_viewer.fit_to_view(center_image=True))
 
+            # Apply slice location lines if enabled. Defer so display/layout has settled.
+            app._slice_sync_coordinator.invalidate_cache()
+            QTimer.singleShot(100, app._slice_location_line_coordinator.refresh_all)
+
     def handle_additive_load(self, merge_result: Any) -> None:
         """
         Handle the result of an additive (non-destructive) file load.
@@ -323,8 +328,6 @@ class FileSeriesLoadingCoordinator:
                           containing new_series, appended_series, skipped_file_count,
                           and added_file_count.
         """
-        from PySide6.QtCore import QTimer
-
         app = self.app
 
         # Always sync current_studies with the organizer (studies dict updated in-place by merge_batch)
@@ -513,6 +516,10 @@ class FileSeriesLoadingCoordinator:
                 f"{merge_result.skipped_file_count} file(s) already loaded and skipped"
             )
 
+        # Apply slice location lines if enabled. Defer so display/layout has settled.
+        app._slice_sync_coordinator.invalidate_cache()
+        QTimer.singleShot(100, app._slice_location_line_coordinator.refresh_all)
+
     def open_files(self) -> None:
         """Handle open files request. Delegates to file_operations_handler and updates app state."""
         datasets, studies = self.app.file_operations_handler.open_files()
@@ -653,6 +660,10 @@ class FileSeriesLoadingCoordinator:
 
         # Update dot indicators to reflect the new subwindow assignment
         app.series_navigator.set_subwindow_assignments(app._get_subwindow_assignments())
+
+        # Refresh slice location lines when series assignment changes.
+        app._slice_sync_coordinator.invalidate_cache()
+        QTimer.singleShot(100, app._slice_location_line_coordinator.refresh_all)
 
     def on_series_navigator_selected(self, series_uid: str) -> None:
         """Handle series selection from series navigator (assigns to focused subwindow)."""

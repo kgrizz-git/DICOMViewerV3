@@ -108,6 +108,9 @@ def _wire_view_signals(app: "DICOMViewerApp") -> None:
     app.main_window.slice_location_lines_same_group_only_toggled.connect(
         app._on_slice_location_lines_same_group_only_toggled
     )
+    app.main_window.slice_location_lines_focused_only_toggled.connect(
+        app._on_slice_location_lines_focused_only_toggled
+    )
 
 
 def _wire_customization_signals(app) -> None:

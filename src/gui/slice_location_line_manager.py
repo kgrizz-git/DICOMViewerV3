@@ -5,6 +5,9 @@ Manages QGraphicsLineItem objects that display the intersection of other
 views' slice planes on the current image. Lines zoom and pan with the image
 (scene coordinates, no ItemIgnoresTransformations).
 
+Line colors match the subwindow dot colors from navigator_colors (blue, green,
+orange, magenta) so each window's line is visually associated with its dot.
+
 Inputs:
     - Scene reference
     - Segment descriptors from slice_location_line_helper
@@ -21,20 +24,31 @@ from typing import Dict, List, Optional
 from PySide6.QtGui import QColor, QPen
 from PySide6.QtWidgets import QGraphicsLineItem, QGraphicsScene
 
-# Color palette for source subwindow indices (cyan, magenta, green, orange).
+from gui.navigator_colors import SUBWINDOW_DOT_COLORS
+
+
+def _hex_to_rgb(hex_str: str) -> tuple:
+    """Convert hex color (e.g. #2196F3) to (r, g, b) tuple."""
+    hex_str = hex_str.lstrip("#")
+    return (
+        int(hex_str[0:2], 16),
+        int(hex_str[2:4], 16),
+        int(hex_str[4:6], 16),
+    )
+
+
+# Colors match SUBWINDOW_DOT_COLORS: blue(0), green(1), orange(2), magenta(3).
 # Index 0 = Window 1, etc. Wraps for indices >= 4.
 _SOURCE_COLORS = [
-    (0, 255, 255),   # Cyan
-    (255, 0, 255),   # Magenta
-    (0, 255, 128),   # Green
-    (255, 165, 0),   # Orange
+    _hex_to_rgb(SUBWINDOW_DOT_COLORS.get(i, "#2196F3"))
+    for i in range(4)
 ]
 _LINE_WIDTH = 1
 _Z_VALUE = 100
 
 
 def _color_for_source(source_idx: int) -> tuple:
-    """Return (r, g, b) for the given source subwindow index."""
+    """Return (r, g, b) for the given source subwindow index. Matches navigator dot colors."""
     idx = source_idx % len(_SOURCE_COLORS)
     return _SOURCE_COLORS[idx]
 

@@ -18,6 +18,7 @@ slice_sync_groups   : list of list[int]  – each inner list is one linked group
                       Default: [] (no groups defined).
 slice_location_lines_visible : bool  – show slice location lines across views (default False)
 slice_location_lines_same_group_only : bool  – only show lines from same linked group (default False)
+slice_location_lines_focused_only : bool  – only show lines from the focused subwindow (default False)
 """
 
 from typing import List
@@ -130,4 +131,23 @@ class SliceSyncConfigMixin:
             same_group_only: True to scope to linked group only.
         """
         self.config["slice_location_lines_same_group_only"] = bool(same_group_only)
+        self.save_config()
+
+    def get_slice_location_lines_focused_only(self) -> bool:
+        """
+        Return whether slice location lines show only the focused subwindow's line.
+
+        When True, only the currently focused subwindow's slice plane intersection
+        is drawn on other views. Default is ``False``.
+        """
+        return bool(self.config.get("slice_location_lines_focused_only", False))
+
+    def set_slice_location_lines_focused_only(self, focused_only: bool) -> None:
+        """
+        Set slice location lines focused-only and persist.
+
+        Args:
+            focused_only: True to show only the focused subwindow's line.
+        """
+        self.config["slice_location_lines_focused_only"] = bool(focused_only)
         self.save_config()

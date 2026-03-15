@@ -1413,6 +1413,9 @@ class DICOMViewerApp(QObject):
     def _on_focused_subwindow_changed(self, subwindow: SubWindowContainer) -> None:
         """Handle focused subwindow change. Delegates to subwindow lifecycle controller."""
         self._subwindow_lifecycle_controller.on_focused_subwindow_changed(subwindow)
+        # When "Show Only For Focused Window" is on, refresh slice location lines so they track focus.
+        if self.config_manager.get_slice_location_lines_focused_only():
+            self._slice_location_line_coordinator.refresh_all()
         # Refresh window-slot thumbnail(s) so focus outline updates.
         widget = getattr(self.main_window, "window_slot_map_widget", None)
         if widget is not None:
@@ -2017,6 +2020,19 @@ class DICOMViewerApp(QObject):
         self.config_manager.set_slice_location_lines_same_group_only(same_group_only)
         self._slice_location_line_coordinator.refresh_all()
         self.main_window.set_slice_location_lines_same_group_only_checked(same_group_only)
+
+    def _on_slice_location_lines_focused_only_toggled(self, focused_only: bool) -> None:
+        """
+        Handle View → Show Lines → Show Only For Focused Window toggle.
+
+        Persists the setting and refreshes all subwindows.
+
+        Args:
+            focused_only: True to show only the focused subwindow's line, False for all views.
+        """
+        self.config_manager.set_slice_location_lines_focused_only(focused_only)
+        self._slice_location_line_coordinator.refresh_all()
+        self.main_window.set_slice_location_lines_focused_only_checked(focused_only)
 
     def _on_smooth_when_zoomed_toggled(self, enabled: bool) -> None:
         """

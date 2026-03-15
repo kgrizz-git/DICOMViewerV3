@@ -96,6 +96,7 @@ class ImageViewer(QGraphicsView):
     slice_sync_manage_requested = Signal()  # Emitted when slice sync group management is requested from context menu
     slice_location_lines_toggled = Signal(bool)  # Emitted when slice location lines toggled from context menu (True = show)
     slice_location_lines_same_group_only_toggled = Signal(bool)  # Emitted when same-group-only toggled (True = only same group)
+    slice_location_lines_focused_only_toggled = Signal(bool)  # Emitted when focused-only toggled (True = only focused window)
     left_pane_toggle_requested = Signal()  # Emitted when Show/Hide Left Pane is requested from context menu
     right_pane_toggle_requested = Signal()  # Emitted when Show/Hide Right Pane is requested from context menu
     annotation_options_requested = Signal()  # Emitted when annotation options dialog is requested
@@ -1872,6 +1873,17 @@ class ImageViewer(QGraphicsView):
                         )
                         same_group_action.triggered.connect(
                             lambda checked: self.slice_location_lines_same_group_only_toggled.emit(checked)
+                        )
+                        focused_only_action = show_lines_menu.addAction("Show Only For Focused Window")
+                        focused_only_action.setCheckable(True)
+                        focused_only_action.setChecked(
+                            self.get_slice_location_lines_focused_only_callback()
+                            if hasattr(self, "get_slice_location_lines_focused_only_callback")
+                            and self.get_slice_location_lines_focused_only_callback
+                            else False
+                        )
+                        focused_only_action.triggered.connect(
+                            lambda checked: self.slice_location_lines_focused_only_toggled.emit(checked)
                         )
 
                         # Show/Hide Left Pane and Right Pane
