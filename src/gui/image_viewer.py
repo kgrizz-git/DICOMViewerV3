@@ -642,7 +642,6 @@ class ImageViewer(QGraphicsView):
         
         # Centering is now handled by fit_to_view() when appropriate
         # Don't center here as fit_to_view() will be called and may override it
-        
         if preserve_view and saved_zoom is not None:
             # Restore zoom and pan
             # First, reset transform and set zoom
@@ -672,24 +671,19 @@ class ImageViewer(QGraphicsView):
             center_image: If True, center the image in the viewport (for initialization/reset).
                          If False, preserve current view position.
         """
-        # print(f"[DEBUG-FIT] fit_to_view called: center_image={center_image}")
         if self.image_item is None:
-            # print(f"[DEBUG-FIT] fit_to_view: image_item is None, returning")
             return
         
         # Get scene rect
         scene_rect = self.image_item.boundingRect()
-        # print(f"[DEBUG-FIT] fit_to_view: scene_rect = {scene_rect.width():.1f}x{scene_rect.height():.1f}")
         if scene_rect.isEmpty():
-            # print(f"[DEBUG-FIT] fit_to_view: scene_rect is empty, returning")
             return
-        
+
         viewport = self.viewport()
         if viewport:
             viewport_size = f"{viewport.width()}x{viewport.height()}"
         else:
             viewport_size = "None"
-        # print(f"[DEBUG-FIT] fit_to_view: viewport size = {viewport_size}")
         
         # Fit in view
         # print(f"[DEBUG-FIT] fit_to_view: Calling fitInView")
@@ -709,8 +703,6 @@ class ImageViewer(QGraphicsView):
             viewport_height = self.viewport().height()
             scaled_width = scene_rect.width() * self.current_zoom
             scaled_height = scene_rect.height() * self.current_zoom
-            
-            # print(f"[DEBUG-FIT] fit_to_view: center_image=True, scaled_size={scaled_width:.1f}x{scaled_height:.1f}, viewport={viewport_width}x{viewport_height}")
             if scaled_width < viewport_width or scaled_height < viewport_height:
                 # Image is smaller than viewport - center it
                 image_center = scene_rect.center()

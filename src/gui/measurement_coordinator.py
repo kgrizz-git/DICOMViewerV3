@@ -391,11 +391,11 @@ class MeasurementCoordinator:
 
     def _on_handle_drag_start(self, scene_pos: QPointF, shift_held: bool) -> None:
         """
-        Handle start of measurement handle drag. Hide cursor and show magnifier only if Shift was held (Shift+drag).
+        Handle start of measurement handle drag. Hide cursor and show magnifier by default.
 
         Args:
             scene_pos: Scene position of the handle (start of drag).
-            shift_held: True if Shift was held when the user started dragging the handle.
+            shift_held: Unused; kept for callback signature compatibility.
         """
         # Use QApplication.setOverrideCursor so the blank cursor takes priority over both the
         # view widget cursor and any QGraphicsItem cursor (e.g. the handle's SizeAllCursor).
@@ -408,43 +408,19 @@ class MeasurementCoordinator:
             print(
                 "[DEBUG-MAGNIFIER] MeasurementCoordinator._on_handle_drag_start: "
                 f"scene_pos=({scene_pos.x():.1f},{scene_pos.y():.1f}), "
-                f"shift_held={shift_held}, image_viewer_is_none={self.image_viewer is None}"
+                f"image_viewer_is_none={self.image_viewer is None}"
             )
 
-        # Record whether Shift was held at the moment the drag started.
-        self._handle_drag_magnifier_enabled = shift_held
+        # Magnifier is enabled by default when dragging a measurement handle.
+        self._handle_drag_magnifier_enabled = True
 
-        # If Shift was already held at press time, immediately show the magnifier.
-        if self._handle_drag_magnifier_enabled and self.image_viewer is not None:
+        if self.image_viewer is not None:
             if DEBUG_MAGNIFIER:
                 print("[DEBUG-MAGNIFIER] MeasurementCoordinator._on_handle_drag_start: calling show_handle_drag_magnifier()")
             self.image_viewer.show_handle_drag_magnifier(scene_pos)
 
     def _on_handle_drag_move(self, scene_pos: QPointF) -> None:
         """Update handle-drag magnifier position/content during handle drag."""
-        from PySide6.QtWidgets import QApplication
-
-        # If the magnifier was not enabled at drag start, allow it to be turned on the first
-        # time Shift is pressed while dragging. This makes the UX tolerant of the user
-        # pressing Shift slightly after the click.
-        if not self._handle_drag_magnifier_enabled:
-            modifiers = QApplication.keyboardModifiers()
-            if modifiers & Qt.KeyboardModifier.ShiftModifier:
-                if DEBUG_MAGNIFIER:
-                    print(
-                        "[DEBUG-MAGNIFIER] MeasurementCoordinator._on_handle_drag_move: "
-                        "Shift detected mid-drag; enabling magnifier"
-                    )
-                self._handle_drag_magnifier_enabled = True
-                if self.image_viewer is not None:
-                    if DEBUG_MAGNIFIER:
-                        print(
-                            "[DEBUG-MAGNIFIER] MeasurementCoordinator._on_handle_drag_move: "
-                            "calling show_handle_drag_magnifier() (mid-drag)"
-                        )
-                    self.image_viewer.show_handle_drag_magnifier(scene_pos)
-                return
-
         if self._handle_drag_magnifier_enabled and self.image_viewer is not None:
             if DEBUG_MAGNIFIER:
                 print(

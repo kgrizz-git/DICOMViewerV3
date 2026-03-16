@@ -822,6 +822,40 @@ class SubwindowLifecycleController:
 
         def handle_reset_view():
             app.view_state_manager.reset_view(skip_redisplay=True)
+
+            # If the focused subwindow is in MPR mode, reset view using the MPR controller
+            # instead of redisplaying the original series via _display_slice.
+            try:
+                focused_subwindow = app.multi_window_layout.get_focused_subwindow()
+                subwindows = app.multi_window_layout.get_all_subwindows()
+                focused_idx = subwindows.index(focused_subwindow) if focused_subwindow in subwindows else -1
+            except Exception:
+                focused_idx = -1
+
+            is_mpr_view = False
+            try:
+                if (
+                    hasattr(app, "_mpr_controller")
+                    and focused_idx != -1
+                    and app._mpr_controller.is_mpr(focused_idx)
+                ):
+                    is_mpr_view = True
+            except Exception:
+                is_mpr_view = False
+
+            if is_mpr_view:
+                data = app.subwindow_data.get(focused_idx, {})
+                slice_index = data.get("mpr_slice_index", 0)
+                try:
+                    app._mpr_controller.display_mpr_slice(focused_idx, slice_index)
+                    image_viewer = app._mpr_controller._get_image_viewer(focused_idx)
+                    if image_viewer is not None:
+                        image_viewer.fit_to_view(center_image=True)
+                    return
+                except Exception:
+                    # Fall back to normal path on error.
+                    pass
+
             if app.current_dataset is not None:
                 app._display_slice(app.current_dataset, preserve_view_override=False)
         app.main_window.reset_view_requested.connect(handle_reset_view)
