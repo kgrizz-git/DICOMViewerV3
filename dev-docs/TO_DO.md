@@ -18,8 +18,7 @@
 - [ ] Differentiate between frame # and slice #?
 - [ ] When an ROI is selected in one subwindow and we click into another subwindow, the ROI disappears from the ROI list in the right pane but the ROI statistics are still there until the user does something else in the new window or goes back to the first one and unselects the ROI. Clicking into a different subwindow should automatically unselect any selected ROI (and the statistics in the right pane should be cleared)
 - [ ] See qi-assessment recommendations
-- add top bar to layout map added from context menu with X button in corner to close out
-- Make magnify around end when dragging measurement handle by default (not just if shift+click)
+- *Fix issues with MPRS* - sometimes not sizing / zooming apropriately or being centered in its window
 - [ ] Add basic image processing for creating new DICOMs - applying kernels, smoothing, edge enhancing, sharpening, custom kernels (drawn or using matrix of numbers)
 - [ ] Build a technical guide
 - [ ] Double check fusion
@@ -35,7 +34,7 @@
 - [ ] also see to-dos on Unpushed Edits google sheet
 - [ ] Name - DICOM Viewer + ?
 - support showing lines for and on MPRs
-- support most features on MPRs that normal images support - ROIs, slice combining
+- support most features on MPRs that normal images support - ROIs, slice combining, window/level ROI
 - enable export mpg, gif, avi for cine
 - Add measure angle
 - Add scale markers on left and bottom (eg, small ticks every image mm, large every image cm)

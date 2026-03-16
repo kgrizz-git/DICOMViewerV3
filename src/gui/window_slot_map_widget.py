@@ -24,7 +24,7 @@ from typing import Callable, List, Optional
 
 from PySide6.QtCore import Qt, QPoint, QRect, QSize
 from PySide6.QtGui import QColor, QPainter, QPen, QPixmap
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QWidget, QSizePolicy
+from PySide6.QtWidgets import QDialog, QHBoxLayout, QPushButton, QSizePolicy, QStyle, QVBoxLayout, QWidget
 
 from gui.style_constants import FOCUS_BORDER_COLOR
 from gui.navigator_colors import SUBWINDOW_DOT_COLORS
@@ -247,6 +247,85 @@ class WindowSlotMapWidget(QWidget):
         painter.end()
 
 
+class _LayoutMapTopBar(QWidget):
+    """
+    Top bar for the layout map popup: drag area on the left, X close button on the right.
+    Implements drag-to-move for the parent window (same logic as the container).
+    """
+
+    def __init__(
+        self,
+        parent: QWidget,
+        boundary_widget: QWidget,
+        on_position_changed: Optional[Callable[[int, int], None]] = None,
+    ) -> None:
+        super().__init__(parent)
+        self._boundary_widget = boundary_widget
+        self._on_position_changed = on_position_changed
+        self._drag_start_global: Optional[QPoint] = None
+        self._window_start_pos: Optional[QPoint] = None
+
+        self.setFixedHeight(11)
+        self.setFixedWidth(WINDOW_SLOT_MAP_SIZE)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+
+        bar_layout = QHBoxLayout(self)
+        bar_layout.setContentsMargins(1, 1, 1, 1)
+        bar_layout.setSpacing(0)
+        bar_layout.addStretch()
+
+        close_btn = QPushButton(self)
+        close_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_TitleBarCloseButton))
+        close_btn.setFixedSize(10, 10)
+        close_btn.setToolTip("Close")
+        close_btn.clicked.connect(self._on_close_clicked)
+        bar_layout.addWidget(close_btn)
+
+    def _on_close_clicked(self) -> None:
+        """Close the parent dialog when X is clicked."""
+        win = self.window()
+        if win is not None:
+            win.close()
+
+    def _boundary_rect_global(self) -> QRect:
+        """Return the boundary widget's frame geometry in global coordinates."""
+        return self._boundary_widget.frameGeometry()
+
+    def mousePressEvent(self, event) -> None:  # type: ignore[override]
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_start_global = event.globalPosition().toPoint()
+            win = self.window()
+            self._window_start_pos = win.mapToGlobal(QPoint(0, 0)) if win else QPoint(0, 0)
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event) -> None:  # type: ignore[override]
+        if (
+            self._drag_start_global is not None
+            and self._window_start_pos is not None
+            and event.buttons() & Qt.MouseButton.LeftButton
+        ):
+            win = self.window()
+            if win is not None:
+                delta = event.globalPosition().toPoint() - self._drag_start_global
+                new_pos = self._window_start_pos + delta
+                boundary = self._boundary_rect_global()
+                w, h = win.width(), win.height()
+                new_x = max(boundary.left(), min(new_pos.x(), boundary.right() - w))
+                new_y = max(boundary.top(), min(new_pos.y(), boundary.bottom() - h))
+                win.move(new_x, new_y)
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event) -> None:  # type: ignore[override]
+        if event.button() == Qt.MouseButton.LeftButton and self._drag_start_global is not None:
+            win = self.window()
+            if win is not None and self._on_position_changed is not None:
+                pos = win.mapToGlobal(QPoint(0, 0))
+                self._on_position_changed(pos.x(), pos.y())
+            self._drag_start_global = None
+            self._window_start_pos = None
+        super().mouseReleaseEvent(event)
+
+
 class _DraggableWindowSlotMapContainer(QWidget):
     """
     Container that holds a WindowSlotMapWidget and implements drag-to-move
@@ -267,10 +346,18 @@ class _DraggableWindowSlotMapContainer(QWidget):
         self._drag_start_global: Optional[QPoint] = None
         self._window_start_pos: Optional[QPoint] = None
 
+        # Keep popup width equal to the square map (no wider)
+        total_w = 4 + WINDOW_SLOT_MAP_SIZE + 4
+        self.setFixedWidth(total_w)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
         layout.setSpacing(0)
+        self._top_bar = _LayoutMapTopBar(self, boundary_widget, on_position_changed)
+        layout.addWidget(self._top_bar, 0, Qt.AlignmentFlag.AlignHCenter)
         self._map_widget = WindowSlotMapWidget(self)
+        # Allow drag from map area: clicks pass through to container
+        self._map_widget.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         layout.addWidget(self._map_widget)
 
     def get_map_widget(self) -> WindowSlotMapWidget:
