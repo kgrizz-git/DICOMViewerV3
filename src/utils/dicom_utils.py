@@ -280,7 +280,7 @@ def get_image_position(dataset: Dataset) -> Optional[np.ndarray]:
 
 def get_slice_location(dataset: Dataset) -> Optional[float]:
     """
-    Get SliceLocation (0018,0050) from DICOM dataset.
+    Get SliceLocation (0020,1041) from DICOM dataset.
 
     Used as a fallback for slice ordering when ImagePositionPatient is missing.
     The value is typically in mm along the slice normal.
