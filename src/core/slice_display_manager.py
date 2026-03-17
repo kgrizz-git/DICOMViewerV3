@@ -43,7 +43,7 @@ from gui.overlay_manager import OverlayManager
 from gui.roi_list_panel import ROIListPanel
 from gui.roi_statistics_panel import ROIStatisticsPanel
 from utils.dicom_utils import get_pixel_spacing, get_slice_thickness, get_composite_series_key
-from utils.debug_flags import DEBUG_WL
+from utils.debug_flags import DEBUG_WL, DEBUG_SERIES
 
 
 class SliceDisplayManager:
@@ -1425,7 +1425,9 @@ class SliceDisplayManager:
         
         # Check if there are multiple series
         if len(study_series) <= 1:
-            print(f"[DEBUG] handle_series_navigation: Only {len(study_series)} series in study, cannot navigate")
+            if DEBUG_SERIES:
+
+                print(f"[DEBUG] handle_series_navigation: Only {len(study_series)} series in study, cannot navigate")
             return None, None, None  # No navigation needed if only one series
         
         # Build list of series with SeriesNumber for sorting
@@ -1444,42 +1446,49 @@ class SliceDisplayManager:
         
         # Sort by SeriesNumber (ascending)
         series_list.sort(key=lambda x: x[0])
-        
-        print(f"[DEBUG] handle_series_navigation: Found {len(series_list)} series in study. "
-              f"Looking for current_series_uid={self.current_series_uid[:20] if self.current_series_uid else 'None'}...")
-        
+
+        if DEBUG_SERIES:
+            print(f"[DEBUG] handle_series_navigation: Found {len(series_list)} series in study. "
+                  f"Looking for current_series_uid={self.current_series_uid[:20] if self.current_series_uid else 'None'}...")
+
         # Find current series in sorted list
         current_index = None
         for idx, (_, series_uid, _) in enumerate(series_list):
             if series_uid == self.current_series_uid:
                 current_index = idx
                 break
-        
+
         if current_index is None:
-            print(f"[DEBUG] handle_series_navigation: Current series not found in sorted list. "
-                  f"Available series UIDs: {[uid[:20] + '...' for _, uid, _ in series_list[:3]]} (showing first 3)")
+            if DEBUG_SERIES:
+                print(f"[DEBUG] handle_series_navigation: Current series not found in sorted list. "
+                      f"Available series UIDs: {[uid[:20] + '...' for _, uid, _ in series_list[:3]]} (showing first 3)")
             return None, None, None  # Current series not found
-        
-        print(f"[DEBUG] handle_series_navigation: Current series found at index {current_index} of {len(series_list)}")
+
+        if DEBUG_SERIES:
+            print(f"[DEBUG] handle_series_navigation: Current series found at index {current_index} of {len(series_list)}")
         
         # Calculate new series index
         new_index = current_index + direction
         
         # Clamp to valid range
         if new_index < 0 or new_index >= len(series_list):
-            print(f"[DEBUG] handle_series_navigation: New index {new_index} out of range [0, {len(series_list)})")
+            if DEBUG_SERIES:
+
+                print(f"[DEBUG] handle_series_navigation: New index {new_index} out of range [0, {len(series_list)})")
             return None, None, None  # Already at first or last series
         
         # Get new series UID and datasets
         _, new_series_uid, datasets = series_list[new_index]
         
         if not datasets:
-            print(f"[DEBUG] handle_series_navigation: New series {new_series_uid[:20] if new_series_uid else 'None'}... has no datasets")
+            if DEBUG_SERIES:
+                print(f"[DEBUG] handle_series_navigation: New series {new_series_uid[:20] if new_series_uid else 'None'}... has no datasets")
             return None, None, None
-        
-        print(f"[DEBUG] handle_series_navigation: Successfully navigating from index {current_index} to {new_index}, "
-              f"new_series_uid={new_series_uid[:20]}...")
-        
+
+        if DEBUG_SERIES:
+            print(f"[DEBUG] handle_series_navigation: Successfully navigating from index {current_index} to {new_index}, "
+                  f"new_series_uid={new_series_uid[:20]}...")
+
         # Return new series information
         return new_series_uid, 0, datasets[0]
     
