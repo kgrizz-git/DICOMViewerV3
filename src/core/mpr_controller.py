@@ -126,6 +126,17 @@ class MprController(QObject):
         """
         from gui.dialogs.mpr_dialog import MprDialog
 
+        # Ensure subwindow data exists and is properly initialized
+        if target_subwindow_idx not in self._app.subwindow_data:
+            self._app.subwindow_data[target_subwindow_idx] = {}
+
+        # Clear any stale MPR state (inconsistent state where is_mpr is True but mpr_result is None)
+        data = self._app.subwindow_data[target_subwindow_idx]
+        if data.get("is_mpr") and data.get("mpr_result") is None:
+            # Inconsistent state - clear it
+            _mpr_log(f"Clearing stale MPR state in window {target_subwindow_idx}")
+            self.clear_mpr(target_subwindow_idx)
+
         loaded_series = self._collect_loaded_series()
         _mpr_log(
             f"Open MPR dialog for window {target_subwindow_idx}: "
@@ -536,6 +547,17 @@ class MprController(QObject):
                     self._cache.save(result)
                 except Exception as exc:
                     print(f"[MprController] Cache save error: {exc}")
+
+            # Verify image viewer exists before activating MPR
+            image_viewer = self._get_image_viewer(target_idx)
+            if image_viewer is None:
+                QMessageBox.critical(
+                    self._app.main_window,
+                    "MPR Error",
+                    "Cannot activate MPR: image viewer not ready. Please try again.",
+                )
+                return
+
             self._activate_mpr(target_idx, result, orientation_label)
 
         def on_error(msg: str) -> None:
@@ -573,6 +595,14 @@ class MprController(QObject):
         data = self._app.subwindow_data.get(idx)
         if data is None:
             return
+
+        # Debug logging to track state
+        _mpr_log(
+            f"Activating MPR: window={idx} "
+            f"has_image_viewer={self._get_image_viewer(idx) is not None} "
+            f"has_subwindow_data={idx in self._app.subwindow_data} "
+            f"result_slices={result.n_slices}"
+        )
 
         if "mpr_previous_state" not in data:
             data["mpr_previous_state"] = {
