@@ -44,7 +44,7 @@ from pydicom.dataset import Dataset
 from PySide6.QtCore import QTimer
 
 from utils.dicom_utils import get_composite_series_key
-from utils.debug_flags import DEBUG_LOADING, DEBUG_NAV
+from utils.debug_flags import DEBUG_LOADING, DEBUG_NAV, DEBUG_SERIES
 
 # Human-readable window labels for error messages (1-based).
 _WINDOW_LABELS = ["Window 1", "Window 2", "Window 3", "Window 4"]
@@ -192,7 +192,9 @@ class FileSeriesLoadingCoordinator:
                         }
                         stale_count += 1
             if stale_count > 0 and DEBUG_LOADING:
-                print(f"[DEBUG] Cleared stale data from {stale_count} subwindow(s)")
+                if DEBUG_SERIES:
+
+                    print(f"[DEBUG] Cleared stale data from {stale_count} subwindow(s)")
 
             # Load Presentation States and Key Objects into annotation manager
             all_presentation_states = {}
@@ -249,9 +251,13 @@ class FileSeriesLoadingCoordinator:
             extracted_study_uid = getattr(displayed_dataset, 'StudyInstanceUID', '')
 
             if extracted_series_uid != app.current_series_uid:
-                print(f"[DEBUG] Syncing subwindow_data after initial load: MISMATCH detected!")
+                if DEBUG_SERIES:
+
+                    print(f"[DEBUG] Syncing subwindow_data after initial load: MISMATCH detected!")
             if extracted_study_uid != app.current_study_uid:
-                print(f"[DEBUG]   Extracted study_uid from dataset: {extracted_study_uid}")
+                if DEBUG_SERIES:
+
+                    print(f"[DEBUG]   Extracted study_uid from dataset: {extracted_study_uid}")
 
             app.subwindow_data[focused_idx]['current_dataset'] = displayed_dataset
             app.subwindow_data[focused_idx]['current_slice_index'] = app.current_slice_index
@@ -731,7 +737,9 @@ class FileSeriesLoadingCoordinator:
         try:
             if focused_idx not in app.subwindow_data:
                 if DEBUG_NAV:
-                    print(f"[DEBUG] Series navigation: subwindow {focused_idx} not in subwindow_data")
+                    if DEBUG_SERIES:
+
+                        print(f"[DEBUG] Series navigation: subwindow {focused_idx} not in subwindow_data")
                 return
             data = app.subwindow_data[focused_idx]
             focused_study_uid = data.get('current_study_uid', '')
@@ -743,17 +751,23 @@ class FileSeriesLoadingCoordinator:
                 extracted_study_uid = getattr(displayed_dataset, 'StudyInstanceUID', '')
                 if extracted_series_uid and extracted_series_uid != focused_series_uid:
                     if DEBUG_NAV:
-                        print(f"[DEBUG] Series navigation: MISMATCH at start! Stored={focused_series_uid}, Extracted={extracted_series_uid}")
+                        if DEBUG_SERIES:
+
+                            print(f"[DEBUG] Series navigation: MISMATCH at start! Stored={focused_series_uid}, Extracted={extracted_series_uid}")
                     focused_series_uid = extracted_series_uid
                     focused_study_uid = extracted_study_uid
                     data['current_series_uid'] = extracted_series_uid
                     data['current_study_uid'] = extracted_study_uid
             elif not focused_series_uid:
                 if DEBUG_NAV:
-                    print(f"[DEBUG] Series navigation: No series loaded, attempting to load {'first' if direction > 0 else 'last'} series")
+                    if DEBUG_SERIES:
+
+                        print(f"[DEBUG] Series navigation: No series loaded, attempting to load {'first' if direction > 0 else 'last'} series")
                 if not app.current_studies:
                     if DEBUG_NAV:
-                        print(f"[DEBUG] Series navigation: No studies loaded, cannot navigate")
+                        if DEBUG_SERIES:
+
+                            print(f"[DEBUG] Series navigation: No studies loaded, cannot navigate")
                     return
                 if not focused_study_uid:
                     focused_study_uid = list(app.current_studies.keys())[0]
@@ -761,7 +775,9 @@ class FileSeriesLoadingCoordinator:
                 study_series = app.current_studies.get(focused_study_uid, {})
                 if not study_series:
                     if DEBUG_NAV:
-                        print(f"[DEBUG] Series navigation: Study has no series, cannot navigate")
+                        if DEBUG_SERIES:
+
+                            print(f"[DEBUG] Series navigation: Study has no series, cannot navigate")
                     return
                 series_list = []
                 for series_uid, datasets in study_series.items():
@@ -776,7 +792,9 @@ class FileSeriesLoadingCoordinator:
                 series_list.sort(key=lambda x: x[0])
                 if not series_list:
                     if DEBUG_NAV:
-                        print(f"[DEBUG] Series navigation: No valid series in study, cannot navigate")
+                        if DEBUG_SERIES:
+
+                            print(f"[DEBUG] Series navigation: No valid series in study, cannot navigate")
                     return
                 if direction > 0:
                     _, target_series_uid, target_datasets = series_list[0]
@@ -829,10 +847,14 @@ class FileSeriesLoadingCoordinator:
                 return
 
             if DEBUG_NAV:
-                print(f"[DEBUG] Series navigation: subwindow {focused_idx}, study={focused_study_uid[:20] if focused_study_uid else 'None'}..., series={focused_series_uid[:20] if focused_series_uid else 'None'}..., direction={direction}")
+                if DEBUG_SERIES:
+
+                    print(f"[DEBUG] Series navigation: subwindow {focused_idx}, study={focused_study_uid[:20] if focused_study_uid else 'None'}..., series={focused_series_uid[:20] if focused_series_uid else 'None'}..., direction={direction}")
             if not focused_study_uid or focused_study_uid not in app.current_studies:
                 if DEBUG_NAV:
-                    print(f"[DEBUG] Series navigation: Invalid study UID or study not in current_studies")
+                    if DEBUG_SERIES:
+
+                        print(f"[DEBUG] Series navigation: Invalid study UID or study not in current_studies")
                 return
             study_series = app.current_studies[focused_study_uid]
             if focused_series_uid and focused_series_uid not in study_series:
@@ -870,7 +892,9 @@ class FileSeriesLoadingCoordinator:
             flat_series_list = self.build_flat_series_list(app.current_studies)
             if not flat_series_list:
                 if DEBUG_NAV:
-                    print(f"[DEBUG] Series navigation: No series found in any study")
+                    if DEBUG_SERIES:
+
+                        print(f"[DEBUG] Series navigation: No series found in any study")
                 return
             current_index = None
             for idx, (_, study_uid, series_uid, _) in enumerate(flat_series_list):
