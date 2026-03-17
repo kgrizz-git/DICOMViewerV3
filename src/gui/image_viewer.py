@@ -26,7 +26,7 @@ from PySide6.QtGui import (QPixmap, QImage, QWheelEvent, QKeyEvent, QMouseEvent,
                           QPainter, QColor, QTransform, QDragEnterEvent, QDropEvent,
                           QNativeGestureEvent)
 from PIL import Image
-from utils.debug_flags import DEBUG_NAV, DEBUG_MAGNIFIER
+from utils.debug_flags import DEBUG_NAV, DEBUG_MAGNIFIER, DEBUG_AGENT_LOG
 import numpy as np
 import os
 import time
@@ -519,35 +519,36 @@ class ImageViewer(QGraphicsView):
             saved_scene_center = self.mapToScene(viewport_center_viewport.toPoint())
 
             # region agent log: set_image preserve_view before scene change (H5-fix)
-            try:
-                import json as _json  # Local alias
-                from time import time as _time
-                _vp_w_before = int(self.viewport().width())
-                _vsb_vis_before = bool(
-                    self.verticalScrollBar() is not None
-                    and self.verticalScrollBar().maximum() > self.verticalScrollBar().minimum()
-                )
-                before_preserve_log = {
-                    "sessionId": "088dbc",
-                    "runId": "post-H5-fix",
-                    "hypothesisId": "H5",
-                    "location": "image_viewer.set_image:before_preserve_view",
-                    "message": "set_image preserve_view BEFORE scene change",
-                    "data": {
-                        "saved_zoom": float(saved_zoom),
-                        "saved_h_scroll": saved_h_scroll,
-                        "saved_v_scroll": saved_v_scroll,
-                        "saved_scene_center_x": float(saved_scene_center.x()),
-                        "saved_scene_center_y": float(saved_scene_center.y()),
-                        "viewport_width": _vp_w_before,
-                        "v_scrollbar_active": _vsb_vis_before,
-                    },
-                    "timestamp": int(_time() * 1000),
-                }
-                with open("debug-088dbc.log", "a", encoding="utf-8") as _f:
-                    _f.write(_json.dumps(before_preserve_log) + "\n")
-            except Exception:
-                pass
+            if DEBUG_AGENT_LOG:
+                try:
+                    import json as _json  # Local alias
+                    from time import time as _time
+                    _vp_w_before = int(self.viewport().width())
+                    _vsb_vis_before = bool(
+                        self.verticalScrollBar() is not None
+                        and self.verticalScrollBar().maximum() > self.verticalScrollBar().minimum()
+                    )
+                    before_preserve_log = {
+                        "sessionId": "088dbc",
+                        "runId": "post-H5-fix",
+                        "hypothesisId": "H5",
+                        "location": "image_viewer.set_image:before_preserve_view",
+                        "message": "set_image preserve_view BEFORE scene change",
+                        "data": {
+                            "saved_zoom": float(saved_zoom),
+                            "saved_h_scroll": saved_h_scroll,
+                            "saved_v_scroll": saved_v_scroll,
+                            "saved_scene_center_x": float(saved_scene_center.x()),
+                            "saved_scene_center_y": float(saved_scene_center.y()),
+                            "viewport_width": _vp_w_before,
+                            "v_scrollbar_active": _vsb_vis_before,
+                        },
+                        "timestamp": int(_time() * 1000),
+                    }
+                    with open("debug-088dbc.log", "a", encoding="utf-8") as _f:
+                        _f.write(_json.dumps(before_preserve_log) + "\n")
+                except Exception:
+                    pass
             # endregion agent log
         else:
             saved_zoom = None
@@ -706,47 +707,48 @@ class ImageViewer(QGraphicsView):
             self.zoom_changed.emit(self.current_zoom)
 
             # region agent log: set_image preserve_view after restore (H5-fix)
-            try:
-                import json as _json  # Local alias
-                from time import time as _time
-                _sc_x = float(saved_scene_center.x()) if saved_scene_center is not None else None
-                _sc_y = float(saved_scene_center.y()) if saved_scene_center is not None else None
-                _vp_w_after = int(self.viewport().width())
-                _vsb_vis_after = bool(
-                    self.verticalScrollBar() is not None
-                    and self.verticalScrollBar().maximum() > self.verticalScrollBar().minimum()
-                )
-                after_preserve_log = {
-                    "sessionId": "088dbc",
-                    "runId": "post-H5-fix",
-                    "hypothesisId": "H5",
-                    "location": "image_viewer.set_image:after_preserve_view",
-                    "message": "set_image preserve_view AFTER restore",
-                    "data": {
-                        "saved_zoom": float(saved_zoom),
-                        "saved_h_scroll": saved_h_scroll,
-                        "saved_v_scroll": saved_v_scroll,
-                        "h_scroll": int(self.horizontalScrollBar().value())
-                        if self.horizontalScrollBar() is not None
-                        else 0,
-                        "v_scroll": int(self.verticalScrollBar().value())
-                        if self.verticalScrollBar() is not None
-                        else 0,
-                        "h_scroll_matches": int(self.horizontalScrollBar().value()) == saved_h_scroll,
-                        "v_scroll_matches": int(self.verticalScrollBar().value()) == saved_v_scroll,
-                        "scene_center_x_for_log": _sc_x,
-                        "scene_center_y_for_log": _sc_y,
-                        "viewport_width": _vp_w_after,
-                        "v_scrollbar_active": _vsb_vis_after,
-                        "expanded_rect_x": float(expanded_rect.x()),
-                        "expanded_rect_width": float(expanded_rect.width()),
-                    },
-                    "timestamp": int(_time() * 1000),
-                }
-                with open("debug-088dbc.log", "a", encoding="utf-8") as _f:
-                    _f.write(_json.dumps(after_preserve_log) + "\n")
-            except Exception:
-                pass
+            if DEBUG_AGENT_LOG:
+                try:
+                    import json as _json  # Local alias
+                    from time import time as _time
+                    _sc_x = float(saved_scene_center.x()) if saved_scene_center is not None else None
+                    _sc_y = float(saved_scene_center.y()) if saved_scene_center is not None else None
+                    _vp_w_after = int(self.viewport().width())
+                    _vsb_vis_after = bool(
+                        self.verticalScrollBar() is not None
+                        and self.verticalScrollBar().maximum() > self.verticalScrollBar().minimum()
+                    )
+                    after_preserve_log = {
+                        "sessionId": "088dbc",
+                        "runId": "post-H5-fix",
+                        "hypothesisId": "H5",
+                        "location": "image_viewer.set_image:after_preserve_view",
+                        "message": "set_image preserve_view AFTER restore",
+                        "data": {
+                            "saved_zoom": float(saved_zoom),
+                            "saved_h_scroll": saved_h_scroll,
+                            "saved_v_scroll": saved_v_scroll,
+                            "h_scroll": int(self.horizontalScrollBar().value())
+                            if self.horizontalScrollBar() is not None
+                            else 0,
+                            "v_scroll": int(self.verticalScrollBar().value())
+                            if self.verticalScrollBar() is not None
+                            else 0,
+                            "h_scroll_matches": int(self.horizontalScrollBar().value()) == saved_h_scroll,
+                            "v_scroll_matches": int(self.verticalScrollBar().value()) == saved_v_scroll,
+                            "scene_center_x_for_log": _sc_x,
+                            "scene_center_y_for_log": _sc_y,
+                            "viewport_width": _vp_w_after,
+                            "v_scrollbar_active": _vsb_vis_after,
+                            "expanded_rect_x": float(expanded_rect.x()),
+                            "expanded_rect_width": float(expanded_rect.width()),
+                        },
+                        "timestamp": int(_time() * 1000),
+                    }
+                    with open("debug-088dbc.log", "a", encoding="utf-8") as _f:
+                        _f.write(_json.dumps(after_preserve_log) + "\n")
+                except Exception:
+                    pass
             # endregion agent log
         else:
             # Reset zoom and fit to view
@@ -980,32 +982,33 @@ class ImageViewer(QGraphicsView):
         else:
             # Slice navigation mode - emit signal for slice navigator
             # region agent log: wheel slice navigation (H2 - wheel slice vs pan)
-            try:
-                import json as _json  # Local alias to avoid conflicts
-                from time import time as _time
-                wheel_log = {
-                    "sessionId": "088dbc",
-                    "runId": "pre-fix",
-                    "hypothesisId": "H2",
-                    "location": "image_viewer.wheelEvent",
-                    "message": "wheelEvent slice navigation",
-                    "data": {
-                        "angle_delta_y": int(event.angleDelta().y()),
-                        "scroll_wheel_mode": str(self.scroll_wheel_mode),
-                        "zoom": float(self.current_zoom),
-                        "h_scroll": int(self.horizontalScrollBar().value())
-                        if self.horizontalScrollBar() is not None
-                        else 0,
-                        "v_scroll": int(self.verticalScrollBar().value())
-                        if self.verticalScrollBar() is not None
-                        else 0,
-                    },
-                    "timestamp": int(_time() * 1000),
-                }
-                with open("debug-088dbc.log", "a", encoding="utf-8") as f:
-                    f.write(_json.dumps(wheel_log) + "\n")
-            except Exception:
-                pass
+            if DEBUG_AGENT_LOG:
+                try:
+                    import json as _json  # Local alias to avoid conflicts
+                    from time import time as _time
+                    wheel_log = {
+                        "sessionId": "088dbc",
+                        "runId": "pre-fix",
+                        "hypothesisId": "H2",
+                        "location": "image_viewer.wheelEvent",
+                        "message": "wheelEvent slice navigation",
+                        "data": {
+                            "angle_delta_y": int(event.angleDelta().y()),
+                            "scroll_wheel_mode": str(self.scroll_wheel_mode),
+                            "zoom": float(self.current_zoom),
+                            "h_scroll": int(self.horizontalScrollBar().value())
+                            if self.horizontalScrollBar() is not None
+                            else 0,
+                            "v_scroll": int(self.verticalScrollBar().value())
+                            if self.verticalScrollBar() is not None
+                            else 0,
+                        },
+                        "timestamp": int(_time() * 1000),
+                    }
+                    with open("debug-088dbc.log", "a", encoding="utf-8") as f:
+                        f.write(_json.dumps(wheel_log) + "\n")
+                except Exception:
+                    pass
             # endregion agent log
 
             self.wheel_event_for_slice.emit(event.angleDelta().y())
@@ -2403,30 +2406,31 @@ class ImageViewer(QGraphicsView):
         if event.key() == Qt.Key.Key_Up:
             # Up arrow: next slice
             # region agent log: up arrow slice navigation (H3 - key vs pan)
-            try:
-                import json as _json  # Local alias to avoid conflicts
-                from time import time as _time
-                up_log = {
-                    "sessionId": "088dbc",
-                    "runId": "pre-fix",
-                    "hypothesisId": "H3",
-                    "location": "image_viewer.keyPressEvent:Key_Up",
-                    "message": "Key_Up slice navigation",
-                    "data": {
-                        "zoom": float(self.current_zoom),
-                        "h_scroll": int(self.horizontalScrollBar().value())
-                        if self.horizontalScrollBar() is not None
-                        else 0,
-                        "v_scroll": int(self.verticalScrollBar().value())
-                        if self.verticalScrollBar() is not None
-                        else 0,
-                    },
-                    "timestamp": int(_time() * 1000),
-                }
-                with open("debug-088dbc.log", "a", encoding="utf-8") as f:
-                    f.write(_json.dumps(up_log) + "\n")
-            except Exception:
-                pass
+            if DEBUG_AGENT_LOG:
+                try:
+                    import json as _json  # Local alias to avoid conflicts
+                    from time import time as _time
+                    up_log = {
+                        "sessionId": "088dbc",
+                        "runId": "pre-fix",
+                        "hypothesisId": "H3",
+                        "location": "image_viewer.keyPressEvent:Key_Up",
+                        "message": "Key_Up slice navigation",
+                        "data": {
+                            "zoom": float(self.current_zoom),
+                            "h_scroll": int(self.horizontalScrollBar().value())
+                            if self.horizontalScrollBar() is not None
+                            else 0,
+                            "v_scroll": int(self.verticalScrollBar().value())
+                            if self.verticalScrollBar() is not None
+                            else 0,
+                        },
+                        "timestamp": int(_time() * 1000),
+                    }
+                    with open("debug-088dbc.log", "a", encoding="utf-8") as f:
+                        f.write(_json.dumps(up_log) + "\n")
+                except Exception:
+                    pass
             # endregion agent log
 
             self.arrow_key_pressed.emit(1)
@@ -2434,30 +2438,31 @@ class ImageViewer(QGraphicsView):
         elif event.key() == Qt.Key.Key_Down:
             # Down arrow: previous slice
             # region agent log: down arrow slice navigation (H3 - key vs pan)
-            try:
-                import json as _json  # Local alias to avoid conflicts
-                from time import time as _time
-                down_log = {
-                    "sessionId": "088dbc",
-                    "runId": "pre-fix",
-                    "hypothesisId": "H3",
-                    "location": "image_viewer.keyPressEvent:Key_Down",
-                    "message": "Key_Down slice navigation",
-                    "data": {
-                        "zoom": float(self.current_zoom),
-                        "h_scroll": int(self.horizontalScrollBar().value())
-                        if self.horizontalScrollBar() is not None
-                        else 0,
-                        "v_scroll": int(self.verticalScrollBar().value())
-                        if self.verticalScrollBar() is not None
-                        else 0,
-                    },
-                    "timestamp": int(_time() * 1000),
-                }
-                with open("debug-088dbc.log", "a", encoding="utf-8") as f:
-                    f.write(_json.dumps(down_log) + "\n")
-            except Exception:
-                pass
+            if DEBUG_AGENT_LOG:
+                try:
+                    import json as _json  # Local alias to avoid conflicts
+                    from time import time as _time
+                    down_log = {
+                        "sessionId": "088dbc",
+                        "runId": "pre-fix",
+                        "hypothesisId": "H3",
+                        "location": "image_viewer.keyPressEvent:Key_Down",
+                        "message": "Key_Down slice navigation",
+                        "data": {
+                            "zoom": float(self.current_zoom),
+                            "h_scroll": int(self.horizontalScrollBar().value())
+                            if self.horizontalScrollBar() is not None
+                            else 0,
+                            "v_scroll": int(self.verticalScrollBar().value())
+                            if self.verticalScrollBar() is not None
+                            else 0,
+                        },
+                        "timestamp": int(_time() * 1000),
+                    }
+                    with open("debug-088dbc.log", "a", encoding="utf-8") as f:
+                        f.write(_json.dumps(down_log) + "\n")
+                except Exception:
+                    pass
             # endregion agent log
 
             self.arrow_key_pressed.emit(-1)

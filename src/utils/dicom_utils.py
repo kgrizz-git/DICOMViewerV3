@@ -26,6 +26,8 @@ import numpy as np
 import pydicom
 from pydicom.dataset import Dataset
 
+from utils.debug_flags import DEBUG_PATIENT_COORDS
+
 
 def calculate_pixel_spacing_from_fov(dataset: Dataset) -> Optional[Tuple[float, float]]:
     """
@@ -403,9 +405,10 @@ def pixel_to_patient_coordinates(
         )
         
         return (float(patient_pos[0]), float(patient_pos[1]), float(patient_pos[2]))
-        
+
     except Exception as e:
-        print(f"[DEBUG-PATIENT-COORDS] Error calculating patient coordinates: {e}")
+        if DEBUG_PATIENT_COORDS:
+            print(f"[DEBUG-PATIENT-COORDS] Error calculating patient coordinates: {e}")
         return None
 
 

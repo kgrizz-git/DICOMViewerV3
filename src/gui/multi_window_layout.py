@@ -26,7 +26,7 @@ from datetime import datetime
 
 from gui.sub_window_container import SubWindowContainer
 from gui.image_viewer import ImageViewer
-from utils.debug_flags import DEBUG_LAYOUT
+from utils.debug_flags import DEBUG_LAYOUT, DEBUG_RESIZE
 
 
 LayoutMode = Literal["1x1", "1x2", "2x1", "2x2"]
@@ -153,7 +153,8 @@ class MultiWindowLayout(QWidget):
             stack = traceback.extract_stack()[-6:-1]
             callers = " <- ".join([f"{f.name}:{f.lineno}" for f in stack])
             ts = datetime.now().strftime("%H:%M:%S.%f")
-            print(f"[DEBUG-LAYOUT] [{ts}] set_layout: mode={layout_mode!r} current_layout={current!r} focused_view_index={focused_idx} callers={callers}")
+            if DEBUG_LAYOUT:
+                print(f"[DEBUG-LAYOUT] [{ts}] set_layout: mode={layout_mode!r} current_layout={current!r} focused_view_index={focused_idx} callers={callers}")
         
         num_subwindows = self._get_num_subwindows(layout_mode)
         
@@ -430,8 +431,9 @@ class MultiWindowLayout(QWidget):
                 self.layout_widget.updateGeometry()
                 self.updateGeometry()
                 # Log sizes for investigation
-                sizes = [(i, self.subwindows[i].size().width(), self.subwindows[i].size().height()) for i in visible]
-                print(f"[DEBUG-RESIZE] layout={layout_mode} visible_indices={visible} sizes={sizes}")
+                if DEBUG_RESIZE:
+                    sizes = [(i, self.subwindows[i].size().width(), self.subwindows[i].size().height()) for i in visible]
+                    print(f"[DEBUG-RESIZE] layout={layout_mode} visible_indices={visible} sizes={sizes}")
             QTimer.singleShot(50, _debug_resize)
     
     def _on_subwindow_focus_changed(self, focused: bool) -> None:
