@@ -23,6 +23,8 @@ import time
 from pathlib import Path
 from typing import Any, Dict
 
+from utils.debug_flags import DEBUG_ANNOTATION
+
 # Project root: this file is src/utils/debug_log.py -> parent=utils, parent.parent=src, parent.parent.parent=project root
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -36,8 +38,8 @@ ANNOTATION_DEBUG_ENABLED = _ANNOTATION_DEBUG_ENV in ("1", "true", "yes")
 
 
 def annotation_debug(msg: str) -> None:
-    """Print annotation debug message to console only when DICOMVIEWER_ANNOTATION_DEBUG is set."""
-    if ANNOTATION_DEBUG_ENABLED:
+    """Print annotation debug message to console only when DEBUG_ANNOTATION flag is enabled."""
+    if DEBUG_ANNOTATION or ANNOTATION_DEBUG_ENABLED:  # Support both flag and env var
         print(f"[ANNOTATION DEBUG] {msg}")
 
 
