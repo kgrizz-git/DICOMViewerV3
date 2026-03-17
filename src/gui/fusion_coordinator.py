@@ -29,6 +29,8 @@ from gui.fusion_controls_widget import FusionControlsWidget
 from PySide6.QtWidgets import QMessageBox
 from PySide6.QtCore import QTimer
 
+from utils.debug_flags import DEBUG_SPATIAL_ALIGNMENT
+
 
 class FusionCoordinator:
     """
@@ -788,9 +790,11 @@ class FusionCoordinator:
                 # Only restore if user hasn't manually modified
                 if not self.fusion_controls.has_user_modified_offset():
                     self.fusion_controls.set_calculated_offset(offset[0], offset[1])
-                    print(f"[SPATIAL ALIGNMENT] Restored from cache: scale={scale}, offset={offset}")
+                    if DEBUG_SPATIAL_ALIGNMENT:
+                        print(f"[SPATIAL ALIGNMENT] Restored from cache: scale={scale}, offset={offset}")
                 else:
-                    print(f"[SPATIAL ALIGNMENT] Cache exists but user modified offset, keeping user values")
+                    if DEBUG_SPATIAL_ALIGNMENT:
+                        print(f"[SPATIAL ALIGNMENT] Cache exists but user modified offset, keeping user values")
             
             # Still need to update resampling status to ensure offset controls are enabled/disabled correctly
             self._update_resampling_status()
@@ -840,13 +844,14 @@ class FusionCoordinator:
         # spacing description beneath Spatial Alignment stay in sync.
         if hasattr(self.fusion_controls, "set_pixel_spacing"):
             self.fusion_controls.set_pixel_spacing(row_spacing_mm, col_spacing_mm, spacing_source)
-        
+
         # DEBUG
-        print(f"\n[SPATIAL ALIGNMENT DEBUG]")
-        print(f"  base_series: {self.fusion_handler.base_series_uid[:20] if self.fusion_handler.base_series_uid else 'None'}...")
-        print(f"  overlay_series: {self.fusion_handler.overlay_series_uid[:20] if self.fusion_handler.overlay_series_uid else 'None'}...")
-        print(f"  base_pixel_spacing: {base_pixel_spacing}")
-        print(f"  overlay_pixel_spacing: {overlay_pixel_spacing}")
+        if DEBUG_SPATIAL_ALIGNMENT:
+            print(f"\n[SPATIAL ALIGNMENT DEBUG]")
+            print(f"  base_series: {self.fusion_handler.base_series_uid[:20] if self.fusion_handler.base_series_uid else 'None'}...")
+            print(f"  overlay_series: {self.fusion_handler.overlay_series_uid[:20] if self.fusion_handler.overlay_series_uid else 'None'}...")
+            print(f"  base_pixel_spacing: {base_pixel_spacing}")
+            print(f"  overlay_pixel_spacing: {overlay_pixel_spacing}")
         
         stored_scale: Optional[Tuple[float, float]] = None
         stored_offset: Optional[Tuple[float, float]] = None
@@ -855,7 +860,8 @@ class FusionCoordinator:
         if base_pixel_spacing and overlay_pixel_spacing:
             scale_x = overlay_pixel_spacing[1] / base_pixel_spacing[1]  # column spacing
             scale_y = overlay_pixel_spacing[0] / base_pixel_spacing[0]  # row spacing
-            print(f"  scale_x: {scale_x:.4f}, scale_y: {scale_y:.4f}")
+            if DEBUG_SPATIAL_ALIGNMENT:
+                print(f"  scale_x: {scale_x:.4f}, scale_y: {scale_y:.4f}")
             stored_scale = (scale_x, scale_y)
             self.fusion_controls.set_scaling_factors(scale_x, scale_y)
         else:
@@ -863,24 +869,26 @@ class FusionCoordinator:
             stored_scale = (1.0, 1.0)
             self.fusion_controls.set_scaling_factors(1.0, 1.0)
             self._append_status("Pixel spacing not available", severity="warning")
-        
+
         # Calculate and display translation offset
         if base_pixel_spacing and overlay_pixel_spacing:
             offset = self.fusion_handler.calculate_translation_offset(
                 base_ds, overlay_ds, base_pixel_spacing, overlay_pixel_spacing
             )
-            
+
             if offset:
                 offset_x, offset_y = offset
                 stored_offset = (offset_x, offset_y)
-                print(f"  calculated offset: ({offset_x:.2f}, {offset_y:.2f}) pixels")
-                print(f"  base ImagePositionPatient: {self.fusion_handler.get_image_position_patient(base_ds)}")
-                print(f"  overlay ImagePositionPatient: {self.fusion_handler.get_image_position_patient(overlay_ds)}")
+                if DEBUG_SPATIAL_ALIGNMENT:
+                    print(f"  calculated offset: ({offset_x:.2f}, {offset_y:.2f}) pixels")
+                    print(f"  base ImagePositionPatient: {self.fusion_handler.get_image_position_patient(base_ds)}")
+                    print(f"  overlay ImagePositionPatient: {self.fusion_handler.get_image_position_patient(overlay_ds)}")
                 # Only set if user hasn't manually modified
                 if not self.fusion_controls.has_user_modified_offset():
                     self.fusion_controls.set_calculated_offset(offset_x, offset_y)
             else:
-                print(f"  offset calculation failed - no ImagePositionPatient")
+                if DEBUG_SPATIAL_ALIGNMENT:
+                    print(f"  offset calculation failed - no ImagePositionPatient")
                 # No image position available
                 stored_offset = (0.0, 0.0)
                 if not self.fusion_controls.has_user_modified_offset():
@@ -900,7 +908,8 @@ class FusionCoordinator:
                 stored_scale,
                 stored_offset
             )
-            print(f"[SPATIAL ALIGNMENT] Stored in cache: scale={stored_scale}, offset={stored_offset}")
+            if DEBUG_SPATIAL_ALIGNMENT:
+                print(f"[SPATIAL ALIGNMENT] Stored in cache: scale={stored_scale}, offset={stored_offset}")
         
         # Update resampling status to ensure offset controls are enabled/disabled correctly
         self._update_resampling_status()
