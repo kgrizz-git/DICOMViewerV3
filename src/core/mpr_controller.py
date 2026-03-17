@@ -620,6 +620,10 @@ class MprController(QObject):
         # Disable ROI/measurement/annotation tools.
         self._set_tools_enabled(idx, enabled=False)
 
+        # Reset window/level from the new MPR source series to avoid using
+        # stale values from a previous series.
+        self._reset_window_level_for_mpr(idx, source_ds)
+
         # Display first slice.
         self.display_mpr_slice(idx, 0)
         image_viewer = self._get_image_viewer(idx)
@@ -759,6 +763,52 @@ class MprController(QObject):
         else:
             if hasattr(image_viewer, "_mpr_mode_override"):
                 image_viewer._mpr_mode_override = False
+
+    def _reset_window_level_for_mpr(self, idx: int, source_dataset) -> None:
+        """
+        Reset window/level controls to defaults from the MPR source dataset.
+
+        This ensures that when a new MPR is created, we use the window/level
+        from the new source series, not stale values from a previous series.
+
+        Args:
+            idx: Subwindow index
+            source_dataset: Source DICOM dataset for the MPR
+        """
+        # Only update controls if this is the focused window
+        if idx != getattr(self._app, "focused_subwindow_index", -1):
+            return
+
+        wl_controls = getattr(self._app, "window_level_controls", None)
+        if wl_controls is None:
+            return
+
+        try:
+            from core.dicom_window_level import get_window_level_presets_from_dataset, get_window_level_from_dataset
+            from core.dicom_rescale import get_rescale_parameters
+
+            # Get rescale parameters
+            rescale_slope, rescale_intercept, rescale_type = get_rescale_parameters(source_dataset)
+
+            # Try to get presets first
+            presets = get_window_level_presets_from_dataset(
+                source_dataset, rescale_slope, rescale_intercept
+            )
+
+            if presets:
+                # Use first preset
+                wc, ww, is_rescaled, preset_name = presets[0]
+            else:
+                # Fall back to single window/level or auto-calculation
+                wc, ww, is_rescaled = get_window_level_from_dataset(
+                    source_dataset, rescale_slope, rescale_intercept
+                )
+
+            if wc is not None and ww is not None and ww > 0:
+                wl_controls.set_window_level(wc, ww, block_signals=False)
+                _mpr_log(f"Reset W/L for MPR: center={wc:.1f} width={ww:.1f}")
+        except Exception as exc:
+            print(f"[MprController] Failed to reset W/L for MPR in window {idx}: {exc}")
 
     @staticmethod
     def _get_window_level(wl_controls, array: np.ndarray):
