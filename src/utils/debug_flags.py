@@ -81,3 +81,8 @@ DEBUG_PATIENT_COORDS: bool = False
 # Enables generic series loading / navigation / state management debugging.
 # Affects: file_series_loading_coordinator.py, slice_display_manager.py.
 DEBUG_SERIES: bool = False
+
+# Enables agent hypothesis log writes to debug-088dbc.log file in repo root.
+# These are structured JSON logs for specific hypothesis testing (H1-H5).
+# Affects: image_viewer.py, slice_display_manager.py.
+DEBUG_AGENT_LOG: bool = False
