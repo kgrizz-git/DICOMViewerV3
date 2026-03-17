@@ -879,6 +879,11 @@ class SubwindowLifecycleController:
         app = self.app
         subwindows = app.multi_window_layout.get_all_subwindows()
         focused_idx = subwindows.index(subwindow) if subwindow in subwindows else -1
+        # Deselect any selected ROI in the outgoing subwindow before refs are swapped.
+        # handle_image_clicked_no_roi() is the canonical full-cleanup path: it clears
+        # selected_roi, the scene selection, the shared list panel, and the stats panel.
+        if app.roi_coordinator:
+            app.roi_coordinator.handle_image_clicked_no_roi()
         self.disconnect_focused_subwindow_signals()
         self.update_focused_subwindow_references()
         self.connect_focused_subwindow_signals()
@@ -900,16 +905,6 @@ class SubwindowLifecycleController:
                 series_uid = get_composite_series_key(app.current_dataset)
                 instance_identifier = app.current_slice_index
                 app.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
-        if app.roi_manager:
-            selected_roi = app.roi_manager.get_selected_roi()
-            if selected_roi:
-                roi_belongs = False
-                for roi_list in app.roi_manager.rois.values():
-                    if selected_roi in roi_list:
-                        roi_belongs = True
-                        break
-                if not roi_belongs:
-                    app.roi_manager.select_roi(None)
         self.update_right_panel_for_focused_subwindow()
         app._update_series_navigator_highlighting()
         app._update_about_this_file_dialog()
