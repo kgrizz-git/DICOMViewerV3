@@ -56,6 +56,7 @@ This file tracks active and near-term tasks.
 
 ## Features (Near-Term)
 
+- [ ] **[P0]** Add simple launcher to root directory
 - [ ] **[P2]** Add basic image processing for creating new DICOMs (kernels, smoothing, edge enhancement, sharpening, custom kernels) ([details](FUTURE_WORK_DETAIL_NOTES.md#basic-image-processing-and-creating-new-dicoms))
 - [ ] **[P2]** Integrate pylinac and other automated QC analysis tools ([details](FUTURE_WORK_DETAIL_NOTES.md#integrating-pylinac-and-other-automated-qc-tools))
 - [ ] **[P1]** Add ability to save MPRs as DICOM
@@ -90,7 +91,7 @@ This file tracks active and near-term tasks.
 - [ ] **[P2]** See IMAIOS (iOS) disclaimer as an example
 - [ ] **[P2]** Reduce old backup files
 - [ ] **[P1]** Figure out license
-- [ ] **[P0]** Make versioned release
+- [ ] **[P0]** Make versioned release with exectutables
 - [ ] **[P2]** Announce on LinkedIn and share with people
 - [ ] **[P2]** Build a technical guide ([details](FUTURE_WORK_DETAIL_NOTES.md#technical-guide-scope))
 - [ ] **[P2]** Naming exploration: "DICOM Viewer + ?" ([details](FUTURE_WORK_DETAIL_NOTES.md#product-naming-exploration))
