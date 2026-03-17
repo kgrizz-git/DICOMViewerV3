@@ -35,6 +35,8 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QTextCursor, QTextCharFormat, QColor, QFont
 from typing import List, Tuple
 
+from utils.debug_flags import DEBUG_OFFSET
+
 
 class FusionControlsWidget(QWidget):
     """
@@ -517,9 +519,10 @@ class FusionControlsWidget(QWidget):
         self._user_modified_offset = True
         self._calculated_offset_x = x_px
         self._calculated_offset_y = y_px
-        print(f"[OFFSET DEBUG] User changed offset to: X={x_px:.1f}px, Y={y_px:.1f}px")
+        if DEBUG_OFFSET:
+            print(f"[OFFSET DEBUG] User changed offset to: X={x_px:.1f}px, Y={y_px:.1f}px")
         self.translation_offset_changed.emit(x_px, y_px)
-    
+
     def _on_reset_offset_clicked(self) -> None:
         """Handle reset offset button click."""
         # Reset the user-modified flag since we're resetting to calculated
@@ -532,7 +535,8 @@ class FusionControlsWidget(QWidget):
         # Update spinboxes from internal pixel offsets according to current unit
         self._update_offset_spinboxes_from_pixels()
 
-        print(f"[OFFSET DEBUG] Reset to calculated offset: X={x_px:.1f}px, Y={y_px:.1f}px")
+        if DEBUG_OFFSET:
+            print(f"[OFFSET DEBUG] Reset to calculated offset: X={x_px:.1f}px, Y={y_px:.1f}px")
         # Emit signal with calculated values (always in pixels)
         self.translation_offset_changed.emit(x_px, y_px)
     
@@ -921,17 +925,20 @@ class FusionControlsWidget(QWidget):
         self._calculated_offset_x = x
         self._calculated_offset_y = y
         self.calculated_offset_label.setText(f"2D Calculated Offset: X={x:.1f}, Y={y:.1f} pixels")
-        
-        print(f"[OFFSET DEBUG] set_calculated_offset called: X={x:.1f}, Y={y:.1f}")
-        print(f"[OFFSET DEBUG]   Current spinbox values: X={self.x_offset_spinbox.value()}, Y={self.y_offset_spinbox.value()}")
-        print(f"[OFFSET DEBUG]   User modified: {self._user_modified_offset}")
-        
+
+        if DEBUG_OFFSET:
+            print(f"[OFFSET DEBUG] set_calculated_offset called: X={x:.1f}, Y={y:.1f}")
+            print(f"[OFFSET DEBUG]   Current spinbox values: X={self.x_offset_spinbox.value()}, Y={self.y_offset_spinbox.value()}")
+            print(f"[OFFSET DEBUG]   User modified: {self._user_modified_offset}")
+
         # Update the spinboxes only if user hasn't manually modified them
         if not self._user_modified_offset:
             self._update_offset_spinboxes_from_pixels()
-            print(f"[OFFSET DEBUG]   Updated spinboxes to calculated values (unit={self._offset_unit}, can_use_mm={self._can_use_mm})")
+            if DEBUG_OFFSET:
+                print(f"[OFFSET DEBUG]   Updated spinboxes to calculated values (unit={self._offset_unit}, can_use_mm={self._can_use_mm})")
         else:
-            print(f"[OFFSET DEBUG]   Keeping user-modified spinbox values")
+            if DEBUG_OFFSET:
+                print(f"[OFFSET DEBUG]   Keeping user-modified spinbox values")
     
     def set_scaling_factors(self, scale_x: float, scale_y: float) -> None:
         """
