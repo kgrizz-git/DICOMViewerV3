@@ -43,7 +43,7 @@ from gui.overlay_manager import OverlayManager
 from gui.roi_list_panel import ROIListPanel
 from gui.roi_statistics_panel import ROIStatisticsPanel
 from utils.dicom_utils import get_pixel_spacing, get_slice_thickness, get_composite_series_key
-from utils.debug_flags import DEBUG_WL
+from utils.debug_flags import DEBUG_WL, DEBUG_SERIES, DEBUG_AGENT_LOG
 
 
 class SliceDisplayManager:
@@ -840,63 +840,7 @@ class SliceDisplayManager:
             # print(f"[DISPLAY] Image id: {id(image) if image else 'None'}")
             # print(f"[DISPLAY] Apply inversion: {apply_inversion}")
 
-            # region agent log: before set_image (H1/H2 - unexpected pan on slice change)
-            try:
-                pre_log = {
-                    "sessionId": "088dbc",
-                    "runId": "pre-fix",
-                    "hypothesisId": "H1",
-                    "location": "slice_display_manager.display_slice:before_set_image",
-                    "message": "Before set_image",
-                    "data": {
-                        "current_slice_index": int(current_slice_index),
-                        "preserve_view": bool(preserve_view),
-                        "is_new_study_series": bool(is_new_study_series),
-                        "is_same_series": bool(is_same_series),
-                        "zoom": float(getattr(self.image_viewer, "current_zoom", 0.0)),
-                        "h_scroll": int(self.image_viewer.horizontalScrollBar().value())
-                        if self.image_viewer.horizontalScrollBar() is not None
-                        else 0,
-                        "v_scroll": int(self.image_viewer.verticalScrollBar().value())
-                        if self.image_viewer.verticalScrollBar() is not None
-                        else 0,
-                    },
-                    "timestamp": int(time.time() * 1000),
-                }
-                with open("debug-088dbc.log", "a", encoding="utf-8") as f:
-                    f.write(json.dumps(pre_log) + "\n")
-            except Exception:
-                pass
-            # endregion agent log
-
             self.image_viewer.set_image(image, preserve_view=preserve_view, apply_inversion=apply_inversion)
-
-            # region agent log: after set_image (H1/H2 - unexpected pan on slice change)
-            try:
-                post_log = {
-                    "sessionId": "088dbc",
-                    "runId": "pre-fix",
-                    "hypothesisId": "H1",
-                    "location": "slice_display_manager.display_slice:after_set_image",
-                    "message": "After set_image",
-                    "data": {
-                        "current_slice_index": int(current_slice_index),
-                        "preserve_view": bool(preserve_view),
-                        "is_new_study_series": bool(is_new_study_series),
-                        "is_same_series": bool(is_same_series),
-                        "zoom": float(getattr(self.image_viewer, "current_zoom", 0.0)),
-                        "h_scroll": int(self.image_viewer.horizontalScrollBar().value())
-                        if self.image_viewer.horizontalScrollBar() is not None
-                        else 0,
-                        "v_scroll": int(self.image_viewer.verticalScrollBar().value())
-                        if self.image_viewer.verticalScrollBar() is not None
-                        else 0,
-                    },
-                    "timestamp": int(time.time() * 1000),
-                }
-                with open("debug-088dbc.log", "a", encoding="utf-8") as f:
-                    f.write(json.dumps(post_log) + "\n")
-            except Exception:
                 pass
             # endregion agent log
 
@@ -924,31 +868,32 @@ class SliceDisplayManager:
                         })
 
                 # region agent log: after fit_to_view (H1 - new series centering)
-                try:
-                    post_fit_log = {
-                        "sessionId": "088dbc",
-                        "runId": "pre-fix",
-                        "hypothesisId": "H1",
-                        "location": "slice_display_manager.display_slice:after_fit_to_view",
-                        "message": "After fit_to_view",
-                        "data": {
-                            "current_slice_index": int(current_slice_index),
-                            "is_new_study_series": bool(is_new_study_series),
-                            "force_fit_to_view": bool(force_fit_to_view),
-                            "zoom": float(getattr(self.image_viewer, "current_zoom", 0.0)),
-                            "h_scroll": int(self.image_viewer.horizontalScrollBar().value())
-                            if self.image_viewer.horizontalScrollBar() is not None
-                            else 0,
-                            "v_scroll": int(self.image_viewer.verticalScrollBar().value())
-                            if self.image_viewer.verticalScrollBar() is not None
-                            else 0,
-                        },
-                        "timestamp": int(time.time() * 1000),
-                    }
-                    with open("debug-088dbc.log", "a", encoding="utf-8") as f:
-                        f.write(json.dumps(post_fit_log) + "\n")
-                except Exception:
-                    pass
+                if DEBUG_AGENT_LOG:
+                    try:
+                        post_fit_log = {
+                            "sessionId": "088dbc",
+                            "runId": "pre-fix",
+                            "hypothesisId": "H1",
+                            "location": "slice_display_manager.display_slice:after_fit_to_view",
+                            "message": "After fit_to_view",
+                            "data": {
+                                "current_slice_index": int(current_slice_index),
+                                "is_new_study_series": bool(is_new_study_series),
+                                "force_fit_to_view": bool(force_fit_to_view),
+                                "zoom": float(getattr(self.image_viewer, "current_zoom", 0.0)),
+                                "h_scroll": int(self.image_viewer.horizontalScrollBar().value())
+                                if self.image_viewer.horizontalScrollBar() is not None
+                                else 0,
+                                "v_scroll": int(self.image_viewer.verticalScrollBar().value())
+                                if self.image_viewer.verticalScrollBar() is not None
+                                else 0,
+                            },
+                            "timestamp": int(time.time() * 1000),
+                        }
+                        with open("debug-088dbc.log", "a", encoding="utf-8") as f:
+                            f.write(json.dumps(post_fit_log) + "\n")
+                    except Exception:
+                        pass
                 # endregion agent log
             
             # Update metadata panel (only for focused subwindow)
@@ -1425,30 +1370,31 @@ class SliceDisplayManager:
             dataset = datasets[slice_index]
 
             # region agent log: handle_slice_changed entry (H2 - scroll vs pan interaction)
-            try:
-                slice_log = {
-                    "sessionId": "088dbc",
-                    "runId": "pre-fix",
-                    "hypothesisId": "H2",
-                    "location": "slice_display_manager.handle_slice_changed",
-                    "message": "handle_slice_changed",
-                    "data": {
-                        "requested_slice_index": int(slice_index),
-                        "current_slice_index": int(self.current_slice_index),
-                        "zoom": float(getattr(self.image_viewer, "current_zoom", 0.0)),
-                        "h_scroll": int(self.image_viewer.horizontalScrollBar().value())
-                        if self.image_viewer.horizontalScrollBar() is not None
-                        else 0,
-                        "v_scroll": int(self.image_viewer.verticalScrollBar().value())
-                        if self.image_viewer.verticalScrollBar() is not None
-                        else 0,
-                    },
-                    "timestamp": int(time.time() * 1000),
-                }
-                with open("debug-088dbc.log", "a", encoding="utf-8") as f:
-                    f.write(json.dumps(slice_log) + "\n")
-            except Exception:
-                pass
+            if DEBUG_AGENT_LOG:
+                try:
+                    slice_log = {
+                        "sessionId": "088dbc",
+                        "runId": "pre-fix",
+                        "hypothesisId": "H2",
+                        "location": "slice_display_manager.handle_slice_changed",
+                        "message": "handle_slice_changed",
+                        "data": {
+                            "requested_slice_index": int(slice_index),
+                            "current_slice_index": int(self.current_slice_index),
+                            "zoom": float(getattr(self.image_viewer, "current_zoom", 0.0)),
+                            "h_scroll": int(self.image_viewer.horizontalScrollBar().value())
+                            if self.image_viewer.horizontalScrollBar() is not None
+                            else 0,
+                            "v_scroll": int(self.image_viewer.verticalScrollBar().value())
+                            if self.image_viewer.verticalScrollBar() is not None
+                            else 0,
+                        },
+                        "timestamp": int(time.time() * 1000),
+                    }
+                    with open("debug-088dbc.log", "a", encoding="utf-8") as f:
+                        f.write(json.dumps(slice_log) + "\n")
+                except Exception:
+                    pass
             # endregion agent log
 
             # print(f"[SLICE] Dataset SOPInstanceUID: {getattr(dataset, 'SOPInstanceUID', 'N/A')}")
@@ -1481,7 +1427,9 @@ class SliceDisplayManager:
         
         # Check if there are multiple series
         if len(study_series) <= 1:
-            print(f"[DEBUG] handle_series_navigation: Only {len(study_series)} series in study, cannot navigate")
+            if DEBUG_SERIES:
+
+                print(f"[DEBUG] handle_series_navigation: Only {len(study_series)} series in study, cannot navigate")
             return None, None, None  # No navigation needed if only one series
         
         # Build list of series with SeriesNumber for sorting
@@ -1500,42 +1448,49 @@ class SliceDisplayManager:
         
         # Sort by SeriesNumber (ascending)
         series_list.sort(key=lambda x: x[0])
-        
-        print(f"[DEBUG] handle_series_navigation: Found {len(series_list)} series in study. "
-              f"Looking for current_series_uid={self.current_series_uid[:20] if self.current_series_uid else 'None'}...")
-        
+
+        if DEBUG_SERIES:
+            print(f"[DEBUG] handle_series_navigation: Found {len(series_list)} series in study. "
+                  f"Looking for current_series_uid={self.current_series_uid[:20] if self.current_series_uid else 'None'}...")
+
         # Find current series in sorted list
         current_index = None
         for idx, (_, series_uid, _) in enumerate(series_list):
             if series_uid == self.current_series_uid:
                 current_index = idx
                 break
-        
+
         if current_index is None:
-            print(f"[DEBUG] handle_series_navigation: Current series not found in sorted list. "
-                  f"Available series UIDs: {[uid[:20] + '...' for _, uid, _ in series_list[:3]]} (showing first 3)")
+            if DEBUG_SERIES:
+                print(f"[DEBUG] handle_series_navigation: Current series not found in sorted list. "
+                      f"Available series UIDs: {[uid[:20] + '...' for _, uid, _ in series_list[:3]]} (showing first 3)")
             return None, None, None  # Current series not found
-        
-        print(f"[DEBUG] handle_series_navigation: Current series found at index {current_index} of {len(series_list)}")
+
+        if DEBUG_SERIES:
+            print(f"[DEBUG] handle_series_navigation: Current series found at index {current_index} of {len(series_list)}")
         
         # Calculate new series index
         new_index = current_index + direction
         
         # Clamp to valid range
         if new_index < 0 or new_index >= len(series_list):
-            print(f"[DEBUG] handle_series_navigation: New index {new_index} out of range [0, {len(series_list)})")
+            if DEBUG_SERIES:
+
+                print(f"[DEBUG] handle_series_navigation: New index {new_index} out of range [0, {len(series_list)})")
             return None, None, None  # Already at first or last series
         
         # Get new series UID and datasets
         _, new_series_uid, datasets = series_list[new_index]
         
         if not datasets:
-            print(f"[DEBUG] handle_series_navigation: New series {new_series_uid[:20] if new_series_uid else 'None'}... has no datasets")
+            if DEBUG_SERIES:
+                print(f"[DEBUG] handle_series_navigation: New series {new_series_uid[:20] if new_series_uid else 'None'}... has no datasets")
             return None, None, None
-        
-        print(f"[DEBUG] handle_series_navigation: Successfully navigating from index {current_index} to {new_index}, "
-              f"new_series_uid={new_series_uid[:20]}...")
-        
+
+        if DEBUG_SERIES:
+            print(f"[DEBUG] handle_series_navigation: Successfully navigating from index {current_index} to {new_index}, "
+                  f"new_series_uid={new_series_uid[:20]}...")
+
         # Return new series information
         return new_series_uid, 0, datasets[0]
     

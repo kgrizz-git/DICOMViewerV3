@@ -26,6 +26,8 @@ from pydicom.dataset import Dataset
 from core.image_resampler import ImageResampler
 from core.dicom_processor import DICOMProcessor
 
+from utils.debug_flags import DEBUG_OFFSET
+
 
 class FusionHandler:
     """
@@ -686,17 +688,19 @@ class FusionHandler:
         # Get image positions
         base_ipp = self.get_image_position_patient(base_dataset)
         overlay_ipp = self.get_image_position_patient(overlay_dataset)
-        
-        print(f"\n[OFFSET CALC DEBUG] calculate_translation_offset called")
-        print(f"  base IPP: {base_ipp}")
-        print(f"  overlay IPP: {overlay_ipp}")
-        print(f"  base_pixel_spacing: {base_pixel_spacing}")
-        print(f"  overlay_pixel_spacing: {overlay_pixel_spacing}")
-        
+
+        if DEBUG_OFFSET:
+            print(f"\n[OFFSET CALC DEBUG] calculate_translation_offset called")
+            print(f"  base IPP: {base_ipp}")
+            print(f"  overlay IPP: {overlay_ipp}")
+            print(f"  base_pixel_spacing: {base_pixel_spacing}")
+            print(f"  overlay_pixel_spacing: {overlay_pixel_spacing}")
+
         if base_ipp is None or overlay_ipp is None:
-            print(f"  Result: None (IPP missing)")
+            if DEBUG_OFFSET:
+                print(f"  Result: None (IPP missing)")
             return None
-        
+
         # Calculate physical offset in mm
         # ImagePositionPatient is [x, y, z] where:
         # x increases left to right
@@ -704,18 +708,20 @@ class FusionHandler:
         # z increases foot to head
         offset_mm_x = overlay_ipp[0] - base_ipp[0]
         offset_mm_y = overlay_ipp[1] - base_ipp[1]
-        
-        print(f"  Physical offset (mm): X={offset_mm_x:.2f}, Y={offset_mm_y:.2f}")
-        
+
+        if DEBUG_OFFSET:
+            print(f"  Physical offset (mm): X={offset_mm_x:.2f}, Y={offset_mm_y:.2f}")
+
         # Convert to pixel offset in base image coordinates
         # Note: Pixel spacing is [row_spacing, col_spacing] where:
         # - row_spacing is the spacing between rows (vertical, relates to y)
         # - col_spacing is the spacing between columns (horizontal, relates to x)
         offset_px_x = offset_mm_x / base_pixel_spacing[1]  # column spacing
         offset_px_y = offset_mm_y / base_pixel_spacing[0]  # row spacing
-        
-        print(f"  Pixel offset: X={offset_px_x:.2f}, Y={offset_px_y:.2f} pixels")
-        
+
+        if DEBUG_OFFSET:
+            print(f"  Pixel offset: X={offset_px_x:.2f}, Y={offset_px_y:.2f} pixels")
+
         return (offset_px_x, offset_px_y)
     
     def set_alignment(

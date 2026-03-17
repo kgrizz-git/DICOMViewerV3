@@ -22,6 +22,7 @@ from PySide6.QtGui import QColor, QFont, QKeyEvent, QTextCursor
 from typing import List, Optional, Tuple, Dict, Callable
 from utils.config_manager import ConfigManager
 from utils.debug_log import debug_log, annotation_debug
+from utils.debug_flags import DEBUG_ANNOTATION
 
 
 class TextAnnotationItem(QGraphicsTextItem):
@@ -398,7 +399,8 @@ class TextAnnotationItem(QGraphicsTextItem):
             # Call movement callback if set (for undo/redo tracking)
             if self.on_moved_callback:
                 try:
-                    debug_log("text_annotation_tool.py:itemChange", "Text annotation moved", {"item_id": str(id(self)), "position": str(self.pos()), "has_callback": self.on_moved_callback is not None}, hypothesis_id="C")
+                    if DEBUG_ANNOTATION:
+                        debug_log("text_annotation_tool.py:itemChange", "Text annotation moved", {"item_id": str(id(self)), "position": str(self.pos()), "has_callback": self.on_moved_callback is not None}, hypothesis_id="C")
                     self.on_moved_callback(self)
                 except Exception:
                     pass

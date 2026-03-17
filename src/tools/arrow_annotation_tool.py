@@ -22,6 +22,7 @@ from typing import List, Optional, Tuple, Dict
 import math
 from utils.config_manager import ConfigManager
 from utils.debug_log import debug_log
+from utils.debug_flags import DEBUG_ANNOTATION
 
 # Arrowhead is drawn larger than line thickness so it stays visually balanced
 ARROWHEAD_SIZE_MULTIPLIER = 3.5
@@ -278,12 +279,14 @@ class ArrowAnnotationItem(QGraphicsItemGroup):
                 from PySide6.QtCore import QPointF
                 self._pre_move_start_point = QPointF(self.start_point)  # Create copy, not reference
                 self._pre_move_end_point = QPointF(self.end_point)  # Create copy, not reference
-                debug_log("arrow_annotation_tool.py:199", "ItemPositionChange: BEFORE updating positions", {"old_pos": str(old_pos), "new_pos": str(new_pos), "delta": str(delta), "start_point_before": str(self.start_point), "end_point_before": str(self.end_point), "pre_move_start": str(self._pre_move_start_point), "pre_move_end": str(self._pre_move_end_point), "has_callback": self.on_moved_callback is not None}, hypothesis_id="A")
+                if DEBUG_ANNOTATION:
+                    debug_log("arrow_annotation_tool.py:199", "ItemPositionChange: BEFORE updating positions", {"old_pos": str(old_pos), "new_pos": str(new_pos), "delta": str(delta), "start_point_before": str(self.start_point), "end_point_before": str(self.end_point), "pre_move_start": str(self._pre_move_start_point), "pre_move_end": str(self._pre_move_end_point), "has_callback": self.on_moved_callback is not None}, hypothesis_id="A")
 
                 # Update start and end points (they track the group's position)
                 self.start_point = QPointF(new_pos)  # Group position is start_point
                 self.end_point = QPointF(new_pos + (self.end_point - self._pre_move_start_point))  # Maintain relative offset
-                debug_log("arrow_annotation_tool.py:211", "ItemPositionChange: AFTER updating positions", {"start_point_after": str(self.start_point), "end_point_after": str(self.end_point)}, hypothesis_id="A")
+                if DEBUG_ANNOTATION:
+                    debug_log("arrow_annotation_tool.py:211", "ItemPositionChange: AFTER updating positions", {"start_point_after": str(self.start_point), "end_point_after": str(self.end_point)}, hypothesis_id="A")
 
                 # Update line (shortened) and arrowhead position/rotation
                 relative_end = self.end_point - self.start_point

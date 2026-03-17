@@ -22,6 +22,7 @@ from tools.arrow_annotation_tool import ArrowAnnotationTool
 from gui.image_viewer import ImageViewer
 from utils.dicom_utils import get_composite_series_key
 from utils.debug_log import debug_log, annotation_debug
+from utils.debug_flags import DEBUG_ANNOTATION
 
 if TYPE_CHECKING:
     from utils.undo_redo import UndoRedoManager
@@ -130,7 +131,8 @@ class ArrowAnnotationCoordinator:
             # Store initial position for move tracking (before any moves happen)
             # This allows us to track the true initial position for undo
             if arrow not in self._arrow_move_tracking:
-                debug_log("arrow_annotation_coordinator.py:110", "Storing initial position on arrow creation", {"arrow_id": str(id(arrow)), "start_point": str(arrow.start_point), "end_point": str(arrow.end_point)}, hypothesis_id="B")
+                if DEBUG_ANNOTATION:
+                    debug_log("arrow_annotation_coordinator.py:110", "Storing initial position on arrow creation", {"arrow_id": str(id(arrow)), "start_point": str(arrow.start_point), "end_point": str(arrow.end_point)}, hypothesis_id="B")
                 # Store COPIES, not references
                 from PySide6.QtCore import QPointF
                 self._arrow_move_tracking[arrow] = {
@@ -277,7 +279,8 @@ class ArrowAnnotationCoordinator:
             # Check if arrow is being tracked for movement
             is_tracked = arrow_item in self._arrow_move_tracking
             tracking_data = self._arrow_move_tracking.get(arrow_item, {}) if arrow_item in self._arrow_move_tracking else {}
-            debug_log("arrow_annotation_coordinator.py:237", "_on_arrow_moved: callback called", {"arrow_id": str(id(arrow_item)), "is_tracked": is_tracked, "pre_move_start": str(pre_move_start) if pre_move_start else "None", "pre_move_end": str(pre_move_end) if pre_move_end else "None", "current_start": str(current_start), "current_end": str(current_end), "tracking_initial_start": str(tracking_data.get('initial_start', 'N/A')), "tracking_initial_end": str(tracking_data.get('initial_end', 'N/A')), "tracking_initialized": tracking_data.get('initialized', False)}, hypothesis_id="A")
+            if DEBUG_ANNOTATION:
+                debug_log("arrow_annotation_coordinator.py:237", "_on_arrow_moved: callback called", {"arrow_id": str(id(arrow_item)), "is_tracked": is_tracked, "pre_move_start": str(pre_move_start) if pre_move_start else "None", "pre_move_end": str(pre_move_end) if pre_move_end else "None", "current_start": str(current_start), "current_end": str(current_end), "tracking_initial_start": str(tracking_data.get('initial_start', 'N/A')), "tracking_initial_end": str(tracking_data.get('initial_end', 'N/A')), "tracking_initialized": tracking_data.get('initialized', False)}, hypothesis_id="A")
 
             annotation_debug(f" ArrowAnnotationCoordinator._on_arrow_moved: arrow={arrow_item}, _updating_position={getattr(arrow_item, '_updating_position', False)}, tracking={is_tracked}, pre_move_start={pre_move_start}, pre_move_end={pre_move_end}, current_start={current_start}, current_end={current_end}")
             
@@ -356,7 +359,8 @@ class ArrowAnnotationCoordinator:
         initial_end = QPointF(tracking['initial_end'])
         final_start = QPointF(tracking['current_start'])
         final_end = QPointF(tracking['current_end'])
-        debug_log("arrow_annotation_coordinator.py:320", "_finalize_arrow_move: checking positions", {"arrow_id": str(id(arrow_item)), "initial_start": str(initial_start), "initial_end": str(initial_end), "final_start": str(final_start), "final_end": str(final_end), "initialized": tracking.get('initialized', False)}, hypothesis_id="A")
+        if DEBUG_ANNOTATION:
+            debug_log("arrow_annotation_coordinator.py:320", "_finalize_arrow_move: checking positions", {"arrow_id": str(id(arrow_item)), "initial_start": str(initial_start), "initial_end": str(initial_end), "final_start": str(final_start), "final_end": str(final_end), "initialized": tracking.get('initialized', False)}, hypothesis_id="A")
 
         annotation_debug(f" ArrowAnnotationCoordinator._finalize_arrow_move: positions - initial=({initial_start.x():.1f}, {initial_start.y():.1f}, {initial_end.x():.1f}, {initial_end.y():.1f}), final=({final_start.x():.1f}, {final_start.y():.1f}, {final_end.x():.1f}, {final_end.y():.1f})")
         

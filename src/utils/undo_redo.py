@@ -22,6 +22,7 @@ from typing import List, Optional, Callable, Any, Tuple, Union
 from abc import ABC, abstractmethod
 
 from utils.debug_log import debug_log, annotation_debug
+from utils.debug_flags import DEBUG_ANNOTATION
 
 
 class Command(ABC):
@@ -96,7 +97,8 @@ class UndoRedoManager:
             log_data["command_action"] = command.action
         if hasattr(command, 'arrow_item'):
             log_data["arrow_item_id"] = str(id(command.arrow_item))
-        debug_log("undo_redo.py:90", "UndoRedoManager.undo: command being undone", log_data, hypothesis_id="D")
+        if DEBUG_ANNOTATION:
+            debug_log("undo_redo.py:90", "UndoRedoManager.undo: command being undone", log_data, hypothesis_id="D")
 
         annotation_debug(f" UndoRedoManager.undo: undoing command type={command_type}, undo stack size before={len(self.undo_stack) + 1}, after={len(self.undo_stack)}")
         
@@ -553,14 +555,16 @@ class TextAnnotationEditCommand(Command):
         """Execute the command - set to new text."""
         if self.text_annotation_item is None:
             return
-        debug_log("undo_redo.py:TextAnnotationEditCommand.execute", "Setting text annotation to new text", {"item_id": str(id(self.text_annotation_item)), "old_text": self.old_text, "new_text": self.new_text}, hypothesis_id="D")
+        if DEBUG_ANNOTATION:
+            debug_log("undo_redo.py:TextAnnotationEditCommand.execute", "Setting text annotation to new text", {"item_id": str(id(self.text_annotation_item)), "old_text": self.old_text, "new_text": self.new_text}, hypothesis_id="D")
         self.text_annotation_item.setPlainText(self.new_text)
     
     def undo(self) -> None:
         """Undo the command - restore old text."""
         if self.text_annotation_item is None:
             return
-        debug_log("undo_redo.py:TextAnnotationEditCommand.undo", "Restoring text annotation to old text", {"item_id": str(id(self.text_annotation_item)), "old_text": self.old_text, "new_text": self.new_text}, hypothesis_id="D")
+        if DEBUG_ANNOTATION:
+            debug_log("undo_redo.py:TextAnnotationEditCommand.undo", "Restoring text annotation to old text", {"item_id": str(id(self.text_annotation_item)), "old_text": self.old_text, "new_text": self.new_text}, hypothesis_id="D")
         self.text_annotation_item.setPlainText(self.old_text)
 
 
@@ -589,7 +593,8 @@ class TextAnnotationMoveCommand(Command):
         if self.text_annotation_item is None or self.scene is None:
             return
         if self.text_annotation_item.scene() == self.scene:
-            debug_log("undo_redo.py:TextAnnotationMoveCommand.execute", "Moving text annotation to new position", {"item_id": str(id(self.text_annotation_item)), "old_pos": str(self.old_position), "new_pos": str(self.new_position)}, hypothesis_id="C")
+            if DEBUG_ANNOTATION:
+                debug_log("undo_redo.py:TextAnnotationMoveCommand.execute", "Moving text annotation to new position", {"item_id": str(id(self.text_annotation_item)), "old_pos": str(self.old_position), "new_pos": str(self.new_position)}, hypothesis_id="C")
             self.text_annotation_item.setPos(self.new_position)
     
     def undo(self) -> None:
@@ -597,7 +602,8 @@ class TextAnnotationMoveCommand(Command):
         if self.text_annotation_item is None or self.scene is None:
             return
         if self.text_annotation_item.scene() == self.scene:
-            debug_log("undo_redo.py:TextAnnotationMoveCommand.undo", "Restoring text annotation to old position", {"item_id": str(id(self.text_annotation_item)), "old_pos": str(self.old_position), "new_pos": str(self.new_position)}, hypothesis_id="C")
+            if DEBUG_ANNOTATION:
+                debug_log("undo_redo.py:TextAnnotationMoveCommand.undo", "Restoring text annotation to old position", {"item_id": str(id(self.text_annotation_item)), "old_pos": str(self.old_position), "new_pos": str(self.new_position)}, hypothesis_id="C")
             self.text_annotation_item.setPos(self.old_position)
 
 

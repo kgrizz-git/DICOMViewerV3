@@ -25,7 +25,7 @@ Requirements:
 from PySide6.QtCore import QPointF
 from pydicom.dataset import Dataset
 from datetime import datetime
-from utils.debug_flags import DEBUG_LAYOUT
+from utils.debug_flags import DEBUG_LAYOUT, DEBUG_DIAG
 from typing import Optional, Dict, Callable, List, Tuple
 import numpy as np
 from core.dicom_processor import DICOMProcessor
@@ -853,8 +853,9 @@ class ViewStateManager:
         translation_y = view_transform.m32()
         # Only log if there's actual translation (panning) to reduce noise
         if abs(translation_x) > 0.01 or abs(translation_y) > 0.01:
-            print(f"[DEBUG-DIAG] handle_transform_changed: PAN - transform_scale={view_transform.m11():.6f}, "
-                  f"translation=({translation_x:.2f}, {translation_y:.2f})")
+            if DEBUG_DIAG:
+                print(f"[DEBUG-DIAG] handle_transform_changed: PAN - transform_scale={view_transform.m11():.6f}, "
+                      f"translation=({translation_x:.2f}, {translation_y:.2f})")
         
         # Update overlay positions when transform changes
         # We update for ALL subwindows (focused and unfocused) so overlays
@@ -902,7 +903,8 @@ class ViewStateManager:
             had_center = self.saved_scene_center is not None
             center_val = self.saved_scene_center
             ts = datetime.now().strftime("%H:%M:%S.%f")
-            print(f"[DEBUG-LAYOUT] [{ts}] handle_viewport_resized: view_state_manager id={id(self)} image_viewer id={id(self.image_viewer)} is_focused={is_focused} had_saved_scene_center={had_center} center={center_val}")
+            if DEBUG_LAYOUT:
+                print(f"[DEBUG-LAYOUT] [{ts}] handle_viewport_resized: view_state_manager id={id(self)} image_viewer id={id(self.image_viewer)} is_focused={is_focused} had_saved_scene_center={had_center} center={center_val}")
         # This works for splitter moves, series navigator show/hide, and layout changes
         if self.image_viewer.image_item is not None:
             if self.saved_scene_center is not None:
