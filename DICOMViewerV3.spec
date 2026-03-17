@@ -18,7 +18,9 @@ from pathlib import Path
 block_cipher = None
 
 # Load application version from single source of truth (used for macOS bundle and consistency)
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+# Use SPECPATH (PyInstaller provides this) or fall back to current working directory
+spec_root = Path(SPECPATH if 'SPECPATH' in dir() else os.getcwd())
+sys.path.insert(0, str(spec_root))
 from src.version import __version__ as _app_version
 
 # Construct absolute path to main.py
