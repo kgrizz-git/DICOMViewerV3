@@ -29,6 +29,8 @@ from core.dicom_parser import DICOMParser
 from core.multiframe_handler import is_multiframe, get_frame_count
 from utils.dicom_utils import get_patient_tag_keywords
 
+from utils.debug_flags import DEBUG_WIDGET_PAN
+
 
 class ViewportOverlayWidget(QWidget):
     """
@@ -1064,24 +1066,26 @@ class OverlayManager:
                     
                     # Debug: Only log during panning (when translation is non-zero)
                     if abs(translation_x) > 0.01 or abs(translation_y) > 0.01:
-                        widget_pos = (current_geometry.x(), current_geometry.y())
-                        widget_size = (current_geometry.width(), current_geometry.height())
-                        viewport_size = (viewport.width(), viewport.height())
-                        print(f"[DEBUG-WIDGET-PAN] PAN detected: widget_pos={widget_pos}, widget_size={widget_size}, "
-                              f"viewport_size={viewport_size}, transform_translation=({translation_x:.2f}, {translation_y:.2f})")
-                        
-                        # Log label positions to see if they're moving
-                        for corner_key, label in self.viewport_overlay_widget.corner_labels.items():
-                            if label.isVisible():
-                                label_pos = label.pos()
-                                print(f"[DEBUG-WIDGET-PAN] {corner_key} label position: {label_pos}")
-                    
+                        if DEBUG_WIDGET_PAN:
+                            widget_pos = (current_geometry.x(), current_geometry.y())
+                            widget_size = (current_geometry.width(), current_geometry.height())
+                            viewport_size = (viewport.width(), viewport.height())
+                            print(f"[DEBUG-WIDGET-PAN] PAN detected: widget_pos={widget_pos}, widget_size={widget_size}, "
+                                  f"viewport_size={viewport_size}, transform_translation=({translation_x:.2f}, {translation_y:.2f})")
+
+                            # Log label positions to see if they're moving
+                            for corner_key, label in self.viewport_overlay_widget.corner_labels.items():
+                                if label.isVisible():
+                                    label_pos = label.pos()
+                                    print(f"[DEBUG-WIDGET-PAN] {corner_key} label position: {label_pos}")
+
                     # Ensure widget stays at (0,0) and matches viewport size
                     if (current_geometry.x() != 0 or current_geometry.y() != 0 or
-                        current_geometry.width() != viewport.width() or 
+                        current_geometry.width() != viewport.width() or
                         current_geometry.height() != viewport.height()):
                         if abs(translation_x) > 0.01 or abs(translation_y) > 0.01:
-                            print(f"[DEBUG-WIDGET-PAN] Correcting widget geometry: {current_geometry} -> (0, 0, {viewport.width()}, {viewport.height()})")
+                            if DEBUG_WIDGET_PAN:
+                                print(f"[DEBUG-WIDGET-PAN] Correcting widget geometry: {current_geometry} -> (0, 0, {viewport.width()}, {viewport.height()})")
                         self.viewport_overlay_widget.setGeometry(0, 0, viewport.width(), viewport.height())
             return
         
