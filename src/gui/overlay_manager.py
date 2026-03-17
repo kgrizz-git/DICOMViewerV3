@@ -1070,14 +1070,16 @@ class OverlayManager:
                             widget_pos = (current_geometry.x(), current_geometry.y())
                             widget_size = (current_geometry.width(), current_geometry.height())
                             viewport_size = (viewport.width(), viewport.height())
-                            print(f"[DEBUG-WIDGET-PAN] PAN detected: widget_pos={widget_pos}, widget_size={widget_size}, "
+                            if DEBUG_WIDGET_PAN:
+                                print(f"[DEBUG-WIDGET-PAN] PAN detected: widget_pos={widget_pos}, widget_size={widget_size}, "
                                   f"viewport_size={viewport_size}, transform_translation=({translation_x:.2f}, {translation_y:.2f})")
 
                             # Log label positions to see if they're moving
                             for corner_key, label in self.viewport_overlay_widget.corner_labels.items():
                                 if label.isVisible():
                                     label_pos = label.pos()
-                                    print(f"[DEBUG-WIDGET-PAN] {corner_key} label position: {label_pos}")
+                                    if DEBUG_WIDGET_PAN:
+                                        print(f"[DEBUG-WIDGET-PAN] {corner_key} label position: {label_pos}")
 
                     # Ensure widget stays at (0,0) and matches viewport size
                     if (current_geometry.x() != 0 or current_geometry.y() != 0 or

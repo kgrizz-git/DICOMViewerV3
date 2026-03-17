@@ -153,7 +153,8 @@ class MultiWindowLayout(QWidget):
             stack = traceback.extract_stack()[-6:-1]
             callers = " <- ".join([f"{f.name}:{f.lineno}" for f in stack])
             ts = datetime.now().strftime("%H:%M:%S.%f")
-            print(f"[DEBUG-LAYOUT] [{ts}] set_layout: mode={layout_mode!r} current_layout={current!r} focused_view_index={focused_idx} callers={callers}")
+            if DEBUG_LAYOUT:
+                print(f"[DEBUG-LAYOUT] [{ts}] set_layout: mode={layout_mode!r} current_layout={current!r} focused_view_index={focused_idx} callers={callers}")
         
         num_subwindows = self._get_num_subwindows(layout_mode)
         
