@@ -126,6 +126,17 @@ class MprController(QObject):
         """
         from gui.dialogs.mpr_dialog import MprDialog
 
+        # Ensure subwindow data exists and is properly initialized
+        if target_subwindow_idx not in self._app.subwindow_data:
+            self._app.subwindow_data[target_subwindow_idx] = {}
+
+        # Clear any stale MPR state (inconsistent state where is_mpr is True but mpr_result is None)
+        data = self._app.subwindow_data[target_subwindow_idx]
+        if data.get("is_mpr") and data.get("mpr_result") is None:
+            # Inconsistent state - clear it
+            _mpr_log(f"Clearing stale MPR state in window {target_subwindow_idx}")
+            self.clear_mpr(target_subwindow_idx)
+
         loaded_series = self._collect_loaded_series()
         _mpr_log(
             f"Open MPR dialog for window {target_subwindow_idx}: "
@@ -536,6 +547,17 @@ class MprController(QObject):
                     self._cache.save(result)
                 except Exception as exc:
                     print(f"[MprController] Cache save error: {exc}")
+
+            # Verify image viewer exists before activating MPR
+            image_viewer = self._get_image_viewer(target_idx)
+            if image_viewer is None:
+                QMessageBox.critical(
+                    self._app.main_window,
+                    "MPR Error",
+                    "Cannot activate MPR: image viewer not ready. Please try again.",
+                )
+                return
+
             self._activate_mpr(target_idx, result, orientation_label)
 
         def on_error(msg: str) -> None:
@@ -573,6 +595,14 @@ class MprController(QObject):
         data = self._app.subwindow_data.get(idx)
         if data is None:
             return
+
+        # Debug logging to track state
+        _mpr_log(
+            f"Activating MPR: window={idx} "
+            f"has_image_viewer={self._get_image_viewer(idx) is not None} "
+            f"has_subwindow_data={idx in self._app.subwindow_data} "
+            f"result_slices={result.n_slices}"
+        )
 
         if "mpr_previous_state" not in data:
             data["mpr_previous_state"] = {
@@ -619,6 +649,10 @@ class MprController(QObject):
 
         # Disable ROI/measurement/annotation tools.
         self._set_tools_enabled(idx, enabled=False)
+
+        # Reset window/level from the new MPR source series to avoid using
+        # stale values from a previous series.
+        self._reset_window_level_for_mpr(idx, source_ds)
 
         # Display first slice.
         self.display_mpr_slice(idx, 0)
@@ -759,6 +793,61 @@ class MprController(QObject):
         else:
             if hasattr(image_viewer, "_mpr_mode_override"):
                 image_viewer._mpr_mode_override = False
+
+    def _reset_window_level_for_mpr(self, idx: int, source_dataset) -> None:
+        """
+        Reset window/level controls to defaults from the MPR source dataset.
+
+        This ensures that when a new MPR is created, we use the window/level
+        from the new source series, not stale values from a previous series.
+
+        Args:
+            idx: Subwindow index
+            source_dataset: Source DICOM dataset for the MPR
+        """
+        # Only update controls if this is the focused window
+        if idx != getattr(self._app, "focused_subwindow_index", -1):
+            return
+
+        wl_controls = getattr(self._app, "window_level_controls", None)
+        if wl_controls is None:
+            return
+
+        try:
+            from core.dicom_window_level import get_window_level_presets_from_dataset, get_window_level_from_dataset
+            from core.dicom_rescale import get_rescale_parameters
+
+            # Get rescale parameters
+            rescale_slope, rescale_intercept, rescale_type = get_rescale_parameters(source_dataset)
+
+            # Update view_state_manager with rescale parameters so it knows the values are rescaled
+            managers = self._app.subwindow_managers.get(idx, {})
+            view_state_manager = managers.get("view_state_manager")
+            if view_state_manager is not None:
+                view_state_manager.set_rescale_parameters(rescale_slope, rescale_intercept, rescale_type)
+                # Set use_rescaled_values to True if rescale parameters exist
+                if rescale_slope is not None and rescale_intercept is not None:
+                    view_state_manager.use_rescaled_values = True
+
+            # Try to get presets first
+            presets = get_window_level_presets_from_dataset(
+                source_dataset, rescale_slope, rescale_intercept
+            )
+
+            if presets:
+                # Use first preset
+                wc, ww, is_rescaled, preset_name = presets[0]
+            else:
+                # Fall back to single window/level or auto-calculation
+                wc, ww, is_rescaled = get_window_level_from_dataset(
+                    source_dataset, rescale_slope, rescale_intercept
+                )
+
+            if wc is not None and ww is not None and ww > 0:
+                wl_controls.set_window_level(wc, ww, block_signals=False)
+                _mpr_log(f"Reset W/L for MPR: center={wc:.1f} width={ww:.1f} rescaled={is_rescaled}")
+        except Exception as exc:
+            print(f"[MprController] Failed to reset W/L for MPR in window {idx}: {exc}")
 
     @staticmethod
     def _get_window_level(wl_controls, array: np.ndarray):

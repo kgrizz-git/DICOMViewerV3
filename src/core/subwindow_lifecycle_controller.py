@@ -903,13 +903,27 @@ class SubwindowLifecycleController:
         if app.roi_manager:
             selected_roi = app.roi_manager.get_selected_roi()
             if selected_roi:
-                roi_belongs = False
-                for roi_list in app.roi_manager.rois.values():
-                    if selected_roi in roi_list:
-                        roi_belongs = True
-                        break
-                if not roi_belongs:
+                # Check if the selected ROI belongs to the current focused slice/series
+                roi_belongs_to_current_slice = False
+                if app.current_dataset is not None:
+                    from utils.dicom_utils import get_composite_series_key
+                    study_uid = getattr(app.current_dataset, 'StudyInstanceUID', '')
+                    series_uid = get_composite_series_key(app.current_dataset)
+                    slice_index = app.current_slice_index
+
+                    # Check if ROI is in the current slice's ROI list
+                    roi_key = (study_uid, series_uid, slice_index)
+                    if roi_key in app.roi_manager.rois:
+                        roi_list = app.roi_manager.rois[roi_key]
+                        if selected_roi in roi_list:
+                            roi_belongs_to_current_slice = True
+
+                # Clear selection if ROI doesn't belong to the current slice
+                if not roi_belongs_to_current_slice:
                     app.roi_manager.select_roi(None)
+                    # Clear statistics panel when ROI is deselected
+                    if hasattr(app, 'roi_statistics_panel') and app.roi_statistics_panel:
+                        app.roi_statistics_panel.clear_statistics()
         self.update_right_panel_for_focused_subwindow()
         app._update_series_navigator_highlighting()
         app._update_about_this_file_dialog()
