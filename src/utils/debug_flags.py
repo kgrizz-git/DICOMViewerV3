@@ -45,3 +45,39 @@ DEBUG_MPR: bool = False
 # at each step of MeasurementHandle.itemChange so you can see exactly what moves and why.
 # Affects: measurement_items.py (MeasurementHandle.itemChange).
 DEBUG_MEASUREMENT_DRAG: bool = False
+
+# Enables intensity projection debugging (enabled/type/count changes, state management).
+# Affects: main.py (_on_projection_* methods).
+DEBUG_PROJECTION: bool = False
+
+# Enables fusion/overlay offset calculation and user-modification tracing.
+# Affects: fusion_controls_widget.py, fusion_handler.py.
+DEBUG_OFFSET: bool = False
+
+# Enables spatial alignment and resampling tracing for fusion/overlay.
+# Affects: fusion_coordinator.py.
+DEBUG_SPATIAL_ALIGNMENT: bool = False
+
+# Enables diagnostic tracing for view state and viewport operations.
+# Affects: view_state_manager.py.
+DEBUG_DIAG: bool = False
+
+# Enables widget pan/interaction tracing for overlays.
+# Affects: overlay_manager.py.
+DEBUG_WIDGET_PAN: bool = False
+
+# Enables viewport resize tracing.
+# Affects: multi_window_layout.py.
+DEBUG_RESIZE: bool = False
+
+# Enables annotation-related tracing.
+# Affects: debug_log.py.
+DEBUG_ANNOTATION: bool = False
+
+# Enables patient coordinate calculation tracing.
+# Affects: dicom_utils.py.
+DEBUG_PATIENT_COORDS: bool = False
+
+# Enables generic series loading / navigation / state management debugging.
+# Affects: file_series_loading_coordinator.py, slice_display_manager.py.
+DEBUG_SERIES: bool = False
