@@ -22,6 +22,7 @@ from tools.text_annotation_tool import TextAnnotationTool
 from gui.image_viewer import ImageViewer
 from utils.dicom_utils import get_composite_series_key
 from utils.debug_log import debug_log, annotation_debug
+from utils.debug_flags import DEBUG_ANNOTATION
 
 if TYPE_CHECKING:
     from utils.undo_redo import UndoRedoManager
@@ -216,7 +217,8 @@ class TextAnnotationCoordinator:
             # Check if item is being tracked for movement
             is_tracked = text_item in self._text_move_tracking
             tracking_data = self._text_move_tracking.get(text_item, {}) if text_item in self._text_move_tracking else {}
-            debug_log("text_annotation_coordinator.py:_on_text_annotation_moved", "Text annotation moved", {"item_id": str(id(text_item)), "is_tracked": is_tracked, "current_pos": str(current_pos), "tracking_initial_pos": str(tracking_data.get('initial_position', 'N/A')), "tracking_initialized": tracking_data.get('initialized', False)}, hypothesis_id="C")
+            if DEBUG_ANNOTATION:
+                debug_log("text_annotation_coordinator.py:_on_text_annotation_moved", "Text annotation moved", {"item_id": str(id(text_item)), "is_tracked": is_tracked, "current_pos": str(current_pos), "tracking_initial_pos": str(tracking_data.get('initial_position', 'N/A')), "tracking_initialized": tracking_data.get('initialized', False)}, hypothesis_id="C")
 
             if not is_tracked:
                 # Start tracking
@@ -283,7 +285,8 @@ class TextAnnotationCoordinator:
         tracking = self._text_move_tracking[text_item]
         initial_pos = tracking['initial_position']
         final_pos = tracking['current_position']
-        debug_log("text_annotation_coordinator.py:_finalize_text_move", "Finalizing text move", {"item_id": str(id(text_item)), "initial_pos": str(initial_pos), "final_pos": str(final_pos), "position_changed": initial_pos != final_pos}, hypothesis_id="C")
+        if DEBUG_ANNOTATION:
+            debug_log("text_annotation_coordinator.py:_finalize_text_move", "Finalizing text move", {"item_id": str(id(text_item)), "initial_pos": str(initial_pos), "final_pos": str(final_pos), "position_changed": initial_pos != final_pos}, hypothesis_id="C")
 
         # Only create command if position actually changed
         if initial_pos != final_pos and self.undo_redo_manager and self.image_viewer.scene:
