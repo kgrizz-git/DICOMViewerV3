@@ -23,6 +23,7 @@ from typing import Dict, List, Optional
 
 from PySide6.QtGui import QColor, QPen
 from PySide6.QtWidgets import QGraphicsLineItem, QGraphicsScene
+from shiboken6 import isValid
 
 from gui.navigator_colors import SUBWINDOW_DOT_COLORS
 
@@ -105,8 +106,13 @@ class SliceLocationLineManager:
             row2 = seg.get("row2", 0)
             seen_sources.add(source_idx)
 
-            if source_idx in self._line_items:
-                item = self._line_items[source_idx]
+            item = self._line_items.get(source_idx)
+            if item is not None and not isValid(item):
+                # Underlying C++ item was destroyed (e.g. scene cleared); drop it.
+                self._line_items.pop(source_idx, None)
+                item = None
+
+            if item is not None:
                 item.setLine(col1, row1, col2, row2)
             else:
                 item = QGraphicsLineItem(col1, row1, col2, row2)
@@ -123,17 +129,25 @@ class SliceLocationLineManager:
         for src in list(self._line_items.keys()):
             if src not in seen_sources:
                 item = self._line_items.pop(src)
+                if not isValid(item):
+                    continue
                 if self._scene and item.scene() == self._scene:
                     self._scene.removeItem(item)
 
     def clear(self) -> None:
         """Remove all line items from the scene."""
         for item in list(self._line_items.values()):
+            if not isValid(item):
+                continue
             if self._scene and item.scene() == self._scene:
                 self._scene.removeItem(item)
         self._line_items.clear()
 
     def set_visible(self, visible: bool) -> None:
         """Show or hide all line items without recomputing."""
-        for item in self._line_items.values():
+        # Filter out any items whose underlying C++ objects have been destroyed.
+        for src, item in list(self._line_items.items()):
+            if not isValid(item):
+                self._line_items.pop(src, None)
+                continue
             item.setVisible(visible)

@@ -39,7 +39,7 @@ DEBUG_MAGNIFIER: bool = False
 
 # Enables MPR volume/build/display/cache tracing.
 # Affects: mpr_volume, mpr_builder, mpr_controller.
-DEBUG_MPR: bool = True
+DEBUG_MPR: bool = False
 
 # Enables verbose tracing of handle drag: handle/group positions, end_relative, and line p1/p2
 # at each step of MeasurementHandle.itemChange so you can see exactly what moves and why.

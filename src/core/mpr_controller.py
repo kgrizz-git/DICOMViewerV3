@@ -275,6 +275,15 @@ class MprController(QObject):
         except Exception:
             pass
 
+        # Update series navigator dot indicators now that this window's content changed.
+        try:
+            if hasattr(self._app, "series_navigator") and hasattr(self._app, "_get_subwindow_assignments"):
+                assignments = self._app._get_subwindow_assignments()
+                self._app.series_navigator.set_subwindow_assignments(assignments)
+        except Exception:
+            # Dot indicators are non-critical; ignore failures here.
+            pass
+
     def display_mpr_slice(self, idx: int, slice_index: int) -> None:
         """
         Display a single MPR slice in subwindow *idx*.
