@@ -790,6 +790,15 @@ class MprController(QObject):
             # Get rescale parameters
             rescale_slope, rescale_intercept, rescale_type = get_rescale_parameters(source_dataset)
 
+            # Update view_state_manager with rescale parameters so it knows the values are rescaled
+            managers = self._app.subwindow_managers.get(idx, {})
+            view_state_manager = managers.get("view_state_manager")
+            if view_state_manager is not None:
+                view_state_manager.set_rescale_parameters(rescale_slope, rescale_intercept, rescale_type)
+                # Set use_rescaled_values to True if rescale parameters exist
+                if rescale_slope is not None and rescale_intercept is not None:
+                    view_state_manager.use_rescaled_values = True
+
             # Try to get presets first
             presets = get_window_level_presets_from_dataset(
                 source_dataset, rescale_slope, rescale_intercept
@@ -806,7 +815,7 @@ class MprController(QObject):
 
             if wc is not None and ww is not None and ww > 0:
                 wl_controls.set_window_level(wc, ww, block_signals=False)
-                _mpr_log(f"Reset W/L for MPR: center={wc:.1f} width={ww:.1f}")
+                _mpr_log(f"Reset W/L for MPR: center={wc:.1f} width={ww:.1f} rescaled={is_rescaled}")
         except Exception as exc:
             print(f"[MprController] Failed to reset W/L for MPR in window {idx}: {exc}")
 
