@@ -24,6 +24,8 @@ Requirements:
 """
 
 from typing import Optional, Callable
+import json
+import time
 import numpy as np
 from PIL import Image
 from pydicom.dataset import Dataset
@@ -837,7 +839,67 @@ class SliceDisplayManager:
             # print(f"[DISPLAY] Image size: {image.size if image else 'None'}, mode: {image.mode if image else 'None'}")
             # print(f"[DISPLAY] Image id: {id(image) if image else 'None'}")
             # print(f"[DISPLAY] Apply inversion: {apply_inversion}")
+
+            # region agent log: before set_image (H1/H2 - unexpected pan on slice change)
+            try:
+                pre_log = {
+                    "sessionId": "088dbc",
+                    "runId": "pre-fix",
+                    "hypothesisId": "H1",
+                    "location": "slice_display_manager.display_slice:before_set_image",
+                    "message": "Before set_image",
+                    "data": {
+                        "current_slice_index": int(current_slice_index),
+                        "preserve_view": bool(preserve_view),
+                        "is_new_study_series": bool(is_new_study_series),
+                        "is_same_series": bool(is_same_series),
+                        "zoom": float(getattr(self.image_viewer, "current_zoom", 0.0)),
+                        "h_scroll": int(self.image_viewer.horizontalScrollBar().value())
+                        if self.image_viewer.horizontalScrollBar() is not None
+                        else 0,
+                        "v_scroll": int(self.image_viewer.verticalScrollBar().value())
+                        if self.image_viewer.verticalScrollBar() is not None
+                        else 0,
+                    },
+                    "timestamp": int(time.time() * 1000),
+                }
+                with open("debug-088dbc.log", "a", encoding="utf-8") as f:
+                    f.write(json.dumps(pre_log) + "\n")
+            except Exception:
+                pass
+            # endregion agent log
+
             self.image_viewer.set_image(image, preserve_view=preserve_view, apply_inversion=apply_inversion)
+
+            # region agent log: after set_image (H1/H2 - unexpected pan on slice change)
+            try:
+                post_log = {
+                    "sessionId": "088dbc",
+                    "runId": "pre-fix",
+                    "hypothesisId": "H1",
+                    "location": "slice_display_manager.display_slice:after_set_image",
+                    "message": "After set_image",
+                    "data": {
+                        "current_slice_index": int(current_slice_index),
+                        "preserve_view": bool(preserve_view),
+                        "is_new_study_series": bool(is_new_study_series),
+                        "is_same_series": bool(is_same_series),
+                        "zoom": float(getattr(self.image_viewer, "current_zoom", 0.0)),
+                        "h_scroll": int(self.image_viewer.horizontalScrollBar().value())
+                        if self.image_viewer.horizontalScrollBar() is not None
+                        else 0,
+                        "v_scroll": int(self.image_viewer.verticalScrollBar().value())
+                        if self.image_viewer.verticalScrollBar() is not None
+                        else 0,
+                    },
+                    "timestamp": int(time.time() * 1000),
+                }
+                with open("debug-088dbc.log", "a", encoding="utf-8") as f:
+                    f.write(json.dumps(post_log) + "\n")
+            except Exception:
+                pass
+            # endregion agent log
+
             # print(f"[DISPLAY] Image set in viewer successfully")
             
             # If new study/series or explicitly requested, fit to view and center
@@ -860,6 +922,34 @@ class SliceDisplayManager:
                             'v_scroll': stored_v_scroll,
                             'initial_fit_zoom': stored_zoom  # Store for export font scaling
                         })
+
+                # region agent log: after fit_to_view (H1 - new series centering)
+                try:
+                    post_fit_log = {
+                        "sessionId": "088dbc",
+                        "runId": "pre-fix",
+                        "hypothesisId": "H1",
+                        "location": "slice_display_manager.display_slice:after_fit_to_view",
+                        "message": "After fit_to_view",
+                        "data": {
+                            "current_slice_index": int(current_slice_index),
+                            "is_new_study_series": bool(is_new_study_series),
+                            "force_fit_to_view": bool(force_fit_to_view),
+                            "zoom": float(getattr(self.image_viewer, "current_zoom", 0.0)),
+                            "h_scroll": int(self.image_viewer.horizontalScrollBar().value())
+                            if self.image_viewer.horizontalScrollBar() is not None
+                            else 0,
+                            "v_scroll": int(self.image_viewer.verticalScrollBar().value())
+                            if self.image_viewer.verticalScrollBar() is not None
+                            else 0,
+                        },
+                        "timestamp": int(time.time() * 1000),
+                    }
+                    with open("debug-088dbc.log", "a", encoding="utf-8") as f:
+                        f.write(json.dumps(post_fit_log) + "\n")
+                except Exception:
+                    pass
+                # endregion agent log
             
             # Update metadata panel (only for focused subwindow)
             if update_metadata:
@@ -1333,6 +1423,34 @@ class SliceDisplayManager:
         if 0 <= slice_index < len(datasets):
             self.current_slice_index = slice_index
             dataset = datasets[slice_index]
+
+            # region agent log: handle_slice_changed entry (H2 - scroll vs pan interaction)
+            try:
+                slice_log = {
+                    "sessionId": "088dbc",
+                    "runId": "pre-fix",
+                    "hypothesisId": "H2",
+                    "location": "slice_display_manager.handle_slice_changed",
+                    "message": "handle_slice_changed",
+                    "data": {
+                        "requested_slice_index": int(slice_index),
+                        "current_slice_index": int(self.current_slice_index),
+                        "zoom": float(getattr(self.image_viewer, "current_zoom", 0.0)),
+                        "h_scroll": int(self.image_viewer.horizontalScrollBar().value())
+                        if self.image_viewer.horizontalScrollBar() is not None
+                        else 0,
+                        "v_scroll": int(self.image_viewer.verticalScrollBar().value())
+                        if self.image_viewer.verticalScrollBar() is not None
+                        else 0,
+                    },
+                    "timestamp": int(time.time() * 1000),
+                }
+                with open("debug-088dbc.log", "a", encoding="utf-8") as f:
+                    f.write(json.dumps(slice_log) + "\n")
+            except Exception:
+                pass
+            # endregion agent log
+
             # print(f"[SLICE] Dataset SOPInstanceUID: {getattr(dataset, 'SOPInstanceUID', 'N/A')}")
             # print(f"[SLICE] Dataset InstanceNumber: {getattr(dataset, 'InstanceNumber', 'N/A')}")
             self.display_slice(
