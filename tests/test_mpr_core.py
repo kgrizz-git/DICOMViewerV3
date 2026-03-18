@@ -119,12 +119,17 @@ class TestMprVolume(unittest.TestCase):
         np.testing.assert_array_almost_equal(volume.normal, [0.0, 0.0, 1.0])
 
     def test_from_datasets_deduplicates_duplicate_positions(self):
-        # Two datasets at the same position should be silently deduped to one slice
-        # (first occurrence kept) rather than raising an error, allowing single-slice MPRs.
-        ds1 = _make_pixel_dataset(np.ones((4, 4)), position=(0.0, 0.0, 0.0))
-        ds2 = _make_pixel_dataset(np.ones((4, 4)) * 2, position=(0.0, 0.0, 0.0))
+        # Two datasets at the same position should be averaged into one slice
+        # (not rejected), allowing single-slice MPRs to be built.
+        ds1 = _make_pixel_dataset(np.ones((4, 4)) * 10.0, position=(0.0, 0.0, 0.0))
+        ds2 = _make_pixel_dataset(np.ones((4, 4)) * 20.0, position=(0.0, 0.0, 0.0))
         volume = MprVolume.from_datasets([ds1, ds2])
-        self.assertEqual(volume.sitk_image.GetSize()[2], 1)  # only 1 unique slice
+        # Only one unique slice after dedup
+        self.assertEqual(volume.sitk_image.GetSize()[2], 1)
+        # Pixel values should be the mean (15.0), not just the first slice (10.0)
+        import SimpleITK as sitk
+        arr = sitk.GetArrayFromImage(volume.sitk_image)  # shape (z, y, x)
+        np.testing.assert_allclose(arr[0], 15.0, rtol=1e-5)
 
 
 class TestMprBuilderAndCache(unittest.TestCase):

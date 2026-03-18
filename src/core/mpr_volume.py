@@ -305,8 +305,8 @@ class MprVolume:
         ]
         sorted_positions: List[float] = list(initial_stack.positions)
 
-        # Step 3: Deduplicate by position (keep first occurrence).
-        deduped_datasets, deduped_positions = cls._deduplicate_sorted(
+        # Step 3: Deduplicate by position (average coincident slices).
+        deduped_datasets, deduped_positions, averaged_arrays = cls._deduplicate_sorted(
             sorted_datasets, sorted_positions
         )
         if len(deduped_datasets) < 1:
@@ -351,7 +351,7 @@ class MprVolume:
 
         # Step 5: Build SimpleITK image.
         sitk_image = cls._build_sitk_image(
-            deduped_datasets, final_stack, pixel_spacing_mm
+            deduped_datasets, final_stack, pixel_spacing_mm, averaged_arrays
         )
 
         sitk_size = sitk_image.GetSize()
@@ -415,11 +415,15 @@ class MprVolume:
         sorted_datasets: List[Dataset],
         sorted_positions: List[float],
         tolerance_mm: float = 0.01,
-    ) -> Tuple[List[Dataset], List[float]]:
+    ) -> Tuple[List[Dataset], List[float], dict]:
         """
-        Remove duplicate positions from an already-sorted dataset list.
+        Deduplicate an already-sorted dataset list by position.
 
-        Keeps the first occurrence of each unique position (within tolerance).
+        When multiple slices share the same position (within tolerance), the
+        first dataset in the group is kept as the representative and its pixel
+        values are replaced by the mean across all coincident slices.  The
+        averaged arrays are returned separately so callers can pass them to
+        _build_sitk_image without mutating the pydicom datasets.
 
         Args:
             sorted_datasets:  Datasets in ascending-position order.
@@ -427,26 +431,53 @@ class MprVolume:
             tolerance_mm:     Positions closer than this are considered equal.
 
         Returns:
-            (deduped_datasets, deduped_positions) — parallel filtered lists.
+            (deduped_datasets, deduped_positions, averaged_arrays) where
+            averaged_arrays maps id(dataset) -> float32 ndarray for groups
+            that were merged; single-slice groups have no entry.
         """
         if not sorted_datasets:
-            return [], []
+            return [], [], {}
 
-        deduped_ds: List[Dataset] = [sorted_datasets[0]]
-        deduped_pos: List[float] = [sorted_positions[0]]
+        deduped_ds: List[Dataset] = []
+        deduped_pos: List[float] = []
+
+        # Collect runs of datasets at the same position, then merge each run.
+        group_ds: List[Dataset] = [sorted_datasets[0]]
+        group_pos: float = sorted_positions[0]
+
+        # averaged_arrays: maps id(dataset) -> pre-averaged float32 ndarray for
+        # groups that were merged.  Single-slice groups have no entry (use pixel_array
+        # as normal).  Passed back to the caller so _build_sitk_image can use them.
+        averaged_arrays: dict = {}
+
+        def _flush_group(ds_group: List[Dataset], pos: float) -> None:
+            rep = ds_group[0]
+            deduped_ds.append(rep)
+            deduped_pos.append(pos)
+            if len(ds_group) > 1:
+                try:
+                    arrays = [ds.pixel_array.astype(np.float32) for ds in ds_group]
+                    averaged_arrays[id(rep)] = np.mean(arrays, axis=0)
+                except Exception:
+                    pass  # fall back to pixel_array on the representative dataset
 
         for ds, pos in zip(sorted_datasets[1:], sorted_positions[1:]):
-            if abs(pos - deduped_pos[-1]) >= tolerance_mm:
-                deduped_ds.append(ds)
-                deduped_pos.append(pos)
+            if abs(pos - group_pos) < tolerance_mm:
+                group_ds.append(ds)
+            else:
+                _flush_group(group_ds, group_pos)
+                group_ds = [ds]
+                group_pos = pos
 
-        return deduped_ds, deduped_pos
+        _flush_group(group_ds, group_pos)
+        return deduped_ds, deduped_pos, averaged_arrays
 
     @staticmethod
     def _build_sitk_image(
         sorted_datasets: List[Dataset],
         stack: SliceStack,
         pixel_spacing_mm: Tuple[float, float],
+        averaged_arrays: Optional[dict] = None,
     ) -> "sitk.Image":
         """
         Build a SimpleITK image from sorted, deduplicated datasets.
@@ -459,6 +490,10 @@ class MprVolume:
             sorted_datasets:  Datasets in stack-normal ascending order.
             stack:            Self-consistent SliceStack for these datasets.
             pixel_spacing_mm: (row_spacing, col_spacing) in mm.
+            averaged_arrays:  Optional dict mapping id(dataset) -> pre-averaged
+                              float32 ndarray for groups that were merged by
+                              _deduplicate_sorted.  When present, overrides
+                              ds.pixel_array for those datasets.
 
         Returns:
             sitk.Image with correct spatial metadata.
@@ -466,11 +501,16 @@ class MprVolume:
         Raises:
             MprVolumeError on any failure.
         """
+        if averaged_arrays is None:
+            averaged_arrays = {}
         # Extract and stack pixel arrays.
         pixel_arrays: List[np.ndarray] = []
         for ds in sorted_datasets:
             try:
-                arr = ds.pixel_array.astype(np.float32)
+                if id(ds) in averaged_arrays:
+                    arr = averaged_arrays[id(ds)]
+                else:
+                    arr = ds.pixel_array.astype(np.float32)
                 pixel_arrays.append(arr)
             except Exception as exc:
                 raise MprVolumeError(
