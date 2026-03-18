@@ -841,7 +841,6 @@ class SliceDisplayManager:
             # print(f"[DISPLAY] Apply inversion: {apply_inversion}")
 
             self.image_viewer.set_image(image, preserve_view=preserve_view, apply_inversion=apply_inversion)
-                pass
             # endregion agent log
 
             # print(f"[DISPLAY] Image set in viewer successfully")

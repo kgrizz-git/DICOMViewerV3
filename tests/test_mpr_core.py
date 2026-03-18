@@ -118,11 +118,13 @@ class TestMprVolume(unittest.TestCase):
         self.assertAlmostEqual(volume.slice_thickness_mm, 1.0, places=5)
         np.testing.assert_array_almost_equal(volume.normal, [0.0, 0.0, 1.0])
 
-    def test_from_datasets_rejects_duplicate_positions(self):
+    def test_from_datasets_deduplicates_duplicate_positions(self):
+        # Two datasets at the same position should be silently deduped to one slice
+        # (first occurrence kept) rather than raising an error, allowing single-slice MPRs.
         ds1 = _make_pixel_dataset(np.ones((4, 4)), position=(0.0, 0.0, 0.0))
         ds2 = _make_pixel_dataset(np.ones((4, 4)) * 2, position=(0.0, 0.0, 0.0))
-        with self.assertRaises(MprVolumeError):
-            MprVolume.from_datasets([ds1, ds2])
+        volume = MprVolume.from_datasets([ds1, ds2])
+        self.assertEqual(volume.sitk_image.GetSize()[2], 1)  # only 1 unique slice
 
 
 class TestMprBuilderAndCache(unittest.TestCase):
