@@ -311,7 +311,8 @@ class MprVolume:
         )
         if len(deduped_datasets) < 1:
             raise MprVolumeError(
-                "No slices with valid position remained after deduplication."
+                "MPR requires at least one slice with a valid position. "
+                "All input slices had duplicate or missing positions."
             )
 
         removed_duplicates = len(sorted_datasets) - len(deduped_datasets)

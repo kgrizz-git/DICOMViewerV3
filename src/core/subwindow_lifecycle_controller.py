@@ -905,6 +905,26 @@ class SubwindowLifecycleController:
                 series_uid = get_composite_series_key(app.current_dataset)
                 instance_identifier = app.current_slice_index
                 app.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
+        if app.roi_manager:
+            selected_roi = app.roi_manager.get_selected_roi()
+            if selected_roi:
+                # Check if the selected ROI belongs to the current focused slice/series.
+                # Handles stale selections when a non-focused window was navigated to a
+                # different slice while focus was elsewhere.
+                roi_belongs_to_current_slice = False
+                if app.current_dataset is not None:
+                    from utils.dicom_utils import get_composite_series_key
+                    study_uid = getattr(app.current_dataset, 'StudyInstanceUID', '')
+                    series_uid = get_composite_series_key(app.current_dataset)
+                    slice_index = app.current_slice_index
+                    roi_key = (study_uid, series_uid, slice_index)
+                    if roi_key in app.roi_manager.rois:
+                        if selected_roi in app.roi_manager.rois[roi_key]:
+                            roi_belongs_to_current_slice = True
+                if not roi_belongs_to_current_slice:
+                    # Use the coordinator's full-cleanup path: clears manager selection,
+                    # scene selection, shared list panel, and statistics panel.
+                    app.roi_coordinator.handle_image_clicked_no_roi()
         self.update_right_panel_for_focused_subwindow()
         app._update_series_navigator_highlighting()
         app._update_about_this_file_dialog()
