@@ -44,7 +44,7 @@ from pydicom.dataset import Dataset
 from PySide6.QtCore import QTimer
 
 from utils.dicom_utils import get_composite_series_key
-from utils.debug_flags import DEBUG_LOADING, DEBUG_NAV, DEBUG_SERIES
+from utils.debug_flags import DEBUG_LOADING, DEBUG_NAV, DEBUG_SERIES, DEBUG_MEASUREMENT_SERIES
 
 # Human-readable window labels for error messages (1-based).
 _WINDOW_LABELS = ["Window 1", "Window 2", "Window 3", "Window 4"]
@@ -628,6 +628,12 @@ class FileSeriesLoadingCoordinator:
         app.subwindow_data[idx]['current_dataset'] = (
             series_datasets[slice_index] if slice_index < len(series_datasets) else series_datasets[0]
         )
+        if DEBUG_MEASUREMENT_SERIES:
+            print(
+                "[DEBUG-MEAS-SERIES] assign_series_to_subwindow: "
+                f"idx={idx}, target_key={(target_study_uid, series_uid, slice_index)}, "
+                f"focused_idx={getattr(app, 'focused_subwindow_index', -1)}"
+            )
         subwindow.set_assigned_series(series_uid, slice_index)
         if idx in app.subwindow_managers:
             managers = app.subwindow_managers[idx]
@@ -675,6 +681,12 @@ class FileSeriesLoadingCoordinator:
         """Handle series selection from series navigator (assigns to focused subwindow)."""
         app = self.app
         focused_idx = getattr(app, "focused_subwindow_index", -1)
+        if DEBUG_MEASUREMENT_SERIES:
+            print(
+                "[DEBUG-MEAS-SERIES] on_series_navigator_selected: "
+                f"requested_series_uid={series_uid}, focused_idx={focused_idx}, "
+                f"current_series_uid={getattr(app, 'current_series_uid', '')}"
+            )
         if hasattr(app, "_mpr_controller") and app._mpr_controller.is_mpr(focused_idx):
             label = _WINDOW_LABELS[focused_idx] if 0 <= focused_idx < len(_WINDOW_LABELS) else f"Window {focused_idx + 1}"
             app.main_window.show_toast_message(

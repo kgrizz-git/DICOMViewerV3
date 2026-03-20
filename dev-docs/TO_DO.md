@@ -57,6 +57,7 @@ This file tracks active and near-term tasks.
 ## Features (Near-Term)
 
 - [ ] **[P0]** Add simple launcher to root directory
+- [ ] **[P2]** Add option to choose font from included ones in resources/fonts
 - [ ] **[P2]** Add basic image processing for creating new DICOMs (kernels, smoothing, edge enhancement, sharpening, custom kernels) ([details](FUTURE_WORK_DETAIL_NOTES.md#basic-image-processing-and-creating-new-dicoms))
 - [ ] **[P2]** Integrate pylinac and other automated QC analysis tools ([details](FUTURE_WORK_DETAIL_NOTES.md#integrating-pylinac-and-other-automated-qc-tools))
 - [ ] **[P1]** Add ability to save MPRs as DICOM

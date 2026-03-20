@@ -244,21 +244,21 @@ class FileOperationsHandler:
         # Format source name for status display
         source_name = self._format_source_name(file_paths)
         
-        # Check for large files and show warning
-        self._check_large_files(file_paths)
-        
         try:
             # Reset loading manager state (cancellation flag, animation, dialog)
             self._loading_manager.reset()
             self.dicom_loader.reset_cancellation()
             
-            # Create progress dialog for all loads
+            # Create progress dialog first so the UI is responsive immediately
             progress_dialog = self._loading_manager.create_progress_dialog(self.main_window,
                 len(file_paths),
                 f"Loading files from {source_name}..."
             )
             progress_dialog.setValue(0)
             QApplication.processEvents()
+
+            # Check for large files and show warning (now that the progress dialog is visible)
+            self._check_large_files(file_paths)
             
             # Track if we've actually started loading files (to avoid false cancellation on dialog creation)
             # Use list to allow modification in nested function
@@ -513,41 +513,30 @@ class FileOperationsHandler:
         # Format source name for status display
         source_name = os.path.basename(folder_path)
         
-        # Check for large files in folder before loading
-        # Get all files in folder to check sizes
-        try:
-            from pathlib import Path
-            folder_path_obj = Path(folder_path)
-            file_paths = [str(p) for p in folder_path_obj.rglob('*') if p.is_file()]
-            if file_paths:
-                self._check_large_files(file_paths)
-        except Exception:
-            # If we can't check files, continue without warning
-            pass
-        
         try:
             # Reset loading manager state (cancellation flag, animation, dialog)
             self._loading_manager.reset()
             self.dicom_loader.reset_cancellation()
             
-            # Estimate total files for progress dialog (we'll update it when we know the actual count)
-            # For now, use a placeholder - we'll need to scan first or update dynamically
-            # Since we already scanned for large files check, we can use that count if available
-            try:
-                from pathlib import Path
-                folder_path_obj = Path(folder_path)
-                estimated_total = len([str(p) for p in folder_path_obj.rglob('*') if p.is_file()])
-            except Exception:
-                estimated_total = 100  # Fallback estimate
-            
-            # Create progress dialog
+            # Create progress dialog immediately so the UI is responsive (use placeholder count)
             progress_dialog = self._loading_manager.create_progress_dialog(self.main_window,
-                estimated_total,
+                100,  # Placeholder – updated after folder scan below
                 f"Loading files from {source_name}..."
             )
             progress_dialog.setValue(0)
             QApplication.processEvents()
-            
+
+            # Scan folder once: update dialog count and check for large files (dialog is now visible)
+            try:
+                from pathlib import Path
+                folder_path_obj = Path(folder_path)
+                scanned_files = [str(p) for p in folder_path_obj.rglob('*') if p.is_file()]
+                if scanned_files:
+                    progress_dialog.setMaximum(len(scanned_files))
+                    self._check_large_files(scanned_files)
+            except Exception:
+                pass
+
             # Track if we've actually started loading files (to avoid false cancellation on dialog creation)
             loading_started = [False]
             

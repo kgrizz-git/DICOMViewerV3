@@ -62,3 +62,45 @@ class AnnotationConfigMixin:
         if 4 <= size <= 30:
             self.config["arrow_annotation_size"] = size
             self.save_config()
+
+    def get_text_annotation_font_family(self) -> str:
+        """Get text annotation font family name."""
+        return self.config.get("text_annotation_font_family", "IBM Plex Sans")
+
+    def set_text_annotation_font_family(self, family: str) -> None:
+        """Set text annotation font family name."""
+        from utils.bundled_fonts import get_font_families
+        if family in get_font_families():
+            self.config["text_annotation_font_family"] = family
+            self.save_config()
+
+    def get_text_annotation_font_variant(self) -> str:
+        """Get text annotation font variant (e.g. "Bold", "Regular")."""
+        from utils.bundled_fonts import resolve_font
+        family = self.get_text_annotation_font_family()
+        variant = self.config.get("text_annotation_font_variant", "Bold")
+        _, variant = resolve_font(family, variant)
+        return variant
+
+    def set_text_annotation_font_variant(self, variant: str) -> None:
+        """Set text annotation font variant."""
+        from utils.bundled_fonts import get_font_variants
+        from utils.debug_flags import DEBUG_FONT_VARIANT
+        from utils.debug_log import debug_log
+        family = self.get_text_annotation_font_family()
+        valid = get_font_variants(family)
+        if DEBUG_FONT_VARIANT:
+            debug_log(
+                "annotation_config.py:set_text_annotation_font_variant",
+                "Attempting to save text annotation font variant",
+                {
+                    "variant": variant,
+                    "family": family,
+                    "valid_variants": valid,
+                    "accepted": variant in valid,
+                },
+                hypothesis_id="FONTVAR",
+            )
+        if variant in valid:
+            self.config["text_annotation_font_variant"] = variant
+            self.save_config()

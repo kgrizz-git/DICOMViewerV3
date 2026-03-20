@@ -43,7 +43,7 @@ from gui.overlay_manager import OverlayManager
 from gui.roi_list_panel import ROIListPanel
 from gui.roi_statistics_panel import ROIStatisticsPanel
 from utils.dicom_utils import get_pixel_spacing, get_slice_thickness, get_composite_series_key
-from utils.debug_flags import DEBUG_WL, DEBUG_SERIES, DEBUG_AGENT_LOG
+from utils.debug_flags import DEBUG_WL, DEBUG_SERIES, DEBUG_AGENT_LOG, DEBUG_MEASUREMENT_SERIES
 
 
 class SliceDisplayManager:
@@ -122,18 +122,23 @@ class SliceDisplayManager:
         self.annotation_manager = annotation_manager
         self.dicom_organizer = dicom_organizer
         self.fusion_coordinator = fusion_coordinator
-        
+
         # Current data context
         self.current_studies: dict = {}
         self.current_study_uid: str = ""
         self.current_series_uid: str = ""
         self.current_slice_index: int = 0
         self.current_dataset: Optional[Dataset] = None
-        
+
         # Intensity projection state
         self.projection_enabled: bool = False
         self.projection_type: str = "aip"  # "aip", "mip", or "minip"
         self.projection_slice_count: int = 4  # 2, 3, 4, 6, or 8
+
+    def _measurement_debug_prefix(self, dataset: Dataset, current_slice_index: int) -> str:
+        study_uid = getattr(dataset, 'StudyInstanceUID', '')
+        series_uid = get_composite_series_key(dataset)
+        return f"dataset_key={(study_uid, series_uid, current_slice_index)}"
     
     def reset_projection_state(self) -> None:
         """
@@ -361,8 +366,19 @@ class SliceDisplayManager:
             is_same_series = (new_series_uid == current_series_uid and current_series_uid != "")
             
             # Detect if this is a new study/series
+            previous_series_identifier = self.view_state_manager.current_series_identifier
             is_new_study_series = self.view_state_manager.is_new_study_or_series(dataset)
             series_identifier = self.view_state_manager.get_series_identifier(dataset)
+            if DEBUG_MEASUREMENT_SERIES:
+                print(
+                    "[DEBUG-MEAS-SERIES] display_slice enter: "
+                    f"{self._measurement_debug_prefix(dataset, current_slice_index)}, "
+                    f"arg_current_series_uid={current_series_uid}, computed_series_uid={new_series_uid}, "
+                    f"previous_series_identifier={previous_series_identifier}, "
+                    f"incoming_series_identifier={series_identifier}, is_same_series={is_same_series}, "
+                    f"is_new_study_series={is_new_study_series}, "
+                    f"measurement_summary={self.measurement_tool.get_debug_summary(self.image_viewer.scene)}"
+                )
             
             # Check for JPEGLS transfer syntax and show warning only for new series
             if is_new_study_series:
@@ -1091,13 +1107,30 @@ class SliceDisplayManager:
             if self.arrow_annotation_tool:
                 self.arrow_annotation_tool.set_current_slice(study_uid, series_uid, instance_identifier)
             
-            # Clear measurements, text annotations, and arrow annotations when switching to new series (not when switching slices)
+            # Remove measurements from the current scene when switching series, but keep
+            # per-series storage so they reappear when navigating back.
             if is_new_study_series:
-                self.measurement_tool.clear_measurements(self.image_viewer.scene)
+                if DEBUG_MEASUREMENT_SERIES:
+                    print(
+                        "[DEBUG-MEAS-SERIES] display_slice new series: clearing measurement/annotation scene items. "
+                        f"scene_id={id(self.image_viewer.scene)}, measurement_summary_before_clear="
+                        f"{self.measurement_tool.get_debug_summary(self.image_viewer.scene)}"
+                    )
+                self.measurement_tool.clear_measurements_from_other_slices(
+                    study_uid,
+                    series_uid,
+                    instance_identifier,
+                    self.image_viewer.scene,
+                )
                 if self.text_annotation_tool:
                     self.text_annotation_tool.clear_annotations(self.image_viewer.scene)
                 if self.arrow_annotation_tool:
                     self.arrow_annotation_tool.clear_arrows(self.image_viewer.scene)
+            elif DEBUG_MEASUREMENT_SERIES:
+                print(
+                    "[DEBUG-MEAS-SERIES] display_slice same series path: skipping clear_measurements. "
+                    f"measurement_summary={self.measurement_tool.get_debug_summary(self.image_viewer.scene)}"
+                )
             
             # Display ROIs for current slice
             if self.display_rois_callback:
@@ -1283,6 +1316,12 @@ class SliceDisplayManager:
         series_uid = get_composite_series_key(dataset)
         # Use current_slice_index as instance identifier (array position)
         instance_identifier = self.current_slice_index
+        if DEBUG_MEASUREMENT_SERIES:
+            print(
+                "[DEBUG-MEAS-SERIES] display_measurements_for_slice: "
+                f"key={(study_uid, series_uid, instance_identifier)}, "
+                f"measurement_summary_before={self.measurement_tool.get_debug_summary(self.image_viewer.scene)}"
+            )
         
         # Clear measurements from other slices first
         self.measurement_tool.clear_measurements_from_other_slices(
@@ -1293,6 +1332,12 @@ class SliceDisplayManager:
         self.measurement_tool.display_measurements_for_slice(
             study_uid, series_uid, instance_identifier, self.image_viewer.scene
         )
+        if DEBUG_MEASUREMENT_SERIES:
+            print(
+                "[DEBUG-MEAS-SERIES] display_measurements_for_slice complete: "
+                f"key={(study_uid, series_uid, instance_identifier)}, "
+                f"measurement_summary_after={self.measurement_tool.get_debug_summary(self.image_viewer.scene)}"
+            )
     
     def display_text_annotations_for_slice(self, dataset: Dataset) -> None:
         """

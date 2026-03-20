@@ -29,6 +29,7 @@ from core.dicom_parser import DICOMParser
 from core.multiframe_handler import is_multiframe, get_frame_count
 from utils.dicom_utils import get_patient_tag_keywords
 
+from utils.bundled_fonts import make_qfont
 from utils.debug_flags import DEBUG_WIDGET_PAN
 
 
@@ -46,19 +47,24 @@ class ViewportOverlayWidget(QWidget):
     - Same styling as QGraphicsItem overlays
     """
     
-    def __init__(self, parent: Optional[QWidget] = None, font_size: int = 6, 
-                 font_color: tuple = (255, 255, 0)):
+    def __init__(self, parent: Optional[QWidget] = None, font_size: int = 6,
+                 font_color: tuple = (255, 255, 0), font_family: str = "IBM Plex Sans",
+                 font_variant: str = "Bold"):
         """
         Initialize the viewport overlay widget.
-        
+
         Args:
             parent: Parent widget (should be ImageViewer's viewport)
             font_size: Font size in points
             font_color: Font color as (r, g, b) tuple
+            font_family: Font family name (must be a bundled font)
+            font_variant: Font variant (e.g. "Bold", "Regular")
         """
         super().__init__(parent)
         self.font_size = font_size
         self.font_color = font_color
+        self.font_family = font_family
+        self.font_variant = font_variant
         
         # Set widget to be transparent and not interfere with mouse events
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
@@ -80,23 +86,20 @@ class ViewportOverlayWidget(QWidget):
         }
         
         # Configure labels
-        font = QFont("Arial", font_size)
-        font.setBold(True)
-        color = QColor(*font_color)
-        
+        font = make_qfont(font_family, font_variant, font_size)
+
         for label in self.corner_labels.values():
             label.setFont(font)
             label.setStyleSheet(f"color: rgb({font_color[0]}, {font_color[1]}, {font_color[2]}); background: transparent;")
             label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
             label.hide()  # Hide by default until content is set
-        
+
         # Margin in viewport pixels
         self.margin = 10
 
         # MPR banner label (top-centre, shown only in MPR mode).
         self.mpr_banner_label = QLabel("", self)
-        mpr_font = QFont("Arial", max(font_size + 4, 12))
-        mpr_font.setBold(True)
+        mpr_font = make_qfont(font_family, font_variant, max(font_size + 4, 12))
         self.mpr_banner_label.setFont(mpr_font)
         self.mpr_banner_label.setStyleSheet(
             "color: rgb(255, 220, 50); background: rgba(0,0,0,140);"
@@ -208,19 +211,45 @@ class ViewportOverlayWidget(QWidget):
     def set_font_size(self, font_size: int) -> None:
         """
         Update font size for all labels.
-        
+
         Args:
             font_size: New font size in points
         """
         self.font_size = font_size
-        font = QFont("Arial", font_size)
-        font.setBold(True)
+        font = make_qfont(self.font_family, self.font_variant, font_size)
         for label in self.corner_labels.values():
             label.setFont(font)
-        mpr_font = QFont("Arial", max(font_size + 4, 12))
-        mpr_font.setBold(True)
+        mpr_font = make_qfont(self.font_family, self.font_variant, max(font_size + 4, 12))
         self.mpr_banner_label.setFont(mpr_font)
-    
+
+    def set_font_family(self, family: str) -> None:
+        """
+        Update font family for all labels.
+
+        Args:
+            family: Font family name
+        """
+        self.font_family = family
+        font = make_qfont(family, self.font_variant, self.font_size)
+        for label in self.corner_labels.values():
+            label.setFont(font)
+        mpr_font = make_qfont(family, self.font_variant, max(self.font_size + 4, 12))
+        self.mpr_banner_label.setFont(mpr_font)
+
+    def set_font_variant(self, variant: str) -> None:
+        """
+        Update font variant for all labels.
+
+        Args:
+            variant: Font variant name (e.g. "Bold", "Light Italic")
+        """
+        self.font_variant = variant
+        font = make_qfont(self.font_family, variant, self.font_size)
+        for label in self.corner_labels.values():
+            label.setFont(font)
+        mpr_font = make_qfont(self.font_family, variant, max(self.font_size + 4, 12))
+        self.mpr_banner_label.setFont(mpr_font)
+
     def set_font_color(self, font_color: tuple) -> None:
         """
         Update font color for all labels.
@@ -253,16 +282,19 @@ class OverlayManager:
     - Customizable font size and color
     """
     
-    def __init__(self, font_size: int = 6, font_color: tuple = (255, 255, 0), 
-                 config_manager=None, use_widget_overlays: bool = True):
+    def __init__(self, font_size: int = 6, font_color: tuple = (255, 255, 0),
+                 config_manager=None, use_widget_overlays: bool = True,
+                 font_family: str = "IBM Plex Sans", font_variant: str = "Bold"):
         """
         Initialize the overlay manager.
-        
+
         Args:
             font_size: Default font size in points
             font_color: Default font color as (r, g, b) tuple
             config_manager: Optional ConfigManager instance for overlay tag configuration
             use_widget_overlays: If True, use QWidget viewport overlays instead of QGraphicsItem overlays
+            font_family: Font family name for overlay labels
+            font_variant: Font variant (e.g. "Bold", "Regular")
         """
         self.mode = "minimal"  # minimal, detailed, hidden (kept for backward compatibility)
         self.visibility_state = 0  # 0=show all, 1=hide corner text, 2=hide all text
@@ -270,6 +302,8 @@ class OverlayManager:
         self.overlay_items: List[QGraphicsTextItem] = []
         self.font_size = font_size
         self.font_color = font_color
+        self.font_family = font_family
+        self.font_variant = font_variant
         self.config_manager = config_manager
         self.use_widget_overlays = use_widget_overlays  # Flag to switch between approaches
         self.privacy_mode: bool = False
@@ -373,14 +407,36 @@ class OverlayManager:
     def set_font_color(self, r: int, g: int, b: int) -> None:
         """
         Set overlay font color.
-        
+
         Args:
             r: Red component (0-255)
             g: Green component (0-255)
             b: Blue component (0-255)
         """
         self.font_color = (r, g, b)
-    
+
+    def set_font_family(self, family: str) -> None:
+        """
+        Set overlay font family and propagate to the viewport widget if it exists.
+
+        Args:
+            family: Font family name (should be a bundled font)
+        """
+        self.font_family = family
+        if self.viewport_overlay_widget is not None:
+            self.viewport_overlay_widget.set_font_family(family)
+
+    def set_font_variant(self, variant: str) -> None:
+        """
+        Set overlay font variant and propagate to the viewport widget if it exists.
+
+        Args:
+            variant: Font variant name (e.g. "Bold", "Light Italic")
+        """
+        self.font_variant = variant
+        if self.viewport_overlay_widget is not None:
+            self.viewport_overlay_widget.set_font_variant(variant)
+
     def set_privacy_mode(self, enabled: bool) -> None:
         """
         Set privacy mode for masking patient tags in overlays.
@@ -938,9 +994,11 @@ class OverlayManager:
         # Create or get existing overlay widget
         if self.viewport_overlay_widget is None:
             self.viewport_overlay_widget = ViewportOverlayWidget(
-                viewport, 
+                viewport,
                 font_size=self.font_size,
-                font_color=self.font_color
+                font_color=self.font_color,
+                font_family=self.font_family,
+                font_variant=self.font_variant,
             )
             # Make widget fill the viewport and raise it above other widgets
             # Widget must stay at (0,0) and match viewport size to remain fixed during pan/zoom
@@ -948,14 +1006,16 @@ class OverlayManager:
             self.viewport_overlay_widget.raise_()  # Raise above other widgets
             self.viewport_overlay_widget.show()
         else:
-            # Update font size and color if changed
+            # Update font size, color, family, and variant if changed
             self.viewport_overlay_widget.set_font_size(self.font_size)
             self.viewport_overlay_widget.set_font_color(self.font_color)
+            self.viewport_overlay_widget.set_font_family(self.font_family)
+            self.viewport_overlay_widget.set_font_variant(self.font_variant)
             # Ensure widget fills viewport and stays at (0,0) (in case viewport was resized)
             # This ensures widget stays fixed during pan/zoom operations
             current_geometry = self.viewport_overlay_widget.geometry()
             if (current_geometry.x() != 0 or current_geometry.y() != 0 or
-                current_geometry.width() != viewport.width() or 
+                current_geometry.width() != viewport.width() or
                 current_geometry.height() != viewport.height()):
                 self.viewport_overlay_widget.setGeometry(0, 0, viewport.width(), viewport.height())
         

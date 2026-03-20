@@ -27,6 +27,7 @@ from PySide6.QtGui import QPen, QColor, QFont, QTransform, QPainterPath, QPainte
 from typing import List, Optional, Tuple, Dict, Set, Callable
 import numpy as np
 from PIL import Image
+from utils.bundled_fonts import make_qfont
 
 
 class ROIGraphicsEllipseItem(QGraphicsEllipseItem):
@@ -685,6 +686,8 @@ class ROIManager:
         pen_color = config_manager.get_roi_line_color()
         font_size = config_manager.get_roi_font_size()
         font_color = config_manager.get_roi_font_color()
+        font_family = config_manager.get_roi_font_family()
+        font_variant = config_manager.get_roi_font_variant()
         
         # Create new pen with updated settings
         pen = QPen(QColor(*pen_color), pen_width)
@@ -704,17 +707,16 @@ class ROIManager:
                     
                     # Update font size
                     if font_size < 6:
-                        font = QFont("Arial", 6)
+                        font = make_qfont(font_family, font_variant, 6)
                         scale_factor = font_size / 6.0
                         transform = QTransform()
                         transform.scale(scale_factor, scale_factor)
                         text_item.setTransform(transform)
                     else:
-                        font = QFont("Arial", font_size)
+                        font = make_qfont(font_family, font_variant, font_size)
                         # Reset transform if font size is >= 6
                         text_item.setTransform(QTransform())
                     
-                    font.setBold(True)
                     text_item.setFont(font)
     
     def calculate_statistics(self, roi: ROIItem, pixel_array: np.ndarray, 
@@ -844,6 +846,8 @@ class ROIManager:
                 font_color = self.config_manager.get_roi_font_color()
             else:
                 font_color = (255, 255, 0)  # Default yellow
+        font_family = self.config_manager.get_roi_font_family() if self.config_manager else "IBM Plex Sans"
+        font_variant = self.config_manager.get_roi_font_variant() if self.config_manager else "Bold"
         # Format statistics text based on visible_statistics
         lines = []
         unit_suffix = f" {rescale_type}" if rescale_type else ""
@@ -900,16 +904,15 @@ class ROIManager:
         
         # Set font - use absolute pixel size
         if font_size < 6:
-            font = QFont("Arial", 6)
+            font = make_qfont(font_family, font_variant, 6)
             scale_factor = font_size / 6.0
             from PySide6.QtGui import QTransform
             transform = QTransform()
             transform.scale(scale_factor, scale_factor)
             text_item.setTransform(transform)
         else:
-            font = QFont("Arial", font_size)
+            font = make_qfont(font_family, font_variant, font_size)
         
-        font.setBold(True)
         text_item.setFont(font)
         text_item.setPlainText(text)
         

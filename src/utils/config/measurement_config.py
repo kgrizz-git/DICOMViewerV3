@@ -62,3 +62,29 @@ class MeasurementConfigMixin:
             self.config["measurement_line_color_g"] = g
             self.config["measurement_line_color_b"] = b
             self.save_config()
+
+    def get_measurement_font_family(self) -> str:
+        """Get measurement text font family."""
+        return self.config.get("measurement_font_family", "IBM Plex Sans")
+
+    def set_measurement_font_family(self, family: str) -> None:
+        """Set measurement text font family."""
+        from utils.bundled_fonts import get_font_families
+        if family in get_font_families():
+            self.config["measurement_font_family"] = family
+            self.save_config()
+
+    def get_measurement_font_variant(self) -> str:
+        """Get measurement font variant (e.g. "Bold", "Regular")."""
+        from utils.bundled_fonts import resolve_font
+        family = self.get_measurement_font_family()
+        variant = self.config.get("measurement_font_variant", "Bold")
+        _, variant = resolve_font(family, variant)
+        return variant
+
+    def set_measurement_font_variant(self, variant: str) -> None:
+        """Set measurement font variant."""
+        from utils.bundled_fonts import get_font_variants
+        if variant in get_font_variants(self.get_measurement_font_family()):
+            self.config["measurement_font_variant"] = variant
+            self.save_config()

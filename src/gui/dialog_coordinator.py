@@ -106,6 +106,18 @@ class DialogCoordinator:
     
     def open_overlay_settings(self) -> None:
         """Handle overlay settings dialog request."""
+        from utils.debug_flags import DEBUG_FONT_VARIANT
+        from utils.debug_log import debug_log
+        if DEBUG_FONT_VARIANT:
+            debug_log(
+                "dialog_coordinator.py:open_overlay_settings",
+                "Opening overlay settings dialog",
+                {
+                    "main_window_present": self.main_window is not None,
+                    "has_settings_applied_callback": self.settings_applied_callback is not None,
+                },
+                hypothesis_id="FONTVAR",
+            )
         dialog = OverlaySettingsDialog(self.config_manager, self.main_window)
         if self.settings_applied_callback:
             # Both signals trigger the same overlay-refresh pipeline:
@@ -171,8 +183,21 @@ class DialogCoordinator:
     
     def open_annotation_options(self) -> None:
         """Handle annotation options dialog request."""
+        from utils.debug_flags import DEBUG_FONT_VARIANT
+        from utils.debug_log import debug_log
+        if DEBUG_FONT_VARIANT:
+            debug_log(
+                "dialog_coordinator.py:open_annotation_options",
+                "Opening annotation options dialog",
+                {
+                    "main_window_present": self.main_window is not None,
+                    "has_annotation_options_applied_callback": self.annotation_options_applied_callback is not None,
+                },
+                hypothesis_id="FONTVAR",
+            )
         dialog = AnnotationOptionsDialog(self.config_manager, self.main_window)
         if self.annotation_options_applied_callback:
+            dialog.settings_changed.connect(self.annotation_options_applied_callback)
             dialog.settings_applied.connect(self.annotation_options_applied_callback)
         dialog.exec()
     

@@ -21,7 +21,7 @@ from pydicom.dataset import Dataset
 from tools.measurement_tool import MeasurementTool
 from gui.image_viewer import ImageViewer
 from utils.dicom_utils import get_composite_series_key
-from utils.debug_flags import DEBUG_MAGNIFIER
+from utils.debug_flags import DEBUG_MAGNIFIER, DEBUG_MEASUREMENT_SERIES
 
 if TYPE_CHECKING:
     from utils.undo_redo import UndoRedoManager
@@ -86,6 +86,12 @@ class MeasurementCoordinator:
             # Use current slice index as instance identifier (array position)
             instance_identifier = self.get_current_slice_index()
             self.measurement_tool.set_current_slice(study_uid, series_uid, instance_identifier)
+            if DEBUG_MEASUREMENT_SERIES:
+                print(
+                    "[DEBUG-MEAS-SERIES] measurement_started: "
+                    f"dataset_key={(study_uid, series_uid, instance_identifier)}, "
+                    f"tool_summary={self.measurement_tool.get_debug_summary(self.image_viewer.scene)}"
+                )
         
         self.measurement_tool.start_measurement(pos)
     
@@ -103,6 +109,18 @@ class MeasurementCoordinator:
         """Handle measurement finish."""
         if self.image_viewer.scene is None:
             return
+
+        if DEBUG_MEASUREMENT_SERIES:
+            current_dataset = self.get_current_dataset()
+            debug_study_uid = getattr(current_dataset, 'StudyInstanceUID', '') if current_dataset is not None else ''
+            debug_series_uid = get_composite_series_key(current_dataset) if current_dataset is not None else ''
+            debug_instance_identifier = self.get_current_slice_index()
+            print(
+                "[DEBUG-MEAS-SERIES] measurement_finished before finish_measurement: "
+                f"dataset_key={(debug_study_uid, debug_series_uid, debug_instance_identifier)}, "
+                f"tool_current_key={(self.measurement_tool.current_study_uid, self.measurement_tool.current_series_uid, self.measurement_tool.current_instance_identifier)}, "
+                f"tool_summary={self.measurement_tool.get_debug_summary(self.image_viewer.scene)}"
+            )
         
         measurement = self.measurement_tool.finish_measurement(self.image_viewer.scene)
         if measurement is not None:
@@ -130,6 +148,13 @@ class MeasurementCoordinator:
                 # Update undo/redo state after command execution
                 if self.update_undo_redo_state_callback:
                     self.update_undo_redo_state_callback()
+
+            if DEBUG_MEASUREMENT_SERIES:
+                print(
+                    "[DEBUG-MEAS-SERIES] measurement_finished after finish_measurement: "
+                    f"tool_current_key={(self.measurement_tool.current_study_uid, self.measurement_tool.current_series_uid, self.measurement_tool.current_instance_identifier)}, "
+                    f"tool_summary={self.measurement_tool.get_debug_summary(self.image_viewer.scene)}"
+                )
             
             # Set up movement callback for the newly created measurement
             if measurement is not None:
@@ -140,6 +165,8 @@ class MeasurementCoordinator:
                 measurement.on_handle_drag_start_callback = self._on_handle_drag_start
                 measurement.on_handle_drag_move_callback = self._on_handle_drag_move
                 measurement.on_handle_drag_end_callback = self._on_handle_drag_end
+        elif DEBUG_MEASUREMENT_SERIES:
+            print("[DEBUG-MEAS-SERIES] measurement_finished: finish_measurement returned None")
     
     def handle_measurement_delete_requested(self, measurement_item) -> None:
         """

@@ -36,25 +36,47 @@ COMMON_TAGS = [
     # Patient information
     "PatientName", "PatientID", "PatientBirthDate", "PatientSex", "PatientAge",
     # Study information
-    "StudyDate", "StudyTime", "StudyDescription", "StudyInstanceUID",
+    "StudyDate", "StudyTime", "StudyDescription", "StudyInstanceUID", "AccessionNumber",
     # Series information
     "SeriesNumber", "SeriesDescription", "SeriesInstanceUID", "SeriesDate",
+    # Acquisition timing
+    "AcquisitionDate", "AcquisitionTime", "AcquisitionNumber", "ContentDate", "ContentTime",
+    "AcquisitionDuration",
     # Equipment information
-    "Modality", "Manufacturer", "ManufacturerModelName", "StationName", "DeviceSerialNumber", "ScanOptions", "PerformedStationName",
+    "Modality", "Manufacturer", "ManufacturerModelName", "StationName", "DeviceSerialNumber",
+    "ScanOptions", "PerformedStationName", "SoftwareVersions", "ProtocolName",
+    # Institution information
+    "InstitutionName", "InstitutionAddress", "InstitutionalDepartmentName",
+    # Patient/image context
+    "BodyPartExamined", "PatientPosition", "Laterality", "ImageLaterality", "ViewPosition",
     # Image information
     "InstanceNumber", "SliceLocation", "SliceThickness", "SpacingBetweenSlices",
-    # Window/Level
+    "NumberOfFrames",
+    # Window/Level and rescale
     "WindowCenter", "WindowWidth", "RescaleIntercept", "RescaleSlope", "RescaleType",
     # Image geometry
     "ImagePositionPatient", "ImageOrientationPatient",
     # Image matrix
     "Rows", "Columns", "PixelSpacing", "ImagerPixelSpacing", "BitsAllocated", "BitsStored",
+    # Field of view and reconstruction geometry (CT, XA, MR, CR/DX)
+    "FieldOfViewShape", "FieldOfViewDimensions", "FieldOfViewOrigin", "FieldOfViewRotation",
+    "ReconstructionDiameter", "DataCollectionDiameter",
+    "ReconstructionFieldOfView", "PercentPhaseFieldOfView", "SpatialResolution",
     # MR-specific tags
-    "RepetitionTime", "EchoTime", "EchoTrainLength", "FlipAngle", "MagneticFieldStrength",
+    "ScanningSequence", "SequenceVariant", "SequenceName", "MRAcquisitionType",
+    "RepetitionTime", "EchoTime", "InversionTime", "EchoTrainLength", "FlipAngle",
+    "MagneticFieldStrength", "NumberOfAverages", "PixelBandwidth",
+    "NumberOfPhaseEncodingSteps", "InPlanePhaseEncodingDirection",
+    "ReceiveCoilName", "TransmitCoilName",
+    "DiffusionBValue",
     # CT-specific tags
+    "ConvolutionKernel", "CTDIvol",
     "RevolutionTime", "KVP", "ExposureTime", "Exposure", "XRayTubeCurrent", "ExposureInmAs",
     "ExposureIndex", "DeviationIndex", "HelicalPitch", "SpiralPitchFactor",
+    "SingleCollimationWidth", "TotalCollimationWidth", "TableSpeed",
     "TableHeight", "GantryDetectorTilt",
+    "DistanceSourceToDetector", "DistanceSourceToPatient",
+    "FocalSpots", "FilterType",
     # CT/XA tube and filter details
     "AnodeTargetMaterial", "FilterMaterial",
     # US-specific tags
