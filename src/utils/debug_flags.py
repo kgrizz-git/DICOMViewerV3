@@ -81,7 +81,7 @@ DEBUG_ANNOTATION: bool = False
 
 # Enables font family/variant persistence tracing in config setters and dialogs.
 # Affects: overlay_config.py, overlay_settings_dialog.py.
-DEBUG_FONT_VARIANT: bool = True
+DEBUG_FONT_VARIANT: bool = False
 
 # Enables patient coordinate calculation tracing.
 # Affects: dicom_utils.py.
