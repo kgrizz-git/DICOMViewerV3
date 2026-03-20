@@ -79,3 +79,29 @@ class ROIConfigMixin:
         """Set default visible statistics for new ROIs."""
         self.config["roi_default_visible_statistics"] = statistics
         self.save_config()
+
+    def get_roi_font_family(self) -> str:
+        """Get ROI statistics overlay font family."""
+        return self.config.get("roi_font_family", "IBM Plex Sans")
+
+    def set_roi_font_family(self, family: str) -> None:
+        """Set ROI statistics overlay font family."""
+        from utils.bundled_fonts import get_font_families
+        if family in get_font_families():
+            self.config["roi_font_family"] = family
+            self.save_config()
+
+    def get_roi_font_variant(self) -> str:
+        """Get ROI statistics font variant (e.g. "Bold", "Regular")."""
+        from utils.bundled_fonts import resolve_font
+        family = self.get_roi_font_family()
+        variant = self.config.get("roi_font_variant", "Bold")
+        _, variant = resolve_font(family, variant)
+        return variant
+
+    def set_roi_font_variant(self, variant: str) -> None:
+        """Set ROI statistics font variant."""
+        from utils.bundled_fonts import get_font_variants
+        if variant in get_font_variants(self.get_roi_font_family()):
+            self.config["roi_font_variant"] = variant
+            self.save_config()

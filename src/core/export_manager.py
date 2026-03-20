@@ -23,6 +23,8 @@ Requirements:
 
 import copy
 import os
+import sys
+from pathlib import Path
 from typing import Optional, List, Dict, Tuple, Any, Any
 
 import numpy as np
@@ -35,6 +37,82 @@ from PySide6.QtWidgets import QProgressDialog
 from core.dicom_parser import DICOMParser
 from core.dicom_processor import DICOMProcessor
 from utils.dicom_utils import get_slice_thickness, get_composite_series_key
+
+
+def _get_bundled_font_path(filename: str) -> str:
+    """Return the absolute path to a font bundled in resources/fonts/, works in dev and PyInstaller."""
+    if getattr(sys, 'frozen', False):
+        base = Path(sys._MEIPASS)
+    else:
+        base = Path(__file__).parent.parent.parent
+    return str(base / "resources" / "fonts" / filename)
+
+
+def _load_font_with_fallback(size: int, variant: str = "Bold",
+                             font_family: str = "IBM Plex Sans") -> ImageFont.FreeTypeFont:
+    """Load a TrueType font at *size* with a robust cross-platform fallback chain.
+
+    Priority:
+      1. Requested bundled font (font_family + variant)
+      2. Remaining bundled fonts as ordered fallbacks
+      3. Common system font paths (Windows via WINDIR, macOS, various Linux distros)
+      4. matplotlib.font_manager.findfont() – always returns a valid path
+      5. PIL ImageFont.load_default() – bitmap fallback of last resort
+    """
+    from utils.bundled_fonts import get_bundled_ttf_path, BUNDLED_FONTS, get_variant_weight_italic
+    _weight_int, _ = get_variant_weight_italic(variant)
+    _is_bold = _weight_int >= 600
+    _win_fonts = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")
+
+    # Start with the user's chosen family, then fall through remaining bundled fonts.
+    # resolve_font (called inside get_bundled_ttf_path) handles variant fallback automatically.
+    ordered_families = [font_family] + [f for f in BUNDLED_FONTS if f != font_family]
+    bundled_candidates = []
+    for fam in ordered_families:
+        bundled_candidates.append(get_bundled_ttf_path(fam, variant))
+
+    candidates: list[str] = [
+        *bundled_candidates,
+        # System fonts – bold variants first when requested
+        *([           
+            os.path.join(_win_fonts, "arialbd.ttf"),
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+            "/usr/share/fonts/liberation-sans/LiberationSans-Bold.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
+        ] if _is_bold else []),
+        # System fonts – regular paths (Debian/Ubuntu, Fedora, Arch, openSUSE)
+        os.path.join(_win_fonts, "arial.ttf"),
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/liberation-sans/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/TTF/DejaVuSans.ttf",
+        "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+        # macOS
+        "/System/Library/Fonts/Helvetica.ttc",
+        "/System/Library/Fonts/Arial.ttf",
+        "/Library/Fonts/Arial.ttf",
+    ]
+
+    for path in candidates:
+        try:
+            return ImageFont.truetype(path, size)
+        except Exception:
+            continue
+
+    # 3. matplotlib findfont – always resolves to a real file
+    try:
+        from matplotlib import font_manager as _fm
+        weight = "bold" if _is_bold else "normal"
+        _prop = _fm.FontProperties(family="sans-serif", weight=weight)
+        _path = _fm.findfont(_prop)
+        return ImageFont.truetype(_path, size)
+    except Exception:
+        pass
+
+    # 4. Last resort bitmap font
+    return ImageFont.load_default()
 
 
 # Export scale factor choices (plan: cap output max dimension at 8192)
@@ -1142,25 +1220,9 @@ class ExportManager:
                 
                 # Draw ROI statistics text if available and visible
                 if roi.statistics and roi.statistics_overlay_visible:
-                    roi_font = None
-                    font_paths = [
-                        "arial.ttf",
-                        "Arial.ttf",
-                        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-                        "/System/Library/Fonts/Helvetica.ttc",
-                        "C:/Windows/Fonts/arial.ttf"
-                    ]
-                    for font_path in font_paths:
-                        try:
-                            roi_font = ImageFont.truetype(font_path, roi_font_size)
-                            break
-                        except Exception:
-                            continue
-                    if roi_font is None:
-                        try:
-                            roi_font = ImageFont.load_default()
-                        except Exception:
-                            pass
+                    _roi_font_family = config_manager.get_roi_font_family() if config_manager else "IBM Plex Sans"
+                    _roi_font_variant = config_manager.get_roi_font_variant() if config_manager else "Bold"
+                    roi_font = _load_font_with_fallback(roi_font_size, variant=_roi_font_variant, font_family=_roi_font_family)
                     if roi_font:
                         stats_lines = []
                         if "mean" in roi.visible_statistics and "mean" in roi.statistics:
@@ -1209,25 +1271,9 @@ class ExportManager:
                 draw.line([(start_x, start_y), (end_x, end_y)], fill=measurement_line_color, width=measurement_line_thickness)
                 mid_x = int((start_x + end_x) / 2)
                 mid_y = int((start_y + end_y) / 2)
-                measurement_font = None
-                font_paths = [
-                    "arial.ttf",
-                    "Arial.ttf",
-                    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-                    "/System/Library/Fonts/Helvetica.ttc",
-                    "C:/Windows/Fonts/arial.ttf"
-                ]
-                for font_path in font_paths:
-                    try:
-                        measurement_font = ImageFont.truetype(font_path, measurement_font_size)
-                        break
-                    except Exception:
-                        continue
-                if measurement_font is None:
-                    try:
-                        measurement_font = ImageFont.load_default()
-                    except Exception:
-                        pass
+                _meas_font_family = config_manager.get_measurement_font_family() if config_manager else "IBM Plex Sans"
+                _meas_font_variant = config_manager.get_measurement_font_variant() if config_manager else "Bold"
+                measurement_font = _load_font_with_fallback(measurement_font_size, variant=_meas_font_variant, font_family=_meas_font_family)
                 if measurement_font:
                     draw.text((mid_x, mid_y), measurement.distance_formatted, fill=measurement_font_color, font=measurement_font)
         
@@ -1254,25 +1300,9 @@ class ExportManager:
                         fill_color = (int(text_color[0]), int(text_color[1]), int(text_color[2]))
                     else:
                         fill_color = (255, 255, 0)
-                    font_paths = [
-                        "arialbd.ttf", "Arial Bold.ttf",
-                        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
-                        "/System/Library/Fonts/Helvetica.ttc", "arial.ttf", "Arial.ttf",
-                        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-                        "C:/Windows/Fonts/arialbd.ttf", "C:/Windows/Fonts/arial.ttf"
-                    ]
-                    text_font = None
-                    for font_path in font_paths:
-                        try:
-                            text_font = ImageFont.truetype(font_path, text_font_size)
-                            break
-                        except Exception:
-                            continue
-                    if text_font is None:
-                        try:
-                            text_font = ImageFont.load_default()
-                        except Exception:
-                            pass
+                    _text_font_family = config_manager.get_text_annotation_font_family()
+                    _text_font_variant = config_manager.get_text_annotation_font_variant()
+                    text_font = _load_font_with_fallback(text_font_size, variant=_text_font_variant, font_family=_text_font_family)
                     if text_font:
                         for item in text_items:
                             try:
@@ -1353,33 +1383,10 @@ class ExportManager:
             
             # Try to load a font, fallback to default
             # Use bold variant to match viewer appearance (viewer uses setBold(True))
-            font = None
-            # Try common font paths - prioritize bold variants to match viewer
-            font_paths = [
-                "arialbd.ttf",  # Arial Bold (Windows)
-                "Arial Bold.ttf",  # Arial Bold (macOS)
-                "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",  # Linux bold
-                "/System/Library/Fonts/Helvetica.ttc",  # macOS fallback
-                "arial.ttf",  # Regular Arial fallback
-                "Arial.ttf",
-                "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-                "C:/Windows/Fonts/arialbd.ttf",  # Windows Arial Bold explicit path
-                "C:/Windows/Fonts/arial.ttf"
-            ]
-            for font_path in font_paths:
-                try:
-                    font = ImageFont.truetype(font_path, font_size)
-                    break
-                except:
-                    continue
-            
-            # If no font loaded, try default
-            if font is None:
-                try:
-                    font = ImageFont.load_default()
-                except:
-                    pass
-            
+            _overlay_font_family = config_manager.get_overlay_font_family() if config_manager else "IBM Plex Sans"
+            _overlay_font_variant = config_manager.get_overlay_font_variant() if config_manager else "Bold"
+            font = _load_font_with_fallback(font_size, variant=_overlay_font_variant, font_family=_overlay_font_family)
+
             margin = 10
             
             # Calculate projection information for overlay rendering

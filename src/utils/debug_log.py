@@ -23,14 +23,14 @@ import time
 from pathlib import Path
 from typing import Any, Dict
 
-from utils.debug_flags import DEBUG_ANNOTATION
+from utils.debug_flags import DEBUG_ANNOTATION, DEBUG_FONT_VARIANT
 
 # Project root: this file is src/utils/debug_log.py -> parent=utils, parent.parent=src, parent.parent.parent=project root
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 # Enable only when env is set to 1, true, or yes (case-insensitive). Default off.
 _DEBUG_ENV = os.getenv("DICOMVIEWER_DEBUG_LOG", "0").strip().lower()
-DEBUG_LOG_ENABLED = _DEBUG_ENV in ("1", "true", "yes")
+DEBUG_LOG_ENABLED = _DEBUG_ENV in ("1", "true", "yes") or DEBUG_FONT_VARIANT
 
 # Annotation debug prints (console); set DICOMVIEWER_ANNOTATION_DEBUG=1 to enable.
 _ANNOTATION_DEBUG_ENV = os.getenv("DICOMVIEWER_ANNOTATION_DEBUG", "0").strip().lower()

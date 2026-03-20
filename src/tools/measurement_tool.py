@@ -27,7 +27,9 @@ from typing import List, Optional, Tuple, Dict, Callable
 import math
 
 from utils.dicom_utils import format_distance, get_pixel_spacing
+from utils.debug_flags import DEBUG_MEASUREMENT_SERIES
 from tools.measurement_items import DraggableMeasurementText, MeasurementHandle, MeasurementItem
+from utils.bundled_fonts import make_qfont
 
 # Re-export for backward compatibility (existing imports from tools.measurement_tool still work)
 __all__ = ["MeasurementTool", "DraggableMeasurementText", "MeasurementHandle", "MeasurementItem"]
@@ -63,6 +65,22 @@ class MeasurementTool:
         self.current_text_item: Optional[QGraphicsTextItem] = None
         self.pixel_spacing: Optional[Tuple[float, float]] = None
         self.config_manager = config_manager
+
+    def get_debug_summary(self, scene=None) -> str:
+        """Return a compact summary of stored measurements for diagnostics."""
+        if not self.measurements:
+            return "stored=0"
+
+        parts = []
+        for key, measurement_list in self.measurements.items():
+            attached_to_scene = 0
+            if scene is not None:
+                attached_to_scene = sum(1 for measurement in measurement_list if measurement.scene() == scene)
+            parts.append(
+                f"{key}:count={len(measurement_list)}"
+                + (f",attached={attached_to_scene}" if scene is not None else "")
+            )
+        return " | ".join(parts)
     
     def set_current_slice(self, study_uid: str, series_uid: str, instance_identifier: int) -> None:
         """
@@ -79,6 +97,11 @@ class MeasurementTool:
         key = (study_uid, series_uid, instance_identifier)
         if key not in self.measurements:
             self.measurements[key] = []
+        if DEBUG_MEASUREMENT_SERIES:
+            print(
+                "[DEBUG-MEAS-SERIES] measurement_tool.set_current_slice: "
+                f"key={key}, summary={self.get_debug_summary()}"
+            )
     
     def set_pixel_spacing(self, pixel_spacing: Optional[Tuple[float, float]]) -> None:
         """
@@ -180,12 +203,13 @@ class MeasurementTool:
         if self.config_manager:
             font_size = self.config_manager.get_measurement_font_size()
             font_color = self.config_manager.get_measurement_font_color()
+        font_family = self.config_manager.get_measurement_font_family() if self.config_manager else "IBM Plex Sans"
+        font_variant = self.config_manager.get_measurement_font_variant() if self.config_manager else "Bold"
         
         # Create temporary text item (not draggable during drawing)
         self.current_text_item = QGraphicsTextItem(distance_formatted)
         self.current_text_item.setDefaultTextColor(QColor(*font_color))
-        font = QFont("Arial", font_size)
-        font.setBold(True)
+        font = make_qfont(font_family, font_variant, font_size)
         self.current_text_item.setFont(font)
         self.current_text_item.setPos(mid_point)
         # Set flag to ignore parent transformations (keeps font size consistent)
@@ -247,6 +271,8 @@ class MeasurementTool:
         if self.config_manager:
             font_size = self.config_manager.get_measurement_font_size()
             font_color = self.config_manager.get_measurement_font_color()
+        font_family = self.config_manager.get_measurement_font_family() if self.config_manager else "IBM Plex Sans"
+        font_variant = self.config_manager.get_measurement_font_variant() if self.config_manager else "Bold"
         
         # Create a temporary measurement to get callback reference
         # We'll update the reference after creating the actual measurement
@@ -276,8 +302,7 @@ class MeasurementTool:
         
         draggable_text = DraggableMeasurementText(None, update_text_offset)  # Will set measurement after creation
         draggable_text.setDefaultTextColor(QColor(*font_color))
-        font = QFont("Arial", font_size)
-        font.setBold(True)
+        font = make_qfont(font_family, font_variant, font_size)
         draggable_text.setFont(font)
         draggable_text.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations, True)
         draggable_text.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
@@ -484,8 +509,25 @@ class MeasurementTool:
         Args:
             scene: QGraphicsScene to remove items from
         """
-        for measurement_list in self.measurements.values():
+        if DEBUG_MEASUREMENT_SERIES:
+            scene_items_before = sum(1 for item in scene.items() if isinstance(item, MeasurementItem))
+            print(
+                "[DEBUG-MEAS-SERIES] clear_measurements: "
+                f"scene_id={id(scene)}, scene_measurement_items_before={scene_items_before}, "
+                f"summary_before={self.get_debug_summary(scene)}"
+            )
+
+        for key, measurement_list in list(self.measurements.items()):
             for measurement in measurement_list:
+                if DEBUG_MEASUREMENT_SERIES:
+                    measurement_scene = measurement.scene()
+                    text_scene = measurement.text_item.scene() if measurement.text_item is not None else None
+                    print(
+                        "[DEBUG-MEAS-SERIES] clear_measurements item: "
+                        f"key={key}, measurement_scene_id={id(measurement_scene) if measurement_scene is not None else None}, "
+                        f"text_scene_id={id(text_scene) if text_scene is not None else None}, "
+                        f"target_scene_id={id(scene)}, match={measurement_scene == scene}"
+                    )
                 # Only remove if item actually belongs to this scene
                 if measurement.scene() == scene:
                     # Remove text item from scene (it's not a child of the group)
@@ -496,6 +538,12 @@ class MeasurementTool:
                     # Then remove the measurement item
                     scene.removeItem(measurement)
         self.measurements.clear()
+        if DEBUG_MEASUREMENT_SERIES:
+            scene_items_after = sum(1 for item in scene.items() if isinstance(item, MeasurementItem))
+            print(
+                "[DEBUG-MEAS-SERIES] clear_measurements complete: "
+                f"scene_measurement_items_after={scene_items_after}, summary_after={self.get_debug_summary(scene)}"
+            )
     
     def update_all_measurement_text_offsets(self) -> None:
         """
@@ -524,6 +572,8 @@ class MeasurementTool:
         pen_color = config_manager.get_measurement_line_color()
         font_size = config_manager.get_measurement_font_size()
         font_color = config_manager.get_measurement_font_color()
+        font_family = config_manager.get_measurement_font_family()
+        font_variant = config_manager.get_measurement_font_variant()
         
         # Create new pen with updated settings
         pen = QPen(QColor(*pen_color), pen_width)
@@ -546,7 +596,6 @@ class MeasurementTool:
                 # Update text item font and color
                 if measurement.text_item is not None:
                     measurement.text_item.setDefaultTextColor(QColor(*font_color))
-                    font = QFont("Arial", font_size)
-                    font.setBold(True)
+                    font = make_qfont(font_family, font_variant, font_size)
                     measurement.text_item.setFont(font)
 

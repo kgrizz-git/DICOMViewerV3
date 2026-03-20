@@ -23,6 +23,7 @@ from typing import List, Optional, Tuple, Dict, Callable
 from utils.config_manager import ConfigManager
 from utils.debug_log import debug_log, annotation_debug
 from utils.debug_flags import DEBUG_ANNOTATION
+from utils.bundled_fonts import make_qfont
 
 
 class TextAnnotationItem(QGraphicsTextItem):
@@ -52,14 +53,17 @@ class TextAnnotationItem(QGraphicsTextItem):
         # Get font settings from config
         font_size = 12  # Default
         font_color = (255, 255, 0)  # Default yellow
+        font_family = "IBM Plex Sans"  # Default
+        font_variant = "Bold"  # Default
         if self.config_manager:
             # Use text annotation specific settings
             font_size = self.config_manager.get_text_annotation_font_size()
             font_color = self.config_manager.get_text_annotation_color()
-        
+            font_family = self.config_manager.get_text_annotation_font_family()
+            font_variant = self.config_manager.get_text_annotation_font_variant()
+
         # Set font
-        font = QFont("Arial", font_size)
-        font.setBold(True)
+        font = make_qfont(font_family, font_variant, font_size)
         self.setFont(font)
         self.setDefaultTextColor(QColor(*font_color))
         
@@ -724,12 +728,13 @@ class TextAnnotationTool:
         # Get new settings from config (text annotation specific)
         font_size = config_manager.get_text_annotation_font_size()
         font_color = config_manager.get_text_annotation_color()
-        
+        font_family = config_manager.get_text_annotation_font_family()
+        font_variant = config_manager.get_text_annotation_font_variant()
+
         # Update all annotations
         for key, annotation_list in self.annotations.items():
             for annotation in annotation_list:
                 # Update text item font and color
                 annotation.setDefaultTextColor(QColor(*font_color))
-                font = QFont("Arial", font_size)
-                font.setBold(True)
+                font = make_qfont(font_family, font_variant, font_size)
                 annotation.setFont(font)

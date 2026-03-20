@@ -179,6 +179,10 @@ class DICOMViewerApp(QObject):
         self.app.setApplicationName("DICOM Viewer V3")
         self.app.setStyle(QStyleFactory.create("Fusion"))
 
+        # Register bundled TrueType fonts with Qt so they can be used by name
+        from utils.bundled_fonts import register_fonts_with_qt
+        register_fonts_with_qt()
+
         # DICOM data managers
         self.config_manager = ConfigManager()
         self.dicom_loader = DICOMLoader()
@@ -257,9 +261,13 @@ class DICOMViewerApp(QObject):
         # Shared overlay manager (each subwindow also has its own copy)
         font_size = self.config_manager.get_overlay_font_size()
         font_color = self.config_manager.get_overlay_font_color()
+        font_family = self.config_manager.get_overlay_font_family()
+        font_variant = self.config_manager.get_overlay_font_variant()
         self.overlay_manager = OverlayManager(
             font_size=font_size,
             font_color=font_color,
+            font_family=font_family,
+            font_variant=font_variant,
             config_manager=self.config_manager,
         )
         # Overlay always starts with everything visible; privacy mode is applied immediately.
@@ -434,9 +442,13 @@ class DICOMViewerApp(QObject):
         managers['crosshair_manager'].set_privacy_mode(self.privacy_view_enabled)
         font_size = self.config_manager.get_overlay_font_size()
         font_color = self.config_manager.get_overlay_font_color()
+        font_family = self.config_manager.get_overlay_font_family()
+        font_variant = self.config_manager.get_overlay_font_variant()
         managers['overlay_manager'] = OverlayManager(
             font_size=font_size,
             font_color=font_color,
+            font_family=font_family,
+            font_variant=font_variant,
             config_manager=self.config_manager
         )
         managers['overlay_manager'].set_privacy_mode(self.privacy_view_enabled)
@@ -2179,8 +2191,12 @@ class DICOMViewerApp(QObject):
         """Apply imported customization settings: overlay font, overlay refresh, annotations, theme, metadata columns."""
         font_size = self.config_manager.get_overlay_font_size()
         font_color = self.config_manager.get_overlay_font_color()
+        font_family = self.config_manager.get_overlay_font_family()
+        font_variant = self.config_manager.get_overlay_font_variant()
         self.overlay_manager.set_font_size(font_size)
         self.overlay_manager.set_font_color(*font_color)
+        self.overlay_manager.set_font_family(font_family)
+        self.overlay_manager.set_font_variant(font_variant)
         self.overlay_coordinator.handle_overlay_config_applied()
         self._on_annotation_options_applied()
         theme = self.config_manager.get_theme()
@@ -2255,13 +2271,30 @@ class DICOMViewerApp(QObject):
     
     def _on_settings_applied(self) -> None:
         """Handle settings being applied."""
-        # Update overlay manager with new settings
         font_size = self.config_manager.get_overlay_font_size()
         font_color = self.config_manager.get_overlay_font_color()
+        font_family = self.config_manager.get_overlay_font_family()
+        font_variant = self.config_manager.get_overlay_font_variant()
+
+        # Update the focused subwindow's overlay manager
         self.overlay_manager.set_font_size(font_size)
         self.overlay_manager.set_font_color(*font_color)
-        
-        # Recreate overlay
+        self.overlay_manager.set_font_family(font_family)
+        self.overlay_manager.set_font_variant(font_variant)
+
+        # Also propagate to all per-subwindow overlay managers so that
+        # switching subwindows reflects the new font immediately.
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        for idx, subwindow in enumerate(subwindows):
+            if subwindow and idx in self.subwindow_managers:
+                om = self.subwindow_managers[idx].get('overlay_manager')
+                if om:
+                    om.set_font_size(font_size)
+                    om.set_font_color(*font_color)
+                    om.set_font_family(font_family)
+                    om.set_font_variant(font_variant)
+
+        # Recreate overlay for the focused subwindow
         self.overlay_coordinator.handle_overlay_config_applied()
     
     def _on_window_changed(self, center: float, width: float) -> None:

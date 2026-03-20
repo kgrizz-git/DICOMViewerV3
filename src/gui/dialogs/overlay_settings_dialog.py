@@ -16,12 +16,13 @@ Requirements:
 
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                                 QPushButton, QSpinBox, QColorDialog, QGroupBox,
-                                QFormLayout, QDialogButtonBox)
+                                QFormLayout, QDialogButtonBox, QComboBox)
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from typing import Optional
 
 from utils.config_manager import ConfigManager
+from utils.bundled_fonts import get_font_families, get_font_variants
 
 
 class OverlaySettingsDialog(QDialog):
@@ -57,20 +58,40 @@ class OverlaySettingsDialog(QDialog):
         """
         super().__init__(parent)
 
+        from utils.debug_flags import DEBUG_FONT_VARIANT
+        from utils.debug_log import debug_log
+
         self.config_manager = config_manager
         self.setWindowTitle("Overlay Settings")
         self.setModal(True)
-        self.resize(400, 200)
+        self.resize(420, 260)
 
         # Store original values so we can revert on Cancel
         self._original_font_size = config_manager.get_overlay_font_size()
         self._original_font_color = config_manager.get_overlay_font_color()
+        self._original_font_family = config_manager.get_overlay_font_family()
+        self._original_font_variant = config_manager.get_overlay_font_variant()
+
+        if DEBUG_FONT_VARIANT:
+            debug_log(
+                "overlay_settings_dialog.py:__init__",
+                "Overlay settings dialog constructed",
+                {
+                    "original_font_size": self._original_font_size,
+                    "original_font_color": self._original_font_color,
+                    "original_font_family": self._original_font_family,
+                    "original_font_variant": self._original_font_variant,
+                },
+                hypothesis_id="FONTVAR",
+            )
 
         self._create_ui()
         self._load_settings()
 
-        # Live preview: update overlay as font size is adjusted
+        # Live preview: update overlay as font size, family, or variant is adjusted
         self.font_size_spinbox.valueChanged.connect(self._on_live_update)
+        self.font_family_combo.currentIndexChanged.connect(self._on_family_changed)
+        self.font_variant_combo.currentIndexChanged.connect(self._on_live_update)
 
     def _create_ui(self) -> None:
         """Create the UI components."""
@@ -86,6 +107,15 @@ class OverlaySettingsDialog(QDialog):
         self.font_size_spinbox.setValue(10)
         self.font_size_spinbox.setSuffix(" pt")
         overlay_layout.addRow("Font Size:", self.font_size_spinbox)
+
+        # Font Family
+        self.font_family_combo = QComboBox()
+        self.font_family_combo.addItems(get_font_families())
+        overlay_layout.addRow("Font:", self.font_family_combo)
+
+        # Font Variant
+        self.font_variant_combo = QComboBox()
+        overlay_layout.addRow("Variant:", self.font_variant_combo)
 
         # Font Color
         color_layout = QHBoxLayout()
@@ -124,9 +154,50 @@ class OverlaySettingsDialog(QDialog):
         self.font_size_spinbox.setValue(font_size)
         self.font_size_spinbox.blockSignals(False)
 
+        self.font_family_combo.blockSignals(True)
+        current_family = self.config_manager.get_overlay_font_family()
+        idx = self.font_family_combo.findText(current_family)
+        if idx >= 0:
+            self.font_family_combo.setCurrentIndex(idx)
+        self.font_family_combo.blockSignals(False)
+
+        self._populate_variant_combo(current_family, self.config_manager.get_overlay_font_variant())
+
         r, g, b = self.config_manager.get_overlay_font_color()
         self._update_color_display(r, g, b)
         self.current_color = (r, g, b)
+
+    def _populate_variant_combo(self, family: str, current_variant: str = "Bold") -> None:
+        """Repopulate the variant combo for *family*, preserving the selection when possible."""
+        from utils.debug_flags import DEBUG_FONT_VARIANT
+        from utils.debug_log import debug_log
+        self.font_variant_combo.blockSignals(True)
+        self.font_variant_combo.clear()
+        variants = get_font_variants(family)
+        self.font_variant_combo.addItems(variants)
+        idx = self.font_variant_combo.findText(current_variant)
+        self.font_variant_combo.setCurrentIndex(idx if idx >= 0 else 0)
+        self.font_variant_combo.blockSignals(False)
+        if DEBUG_FONT_VARIANT:
+            debug_log(
+                "overlay_settings_dialog.py:_populate_variant_combo",
+                "Populated overlay font variant combo",
+                {
+                    "family": family,
+                    "requested_variant": current_variant,
+                    "variants": variants,
+                    "selected_index": idx if idx >= 0 else 0,
+                    "selected_variant": self.font_variant_combo.currentText(),
+                },
+                hypothesis_id="FONTVAR",
+            )
+
+    def _on_family_changed(self) -> None:
+        """When the family changes, repopulate variants then trigger a live update."""
+        family = self.font_family_combo.currentText()
+        current_variant = self.font_variant_combo.currentText()
+        self._populate_variant_combo(family, current_variant)
+        self._on_live_update()
 
     def _update_color_display(self, r: int, g: int, b: int) -> None:
         """
@@ -156,9 +227,24 @@ class OverlaySettingsDialog(QDialog):
         """
         Save current values to config and emit settings_changed for live preview.
 
-        Called on every spinbox step and immediately after a colour is picked.
+        Called on every spinbox step, combo selection, and immediately after a colour is picked.
         """
+        from utils.debug_flags import DEBUG_FONT_VARIANT
+        from utils.debug_log import debug_log
+        if DEBUG_FONT_VARIANT:
+            debug_log(
+                "overlay_settings_dialog.py:_on_live_update",
+                "Overlay settings live update",
+                {
+                    "family_combo": self.font_family_combo.currentText(),
+                    "variant_combo": self.font_variant_combo.currentText(),
+                    "font_size": self.font_size_spinbox.value(),
+                },
+                hypothesis_id="FONTVAR",
+            )
         self.config_manager.set_overlay_font_size(self.font_size_spinbox.value())
+        self.config_manager.set_overlay_font_family(self.font_family_combo.currentText())
+        self.config_manager.set_overlay_font_variant(self.font_variant_combo.currentText())
         r, g, b = self.current_color
         self.config_manager.set_overlay_font_color(r, g, b)
         self.settings_changed.emit()
@@ -166,6 +252,8 @@ class OverlaySettingsDialog(QDialog):
     def _apply_settings(self) -> None:
         """Persist settings, emit settings_applied, and close the dialog."""
         self.config_manager.set_overlay_font_size(self.font_size_spinbox.value())
+        self.config_manager.set_overlay_font_family(self.font_family_combo.currentText())
+        self.config_manager.set_overlay_font_variant(self.font_variant_combo.currentText())
         r, g, b = self.current_color
         self.config_manager.set_overlay_font_color(r, g, b)
         self.settings_applied.emit()
@@ -174,6 +262,8 @@ class OverlaySettingsDialog(QDialog):
     def reject(self) -> None:
         """Restore original values on Cancel so the live preview is reverted."""
         self.config_manager.set_overlay_font_size(self._original_font_size)
+        self.config_manager.set_overlay_font_family(self._original_font_family)
+        self.config_manager.set_overlay_font_variant(self._original_font_variant)
         r, g, b = self._original_font_color
         self.config_manager.set_overlay_font_color(r, g, b)
         self.settings_changed.emit()

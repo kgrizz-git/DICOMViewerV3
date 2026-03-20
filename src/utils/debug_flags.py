@@ -46,6 +46,11 @@ DEBUG_MPR: bool = False
 # Affects: measurement_items.py (MeasurementHandle.itemChange).
 DEBUG_MEASUREMENT_DRAG: bool = False
 
+# Enables targeted tracing for measurement persistence across series changes.
+# Affects: measurement_coordinator.py, measurement_tool.py, slice_display_manager.py,
+# and file_series_loading_coordinator.py.
+DEBUG_MEASUREMENT_SERIES: bool = False
+
 # Enables intensity projection debugging (enabled/type/count changes, state management).
 # Affects: main.py (_on_projection_* methods).
 DEBUG_PROJECTION: bool = False
@@ -73,6 +78,10 @@ DEBUG_RESIZE: bool = False
 # Enables annotation-related tracing.
 # Affects: debug_log.py.
 DEBUG_ANNOTATION: bool = False
+
+# Enables font family/variant persistence tracing in config setters and dialogs.
+# Affects: overlay_config.py, overlay_settings_dialog.py.
+DEBUG_FONT_VARIANT: bool = True
 
 # Enables patient coordinate calculation tracing.
 # Affects: dicom_utils.py.
