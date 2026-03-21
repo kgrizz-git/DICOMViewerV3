@@ -23,17 +23,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from collections import defaultdict
 import pydicom
 from pydicom.dataset import Dataset
-from core.multiframe_handler import (
-    FrameType,
-    classify_frame_type,
-    create_frame_dataset,
-    get_frame_count,
-    get_frame_content_time,
-    get_frame_diffusion_b_value,
-    get_frame_nominal_cardiac_trigger_time_ms,
-    get_frame_trigger_time_ms,
-    is_multiframe,
-)
+from core.multiframe_handler import is_multiframe, get_frame_count, create_frame_dataset
 from utils.dicom_utils import get_composite_series_key
 
 
@@ -56,7 +46,6 @@ class MultiFrameSeriesInfo:
     """Per-series summary of multi-frame structure."""
     instance_count: int
     max_frame_count: int
-    frame_type: FrameType = FrameType.UNKNOWN
 
 
 class DICOMOrganizer:
@@ -400,12 +389,11 @@ class DICOMOrganizer:
     def _compute_series_multiframe_info(self, datasets: List[Dataset]) -> MultiFrameSeriesInfo:
         """Compute instance and frame counts for one organized series."""
         if not datasets:
-            return MultiFrameSeriesInfo(instance_count=0, max_frame_count=1, frame_type=FrameType.UNKNOWN)
+            return MultiFrameSeriesInfo(instance_count=0, max_frame_count=1)
 
         seen_original_ids: Set[int] = set()
         instance_count = 0
         max_frame_count = 1
-        frame_types: Set[FrameType] = set()
 
         for dataset in datasets:
             original_dataset = getattr(dataset, '_original_dataset', dataset)
@@ -415,17 +403,10 @@ class DICOMOrganizer:
             seen_original_ids.add(original_id)
             instance_count += 1
             max_frame_count = max(max_frame_count, get_frame_count(original_dataset))
-            frame_types.add(classify_frame_type(original_dataset))
-
-        if len(frame_types) == 1:
-            frame_type = next(iter(frame_types))
-        else:
-            frame_type = FrameType.UNKNOWN
 
         return MultiFrameSeriesInfo(
             instance_count=instance_count,
             max_frame_count=max_frame_count,
-            frame_type=frame_type,
         )
 
     def _update_series_multiframe_info(self, study_uid: str, series_key: str) -> None:
@@ -445,7 +426,7 @@ class DICOMOrganizer:
         study_uid: str,
         series_key: str,
         dataset: Optional[Dataset],
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Optional[Dict[str, int]]:
         """Return instance/frame display context for a frame wrapper within a series."""
         if dataset is None:
             return None
@@ -477,40 +458,12 @@ class DICOMOrganizer:
         if instance_index is None or total_frames <= 1:
             return None
 
-        series_info = self.get_series_multiframe_info(study_uid, series_key)
-        if series_info is None:
-            frame_type = FrameType.UNKNOWN
-        else:
-            frame_type = series_info.frame_type
-
-        context: Dict[str, Any] = {
+        return {
             'instance_index': instance_index,
             'total_instances': len(ordered_instances),
             'frame_index': int(dataset._frame_index) + 1,
             'total_frames': total_frames,
-            'frame_type': frame_type.value,
         }
-
-        if frame_type == FrameType.CARDIAC:
-            trigger_time_ms = get_frame_trigger_time_ms(original_dataset, int(dataset._frame_index))
-            if trigger_time_ms is not None:
-                context['trigger_time_ms'] = trigger_time_ms
-            nominal_trigger_time_ms = get_frame_nominal_cardiac_trigger_time_ms(
-                original_dataset,
-                int(dataset._frame_index),
-            )
-            if nominal_trigger_time_ms is not None:
-                context['nominal_cardiac_trigger_time_ms'] = nominal_trigger_time_ms
-        elif frame_type == FrameType.DIFFUSION:
-            diffusion_b_value = get_frame_diffusion_b_value(original_dataset, int(dataset._frame_index))
-            if diffusion_b_value is not None:
-                context['diffusion_b_value'] = diffusion_b_value
-
-        content_time = get_frame_content_time(original_dataset, int(dataset._frame_index))
-        if content_time is not None:
-            context['content_time'] = content_time
-
-        return context
 
     def _sort_slices(self, slice_list: List[Tuple[Dataset, Optional[str]]]) -> List[Tuple[Dataset, Optional[str]]]:
         """

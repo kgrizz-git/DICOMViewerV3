@@ -41,7 +41,7 @@ COMMON_TAGS = [
     "SeriesNumber", "SeriesDescription", "SeriesInstanceUID", "SeriesDate",
     # Acquisition timing
     "AcquisitionDate", "AcquisitionTime", "AcquisitionNumber", "ContentDate", "ContentTime",
-    "AcquisitionDuration", "TriggerTime", "NominalCardiacTriggerTime",
+    "AcquisitionDuration",
     # Equipment information
     "Modality", "Manufacturer", "ManufacturerModelName", "StationName", "DeviceSerialNumber",
     "ScanOptions", "PerformedStationName", "SoftwareVersions", "ProtocolName",
