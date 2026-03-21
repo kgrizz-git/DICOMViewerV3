@@ -13,7 +13,7 @@ This file tracks active and near-term tasks.
 
 ## Priority Legend
 
-- **P0** = critical correctness/release blocker
+- **P0** = critical
 - **P1** = important near-term
 - **P2** = useful improvement / lower urgency
 
@@ -37,7 +37,7 @@ This file tracks active and near-term tasks.
 ## Performance / Packaging
 
 - [ ] **[P1]** Try to make code faster (startup, file loading, fusion, and general responsiveness) ([details](FUTURE_WORK_DETAIL_NOTES.md#performance-initial-load-file-loading-fusion-and-general-responsiveness))
-    - [P2] Particularly w/ large dataset
+    - [P2] Particularly w/ large dataset (large files or many files) - would loading compressed initially save time? If we make a database, keep compressed cache?
 - [ ] **[P2]** See if executables can be made smaller (especially on macOS) ([details](FUTURE_WORK_DETAIL_NOTES.md#executable-size-especially-on-macos))
 - [ ] **[P1]** Check fusion responsiveness on Parallels with 3D fusion
 
@@ -58,11 +58,14 @@ This file tracks active and near-term tasks.
 - [ ] **[P1]** Add scale markers on left and bottom (small ticks every image mm, large every cm) ([plan](plans/VIEWER_UX_FEATURES_PLAN.md#3-scale-markers-ruler-ticks))
 - [ ] **[P1]** Add direction labels (A/P/L/R/S/I) on viewer window ([plan](plans/VIEWER_UX_FEATURES_PLAN.md#4-direction-labels-aplrsi))
 - [ ] **[P2]** Allow flipping and rotating image ([plan](plans/VIEWER_UX_FEATURES_PLAN.md#5-flip-and-rotate-image))
+- [ ] **[P1]** Slice / frame slider bars in subwindows - ideally only appears when you mouse over near some edge of the window (right?) ([plan](plans/VIEWER_UX_FEATURES_PLAN.md#6-subwindow-slice--frame-slider-bars))
 - [ ] **[P1]** Hovering on a study label in the navigator should show a popup tooltip with the study description, date, and patient name (but should respect privacy mode). Hovering on a thumbnail should show a tooltip with that same info, plus series description ([plan](plans/NAVIGATOR_AND_FILE_LOADING_FEEDBACK_PLAN.md#1-navigator-tooltips-privacy-aware))
 - [ ] **[P2]** The toast that pops up when already loaded files are skipped and not added during loading should appear in the center of the screen and have a slightly more opaque background ([plan](plans/NAVIGATOR_AND_FILE_LOADING_FEEDBACK_PLAN.md#2-duplicate-skip-toast-center--more-opaque))
-- [ ] **[P1]** Make the large-file warning (and any related file handling checks) trigger for >50 MB instead of 25 MB ([plan](plans/NAVIGATOR_AND_FILE_LOADING_FEEDBACK_PLAN.md#3-large-file-warning-threshold-50-mb))
+- [ ] **[P1]** Make the large-file warning (and any related file handling checks) trigger for >50 MB instead of 25 MB ([plan](plans/NAVIGATOR_AND_FILE_LOADING_FEEDBACK_PLAN.md#3-large-file-warning-threshold-50-mb)) - *NOTE: maybe hold off on this for now - 50 might be too high?*
 - [ ] **[P2]** Allow further subdivision of subwindows into up to 4 "tiles"?
 - [ ] **[P1]** Make a "View Fullscreen" menu item and shortcut - make app full-screen, hide left/right/bottom panes, toolbar
+- [ ] **[P2]** Give options for slice position lines on windows to show middle of slice or begin and end
+- [ ] **[P2]** When show instances separately is enabled, allow left/right keys to switch between instances
 
 
 ## Features (Near-Term)
@@ -71,11 +74,10 @@ This file tracks active and near-term tasks.
 - [ ] **[P2]** Add basic image processing for creating new DICOMs (kernels, smoothing, edge enhancement, sharpening, custom kernels) ([details](FUTURE_WORK_DETAIL_NOTES.md#basic-image-processing-and-creating-new-dicoms))
 - [ ] **[P2]** Integrate pylinac and other automated QC analysis tools ([details](FUTURE_WORK_DETAIL_NOTES.md#integrating-pylinac-and-other-automated-qc-tools))
 - [ ] **[P1]** Add ability to save MPRs as DICOM
-- [ ] **[P1]** Support key image features on MPRs (ROIs, slice combining, window/level ROI)
 - [ ] **[P1]** Enable export mpg/gif/avi for cine
 - [ ] **[P2]** Add measure angle as another measurement/annoation - user clicks, line extends, clicks again to drop a second point, another line extends from there, click a third time to create endpoint. angle between these two line segments is measured and reported on-screen. can use same settings (color, line thickness, etc) as the measurement tool
 - [ ] **[P2]** Interactive oblique rotation on MPR (drag handles/crosshairs) ([details](FUTURE_WORK_DETAIL_NOTES.md#interactive-oblique-rotation-on-mpr))
-- [ ] **[P2]** Measurements and ROI tools on MPR subwindows ([details](FUTURE_WORK_DETAIL_NOTES.md#measurements-and-roi-tools-on-mpr))
+- [ ] **[P2]** Add measurements and ROI tools on MPR subwindows, including window/level ROIs ([details](FUTURE_WORK_DETAIL_NOTES.md#measurements-and-roi-tools-on-mpr))
 - [ ] **[P1]** Combine slices on MPR (MIP/MinIP/AIP options) ([details](FUTURE_WORK_DETAIL_NOTES.md#combine-slices-on-mpr-mipminipaip))
 - [ ] **[P2]** Fusion overlays on MPR views ([details](FUTURE_WORK_DETAIL_NOTES.md#fusion-on-mpr))
 - [ ] **[P2]** Advanced ROI/contouring roadmap (contouring, auto-detect ROI, 3D ROI across views) ([details](FUTURE_WORK_DETAIL_NOTES.md#advanced-roi-and-contouring))

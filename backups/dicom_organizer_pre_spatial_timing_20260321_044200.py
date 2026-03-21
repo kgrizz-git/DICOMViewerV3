@@ -491,18 +491,17 @@ class DICOMOrganizer:
             'frame_type': frame_type.value,
         }
 
-        trigger_time_ms = get_frame_trigger_time_ms(original_dataset, int(dataset._frame_index))
-        if trigger_time_ms is not None:
-            context['trigger_time_ms'] = trigger_time_ms
-
-        nominal_trigger_time_ms = get_frame_nominal_cardiac_trigger_time_ms(
-            original_dataset,
-            int(dataset._frame_index),
-        )
-        if nominal_trigger_time_ms is not None:
-            context['nominal_cardiac_trigger_time_ms'] = nominal_trigger_time_ms
-
-        if frame_type == FrameType.DIFFUSION:
+        if frame_type == FrameType.CARDIAC:
+            trigger_time_ms = get_frame_trigger_time_ms(original_dataset, int(dataset._frame_index))
+            if trigger_time_ms is not None:
+                context['trigger_time_ms'] = trigger_time_ms
+            nominal_trigger_time_ms = get_frame_nominal_cardiac_trigger_time_ms(
+                original_dataset,
+                int(dataset._frame_index),
+            )
+            if nominal_trigger_time_ms is not None:
+                context['nominal_cardiac_trigger_time_ms'] = nominal_trigger_time_ms
+        elif frame_type == FrameType.DIFFUSION:
             diffusion_b_value = get_frame_diffusion_b_value(original_dataset, int(dataset._frame_index))
             if diffusion_b_value is not None:
                 context['diffusion_b_value'] = diffusion_b_value
