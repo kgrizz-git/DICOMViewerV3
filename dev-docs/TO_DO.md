@@ -50,14 +50,15 @@ This file tracks active and near-term tasks.
 - [ ] **[P1]** Add alternative window/level interaction (e.g., hold W + drag, or middle/right drag)
 - [ ] **[P1]** Set min/max window width/level using min/max pixel value (raw or rescaled)
 - [ ] **[P1]** Add overlay configuration to image right-click context menu
-- [ ] **[P1]** Differentiate frame # vs slice # in UI and backend ([details](FUTURE_WORK_DETAIL_NOTES.md#differentiating-frame--vs-slice))
+- [ ] **[P1]** Differentiate frame # vs slice # (maybe also consider instance #, acquisition number, anything else?) in UI and backend ([details](FUTURE_WORK_DETAIL_NOTES.md#differentiating-frame--vs-slice)) See CCL2 example datset for one example - seems to be grouping by file or instance number, and each of those have multiple frames - all have same series number. Maybe we should separate in the navigator by series AND by instance number? No, others like VC192 dataset have instance number corresponding to slice number. So maybe separate by series and instance if instances have multiple frames? Make it an option (via right-click context menu in navigator and View menu)?
 - [ ] **[P2]** Make right pane minimum width before collapsing 250 instead of 200
 - [ ] **[P2]** Consider more sophisticated smoothing (PIL/NumPy) vs Qt-only scaling
 
 ## Features (Near-Term)
 
-- [ ] **[P0]** Add simple launcher to root directory
-- [ ] **[P2]** Add option to choose font from included ones in resources/fonts
+- [ ] **[P1]** Be able to associate with DICOM extension and add to Open With menus
+- [ ] **[P2]** Add ability to edit a drawn ellipse or rectangle ROI
+- [ ] **[P2]** Make window/level settings remembered when switching series and then switching back
 - [ ] **[P2]** Add basic image processing for creating new DICOMs (kernels, smoothing, edge enhancement, sharpening, custom kernels) ([details](FUTURE_WORK_DETAIL_NOTES.md#basic-image-processing-and-creating-new-dicoms))
 - [ ] **[P2]** Integrate pylinac and other automated QC analysis tools ([details](FUTURE_WORK_DETAIL_NOTES.md#integrating-pylinac-and-other-automated-qc-tools))
 - [ ] **[P1]** Add ability to save MPRs as DICOM
