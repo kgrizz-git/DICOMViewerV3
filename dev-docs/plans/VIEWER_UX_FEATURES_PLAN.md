@@ -2,7 +2,7 @@
 
 **Created:** 2026-03-21  
 **Status:** Draft, reviewed 2026-03-21  
-**Covers:** Five UX/viewer features from TO_DO.md
+**Covers:** Six UX/viewer features from TO_DO.md
 
 ---
 
@@ -13,6 +13,7 @@
 3. [Scale Markers (Ruler Ticks)](#3-scale-markers-ruler-ticks)
 4. [Direction Labels (A/P/L/R/S/I)](#4-direction-labels-aplrsi)
 5. [Flip and Rotate Image](#5-flip-and-rotate-image)
+6. [Subwindow Slice / Frame Slider Bars](#6-subwindow-slice--frame-slider-bars)
 
 ---
 
@@ -612,6 +613,155 @@ Add flip/rotation commands to the undo stack alongside move/delete ROI commands,
 - MPR views: MPR already applies a fixed orientation; flip/rotate should still work but the direction labels need to be recomputed from the post-flip IOP vectors.
 - Fusion overlay: the fusion image is drawn in the same scene and will transform correctly.
 - Rotation of 90°/270° swaps the effective width and height; this may affect the initial fit-to-view zoom. Call `_fit_to_view()` after applying rotation.
+
+---
+
+## 6. Subwindow Slice / Frame Slider Bars
+
+**Priority:** P1  
+**TO_DO entry:** "Slice / frame slider bars in subwindows - ideally only appears when you mouse over near some edge of the window"
+
+### Goal
+
+Provide an in-view slider for slice or frame navigation inside each subwindow so users can scrub without moving to other controls. The slider should stay visually out of the way by default and only reveal itself when the pointer approaches the relevant viewer edge or while the slider is actively being used.
+
+### Current Architecture
+
+- `ImageViewer` in `src/gui/image_viewer.py` owns the per-subwindow `QGraphicsView` and already handles mouse enter/leave, zoom, pan, and context-menu interaction.
+- Slice and frame navigation state currently flows through the existing loading/navigation coordinators and the subwindow-scoped state managers rather than being owned directly by the viewer widget.
+- The codebase already uses viewport overlays for viewer-adjacent UI (`OverlayManager`, planned ruler/labels), which is a better fit here than scene items because the control should remain pinned to the subwindow edge.
+
+### Recommended Approach – Edge-Revealed Viewport Overlay Slider
+
+Add a lightweight overlay widget hosted inside each `ImageViewer` viewport. That widget contains a single `QSlider` and a compact label showing the current position, and it fades in only when:
+
+- the pointer enters a small activation zone near the chosen edge,
+- the user hovers the slider itself,
+- or the user is currently dragging the thumb.
+
+The overlay should hide again after a short idle delay once the pointer leaves both the activation zone and the slider.
+
+Use one slider control per viewer, but let its label and range adapt to the active content:
+
+- normal stack: `Slice X / N`
+- multi-frame instance: `Frame X / N`
+- future dual-axis cases: keep this first version single-axis and do not over-design for Tier 3 yet
+
+### Step-by-Step Plan
+
+#### Step 1 – Create `EdgeRevealSliderOverlay` (`src/gui/edge_reveal_slider_overlay.py`)
+
+Create a transparent child widget of the `ImageViewer` viewport containing:
+
+- a horizontal or vertical `QSlider` depending on chosen edge placement,
+- a small `QLabel` for `Slice 14 / 120` or `Frame 3 / 20`,
+- a `QTimer` used to delay auto-hide,
+- a simple opacity animation (`QGraphicsOpacityEffect` + `QPropertyAnimation`) so reveal/hide feels intentional rather than abrupt.
+
+Recommended initial placement: along the right edge as a vertical slider. That keeps it out of the way of bottom overlays and matches the user's note about appearing near an edge.
+
+Key methods:
+
+```python
+def set_range_and_value(self, minimum: int, maximum: int, value: int, label_text: str) -> None: ...
+def reveal(self) -> None: ...
+def schedule_hide(self) -> None: ...
+def set_interaction_enabled(self, enabled: bool) -> None: ...
+```
+
+The overlay widget itself should accept mouse input, but any transparent area around the slider should not block normal image interaction.
+
+#### Step 2 – Manage activation zones in `ImageViewer`
+
+In `src/gui/image_viewer.py`, add logic to detect when the pointer is close enough to the activation edge. A small threshold such as 20 to 28 px is enough.
+
+Add helpers such as:
+
+```python
+def _is_in_slider_activation_zone(self, pos: QPoint) -> bool: ...
+def _update_slider_overlay_visibility(self, pos: QPoint | None = None) -> None: ...
+```
+
+Wire them from:
+
+- `mouseMoveEvent`
+- `enterEvent`
+- `leaveEvent`
+- `resizeEvent`
+
+Important implementation note: do not reveal the slider on every hover anywhere in the viewer. Restricting reveal to the activation zone avoids constant UI flicker during normal pan/window-level work.
+
+#### Step 3 – Feed navigation state into the overlay
+
+Add a thin viewer-facing API so the existing navigation/display flow can update the overlay without moving navigation ownership into `ImageViewer`.
+
+Example shape:
+
+```python
+def set_navigation_slider_state(
+    self,
+    *,
+    visible: bool,
+    minimum: int,
+    maximum: int,
+    value: int,
+    mode_label: str,
+) -> None:
+    ...
+```
+
+Populate it from the same place that already knows the currently displayed slice/frame index and total count for each subwindow. For multi-frame content, reuse the display context already being assembled in `DICOMOrganizer.get_multiframe_display_context()` and adjacent UI plumbing instead of duplicating frame-detection logic inside the viewer.
+
+#### Step 4 – Route slider moves back into the existing navigation path
+
+Connect the overlay slider's `valueChanged` / `sliderMoved` signal to the existing per-subwindow navigation flow so dragging the overlay performs the same operation as other slice/frame navigation controls.
+
+The slider should be translated carefully between UI indexing and internal indexing:
+
+- user-facing text and slider values should be 1-based,
+- internal slice/frame indices may remain 0-based.
+
+Prefer `sliderMoved` for live scrubbing if current rendering performance is acceptable. If large stacks make that too expensive, fall back to updating on `sliderReleased` and keep the thumb live only.
+
+#### Step 5 – Keep the overlay in sync with wheel/keyboard navigation
+
+Whenever the current slice/frame changes through mouse wheel, keyboard, cine, navigator thumbnail click, or programmatic series assignment, update the overlay value and label.
+
+This must be one-way state sync from the authoritative navigation state into the overlay so the thumb never lags behind the actual image being shown.
+
+#### Step 6 – Hide for unsupported or low-value cases
+
+Do not show the control when:
+
+- there is no image loaded,
+- the series has only one slice/frame,
+- an operation is active that would materially conflict with the edge interaction,
+- or the viewer is too small for the slider to be usable.
+
+For a very small subwindow, prefer hiding the label first and only showing the slider track/thumb.
+
+#### Step 7 – Add a View toggle and config persistence
+
+Add a checkable action such as **Show In-View Slice/Frame Slider** under the View menu and persist it in config. Default can reasonably be `True` once the reveal behavior is quiet enough.
+
+Config additions belong with other display/view preferences in `src/utils/config/display_config.py` or the closest existing mixin that owns viewer display options.
+
+#### Step 8 – Validate against existing interactions
+
+Before considering implementation complete, manually verify:
+
+- wheel slice scrolling still works,
+- drag-to-pan and drag-to-window/level do not accidentally trigger the slider,
+- context menu near the right edge is still reachable,
+- cine playback keeps the slider in sync,
+- multi-frame datasets label the control as frame navigation when appropriate.
+
+### Edge Cases / Risks
+
+- Right-edge placement can compete with existing scrollbars if the viewer still exposes Qt scrollbars in some states. Prefer hiding native scrollbars or ensuring the overlay sits inside the image area, not on top of Qt chrome.
+- Hover-based reveal can feel noisy if the activation band is too wide or the hide delay is too short. Tune behavior before exposing a config knob.
+- Live scrubbing through large series may create too many redraws. If that shows up, debounce or update only on release for the first version.
+- Privacy mode should not affect the slider itself, but any text label should remain generic (`Slice`, `Frame`) and not surface protected metadata.
 
 ---
 

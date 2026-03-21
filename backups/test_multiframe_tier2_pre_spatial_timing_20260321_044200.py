@@ -108,27 +108,6 @@ class TestDICOMOrganizerTier2(unittest.TestCase):
         self.assertEqual(context["frame_index"], 2)
         self.assertEqual(context["trigger_time_ms"], 240.0)
 
-    def test_spatial_frame_type_still_carries_trigger_time_when_present(self):
-        dataset = make_multiframe_dataset()
-        dataset.ImagePositionPatient = [0.0, 0.0, 0.0]
-        dataset.TriggerTime = 180
-
-        organizer = DICOMOrganizer()
-        organizer.organize([dataset])
-
-        frame_dataset = create_frame_dataset(dataset, 0)
-        self.assertIsNotNone(frame_dataset)
-
-        context = organizer.get_multiframe_display_context(
-            dataset.StudyInstanceUID,
-            "5.6.7.8_1",
-            frame_dataset,
-        )
-
-        self.assertIsNotNone(context)
-        self.assertEqual(context["frame_type"], FrameType.CARDIAC.value)
-        self.assertEqual(context["trigger_time_ms"], 180.0)
-
 
 if __name__ == "__main__":
     unittest.main()
