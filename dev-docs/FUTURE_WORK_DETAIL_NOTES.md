@@ -62,17 +62,104 @@ This file contains implementation notes, technical considerations, tradeoffs, an
 - **Other notes**
   - Once root cause is identified, it may be worth adding a regression test (e.g. simulated scroll steps) that asserts pan offsets remain within tolerance across many slice changes.
 
-## Differentiating Frame # vs. Slice #
+## Differentiating Frame # vs. Slice # vs. Instance #
 
-- **Suggestions / best approaches**
-  - Clearly separate concepts in the data model: “slice index” for spatial position vs. “frame index” for temporal, phase, or other non-spatial dimension (e.g. dynamic PET, cardiac phases).
-  - Reflect this distinction in the UI labels and tooltips (e.g. “Slice 12 / 40 (axial)” vs. “Frame 3 / 10 (time)”).
-  - When both dimensions exist, consider a small combined indicator (e.g. `Slice 12/40 | Frame 3/10`) and keyboard/mouse bindings that make it obvious whether the user is changing slice or frame.
-- **Concerns / difficulties**
-  - Some DICOM series encode frame-related information in non-obvious ways (e.g. enhanced multi-frame) which may require additional parsing logic.
-  - Existing code paths may implicitly assume a single index; refactoring to a multi-dimensional index could be invasive and must be done carefully.
-- **Other notes**
-  - Documentation and training materials should point out the distinction so that users understand how navigation behaves for dynamic or multi-phase studies.
+### Background and the Core Problem
+
+DICOM has a strict four-level hierarchy: **Patient → Study → Series → Instance** (each instance = one file, identified by `SOPInstanceUID`). A "multi-frame" instance stores multiple image frames inside one file (`NumberOfFrames`, tag 0028,0008). The two cases that expose the current viewer's limitation are:
+
+- **CCL2 dataset**: All files share the same `SeriesInstanceUID` (one series), but each file is a distinct instance (`InstanceNumber` varies) with `NumberOfFrames > 1`. Each instance is a separate temporal or functional acquisition. The viewer currently lumps them all into one stack, which is misleading.
+- **VC192 CT dataset**: All slices share the same `SeriesInstanceUID`. Each file has `NumberOfFrames = 1` and a unique `InstanceNumber` that simply sequences the axial slices. Here, "separate by instance" would produce one thumbnail per slice — clearly undesirable.
+
+The root distinction: in VC192, `InstanceNumber` is a **slice index** (spatial position); in CCL2, `InstanceNumber` separates **functionally independent acquisitions** that each happen to be multi-frame.
+
+### How Other Viewers Handle This
+
+Reviewed viewers: **Weasis**, **OHIF/Cornerstone3D**, and **Horos/OsiriX**.
+
+**Weasis** (open-source Java viewer):
+- Groups by `SeriesInstanceUID` as the primary unit.
+- Within a series, offers user-selectable sort keys: `InstanceNumber`, `SlicePosition` (computed from `ImagePositionPatient`), `SliceLocation`, `AcquisitionTime`, `ContentTime`, `DiffusionBValue`. Users can cycle through them.
+- Multi-frame instances have their frames exposed as individual images during navigation, but the instance-level boundary is not surfaced visually in the thumbnail strip by default.
+
+**OHIF / Cornerstone3D** (web viewer, widely used in radiology research):
+- Groups at the `SeriesInstanceUID` level by default.
+- Uses "metadata normalization" to detect whether a series contains enhanced multi-frame DICOM (PS3.3 enhanced IODs: Enhanced MR, Enhanced CT, Enhanced PET). For those, per-frame metadata in `PerFrameFunctionalGroupsSequence` (5200,9230) drives correct slice positions, temporal positions, etc.
+- For legacy multi-frame formats (NM, US, secondary captures) where frame semantics are opaque, exposes frames sequentially within the series.
+- Does **not** automatically split a series into per-instance sub-groups in the thumbnail panel; grouping is by `SeriesInstanceUID` only.
+
+**Horos / OsiriX**:
+- Groups by `SeriesInstanceUID`; does not split by instance number by default.
+- Provides "Merge" and "Split" options at the series level in the database (right-click) for manual combining or separating of instances.
+
+**Key takeaway**: No mainstream viewer automatically splits one series into per-instance sub-groups in the thumbnail strip without an explicit user action. The standard expectation is that `SeriesInstanceUID` defines one "row" in the navigator. However, good viewers **detect multi-frame instances** and use `NumberOfFrames` plus semantic tags to drive frame-vs-slice navigation distinctions.
+
+### Recommended Approach
+
+#### Tier 1 — Short-term heuristic fix (highest value, lowest risk)
+
+1. **Detect multi-frame instances at load time.** Record `NumberOfFrames` for each loaded file. If `NumberOfFrames > 1`, tag the instance as multi-frame.
+2. **Simple series-level detection rule:**
+   - If **all** files in a series have `NumberOfFrames <= 1` → treat as a normal slice stack (current behavior, correct for VC192 CT).
+   - If **any** file in a series has `NumberOfFrames > 1` → the series contains multi-frame instances and should be handled specially.
+3. **Navigator presentation for multi-frame series:**
+   - Show a small indicator on the series thumbnail (e.g. a stacked-layers icon, or label "5 inst × 12 fr") so the user understands the structure.
+   - Provide a **"Show Instances Separately"** toggle in the navigator right-click context menu and/or the View menu. When on, the series expands into one sub-thumbnail per instance, labeled with `InstanceNumber` (or "Instance 1", "Instance 2", …).
+   - Default state: collapsed (single thumbnail), matching current behavior for typical studies. Consider auto-enabling for series where every instance has `NumberOfFrames > 1` (the CCL2 case) as a quality-of-life improvement.
+4. **Persist the expanded/collapsed preference** in config, global or per-series-type.
+5. **Overlay label**: When viewing a multi-frame instance, show `Inst 2/5 · Frame 4/12` in the overlay (replacing or supplementing the current "Slice N/M" label).
+
+#### Tier 2 — Medium-term semantic detection
+
+Use additional DICOM tags to distinguish *what* the frames represent, and surface this in the UI:
+
+| Detected pattern | Tags used | UI label |
+|---|---|---|
+| Temporal/dynamic frames | `TemporalPositionIdentifier` (0020,0100), `FrameTime` (0018,1063), `ActualFrameDuration` (0018,1242) | "Frame N/M (time)" |
+| Cardiac phases | `TriggerTime` (0018,1060), `CardiacNumberOfImages` (0018,1090) | "Phase N/M" |
+| Diffusion b-value | `DiffusionBValue` (0018,9087) | "b=X" per frame |
+| Spatial slices within instance | `ImagePositionPatient` (0020,0032) differs across frames | "Slice N/M" |
+| Opaque / unknown | None of the above | "Frame N/M" |
+
+This enables specific overlay labels such as `Slice 12/40 · Frame 3/10 (time)` for 4D datasets.
+
+#### Tier 3 — Longer-term: enhanced multi-frame IOD support
+
+For fully correct handling of Enhanced MR, Enhanced CT, Enhanced PET, NM Image:
+- Parse `SharedFunctionalGroupsSequence` (5200,9229) and `PerFrameFunctionalGroupsSequence` (5200,9230) to extract per-frame spatial and temporal metadata.
+- Reconstruct a 2D dimensional index (slice × time, or slice × b-value) and navigate these independently: scroll → slice axis; Alt+scroll (or dedicated control) → secondary axis.
+- This is a significant engineering effort; a dedicated plan document should precede implementation.
+
+### The Instance-vs-Slice Disambiguation Heuristic (CCL2 vs VC192)
+
+The cleanest criterion: **`NumberOfFrames > 1` per instance signals that the instance is self-contained** and warrants its own thumbnail.
+
+Edge cases:
+- Ultrasound cine loops: single multi-frame instance with hundreds of frames; should appear distinct from CT slice stacks.
+- Old secondary-capture multi-frame (SC IOD) may have many frames but no spatial metadata; treat as "unknown" frame type.
+- If `NumberOfFrames` is absent or null, treat as 1.
+- If the series has exactly one instance and `NumberOfFrames > 1`, skip the "expand" UI (nothing to expand); just label the frame count.
+
+### UI Option — View Menu / Navigator Context Menu
+
+Suggested menu item wording: **"Show Instances Separately"** (or "Expand Multi-Frame Instances")
+- Placement: View menu (global toggle) + right-click context menu on any series thumbnail (per-series override).
+- Default: Off for series where all files have `NumberOfFrames <= 1`; configurable for multi-frame series.
+- Greyed out when not applicable (series has only one instance, or all instances are single-frame).
+
+### Concerns / Difficulties
+
+- The same `SeriesInstanceUID` sometimes groups heterogeneous data from non-conformant equipment; any heuristic may misfire.
+- Expanding instances in the navigator requires the thumbnail strip and series organizer to support more than one level of hierarchy — potentially involves layout and data-model changes.
+- Frame semantics vary wildly by modality; a universal solution is complex. Start with the `NumberOfFrames > 1` heuristic and iterate.
+- The scroll/navigation model for two independent axes (slice × frame) is a significant UX challenge; keyboard/mouse bindings need careful design to avoid overwhelming users.
+- Existing code paths may implicitly assume a single index; refactoring to a multi-dimensional index could be invasive.
+
+### Other Notes
+
+- See the CCL2 and VC192 sample datasets for concrete test cases.
+- The DICOM standard's PS3.3 Annex A (enhanced IODs) and PS3.3 Annex C (functional groups) define the authoritative approach for per-frame metadata.
+- Weasis's `SortSeriesStack.java` (open-source, GitHub) is a useful reference for sort key options within a series (`InstanceNumber`, `SlicePosition`, `SliceLocation`, `AcquisitionTime`, `ContentTime`, `DiffusionBValue`).
 
 ## ROI Selection Behavior Across Subwindows
 
@@ -214,6 +301,305 @@ This file contains implementation notes, technical considerations, tradeoffs, an
   - Define target audience first (end users, technical admins, developers), then structure sections accordingly.
   - Include reproducible workflows for common tasks and troubleshooting paths.
   - Keep architecture notes high level and link to code-level docs where needed.
+
+## File Association and "Open With" Integration
+
+This covers registering the app so that `.dcm` (and extension-less DICOM) files open in DICOM Viewer V3 by default or appear in OS "Open With" menus.
+
+### Context
+
+DICOM files are commonly `.dcm`, but can also have no extension at all (many PACS exports). The viewer already accepts files via drag-and-drop, but users need OS-level integration to right-click → Open With, or double-click to open directly.
+
+The cleanest implementation is for **packaged executables** — the OS just needs one registry entry (Windows) or `Info.plist` key (macOS) pointing at the `.exe`/`.app`, and it works for any user who installs it. Source/dev installs are messier because the path to `pythonw.exe` is machine-specific.
+
+---
+
+### Windows — Packaged `.exe` (primary target)
+
+The simplest approach for a packaged release is registry entries written by a small bundled helper or the installer itself. No admin rights are needed if keys go under `HKCU`.
+
+**Registry keys required**
+
+```
+HKCU\Software\Classes\.dcm
+  (Default) = "DICOMViewerV3.dcm"
+
+HKCU\Software\Classes\DICOMViewerV3.dcm
+  (Default) = "DICOM Image"
+
+HKCU\Software\Classes\DICOMViewerV3.dcm\DefaultIcon
+  (Default) = "C:\path\to\DICOMViewerV3.exe,0"
+
+HKCU\Software\Classes\DICOMViewerV3.dcm\shell\open\command
+  (Default) = "\"C:\path\to\DICOMViewerV3.exe\" \"%1\""
+
+HKCU\Software\RegisteredApplications
+  DICOMViewerV3 = "Software\Clients\Media\DICOMViewerV3\Capabilities"
+```
+
+The `%1` is where Windows substitutes the path of the file the user opened.
+
+**How to apply the registration**
+
+Option 1 — ship a `register.bat` alongside the `.exe` that writes these keys using `reg add`:
+```batch
+reg add "HKCU\Software\Classes\.dcm" /ve /d "DICOMViewerV3.dcm" /f
+reg add "HKCU\Software\Classes\DICOMViewerV3.dcm\shell\open\command" /ve /d "\"<exepath>\" \"%%1\"" /f
+ie4uinit.exe -show
+```
+(Replace `<exepath>` with the actual path at packaging time.)
+
+Option 2 — if using an installer (Inno Setup or NSIS), handle it in the installer script:
+- Inno Setup: use the `[Registry]` section (built-in, clean uninstall support).
+- NSIS: use `WriteRegStr` in the install section and `DeleteRegKey` in uninstall.
+
+Option 3 — include a small `register_assoc.exe` or call `winreg` from a bundled Python script that detects its own path via `sys.executable`.
+
+**Notifying the shell** after writing: run `ie4uinit.exe -show` (works on Windows 10/11) or call `SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, NULL, NULL)` via `ctypes` — otherwise Explorer may not pick up the change until reboot.
+
+**SmartScreen** will warn users the first time they run an unsigned `.exe`. Code-signing the executable (via a certificate from DigiCert, Sectigo, etc.) eliminates this. Without signing, users click "More info → Run anyway."
+
+**Unregistering**: delete the same keys. If using Inno Setup/NSIS, this happens automatically on uninstall.
+
+---
+
+### Windows — Source/dev install
+
+Works the same way but the command value points to `pythonw.exe` in the venv instead of a standalone `.exe`:
+
+```
+"C:\...\venv\Scripts\pythonw.exe" "C:\...\run.py" "%1"
+```
+
+Use `pythonw.exe` (not `python.exe`) to suppress the console window. The path is machine-specific, so the registration must be generated dynamically — `scripts/register_windows.py` using Python's `winreg` module can detect `sys.executable` and write the correct path at runtime. A corresponding `scripts/unregister_windows.py` removes them.
+
+The `.bat` launcher could add a menu option ("Register .dcm file association") that calls this script.
+
+---
+
+### macOS — Packaged `.app` (primary target)
+
+macOS file association is declared in `Info.plist` inside the `.app` bundle. PyInstaller generates `Info.plist` from the `.spec` file.
+
+**`Info.plist` additions**
+
+```xml
+<key>CFBundleDocumentTypes</key>
+<array>
+  <dict>
+    <key>CFBundleTypeName</key>
+    <string>DICOM Image</string>
+    <key>CFBundleTypeRole</key>
+    <string>Viewer</string>
+    <key>LSHandlerRank</key>
+    <string>Alternate</string>   <!-- use Owner to claim default -->
+    <key>CFBundleTypeExtensions</key>
+    <array>
+      <string>dcm</string>
+    </array>
+    <key>LSItemContentTypes</key>
+    <array>
+      <string>org.nema.dicom</string>
+    </array>
+    <key>CFBundleTypeIconFile</key>
+    <string>AppIcon</string>
+  </dict>
+</array>
+```
+
+**Wiring this into PyInstaller** — in `DICOMViewerV3.spec`, pass an `info_plist` dict to the `BUNDLE()` call:
+
+```python
+app = BUNDLE(
+    exe,
+    name='DICOMViewerV3.app',
+    icon='resources/icon.icns',
+    bundle_identifier='com.yourname.dicomviewerv3',
+    info_plist={
+        'CFBundleDocumentTypes': [
+            {
+                'CFBundleTypeName': 'DICOM Image',
+                'CFBundleTypeRole': 'Viewer',
+                'LSHandlerRank': 'Alternate',
+                'CFBundleTypeExtensions': ['dcm'],
+                'LSItemContentTypes': ['org.nema.dicom'],
+            }
+        ],
+        'NSHighResolutionCapable': True,
+    },
+)
+```
+
+**Registering with Launch Services** after placing the `.app`: macOS normally registers it automatically when the `.app` is in `/Applications` or opened for the first time. If not, run:
+```bash
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f /Applications/DICOMViewerV3.app
+```
+
+**`LSHandlerRank`**: `Alternate` = appears in Open With menu but doesn't steal the default from other apps (e.g. OsiriX). Use `Owner` to become the default for `.dcm`.
+
+**App needs to handle the file via `sys.argv[1]` or `QApplication::arguments()`** — see Application-Level Handling below. On macOS, the OS may also send an `NSOpenFiles` / `QFileOpenEvent` instead of (or in addition to) a command-line argument when a file is opened via Finder; Qt forwards these as `QFileOpenEvent` on the `QApplication`. The safest approach is to handle both `sys.argv[1]` and `QFileOpenEvent`.
+
+---
+
+### macOS — Source/dev install
+
+No clean "Open With" registration exists without a `.app` bundle. Options:
+- Generate a minimal wrapper `.app` from `launch.command` (shell script + `Info.plist`).
+- Use `duti` CLI: `duti -s com.yourname.dicomviewerv3 .dcm all` (requires the bundle to already be registered).
+
+---
+
+### Application-Level Handling (both platforms)
+
+The app needs to respond to a file path provided at launch. Two mechanisms:
+
+**1. `sys.argv[1]` (Windows and macOS CLI)**
+```python
+# In main.py, after the window is shown:
+if len(sys.argv) > 1:
+    path = sys.argv[1]
+    # call the same load pipeline used by drag-and-drop
+```
+
+**2. `QFileOpenEvent` (macOS Finder / dock)**
+```python
+class App(QApplication):
+    def event(self, e):
+        if isinstance(e, QFileOpenEvent):
+            path = e.file()
+            # call load pipeline
+            return True
+        return super().event(e)
+```
+
+The drag-and-drop loading pipeline can be reused for both; the difference is just how the path arrives.
+
+---
+
+### What Needs to Change in `DICOMViewerV3.spec`
+
+**macOS** — one dict added to the existing `info_plist` in `BUNDLE()`:
+
+```python
+app = BUNDLE(
+    coll,
+    name='DICOMViewerV3.app',
+    icon='resources/icons/dvv6ldvv6ldvv6ld_edit-removebg-preview.icns',
+    bundle_identifier='com.dicomviewer.v3',
+    info_plist={
+        'NSPrincipalClass': 'NSApplication',
+        'NSHighResolutionCapable': 'True',
+        'CFBundleShortVersionString': _app_version,
+        'CFBundleVersion': _app_version,
+        'CFBundleIconFile': 'dvv6ldvv6ldvv6ld_edit-removebg-preview',
+        # --- ADD THIS ---
+        'CFBundleDocumentTypes': [
+            {
+                'CFBundleTypeName': 'DICOM Image',
+                'CFBundleTypeRole': 'Viewer',
+                'LSHandlerRank': 'Alternate',      # 'Owner' to claim default
+                'CFBundleTypeExtensions': ['dcm'],
+                'LSItemContentTypes': ['org.nema.dicom'],
+            }
+        ],
+    },
+)
+```
+
+`LSHandlerRank: Alternate` means the app appears in "Open With" but does not steal the `.dcm` default from other installed DICOM viewers. No user prompt is needed for this — it is passive registration. The user still has to explicitly choose "Open With → DICOM Viewer V3" or right-click → "Get Info → Open with → Change All" to make it the default.
+
+**Windows** — PyInstaller does **not** write Windows registry entries. The `.spec` file and `EXE()`/`COLLECT()` blocks have no mechanism for file association. The spec itself needs no changes. Association must be done separately — see options below.
+
+---
+
+### Windows: Asking the User and Applying the Association
+
+**This does not exist yet — it needs to be implemented.**
+
+Since there's no installer, the best approach is a **first-run prompt inside the app itself**. On startup, the app would check whether the association exists; if not, it shows a `QMessageBox` once:
+
+```python
+# In main.py, after the main window is shown (Windows only):
+import sys, winreg
+if sys.platform == 'win32':
+    _offer_file_association()
+
+def _offer_file_association():
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                            r'Software\Classes\DICOMViewerV3.dcm'):
+            return  # already registered
+    except FileNotFoundError:
+        pass
+    from PySide6.QtWidgets import QMessageBox
+    reply = QMessageBox.question(
+        None,
+        "Associate .dcm files?",
+        "Would you like to open DICOM (.dcm) files with DICOM Viewer V3 by default?\n\n"
+        "This registers the app for .dcm files on your account only (no admin required).",
+        QMessageBox.Yes | QMessageBox.No,
+        QMessageBox.Yes,
+    )
+    if reply == QMessageBox.Yes:
+        _register_dcm_association()
+
+def _register_dcm_association():
+    import ctypes, winreg
+    exe = sys.executable  # path to DICOMViewerV3.exe
+    icon = f"{exe},0"
+    cmd  = f'"{exe}" "%1"'
+    pairs = [
+        (r'Software\Classes\.dcm',                              '', 'DICOMViewerV3.dcm'),
+        (r'Software\Classes\DICOMViewerV3.dcm',                 '', 'DICOM Image'),
+        (r'Software\Classes\DICOMViewerV3.dcm\DefaultIcon',     '', icon),
+        (r'Software\Classes\DICOMViewerV3.dcm\shell\open\command', '', cmd),
+    ]
+    for key, name, value in pairs:
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key) as k:
+            winreg.SetValueEx(k, name, 0, winreg.REG_SZ, value)
+    # Notify Explorer
+    SHCNE_ASSOCCHANGED = 0x08000000
+    SHCNF_IDLIST = 0x0000
+    ctypes.windll.shell32.SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, None, None)
+```
+
+The prompt only appears once per install (because on subsequent launches the key already exists). The same `_register_dcm_association` function can also be called from a "Register file association" option in the Help or Settings menu.
+
+To unregister, delete the keys:
+```python
+def _unregister_dcm_association():
+    import winreg
+    for key in [
+        r'Software\Classes\DICOMViewerV3.dcm\shell\open\command',
+        r'Software\Classes\DICOMViewerV3.dcm\shell\open',
+        r'Software\Classes\DICOMViewerV3.dcm\shell',
+        r'Software\Classes\DICOMViewerV3.dcm\DefaultIcon',
+        r'Software\Classes\DICOMViewerV3.dcm',
+        r'Software\Classes\.dcm',  # only delete if we own it
+    ]:
+        try:
+            winreg.DeleteKey(winreg.HKEY_CURRENT_USER, key)
+        except FileNotFoundError:
+            pass
+```
+
+> **Caution**: deleting `HKCU\Software\Classes\.dcm` will remove the association even if the user had originally set a different app. Consider checking the value first and only deleting if it equals `DICOMViewerV3.dcm`.
+
+---
+
+### Summary
+
+| | Windows `.exe` | macOS `.app` |
+|---|---|---|
+| **Mechanism** | Registry keys under `HKCU\Software\Classes` | `CFBundleDocumentTypes` in `Info.plist` |
+| **Spec change needed?** | None — done at runtime | Yes — add `CFBundleDocumentTypes` to `info_plist` in `BUNDLE()` |
+| **User prompt needed?** | Yes — first-run `QMessageBox` in the app | No — passive; user must explicitly pick "Open With" |
+| **Admin rights needed?** | No (HKCU) | No |
+| **App code change needed?** | Yes — first-run prompt + `winreg` logic + `sys.argv[1]` | Yes — `sys.argv[1]` + `QFileOpenEvent` |
+| **Icon needed?** | Yes — `.ico` (already exists in resources) | Yes — `.icns` (already exists in resources) |
+| **Undo/unregister** | Delete registry keys (offer in Settings/Help menu) | Trash the `.app`; Launch Services cleans up |
+
+The app-level `sys.argv` / `QFileOpenEvent` handling is the same regardless of packaging method and should be implemented first.
 
 ## Product Naming Exploration
 
