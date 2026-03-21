@@ -218,4 +218,7 @@ settings.json
 # data/*.dcm
 # data/**/*.dcm
 
+# Sample DICOM files used for local testing (not tracked in version control)
+git-ignore-sample-DICOM/
+
 .DS_Store
