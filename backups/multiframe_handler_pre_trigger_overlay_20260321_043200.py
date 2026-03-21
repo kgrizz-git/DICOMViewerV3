@@ -85,11 +85,7 @@ def classify_frame_type(original_dataset: Dataset) -> FrameType:
         return FrameType.TEMPORAL
     if _has_keyword_value(original_dataset, "FrameTime") or _has_keyword_value(original_dataset, "ActualFrameDuration"):
         return FrameType.TEMPORAL
-    if (
-        _has_keyword_value(original_dataset, "TriggerTime")
-        or _has_keyword_value(original_dataset, "NominalCardiacTriggerTime")
-        or _has_keyword_value(original_dataset, "CardiacNumberOfImages")
-    ):
+    if _has_keyword_value(original_dataset, "TriggerTime") or _has_keyword_value(original_dataset, "CardiacNumberOfImages"):
         return FrameType.CARDIAC
     if _has_keyword_value(original_dataset, "DiffusionBValue"):
         return FrameType.DIFFUSION
@@ -123,34 +119,6 @@ def get_frame_trigger_time_ms(dataset: Dataset, frame_index: int) -> Optional[fl
         if numeric_value is not None:
             return numeric_value
     return _coerce_numeric_value(_find_keyword_value(dataset, "TriggerTime"))
-
-
-def get_frame_nominal_cardiac_trigger_time_ms(dataset: Dataset, frame_index: int) -> Optional[float]:
-    """Return NominalCardiacTriggerTime in milliseconds for a specific frame, if available."""
-    if dataset is None:
-        return None
-    per_frame = getattr(dataset, "PerFrameFunctionalGroupsSequence", None)
-    if per_frame and 0 <= frame_index < len(per_frame):
-        value = _find_keyword_value(per_frame[frame_index], "NominalCardiacTriggerTime")
-        numeric_value = _coerce_numeric_value(value)
-        if numeric_value is not None:
-            return numeric_value
-    return _coerce_numeric_value(_find_keyword_value(dataset, "NominalCardiacTriggerTime"))
-
-
-def get_frame_content_time(dataset: Dataset, frame_index: int) -> Optional[str]:
-    """Return ContentTime for a specific frame, if available."""
-    if dataset is None:
-        return None
-    per_frame = getattr(dataset, "PerFrameFunctionalGroupsSequence", None)
-    if per_frame and 0 <= frame_index < len(per_frame):
-        value = _find_keyword_value(per_frame[frame_index], "ContentTime")
-        if value not in (None, ""):
-            return str(value)
-    value = _find_keyword_value(dataset, "ContentTime")
-    if value in (None, ""):
-        return None
-    return str(value)
 
 
 def get_frame_diffusion_b_value(dataset: Dataset, frame_index: int) -> Optional[float]:

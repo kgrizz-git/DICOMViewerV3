@@ -28,9 +28,7 @@ from core.multiframe_handler import (
     classify_frame_type,
     create_frame_dataset,
     get_frame_count,
-    get_frame_content_time,
     get_frame_diffusion_b_value,
-    get_frame_nominal_cardiac_trigger_time_ms,
     get_frame_trigger_time_ms,
     is_multiframe,
 )
@@ -495,20 +493,10 @@ class DICOMOrganizer:
             trigger_time_ms = get_frame_trigger_time_ms(original_dataset, int(dataset._frame_index))
             if trigger_time_ms is not None:
                 context['trigger_time_ms'] = trigger_time_ms
-            nominal_trigger_time_ms = get_frame_nominal_cardiac_trigger_time_ms(
-                original_dataset,
-                int(dataset._frame_index),
-            )
-            if nominal_trigger_time_ms is not None:
-                context['nominal_cardiac_trigger_time_ms'] = nominal_trigger_time_ms
         elif frame_type == FrameType.DIFFUSION:
             diffusion_b_value = get_frame_diffusion_b_value(original_dataset, int(dataset._frame_index))
             if diffusion_b_value is not None:
                 context['diffusion_b_value'] = diffusion_b_value
-
-        content_time = get_frame_content_time(original_dataset, int(dataset._frame_index))
-        if content_time is not None:
-            context['content_time'] = content_time
 
         return context
 

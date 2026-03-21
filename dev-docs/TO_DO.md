@@ -37,6 +37,7 @@ This file tracks active and near-term tasks.
 ## Performance / Packaging
 
 - [ ] **[P1]** Try to make code faster (startup, file loading, fusion, and general responsiveness) ([details](FUTURE_WORK_DETAIL_NOTES.md#performance-initial-load-file-loading-fusion-and-general-responsiveness))
+    - [P2] Particularly w/ large dataset
 - [ ] **[P2]** See if executables can be made smaller (especially on macOS) ([details](FUTURE_WORK_DETAIL_NOTES.md#executable-size-especially-on-macos))
 - [ ] **[P1]** Check fusion responsiveness on Parallels with 3D fusion
 
@@ -57,9 +58,11 @@ This file tracks active and near-term tasks.
 - [ ] **[P1]** Add scale markers on left and bottom (small ticks every image mm, large every cm) ([plan](plans/VIEWER_UX_FEATURES_PLAN.md#3-scale-markers-ruler-ticks))
 - [ ] **[P1]** Add direction labels (A/P/L/R/S/I) on viewer window ([plan](plans/VIEWER_UX_FEATURES_PLAN.md#4-direction-labels-aplrsi))
 - [ ] **[P2]** Allow flipping and rotating image ([plan](plans/VIEWER_UX_FEATURES_PLAN.md#5-flip-and-rotate-image))
-- [ ] **[P1]** Hovering on a study label in the navigator should show a popup tooltip with the study description, date, and patient name (but should respect privacy mode). Hovering on a thumbnail should show a tooltip with that same info, plus series description ([plan](plans/NAVIGATOR_TOOLTIPS_AND_SKIP_TOAST_PLAN.md#1-navigator-tooltips-privacy-aware))
-- [ ] **[P2]** The toast that pops up when already loaded files are skipped and not added during loading should appear in the center of the screen and have a slightly more opaque background ([plan](plans/NAVIGATOR_TOOLTIPS_AND_SKIP_TOAST_PLAN.md#2-duplicate-skip-toast-center--more-opaque))
-- [ ] **[P1]** Make the large-file warning (and any related file handling checks) trigger for >50 MB instead of 25 MB
+- [ ] **[P1]** Hovering on a study label in the navigator should show a popup tooltip with the study description, date, and patient name (but should respect privacy mode). Hovering on a thumbnail should show a tooltip with that same info, plus series description ([plan](plans/NAVIGATOR_AND_FILE_LOADING_FEEDBACK_PLAN.md#1-navigator-tooltips-privacy-aware))
+- [ ] **[P2]** The toast that pops up when already loaded files are skipped and not added during loading should appear in the center of the screen and have a slightly more opaque background ([plan](plans/NAVIGATOR_AND_FILE_LOADING_FEEDBACK_PLAN.md#2-duplicate-skip-toast-center--more-opaque))
+- [ ] **[P1]** Make the large-file warning (and any related file handling checks) trigger for >50 MB instead of 25 MB ([plan](plans/NAVIGATOR_AND_FILE_LOADING_FEEDBACK_PLAN.md#3-large-file-warning-threshold-50-mb))
+- [ ] **[P2]** Allow further subdivision of subwindows into up to 4 "tiles"?
+- [ ] **[P1]** Make a "View Fullscreen" menu item and shortcut - make app full-screen, hide left/right/bottom panes, toolbar
 
 
 ## Features (Near-Term)
@@ -76,6 +79,8 @@ This file tracks active and near-term tasks.
 - [ ] **[P1]** Combine slices on MPR (MIP/MinIP/AIP options) ([details](FUTURE_WORK_DETAIL_NOTES.md#combine-slices-on-mpr-mipminipaip))
 - [ ] **[P2]** Fusion overlays on MPR views ([details](FUTURE_WORK_DETAIL_NOTES.md#fusion-on-mpr))
 - [ ] **[P2]** Advanced ROI/contouring roadmap (contouring, auto-detect ROI, 3D ROI across views) ([details](FUTURE_WORK_DETAIL_NOTES.md#advanced-roi-and-contouring))
+- [ ] **[P2]** Allow hanging protocols? Configuration of windows/tiles, certain views/phases/priors loaded
+- [ ] **[P2]** Once database is added, allow pulling priors
 
 ## Data / Platform (Future)
 

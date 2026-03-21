@@ -1751,10 +1751,6 @@ class DICOMViewerApp(QObject):
             # Update ROI statistics panel after slice is displayed
             # This ensures statistics are recalculated when projection state changes
             self._display_rois_for_slice(dataset)
-
-            # Keep series and instance-thumbnail state in sync with the focused slice.
-            self._update_series_navigator_highlighting()
-            self.series_navigator.set_subwindow_assignments(self._get_subwindow_assignments())
             
             # Store initial view state if this is the first image
             if self.view_state_manager.initial_zoom is None:
@@ -2911,10 +2907,6 @@ class DICOMViewerApp(QObject):
                 series_uid,
                 slice_index
             )
-
-            # Move focused navigator highlight/dots when scrolling crosses instance boundaries.
-            self._update_series_navigator_highlighting()
-            self.series_navigator.set_subwindow_assignments(self._get_subwindow_assignments())
             
             # Update About This File dialog if open
             self._update_about_this_file_dialog()

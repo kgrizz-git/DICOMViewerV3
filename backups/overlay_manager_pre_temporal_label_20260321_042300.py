@@ -539,15 +539,6 @@ class OverlayManager:
                 return str(int(value)) if value.is_integer() else f"{value:.3f}".rstrip("0").rstrip(".")
             return str(value)
 
-        def get_timing_suffix(context: Dict[str, object]) -> str:
-            trigger_time_ms = context.get("trigger_time_ms")
-            if trigger_time_ms is not None:
-                return f" ({format_numeric_value(trigger_time_ms)} ms)"
-            nominal_trigger_time_ms = context.get("nominal_cardiac_trigger_time_ms")
-            if nominal_trigger_time_ms is not None:
-                return f" ({format_numeric_value(nominal_trigger_time_ms)} ms nominal)"
-            return ""
-
         def format_multiframe_label(context: Dict[str, object]) -> str:
             instance_index = context.get("instance_index")
             total_instances = context.get("total_instances")
@@ -558,10 +549,12 @@ class OverlayManager:
 
             frame_type = str(context.get("frame_type", "unknown"))
             if frame_type == "temporal":
-                frame_label = f"Frame {frame_index}/{total_frames}"
+                frame_label = f"Frame {frame_index}/{total_frames} (time)"
             elif frame_type == "cardiac":
                 frame_label = f"Phase {frame_index}/{total_frames}"
-                frame_label += get_timing_suffix(context)
+                trigger_time_ms = context.get("trigger_time_ms")
+                if trigger_time_ms is not None:
+                    frame_label += f" ({format_numeric_value(trigger_time_ms)} ms)"
             elif frame_type == "diffusion":
                 diffusion_b_value = context.get("diffusion_b_value")
                 if diffusion_b_value is not None:
@@ -570,7 +563,6 @@ class OverlayManager:
                     frame_label = f"Frame {frame_index}/{total_frames}"
             elif frame_type == "spatial":
                 frame_label = f"Slice {frame_index}/{total_frames}"
-                frame_label += get_timing_suffix(context)
             else:
                 frame_label = f"Frame {frame_index}/{total_frames}"
 
@@ -658,14 +650,6 @@ class OverlayManager:
                     except (ValueError, TypeError):
                         # If SliceThickness is not a valid number, show as-is
                         lines.append(f"{tag}: {value_str}")
-                elif tag == "TriggerTime" and multiframe_context is not None and multiframe_context.get("trigger_time_ms") is not None:
-                    lines.append(f"TriggerTime: {format_numeric_value(multiframe_context['trigger_time_ms'])} ms")
-                elif tag == "NominalCardiacTriggerTime" and multiframe_context is not None and multiframe_context.get("nominal_cardiac_trigger_time_ms") is not None:
-                    lines.append(
-                        f"NominalCardiacTriggerTime: {format_numeric_value(multiframe_context['nominal_cardiac_trigger_time_ms'])} ms"
-                    )
-                elif tag == "ContentTime" and multiframe_context is not None and multiframe_context.get("content_time"):
-                    lines.append(f"ContentTime: {multiframe_context['content_time']}")
                 else:
                     lines.append(f"{tag}: {value_str}")
         
