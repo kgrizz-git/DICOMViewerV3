@@ -514,8 +514,7 @@ class OverlayManager:
     def _get_corner_text(self, parser: DICOMParser, tags: List[str], total_slices: Optional[int] = None,
                         projection_enabled: bool = False, projection_start_slice: Optional[int] = None,
                         projection_end_slice: Optional[int] = None, projection_total_thickness: Optional[float] = None,
-                        projection_type: Optional[str] = None,
-                        multiframe_context: Optional[Dict[str, int]] = None) -> str:
+                        projection_type: Optional[str] = None) -> str:
         """
         Get overlay text for a corner from a list of tags.
         
@@ -533,18 +532,6 @@ class OverlayManager:
             Formatted text string
         """
         lines = []
-
-        def format_multiframe_label(context: Dict[str, int]) -> str:
-            instance_index = context.get("instance_index")
-            total_instances = context.get("total_instances")
-            frame_index = context.get("frame_index")
-            total_frames = context.get("total_frames")
-            if not frame_index or not total_frames:
-                return ""
-            frame_label = f"Frame {frame_index}/{total_frames}"
-            if instance_index and total_instances and total_instances > 1:
-                return f"Instance {instance_index}/{total_instances} · {frame_label}"
-            return frame_label
         
         # Check if this is a multi-frame dataset (FrameDatasetWrapper)
         dataset = parser.dataset
@@ -576,13 +563,7 @@ class OverlayManager:
                     value_str = "PRIVACY MODE"
                 
                 # Special formatting for InstanceNumber: show as "Slice X/Y" if total_slices is provided
-                if tag == "InstanceNumber" and multiframe_context is not None:
-                    label = format_multiframe_label(multiframe_context)
-                    if label:
-                        lines.append(label)
-                    else:
-                        lines.append(f"{tag}: {value_str}")
-                elif tag == "InstanceNumber" and total_slices is not None:
+                if tag == "InstanceNumber" and total_slices is not None:
                     try:
                         instance_num = int(value_str)
                         # Build the base slice display string
@@ -631,7 +612,7 @@ class OverlayManager:
         
         # If multi-frame and frame info not already shown with InstanceNumber, add it separately
         # Only add frame info to corners that have InstanceNumber to avoid duplicating in all corners
-        if is_multiframe_dataset and total_frames is not None and multiframe_context is None:
+        if is_multiframe_dataset and total_frames is not None:
             # Check if InstanceNumber was in the tags
             instance_in_tags = "InstanceNumber" in tags
             # Only add frame info if InstanceNumber is in this corner's tags
@@ -717,8 +698,7 @@ class OverlayManager:
                             position: tuple = (10, 10), total_slices: Optional[int] = None,
                             projection_enabled: bool = False, projection_start_slice: Optional[int] = None,
                             projection_end_slice: Optional[int] = None, projection_total_thickness: Optional[float] = None,
-                            projection_type: Optional[str] = None,
-                            multiframe_context: Optional[Dict[str, int]] = None) -> List[QGraphicsTextItem]:
+                            projection_type: Optional[str] = None) -> List[QGraphicsTextItem]:
         """
         Create overlay text items for a graphics scene (4 corners).
         
@@ -750,8 +730,7 @@ class OverlayManager:
         if self.use_widget_overlays and view is not None:
             return self._create_widget_overlays(view, parser, total_slices, projection_enabled,
                                                 projection_start_slice, projection_end_slice,
-                                                projection_total_thickness, projection_type,
-                                                multiframe_context)
+                                                projection_total_thickness, projection_type)
         
         # Clear existing items and corner mapping (QGraphicsItem approach)
         self.clear_overlay_items(scene)
@@ -869,7 +848,7 @@ class OverlayManager:
             if tags:
                 text = self._get_corner_text(parser, tags, total_slices, projection_enabled,
                                             projection_start_slice, projection_end_slice, projection_total_thickness,
-                                            projection_type, multiframe_context)
+                                            projection_type)
                 if text:
                     # For right-aligned corners, create separate text items for each line
                     # so each row can be individually right-aligned
@@ -979,8 +958,7 @@ class OverlayManager:
                                 projection_start_slice: Optional[int] = None,
                                 projection_end_slice: Optional[int] = None,
                                 projection_total_thickness: Optional[float] = None,
-                                projection_type: Optional[str] = None,
-                                multiframe_context: Optional[Dict[str, int]] = None) -> List[QGraphicsTextItem]:
+                                projection_type: Optional[str] = None) -> List[QGraphicsTextItem]:
         """
         Create QWidget-based viewport overlays.
         
@@ -1069,8 +1047,7 @@ class OverlayManager:
             if tags:
                 text = self._get_corner_text(parser, tags, total_slices, projection_enabled,
                                             projection_start_slice, projection_end_slice,
-                                            projection_total_thickness, projection_type,
-                                            multiframe_context)
+                                            projection_total_thickness, projection_type)
                 if text:
                     self.viewport_overlay_widget.set_corner_text(corner_key, text, alignment)
                 else:

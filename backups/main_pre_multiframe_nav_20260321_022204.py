@@ -251,10 +251,6 @@ class DICOMViewerApp(QObject):
 
         # Navigation and playback widgets
         self.series_navigator = SeriesNavigator(self.dicom_processor)
-        self.series_navigator.set_multiframe_info_map(self.dicom_organizer.series_multiframe_info)
-        self.series_navigator.set_show_instances_separately(
-            self.config_manager.get_show_instances_separately()
-        )
         self.cine_controls_widget = CineControlsWidget()
         self.intensity_projection_controls_widget = IntensityProjectionControlsWidget()
 
@@ -550,13 +546,6 @@ class DICOMViewerApp(QObject):
             get_current_study_uid=lambda i=idx: self._get_subwindow_study_uid(i),
             get_current_series_uid=lambda i=idx: self._get_subwindow_series_uid(i),
             get_current_slice_index=lambda i=idx: self._get_subwindow_slice_index(i),
-            get_multiframe_overlay_context=lambda dataset=None, study_uid=None, series_uid=None, i=idx: (
-                self.subwindow_managers[i]['slice_display_manager'].get_multiframe_overlay_context(
-                    dataset=dataset,
-                    study_uid=study_uid,
-                    series_uid=series_uid,
-                ) if i in self.subwindow_managers and self.subwindow_managers[i].get('slice_display_manager') else None
-            ),
             hide_measurement_labels=managers['measurement_coordinator'].hide_measurement_labels,
             hide_measurement_graphics=managers['measurement_coordinator'].hide_measurement_graphics,
             hide_roi_graphics=managers['roi_coordinator'].hide_roi_graphics if hasattr(managers['roi_coordinator'], 'hide_roi_graphics') else None,
@@ -996,7 +985,6 @@ class DICOMViewerApp(QObject):
         
         # Clear series navigator (shared) and dot indicators
         self.series_navigator.update_series_list({}, "", "")
-        self._refresh_series_navigator_state()
         self.series_navigator.set_subwindow_assignments({})
         
         # Clear tag edit history
@@ -1033,21 +1021,17 @@ class DICOMViewerApp(QObject):
 
     def _get_subwindow_assignments(self) -> dict:
         """
-        Build a mapping of subwindow slot index → (study_uid, series_key, slice_index) for every
+        Build a mapping of subwindow slot index → (study_uid, series_key) for every
         subwindow that currently has a dataset loaded.
 
         Used to drive the colored dot indicators in SeriesNavigator.
 
         Returns:
-            Dict[int, Tuple[str, str, int]] — keys are subwindow indices (0–3), values are
-            (current_study_uid, current_series_uid, current_slice_index) for that slot.
+            Dict[int, Tuple[str, str]] — keys are subwindow indices (0–3), values are
+            (current_study_uid, current_series_uid) for that slot.
         """
         return {
-            idx: (
-                data['current_study_uid'],
-                data['current_series_uid'],
-                data.get('current_slice_index', 0),
-            )
+            idx: (data['current_study_uid'], data['current_series_uid'])
             for idx, data in self.subwindow_data.items()
             if data.get('current_dataset') is not None
         }
@@ -1187,7 +1171,6 @@ class DICOMViewerApp(QObject):
             self.current_study_uid,
             self.current_series_uid,
         )
-        self._refresh_series_navigator_state()
         self.series_navigator.set_subwindow_assignments(self._get_subwindow_assignments())
 
         # 8. Invalidate slice-sync geometry cache for the closed series.
@@ -1241,7 +1224,6 @@ class DICOMViewerApp(QObject):
             self.current_study_uid,
             self.current_series_uid,
         )
-        self._refresh_series_navigator_state()
         self.series_navigator.set_subwindow_assignments(self._get_subwindow_assignments())
 
         # 8. Invalidate all cached geometry for this study.
@@ -1471,44 +1453,10 @@ class DICOMViewerApp(QObject):
             data = self.subwindow_data[focused_idx]
             focused_series_uid = data.get('current_series_uid', '')
             focused_study_uid = data.get('current_study_uid', '')
-            focused_slice_index = data.get('current_slice_index', 0)
             if focused_series_uid and focused_study_uid:
-                self.series_navigator.set_current_position(
-                    focused_series_uid,
-                    focused_study_uid,
-                    focused_slice_index,
-                )
+                self.series_navigator.set_current_series(focused_series_uid, focused_study_uid)
             elif focused_series_uid:
-                self.series_navigator.set_current_position(
-                    focused_series_uid,
-                    slice_index=focused_slice_index,
-                )
-            else:
-                self.series_navigator.set_current_position('', '', 0)
-        self._refresh_series_navigator_state()
-
-    def _refresh_series_navigator_state(self) -> None:
-        """Push organizer-backed multiframe state and action enablement into the navigator UI."""
-        self.series_navigator.set_multiframe_info_map(self.dicom_organizer.series_multiframe_info)
-        show_instances_separately = self.config_manager.get_show_instances_separately()
-        self.series_navigator.set_show_instances_separately(show_instances_separately)
-        self.main_window.set_show_instances_separately_checked(show_instances_separately)
-
-        multiframe_info = None
-        if self.current_study_uid and self.current_series_uid:
-            multiframe_info = self.dicom_organizer.get_series_multiframe_info(
-                self.current_study_uid,
-                self.current_series_uid,
-            )
-
-        can_expand_instances = bool(
-            multiframe_info is not None
-            and multiframe_info.max_frame_count > 1
-            and multiframe_info.instance_count > 1
-        )
-        self.main_window.set_show_instances_separately_enabled(
-            can_expand_instances or show_instances_separately
-        )
+                self.series_navigator.set_current_series(focused_series_uid)
     
     def _on_layout_changed(self, layout_mode: str) -> None:
         """Handle layout mode change from multi-window layout. Delegates to subwindow lifecycle controller."""
@@ -1710,10 +1658,6 @@ class DICOMViewerApp(QObject):
     def _on_series_navigator_selected(self, series_uid: str) -> None:
         """Handle series selection from series navigator (assigns to focused subwindow). Delegates to coordinator."""
         self._file_series_coordinator.on_series_navigator_selected(series_uid)
-
-    def _on_series_navigator_instance_selected(self, study_uid: str, series_uid: str, slice_index: int) -> None:
-        """Handle per-instance thumbnail selection from series navigator. Delegates to coordinator."""
-        self._file_series_coordinator.on_series_navigator_instance_selected(study_uid, series_uid, slice_index)
 
     def _on_assign_series_from_context_menu(self, series_uid: str) -> None:
         """Handle series assignment request from context menu. Delegates to coordinator."""
@@ -2135,18 +2079,6 @@ class DICOMViewerApp(QObject):
             if subwindow and subwindow.image_viewer:
                 subwindow.image_viewer.set_smooth_when_zoomed_state(enabled)
         self.main_window.set_smooth_when_zoomed_checked(enabled)
-
-    def _on_show_instances_separately_toggled(self, enabled: bool) -> None:
-        """Handle the View → Show Instances Separately toggle."""
-        self.config_manager.set_show_instances_separately(enabled)
-        self.series_navigator.set_show_instances_separately(enabled)
-        self.series_navigator.update_series_list(
-            self.current_studies,
-            self.current_study_uid,
-            self.current_series_uid,
-        )
-        self._refresh_series_navigator_state()
-        self.series_navigator.set_subwindow_assignments(self._get_subwindow_assignments())
 
     def _refresh_overlays_after_privacy_change(self) -> None:
         """Refresh overlays after privacy view change for all subwindows that have loaded data. Delegates to privacy controller."""

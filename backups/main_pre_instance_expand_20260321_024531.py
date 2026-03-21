@@ -1033,21 +1033,17 @@ class DICOMViewerApp(QObject):
 
     def _get_subwindow_assignments(self) -> dict:
         """
-        Build a mapping of subwindow slot index → (study_uid, series_key, slice_index) for every
+        Build a mapping of subwindow slot index → (study_uid, series_key) for every
         subwindow that currently has a dataset loaded.
 
         Used to drive the colored dot indicators in SeriesNavigator.
 
         Returns:
-            Dict[int, Tuple[str, str, int]] — keys are subwindow indices (0–3), values are
-            (current_study_uid, current_series_uid, current_slice_index) for that slot.
+            Dict[int, Tuple[str, str]] — keys are subwindow indices (0–3), values are
+            (current_study_uid, current_series_uid) for that slot.
         """
         return {
-            idx: (
-                data['current_study_uid'],
-                data['current_series_uid'],
-                data.get('current_slice_index', 0),
-            )
+            idx: (data['current_study_uid'], data['current_series_uid'])
             for idx, data in self.subwindow_data.items()
             if data.get('current_dataset') is not None
         }
@@ -1471,20 +1467,10 @@ class DICOMViewerApp(QObject):
             data = self.subwindow_data[focused_idx]
             focused_series_uid = data.get('current_series_uid', '')
             focused_study_uid = data.get('current_study_uid', '')
-            focused_slice_index = data.get('current_slice_index', 0)
             if focused_series_uid and focused_study_uid:
-                self.series_navigator.set_current_position(
-                    focused_series_uid,
-                    focused_study_uid,
-                    focused_slice_index,
-                )
+                self.series_navigator.set_current_series(focused_series_uid, focused_study_uid)
             elif focused_series_uid:
-                self.series_navigator.set_current_position(
-                    focused_series_uid,
-                    slice_index=focused_slice_index,
-                )
-            else:
-                self.series_navigator.set_current_position('', '', 0)
+                self.series_navigator.set_current_series(focused_series_uid)
         self._refresh_series_navigator_state()
 
     def _refresh_series_navigator_state(self) -> None:
@@ -1506,9 +1492,7 @@ class DICOMViewerApp(QObject):
             and multiframe_info.max_frame_count > 1
             and multiframe_info.instance_count > 1
         )
-        self.main_window.set_show_instances_separately_enabled(
-            can_expand_instances or show_instances_separately
-        )
+        self.main_window.set_show_instances_separately_enabled(can_expand_instances)
     
     def _on_layout_changed(self, layout_mode: str) -> None:
         """Handle layout mode change from multi-window layout. Delegates to subwindow lifecycle controller."""
@@ -1710,10 +1694,6 @@ class DICOMViewerApp(QObject):
     def _on_series_navigator_selected(self, series_uid: str) -> None:
         """Handle series selection from series navigator (assigns to focused subwindow). Delegates to coordinator."""
         self._file_series_coordinator.on_series_navigator_selected(series_uid)
-
-    def _on_series_navigator_instance_selected(self, study_uid: str, series_uid: str, slice_index: int) -> None:
-        """Handle per-instance thumbnail selection from series navigator. Delegates to coordinator."""
-        self._file_series_coordinator.on_series_navigator_instance_selected(study_uid, series_uid, slice_index)
 
     def _on_assign_series_from_context_menu(self, series_uid: str) -> None:
         """Handle series assignment request from context menu. Delegates to coordinator."""

@@ -45,6 +45,7 @@ class OverlayCoordinator:
         get_current_study_uid: Callable[[], str],
         get_current_series_uid: Callable[[], str],
         get_current_slice_index: Callable[[], int],
+        get_multiframe_overlay_context: Optional[Callable[[Optional[Dataset], Optional[str], Optional[str]], Optional[dict]]] = None,
         hide_measurement_labels: Optional[Callable[[bool], None]] = None,
         hide_measurement_graphics: Optional[Callable[[bool], None]] = None,
         hide_roi_graphics: Optional[Callable[[bool], None]] = None,
@@ -72,6 +73,7 @@ class OverlayCoordinator:
         self.get_current_study_uid = get_current_study_uid
         self.get_current_series_uid = get_current_series_uid
         self.get_current_slice_index = get_current_slice_index
+        self.get_multiframe_overlay_context = get_multiframe_overlay_context
         self.hide_measurement_labels = hide_measurement_labels
         self.hide_measurement_graphics = hide_measurement_graphics
         self.hide_roi_graphics = hide_roi_graphics
@@ -94,7 +96,9 @@ class OverlayCoordinator:
                 self.overlay_manager.create_overlay_items(
                     self.image_viewer.scene,
                     parser,
-                    total_slices=total_slices if total_slices > 0 else None
+                    total_slices=total_slices if total_slices > 0 else None,
+                    multiframe_context=self.get_multiframe_overlay_context(dataset, current_study_uid, current_series_uid)
+                    if self.get_multiframe_overlay_context else None,
                 )
     
     def handle_overlay_font_size_changed(self, font_size: int) -> None:
@@ -122,7 +126,9 @@ class OverlayCoordinator:
                 self.overlay_manager.create_overlay_items(
                     self.image_viewer.scene,
                     parser,
-                    total_slices=total_slices if total_slices > 0 else None
+                    total_slices=total_slices if total_slices > 0 else None,
+                    multiframe_context=self.get_multiframe_overlay_context(dataset, current_study_uid, current_series_uid)
+                    if self.get_multiframe_overlay_context else None,
                 )
     
     def handle_overlay_font_color_changed(self, r: int, g: int, b: int) -> None:
@@ -152,7 +158,9 @@ class OverlayCoordinator:
                 self.overlay_manager.create_overlay_items(
                     self.image_viewer.scene,
                     parser,
-                    total_slices=total_slices if total_slices > 0 else None
+                    total_slices=total_slices if total_slices > 0 else None,
+                    multiframe_context=self.get_multiframe_overlay_context(dataset, current_study_uid, current_series_uid)
+                    if self.get_multiframe_overlay_context else None,
                 )
     
     def handle_toggle_overlay(self) -> None:
@@ -178,7 +186,9 @@ class OverlayCoordinator:
             self.overlay_manager.create_overlay_items(
                 self.image_viewer.scene,
                 parser,
-                total_slices=total_slices
+                total_slices=total_slices,
+                multiframe_context=self.get_multiframe_overlay_context(current_dataset, current_study_uid, current_series_uid)
+                if self.get_multiframe_overlay_context else None,
             )
             
             # Handle measurement and ROI label visibility based on state

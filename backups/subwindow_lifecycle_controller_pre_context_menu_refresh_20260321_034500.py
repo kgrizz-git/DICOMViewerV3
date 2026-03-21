@@ -871,7 +871,6 @@ class SubwindowLifecycleController:
         app.slice_navigator.slice_changed.connect(app._update_histogram_for_focused_subwindow)
         app.series_navigator.series_selected.connect(app._on_series_navigator_selected)
         app.series_navigator.instance_selected.connect(app._on_series_navigator_instance_selected)
-        app.series_navigator.show_instances_separately_toggled.connect(app._on_show_instances_separately_toggled)
         app.series_navigator.show_file_requested.connect(app._on_show_file_from_series)
         app.series_navigator.about_this_file_requested.connect(app._on_about_this_file_from_series)
         app.image_viewer.toggle_series_navigator_requested.connect(app.main_window.toggle_series_navigator)

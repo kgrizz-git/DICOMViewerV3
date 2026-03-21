@@ -120,7 +120,6 @@ class MainWindow(QMainWindow):
     layout_changed = Signal(str)  # Emitted when layout mode changes ("1x1", "1x2", "2x1", "2x2")
     privacy_view_toggled = Signal(bool)  # Emitted when privacy view is toggled (True = enabled)
     smooth_when_zoomed_toggled = Signal(bool)  # Emitted when smooth-when-zoomed is toggled (True = enabled)
-    show_instances_separately_toggled = Signal(bool)  # Emitted when multi-frame instance expansion is toggled
     slice_sync_toggled = Signal(bool)  # Emitted when slice sync enabled state changes (True = enabled)
     slice_sync_manage_requested = Signal()  # Emitted when "Manage Sync Groups…" is chosen
     slice_location_lines_toggled = Signal(bool)  # Emitted when slice location lines toggle (True = show)
@@ -609,25 +608,6 @@ class MainWindow(QMainWindow):
         self.smooth_when_zoomed_action.blockSignals(True)
         self.smooth_when_zoomed_action.setChecked(checked)
         self.smooth_when_zoomed_action.blockSignals(False)
-
-    def _on_show_instances_separately_toggled(self, checked: bool) -> None:
-        """Handle the View menu toggle for multi-frame instance expansion."""
-        self.config_manager.set_show_instances_separately(checked)
-        self.show_instances_separately_toggled.emit(checked)
-
-    def set_show_instances_separately_checked(self, checked: bool) -> None:
-        """Sync the View menu Show Instances Separately action check state without emitting triggered."""
-        if not hasattr(self, 'show_instances_separately_action') or self.show_instances_separately_action is None:
-            return
-        self.show_instances_separately_action.blockSignals(True)
-        self.show_instances_separately_action.setChecked(checked)
-        self.show_instances_separately_action.blockSignals(False)
-
-    def set_show_instances_separately_enabled(self, enabled: bool) -> None:
-        """Enable or disable the View menu Show Instances Separately action."""
-        if not hasattr(self, 'show_instances_separately_action') or self.show_instances_separately_action is None:
-            return
-        self.show_instances_separately_action.setEnabled(enabled)
 
     def set_slice_location_lines_checked(self, checked: bool) -> None:
         """Sync the View menu Show Lines → Enable/Disable action check state without emitting triggered."""

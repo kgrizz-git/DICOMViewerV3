@@ -41,13 +41,6 @@ class MergeResult:
     added_file_count: int  # files actually ingested
 
 
-@dataclass(frozen=True)
-class MultiFrameSeriesInfo:
-    """Per-series summary of multi-frame structure."""
-    instance_count: int
-    max_frame_count: int
-
-
 class DICOMOrganizer:
     """
     Organizes DICOM files into studies and series.
@@ -66,7 +59,6 @@ class DICOMOrganizer:
         """Initialize the organizer."""
         self.studies: Dict[str, Dict[str, List[Dataset]]] = {}
         self.file_paths: Dict[Tuple[str, str, int], str] = {}  # (study_uid, series_uid, instance_num) -> path
-        self.series_multiframe_info: Dict[Tuple[str, str], MultiFrameSeriesInfo] = {}
         # Storage for Presentation State and Key Object files
         self.presentation_states: Dict[str, List[Dataset]] = {}  # Keyed by StudyInstanceUID
         self.key_objects: Dict[str, List[Dataset]] = {}  # Keyed by StudyInstanceUID
@@ -89,13 +81,11 @@ class DICOMOrganizer:
         """
         self.studies = {}
         self.file_paths = {}
-        self.series_multiframe_info = {}
         self.presentation_states = {}
         self.key_objects = {}
         batch_studies, batch_fp, batch_ps, batch_ko = self._organize_files_into_batch(datasets, file_paths)
         self.studies = batch_studies
         self.file_paths = batch_fp
-        self.series_multiframe_info = self._build_series_multiframe_info_map(batch_studies)
         self.presentation_states = batch_ps
         self.key_objects = batch_ko
         return self.studies
@@ -293,14 +283,12 @@ class DICOMOrganizer:
                         for k, v in batch_fp.items():
                             if k[0] == study_uid and k[1] == base_key:
                                 self.file_paths[k] = v
-                        self._update_series_multiframe_info(study_uid, base_key)
                         result.appended_series.append((study_uid, base_key))
                     else:
                         self.studies[study_uid][base_key] = new_datasets_list
                         for k, v in batch_fp.items():
                             if k[0] == study_uid and k[1] == base_key:
                                 self.file_paths[k] = v
-                        self._update_series_multiframe_info(study_uid, base_key)
                         result.new_series.append((study_uid, base_key))
                 else:
                     n = self._disambiguation_counters.get((study_uid, base_key), 2)
@@ -311,7 +299,6 @@ class DICOMOrganizer:
                     for k, v in batch_fp.items():
                         if k[0] == study_uid and k[1] == base_key:
                             self.file_paths[(study_uid, effective_key, k[2])] = v
-                    self._update_series_multiframe_info(study_uid, effective_key)
                     result.new_series.append((study_uid, effective_key))
 
         self.presentation_states.update(batch_ps)
@@ -337,7 +324,6 @@ class DICOMOrganizer:
                 paths_to_remove.add(os.path.normpath(os.path.abspath(path)))
         self.loaded_file_paths -= paths_to_remove
         self.series_source_dirs.pop((study_uid, series_key), None)
-        self.series_multiframe_info.pop((study_uid, series_key), None)
         del self.studies[study_uid][series_key]
         if not self.studies[study_uid]:
             self.remove_study(study_uid)
@@ -356,7 +342,6 @@ class DICOMOrganizer:
         self.loaded_file_paths -= paths_to_remove
         for sk in series_keys:
             self.series_source_dirs.pop((study_uid, sk), None)
-            self.series_multiframe_info.pop((study_uid, sk), None)
         del self.studies[study_uid]
         self.presentation_states.pop(study_uid, None)
         self.key_objects.pop(study_uid, None)
@@ -368,102 +353,11 @@ class DICOMOrganizer:
         """Reset all organizer state (studies, file_paths, PS/KO, loaded paths, source dirs)."""
         self.studies = {}
         self.file_paths = {}
-        self.series_multiframe_info = {}
         self.presentation_states = {}
         self.key_objects = {}
         self.loaded_file_paths = set()
         self.series_source_dirs = {}
         self._disambiguation_counters = {}
-
-    def _build_series_multiframe_info_map(
-        self,
-        studies: Dict[str, Dict[str, List[Dataset]]],
-    ) -> Dict[Tuple[str, str], MultiFrameSeriesInfo]:
-        """Build per-series multiframe metadata for a studies dictionary."""
-        info_map: Dict[Tuple[str, str], MultiFrameSeriesInfo] = {}
-        for study_uid, series_dict in studies.items():
-            for series_key, datasets in series_dict.items():
-                info_map[(study_uid, series_key)] = self._compute_series_multiframe_info(datasets)
-        return info_map
-
-    def _compute_series_multiframe_info(self, datasets: List[Dataset]) -> MultiFrameSeriesInfo:
-        """Compute instance and frame counts for one organized series."""
-        if not datasets:
-            return MultiFrameSeriesInfo(instance_count=0, max_frame_count=1)
-
-        seen_original_ids: Set[int] = set()
-        instance_count = 0
-        max_frame_count = 1
-
-        for dataset in datasets:
-            original_dataset = getattr(dataset, '_original_dataset', dataset)
-            original_id = id(original_dataset)
-            if original_id in seen_original_ids:
-                continue
-            seen_original_ids.add(original_id)
-            instance_count += 1
-            max_frame_count = max(max_frame_count, get_frame_count(original_dataset))
-
-        return MultiFrameSeriesInfo(
-            instance_count=instance_count,
-            max_frame_count=max_frame_count,
-        )
-
-    def _update_series_multiframe_info(self, study_uid: str, series_key: str) -> None:
-        """Refresh cached multiframe metadata for one series."""
-        datasets = self.studies.get(study_uid, {}).get(series_key, [])
-        if not datasets:
-            self.series_multiframe_info.pop((study_uid, series_key), None)
-            return
-        self.series_multiframe_info[(study_uid, series_key)] = self._compute_series_multiframe_info(datasets)
-
-    def get_series_multiframe_info(self, study_uid: str, series_key: str) -> Optional[MultiFrameSeriesInfo]:
-        """Return cached multiframe metadata for a series, if available."""
-        return self.series_multiframe_info.get((study_uid, series_key))
-
-    def get_multiframe_display_context(
-        self,
-        study_uid: str,
-        series_key: str,
-        dataset: Optional[Dataset],
-    ) -> Optional[Dict[str, int]]:
-        """Return instance/frame display context for a frame wrapper within a series."""
-        if dataset is None:
-            return None
-        if not hasattr(dataset, '_frame_index') or not hasattr(dataset, '_original_dataset'):
-            return None
-
-        series_datasets = self.studies.get(study_uid, {}).get(series_key, [])
-        if not series_datasets:
-            return None
-
-        original_dataset = dataset._original_dataset
-        ordered_instances: List[Dataset] = []
-        seen_original_ids: Set[int] = set()
-        for series_dataset in series_datasets:
-            series_original = getattr(series_dataset, '_original_dataset', series_dataset)
-            series_original_id = id(series_original)
-            if series_original_id in seen_original_ids:
-                continue
-            seen_original_ids.add(series_original_id)
-            ordered_instances.append(series_original)
-
-        instance_index = None
-        for idx, ordered_instance in enumerate(ordered_instances, start=1):
-            if ordered_instance is original_dataset:
-                instance_index = idx
-                break
-
-        total_frames = get_frame_count(original_dataset)
-        if instance_index is None or total_frames <= 1:
-            return None
-
-        return {
-            'instance_index': instance_index,
-            'total_instances': len(ordered_instances),
-            'frame_index': int(dataset._frame_index) + 1,
-            'total_frames': total_frames,
-        }
 
     def _sort_slices(self, slice_list: List[Tuple[Dataset, Optional[str]]]) -> List[Tuple[Dataset, Optional[str]]]:
         """

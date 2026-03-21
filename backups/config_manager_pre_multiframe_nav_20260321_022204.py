@@ -116,7 +116,6 @@ class ConfigManager(
             "scroll_wheel_mode": "slice",
             "privacy_view_enabled": False,
             "smooth_image_when_zoomed": False,
-            "show_instances_separately": False,
             # Overlay
             "overlay_mode": "minimal",
             "overlay_visibility_state": 0,
