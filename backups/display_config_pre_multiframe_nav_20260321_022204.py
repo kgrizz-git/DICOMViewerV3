@@ -54,15 +54,6 @@ class DisplayConfigMixin:
         self.config["smooth_image_when_zoomed"] = enabled
         self.save_config()
 
-    def get_show_instances_separately(self) -> bool:
-        """Get whether multi-frame instances should be shown separately in the navigator."""
-        return self.config.get("show_instances_separately", False)
-
-    def set_show_instances_separately(self, enabled: bool) -> None:
-        """Set whether multi-frame instances should be shown separately in the navigator."""
-        self.config["show_instances_separately"] = enabled
-        self.save_config()
-
     def get_privacy_view(self) -> bool:
         """
         Get whether privacy view mode is enabled.

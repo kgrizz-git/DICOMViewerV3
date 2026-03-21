@@ -23,7 +23,7 @@ Requirements:
     - ViewStateManager for view state coordination
 """
 
-from typing import Optional, Callable, Dict
+from typing import Optional, Callable
 import json
 import time
 import numpy as np
@@ -134,28 +134,6 @@ class SliceDisplayManager:
         self.projection_enabled: bool = False
         self.projection_type: str = "aip"  # "aip", "mip", or "minip"
         self.projection_slice_count: int = 4  # 2, 3, 4, 6, or 8
-
-    def get_multiframe_overlay_context(
-        self,
-        dataset: Optional[Dataset] = None,
-        study_uid: Optional[str] = None,
-        series_uid: Optional[str] = None,
-    ) -> Optional[Dict[str, int]]:
-        """Return the current dataset's multiframe overlay context, if applicable."""
-        if self.dicom_organizer is None:
-            return None
-        target_dataset = dataset if dataset is not None else self.current_dataset
-        if target_dataset is None:
-            return None
-        target_study_uid = study_uid if study_uid is not None else self.current_study_uid
-        target_series_uid = series_uid if series_uid is not None else self.current_series_uid
-        if not target_study_uid or not target_series_uid:
-            return None
-        return self.dicom_organizer.get_multiframe_display_context(
-            target_study_uid,
-            target_series_uid,
-            target_dataset,
-        )
 
     def _measurement_debug_prefix(self, dataset: Dataset, current_slice_index: int) -> str:
         study_uid = getattr(dataset, 'StudyInstanceUID', '')
@@ -1109,12 +1087,7 @@ class SliceDisplayManager:
                 projection_start_slice=projection_start_slice,
                 projection_end_slice=projection_end_slice,
                 projection_total_thickness=projection_total_thickness,
-                projection_type=self.projection_type if self.projection_enabled else None,
-                multiframe_context=self.get_multiframe_overlay_context(
-                    dataset=dataset,
-                    study_uid=current_study_uid,
-                    series_uid=current_series_uid,
-                ),
+                projection_type=self.projection_type if self.projection_enabled else None
             )
             
             # Extract pixel spacing and set on measurement tool

@@ -523,9 +523,7 @@ class SeriesNavigator(QWidget):
         self.dicom_processor = dicom_processor
         self.current_study_uid = ""
         self.current_series_uid = ""
-        self.current_slice_index = 0
         self.thumbnails: Dict[str, SeriesThumbnail] = {}
-        self.instance_thumbnails: Dict[str, SeriesThumbnail] = {}
 
         # Store study labels and dividers for cleanup
         self.study_labels: List[StudyLabel] = []
@@ -535,12 +533,11 @@ class SeriesNavigator(QWidget):
         self.thumbnail_cache: Dict[tuple, Image.Image] = {}
         self.instance_thumbnail_cache: Dict[tuple, Image.Image] = {}
         self._last_studies: Dict = {}
-        self._instance_start_indices: Dict[Tuple[str, str], List[int]] = {}
         self._multiframe_info_map: Dict[Tuple[str, str], MultiFrameSeriesInfo] = {}
         self._show_instances_separately = False
 
         # Current subwindow slot → (study_uid, series_key) assignments for dot indicators
-        self._subwindow_assignments: Dict[int, Tuple] = {}
+        self._subwindow_assignments: Dict[int, Tuple[str, str]] = {}
         
         # Enable keyboard focus so we can receive key events
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
@@ -736,10 +733,8 @@ class SeriesNavigator(QWidget):
         
         # Clear tracking lists
         self.thumbnails.clear()
-        self.instance_thumbnails.clear()
         self.study_labels.clear()
         self.study_dividers.clear()
-        self._instance_start_indices.clear()
         
         if not studies:
             return
@@ -883,11 +878,7 @@ class SeriesNavigator(QWidget):
                     and multiframe_info.instance_count > 1
                     and multiframe_info.max_frame_count > 1
                 ):
-                    instance_entries = self._build_instance_entries(study_series[series_uid])
-                    self._instance_start_indices[(study_uid, series_uid)] = [
-                        slice_index for slice_index, _, _ in instance_entries
-                    ]
-                    for slice_index, instance_dataset, instance_label in instance_entries:
+                    for slice_index, instance_dataset, instance_label in self._build_instance_entries(study_series[series_uid]):
                         cache_key = (study_uid, series_uid, slice_index)
                         if cache_key in self.instance_thumbnail_cache:
                             instance_thumbnail_image = self.instance_thumbnail_cache[cache_key]
@@ -911,8 +902,6 @@ class SeriesNavigator(QWidget):
                         instance_thumbnail.about_this_file_requested.connect(self.about_this_file_requested.emit)
                         instance_thumbnail.close_series_signal.connect(self.close_series_requested.emit)
                         instance_thumbnail.close_study_signal.connect(self.close_study_requested.emit)
-                        instance_composite_key = f"{study_uid}:{series_uid}:{slice_index}"
-                        self.instance_thumbnails[instance_composite_key] = instance_thumbnail
                         series_group_layout.addWidget(instance_thumbnail)
 
                 thumbnails_layout.addWidget(series_group_widget)
@@ -924,10 +913,8 @@ class SeriesNavigator(QWidget):
             self.main_layout.insertWidget(self.main_layout.count() - 1, study_section)
             
             first_study = False
-
-        self.set_current_position(current_series_uid, current_study_uid, self.current_slice_index)
     
-    def set_subwindow_assignments(self, assignments: Dict[int, Tuple]) -> None:
+    def set_subwindow_assignments(self, assignments: Dict[int, Tuple[str, str]]) -> None:
         """
         Update which subwindow slots are currently displaying which series, then
         repaint the dot indicators on all thumbnails.
@@ -935,10 +922,8 @@ class SeriesNavigator(QWidget):
         Must be called **after** update_series_list() so thumbnails exist.
 
         Args:
-            assignments: Mapping of subwindow_idx → assignment tuple for every
-                         occupied subwindow. Supported formats are
-                         `(study_uid, series_key)` and `(study_uid, series_key, slice_index)`.
-                         Pass an empty dict to clear all dots.
+            assignments: Mapping of subwindow_idx → (study_uid, series_key) for
+                         every occupied subwindow.  Pass an empty dict to clear all dots.
         """
         self._subwindow_assignments = dict(assignments)
         self._refresh_dot_indicators()
@@ -950,37 +935,13 @@ class SeriesNavigator(QWidget):
         """
         # Build reverse map: composite_key → list of slot indices
         reverse: Dict[str, List[int]] = {}
-        instance_reverse: Dict[str, List[int]] = {}
-        for slot_idx, assignment in self._subwindow_assignments.items():
-            if not assignment or len(assignment) < 2:
-                continue
-            study_uid, series_key = assignment[0], assignment[1]
-            slice_index = assignment[2] if len(assignment) > 2 else None
+        for slot_idx, (study_uid, series_key) in self._subwindow_assignments.items():
             composite_key = f"{study_uid}:{series_key}"
             reverse.setdefault(composite_key, []).append(slot_idx)
-            if slice_index is not None:
-                instance_key = self._get_instance_thumbnail_key(study_uid, series_key, slice_index)
-                if instance_key is not None:
-                    instance_reverse.setdefault(instance_key, []).append(slot_idx)
 
         # Apply to thumbnails — thumbnails not in the map get empty list (no dots)
         for composite_key, thumbnail in self.thumbnails.items():
             thumbnail.set_subwindow_dots(reverse.get(composite_key, []))
-        for composite_key, thumbnail in self.instance_thumbnails.items():
-            thumbnail.set_subwindow_dots(instance_reverse.get(composite_key, []))
-
-    def _get_instance_thumbnail_key(self, study_uid: str, series_uid: str, slice_index: int) -> Optional[str]:
-        """Return the instance-thumbnail key that contains the provided slice index."""
-        start_indices = self._instance_start_indices.get((study_uid, series_uid), [])
-        if not start_indices:
-            return None
-
-        selected_start = start_indices[0]
-        for start_index in start_indices:
-            if slice_index < start_index:
-                break
-            selected_start = start_index
-        return f"{study_uid}:{series_uid}:{selected_start}"
 
     def _generate_thumbnail(self, dataset: Dataset) -> Optional[Image.Image]:
         """
@@ -1080,43 +1041,21 @@ class SeriesNavigator(QWidget):
             study_uid: Optional study UID. If provided, only highlights if both match.
                       If None, uses current_study_uid.
         """
-        self.set_current_position(series_uid, study_uid, self.current_slice_index)
-
-    def set_current_position(
-        self,
-        series_uid: str,
-        study_uid: Optional[str] = None,
-        slice_index: Optional[int] = None,
-    ) -> None:
-        """Update current highlighting for both the series thumbnail and instance thumbnail."""
         self.current_series_uid = series_uid
         if study_uid is not None:
             self.current_study_uid = study_uid
-        if slice_index is not None:
-            self.current_slice_index = max(0, int(slice_index))
-
-        # Update highlighting for all series thumbnails.
+        
+        # Update highlighting for all thumbnails
         for composite_key, thumbnail in self.thumbnails.items():
+            # Composite key format: "study_uid:series_uid"
             if ":" in composite_key:
                 stored_study_uid, stored_series_uid = composite_key.split(":", 1)
-                is_current = (
-                    stored_series_uid == self.current_series_uid
-                    and stored_study_uid == self.current_study_uid
-                )
+                is_current = (stored_series_uid == series_uid and 
+                            stored_study_uid == self.current_study_uid)
             else:
-                is_current = (composite_key == self.current_series_uid)
+                # Fallback for old format (shouldn't happen with new code)
+                is_current = (composite_key == series_uid)
             thumbnail.set_current(is_current)
-
-        current_instance_key = None
-        if self.current_series_uid and self.current_study_uid:
-            current_instance_key = self._get_instance_thumbnail_key(
-                self.current_study_uid,
-                self.current_series_uid,
-                self.current_slice_index,
-            )
-
-        for composite_key, thumbnail in self.instance_thumbnails.items():
-            thumbnail.set_current(composite_key == current_instance_key)
     
     def regenerate_series_thumbnail(self, study_uid: str, series_uid: str, 
                                     dataset: Dataset, window_center: float, 

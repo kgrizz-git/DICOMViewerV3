@@ -133,4 +133,5 @@ class PrivacyController:
                     overlay_manager.create_overlay_items(
                         subwindow.image_viewer.scene,
                         parser,
+                        multiframe_context=slice_display_manager.get_multiframe_overlay_context(),
                     )

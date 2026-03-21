@@ -593,13 +593,7 @@ class FileSeriesLoadingCoordinator:
             flat_list.extend(series_list)
         return flat_list
 
-    def assign_series_to_subwindow(
-        self,
-        subwindow: Any,
-        series_uid: str,
-        slice_index: int,
-        target_study_uid: Optional[str] = None,
-    ) -> None:
+    def assign_series_to_subwindow(self, subwindow: Any, series_uid: str, slice_index: int) -> None:
         """Assign a series/slice to a specific subwindow."""
         app = self.app
         subwindows = app.multi_window_layout.get_all_subwindows()
@@ -617,16 +611,11 @@ class FileSeriesLoadingCoordinator:
             app._subwindow_lifecycle_controller.ensure_all_subwindows_have_managers()
         if not app.current_studies:
             return
-        if target_study_uid is not None:
-            if target_study_uid not in app.current_studies:
-                return
-            if series_uid not in app.current_studies[target_study_uid]:
-                return
-        else:
-            for study_uid, series_dict in app.current_studies.items():
-                if series_uid in series_dict:
-                    target_study_uid = study_uid
-                    break
+        target_study_uid = None
+        for study_uid, series_dict in app.current_studies.items():
+            if series_uid in series_dict:
+                target_study_uid = study_uid
+                break
         if target_study_uid is None:
             return
         series_datasets = app.current_studies[target_study_uid][series_uid]
@@ -723,28 +712,6 @@ class FileSeriesLoadingCoordinator:
         focused_subwindow = app.multi_window_layout.get_focused_subwindow()
         if focused_subwindow:
             self.assign_series_to_subwindow(focused_subwindow, series_uid, 0)
-
-    def on_series_navigator_instance_selected(self, study_uid: str, series_uid: str, slice_index: int) -> None:
-        """Handle per-instance thumbnail selection from the series navigator."""
-        app = self.app
-        focused_idx = getattr(app, "focused_subwindow_index", -1)
-        if hasattr(app, "_mpr_controller") and app._mpr_controller.is_mpr(focused_idx):
-            label = _WINDOW_LABELS[focused_idx] if 0 <= focused_idx < len(_WINDOW_LABELS) else f"Window {focused_idx + 1}"
-            app.main_window.show_toast_message(
-                f"Please clear MPR before assigning a new series to {label}.",
-                timeout_ms=4500,
-            )
-            return
-        if not app.current_studies:
-            return
-        if study_uid not in app.current_studies:
-            return
-        if series_uid not in app.current_studies[study_uid]:
-            return
-
-        focused_subwindow = app.multi_window_layout.get_focused_subwindow()
-        if focused_subwindow:
-            self.assign_series_to_subwindow(focused_subwindow, series_uid, slice_index, target_study_uid=study_uid)
 
     def on_assign_series_from_context_menu(self, series_uid: str) -> None:
         """Handle series assignment request from context menu (assigns to focused subwindow)."""

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 Application signal wiring for DICOM Viewer V3.
 
@@ -103,7 +101,6 @@ def _wire_view_signals(app: "DICOMViewerApp") -> None:
     """Wire privacy, image-smoothing, theme-change, and slice-sync view signals."""
     app.main_window.privacy_view_toggled.connect(app._on_privacy_view_toggled)
     app.main_window.smooth_when_zoomed_toggled.connect(app._on_smooth_when_zoomed_toggled)
-    app.main_window.show_instances_separately_toggled.connect(app._on_show_instances_separately_toggled)
     app.main_window.theme_changed.connect(app.fusion_controls_widget.update_status_text_colors)
     app.main_window.slice_sync_toggled.connect(app._on_slice_sync_toggled)
     app.main_window.slice_sync_manage_requested.connect(app._open_slice_sync_dialog)
