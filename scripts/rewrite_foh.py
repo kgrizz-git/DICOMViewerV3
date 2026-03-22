@@ -1,137 +1,23 @@
-"""
-File Operations Handler
+"""Rewrite file_operations_handler.py to use loading_pipeline."""
+import ast
+import pathlib
 
-This module handles all file-related operations including opening files, folders,
-and recent files, as well as loading the first slice.
+src_path = pathlib.Path("src/core/file_operations_handler.py")
+src = src_path.read_text(encoding="utf-8")
+lines = src.splitlines(keepends=True)
 
-Inputs:
-    - File paths (single or multiple)
-    - Folder paths
-    - Recent file paths
-    
-Outputs:
-    - Loaded DICOM datasets
-    - Organized studies/series
-    - First slice displayed
-    
-Requirements:
-    - DICOMLoader for loading files
-    - DICOMOrganizer for organizing
-    - FileDialog for user dialogs
-    - ConfigManager for configuration
-    - LoadingProgressManager for animated status, progress dialog and cancellation
-"""
+# 0-based: header → lines 0-35 (source lines 1-36, up to end of imports)
+header = "".join(lines[:35])
 
-import os
-import gc
-from typing import Callable, Optional, Tuple
-from PySide6.QtWidgets import QApplication
-from core.dicom_loader import DICOMLoader, should_skip_path_for_dicom
-from core.dicom_organizer import DICOMOrganizer
-from core.loading_progress_manager import LoadingProgressManager
-from gui.dialogs.file_dialog import FileDialog
-from utils.config_manager import ConfigManager
-from gui.main_window import MainWindow
+# class definition + __init__ + _check_large_files: lines 36-131
+class_def = "".join(lines[36:132])
 
-from core.loading_pipeline import run_load_pipeline, format_source_name
+# _get_first_study_series_by_dicom starts at source line 1669 → 0-based index 1668
+tail = "".join(lines[1668:])
 
-class FileOperationsHandler:
-    """
-    Handles file operations including opening files, folders, and recent files.
-    
-    Responsibilities:
-    - Open single or multiple DICOM files
-    - Open folders (recursive)
-    - Open recent files/folders
-    - Load and organize DICOM datasets
-    - Display first slice after loading
-    - Clear existing data when opening new files
-    """
-    
-    def __init__(
-        self,
-        dicom_loader: DICOMLoader,
-        dicom_organizer: DICOMOrganizer,
-        file_dialog: FileDialog,
-        config_manager: ConfigManager,
-        main_window: MainWindow,
-        clear_data_callback: Callable,
-        load_first_slice_callback: Callable,
-        update_status_callback: Callable
-    ):
-        """
-        Initialize the file operations handler.
-        
-        Args:
-            dicom_loader: DICOM loader instance
-            dicom_organizer: DICOM organizer instance
-            file_dialog: File dialog instance
-            config_manager: Configuration manager
-            main_window: Main window for dialogs
-            clear_data_callback: Callback to clear existing data (ROIs, measurements, etc.)
-            load_first_slice_callback: Callback to load and display first slice
-            update_status_callback: Callback to update status bar
-        """
-        self.dicom_loader = dicom_loader
-        self.dicom_organizer = dicom_organizer
-        self.file_dialog = file_dialog
-        self.config_manager = config_manager
-        self.main_window = main_window
-        self.clear_data_callback = clear_data_callback
-        self.load_first_slice_callback = load_first_slice_callback
-        self.update_status_callback = update_status_callback
+new_import = "from core.loading_pipeline import run_load_pipeline, format_source_name\n"
 
-        # Centralised loading progress infrastructure (animated dots, progress dialog, cancellation).
-        self._loading_manager = LoadingProgressManager(
-            update_status_callback=update_status_callback,
-            cancel_loader_callback=dicom_loader.cancel,
-        )
-    
-    def _check_large_files(self, file_paths: list[str], threshold_mb: float = 25.0) -> None:
-        """
-        Check for large files and show warning if any exceed the threshold.
-        
-        Args:
-            file_paths: List of file paths to check
-            threshold_mb: Size threshold in MB (default 25 MB)
-        """
-        threshold_bytes = threshold_mb * 1024 * 1024
-        large_files = []
-        
-        for file_path in file_paths:
-            if os.path.isfile(file_path):
-                try:
-                    file_size = os.path.getsize(file_path)
-                    if file_size > threshold_bytes:
-                        filename = os.path.basename(file_path)
-                        size_mb = file_size / (1024 * 1024)
-                        large_files.append((filename, size_mb))
-                except (OSError, ValueError):
-                    # Skip files that can't be checked (permissions, etc.)
-                    continue
-        
-        if large_files:
-            warning_msg = (
-                f"Warning: {len(large_files)} large file(s) detected (>25 MB).\n"
-                f"Loading may cause temporary unresponsiveness.\n"
-                f"Please be patient during loading.\n\n"
-                f"Files:\n"
-            )
-            # Show first 5 files
-            for filename, size_mb in large_files[:5]:
-                warning_msg += f"{filename} ({size_mb:.1f} MB)\n"
-            
-            if len(large_files) > 5:
-                warning_msg += f"\n... and {len(large_files) - 5} more"
-            
-            self.file_dialog.show_warning(
-                self.main_window,
-                "Large File Warning",
-                warning_msg
-            )
-            QApplication.processEvents()
-    
-
+new_open_files = '''
     def open_files(self) -> tuple[list, dict]:
         """
         Handle open files request.
@@ -181,7 +67,9 @@ class FileOperationsHandler:
             check_compression_errors=True,
         )
 
+'''
 
+new_open_folder = '''
     def open_folder(self) -> tuple[list, dict]:
         """
         Handle open folder request.
@@ -229,7 +117,9 @@ class FileOperationsHandler:
             check_compression_errors=False,
         )
 
+'''
 
+new_open_recent = '''
     def open_recent_file(self, file_path: str) -> tuple[list, dict]:
         """
         Handle open recent file/folder request.
@@ -242,7 +132,7 @@ class FileOperationsHandler:
         """
         if not os.path.exists(file_path):
             self.file_dialog.show_error(
-                self.main_window, "Error", f"File or folder not found:\n{file_path}"
+                self.main_window, "Error", f"File or folder not found:\\n{file_path}"
             )
             recent_files = self.config_manager.get_recent_files()
             if file_path in recent_files:
@@ -321,7 +211,9 @@ class FileOperationsHandler:
             check_compression_errors=False,
         )
 
+'''
 
+new_open_paths = '''
     def open_paths(self, paths: list[str]) -> tuple[list, dict]:
         """
         Handle open files/folders from drag-and-drop or direct paths.
@@ -424,67 +316,23 @@ class FileOperationsHandler:
 
         return None, None
 
-    def _get_first_study_series_by_dicom(self, studies: dict) -> Optional[Tuple[str, str]]:
-        """
-        Return (study_uid, series_uid) for the first study/series using the same
-        logic as the series navigator: first study in dict iteration order, then
-        series with lowest SeriesNumber in that study. So the auto-loaded series
-        is always from the first study shown in the navigator.
+'''
 
-        Args:
-            studies: Dictionary of organized studies/series (study_uid -> series_key -> [datasets]).
+new_content = (
+    header
+    + new_import
+    + "\n"
+    + class_def
+    + new_open_files
+    + new_open_folder
+    + new_open_recent
+    + new_open_paths
+    + tail
+)
 
-        Returns:
-            (study_uid, series_uid) or None if no studies/series.
-        """
-        if not studies:
-            return None
-        for study_uid in studies.keys():
-            series_dict = studies[study_uid]
-            if not series_dict:
-                continue
-            series_list = []
-            for series_uid, datasets in series_dict.items():
-                if not datasets:
-                    continue
-                sn = getattr(datasets[0], 'SeriesNumber', None)
-                try:
-                    sn = int(sn) if sn is not None else 0
-                except (ValueError, TypeError):
-                    sn = 0
-                series_list.append((sn, series_uid, datasets))
-            series_list.sort(key=lambda x: x[0])
-            if not series_list:
-                continue
-            return (study_uid, series_list[0][1])
-        return None
+src_path.write_text(new_content, encoding="utf-8")
 
-    def load_first_slice(self, studies: dict) -> dict:
-        """
-        Load and return information about the first slice.
-        First study/series uses the same order as the series navigator (first study, lowest SeriesNumber).
-
-        Args:
-            studies: Dictionary of organized studies/series
-
-        Returns:
-            Dictionary with first slice information: study_uid, series_uid, slice_index, dataset
-            or None if no studies available
-        """
-        if not studies:
-            return None
-        pair = self._get_first_study_series_by_dicom(studies)
-        if not pair:
-            return None
-        study_uid, series_uid = pair
-        datasets = studies[study_uid][series_uid]
-        if not datasets:
-            return None
-        return {
-            'study_uid': study_uid,
-            'series_uid': series_uid,
-            'slice_index': 0,
-            'dataset': datasets[0],
-            'total_slices': len(datasets)
-        }
-
+# Verify
+ast.parse(new_content)
+print("SYNTAX OK")
+print(f"Lines: {len(new_content.splitlines())}")

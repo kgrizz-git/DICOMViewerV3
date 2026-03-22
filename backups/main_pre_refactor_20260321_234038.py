@@ -38,7 +38,6 @@ from typing import Optional, Dict, List, Tuple
 import pydicom
 from pydicom.dataset import Dataset
 
-from core import dialog_action_handlers
 from gui.main_window import MainWindow
 from gui.main_window_layout_helper import setup_main_window_content
 from gui.dialogs.file_dialog import FileDialog
@@ -46,6 +45,7 @@ from gui.dialogs.settings_dialog import SettingsDialog
 from gui.dialogs.tag_viewer_dialog import TagViewerDialog
 from gui.dialogs.overlay_config_dialog import OverlayConfigDialog
 from gui.dialogs.annotation_options_dialog import AnnotationOptionsDialog
+from gui.dialogs.quick_window_level_dialog import QuickWindowLevelDialog
 from gui.image_viewer import ImageViewer
 from gui.multi_window_layout import MultiWindowLayout
 from gui.sub_window_container import SubWindowContainer
@@ -1997,7 +1997,22 @@ class DICOMViewerApp(QObject):
     
     def _open_about_this_file(self) -> None:
         """Handle About This File dialog request."""
-        dialog_action_handlers.open_about_this_file(self)
+        # Get current dataset and file path from focused subwindow
+        focused_idx = self.focused_subwindow_index
+        current_dataset = None
+        file_path = None
+        
+        if focused_idx in self.subwindow_data:
+            current_dataset = self.subwindow_data[focused_idx].get('current_dataset')
+            if current_dataset:
+                file_path = self._get_file_path_for_dataset(
+                    current_dataset,
+                    self.subwindow_data[focused_idx].get('current_study_uid', ''),
+                    self.subwindow_data[focused_idx].get('current_series_uid', ''),
+                    self.subwindow_data[focused_idx].get('current_slice_index', 0)
+                )
+        
+        self.dialog_coordinator.open_about_this_file(current_dataset, file_path)
     
     def _get_file_path_for_dataset(self, dataset, study_uid: str, series_uid: str, slice_index: int) -> Optional[str]:
         """Get file path for a dataset. Delegates to file/series loading coordinator."""
@@ -2050,7 +2065,11 @@ class DICOMViewerApp(QObject):
 
     def _open_slice_sync_dialog(self) -> None:
         """Open the Manage Sync Groups dialog."""
-        dialog_action_handlers.open_slice_sync_dialog(self)
+        from gui.dialogs.slice_sync_dialog import SliceSyncDialog
+        current_groups = self.config_manager.get_slice_sync_groups()
+        dlg = SliceSyncDialog(current_groups, parent=self.main_window)
+        dlg.groups_changed.connect(self._on_slice_sync_groups_changed)
+        dlg.exec()
 
     def _on_slice_sync_groups_changed(self, groups) -> None:
         """
@@ -2143,15 +2162,47 @@ class DICOMViewerApp(QObject):
     
     def _open_overlay_config(self) -> None:
         """Handle overlay configuration dialog request."""
-        dialog_action_handlers.open_overlay_config(self)
+        # Extract modality from current dataset if available
+        current_modality = None
+        if self.current_dataset is not None:
+            modality = getattr(self.current_dataset, 'Modality', None)
+            if modality:
+                # Normalize modality (strip whitespace)
+                modality_str = str(modality).strip()
+                # Valid modalities list (must match overlay_config_dialog.py, alphabetical order, default first)
+                valid_modalities = ["default", "CR", "CT", "DX", "MG", "MR", "NM", "PT", "RF", "RT", "US", "XA"]
+                if modality_str in valid_modalities:
+                    current_modality = modality_str
+                # If modality is not in valid list, current_modality remains None (will default to "default")
+        
+        self.dialog_coordinator.open_overlay_config(current_modality=current_modality)
     
     def _open_annotation_options(self) -> None:
         """Handle annotation options dialog request."""
         self.dialog_coordinator.open_annotation_options()
 
     def _open_quick_window_level(self) -> None:
-        """Open Quick Window/Level dialog for the focused subwindow."""
-        dialog_action_handlers.open_quick_window_level(self)
+        """Open Quick Window/Level dialog for the focused subwindow. Apply entered center/width via view_state_manager.handle_window_changed."""
+        if not self.view_state_manager:
+            return
+        initial_center = self.view_state_manager.current_window_center
+        initial_width = self.view_state_manager.current_window_width
+        center_range = self.window_level_controls.center_range
+        width_range = self.window_level_controls.width_range
+        unit = getattr(self.view_state_manager, "rescale_type", None) or None
+        apply_callback = self.view_state_manager.handle_window_changed
+        dlg = QuickWindowLevelDialog(
+            parent=self.main_window,
+            initial_center=initial_center,
+            initial_width=initial_width,
+            center_range=center_range,
+            width_range=width_range,
+            apply_callback=apply_callback,
+            unit=unit,
+        )
+        dlg.raise_()
+        dlg.activateWindow()
+        dlg.exec()
     
     def _open_quick_start_guide(self) -> None:
         """Handle Quick Start Guide dialog request."""
@@ -2170,8 +2221,38 @@ class DICOMViewerApp(QObject):
         self.dialog_coordinator.open_export_roi_statistics(self.subwindow_managers)
     
     def _open_export(self) -> None:
-        """Handle Export dialog request. Resolution options are in the dialog."""
-        dialog_action_handlers.open_export(self)
+        """Handle Export dialog request. Resolution options are in the dialog (Native / 1.5× / 2× / 4×)."""
+        window_center, window_width = self.window_level_controls.get_window_level()
+        use_rescaled_values = self.view_state_manager.use_rescaled_values
+        projection_enabled = self.slice_display_manager.projection_enabled
+        projection_type = self.slice_display_manager.projection_type
+        projection_slice_count = self.slice_display_manager.projection_slice_count
+        focused_subwindow_index = self.get_focused_subwindow_index()
+        # Option B: aggregate annotations from all subwindows for export
+        subwindow_annotation_managers = []
+        for idx in sorted(self.subwindow_managers.keys()):
+            m = self.subwindow_managers[idx]
+            subwindow_annotation_managers.append({
+                'roi_manager': m.get('roi_manager'),
+                'measurement_tool': m.get('measurement_tool'),
+                'text_annotation_tool': m.get('text_annotation_tool'),
+                'arrow_annotation_tool': m.get('arrow_annotation_tool')
+            })
+        self.dialog_coordinator.open_export(
+            current_window_center=window_center,
+            current_window_width=window_width,
+            focused_subwindow_index=focused_subwindow_index,
+            use_rescaled_values=use_rescaled_values,
+            roi_manager=self.roi_manager,
+            overlay_manager=self.overlay_manager,
+            measurement_tool=self.measurement_tool,
+            text_annotation_tool=getattr(self, 'text_annotation_tool', None),
+            arrow_annotation_tool=getattr(self, 'arrow_annotation_tool', None),
+            projection_enabled=projection_enabled,
+            projection_type=projection_type,
+            projection_slice_count=projection_slice_count,
+            subwindow_annotation_managers=subwindow_annotation_managers
+        )
 
     def _open_export_screenshots(self) -> None:
         """Handle Export Screenshots dialog request. One file per selected subwindow."""
