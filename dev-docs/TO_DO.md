@@ -83,6 +83,7 @@ This file tracks active and near-term tasks.
 - [ ] **[P2]** Advanced ROI/contouring roadmap (contouring, auto-detect ROI, 3D ROI across views) ([details](FUTURE_WORK_DETAIL_NOTES.md#advanced-roi-and-contouring))
 - [ ] **[P2]** Allow hanging protocols? Configuration of windows/tiles, certain views/phases/priors loaded
 - [ ] **[P2]** Once database is added, allow pulling priors
+- [ ] **[P1]** Also try RDSR parsing/export support - have some examples, add to repo
 
 ## Data / Platform (Future)
 
