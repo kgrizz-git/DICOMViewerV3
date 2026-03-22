@@ -79,6 +79,15 @@ DEBUG_RESIZE: bool = False
 # Affects: debug_log.py.
 DEBUG_ANNOTATION: bool = False
 
+# Enables agent-based diagnostic logging to debug-088dbc.log.
+# Set to False before commits/builds; logs are written to working directory.
+# Affects: image_viewer, slice_display_manager.
+DEBUG_AGENT_LOG: bool = False
+
+# Enables font variant diagnostic logging.
+# Affects: debug_log.py.
+DEBUG_FONT_VARIANT: bool = False
+
 # Enables font family/variant persistence tracing in config setters and dialogs.
 # Affects: overlay_config.py, overlay_settings_dialog.py.
 DEBUG_FONT_VARIANT: bool = False

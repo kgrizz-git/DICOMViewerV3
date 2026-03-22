@@ -1,0 +1,558 @@
+        <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; line-height: 1.6; background-color: {bg_color}; color: {text_color}; padding: 10px; }
+                h1 { color: {h1_color}; font-size: 20px; margin-top: 20px; margin-bottom: 15px; border-bottom: 2px solid {strong_color}; padding-bottom: 5px; }
+                h2 { color: {h2_color}; font-size: 18px; margin-top: 20px; margin-bottom: 10px; }
+                h3 { color: {h3_color}; font-size: 16px; margin-top: 15px; margin-bottom: 8px; }
+                h4 { color: {h3_color}; font-size: 14px; margin-top: 12px; margin-bottom: 6px; }
+                p { margin: 8px 0; }
+                ul, ol { margin: 8px 0; padding-left: 25px; }
+                li { margin: 4px 0; }
+                strong { color: {strong_color}; }
+                code { background-color: {code_bg}; color: {code_text}; padding: 2px 6px; border-radius: 3px; font-family: 'Courier New', monospace; }
+                pre { background-color: {code_bg}; color: {code_text}; padding: 10px; border-radius: 5px; overflow-x: auto; }
+                table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+                th, td { border: 1px solid {table_border}; padding: 8px; text-align: left; }
+                th { background-color: {table_header_bg}; font-weight: bold; }
+                a { color: {strong_color}; text-decoration: none; }
+                a:hover { text-decoration: underline; }
+            </style>
+        </head>
+        <body>
+            <h1>Image Fusion Technical Documentation</h1>
+            
+            <h2>Table of Contents</h2>
+            <ul>
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#architecture">Architecture Overview</a></li>
+                <li><a href="#options">Fusion Options and Parameters</a></li>
+                <li><a href="#2d-algorithm">2D Fusion Algorithm</a></li>
+                <li><a href="#3d-algorithm">3D Fusion Algorithm</a></li>
+                <li><a href="#duplicate-locations">Duplicate Slice Locations</a></li>
+                <li><a href="#spatial-alignment">Spatial Alignment</a></li>
+                <li><a href="#error-analysis">Error Sources and Accuracy Analysis</a></li>
+                <li><a href="#performance">Performance Considerations</a></li>
+            </ul>
+            
+            <h2 id="overview">Overview</h2>
+            <p>The DICOM Viewer V3 image fusion feature allows overlaying functional imaging (PET/SPECT) on anatomical imaging (CT/MR) from different series within the same study. This document provides detailed technical information about the fusion algorithms, options, error sources, and accuracy estimates.</p>
+            
+            <h2 id="architecture">Architecture Overview</h2>
+            <p>The fusion system consists of three main components:</p>
+            <ol>
+                <li><strong>FusionHandler</strong>: Manages fusion state, slice matching, and spatial metadata extraction</li>
+                <li><strong>FusionProcessor</strong>: Performs image blending, colormap application, and pixel-level operations</li>
+                <li><strong>ImageResampler</strong>: Handles 3D volume resampling using SimpleITK for complex spatial transformations</li>
+            </ol>
+            
+            <h3>Data Flow</h3>
+            <pre>User Selection â†’ FusionHandler â†’ Slice Matching â†’ Resampling Decision
+                                                      â†“
+                                             2D or 3D Resampling
+                                                      â†“
+                                            FusionProcessor
+                                                      â†“
+                                            Blended RGB Image</pre>
+            
+            <h2 id="options">Fusion Options and Parameters</h2>
+            
+            <h3>Core Parameters</h3>
+            <ol>
+                <li><strong>Opacity (Î±)</strong>: 0.0 to 1.0 (0-100% in UI)
+                    <ul>
+                        <li>Controls transparency of overlay on base image</li>
+                        <li>Formula: <code>fused = base Ã— (1 - Î±Ã—mask) + overlay Ã— (Î±Ã—mask)</code></li>
+                        <li>Default: 0.5 (50%)</li>
+                    </ul>
+                </li>
+                <li><strong>Threshold</strong>: 0.0 to 1.0 (0-100% in UI, normalized space)
+                    <ul>
+                        <li>Minimum overlay value to display</li>
+                        <li>Creates binary mask: <code>mask = (overlay_normalized >= threshold)</code></li>
+                        <li>Default: 0.2 (20% of normalized range)</li>
+                    </ul>
+                </li>
+                <li><strong>Colormap</strong>: Visualization scheme for overlay
+                    <ul>
+                        <li>Available: hot, jet, viridis, plasma, inferno, rainbow, cool, spring</li>
+                        <li>Applied to normalized overlay values (0-1 range)</li>
+                        <li>Default: 'hot' (red-yellow, good for PET)</li>
+                    </ul>
+                </li>
+                <li><strong>Overlay Window/Level</strong>: Independent window width and center for overlay series
+                    <ul>
+                        <li>Normalizes overlay pixel values before colormap application</li>
+                        <li>Formula: <code>normalized = clip((value - (level - window/2)) / window, 0, 1)</code></li>
+                        <li>Default: Window=1000, Level=500</li>
+                    </ul>
+                </li>
+            </ol>
+            
+            <h3>Resampling Modes</h3>
+            <ol>
+                <li><strong>Fast Mode (2D)</strong>:
+                    <ul>
+                        <li>Uses 2D image resize (PIL bilinear interpolation)</li>
+                        <li>Suitable for series with same ImageOrientationPatient, similar slice thickness, and same or similar pixel spacing</li>
+                        <li>Faster processing, lower memory usage</li>
+                        <li>Limited to 2D transformations (scaling, translation)</li>
+                    </ul>
+                </li>
+                <li><strong>High Accuracy Mode (3D)</strong>:
+                    <ul>
+                        <li>Uses 3D volume resampling (SimpleITK)</li>
+                        <li>Handles different orientations, slice thicknesses, pixel spacings, and complex spatial relationships</li>
+                        <li>Slower processing, higher memory usage</li>
+                        <li>Full 3D spatial transformation</li>
+                    </ul>
+                </li>
+            </ol>
+            
+            <h3>Interpolation Methods (3D Mode Only)</h3>
+            <ul>
+                <li><strong>Linear</strong> (default): Smooth interpolation, good balance of quality and speed</li>
+                <li><strong>Nearest Neighbor</strong>: Fastest, preserves original pixel values, may produce blocky artifacts</li>
+                <li><strong>Cubic/B-Spline</strong>: Higher quality, smoother results, more computationally expensive</li>
+            </ul>
+            
+            <h2 id="2d-algorithm">2D Fusion Algorithm</h2>
+            
+            <h3>Algorithm Steps</h3>
+            <p>In 2D mode, the fusion system works one slice at a time. For each anatomical <em>base</em> slice, it locates the best matching functional <em>overlay</em> slice (or pair of slices) that represents the same physical position in the patient. It then scales and shifts that overlay slice so that it lines up with the base slice in pixel space before blending them together.</p>
+            <ol>
+                <li><strong>Slice Matching</strong>:
+                    <ul>
+                        <li>Extract slice location from base slice (SliceLocation or ImagePositionPatient[2])</li>
+                        <li>Find matching overlay slice(s) with tolerance < 0.01 mm for exact match</li>
+                        <li>If no match found within series bounds, return None</li>
+                    </ul>
+                </li>
+                <li><strong>2D Interpolation (if needed)</strong>:
+                    <ul>
+                        <li>If an exact match is found, the overlay slice is used directly.</li>
+                        <li>If the base slice lies between two overlay slices, the system performs linear interpolation along the slice (throughâ€‘plane) direction to synthesize an overlay slice at the correct physical location.</li>
+                        <li>It first finds the two adjacent overlay slices that bracket the base slice, then computes a continuous weight: <code>weight = (base_location - loc1) / (loc2 - loc1)</code>.</li>
+                        <li>The interpolated slice is computed as <code>overlay = array1 Ã— (1 - weight) + array2 Ã— weight</code>, so the overlay values change smoothly as the base position moves between those two overlay slices.</li>
+                    </ul>
+                </li>
+                <li><strong>Pixel Spacing Scaling</strong>:
+                    <ul>
+                        <li>Calculate scaling factors from pixel spacing ratios</li>
+                        <li>Resize overlay to match physical dimensions using PIL bilinear resampling</li>
+                    </ul>
+                </li>
+                <li><strong>Translation Offset</strong>:
+                    <ul>
+                        <li>Calculate from ImagePositionPatient difference</li>
+                        <li>Convert to pixels using base pixel spacing</li>
+                        <li>Apply translation by placing overlay on base-sized canvas</li>
+                    </ul>
+                </li>
+                <li><strong>Normalization and Blending</strong>:
+                    <ul>
+                        <li>Normalize base and overlay using window/level</li>
+                        <li>Apply colormap to overlay</li>
+                        <li>Apply threshold mask</li>
+                        <li>Alpha blend: <code>fused = base Ã— (1 - Î±Ã—mask) + overlay Ã— (Î±Ã—mask)</code></li>
+                    </ul>
+                </li>
+            </ol>
+            
+            <h3>Error Sources (2D Mode)</h3>
+            <p>There are two broad classes of error sources in 2D fusion: (1) <strong>algorithmâ€‘intrinsic</strong> errors from interpolation, resampling, and rounding even when DICOM metadata is correct, and (2) <strong>metadata/input errors</strong> when tags like <code>SliceLocation</code>, <code>ImagePositionPatient</code>, or <code>ImageOrientationPatient</code> are wrong or missing.</p>
+            <table>
+                <tr>
+                    <th>Error Source</th>
+                    <th>Error Magnitude (pixels/voxels and mm)</th>
+                    <th>Impact / Origin</th>
+                </tr>
+                <tr>
+                    <td>Slice Location Extraction</td>
+                    <td>Unbounded (can be many slices/voxels off)</td>
+                    <td>Metadata: wrong/missing <code>SliceLocation</code>/<code>ImagePositionPatient</code> can cause the wrong overlay slice to be matched to the base slice, regardless of algorithm accuracy</td>
+                </tr>
+                <tr>
+                    <td>2D Interpolation</td>
+                    <td>â‰ˆÂ±0.5 overlay slices (Â±0.5 voxels in Z); â‰ˆÂ±0.5 mm at 1 mm slice spacing, â‰ˆÂ±1.5 mm at 3 mm slice spacing</td>
+                    <td>Algorithmic: minor throughâ€‘plane blurring when interpolating between slices; inâ€‘plane position remains aligned</td>
+                </tr>
+                <tr>
+                    <td>Pixel Spacing Scaling</td>
+                    <td>â‰ˆÂ±0.5 pixels in x/y; â‰ˆÂ±0.5 mm at 1 mm pixels, â‰ˆÂ±0.25 mm at 0.5 mm pixels</td>
+                    <td>Algorithmic: slight blurring/softening at edges from 2D resampling; geometry stays on the base pixel grid</td>
+                </tr>
+                <tr>
+                    <td>Translation Offset</td>
+                    <td>Â±0.5 pixels in x/y (rounding); â‰ˆÂ±0.5 mm at 1 mm pixels, â‰ˆÂ±0.25 mm at 0.5 mm pixels</td>
+                    <td>Algorithmic: subâ€‘pixel misalignment from rounding mm offsets to integer pixel indices</td>
+                </tr>
+                <tr>
+                    <td>Orientation Mismatch</td>
+                    <td>Can be many pixels (or entire FOV) off; several mm to cm in physical space</td>
+                    <td>Metadata: different <code>ImageOrientationPatient</code> (e.g., axial vs sagittal) cannot be corrected by 2D scaling/translation alone; 3D resampling is required for accurate alignment</td>
+                </tr>
+            </table>
+            
+            <h3>Accuracy Estimates (2D Mode)</h3>
+            <p>The ranges below assume that DICOM spatial metadata is correct and internally consistent. Under that assumption, only the algorithmâ€‘intrinsic interpolation and rounding errors described above contribute to misalignment.</p>
+            <ul>
+                <li><strong>Best Case</strong> (same orientation, same pixel spacing, no interpolation needed):
+                    <ul>
+                        <li>Spatial accuracy (native): â‰ˆÂ±0.5 pixels in x/y from scaling and translation rounding, â‰ˆ0 voxels in Z.</li>
+                        <li>Physical equivalent: â‰ˆÂ±0.5 mm at 1 mm spacing, â‰ˆÂ±0.25 mm at 0.5 mm spacing.</li>
+                        <li><strong>Total algorithmic error:</strong> on the order of Â±0.5â€“1.0 pixels (â‰ˆÂ±0.5â€“1.0 mm at 1 mm spacing).</li>
+                    </ul>
+                </li>
+                <li><strong>Typical Case</strong> (same orientation, different pixel spacing, interpolation between reasonably spaced slices):
+                    <ul>
+                        <li>Spatial accuracy (native): â‰ˆÂ±0.5â€“1.0 pixels in x/y and up to Â±0.5 overlay slices in Z.</li>
+                        <li>Physical equivalent: â‰ˆÂ±0.5â€“1.5 mm total, depending on slice spacing (e.g., Â±1.5 mm at 3 mm slices).</li>
+                        <li><strong>Total algorithmic error:</strong> typically Â±1.0â€“2.5 mm.</li>
+                    </ul>
+                </li>
+                <li><strong>Worst Case (algorithmâ€‘only)</strong> (still assuming correct metadata, but with very thick/sparse slices where 2D is used instead of 3D):
+                    <ul>
+                        <li>Spatial accuracy: several pixels of combined inâ€‘ and throughâ€‘plane interpolation error.</li>
+                        <li>Physical equivalent: several millimetres, especially with thick slices.</li>
+                        <li><strong>Total algorithmic error:</strong> may be large enough that 3D resampling is strongly recommended.</li>
+                    </ul>
+                </li>
+            </ul>
+            <p><em>Metadata error scenarios</em> (e.g., wrong <code>SliceLocation</code> or <code>ImageOrientationPatient</code>) are not bounded by these ranges; in those cases, pixelâ€‘level misalignment can be arbitrarily large, and the fusion result should be regarded as qualitatively wrong regardless of the algorithm&rsquo;s nominal accuracy.</p>
+            
+            <h2 id="3d-algorithm">3D Fusion Algorithm</h2>
+            
+            <h3>Algorithm Steps</h3>
+            <p>In 3D mode, the system first builds full 3D volumes for both the base and overlay series and then resamples the entire overlay volume into the base volume&rsquo;s coordinate system. Only after that resampling step does it extract individual slices for display. This captures differences in slice spacing, orientation, and position more accurately than the 2D sliceâ€‘byâ€‘slice method.</p>
+            <ol>
+                <li><strong>DICOM Series to SimpleITK Conversion</strong>:
+                    <ul>
+                        <li>Sort datasets by slice location</li>
+                        <li>Extract pixel arrays and stack into 3D volume (z, y, x)</li>
+                        <li>Set spatial metadata: Origin, Spacing, Direction matrix</li>
+                    </ul>
+                </li>
+                <li><strong>Slice Spacing Calculation</strong>:
+                    <ul>
+                        <li>Primary method: Component along slice normal from ImageOrientationPatient</li>
+                        <li>Fallback: 3D Euclidean distance between consecutive slices</li>
+                        <li>Fallback: SliceThickness tag (if only one slice)</li>
+                    </ul>
+                </li>
+                <li><strong>3D Volume Resampling</strong>:
+                    <ul>
+                        <li>Convert overlay and base series to SimpleITK images.</li>
+                        <li>Use SimpleITK <code>Resample()</code> with an identity (noâ€‘movement) transform.</li>
+                        <li>This assumes that the base and overlay series share the same DICOM <code>FrameOfReferenceUID</code> (see the Frame of Reference Assumption in the error section below).</li>
+                        <li>The overlay volume is resampled so that it shares the same origin, spacing, and direction matrix as the base volume, meaning every overlay voxel is mapped directly into the base image&rsquo;s 3D grid.</li>
+                    </ul>
+                </li>
+                <li><strong>Slice Extraction</strong>:
+                    <ul>
+                        <li>Extract requested slice from resampled volume</li>
+                        <li>Map unsorted slice index to sorted index</li>
+                        <li>Apply rescale slope/intercept if present</li>
+                    </ul>
+                </li>
+                <li><strong>Normalization and Blending</strong>:
+                    <ul>
+                        <li>Same as 2D mode (normalize, colormap, threshold, alpha blend)</li>
+                        <li>Skip 2D resize and translation (already handled by 3D interpolation/resampling on the full volume)</li>
+                    </ul>
+                </li>
+            </ol>
+            
+            <h3>Error Sources (3D Mode)</h3>
+            <p>As with 2D mode, 3D fusion errors come from both <strong>algorithmâ€‘intrinsic</strong> effects (e.g., interpolation) and <strong>metadata/input</strong> problems (e.g., incorrect Positions or FrameOfReferenceUIDs). The table below summarizes typical magnitudes for each category.</p>
+            <table>
+                <tr>
+                    <th>Error Source</th>
+                    <th>Error Magnitude (voxels and mm)</th>
+                    <th>Impact / Origin</th>
+                </tr>
+                <tr>
+                    <td>3D Resampling Interpolation (Linear)</td>
+                    <td>â‰ˆÂ±0.5 voxels per axis; â‰ˆÂ±0.87 voxels in 3D magnitude (â‰ˆÂ±0.5â€“0.9 mm at 1 mm voxels)</td>
+                    <td>Algorithmic: subâ€‘voxel smoothing/blurring when mapping overlay into the base grid</td>
+                </tr>
+                <tr>
+                    <td>3D Resampling Interpolation (Cubic/B-spline)</td>
+                    <td>â‰ˆÂ±0.3â€“0.4 voxels per axis; â‰ˆÂ±0.5â€“0.7 voxels total (â‰ˆÂ±0.5â€“0.7 mm at 1 mm voxels)</td>
+                    <td>Algorithmic: higherâ€‘order interpolation with reduced artifacts and smaller voxelâ€‘scale error</td>
+                </tr>
+                <tr>
+                    <td>Slice Location Sorting</td>
+                    <td>Unbounded; slices without valid locations may be dropped, misâ€‘ordered, or unevenly spaced</td>
+                    <td>Metadata: missing/incorrect <code>SliceLocation</code>/<code>ImagePositionPatient</code> can distort or truncate the 3D volume</td>
+                </tr>
+                <tr>
+                    <td>Slice Spacing Calculation</td>
+                    <td>Typically Â±0.1â€“0.5 mm with good metadata; can be overestimated by 10â€“30% or more with oblique slices and poor metadata</td>
+                    <td>Metadata: errors in position/orientation or reliance on simple 3D distances change apparent slice spacing</td>
+                </tr>
+                <tr>
+                    <td>Direction Matrix Construction</td>
+                    <td>Orientation errors usually &lt;0.1Â° for wellâ€‘formed DICOM (<0.001 differences in direction cosines)</td>
+                    <td>Metadata: minor rounding/nonâ€‘orthogonality in <code>ImageOrientationPatient</code>; geometric impact is typically negligible</td>
+                </tr>
+                <tr>
+                    <td>Frame of Reference Assumption</td>
+                    <td>Can be many voxels off in x/y/z; several millimetres to centimetres in physical space</td>
+                    <td>Metadata: if <code>FrameOfReferenceUID</code> differs, the identity transform is wrong and the fusion can be grossly misregistered; the status label warns when UIDs differ, fusion remains allowed but should be treated as potentially inaccurate</td>
+                </tr>
+            </table>
+            
+            <h3>Accuracy Estimates (3D Mode)</h3>
+            <p>These ranges assume that all spatial DICOM metadata (FrameOfReferenceUID, ImageOrientationPatient, ImagePositionPatient, PixelSpacing, SliceThickness) is correct and consistent. Under that assumption, 3D interpolation and numerical effects dominate the residual geometric error.</p>
+            <ul>
+                <li><strong>Best Case</strong> (accurate spatial metadata, linear interpolation, same Frame of Reference):
+                    <ul>
+                        <li>Spatial accuracy (native): subâ€‘voxel in all three dimensions, typically â‰ˆÂ±0.5â€“0.87 voxels total.</li>
+                        <li>Physical equivalent (1 mm isotropic voxels): â‰ˆÂ±0.6â€“1.0 mm total positional error.</li>
+                    </ul>
+                </li>
+                <li><strong>Typical Case</strong> (good spatial metadata, linear interpolation):
+                    <ul>
+                        <li>Spatial accuracy: â‰ˆÂ±0.87 voxels from interpolation plus small spacing/orientation uncertainties.</li>
+                        <li>Physical equivalent: â‰ˆÂ±1.0â€“1.5 mm for most CT/PET volumes.</li>
+                    </ul>
+                </li>
+                <li><strong>Worst Case (algorithmâ€‘only)</strong> (still assuming correct metadata, but aggressive resampling between very different grids/orientations):
+                    <ul>
+                        <li>Spatial accuracy: a few voxels of total 3D error in extreme edge cases.</li>
+                        <li>Physical equivalent: several millimetres, particularly with very thick slices.</li>
+                    </ul>
+                </li>
+            </ul>
+            <p><em>Metadata error scenarios</em> (e.g., mismatched FrameOfReferenceUIDs, misâ€‘encoded positions or spacings) are not bounded by these values. In those cases, voxelâ€‘level misalignment can be arbitrarily large and the fused images should be interpreted with extreme caution unless the metadata has been corrected or explicit registration has been applied.</p>
+            
+            <h2 id="duplicate-locations">Duplicate Slice Locations</h2>
+            <p>Some DICOM series contain multiple slices at the same physical location.</p>
+            
+            <h3>2D Mode Behavior</h3>
+            <p>When multiple overlay slices exist at the same location, only the first occurrence is used for slice matching. The <code>find_matching_slice()</code> method returns the first match within tolerance (0.01mm). All base slices at the same location will receive the same overlay slice.</p>
+            
+            <h3>3D Mode Behavior</h3>
+            <p>Duplicate locations are automatically filtered out before volume construction. The system keeps only the first occurrence of each unique location (within 0.01mm tolerance). This filtering prevents zeroâ€‘valued spacing errors in SimpleITK, which occurs when consecutive slices share the same location. Filtering happens after sorting but before pixel array extraction, ensuring valid slice spacing calculations.</p>
+            
+            <h3>Warning System</h3>
+            <p>A warning is displayed in the fusion status box when an overlay series contains duplicate locations. The warning message indicates how many duplicates were detected. Users are informed that only the first occurrence at each location will be used in 3D fusion.</p>
+            
+            <h3>Impact</h3>
+            <p>Filtering duplicates ensures correct slice spacing calculation and prevents 3D resampling failures. The filtered volume may have fewer slices than the original series, but spatial accuracy is maintained. Index mapping in <code>get_resampled_slice()</code> handles filtered duplicates by finding the first dataset at the same location.</p>
+            
+            <h2 id="spatial-alignment">Spatial Alignment</h2>
+            
+            <h3>Automatic Alignment</h3>
+            <p>The system automatically calculates spatial alignment using DICOM metadata:</p>
+            <ul>
+                <li><strong>Scaling Factors</strong>: Calculated from pixel spacing ratios</li>
+                <li><strong>Translation Offset</strong>: Calculated from ImagePositionPatient difference, converted to pixels</li>
+            </ul>
+            
+            <h3>Manual Adjustment</h3>
+            <p>Users can manually adjust translation offset:</p>
+            <ul>
+                <li>Range: -500 to +500 pixels</li>
+                <li>Step: 1 pixel</li>
+                <li>Reset to calculated offset available</li>
+                <li>Useful for fine-tuning when automatic alignment is slightly off</li>
+            </ul>
+            
+            <h3>Alignment Accuracy</h3>
+            <ul>
+                <li><strong>Automatic alignment error</strong>:
+                    <ul>
+                        <li>Depends on ImagePositionPatient accuracy</li>
+                        <li>Typical DICOM accuracy: Â±0.1-0.5 mm</li>
+                        <li>For 1 mm pixel spacing: Â±0.1-0.5 pixels</li>
+                        <li><strong>Total alignment error: Â±0.1-0.5 mm (best case) to Â±1-2 mm (typical)</strong></li>
+                    </ul>
+                </li>
+                <li><strong>Manual adjustment precision</strong>:
+                    <ul>
+                        <li>Limited to integer pixels</li>
+                        <li>For 1 mm pixel spacing: Â±0.5 mm precision</li>
+                        <li>For 0.5 mm pixel spacing: Â±0.25 mm precision</li>
+                    </ul>
+                </li>
+            </ul>
+            
+            <h2 id="error-analysis">Error Sources and Accuracy Analysis</h2>
+            
+            <h3>Summary of Error Sources</h3>
+            <p>The tables below summarize key error sources across 2D and 3D fusion, grouped into algorithmâ€‘intrinsic effects and DICOM metadata/inputâ€‘driven effects.</p>
+            <h4>Algorithmâ€‘intrinsic error sources (with correct metadata)</h4>
+            <table>
+                <tr>
+                    <th>Error Source</th>
+                    <th>2D Mode Error (pixels/voxels &amp; mm)</th>
+                    <th>3D Mode Error (voxels &amp; mm)</th>
+                    <th>Notes</th>
+                </tr>
+                <tr>
+                    <td>Slice interpolation</td>
+                    <td>â‰ˆÂ±0.5 overlay slices (Â±0.5 voxels in Z); â‰ˆÂ±0.5 mm at 1 mm spacing, â‰ˆÂ±1.5 mm at 3 mm spacing</td>
+                    <td>N/A (effect is handled by 3D interpolation/resampling instead of explicit 2D perâ€‘slice interpolation)</td>
+                    <td>Throughâ€‘plane interpolation when the base slice lies between overlay slices</td>
+                </tr>
+                <tr>
+                    <td>Pixel spacing scaling</td>
+                    <td>â‰ˆÂ±0.5 pixels in x/y; â‰ˆÂ±0.5 mm at 1 mm pixels, â‰ˆÂ±0.25 mm at 0.5 mm pixels</td>
+                    <td>N/A (3D resampling handles inâ€‘plane scaling)</td>
+                    <td>2D resize of overlay to match base field of view; slight blurring at edges</td>
+                </tr>
+                <tr>
+                    <td>Translation offset (rounding)</td>
+                    <td>Â±0.5 pixels in x/y; â‰ˆÂ±0.5 mm at 1 mm pixels, â‰ˆÂ±0.25 mm at 0.5 mm pixels</td>
+                    <td>N/A (3D translation handled in world coordinates)</td>
+                    <td>Rounding mm offsets to integer pixel indices in 2D mode</td>
+                </tr>
+                <tr>
+                    <td>3D resampling interpolation</td>
+                    <td>N/A</td>
+                    <td>â‰ˆÂ±0.5â€“0.87 voxels (linear); â‰ˆÂ±0.3â€“0.7 voxels (cubic/Bâ€‘spline); â‰ˆÂ±0.5â€“0.9 mm at 1 mm voxels</td>
+                    <td>Unavoidable subâ€‘voxel error from mapping overlay into the base volume grid</td>
+                </tr>
+            </table>
+            <h4>Metadata / inputâ€‘driven error sources</h4>
+            <table>
+                <tr>
+                    <th>Error Source</th>
+                    <th>2D Mode Error (pixels/voxels &amp; mm)</th>
+                    <th>3D Mode Error (voxels &amp; mm)</th>
+                    <th>Notes</th>
+                </tr>
+                <tr>
+                    <td>Slice location extraction</td>
+                    <td>Unbounded; can misâ€‘match slices by many indices (tens of voxels) if tags are wrong</td>
+                    <td>Same: misâ€‘ordering/dropping slices can distort the volume. Duplicate locations are automatically filtered to ensure valid spacing calculations</td>
+                    <td>Incorrect/missing <code>SliceLocation</code>/<code>ImagePositionPatient</code> affects which slices are fused, not the interpolation math. Only first occurrence of each unique location is used in 3D mode</td>
+                </tr>
+                <tr>
+                    <td>Orientation mismatch</td>
+                    <td>Can be many pixels (or entire FOV) off; several mmâ€“cm in physical space</td>
+                    <td>Reduced to subâ€‘voxel interpolation error if metadata is correct and 3D resampling is used</td>
+                    <td>Different <code>ImageOrientationPatient</code>; 2D mode cannot fully correct this, 3D mode relies on accurate direction cosines</td>
+                </tr>
+                <tr>
+                    <td>Slice spacing calculation</td>
+                    <td>N/A</td>
+                    <td>Typically Â±0.1â€“0.5 mm with good metadata; larger % errors if derived from oblique positions. Duplicate locations are filtered to prevent zero spacing errors</td>
+                    <td>Depends on positions and thickness; algorithm follows reported geometry. Duplicates filtered before spacing calculation</td>
+                </tr>
+                <tr>
+                    <td>Frame of Reference mismatch</td>
+                    <td>Can be very large (entire organs shifted)</td>
+                    <td>Same: misregistration can be many voxels; several mmâ€“cm physically</td>
+                    <td>Wrong/different <code>FrameOfReferenceUID</code>; identity transform is wrong, and fusion is only qualitatively valid unless separate registration is applied</td>
+                </tr>
+                <tr>
+                    <td>Rescale parameter inconsistency</td>
+                    <td>Low (intensity only)</td>
+                    <td>Low (intensity only)</td>
+                    <td>Perâ€‘slice differences in rescale slope/intercept cause value, not geometric, errors if a single global pair is used</td>
+                </tr>
+            </table>
+            
+            <h3>Overall Accuracy Estimates</h3>
+            <p><strong>2D Mode:</strong></p>
+            <ul>
+                <li>Best case: Â±0.5-1.0 mm</li>
+                <li>Typical case: Â±1.0-2.5 mm</li>
+                <li>Worst case (orientation mismatch): Unpredictable, may be unusable</li>
+            </ul>
+            
+            <p><strong>3D Mode:</strong></p>
+            <ul>
+                <li>Best case: Â±0.6-1.0 mm</li>
+                <li>Typical case: Â±1.0-1.5 mm</li>
+                <li>Worst case (Frame of Reference mismatch): Unpredictable, may be unusable</li>
+            </ul>
+            
+            <h3>Recommendations</h3>
+            <ol>
+                <li><strong>Use 3D mode</strong> when:
+                    <ul>
+                        <li>Series have different orientations</li>
+                        <li>Slice thickness ratio > 2:1 or < 0.5:1</li>
+                        <li>Maximum accuracy is required</li>
+                    </ul>
+                </li>
+                <li><strong>Use 2D mode</strong> when:
+                    <ul>
+                        <li>Series have same orientation</li>
+                        <li>Similar slice thicknesses</li>
+                        <li>Speed is prioritized</li>
+                    </ul>
+                </li>
+                <li><strong>Verify Frame of Reference</strong>:
+                    <ul>
+                        <li>Check status indicator for warnings</li>
+                        <li>If Frame of Reference differs, verify alignment manually</li>
+                    </ul>
+                </li>
+                <li><strong>Fine-tune alignment</strong>:
+                    <ul>
+                        <li>Use manual translation offset adjustment if automatic alignment is slightly off</li>
+                        <li>Adjust in 1-pixel increments for sub-pixel precision</li>
+                    </ul>
+                </li>
+            </ol>
+            
+            <h2 id="performance">Performance Considerations</h2>
+            
+            <h3>Memory Usage</h3>
+            <ul>
+                <li><strong>2D Mode</strong>:
+                    <ul>
+                        <li>Processes one slice at a time</li>
+                        <li>Memory: ~2-4Ã— single slice size</li>
+                        <li>Typical: 10-50 MB per slice</li>
+                    </ul>
+                </li>
+                <li><strong>3D Mode</strong>:
+                    <ul>
+                        <li>Caches full resampled volume</li>
+                        <li>Memory: ~2Ã— volume size</li>
+                        <li>Typical: 100-500 MB for typical CT/PET volumes</li>
+                        <li>Cache persists until series changes</li>
+                    </ul>
+                </li>
+            </ul>
+            
+            <h3>Processing Time</h3>
+            <ul>
+                <li><strong>2D Mode</strong>:
+                    <ul>
+                        <li>Slice matching: < 1 ms</li>
+                        <li>2D resize: 10-50 ms per slice</li>
+                        <li>Blending: 5-20 ms per slice</li>
+                        <li><strong>Total: 15-70 ms per slice</strong></li>
+                    </ul>
+                </li>
+                <li><strong>3D Mode</strong>:
+                    <ul>
+                        <li>Volume conversion: 100-500 ms (one-time)</li>
+                        <li>3D resampling: 500-2000 ms (one-time, cached)</li>
+                        <li>Slice extraction: < 1 ms (from cached volume)</li>
+                        <li>Blending: 5-20 ms per slice</li>
+                        <li><strong>Total: 600-2500 ms first slice, 5-20 ms subsequent slices</strong></li>
+                    </ul>
+                </li>
+            </ul>
+            
+            <h3>Optimization Strategies</h3>
+            <ul>
+                <li><strong>Caching</strong>: 3D mode caches resampled volumes to avoid repeated resampling</li>
+                <li><strong>Lazy evaluation</strong>: Resampling only occurs when fusion is enabled</li>
+                <li><strong>Thread-safe caching</strong>: Uses locks for multi-threaded access</li>
+                <li><strong>Cache invalidation</strong>: Clears cache when series changes</li>
+            </ul>
+            
+            <hr>
+            <p><em>For detailed usage instructions, see the Quick Start Guide in the application Help menu.</em></p>
+        </body>
+        </html>
+        

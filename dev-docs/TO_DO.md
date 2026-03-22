@@ -33,6 +33,13 @@ This file tracks active and near-term tasks.
 - [ ] **[P0]** If the base series for an MPR uses rescaled pixel values, the MPR pixel values should be rescaled the same way ([details](FUTURE_WORK_DETAIL_NOTES.md#multi-planar-reconstructions-mprs-and-oblique-reconstructions))
 - [ ] **[P0]** After creating MPRs, clearing, closing all files, and loading new files, creating new MPR does not load/display ([details](FUTURE_WORK_DETAIL_NOTES.md#multi-planar-reconstructions-mprs-and-oblique-reconstructions))
 
+- [ ] **[P0]** REFACTORING SMOKE TESTS:
+    - Launch app, open one study by file and by folder, confirm first image displays.
+    - Toggle privacy mode and confirm overlays/metadata hide correctly.
+    - Open overlay config and quick window/level dialog from focused pane.
+    - Open export dialog and verify it opens with populated options.
+    - Open tag export dialog, perform CSV export with one small study.
+    - Open quick start and fusion docs, verify content renders.
 
 ## Performance / Packaging
 

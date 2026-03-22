@@ -1,0 +1,92 @@
+name: Semgrep SAST Scan
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - 'feature/**'
+  pull_request:
+    branches:
+      - main
+      - develop
+  schedule:
+    # Run Semgrep at 1 AM UTC every Sunday
+    - cron: '0 1 * * 0'
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: write
+
+jobs:
+  semgrep:
+    name: Semgrep Security Audit
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep
+        uses: returntocorp/semgrep-action@v1
+        with:
+          # Rulesets to run
+          config: >-
+            p/security-audit
+            p/owasp-top-ten
+            p/secrets
+            p/python
+          # Generate both JSON for upload and table for PR comments
+          generateSarif: true
+          
+      - name: Upload SARIF results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+      - name: Comment on PR with results
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const sarif = JSON.parse(fs.readFileSync('semgrep.sarif', 'utf8'));
+            const issues = sarif.runs[0].results || [];
+            
+            if (issues.length === 0) {
+              console.log('✅ No security issues found by Semgrep');
+              return;
+            }
+            
+            let comment = '## 🔒 Security Scan Results\n\n';
+            comment += `Found ${issues.length} potential issue(s) from Semgrep:\n\n`;
+            
+            const severity_map = {
+              'warning': '⚠️',
+              'error': '❌',
+              'note': 'ℹ️'
+            };
+            
+            issues.slice(0, 10).forEach(issue => {
+              const severity = issue.level || 'note';
+              const icon = severity_map[severity] || 'ℹ️';
+              const msg = issue.message?.text || 'Unknown issue';
+              const rule = issue.ruleId || 'unknown';
+              comment += `${icon} **${rule}**: ${msg}\n`;
+            });
+            
+            if (issues.length > 10) {
+              comment += `\n... and ${issues.length - 10} more (see GitHub Security tab for full list)\n`;
+            }
+            
+            comment += '\nPlease review and address security findings before merging.';
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });

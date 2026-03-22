@@ -1,0 +1,113 @@
+name: Debug Flags & Security Checks
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+  push:
+    branches:
+      - main
+      - develop
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  debug-flags-check:
+    name: Check Debug Flags
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for proper PR checking
+
+      - name: Check for debug flags set to True
+        id: check_flags
+        run: |
+          set +e  # Don't exit on grep failure
+          
+          echo "Checking src/utils/debug_flags.py for debug flags set to True..."
+          
+          FLAGGED=$(grep -E "^\s*DEBUG_.*\s*:\s*bool\s*=\s*True" src/utils/debug_flags.py || true)
+          
+          if [ -z "$FLAGGED" ]; then
+              echo "✅ All debug flags are False"
+              echo "status=pass" >> $GITHUB_OUTPUT
+              exit 0
+          else
+              echo "❌ Found debug flags set to True:"
+              echo "$FLAGGED"
+              echo "status=fail" >> $GITHUB_OUTPUT
+              exit 1
+          fi
+
+      - name: Comment on PR if flags found
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '❌ **Debug Flags Check Failed**\n\nThis PR contains debug flags set to `True`. Please review `src/utils/debug_flags.py` and ensure:\n\n- All `DEBUG_*` flags are set to `False`\n- No sensitive code paths are left in debug mode\n- This is not a release build attempt with debugging enabled\n\nAfter fixing, push again to re-run the check.'
+            });
+
+  no-secrets-scan:
+    name: Detect Secrets
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run TruffleHog secret scanner
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: "main"
+          head: HEAD
+          extra_args: --only-verified
+          
+      - name: Run detect-secrets
+        continue-on-error: true
+        run: |
+          pip install detect-secrets
+          detect-secrets scan --all-files --force-use-all-plugins > baseline.json || true
+          detect-secrets audit baseline.json 2>/dev/null || true
+
+  pii-in-debug-scan:
+    name: Check Debug Logs for PII
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Scan for patient PII in debug output
+        run: |
+          echo "Scanning for potential PII exposure in debug/logging code..."
+          
+          set +e
+          
+          # Check debug log writes that might include PII
+          ISSUES=$(grep -r "PatientName\|PatientID\|PatientBirthDate" src/ \
+            | grep -E "(print|debug|log)" \
+            | grep -v "overlay_manager\|overlay_config\|export_dialog" || true)
+          
+          if [ -n "$ISSUES" ]; then
+              echo "⚠️ Potential PII in debug output:"
+              echo "$ISSUES"
+          else
+              echo "✅ No obvious patient data in debug output found"
+          fi
+          
+          # Check for unredacted paths in exception handling
+          UNREDACTED=$(grep -r "traceback.print_exc\|exc_info=True" src/ | wc -l)
+          if [ "$UNREDACTED" -gt 0 ]; then
+              echo "⚠️ Warning: Found $UNREDACTED unredacted traceback prints (consider using log_sanitizer)"
+          fi

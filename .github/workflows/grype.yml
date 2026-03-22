@@ -1,0 +1,93 @@
+name: Grype Vulnerability Scan
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+  schedule:
+    # Run Grype at 3 AM UTC every Tuesday
+    - cron: '0 3 * * 2'
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: write
+
+jobs:
+  grype:
+    name: Grype CVE Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Grype scan
+        uses: anchore/scan-action@v3
+        id: grype
+        with:
+          path: "."
+          fail-build: false  # Don't fail on findings; just report
+          severity-cutoff: high
+          
+      - name: Upload Grype SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: ${{ steps.grype.outputs.sarif }}
+          category: grype
+
+      - name: Comment on PR with CVE results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const sarif = JSON.parse(fs.readFileSync('${{ steps.grype.outputs.sarif }}', 'utf8'));
+            const findings = sarif.runs[0].results || [];
+            
+            // Filter by severity
+            const critical = findings.filter(f => f.level === 'error');
+            const high = findings.filter(f => f.level === 'warning');
+            
+            if (findings.length === 0) {
+              console.log('✅ No known vulnerabilities found');
+              return;
+            }
+            
+            let comment = '## 🛡️ Dependency Vulnerability Scan\n\n';
+            comment += `**Summary**: ${critical.length} CRITICAL, ${high.length} HIGH, ${findings.length - critical.length - high.length} other\n\n`;
+            
+            if (critical.length > 0) {
+              comment += '### 🚨 Critical Issues\n';
+              critical.slice(0, 5).forEach(issue => {
+                const pkg = issue.properties?.package || 'unknown';
+                const vuln = issue.properties?.cve || 'CVE-UNKNOWN';
+                comment += `- **${pkg}**: ${vuln}\n`;
+              });
+            }
+            
+            if (high.length > 0) {
+              comment += '\n### ⚠️ High Issues\n';
+              high.slice(0, 5).forEach(issue => {
+                const pkg = issue.properties?.package || 'unknown';
+                const vuln = issue.properties?.cve || 'CVE-UNKNOWN';
+                comment += `- **${pkg}**: ${vuln}\n`;
+              });
+            }
+            
+            if (findings.length > 10) {
+              comment += `\n... and ${findings.length - 10} more vulnerabilities (see GitHub Security tab)`;
+            }
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });

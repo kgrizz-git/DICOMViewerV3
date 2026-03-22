@@ -221,4 +221,8 @@ settings.json
 # Sample DICOM files used for local testing (not tracked in version control)
 git-ignore-sample-DICOM/
 
+# Local security scanner binaries/artifacts (too large for normal git hosting)
+tools/security/trufflehog/
+.tmp-trufflehog-*.txt
+
 .DS_Store

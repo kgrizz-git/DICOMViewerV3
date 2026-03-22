@@ -30,7 +30,6 @@ from core.multiframe_handler import is_multiframe, get_frame_count
 from utils.dicom_utils import get_patient_tag_keywords
 
 from utils.bundled_fonts import make_qfont
-from gui.overlay_text_builder import get_corner_text, get_modality, get_overlay_text
 from utils.debug_flags import DEBUG_WIDGET_PAN
 
 
@@ -462,6 +461,228 @@ class OverlayManager:
         ):
             self.viewport_overlay_widget.set_mpr_banner(text)
     
+    def get_overlay_text(self, parser: DICOMParser) -> str:
+        """
+        Get overlay text for a dataset.
+        
+        Args:
+            parser: DICOMParser instance with dataset set
+            
+        Returns:
+            Formatted overlay text
+        """
+        if self.mode == "hidden":
+            return ""
+        
+        # Determine which fields to show
+        if self.mode == "minimal":
+            fields = self.minimal_fields
+        elif self.mode == "detailed":
+            fields = self.detailed_fields
+        else:
+            fields = self.custom_fields
+        
+        # Get values for each field
+        lines = []
+        for field in fields:
+            value = parser.get_tag_by_keyword(field)
+            if value is not None and value != "":
+                # Format the value
+                if isinstance(value, (list, tuple)):
+                    value_str = ", ".join(str(v) for v in value)
+                else:
+                    value_str = str(value)
+                lines.append(f"{field}: {value_str}")
+        
+        return "\n".join(lines)
+    
+    def _get_modality(self, parser: DICOMParser) -> str:
+        """
+        Get modality from DICOM dataset.
+        
+        Args:
+            parser: DICOMParser instance
+            
+        Returns:
+            Modality string (e.g., "CT", "MR") or "default"
+        """
+        modality = parser.get_tag_by_keyword("Modality")
+        if modality is None or modality == "":
+            return "default"
+        return str(modality).strip()
+    
+    def _get_corner_text(self, parser: DICOMParser, tags: List[str], total_slices: Optional[int] = None,
+                        projection_enabled: bool = False, projection_start_slice: Optional[int] = None,
+                        projection_end_slice: Optional[int] = None, projection_total_thickness: Optional[float] = None,
+                        projection_type: Optional[str] = None,
+                        multiframe_context: Optional[Dict[str, object]] = None) -> str:
+        """
+        Get overlay text for a corner from a list of tags.
+        
+        Args:
+            parser: DICOMParser instance
+            tags: List of tag keywords
+            total_slices: Total number of slices in the series (for formatting InstanceNumber)
+            projection_enabled: Whether Combine Slices projection is enabled
+            projection_start_slice: Start slice index (0-based) of the projection range
+            projection_end_slice: End slice index (0-based) of the projection range
+            projection_total_thickness: Total thickness of combined slices in mm
+            projection_type: Projection type ("aip", "mip", or "minip")
+            
+        Returns:
+            Formatted text string
+        """
+        lines = []
+
+        def format_numeric_value(value: object) -> str:
+            if isinstance(value, float):
+                return str(int(value)) if value.is_integer() else f"{value:.3f}".rstrip("0").rstrip(".")
+            return str(value)
+
+        def get_timing_suffix(context: Dict[str, object]) -> str:
+            trigger_time_ms = context.get("trigger_time_ms")
+            if trigger_time_ms is not None:
+                return f" ({format_numeric_value(trigger_time_ms)} ms)"
+            nominal_trigger_time_ms = context.get("nominal_cardiac_trigger_time_ms")
+            if nominal_trigger_time_ms is not None:
+                return f" ({format_numeric_value(nominal_trigger_time_ms)} ms nominal)"
+            return ""
+
+        def format_multiframe_label(context: Dict[str, object]) -> str:
+            instance_index = context.get("instance_index")
+            total_instances = context.get("total_instances")
+            frame_index = context.get("frame_index")
+            total_frames = context.get("total_frames")
+            if not frame_index or not total_frames:
+                return ""
+
+            frame_type = str(context.get("frame_type", "unknown"))
+            if frame_type == "temporal":
+                frame_label = f"Frame {frame_index}/{total_frames}"
+            elif frame_type == "cardiac":
+                frame_label = f"Phase {frame_index}/{total_frames}"
+                frame_label += get_timing_suffix(context)
+            elif frame_type == "diffusion":
+                diffusion_b_value = context.get("diffusion_b_value")
+                if diffusion_b_value is not None:
+                    frame_label = f"b={format_numeric_value(diffusion_b_value)}"
+                else:
+                    frame_label = f"Frame {frame_index}/{total_frames}"
+            elif frame_type == "spatial":
+                frame_label = f"Slice {frame_index}/{total_frames}"
+                frame_label += get_timing_suffix(context)
+            else:
+                frame_label = f"Frame {frame_index}/{total_frames}"
+
+            if instance_index and total_instances and total_instances > 1:
+                return f"Instance {instance_index}/{total_instances} · {frame_label}"
+            return frame_label
+        
+        # Check if this is a multi-frame dataset (FrameDatasetWrapper)
+        dataset = parser.dataset
+        frame_index = None
+        total_frames = None
+        is_multiframe_dataset = False
+        
+        if dataset is not None:
+            # Check if dataset is a FrameDatasetWrapper (has _frame_index attribute)
+            if hasattr(dataset, '_frame_index') and hasattr(dataset, '_original_dataset'):
+                is_multiframe_dataset = True
+                frame_index = dataset._frame_index  # 0-based
+                original_dataset = dataset._original_dataset
+                # Get total frames from original dataset
+                if is_multiframe(original_dataset):
+                    total_frames = get_frame_count(original_dataset)
+        
+        for tag in tags:
+            value = parser.get_tag_by_keyword(tag)
+            if value is not None and value != "":
+                # Format the value
+                if isinstance(value, (list, tuple)):
+                    value_str = ", ".join(str(v) for v in value)
+                else:
+                    value_str = str(value)
+                
+                # Apply privacy mode masking for patient tags
+                if self.privacy_mode and tag in get_patient_tag_keywords():
+                    value_str = "PRIVACY MODE"
+                
+                # Special formatting for InstanceNumber: show as "Slice X/Y" if total_slices is provided
+                if tag == "InstanceNumber" and multiframe_context is not None:
+                    label = format_multiframe_label(multiframe_context)
+                    if label:
+                        lines.append(label)
+                    else:
+                        lines.append(f"{tag}: {value_str}")
+                elif tag == "InstanceNumber" and total_slices is not None:
+                    try:
+                        instance_num = int(value_str)
+                        # Build the base slice display string
+                        slice_display = f"Slice {instance_num}/{total_slices}"
+                        
+                        # Add projection range if enabled
+                        if projection_enabled and projection_start_slice is not None and projection_end_slice is not None:
+                            # Convert to 1-based for display
+                            start_display = projection_start_slice + 1
+                            end_display = projection_end_slice + 1
+                            # Map projection type to display format
+                            projection_type_display = ""
+                            if projection_type:
+                                type_map = {
+                                    "aip": "AIP",
+                                    "mip": "MIP",
+                                    "minip": "MinIP"
+                                }
+                                projection_type_display = type_map.get(projection_type.lower(), projection_type.upper())
+                            if projection_type_display:
+                                slice_display += f" ({start_display}-{end_display} {projection_type_display})"
+                            else:
+                                slice_display += f" ({start_display}-{end_display})"
+                        
+                        # For multi-frame datasets, also show frame information
+                        if is_multiframe_dataset and total_frames is not None:
+                            # Display as "Slice X/Y (Frame A/B)" or "Slice X/Y (1-4) (Frame A/B)"
+                            frame_display = frame_index + 1  # Convert to 1-based for display
+                            lines.append(f"{slice_display} (Frame {frame_display}/{total_frames})")
+                        else:
+                            lines.append(slice_display)
+                    except (ValueError, TypeError):
+                        # If InstanceNumber is not a valid integer, show as-is
+                        lines.append(f"{tag}: {value_str}")
+                # Special formatting for SliceThickness: show total thickness when projection is enabled
+                elif tag == "SliceThickness" and projection_enabled and projection_total_thickness is not None:
+                    try:
+                        single_thickness = float(value_str)
+                        # Display as "Slice Thickness: X (Y)" where X is single slice and Y is total
+                        lines.append(f"Slice Thickness: {single_thickness} ({projection_total_thickness})")
+                    except (ValueError, TypeError):
+                        # If SliceThickness is not a valid number, show as-is
+                        lines.append(f"{tag}: {value_str}")
+                elif tag == "TriggerTime" and multiframe_context is not None and multiframe_context.get("trigger_time_ms") is not None:
+                    lines.append(f"TriggerTime: {format_numeric_value(multiframe_context['trigger_time_ms'])} ms")
+                elif tag == "NominalCardiacTriggerTime" and multiframe_context is not None and multiframe_context.get("nominal_cardiac_trigger_time_ms") is not None:
+                    lines.append(
+                        f"NominalCardiacTriggerTime: {format_numeric_value(multiframe_context['nominal_cardiac_trigger_time_ms'])} ms"
+                    )
+                elif tag == "ContentTime" and multiframe_context is not None and multiframe_context.get("content_time"):
+                    lines.append(f"ContentTime: {multiframe_context['content_time']}")
+                else:
+                    lines.append(f"{tag}: {value_str}")
+        
+        # If multi-frame and frame info not already shown with InstanceNumber, add it separately
+        # Only add frame info to corners that have InstanceNumber to avoid duplicating in all corners
+        if is_multiframe_dataset and total_frames is not None and multiframe_context is None:
+            # Check if InstanceNumber was in the tags
+            instance_in_tags = "InstanceNumber" in tags
+            # Only add frame info if InstanceNumber is in this corner's tags
+            # and it wasn't already included with InstanceNumber formatting (i.e., total_slices is None)
+            if instance_in_tags and total_slices is None:
+                # Add frame information as a separate line
+                frame_display = frame_index + 1  # Convert to 1-based for display
+                lines.append(f"Frame: {frame_display}/{total_frames}")
+        
+        return "\n".join(lines)
+    
     def _create_text_item(self, text: str, x: float, y: float, alignment: Qt.AlignmentFlag = Qt.AlignmentFlag.AlignLeft, text_width: Optional[float] = None) -> QGraphicsTextItem:
         """
         Create a text item with proper font and styling.
@@ -587,7 +808,7 @@ class OverlayManager:
             return []
         
         # Get modality and corner tags
-        modality = get_modality(parser)
+        modality = self._get_modality(parser)
         
         # Get tags for each corner from config manager
         if self.config_manager is not None:
@@ -686,12 +907,9 @@ class OverlayManager:
         for corner_key, x, y, alignment in corners:
             tags = corner_tags.get(corner_key, [])
             if tags:
-                text = get_corner_text(
-                                    parser, tags, self.privacy_mode, total_slices,
-                                    projection_enabled, projection_start_slice,
-                                    projection_end_slice, projection_total_thickness,
-                                    projection_type, multiframe_context
-                                )
+                text = self._get_corner_text(parser, tags, total_slices, projection_enabled,
+                                            projection_start_slice, projection_end_slice, projection_total_thickness,
+                                            projection_type, multiframe_context)
                 if text:
                     # For right-aligned corners, create separate text items for each line
                     # so each row can be individually right-aligned
@@ -864,7 +1082,7 @@ class OverlayManager:
                 self.viewport_overlay_widget.setGeometry(0, 0, viewport.width(), viewport.height())
         
         # Get modality and corner tags
-        modality = get_modality(parser)
+        modality = self._get_modality(parser)
         
         # Get tags for each corner from config manager
         if self.config_manager is not None:
@@ -889,12 +1107,10 @@ class OverlayManager:
         for corner_key, alignment in corners:
             tags = corner_tags.get(corner_key, [])
             if tags:
-                text = get_corner_text(
-                                    parser, tags, self.privacy_mode, total_slices,
-                                    projection_enabled, projection_start_slice,
-                                    projection_end_slice, projection_total_thickness,
-                                    projection_type, multiframe_context
-                                )
+                text = self._get_corner_text(parser, tags, total_slices, projection_enabled,
+                                            projection_start_slice, projection_end_slice,
+                                            projection_total_thickness, projection_type,
+                                            multiframe_context)
                 if text:
                     self.viewport_overlay_widget.set_corner_text(corner_key, text, alignment)
                 else:
