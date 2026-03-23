@@ -2372,6 +2372,8 @@ class DICOMViewerApp(QObject):
 
         # Also propagate to all per-subwindow overlay managers so that
         # switching subwindows reflects the new font immediately.
+        show_scale_markers = self.config_manager.get_show_scale_markers()
+        show_direction_labels = self.config_manager.get_show_direction_labels()
         subwindows = self.multi_window_layout.get_all_subwindows()
         for idx, subwindow in enumerate(subwindows):
             if subwindow and idx in self.subwindow_managers:
@@ -2381,6 +2383,8 @@ class DICOMViewerApp(QObject):
                     om.set_font_color(*font_color)
                     om.set_font_family(font_family)
                     om.set_font_variant(font_variant)
+                subwindow.image_viewer.set_scale_markers_state(show_scale_markers)
+                subwindow.image_viewer.set_direction_labels_state(show_direction_labels)
                 subwindow.image_viewer.set_scale_markers_color_state(
                     self.config_manager.get_scale_markers_color()
                 )

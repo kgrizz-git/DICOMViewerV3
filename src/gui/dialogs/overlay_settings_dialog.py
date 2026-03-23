@@ -77,6 +77,8 @@ class OverlaySettingsDialog(QDialog):
         self._original_direction_label_size = config_manager.get_direction_label_size()
         self._original_major_tick_interval_mm = config_manager.get_scale_markers_major_tick_interval_mm()
         self._original_minor_tick_interval_mm = config_manager.get_scale_markers_minor_tick_interval_mm()
+        self._original_show_scale_markers = config_manager.get_show_scale_markers()
+        self._original_show_direction_labels = config_manager.get_show_direction_labels()
 
         if DEBUG_FONT_VARIANT:
             debug_log(
@@ -153,6 +155,16 @@ class OverlaySettingsDialog(QDialog):
         viewer_overlay_group = QGroupBox("Viewer Overlay Elements")
         viewer_overlay_layout = QFormLayout()
 
+        # Show/hide checkboxes
+        from PySide6.QtWidgets import QCheckBox
+        self.show_direction_labels_checkbox = QCheckBox("Show Direction Labels")
+        self.show_scale_markers_checkbox = QCheckBox("Show Scale Markers")
+        viewer_overlay_layout.addRow(self.show_direction_labels_checkbox)
+        viewer_overlay_layout.addRow(self.show_scale_markers_checkbox)
+
+        self.show_direction_labels_checkbox.stateChanged.connect(self._on_live_update)
+        self.show_scale_markers_checkbox.stateChanged.connect(self._on_live_update)
+
         self.direction_label_size_spinbox = QSpinBox()
         self.direction_label_size_spinbox.setRange(6, 48)
         self.direction_label_size_spinbox.setValue(16)
@@ -193,6 +205,12 @@ class OverlaySettingsDialog(QDialog):
         self.minor_tick_interval_spinbox.setSuffix(" mm")
         viewer_overlay_layout.addRow("Minor Tick Interval:", self.minor_tick_interval_spinbox)
 
+        # Help text for tick intervals
+        from PySide6.QtWidgets import QLabel as QtLabel
+        tick_help = QtLabel("<small>Major ticks are longer; minor ticks are shorter.</small>")
+        tick_help.setTextFormat(Qt.TextFormat.RichText)
+        viewer_overlay_layout.addRow(tick_help)
+
         viewer_overlay_group.setLayout(viewer_overlay_layout)
         layout.addWidget(viewer_overlay_group)
 
@@ -207,6 +225,12 @@ class OverlaySettingsDialog(QDialog):
         layout.addWidget(button_box)
 
     def _load_settings(self) -> None:
+        self.show_direction_labels_checkbox.blockSignals(True)
+        self.show_scale_markers_checkbox.blockSignals(True)
+        self.show_direction_labels_checkbox.setChecked(self.config_manager.get_show_direction_labels())
+        self.show_scale_markers_checkbox.setChecked(self.config_manager.get_show_scale_markers())
+        self.show_direction_labels_checkbox.blockSignals(False)
+        self.show_scale_markers_checkbox.blockSignals(False)
         """Load current settings into the dialog."""
         # Block valueChanged so the initial load does not trigger a live update
         self.font_size_spinbox.blockSignals(True)
@@ -336,6 +360,8 @@ class OverlaySettingsDialog(QDialog):
             self._on_live_update()
 
     def _on_live_update(self) -> None:
+        self.config_manager.set_show_direction_labels(self.show_direction_labels_checkbox.isChecked())
+        self.config_manager.set_show_scale_markers(self.show_scale_markers_checkbox.isChecked())
         """
         Save current values to config and emit settings_changed for live preview.
 
@@ -369,6 +395,8 @@ class OverlaySettingsDialog(QDialog):
         self.settings_changed.emit()
 
     def _apply_settings(self) -> None:
+        self.config_manager.set_show_direction_labels(self.show_direction_labels_checkbox.isChecked())
+        self.config_manager.set_show_scale_markers(self.show_scale_markers_checkbox.isChecked())
         """Persist settings, emit settings_applied, and close the dialog."""
         self.config_manager.set_overlay_font_size(self.font_size_spinbox.value())
         self.config_manager.set_overlay_font_family(self.font_family_combo.currentText())
@@ -386,6 +414,8 @@ class OverlaySettingsDialog(QDialog):
         self.accept()
 
     def reject(self) -> None:
+        self.config_manager.set_show_direction_labels(self._original_show_direction_labels)
+        self.config_manager.set_show_scale_markers(self._original_show_scale_markers)
         """Restore original values on Cancel so the live preview is reverted."""
         self.config_manager.set_overlay_font_size(self._original_font_size)
         self.config_manager.set_overlay_font_family(self._original_font_family)
