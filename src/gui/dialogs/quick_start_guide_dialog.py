@@ -19,8 +19,10 @@ Requirements:
     - PySide6 for dialog components
 """
 
+import re
+
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QTextBrowser, QDialogButtonBox, QLineEdit, QLabel, QHBoxLayout, QPushButton)
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QUrl
 from typing import Optional
 
 from pathlib import Path
@@ -28,6 +30,53 @@ from pathlib import Path
 from utils.config_manager import ConfigManager
 
 _HELP_DIR = Path(__file__).parent.parent.parent.parent / "resources" / "help"
+
+
+def _normalize_guide_text_encoding(html: str) -> str:
+    """Repair common mojibake sequences in the bundled guide HTML."""
+    replacements = {
+        "â†’": "&rarr;",
+        "â†": "&larr;",
+        "â†‘": "&uarr;",
+        "â†“": "&darr;",
+        "â€¦": "...",
+        "â€‘": "-",
+        "â€“": "-",
+        "â€”": "-",
+        "â€˜": "'",
+        "â€™": "'",
+        "â€œ": '"',
+        "â€": '"',
+        "â„¢": "TM",
+        "Ã—": "&times;",
+        "Â°": "&deg;",
+        "Â±": "&plusmn;",
+        "Ã": "&times;",
+        "Î±": "&alpha;",
+        "â‰ˆ": "&asymp;",
+    }
+    for bad_text, fixed_text in replacements.items():
+        html = html.replace(bad_text, fixed_text)
+    html = html.replace("<h2>Table of Contents</h2>", '<h2 id="table-of-contents">Table of Contents</h2>', 1)
+    return html
+
+
+def _extract_toc_sections(html: str) -> list[tuple[str, str]]:
+    """Return unique section anchors in the order shown in the Table of Contents."""
+    toc_match = re.search(
+        r'<h2 id="table-of-contents">Table of Contents</h2>\s*<ul>(.*?)</ul>',
+        html,
+        re.DOTALL,
+    )
+    toc_html = toc_match.group(1) if toc_match else html
+    sections: list[tuple[str, str]] = []
+    seen_anchors: set[str] = set()
+    for anchor, title in re.findall(r'<a href="#([^"]+)">([^<]+)</a>', toc_html):
+        if anchor in seen_anchors:
+            continue
+        seen_anchors.add(anchor)
+        sections.append((anchor, title.strip()))
+    return sections
 
 
 class QuickStartGuideDialog(QDialog):
@@ -80,17 +129,17 @@ class QuickStartGuideDialog(QDialog):
         search_layout = QHBoxLayout()
         search_label = QLabel("Search:")
         self.search_edit = QLineEdit()
-        self.search_edit.setPlaceholderText("Search in guide...")
+        self.search_edit.setPlaceholderText("Search in guide to enable Prev/Next...")
         self.search_edit.textChanged.connect(self._on_search_text_changed)
         # Prevent Enter key from closing dialog (it triggers default button)
         self.search_edit.returnPressed.connect(lambda: None)  # Do nothing on Enter
         
         # Prev/Next buttons
-        self.prev_button = QPushButton("â—€ Prev")
+        self.prev_button = QPushButton("< Prev")
         self.prev_button.setEnabled(False)
         self.prev_button.clicked.connect(self._on_prev_match)
         
-        self.next_button = QPushButton("Next â–¶")
+        self.next_button = QPushButton("Next >")
         self.next_button.setEnabled(False)
         self.next_button.clicked.connect(self._on_next_match)
         
@@ -99,10 +148,27 @@ class QuickStartGuideDialog(QDialog):
         search_layout.addWidget(self.prev_button)
         search_layout.addWidget(self.next_button)
         layout.addLayout(search_layout)
+
+        section_layout = QHBoxLayout()
+        section_label = QLabel("Sections:")
+        self.toc_button = QPushButton("Table of Contents")
+        self.toc_button.clicked.connect(self._scroll_to_table_of_contents)
+        self.prev_section_button = QPushButton("Prev Section")
+        self.prev_section_button.clicked.connect(self._on_prev_section)
+        self.next_section_button = QPushButton("Next Section")
+        self.next_section_button.clicked.connect(self._on_next_section)
+        section_layout.addWidget(section_label)
+        section_layout.addWidget(self.toc_button)
+        section_layout.addWidget(self.prev_section_button)
+        section_layout.addWidget(self.next_section_button)
+        section_layout.addStretch()
+        layout.addLayout(section_layout)
         
         # Text edit for guide content - use QTextBrowser for anchor link support
         self.text_edit = QTextBrowser()
         self.text_edit.setOpenExternalLinks(False)  # Don't open external links in browser
+        self.text_edit.setOpenLinks(False)
+        self.text_edit.anchorClicked.connect(self._on_anchor_clicked)
         self.text_edit.setReadOnly(True)
         # Set QTextBrowser background to match metadata panel in dark theme
         if theme == "dark":
@@ -110,11 +176,14 @@ class QuickStartGuideDialog(QDialog):
         
         # Store full content and set initial content
         self._full_content = self._get_guide_content()
+        self._section_anchors = _extract_toc_sections(self._full_content)
+        self._current_section_index = -1
         self.text_edit.setHtml(self._full_content)
         
         # Search navigation state
         self._search_match_positions = []  # List of cursor positions for matches
         self._current_match_index = -1  # Current match index (-1 = no match selected)
+        self._update_section_buttons()
         layout.addWidget(self.text_edit)
         
         # Close button
@@ -150,6 +219,7 @@ class QuickStartGuideDialog(QDialog):
             )
 
         template = (_HELP_DIR / "quick_start_guide.html").read_text(encoding="utf-8")
+        template = _normalize_guide_text_encoding(template)
         content = template
         for key, val in colors.items():
             content = content.replace(f"{{{key}}}", val)
@@ -168,7 +238,7 @@ class QuickStartGuideDialog(QDialog):
             # If search is empty, show full content
             self.text_edit.setHtml(self._full_content)
             # Scroll to top
-            self.text_edit.moveCursor(self.text_edit.textCursor().Start)
+            self.text_edit.moveCursor(self.text_edit.textCursor().MoveOperation.Start)
             self._search_match_positions = []
             self._current_match_index = -1
             self._update_navigation_buttons()
@@ -209,6 +279,48 @@ class QuickStartGuideDialog(QDialog):
             self._current_match_index = -1
         
         self._update_navigation_buttons()
+
+    def _on_anchor_clicked(self, url: QUrl) -> None:
+        """Handle internal documentation anchor navigation."""
+        anchor = url.fragment()
+        if not anchor:
+            return
+        self.text_edit.scrollToAnchor(anchor)
+        self._set_current_section(anchor)
+
+    def _scroll_to_table_of_contents(self) -> None:
+        """Scroll to the table of contents heading."""
+        self.text_edit.scrollToAnchor("table-of-contents")
+        self._set_current_section("table-of-contents")
+
+    def _set_current_section(self, anchor: str) -> None:
+        """Update section navigation state for the currently focused anchor."""
+        if anchor == "table-of-contents":
+            self._current_section_index = -1
+            self._update_section_buttons()
+            return
+
+        for index, (section_anchor, _title) in enumerate(self._section_anchors):
+            if section_anchor == anchor:
+                self._current_section_index = index
+                break
+        self._update_section_buttons()
+
+    def _on_prev_section(self) -> None:
+        """Navigate to the previous top-level section."""
+        if self._current_section_index <= 0:
+            return
+        self._current_section_index -= 1
+        self.text_edit.scrollToAnchor(self._section_anchors[self._current_section_index][0])
+        self._update_section_buttons()
+
+    def _on_next_section(self) -> None:
+        """Navigate to the next top-level section."""
+        if self._current_section_index >= len(self._section_anchors) - 1:
+            return
+        self._current_section_index += 1
+        self.text_edit.scrollToAnchor(self._section_anchors[self._current_section_index][0])
+        self._update_section_buttons()
     
     def _on_prev_match(self) -> None:
         """Navigate to previous search match."""
@@ -252,3 +364,12 @@ class QuickStartGuideDialog(QDialog):
         has_matches = len(self._search_match_positions) > 0
         self.prev_button.setEnabled(has_matches and self._current_match_index > 0)
         self.next_button.setEnabled(has_matches)
+
+    def _update_section_buttons(self) -> None:
+        """Update section-level navigation buttons."""
+        has_sections = len(self._section_anchors) > 0
+        self.toc_button.setEnabled(has_sections)
+        self.prev_section_button.setEnabled(has_sections and self._current_section_index > 0)
+        self.next_section_button.setEnabled(
+            has_sections and self._current_section_index < len(self._section_anchors) - 1
+        )

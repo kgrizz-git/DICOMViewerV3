@@ -37,6 +37,7 @@ from PySide6.QtWidgets import QProgressDialog
 from core.dicom_parser import DICOMParser
 from core.dicom_processor import DICOMProcessor
 from utils.dicom_utils import get_slice_thickness, get_composite_series_key
+from gui.overlay_text_builder import get_modality, get_corner_text
 
 
 def _get_bundled_font_path(filename: str) -> str:
@@ -1362,7 +1363,7 @@ class ExportManager:
         # Draw overlay (DICOM corner) text – font size from formula
         if overlay_manager and config_manager:
             parser = DICOMParser(dataset)
-            modality = overlay_manager._get_modality(parser)
+            modality = get_modality(parser)
             corner_tags = config_manager.get_overlay_tags(modality)
             overlay_font_size_setting = config_manager.get_overlay_font_size()
             font_size = ExportManager.export_text_size_pixels(
@@ -1430,10 +1431,10 @@ class ExportManager:
                 if not tags:
                     continue
                 
-                # Use overlay_manager's _get_corner_text() method for consistent formatting
+                # Use get_corner_text() for consistent formatting
                 # This handles "Slice X/Y" formatting, projection info, and other edge cases
-                text = overlay_manager._get_corner_text(
-                    parser, tags, total_slices,
+                text = get_corner_text(
+                    parser, tags, overlay_manager.privacy_mode, total_slices,
                     projection_enabled=projection_enabled,
                     projection_start_slice=projection_start_slice,
                     projection_end_slice=projection_end_slice,
