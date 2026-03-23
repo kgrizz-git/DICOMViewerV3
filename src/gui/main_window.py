@@ -120,6 +120,8 @@ class MainWindow(QMainWindow):
     layout_changed = Signal(str)  # Emitted when layout mode changes ("1x1", "1x2", "2x1", "2x2")
     privacy_view_toggled = Signal(bool)  # Emitted when privacy view is toggled (True = enabled)
     smooth_when_zoomed_toggled = Signal(bool)  # Emitted when smooth-when-zoomed is toggled (True = enabled)
+    scale_markers_toggled = Signal(bool)  # Emitted when scale markers are toggled (True = enabled)
+    direction_labels_toggled = Signal(bool)  # Emitted when direction labels are toggled (True = enabled)
     show_instances_separately_toggled = Signal(bool)  # Emitted when multi-frame instance expansion is toggled
     slice_sync_toggled = Signal(bool)  # Emitted when slice sync enabled state changes (True = enabled)
     slice_sync_manage_requested = Signal()  # Emitted when "Manage Sync Groups…" is chosen
@@ -602,6 +604,26 @@ class MainWindow(QMainWindow):
         self.config_manager.set_smooth_image_when_zoomed(checked)
         self.smooth_when_zoomed_toggled.emit(checked)
 
+    def _on_scale_markers_toggled(self, checked: bool) -> None:
+        """
+        Handle scale markers toggle from View menu or context menu.
+
+        Args:
+            checked: True if scale markers are enabled, False otherwise
+        """
+        self.config_manager.set_show_scale_markers(checked)
+        self.scale_markers_toggled.emit(checked)
+
+    def _on_direction_labels_toggled(self, checked: bool) -> None:
+        """
+        Handle direction labels toggle from View menu or context menu.
+
+        Args:
+            checked: True if direction labels are enabled, False otherwise
+        """
+        self.config_manager.set_show_direction_labels(checked)
+        self.direction_labels_toggled.emit(checked)
+
     def set_smooth_when_zoomed_checked(self, checked: bool) -> None:
         """Sync the View menu Image Smoothing action check state without emitting triggered."""
         if not hasattr(self, 'smooth_when_zoomed_action') or self.smooth_when_zoomed_action is None:
@@ -609,6 +631,22 @@ class MainWindow(QMainWindow):
         self.smooth_when_zoomed_action.blockSignals(True)
         self.smooth_when_zoomed_action.setChecked(checked)
         self.smooth_when_zoomed_action.blockSignals(False)
+
+    def set_scale_markers_checked(self, checked: bool) -> None:
+        """Sync the View menu Show Scale Markers action check state without emitting triggered."""
+        if not hasattr(self, 'scale_markers_action') or self.scale_markers_action is None:
+            return
+        self.scale_markers_action.blockSignals(True)
+        self.scale_markers_action.setChecked(checked)
+        self.scale_markers_action.blockSignals(False)
+
+    def set_direction_labels_checked(self, checked: bool) -> None:
+        """Sync the View menu Show Direction Labels action check state without emitting triggered."""
+        if not hasattr(self, 'direction_labels_action') or self.direction_labels_action is None:
+            return
+        self.direction_labels_action.blockSignals(True)
+        self.direction_labels_action.setChecked(checked)
+        self.direction_labels_action.blockSignals(False)
 
     def _on_show_instances_separately_toggled(self, checked: bool) -> None:
         """Handle the View menu toggle for multi-frame instance expansion."""

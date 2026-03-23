@@ -334,6 +334,16 @@ class DICOMViewerApp(QObject):
                 subwindow.image_viewer.set_smooth_when_zoomed_state(
                     self.config_manager.get_smooth_image_when_zoomed()
                 )
+        for subwindow in subwindows:
+            if subwindow and subwindow.image_viewer:
+                subwindow.image_viewer.set_scale_markers_state(
+                    self.config_manager.get_show_scale_markers()
+                )
+        for subwindow in subwindows:
+            if subwindow and subwindow.image_viewer:
+                subwindow.image_viewer.set_direction_labels_state(
+                    self.config_manager.get_show_direction_labels()
+                )
 
         # Resolve which subwindow currently has focus and set up its manager references.
         # Must happen before _initialize_handlers() which consumes these references.
@@ -623,6 +633,8 @@ class DICOMViewerApp(QObject):
         image_viewer = subwindow.image_viewer
         image_viewer.set_slice_sync_enabled_state(self.config_manager.get_slice_sync_enabled())
         image_viewer.set_smooth_when_zoomed_state(self.config_manager.get_smooth_image_when_zoomed())
+        image_viewer.set_scale_markers_state(self.config_manager.get_show_scale_markers())
+        image_viewer.set_direction_labels_state(self.config_manager.get_show_direction_labels())
         image_viewer.get_file_path_callback = lambda i=idx: self._get_current_slice_file_path(i)
         self.subwindow_managers[idx] = managers
         if idx not in self.subwindow_data:
@@ -2121,6 +2133,34 @@ class DICOMViewerApp(QObject):
             if subwindow and subwindow.image_viewer:
                 subwindow.image_viewer.set_smooth_when_zoomed_state(enabled)
         self.main_window.set_smooth_when_zoomed_checked(enabled)
+
+    def _on_scale_markers_toggled(self, enabled: bool) -> None:
+        """
+        Handle scale markers toggle from View menu or image viewer context menu.
+
+        Args:
+            enabled: True to show scale markers, False to hide
+        """
+        self.config_manager.set_show_scale_markers(enabled)
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        for subwindow in subwindows:
+            if subwindow and subwindow.image_viewer:
+                subwindow.image_viewer.set_scale_markers_state(enabled)
+        self.main_window.set_scale_markers_checked(enabled)
+
+    def _on_direction_labels_toggled(self, enabled: bool) -> None:
+        """
+        Handle direction labels toggle from View menu or image viewer context menu.
+
+        Args:
+            enabled: True to show direction labels, False to hide
+        """
+        self.config_manager.set_show_direction_labels(enabled)
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        for subwindow in subwindows:
+            if subwindow and subwindow.image_viewer:
+                subwindow.image_viewer.set_direction_labels_state(enabled)
+        self.main_window.set_direction_labels_checked(enabled)
 
     def _on_show_instances_separately_toggled(self, enabled: bool) -> None:
         """Handle the View → Show Instances Separately toggle."""

@@ -10,6 +10,7 @@
 This file tracks active and near-term tasks.
 
 - Detailed implementation notes and tradeoffs: [FUTURE_WORK_DETAIL_NOTES.md](FUTURE_WORK_DETAIL_NOTES.md)
+- Parallel implementation ownership/workstreams: [plans/PARALLEL_WORKSTREAM_OWNERSHIP_PLAN.md](plans/PARALLEL_WORKSTREAM_OWNERSHIP_PLAN.md)
 
 ## Priority Legend
 
@@ -49,14 +50,13 @@ This file tracks active and near-term tasks.
 - [ ] **[P1]** Set min/max window width/level using min/max pixel value possible (raw or rescaled) based on bit depth ([plan](plans/UX_IMPROVEMENTS_BATCH1_PLAN.md#4-minmax-windowlevel-from-bit-depth))
 - [ ] **[P1]** Add overlay configuration to image right-click context menu ([plan](plans/UX_IMPROVEMENTS_BATCH1_PLAN.md#5-overlay-configuration-in-right-click-context-menu))
 - [ ] **[P2]** Make default line thicknesses and annotation font sizes smaller (for ROIs, text annotation, measurements) - say line thickness 3 and font size 12 ([plan](plans/UX_IMPROVEMENTS_BATCH1_PLAN.md#6-reduce-default-line-thicknesses-and-font-sizes))
-- [ ] **[P1]** Differentiate frame # vs slice # (maybe also consider instance #, acquisition number, anything else?) in UI and backend ([details](FUTURE_WORK_DETAIL_NOTES.md#differentiating-frame--vs-slice)) See CCL2 example datset for one example - seems to be grouping by file or instance number, and each of those have multiple frames - all have same series number. Maybe we should separate in the navigator by series AND by instance number? No, others like VC192 dataset have instance number corresponding to slice number. So maybe separate by series and instance if instances have multiple frames? Make it an option (via right-click context menu in navigator and View menu)?
 - [ ] **[P2]** Follow-up for multi-frame instance navigation: audit ROI / measurement / annotation / cine / projection code paths that use `current_slice_index` as slice identity before attempting bounded per-instance scrolling ([plan](plans/MULTI_FRAME_INSTANCE_NAVIGATION_PLAN.md#phase-4-show-instances-separately-toggle-and-config))
 - [ ] **[P2]** Make right pane minimum width before collapsing 250 instead of 200
 - [ ] **[P2]** Consider more sophisticated smoothing (PIL/NumPy) vs Qt-only scaling
 - [ ] **[P2]** Add ability to edit a drawn ellipse or rectangle ROI ([plan](plans/VIEWER_UX_FEATURES_PLAN.md#1-roi-editing-resize-handles))
 - [ ] **[P2]** Make window/level settings remembered when switching series and then switching back ([plan](plans/VIEWER_UX_FEATURES_PLAN.md#2-windowlevel-remembered-per-series))
-- [ ] **[P1]** Add scale markers on left and bottom (small ticks every image mm, large every cm) ([plan](plans/VIEWER_UX_FEATURES_PLAN.md#3-scale-markers-ruler-ticks))
-- [ ] **[P1]** Add direction labels (A/P/L/R/S/I) on viewer window ([plan](plans/VIEWER_UX_FEATURES_PLAN.md#4-direction-labels-aplrsi))
+- [ ] **[P1]** Add scale markers on left and bottom (small ticks every image mm, large every cm) ([plan](plans/VIEWER_UX_FEATURES_PLAN.md#3-scale-markers-ruler-ticks)) and allow enable/disable *implemented, verify behavior*
+- [ ] **[P1]** Add direction labels (A/P/L/R/S/I) on viewer window ([plan](plans/VIEWER_UX_FEATURES_PLAN.md#4-direction-labels-aplrsi)) and allow to enable/disable *implemented, verify behavior*
 - [ ] **[P2]** Allow flipping and rotating image ([plan](plans/VIEWER_UX_FEATURES_PLAN.md#5-flip-and-rotate-image))
 - [ ] **[P1]** Slice / frame slider bars in subwindows - ideally only appears when you mouse over near some edge of the window (right?) ([plan](plans/VIEWER_UX_FEATURES_PLAN.md#6-subwindow-slice--frame-slider-bars))
 - [ ] **[P1]** Hovering on a study label in the navigator should show a popup tooltip with the study description, date, and patient name (but should respect privacy mode). Hovering on a thumbnail should show a tooltip with that same info, plus series description ([plan](plans/NAVIGATOR_AND_FILE_LOADING_FEEDBACK_PLAN.md#1-navigator-tooltips-privacy-aware))
@@ -67,7 +67,9 @@ This file tracks active and near-term tasks.
 - [ ] **[P2]** Give options for slice position lines on windows to show middle of slice or begin and end ([plan](plans/WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md#3-slice-position-line-display-options-middle-vs-beginend))
 - [ ] **[P2]** When show instances separately is enabled, allow left/right keys to switch between instances ([plan](plans/WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md#4-leftright-keys-for-instance-switching-show-instances-separately))
 - [ ] **[P2]** When exporting PNG or JPG, allow anonymization and make using embedded window/level the default option ([plan](plans/EXPORT_PRIVACY_AND_WL_DEFAULT_PLAN.md#goal))
-- [ ] **[P2]** Make default pixel size and slice thickness more reasonable and make editing them easier (spinboxes?)
+- [ ] **[P2]** Make default pixel size and slice thickness more reasonable and make editing them easier (default to 1.0 mm, 1.0 mm?)
+- [ ] **[P2]** Make a Settings menu for grouping lots of options?
+- [ ] **[P2]** Allow setting of colors for direction indicators and scale markers separately? Maybe also size of direction indicator fonts and which scale ticks to show (small, large ticks)?
 
 
 ## Features (Near-Term)
