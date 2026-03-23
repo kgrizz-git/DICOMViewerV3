@@ -246,6 +246,11 @@ class ImageViewer(QGraphicsView):
         # Viewer overlays (independent from metadata corner overlays)
         self._show_scale_markers: bool = False
         self._show_direction_labels: bool = False
+        self._scale_markers_color: Tuple[int, int, int] = (255, 255, 0)
+        self._direction_labels_color: Tuple[int, int, int] = (255, 255, 0)
+        self._direction_label_size: int = 16
+        self._scale_markers_major_tick_interval_mm: int = 10
+        self._scale_markers_minor_tick_interval_mm: int = 5
         # Slice sync state (for context menu synchronization)
         self._slice_sync_enabled: bool = False
         # When True, we are in "interacting" state (zoom/pan just happened); use fast transform until idle timer fires
@@ -397,6 +402,27 @@ class ImageViewer(QGraphicsView):
         self._show_direction_labels = enabled
         self.viewport().update()
 
+    def set_scale_markers_color_state(self, color: Tuple[int, int, int]) -> None:
+        """Set the RGB color used when drawing scale markers."""
+        self._scale_markers_color = color
+        self.viewport().update()
+
+    def set_direction_labels_color_state(self, color: Tuple[int, int, int]) -> None:
+        """Set the RGB color used when drawing direction labels."""
+        self._direction_labels_color = color
+        self.viewport().update()
+
+    def set_direction_label_size_state(self, size: int) -> None:
+        """Set the point size used for direction labels."""
+        self._direction_label_size = max(1, int(size))
+        self.viewport().update()
+
+    def set_scale_markers_tick_intervals_state(self, major_interval_mm: int, minor_interval_mm: int) -> None:
+        """Set the scale markers major/minor tick intervals in millimetres."""
+        self._scale_markers_major_tick_interval_mm = max(1, int(major_interval_mm))
+        self._scale_markers_minor_tick_interval_mm = max(1, int(minor_interval_mm))
+        self.viewport().update()
+
     def drawForeground(self, painter: QPainter, rect: QRectF) -> None:
         """
         Draw viewer-only overlays (scale markers and direction labels) on top of scene items.
@@ -441,45 +467,70 @@ class ImageViewer(QGraphicsView):
         major_tick_len_px = 14.0
         minor_tick_len_px = 8.0
 
-        pen = QPen(QColor(255, 255, 0, 220))
+        pen = QPen(QColor(self._scale_markers_color[0], self._scale_markers_color[1], self._scale_markers_color[2], 220))
         pen.setWidthF(1.0)
         painter.setPen(pen)
 
-        # Bottom ruler: minor ticks every 5 mm, major ticks every 10 mm (1 cm)
-        minor_tick_mm = 5
-        major_tick_mm = 10
-        mm_step_x = minor_tick_mm / col_spacing_mm
-        if mm_step_x >= 1e-6:
-            start_mm_x = int(max(0.0, np.floor((visible_rect.left() - image_rect.left()) / mm_step_x)))
-            end_mm_x = int(np.ceil((visible_rect.right() - image_rect.left()) / mm_step_x))
+        minor_tick_mm = max(1, self._scale_markers_minor_tick_interval_mm)
+        major_tick_mm = max(1, self._scale_markers_major_tick_interval_mm)
+
+        # Bottom ruler: minor ticks and major ticks are drawn independently.
+        minor_step_x = minor_tick_mm / col_spacing_mm
+        if minor_step_x >= 1e-6:
+            start_mm_x = int(max(0.0, np.floor((visible_rect.left() - image_rect.left()) / minor_step_x)))
+            end_mm_x = int(np.ceil((visible_rect.right() - image_rect.left()) / minor_step_x))
             bottom_y = float(viewport_rect.bottom())
             for mm_idx in range(start_mm_x, end_mm_x + 1):
-                scene_x = image_rect.left() + (mm_idx * mm_step_x)
+                scene_x = image_rect.left() + (mm_idx * minor_step_x)
                 if scene_x < visible_rect.left() - 0.5 or scene_x > visible_rect.right() + 0.5:
                     continue
                 viewport_x = float(self.mapFromScene(QPointF(scene_x, visible_rect.center().y())).x())
                 if viewport_x < viewport_rect.left() - 1 or viewport_x > viewport_rect.right() + 1:
                     continue
-                tick_distance_mm = mm_idx * minor_tick_mm
-                tick_len = major_tick_len_px if (tick_distance_mm % major_tick_mm == 0) else minor_tick_len_px
-                painter.drawLine(QPointF(viewport_x, bottom_y), QPointF(viewport_x, bottom_y - tick_len))
+                painter.drawLine(QPointF(viewport_x, bottom_y), QPointF(viewport_x, bottom_y - minor_tick_len_px))
 
-        # Left ruler: minor ticks every 5 mm, major ticks every 10 mm (1 cm)
-        mm_step_y = minor_tick_mm / row_spacing_mm
-        if mm_step_y >= 1e-6:
-            start_mm_y = int(max(0.0, np.floor((visible_rect.top() - image_rect.top()) / mm_step_y)))
-            end_mm_y = int(np.ceil((visible_rect.bottom() - image_rect.top()) / mm_step_y))
+        major_step_x = major_tick_mm / col_spacing_mm
+        if major_step_x >= 1e-6:
+            start_major_x = int(max(0.0, np.floor((visible_rect.left() - image_rect.left()) / major_step_x)))
+            end_major_x = int(np.ceil((visible_rect.right() - image_rect.left()) / major_step_x))
+            bottom_y = float(viewport_rect.bottom())
+            for major_idx in range(start_major_x, end_major_x + 1):
+                scene_x = image_rect.left() + (major_idx * major_step_x)
+                if scene_x < visible_rect.left() - 0.5 or scene_x > visible_rect.right() + 0.5:
+                    continue
+                viewport_x = float(self.mapFromScene(QPointF(scene_x, visible_rect.center().y())).x())
+                if viewport_x < viewport_rect.left() - 1 or viewport_x > viewport_rect.right() + 1:
+                    continue
+                painter.drawLine(QPointF(viewport_x, bottom_y), QPointF(viewport_x, bottom_y - major_tick_len_px))
+
+        # Left ruler: minor ticks and major ticks are drawn independently.
+        minor_step_y = minor_tick_mm / row_spacing_mm
+        if minor_step_y >= 1e-6:
+            start_mm_y = int(max(0.0, np.floor((visible_rect.top() - image_rect.top()) / minor_step_y)))
+            end_mm_y = int(np.ceil((visible_rect.bottom() - image_rect.top()) / minor_step_y))
             left_x = float(viewport_rect.left())
             for mm_idx in range(start_mm_y, end_mm_y + 1):
-                scene_y = image_rect.top() + (mm_idx * mm_step_y)
+                scene_y = image_rect.top() + (mm_idx * minor_step_y)
                 if scene_y < visible_rect.top() - 0.5 or scene_y > visible_rect.bottom() + 0.5:
                     continue
                 viewport_y = float(self.mapFromScene(QPointF(visible_rect.center().x(), scene_y)).y())
                 if viewport_y < viewport_rect.top() - 1 or viewport_y > viewport_rect.bottom() + 1:
                     continue
-                tick_distance_mm = mm_idx * minor_tick_mm
-                tick_len = major_tick_len_px if (tick_distance_mm % major_tick_mm == 0) else minor_tick_len_px
-                painter.drawLine(QPointF(left_x, viewport_y), QPointF(left_x + tick_len, viewport_y))
+                painter.drawLine(QPointF(left_x, viewport_y), QPointF(left_x + minor_tick_len_px, viewport_y))
+
+        major_step_y = major_tick_mm / row_spacing_mm
+        if major_step_y >= 1e-6:
+            start_major_y = int(max(0.0, np.floor((visible_rect.top() - image_rect.top()) / major_step_y)))
+            end_major_y = int(np.ceil((visible_rect.bottom() - image_rect.top()) / major_step_y))
+            left_x = float(viewport_rect.left())
+            for major_idx in range(start_major_y, end_major_y + 1):
+                scene_y = image_rect.top() + (major_idx * major_step_y)
+                if scene_y < visible_rect.top() - 0.5 or scene_y > visible_rect.bottom() + 0.5:
+                    continue
+                viewport_y = float(self.mapFromScene(QPointF(visible_rect.center().x(), scene_y)).y())
+                if viewport_y < viewport_rect.top() - 1 or viewport_y > viewport_rect.bottom() + 1:
+                    continue
+                painter.drawLine(QPointF(left_x, viewport_y), QPointF(left_x + major_tick_len_px, viewport_y))
 
     def _draw_direction_labels(self, painter: QPainter, dataset: Any) -> None:
         """Draw patient-orientation direction labels on viewport edges."""
@@ -494,23 +545,19 @@ class ImageViewer(QGraphicsView):
         top_bottom_margin_px = 16.0
         side_margin_px = 14.0
 
-        overlay_font_size = 10
         overlay_font_family = "IBM Plex Sans"
         overlay_font_variant = "Bold"
-        overlay_font_color = (255, 255, 0)
         if self.config_manager is not None:
             try:
-                overlay_font_size = int(self.config_manager.get_overlay_font_size())
                 overlay_font_family = self.config_manager.get_overlay_font_family()
                 overlay_font_variant = self.config_manager.get_overlay_font_variant()
-                overlay_font_color = self.config_manager.get_overlay_font_color()
             except Exception:
                 pass
-        font_px = max(overlay_font_size + 6, 16)
+        font_px = max(self._direction_label_size, 1)
 
         font = make_qfont(overlay_font_family, overlay_font_variant, font_px)
         painter.setFont(font)
-        painter.setPen(QPen(QColor(overlay_font_color[0], overlay_font_color[1], overlay_font_color[2], 230)))
+        painter.setPen(QPen(QColor(self._direction_labels_color[0], self._direction_labels_color[1], self._direction_labels_color[2], 230)))
 
         font_metrics = painter.fontMetrics()
         center_x = viewport_rect.center().x()

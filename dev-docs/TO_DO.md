@@ -69,7 +69,7 @@ This file tracks active and near-term tasks.
 - [ ] **[P2]** When exporting PNG or JPG, allow anonymization and make using embedded window/level the default option ([plan](plans/EXPORT_PRIVACY_AND_WL_DEFAULT_PLAN.md#goal))
 - [ ] **[P2]** Make default pixel size and slice thickness more reasonable and make editing them easier (default to 1.0 mm, 1.0 mm?)
 - [ ] **[P2]** Make a Settings menu for grouping lots of options?
-- [ ] **[P2]** Allow setting of colors for direction indicators and scale markers separately? Maybe also size of direction indicator fonts and which scale ticks to show (small, large ticks)?
+
 
 
 ## Features (Near-Term)
