@@ -788,6 +788,7 @@ class DICOMViewerApp(QObject):
             config_manager=self.config_manager,
             metadata_controller=self.metadata_controller,
             overlay_manager=self.overlay_manager,
+            dialog_coordinator=self.dialog_coordinator,
             get_subwindow_managers=lambda: self.subwindow_managers,
             get_all_subwindows=self.multi_window_layout.get_all_subwindows,
             get_focused_subwindow_index=self.get_focused_subwindow_index,

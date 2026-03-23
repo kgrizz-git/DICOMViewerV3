@@ -57,6 +57,21 @@ def _normalize_guide_text_encoding(html: str) -> str:
     }
     for bad_text, fixed_text in replacements.items():
         html = html.replace(bad_text, fixed_text)
+    html = html.replace(" ? ", " &rarr; ")
+    html = html.replace('<code>?</code> (Up)', '<code>&uarr;</code> (Up)')
+    html = html.replace('<code>?</code> (Down)', '<code>&darr;</code> (Down)')
+    html = html.replace('<code>?</code> (Left)', '<code>&larr;</code> (Left)')
+    html = html.replace('<code>?</code> (Right)', '<code>&rarr;</code> (Right)')
+    html = html.replace(
+        '<code>?</code> / <code>?</code>:</strong> Navigate slices',
+        '<code>&uarr;</code> / <code>&darr;</code>:</strong> Navigate slices',
+    )
+    html = html.replace(
+        '<code>?</code> / <code>?</code>:</strong> Navigate series',
+        '<code>&larr;</code> / <code>&rarr;</code>:</strong> Navigate series',
+    )
+    html = html.replace("Export ROI Statistics�", "Export ROI Statistics...")
+    html = html.replace("1.5�, 2�, 4�", "1.5&times;, 2&times;, 4&times;")
     html = html.replace("<h2>Table of Contents</h2>", '<h2 id="table-of-contents">Table of Contents</h2>', 1)
     return html
 

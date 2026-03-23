@@ -315,6 +315,16 @@ class DialogCoordinator:
         """
         if self.tag_viewer_dialog is not None:
             self.tag_viewer_dialog.clear_filter()
+
+    def apply_privacy_mode(self, enabled: bool) -> None:
+        """
+        Propagate privacy mode updates to open dialog state.
+
+        Args:
+            enabled: True to enable privacy mode, False to disable.
+        """
+        if self.tag_viewer_dialog is not None:
+            self.tag_viewer_dialog.set_privacy_mode(enabled)
     
     def open_histogram(self, subwindow_index: Optional[int] = None) -> None:
         """

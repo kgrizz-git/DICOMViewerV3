@@ -51,6 +51,80 @@ def _normalize_doc_text_encoding(html: str) -> str:
     }
     for bad_text, fixed_text in replacements.items():
         html = html.replace(bad_text, fixed_text)
+    html = html.replace(" ? ", " &rarr; ")
+    html = html.replace("\n?\n", "\n&darr;\n")
+    html = html.replace(
+        "fused = base � (1 - a�mask) + overlay � (a�mask)",
+        "fused = base &times; (1 - &alpha;&times;mask) + overlay &times; (&alpha;&times;mask)",
+    )
+    html = html.replace(
+        "overlay = array1 � (1 - weight) + array2 � weight",
+        "overlay = array1 &times; (1 - weight) + array2 &times; weight",
+    )
+    html = html.replace(
+        "��0.5 overlay slices (�0.5 voxels in Z); ��0.5 mm at 1 mm slice spacing, ��1.5 mm at 3 mm slice spacing",
+        "&plusmn;0.5 overlay slices (&plusmn;0.5 voxels in Z); &plusmn;0.5 mm at 1 mm slice spacing, &plusmn;1.5 mm at 3 mm slice spacing",
+    )
+    html = html.replace(
+        "��0.5 pixels in x/y; ��0.5 mm at 1 mm pixels, ��0.25 mm at 0.5 mm pixels",
+        "&plusmn;0.5 pixels in x/y; &plusmn;0.5 mm at 1 mm pixels, &plusmn;0.25 mm at 0.5 mm pixels",
+    )
+    html = html.replace(
+        "�0.5 pixels in x/y (rounding); ��0.5 mm at 1 mm pixels, ��0.25 mm at 0.5 mm pixels",
+        "&plusmn;0.5 pixels in x/y (rounding); &plusmn;0.5 mm at 1 mm pixels, &plusmn;0.25 mm at 0.5 mm pixels",
+    )
+    html = html.replace(
+        "Spatial accuracy (native): ��0.5 pixels in x/y from scaling and translation rounding, �0 voxels in Z.",
+        "Spatial accuracy (native): &plusmn;0.5 pixels in x/y from scaling and translation rounding, ~0 voxels in Z.",
+    )
+    html = html.replace(
+        "Physical equivalent: ��0.5 mm at 1 mm spacing, ��0.25 mm at 0.5 mm spacing.",
+        "Physical equivalent: &plusmn;0.5 mm at 1 mm spacing, &plusmn;0.25 mm at 0.5 mm spacing.",
+    )
+    html = html.replace(
+        "<strong>Total algorithmic error:</strong> on the order of �0.5�1.0 pixels (��0.5�1.0 mm at 1 mm spacing).",
+        "<strong>Total algorithmic error:</strong> on the order of 0.5-1.0 pixels (&plusmn;0.5-1.0 mm at 1 mm spacing).",
+    )
+    html = html.replace(
+        "Spatial accuracy (native): ��0.5�1.0 pixels in x/y and up to �0.5 overlay slices in Z.",
+        "Spatial accuracy (native): &plusmn;0.5-1.0 pixels in x/y and up to &plusmn;0.5 overlay slices in Z.",
+    )
+    html = html.replace(
+        "Physical equivalent: ��0.5�1.5 mm total, depending on slice spacing (e.g., �1.5 mm at 3 mm slices).",
+        "Physical equivalent: &plusmn;0.5-1.5 mm total, depending on slice spacing (for example, &plusmn;1.5 mm at 3 mm slices).",
+    )
+    html = html.replace(
+        "<strong>Total algorithmic error:</strong> typically �1.0�2.5 mm.",
+        "<strong>Total algorithmic error:</strong> typically 1.0-2.5 mm.",
+    )
+    html = html.replace(
+        "��0.5 voxels per axis; ��0.87 voxels in 3D magnitude (��0.5�0.9 mm at 1 mm voxels)",
+        "&plusmn;0.5 voxels per axis; &plusmn;0.87 voxels in 3D magnitude (&plusmn;0.5-0.9 mm at 1 mm voxels)",
+    )
+    html = html.replace(
+        "��0.3�0.4 voxels per axis; ��0.5�0.7 voxels total (��0.5�0.7 mm at 1 mm voxels)",
+        "&plusmn;0.3-0.4 voxels per axis; &plusmn;0.5-0.7 voxels total (&plusmn;0.5-0.7 mm at 1 mm voxels)",
+    )
+    html = html.replace(
+        "Typically �0.1�0.5 mm with good metadata; can be overestimated by 10�30% or more with oblique slices and poor metadata",
+        "Typically 0.1-0.5 mm with good metadata; can be overestimated by 10-30% or more with oblique slices and poor metadata",
+    )
+    html = html.replace(
+        "Orientation errors usually &lt;0.1� for well-formed DICOM (<0.001 differences in direction cosines)",
+        "Orientation errors usually &lt;0.1&deg; for well-formed DICOM (&lt;0.001 differences in direction cosines)",
+    )
+    html = html.replace(
+        "Spatial accuracy (native): sub-voxel in all three dimensions, typically ��0.5�0.87 voxels total.",
+        "Spatial accuracy (native): sub-voxel in all three dimensions, typically &plusmn;0.5-0.87 voxels total.",
+    )
+    html = html.replace(
+        "Physical equivalent (1 mm isotropic voxels): ��0.6�1.0 mm total positional error.",
+        "Physical equivalent (1 mm isotropic voxels): &plusmn;0.6-1.0 mm total positional error.",
+    )
+    html = html.replace(
+        "Spatial accuracy: ��0.87 voxels from interpolation plus small spacing/orientation uncertainties.",
+        "Spatial accuracy: &plusmn;0.87 voxels from interpolation plus small spacing/orientation uncertainties.",
+    )
     html = html.replace("<h2>Table of Contents</h2>", '<h2 id="table-of-contents">Table of Contents</h2>', 1)
     return html
 
