@@ -54,6 +54,44 @@ class DisplayConfigMixin:
         self.config["smooth_image_when_zoomed"] = enabled
         self.save_config()
 
+    def get_show_scale_markers(self) -> bool:
+        """
+        Get whether viewer scale markers are enabled.
+
+        Returns:
+            True if scale markers are enabled, False otherwise
+        """
+        return self.config.get("show_scale_markers", False)
+
+    def set_show_scale_markers(self, enabled: bool) -> None:
+        """
+        Set whether viewer scale markers are enabled.
+
+        Args:
+            enabled: True to enable scale markers, False to disable
+        """
+        self.config["show_scale_markers"] = enabled
+        self.save_config()
+
+    def get_show_direction_labels(self) -> bool:
+        """
+        Get whether viewer direction labels are enabled.
+
+        Returns:
+            True if direction labels are enabled, False otherwise
+        """
+        return self.config.get("show_direction_labels", False)
+
+    def set_show_direction_labels(self, enabled: bool) -> None:
+        """
+        Set whether viewer direction labels are enabled.
+
+        Args:
+            enabled: True to enable direction labels, False to disable
+        """
+        self.config["show_direction_labels"] = enabled
+        self.save_config()
+
     def get_show_instances_separately(self) -> bool:
         """Get whether multi-frame instances should be shown separately in the navigator."""
         return self.config.get("show_instances_separately", False)

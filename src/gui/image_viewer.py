@@ -24,8 +24,10 @@ from PySide6.QtWidgets import (QGraphicsView, QGraphicsScene, QGraphicsPixmapIte
 from PySide6.QtCore import Qt, QRectF, Signal, QPointF, QPoint, QTimer, QEvent
 from PySide6.QtGui import (QPixmap, QImage, QWheelEvent, QKeyEvent, QMouseEvent,
                           QPainter, QColor, QTransform, QDragEnterEvent, QDropEvent,
+                          QPen,
                           QNativeGestureEvent)
 from PIL import Image
+from utils.bundled_fonts import make_qfont
 from utils.debug_flags import DEBUG_NAV, DEBUG_MAGNIFIER, DEBUG_AGENT_LOG
 import numpy as np
 import os
@@ -92,6 +94,8 @@ class ImageViewer(QGraphicsView):
     toggle_overlay_requested = Signal()  # Emitted when toggle overlay is requested
     privacy_view_toggled = Signal(bool)  # Emitted when privacy view is toggled from context menu (True = enabled)
     smooth_when_zoomed_toggled = Signal(bool)  # Emitted when smooth when zoomed is toggled from context menu (True = enabled)
+    scale_markers_toggled = Signal(bool)  # Emitted when scale markers are toggled from context menu (True = enabled)
+    direction_labels_toggled = Signal(bool)  # Emitted when direction labels are toggled from context menu (True = enabled)
     slice_sync_toggled = Signal(bool)  # Emitted when slice sync is toggled from context menu (True = enabled)
     slice_sync_manage_requested = Signal()  # Emitted when slice sync group management is requested from context menu
     slice_location_lines_toggled = Signal(bool)  # Emitted when slice location lines toggled from context menu (True = show)
@@ -239,6 +243,9 @@ class ImageViewer(QGraphicsView):
 
         # Smooth image when zoomed (display option; applied to view and image item)
         self._smooth_when_zoomed: bool = False
+        # Viewer overlays (independent from metadata corner overlays)
+        self._show_scale_markers: bool = False
+        self._show_direction_labels: bool = False
         # Slice sync state (for context menu synchronization)
         self._slice_sync_enabled: bool = False
         # When True, we are in "interacting" state (zoom/pan just happened); use fast transform until idle timer fires
@@ -369,6 +376,232 @@ class ImageViewer(QGraphicsView):
             enabled: True if global slice sync is enabled, False otherwise
         """
         self._slice_sync_enabled = enabled
+
+    def set_scale_markers_state(self, enabled: bool) -> None:
+        """
+        Set whether scale markers should be rendered.
+
+        Args:
+            enabled: True to show scale markers, False to hide
+        """
+        self._show_scale_markers = enabled
+        self.viewport().update()
+
+    def set_direction_labels_state(self, enabled: bool) -> None:
+        """
+        Set whether orientation direction labels should be rendered.
+
+        Args:
+            enabled: True to show direction labels, False to hide
+        """
+        self._show_direction_labels = enabled
+        self.viewport().update()
+
+    def drawForeground(self, painter: QPainter, rect: QRectF) -> None:
+        """
+        Draw viewer-only overlays (scale markers and direction labels) on top of scene items.
+        """
+        super().drawForeground(painter, rect)
+
+        if self.image_item is None:
+            return
+
+        dataset = self.get_current_dataset_callback() if self.get_current_dataset_callback else None
+        if dataset is None:
+            return
+
+        painter.save()
+        try:
+            painter.resetTransform()
+            if self._show_scale_markers:
+                self._draw_scale_markers(painter, dataset)
+            if self._show_direction_labels:
+                self._draw_direction_labels(painter, dataset)
+        finally:
+            painter.restore()
+
+    def _draw_scale_markers(self, painter: QPainter, dataset: Any) -> None:
+        """Draw mm/cm ruler ticks on viewport left and bottom edges using PixelSpacing."""
+        spacing = self._extract_pixel_spacing(dataset)
+        if spacing is None or self.image_item is None:
+            return
+
+        row_spacing_mm, col_spacing_mm = spacing
+        if row_spacing_mm <= 0.0 or col_spacing_mm <= 0.0:
+            return
+
+        image_rect = self.image_item.sceneBoundingRect()
+        view_scene_rect = self.mapToScene(self.viewport().rect()).boundingRect()
+        visible_rect = image_rect.intersected(view_scene_rect)
+        if visible_rect.isEmpty():
+            return
+
+        zoom = max(0.0001, self.transform().m11())
+        viewport_rect = self.viewport().rect()
+        major_tick_len_px = 14.0
+        minor_tick_len_px = 8.0
+
+        pen = QPen(QColor(255, 255, 0, 220))
+        pen.setWidthF(1.0)
+        painter.setPen(pen)
+
+        # Bottom ruler: minor ticks every 5 mm, major ticks every 10 mm (1 cm)
+        minor_tick_mm = 5
+        major_tick_mm = 10
+        mm_step_x = minor_tick_mm / col_spacing_mm
+        if mm_step_x >= 1e-6:
+            start_mm_x = int(max(0.0, np.floor((visible_rect.left() - image_rect.left()) / mm_step_x)))
+            end_mm_x = int(np.ceil((visible_rect.right() - image_rect.left()) / mm_step_x))
+            bottom_y = float(viewport_rect.bottom())
+            for mm_idx in range(start_mm_x, end_mm_x + 1):
+                scene_x = image_rect.left() + (mm_idx * mm_step_x)
+                if scene_x < visible_rect.left() - 0.5 or scene_x > visible_rect.right() + 0.5:
+                    continue
+                viewport_x = float(self.mapFromScene(QPointF(scene_x, visible_rect.center().y())).x())
+                if viewport_x < viewport_rect.left() - 1 or viewport_x > viewport_rect.right() + 1:
+                    continue
+                tick_distance_mm = mm_idx * minor_tick_mm
+                tick_len = major_tick_len_px if (tick_distance_mm % major_tick_mm == 0) else minor_tick_len_px
+                painter.drawLine(QPointF(viewport_x, bottom_y), QPointF(viewport_x, bottom_y - tick_len))
+
+        # Left ruler: minor ticks every 5 mm, major ticks every 10 mm (1 cm)
+        mm_step_y = minor_tick_mm / row_spacing_mm
+        if mm_step_y >= 1e-6:
+            start_mm_y = int(max(0.0, np.floor((visible_rect.top() - image_rect.top()) / mm_step_y)))
+            end_mm_y = int(np.ceil((visible_rect.bottom() - image_rect.top()) / mm_step_y))
+            left_x = float(viewport_rect.left())
+            for mm_idx in range(start_mm_y, end_mm_y + 1):
+                scene_y = image_rect.top() + (mm_idx * mm_step_y)
+                if scene_y < visible_rect.top() - 0.5 or scene_y > visible_rect.bottom() + 0.5:
+                    continue
+                viewport_y = float(self.mapFromScene(QPointF(visible_rect.center().x(), scene_y)).y())
+                if viewport_y < viewport_rect.top() - 1 or viewport_y > viewport_rect.bottom() + 1:
+                    continue
+                tick_distance_mm = mm_idx * minor_tick_mm
+                tick_len = major_tick_len_px if (tick_distance_mm % major_tick_mm == 0) else minor_tick_len_px
+                painter.drawLine(QPointF(left_x, viewport_y), QPointF(left_x + tick_len, viewport_y))
+
+    def _draw_direction_labels(self, painter: QPainter, dataset: Any) -> None:
+        """Draw patient-orientation direction labels on viewport edges."""
+        if self.image_item is None:
+            return
+
+        labels = self._compute_direction_labels(dataset)
+        if labels is None:
+            return
+
+        viewport_rect = self.viewport().rect()
+        top_bottom_margin_px = 16.0
+        side_margin_px = 14.0
+
+        overlay_font_size = 10
+        overlay_font_family = "IBM Plex Sans"
+        overlay_font_variant = "Bold"
+        overlay_font_color = (255, 255, 0)
+        if self.config_manager is not None:
+            try:
+                overlay_font_size = int(self.config_manager.get_overlay_font_size())
+                overlay_font_family = self.config_manager.get_overlay_font_family()
+                overlay_font_variant = self.config_manager.get_overlay_font_variant()
+                overlay_font_color = self.config_manager.get_overlay_font_color()
+            except Exception:
+                pass
+        font_px = max(overlay_font_size + 6, 16)
+
+        font = make_qfont(overlay_font_family, overlay_font_variant, font_px)
+        painter.setFont(font)
+        painter.setPen(QPen(QColor(overlay_font_color[0], overlay_font_color[1], overlay_font_color[2], 230)))
+
+        font_metrics = painter.fontMetrics()
+        center_x = viewport_rect.center().x()
+        center_y = viewport_rect.center().y()
+
+        top_width = font_metrics.horizontalAdvance(labels["top"])
+        bottom_width = font_metrics.horizontalAdvance(labels["bottom"])
+        right_width = font_metrics.horizontalAdvance(labels["right"])
+        ascent = font_metrics.ascent()
+        cap_center_offset = (ascent - font_metrics.descent()) / 2.0
+
+        painter.drawText(
+            QPointF(
+                center_x - (top_width / 2.0),
+                viewport_rect.top() + top_bottom_margin_px + ascent,
+            ),
+            labels["top"],
+        )
+        painter.drawText(
+            QPointF(
+                center_x - (bottom_width / 2.0),
+                viewport_rect.bottom() - top_bottom_margin_px,
+            ),
+            labels["bottom"],
+        )
+        painter.drawText(
+            QPointF(
+                viewport_rect.left() + side_margin_px,
+                center_y + cap_center_offset,
+            ),
+            labels["left"],
+        )
+        painter.drawText(
+            QPointF(
+                viewport_rect.right() - side_margin_px - right_width,
+                center_y + cap_center_offset,
+            ),
+            labels["right"],
+        )
+
+    def _extract_pixel_spacing(self, dataset: Any) -> Optional[Tuple[float, float]]:
+        """Extract row and column pixel spacing in mm from the dataset."""
+        pixel_spacing = getattr(dataset, "PixelSpacing", None)
+        if pixel_spacing is None or len(pixel_spacing) < 2:
+            return None
+
+        try:
+            row_mm = float(pixel_spacing[0])
+            col_mm = float(pixel_spacing[1])
+        except (TypeError, ValueError):
+            return None
+        return (row_mm, col_mm)
+
+    def _compute_direction_labels(self, dataset: Any) -> Optional[dict]:
+        """Compute top/bottom/left/right patient orientation labels from ImageOrientationPatient."""
+        iop = getattr(dataset, "ImageOrientationPatient", None)
+        if iop is None or len(iop) < 6:
+            return None
+
+        try:
+            row_cos = np.array([float(iop[0]), float(iop[1]), float(iop[2])], dtype=np.float64)
+            col_cos = np.array([float(iop[3]), float(iop[4]), float(iop[5])], dtype=np.float64)
+        except (TypeError, ValueError):
+            return None
+
+        left_dir = self._axis_label_from_vector(-row_cos)
+        right_dir = self._axis_label_from_vector(row_cos)
+        top_dir = self._axis_label_from_vector(-col_cos)
+        bottom_dir = self._axis_label_from_vector(col_cos)
+
+        return {
+            "left": left_dir,
+            "right": right_dir,
+            "top": top_dir,
+            "bottom": bottom_dir,
+        }
+
+    def _axis_label_from_vector(self, vec: np.ndarray) -> str:
+        """Map a DICOM LPS direction vector to nearest cardinal patient label."""
+        if vec is None or vec.size != 3:
+            return ""
+        if np.linalg.norm(vec) < 1e-6:
+            return ""
+
+        axes = [
+            (abs(vec[0]), "L" if vec[0] >= 0 else "R"),
+            (abs(vec[1]), "P" if vec[1] >= 0 else "A"),
+            (abs(vec[2]), "S" if vec[2] >= 0 else "I"),
+        ]
+        axes.sort(key=lambda item: item[0], reverse=True)
+        return axes[0][1]
 
     def _apply_inversion(self, image: Image.Image) -> Image.Image:
         """
@@ -1952,6 +2185,20 @@ class ImageViewer(QGraphicsView):
                         smooth_when_zoomed_action.setCheckable(True)
                         smooth_when_zoomed_action.setChecked(self._smooth_when_zoomed)
                         smooth_when_zoomed_action.triggered.connect(lambda checked: self.smooth_when_zoomed_toggled.emit(checked))
+
+                        scale_markers_action = context_menu.addAction("Show Scale Markers")
+                        scale_markers_action.setCheckable(True)
+                        scale_markers_action.setChecked(self._show_scale_markers)
+                        scale_markers_action.triggered.connect(
+                            lambda checked: self.scale_markers_toggled.emit(checked)
+                        )
+
+                        direction_labels_action = context_menu.addAction("Show Direction Labels")
+                        direction_labels_action.setCheckable(True)
+                        direction_labels_action.setChecked(self._show_direction_labels)
+                        direction_labels_action.triggered.connect(
+                            lambda checked: self.direction_labels_toggled.emit(checked)
+                        )
 
                         # Slice Sync submenu
                         slice_sync_menu = context_menu.addMenu("Slice Sync")

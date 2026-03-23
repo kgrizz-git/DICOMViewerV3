@@ -369,6 +369,14 @@ class SubwindowLifecycleController:
                     except (TypeError, RuntimeError):
                         pass
                     try:
+                        image_viewer.scale_markers_toggled.disconnect(app._on_scale_markers_toggled)
+                    except (TypeError, RuntimeError):
+                        pass
+                    try:
+                        image_viewer.direction_labels_toggled.disconnect(app._on_direction_labels_toggled)
+                    except (TypeError, RuntimeError):
+                        pass
+                    try:
                         image_viewer.slice_sync_toggled.disconnect(app._on_slice_sync_toggled)
                     except (TypeError, RuntimeError):
                         pass
@@ -449,6 +457,8 @@ class SubwindowLifecycleController:
                 image_viewer.layout_change_requested.connect(app._on_layout_change_requested)
                 image_viewer.privacy_view_toggled.connect(app._on_privacy_view_toggled)
                 image_viewer.smooth_when_zoomed_toggled.connect(app._on_smooth_when_zoomed_toggled)
+                image_viewer.scale_markers_toggled.connect(app._on_scale_markers_toggled)
+                image_viewer.direction_labels_toggled.connect(app._on_direction_labels_toggled)
                 image_viewer.slice_sync_toggled.connect(app._on_slice_sync_toggled)
                 image_viewer.slice_sync_manage_requested.connect(app._open_slice_sync_dialog)
                 image_viewer.slice_location_lines_toggled.connect(app._on_slice_location_lines_toggled)
