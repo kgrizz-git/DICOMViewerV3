@@ -20,7 +20,8 @@ Requirements:
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                                 QTreeWidget, QTreeWidgetItem, QLineEdit,
                                 QPushButton, QCheckBox, QSplitter, QDialog,
-                                QStyledItemDelegate, QStyleOptionViewItem, QMenu)
+                                QStyledItemDelegate, QStyleOptionViewItem, QMenu,
+                                QMessageBox)
 from PySide6.QtCore import Qt, Signal, QTimer, QPoint
 from PySide6.QtGui import QFont, QPainter, QAction, QColor
 from typing import Optional, Dict, Any, List, Callable
@@ -32,6 +33,7 @@ from core.dicom_editor import DICOMEditor
 from core.tag_edit_history import TagEditHistoryManager
 from gui.dialogs.tag_edit_dialog import TagEditDialog
 from utils.config_manager import ConfigManager
+from utils.dicom_utils import is_patient_tag
 from utils.undo_redo import UndoRedoManager, TagEditCommand
 
 
@@ -138,6 +140,8 @@ class MetadataPanel(QWidget):
         self._cached_tags: Optional[Dict[str, Any]] = None
         self._cached_search_text: str = ""
         self._cached_include_private: bool = True
+        self._active_tag_edit_dialog: Optional[TagEditDialog] = None
+        self._active_tag_edit_tag: Optional[str] = None
         
         # Search debouncing timer
         self._search_timer = QTimer()
@@ -205,12 +209,41 @@ class MetadataPanel(QWidget):
             enabled: True to enable privacy mode, False to disable
         """
         self.privacy_mode = enabled
+        if enabled and self.close_active_tag_edit_dialog_due_to_privacy():
+            QMessageBox.information(
+                self,
+                "Privacy Mode Enabled",
+                "Patient tag editing was closed because Privacy Mode is enabled.",
+            )
         # Clear cache to force refresh
         self._cached_tags = None
         # Refresh display if parser is available
         if self.parser is not None:
             search_text = self.search_edit.text()
             self._populate_tags(search_text)
+
+    def close_active_tag_edit_dialog_due_to_privacy(self) -> bool:
+        """
+        Close the active tag-edit dialog when privacy mode is enabled.
+
+        Returns:
+            True if a patient-tag edit dialog was active and closed; False otherwise.
+        """
+        if self._active_tag_edit_dialog is None:
+            return False
+        if not self._active_tag_edit_dialog.isVisible():
+            return False
+        if not is_patient_tag(self._active_tag_edit_tag or ""):
+            return False
+
+        self._active_tag_edit_dialog.reject()
+        self._active_tag_edit_dialog = None
+        self._active_tag_edit_tag = None
+        return True
+
+    def _is_edit_blocked_by_privacy(self, tag_str: str) -> bool:
+        """Return True when patient-tag editing must be blocked in privacy mode."""
+        return self.privacy_mode and is_patient_tag(tag_str)
     
     def _create_ui(self) -> None:
         """Create the UI components."""
@@ -637,6 +670,14 @@ class MetadataPanel(QWidget):
         tag_str = item.data(0, Qt.ItemDataRole.UserRole)
         if tag_data is None or tag_str is None:
             return
+
+        if self._is_edit_blocked_by_privacy(tag_str):
+            QMessageBox.information(
+                self,
+                "Privacy Mode Enabled",
+                "Patient information tags cannot be edited while Privacy Mode is enabled.",
+            )
+            return
         
         if self.dataset is None or self.editor is None:
             return
@@ -654,56 +695,61 @@ class MetadataPanel(QWidget):
             vr=vr,
             current_value=current_value
         )
-        
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            new_value = dialog.get_value()
-            if new_value is not None:
-                # Get old value for undo/redo
-                old_value = current_value
-                
-                # Create edit command
-                # Use unified undo/redo manager if available
-                if self.undo_redo_manager and self.dataset:
-                    # Convert tag_str to tag object
-                    from pydicom.tag import Tag
-                    tag_tuple = tuple(int(x, 16) for x in tag_str.strip("()").split(","))
-                    tag = Tag(tag_tuple)
-                    
-                    command = TagEditCommand(
-                        self.dataset,
-                        tag,
-                        old_value,
-                        new_value,
-                        vr,
-                        tag_edit_history_manager=self.history_manager,
-                        ui_refresh_callback=self.ui_refresh_callback
-                    )
-                    # Execute command through unified undo/redo manager
-                    self.undo_redo_manager.execute_command(command)
-                else:
-                    # Fallback: update directly if no undo/redo manager
-                    success = self.editor.update_tag(tag_str, new_value, vr)
-                    if not success:
-                        from PySide6.QtWidgets import QMessageBox
-                        QMessageBox.warning(
-                            self,
-                            "Edit Failed",
-                            f"Failed to update tag {tag_str}.\n"
-                            "The tag may be read-only or the value may be invalid."
+        self._active_tag_edit_dialog = dialog
+        self._active_tag_edit_tag = tag_str
+        try:
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                new_value = dialog.get_value()
+                if new_value is not None:
+                    # Get old value for undo/redo
+                    old_value = current_value
+
+                    # Create edit command
+                    # Use unified undo/redo manager if available
+                    if self.undo_redo_manager and self.dataset:
+                        # Convert tag_str to tag object
+                        from pydicom.tag import Tag
+                        tag_tuple = tuple(int(x, 16) for x in tag_str.strip("()").split(","))
+                        tag = Tag(tag_tuple)
+
+                        command = TagEditCommand(
+                            self.dataset,
+                            tag,
+                            old_value,
+                            new_value,
+                            vr,
+                            tag_edit_history_manager=self.history_manager,
+                            ui_refresh_callback=self.ui_refresh_callback
                         )
-                        return
-                    # Still mark as edited if we have history manager
-                    if self.history_manager:
-                        self.history_manager.mark_tag_edited(self.dataset, tag_str)
-                
-                # Emit signal
-                self.tag_edited.emit(tag_str, new_value)
-                # Refresh the tree view (preserve search text)
-                search_text = self.search_edit.text()
-                # Clear cache since tag was edited
-                self._cached_tags = None
-                # Clear parser cache so it re-reads from updated dataset
-                if self.parser is not None:
-                    self.parser._tag_cache.clear()
-                self._populate_tags(search_text)
+                        # Execute command through unified undo/redo manager
+                        self.undo_redo_manager.execute_command(command)
+                    else:
+                        # Fallback: update directly if no undo/redo manager
+                        success = self.editor.update_tag(tag_str, new_value, vr)
+                        if not success:
+                            QMessageBox.warning(
+                                self,
+                                "Edit Failed",
+                                f"Failed to update tag {tag_str}.\n"
+                                "The tag may be read-only or the value may be invalid."
+                            )
+                            return
+                        # Still mark as edited if we have history manager
+                        if self.history_manager:
+                            self.history_manager.mark_tag_edited(self.dataset, tag_str)
+
+                    # Emit signal
+                    self.tag_edited.emit(tag_str, new_value)
+                    # Refresh the tree view (preserve search text)
+                    search_text = self.search_edit.text()
+                    # Clear cache since tag was edited
+                    self._cached_tags = None
+                    # Clear parser cache so it re-reads from updated dataset
+                    if self.parser is not None:
+                        self.parser._tag_cache.clear()
+                    self._populate_tags(search_text)
+        finally:
+            if self._active_tag_edit_dialog is dialog:
+                self._active_tag_edit_dialog = None
+                self._active_tag_edit_tag = None
 

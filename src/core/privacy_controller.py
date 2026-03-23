@@ -25,6 +25,7 @@ class PrivacyController:
         config_manager: Any,
         metadata_controller: Any,
         overlay_manager: Any,
+        dialog_coordinator: Any = None,
         get_subwindow_managers: Callable[[], Dict[int, Dict[str, Any]]],
         get_all_subwindows: Callable[[], List[Any]],
         get_focused_subwindow_index: Callable[[], int],
@@ -37,6 +38,7 @@ class PrivacyController:
             config_manager: Application config manager (for persist/load if needed).
             metadata_controller: Metadata controller; must have set_privacy_mode(enabled).
             overlay_manager: Shared (focused) overlay manager; must have set_privacy_mode(enabled).
+            dialog_coordinator: Dialog coordinator; may expose apply_privacy_mode(enabled).
             get_subwindow_managers: Callable returning the subwindow_managers dict (idx -> managers).
             get_all_subwindows: Callable returning list of subwindow widgets (e.g. multi_window_layout.get_all_subwindows).
             get_focused_subwindow_index: Callable returning the current focused subwindow index.
@@ -45,6 +47,7 @@ class PrivacyController:
         self._config_manager = config_manager
         self._metadata_controller = metadata_controller
         self._overlay_manager = overlay_manager
+        self._dialog_coordinator = dialog_coordinator
         self._get_subwindow_managers = get_subwindow_managers
         self._get_all_subwindows = get_all_subwindows
         self._get_focused_subwindow_index = get_focused_subwindow_index
@@ -66,6 +69,9 @@ class PrivacyController:
 
         if hasattr(self._overlay_manager, "set_privacy_mode") and self._overlay_manager:
             self._overlay_manager.set_privacy_mode(enabled)
+
+        if hasattr(self._dialog_coordinator, "apply_privacy_mode") and self._dialog_coordinator:
+            self._dialog_coordinator.apply_privacy_mode(enabled)
 
         for _subwindow_idx, managers in self._get_subwindow_managers().items():
             overlay_mgr = managers.get("overlay_manager")

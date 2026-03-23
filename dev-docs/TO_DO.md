@@ -32,7 +32,6 @@ This file tracks active and near-term tasks.
 - [ ] **[P1]**  After making an MPR in a window, clearing it, then making a new MPR in that window using a different series, the default (embedded) window/level from the first base series was applied instead of from the second.
 - [ ] **[P0]** If the base series for an MPR uses rescaled pixel values, the MPR pixel values should be rescaled the same way ([details](FUTURE_WORK_DETAIL_NOTES.md#multi-planar-reconstructions-mprs-and-oblique-reconstructions))
 - [ ] **[P0]** After creating MPRs, clearing, closing all files, and loading new files, creating new MPR does not load/display ([details](FUTURE_WORK_DETAIL_NOTES.md#multi-planar-reconstructions-mprs-and-oblique-reconstructions))
-- [ ] **[P1]** If tag viewer/editor is opened with Privacy Mode off and then they turn it on, the open viewer/editor window should update to show anonymization, not wait to be closed and reopened again.
 
 ## Performance / Packaging
 
@@ -62,11 +61,11 @@ This file tracks active and near-term tasks.
 - [ ] **[P1]** Hovering on a study label in the navigator should show a popup tooltip with the study description, date, and patient name (but should respect privacy mode). Hovering on a thumbnail should show a tooltip with that same info, plus series description ([plan](plans/NAVIGATOR_AND_FILE_LOADING_FEEDBACK_PLAN.md#1-navigator-tooltips-privacy-aware))
 - [ ] **[P2]** The toast that pops up when already loaded files are skipped and not added during loading should appear in the center of the screen and have a slightly more opaque background ([plan](plans/NAVIGATOR_AND_FILE_LOADING_FEEDBACK_PLAN.md#2-duplicate-skip-toast-center--more-opaque))
 - [ ] **[P1]** Make the large-file warning (and any related file handling checks) trigger for >50 MB instead of 25 MB ([plan](plans/NAVIGATOR_AND_FILE_LOADING_FEEDBACK_PLAN.md#3-large-file-warning-threshold-50-mb)) - *NOTE: maybe hold off on this for now - 50 might be too high?*
-- [ ] **[P2]** Allow further subdivision of subwindows into up to 4 "tiles"?
-- [ ] **[P1]** Make a "View Fullscreen" menu item and shortcut - make app full-screen, hide left/right/bottom panes, toolbar
-- [ ] **[P2]** Give options for slice position lines on windows to show middle of slice or begin and end
-- [ ] **[P2]** When show instances separately is enabled, allow left/right keys to switch between instances
-- [ ] **[P2]** When exporting PNG or JPG, allow anonymization and make using embedded window/level the default option
+- [ ] **[P2]** Allow further subdivision of subwindows into up to 4 "tiles"? ([plan](plans/WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md#1-subwindow-further-subdivision-up-to-4-tiles))
+- [ ] **[P1]** Make a "View Fullscreen" menu item and shortcut - make app full-screen, hide left/right/bottom panes, toolbar ([plan](plans/WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md#2-view-fullscreen-command-and-shortcut))
+- [ ] **[P2]** Give options for slice position lines on windows to show middle of slice or begin and end ([plan](plans/WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md#3-slice-position-line-display-options-middle-vs-beginend))
+- [ ] **[P2]** When show instances separately is enabled, allow left/right keys to switch between instances ([plan](plans/WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md#4-leftright-keys-for-instance-switching-show-instances-separately))
+- [ ] **[P2]** When exporting PNG or JPG, allow anonymization and make using embedded window/level the default option ([plan](plans/EXPORT_PRIVACY_AND_WL_DEFAULT_PLAN.md#goal))
 
 
 ## Features (Near-Term)
