@@ -344,6 +344,21 @@ class DICOMViewerApp(QObject):
                 subwindow.image_viewer.set_direction_labels_state(
                     self.config_manager.get_show_direction_labels()
                 )
+        for subwindow in subwindows:
+            if subwindow and subwindow.image_viewer:
+                subwindow.image_viewer.set_scale_markers_color_state(
+                    self.config_manager.get_scale_markers_color()
+                )
+                subwindow.image_viewer.set_direction_labels_color_state(
+                    self.config_manager.get_direction_labels_color()
+                )
+                subwindow.image_viewer.set_direction_label_size_state(
+                    self.config_manager.get_direction_label_size()
+                )
+                subwindow.image_viewer.set_scale_markers_tick_intervals_state(
+                    self.config_manager.get_scale_markers_major_tick_interval_mm(),
+                    self.config_manager.get_scale_markers_minor_tick_interval_mm(),
+                )
 
         # Resolve which subwindow currently has focus and set up its manager references.
         # Must happen before _initialize_handlers() which consumes these references.
@@ -635,6 +650,13 @@ class DICOMViewerApp(QObject):
         image_viewer.set_smooth_when_zoomed_state(self.config_manager.get_smooth_image_when_zoomed())
         image_viewer.set_scale_markers_state(self.config_manager.get_show_scale_markers())
         image_viewer.set_direction_labels_state(self.config_manager.get_show_direction_labels())
+        image_viewer.set_scale_markers_color_state(self.config_manager.get_scale_markers_color())
+        image_viewer.set_direction_labels_color_state(self.config_manager.get_direction_labels_color())
+        image_viewer.set_direction_label_size_state(self.config_manager.get_direction_label_size())
+        image_viewer.set_scale_markers_tick_intervals_state(
+            self.config_manager.get_scale_markers_major_tick_interval_mm(),
+            self.config_manager.get_scale_markers_minor_tick_interval_mm(),
+        )
         image_viewer.get_file_path_callback = lambda i=idx: self._get_current_slice_file_path(i)
         self.subwindow_managers[idx] = managers
         if idx not in self.subwindow_data:
@@ -2162,6 +2184,22 @@ class DICOMViewerApp(QObject):
                 subwindow.image_viewer.set_direction_labels_state(enabled)
         self.main_window.set_direction_labels_checked(enabled)
 
+    def _on_scale_markers_color_changed(self, r: int, g: int, b: int) -> None:
+        """Handle scale markers color change from the View menu."""
+        self.config_manager.set_scale_markers_color(r, g, b)
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        for subwindow in subwindows:
+            if subwindow and subwindow.image_viewer:
+                subwindow.image_viewer.set_scale_markers_color_state((r, g, b))
+
+    def _on_direction_labels_color_changed(self, r: int, g: int, b: int) -> None:
+        """Handle direction labels color change from the View menu."""
+        self.config_manager.set_direction_labels_color(r, g, b)
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        for subwindow in subwindows:
+            if subwindow and subwindow.image_viewer:
+                subwindow.image_viewer.set_direction_labels_color_state((r, g, b))
+
     def _on_show_instances_separately_toggled(self, enabled: bool) -> None:
         """Handle the View → Show Instances Separately toggle."""
         self.config_manager.set_show_instances_separately(enabled)
@@ -2225,10 +2263,25 @@ class DICOMViewerApp(QObject):
         font_color = self.config_manager.get_overlay_font_color()
         font_family = self.config_manager.get_overlay_font_family()
         font_variant = self.config_manager.get_overlay_font_variant()
+        scale_markers_color = self.config_manager.get_scale_markers_color()
+        direction_labels_color = self.config_manager.get_direction_labels_color()
+        direction_label_size = self.config_manager.get_direction_label_size()
+        major_tick_interval_mm = self.config_manager.get_scale_markers_major_tick_interval_mm()
+        minor_tick_interval_mm = self.config_manager.get_scale_markers_minor_tick_interval_mm()
         self.overlay_manager.set_font_size(font_size)
         self.overlay_manager.set_font_color(*font_color)
         self.overlay_manager.set_font_family(font_family)
         self.overlay_manager.set_font_variant(font_variant)
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        for subwindow in subwindows:
+            if subwindow and subwindow.image_viewer:
+                subwindow.image_viewer.set_scale_markers_color_state(scale_markers_color)
+                subwindow.image_viewer.set_direction_labels_color_state(direction_labels_color)
+                subwindow.image_viewer.set_direction_label_size_state(direction_label_size)
+                subwindow.image_viewer.set_scale_markers_tick_intervals_state(
+                    major_tick_interval_mm,
+                    minor_tick_interval_mm,
+                )
         self.overlay_coordinator.handle_overlay_config_applied()
         self._on_annotation_options_applied()
         theme = self.config_manager.get_theme()
@@ -2307,6 +2360,9 @@ class DICOMViewerApp(QObject):
         font_color = self.config_manager.get_overlay_font_color()
         font_family = self.config_manager.get_overlay_font_family()
         font_variant = self.config_manager.get_overlay_font_variant()
+        direction_label_size = self.config_manager.get_direction_label_size()
+        major_tick_interval_mm = self.config_manager.get_scale_markers_major_tick_interval_mm()
+        minor_tick_interval_mm = self.config_manager.get_scale_markers_minor_tick_interval_mm()
 
         # Update the focused subwindow's overlay manager
         self.overlay_manager.set_font_size(font_size)
@@ -2325,6 +2381,17 @@ class DICOMViewerApp(QObject):
                     om.set_font_color(*font_color)
                     om.set_font_family(font_family)
                     om.set_font_variant(font_variant)
+                subwindow.image_viewer.set_scale_markers_color_state(
+                    self.config_manager.get_scale_markers_color()
+                )
+                subwindow.image_viewer.set_direction_labels_color_state(
+                    self.config_manager.get_direction_labels_color()
+                )
+                subwindow.image_viewer.set_direction_label_size_state(direction_label_size)
+                subwindow.image_viewer.set_scale_markers_tick_intervals_state(
+                    major_tick_interval_mm,
+                    minor_tick_interval_mm,
+                )
 
         # Recreate overlay for the focused subwindow
         self.overlay_coordinator.handle_overlay_config_applied()

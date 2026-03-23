@@ -1,7 +1,8 @@
 """
 Overlay Settings Dialog
 
-This module provides a dialog for customizing overlay font size and color.
+This module provides a dialog for customizing overlay font size/color and
+viewer overlay element appearance.
 
 Inputs:
     - User preference changes
@@ -27,7 +28,7 @@ from utils.bundled_fonts import get_font_families, get_font_variants
 
 class OverlaySettingsDialog(QDialog):
     """
-    Dialog for customizing overlay font size and color.
+    Dialog for customizing overlay font size/color and viewer overlay elements.
 
     Provides:
     - Overlay font size customization (live preview as value changes)
@@ -64,13 +65,18 @@ class OverlaySettingsDialog(QDialog):
         self.config_manager = config_manager
         self.setWindowTitle("Overlay Settings")
         self.setModal(True)
-        self.resize(420, 260)
+        self.resize(480, 420)
 
         # Store original values so we can revert on Cancel
         self._original_font_size = config_manager.get_overlay_font_size()
         self._original_font_color = config_manager.get_overlay_font_color()
         self._original_font_family = config_manager.get_overlay_font_family()
         self._original_font_variant = config_manager.get_overlay_font_variant()
+        self._original_scale_markers_color = config_manager.get_scale_markers_color()
+        self._original_direction_labels_color = config_manager.get_direction_labels_color()
+        self._original_direction_label_size = config_manager.get_direction_label_size()
+        self._original_major_tick_interval_mm = config_manager.get_scale_markers_major_tick_interval_mm()
+        self._original_minor_tick_interval_mm = config_manager.get_scale_markers_minor_tick_interval_mm()
 
         if DEBUG_FONT_VARIANT:
             debug_log(
@@ -81,6 +87,11 @@ class OverlaySettingsDialog(QDialog):
                     "original_font_color": self._original_font_color,
                     "original_font_family": self._original_font_family,
                     "original_font_variant": self._original_font_variant,
+                    "original_scale_markers_color": self._original_scale_markers_color,
+                    "original_direction_labels_color": self._original_direction_labels_color,
+                    "original_direction_label_size": self._original_direction_label_size,
+                    "original_major_tick_interval_mm": self._original_major_tick_interval_mm,
+                    "original_minor_tick_interval_mm": self._original_minor_tick_interval_mm,
                 },
                 hypothesis_id="FONTVAR",
             )
@@ -92,6 +103,9 @@ class OverlaySettingsDialog(QDialog):
         self.font_size_spinbox.valueChanged.connect(self._on_live_update)
         self.font_family_combo.currentIndexChanged.connect(self._on_family_changed)
         self.font_variant_combo.currentIndexChanged.connect(self._on_live_update)
+        self.direction_label_size_spinbox.valueChanged.connect(self._on_live_update)
+        self.major_tick_interval_spinbox.valueChanged.connect(self._on_live_update)
+        self.minor_tick_interval_spinbox.valueChanged.connect(self._on_live_update)
 
     def _create_ui(self) -> None:
         """Create the UI components."""
@@ -136,6 +150,52 @@ class OverlaySettingsDialog(QDialog):
         overlay_group.setLayout(overlay_layout)
         layout.addWidget(overlay_group)
 
+        viewer_overlay_group = QGroupBox("Viewer Overlay Elements")
+        viewer_overlay_layout = QFormLayout()
+
+        self.direction_label_size_spinbox = QSpinBox()
+        self.direction_label_size_spinbox.setRange(6, 48)
+        self.direction_label_size_spinbox.setValue(16)
+        self.direction_label_size_spinbox.setSuffix(" pt")
+        viewer_overlay_layout.addRow("Direction Label Size:", self.direction_label_size_spinbox)
+
+        direction_color_layout = QHBoxLayout()
+        self.direction_labels_color_label = QLabel()
+        self.direction_labels_color_label.setMinimumSize(50, 30)
+        self.direction_labels_color_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        direction_color_button = QPushButton("Choose Color...")
+        direction_color_button.clicked.connect(self._choose_direction_labels_color)
+        direction_color_layout.addWidget(self.direction_labels_color_label)
+        direction_color_layout.addWidget(direction_color_button)
+        direction_color_layout.addStretch()
+        viewer_overlay_layout.addRow("Direction Labels Color:", direction_color_layout)
+
+        scale_markers_color_layout = QHBoxLayout()
+        self.scale_markers_color_label = QLabel()
+        self.scale_markers_color_label.setMinimumSize(50, 30)
+        self.scale_markers_color_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        scale_markers_color_button = QPushButton("Choose Color...")
+        scale_markers_color_button.clicked.connect(self._choose_scale_markers_color)
+        scale_markers_color_layout.addWidget(self.scale_markers_color_label)
+        scale_markers_color_layout.addWidget(scale_markers_color_button)
+        scale_markers_color_layout.addStretch()
+        viewer_overlay_layout.addRow("Scale Markers Color:", scale_markers_color_layout)
+
+        self.major_tick_interval_spinbox = QSpinBox()
+        self.major_tick_interval_spinbox.setRange(1, 100)
+        self.major_tick_interval_spinbox.setValue(10)
+        self.major_tick_interval_spinbox.setSuffix(" mm")
+        viewer_overlay_layout.addRow("Major Tick Interval:", self.major_tick_interval_spinbox)
+
+        self.minor_tick_interval_spinbox = QSpinBox()
+        self.minor_tick_interval_spinbox.setRange(1, 100)
+        self.minor_tick_interval_spinbox.setValue(5)
+        self.minor_tick_interval_spinbox.setSuffix(" mm")
+        viewer_overlay_layout.addRow("Minor Tick Interval:", self.minor_tick_interval_spinbox)
+
+        viewer_overlay_group.setLayout(viewer_overlay_layout)
+        layout.addWidget(viewer_overlay_group)
+
         layout.addStretch()
 
         # Buttons
@@ -166,6 +226,26 @@ class OverlaySettingsDialog(QDialog):
         r, g, b = self.config_manager.get_overlay_font_color()
         self._update_color_display(r, g, b)
         self.current_color = (r, g, b)
+
+        self.direction_label_size_spinbox.blockSignals(True)
+        self.direction_label_size_spinbox.setValue(self.config_manager.get_direction_label_size())
+        self.direction_label_size_spinbox.blockSignals(False)
+
+        self.major_tick_interval_spinbox.blockSignals(True)
+        self.major_tick_interval_spinbox.setValue(self.config_manager.get_scale_markers_major_tick_interval_mm())
+        self.major_tick_interval_spinbox.blockSignals(False)
+
+        self.minor_tick_interval_spinbox.blockSignals(True)
+        self.minor_tick_interval_spinbox.setValue(self.config_manager.get_scale_markers_minor_tick_interval_mm())
+        self.minor_tick_interval_spinbox.blockSignals(False)
+
+        r, g, b = self.config_manager.get_direction_labels_color()
+        self._update_direction_labels_color_display(r, g, b)
+        self.current_direction_labels_color = (r, g, b)
+
+        r, g, b = self.config_manager.get_scale_markers_color()
+        self._update_scale_markers_color_display(r, g, b)
+        self.current_scale_markers_color = (r, g, b)
 
     def _populate_variant_combo(self, family: str, current_variant: str = "Bold") -> None:
         """Repopulate the variant combo for *family*, preserving the selection when possible."""
@@ -212,6 +292,18 @@ class OverlaySettingsDialog(QDialog):
             f"background-color: rgb({r}, {g}, {b}); border: 1px solid black;"
         )
 
+    def _update_direction_labels_color_display(self, r: int, g: int, b: int) -> None:
+        """Update the direction labels color swatch."""
+        self.direction_labels_color_label.setStyleSheet(
+            f"background-color: rgb({r}, {g}, {b}); border: 1px solid black;"
+        )
+
+    def _update_scale_markers_color_display(self, r: int, g: int, b: int) -> None:
+        """Update the scale markers color swatch."""
+        self.scale_markers_color_label.setStyleSheet(
+            f"background-color: rgb({r}, {g}, {b}); border: 1px solid black;"
+        )
+
     def _choose_color(self) -> None:
         """Open color picker dialog and apply the chosen color as a live preview."""
         r, g, b = self.current_color
@@ -221,6 +313,26 @@ class OverlaySettingsDialog(QDialog):
             self.current_color = (color.red(), color.green(), color.blue())
             self._update_color_display(*self.current_color)
             # Apply live preview immediately after the colour is chosen
+            self._on_live_update()
+
+    def _choose_direction_labels_color(self) -> None:
+        """Open color picker dialog for direction labels and apply the chosen color as a live preview."""
+        r, g, b = self.current_direction_labels_color
+        color = QColorDialog.getColor(QColor(r, g, b), self, "Choose Direction Labels Color")
+
+        if color.isValid():
+            self.current_direction_labels_color = (color.red(), color.green(), color.blue())
+            self._update_direction_labels_color_display(*self.current_direction_labels_color)
+            self._on_live_update()
+
+    def _choose_scale_markers_color(self) -> None:
+        """Open color picker dialog for scale markers and apply the chosen color as a live preview."""
+        r, g, b = self.current_scale_markers_color
+        color = QColorDialog.getColor(QColor(r, g, b), self, "Choose Scale Markers Color")
+
+        if color.isValid():
+            self.current_scale_markers_color = (color.red(), color.green(), color.blue())
+            self._update_scale_markers_color_display(*self.current_scale_markers_color)
             self._on_live_update()
 
     def _on_live_update(self) -> None:
@@ -247,6 +359,13 @@ class OverlaySettingsDialog(QDialog):
         self.config_manager.set_overlay_font_variant(self.font_variant_combo.currentText())
         r, g, b = self.current_color
         self.config_manager.set_overlay_font_color(r, g, b)
+        self.config_manager.set_direction_label_size(self.direction_label_size_spinbox.value())
+        self.config_manager.set_scale_markers_major_tick_interval_mm(self.major_tick_interval_spinbox.value())
+        self.config_manager.set_scale_markers_minor_tick_interval_mm(self.minor_tick_interval_spinbox.value())
+        r, g, b = self.current_direction_labels_color
+        self.config_manager.set_direction_labels_color(r, g, b)
+        r, g, b = self.current_scale_markers_color
+        self.config_manager.set_scale_markers_color(r, g, b)
         self.settings_changed.emit()
 
     def _apply_settings(self) -> None:
@@ -256,6 +375,13 @@ class OverlaySettingsDialog(QDialog):
         self.config_manager.set_overlay_font_variant(self.font_variant_combo.currentText())
         r, g, b = self.current_color
         self.config_manager.set_overlay_font_color(r, g, b)
+        self.config_manager.set_direction_label_size(self.direction_label_size_spinbox.value())
+        self.config_manager.set_scale_markers_major_tick_interval_mm(self.major_tick_interval_spinbox.value())
+        self.config_manager.set_scale_markers_minor_tick_interval_mm(self.minor_tick_interval_spinbox.value())
+        r, g, b = self.current_direction_labels_color
+        self.config_manager.set_direction_labels_color(r, g, b)
+        r, g, b = self.current_scale_markers_color
+        self.config_manager.set_scale_markers_color(r, g, b)
         self.settings_applied.emit()
         self.accept()
 
@@ -266,5 +392,12 @@ class OverlaySettingsDialog(QDialog):
         self.config_manager.set_overlay_font_variant(self._original_font_variant)
         r, g, b = self._original_font_color
         self.config_manager.set_overlay_font_color(r, g, b)
+        r, g, b = self._original_direction_labels_color
+        self.config_manager.set_direction_labels_color(r, g, b)
+        r, g, b = self._original_scale_markers_color
+        self.config_manager.set_scale_markers_color(r, g, b)
+        self.config_manager.set_direction_label_size(self._original_direction_label_size)
+        self.config_manager.set_scale_markers_major_tick_interval_mm(self._original_major_tick_interval_mm)
+        self.config_manager.set_scale_markers_minor_tick_interval_mm(self._original_minor_tick_interval_mm)
         self.settings_changed.emit()
         super().reject()

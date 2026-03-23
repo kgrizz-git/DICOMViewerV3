@@ -183,6 +183,14 @@ def build_menu_bar(main_window) -> None:
     main_window.direction_labels_action.triggered.connect(main_window._on_direction_labels_toggled)
     view_menu.addAction(main_window.direction_labels_action)
 
+    scale_markers_color_action = QAction("Scale Markers Color...", main_window)
+    scale_markers_color_action.triggered.connect(main_window._on_scale_markers_color_picker)
+    view_menu.addAction(scale_markers_color_action)
+
+    direction_labels_color_action = QAction("Direction Labels Color...", main_window)
+    direction_labels_color_action.triggered.connect(main_window._on_direction_labels_color_picker)
+    view_menu.addAction(direction_labels_color_action)
+
     main_window.show_instances_separately_action = QAction("Show Instances Separately", main_window)
     main_window.show_instances_separately_action.setCheckable(True)
     main_window.show_instances_separately_action.setChecked(main_window.config_manager.get_show_instances_separately())

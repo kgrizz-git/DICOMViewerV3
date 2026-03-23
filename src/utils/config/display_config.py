@@ -92,6 +92,120 @@ class DisplayConfigMixin:
         self.config["show_direction_labels"] = enabled
         self.save_config()
 
+    def get_scale_markers_color(self) -> tuple:
+        """
+        Get scale marker color as RGB tuple.
+
+        Returns:
+            Tuple of (r, g, b) values (0-255)
+        """
+        r = self.config.get("scale_markers_color_r", 255)
+        g = self.config.get("scale_markers_color_g", 255)
+        b = self.config.get("scale_markers_color_b", 0)
+        return (r, g, b)
+
+    def set_scale_markers_color(self, r: int, g: int, b: int) -> None:
+        """
+        Set scale marker color.
+
+        Args:
+            r: Red component (0-255)
+            g: Green component (0-255)
+            b: Blue component (0-255)
+        """
+        if 0 <= r <= 255 and 0 <= g <= 255 and 0 <= b <= 255:
+            self.config["scale_markers_color_r"] = r
+            self.config["scale_markers_color_g"] = g
+            self.config["scale_markers_color_b"] = b
+            self.save_config()
+
+    def get_direction_labels_color(self) -> tuple:
+        """
+        Get direction labels color as RGB tuple.
+
+        Returns:
+            Tuple of (r, g, b) values (0-255)
+        """
+        r = self.config.get("direction_labels_color_r", 255)
+        g = self.config.get("direction_labels_color_g", 255)
+        b = self.config.get("direction_labels_color_b", 0)
+        return (r, g, b)
+
+    def set_direction_labels_color(self, r: int, g: int, b: int) -> None:
+        """
+        Set direction labels color.
+
+        Args:
+            r: Red component (0-255)
+            g: Green component (0-255)
+            b: Blue component (0-255)
+        """
+        if 0 <= r <= 255 and 0 <= g <= 255 and 0 <= b <= 255:
+            self.config["direction_labels_color_r"] = r
+            self.config["direction_labels_color_g"] = g
+            self.config["direction_labels_color_b"] = b
+            self.save_config()
+
+    def get_direction_label_size(self) -> int:
+        """
+        Get direction label font size.
+
+        Returns:
+            Font size in points
+        """
+        return self.config.get("direction_label_size", 16)
+
+    def set_direction_label_size(self, size: int) -> None:
+        """
+        Set direction label font size.
+
+        Args:
+            size: Font size in points
+        """
+        if size > 0:
+            self.config["direction_label_size"] = size
+            self.save_config()
+
+    def get_scale_markers_major_tick_interval_mm(self) -> int:
+        """
+        Get scale markers major tick interval in millimetres.
+
+        Returns:
+            Major tick interval in mm
+        """
+        return self.config.get("scale_markers_major_tick_interval_mm", 10)
+
+    def set_scale_markers_major_tick_interval_mm(self, interval_mm: int) -> None:
+        """
+        Set scale markers major tick interval in millimetres.
+
+        Args:
+            interval_mm: Major tick interval in mm
+        """
+        if interval_mm > 0:
+            self.config["scale_markers_major_tick_interval_mm"] = interval_mm
+            self.save_config()
+
+    def get_scale_markers_minor_tick_interval_mm(self) -> int:
+        """
+        Get scale markers minor tick interval in millimetres.
+
+        Returns:
+            Minor tick interval in mm
+        """
+        return self.config.get("scale_markers_minor_tick_interval_mm", 5)
+
+    def set_scale_markers_minor_tick_interval_mm(self, interval_mm: int) -> None:
+        """
+        Set scale markers minor tick interval in millimetres.
+
+        Args:
+            interval_mm: Minor tick interval in mm
+        """
+        if interval_mm > 0:
+            self.config["scale_markers_minor_tick_interval_mm"] = interval_mm
+            self.save_config()
+
     def get_show_instances_separately(self) -> bool:
         """Get whether multi-frame instances should be shown separately in the navigator."""
         return self.config.get("show_instances_separately", False)

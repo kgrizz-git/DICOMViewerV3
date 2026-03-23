@@ -102,6 +102,8 @@ class MainWindow(QMainWindow):
     scroll_wheel_mode_changed = Signal(str)  # Emitted when scroll wheel mode changes ("slice" or "zoom")
     overlay_font_size_changed = Signal(int)  # Emitted when overlay font size changes
     overlay_font_color_changed = Signal(int, int, int)  # Emitted when overlay font color changes (r, g, b)
+    scale_markers_color_changed = Signal(int, int, int)  # Emitted when scale markers color changes (r, g, b)
+    direction_labels_color_changed = Signal(int, int, int)  # Emitted when direction labels color changes (r, g, b)
     reset_view_requested = Signal()  # Emitted when reset view is requested
     reset_all_views_requested = Signal()  # Emitted when reset all views is requested
     viewport_resized = Signal()  # Emitted when splitter moves and viewport size changes
@@ -1064,6 +1066,24 @@ class MainWindow(QMainWindow):
             # Save to config and emit signal
             self.config_manager.set_overlay_font_color(color.red(), color.green(), color.blue())
             self.overlay_font_color_changed.emit(color.red(), color.green(), color.blue())
+
+    def _on_scale_markers_color_picker(self) -> None:
+        """Handle scale markers color picker menu action."""
+        current_color = self.config_manager.get_scale_markers_color()
+        qcolor = QColor(current_color[0], current_color[1], current_color[2])
+        color = QColorDialog.getColor(qcolor, self, "Select Scale Markers Color")
+        if color.isValid():
+            self.config_manager.set_scale_markers_color(color.red(), color.green(), color.blue())
+            self.scale_markers_color_changed.emit(color.red(), color.green(), color.blue())
+
+    def _on_direction_labels_color_picker(self) -> None:
+        """Handle direction labels color picker menu action."""
+        current_color = self.config_manager.get_direction_labels_color()
+        qcolor = QColor(current_color[0], current_color[1], current_color[2])
+        color = QColorDialog.getColor(qcolor, self, "Select Direction Labels Color")
+        if color.isValid():
+            self.config_manager.set_direction_labels_color(color.red(), color.green(), color.blue())
+            self.direction_labels_color_changed.emit(color.red(), color.green(), color.blue())
     
     def _on_rescale_toggle_changed(self) -> None:
         """Handle rescale toggle button click."""

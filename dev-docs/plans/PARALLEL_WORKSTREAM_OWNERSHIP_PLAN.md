@@ -25,14 +25,32 @@ Define conflict-minimized workstreams by assigning each stream an explicit file 
 - `src/gui/main_window_menu_builder.py`
 - `src/gui/series_navigator.py`
 
+## Active assignments (placeholders)
+
+Use these as temporary placeholders until owners and branches are assigned.
+
+| Stream | Placeholder owner | Placeholder branch | Status |
+|---|---|---|---|
+| A | `TBD` | `tbd/stream-a` | `not started` |
+| B | `TBD` | `tbd/stream-b` | `not started` |
+| C | `TBD` | `tbd/stream-c` | `not started` |
+| D | `TBD` | `tbd/stream-d` | `not started` |
+| E | `TBD` | `tbd/stream-e` | `not started` |
+
 ## Stream A: Export + Loading UX + Default Style
+
+### Placeholder assignment
+
+- Owner: `TBD`
+- Branch: `tbd/stream-a`
+- Status: `not started`
 
 ### TO_DO items
 
-- Reduce default ROI/measurement line thickness and font sizes
-- Duplicate-skip toast center/opacity
-- Large-file warning threshold update
-- PNG/JPG anonymization + embedded WL default
+- [Reduce default ROI/measurement line thickness and font sizes](../TO_DO.md#L51)
+- [Duplicate-skip toast center/opacity](../TO_DO.md#L62)
+- [Large-file warning threshold update](../TO_DO.md#L63)
+- [PNG/JPG anonymization + embedded WL default](../TO_DO.md#L68)
 
 ### File ownership
 
@@ -49,11 +67,17 @@ Define conflict-minimized workstreams by assigning each stream an explicit file 
 
 ## Stream B: Navigator + Multi-frame Navigation
 
+### Placeholder assignment
+
+- Owner: `TBD`
+- Branch: `tbd/stream-b`
+- Status: `not started`
+
 ### TO_DO items
 
-- Navigator tooltips (privacy-aware)
-- Multi-frame instance navigation follow-up audit (`current_slice_index` usage)
-- Left/right keys for instance switching when show-instances-separately is enabled
+- [Navigator tooltips (privacy-aware)](../TO_DO.md#L61)
+- [Multi-frame instance navigation follow-up audit (`current_slice_index` usage)](../TO_DO.md#L52)
+- [Left/right keys for instance switching when show-instances-separately is enabled](../TO_DO.md#L67)
 
 ### File ownership
 
@@ -70,11 +94,17 @@ Define conflict-minimized workstreams by assigning each stream an explicit file 
 
 ## Stream C: Viewer UX Additive Overlays (non-transform)
 
+### Placeholder assignment
+
+- Owner: `TBD`
+- Branch: `tbd/stream-c`
+- Status: `not started`
+
 ### TO_DO items
 
-- Scale markers (ruler ticks)
-- Direction labels (A/P/L/R/S/I)
-- Overlay configuration in right-click context menu
+- [Scale markers (ruler ticks)](../TO_DO.md#L57)
+- [Direction labels (A/P/L/R/S/I)](../TO_DO.md#L58)
+- [Overlay configuration in right-click context menu](../TO_DO.md#L50)
 
 ### File ownership
 
@@ -90,14 +120,20 @@ Define conflict-minimized workstreams by assigning each stream an explicit file 
 
 ## Stream D: Viewer Interaction/Transform Core
 
+### Placeholder assignment
+
+- Owner: `TBD`
+- Branch: `tbd/stream-d`
+- Status: `not started`
+
 ### TO_DO items
 
-- Window/level discoverability/interaction updates
-- Min/max W/L from bit depth
-- W/L remembered per series
-- Flip/rotate image
-- Slice/frame edge slider bars
-- Image drift hardening/follow-up
+- [Window/level discoverability/interaction updates](../TO_DO.md#L48)
+- [Min/max W/L from bit depth](../TO_DO.md#L49)
+- [W/L remembered per series](../TO_DO.md#L56)
+- [Flip/rotate image](../TO_DO.md#L59)
+- [Slice/frame edge slider bars](../TO_DO.md#L60)
+- [Image drift hardening/follow-up](../TO_DO.md#L31)
 
 ### File ownership
 
@@ -115,12 +151,18 @@ Define conflict-minimized workstreams by assigning each stream an explicit file 
 
 ## Stream E: Layout/Window-Map/Fullscreen/Toolbar
 
+### Placeholder assignment
+
+- Owner: `TBD`
+- Branch: `tbd/stream-e`
+- Status: `not started`
+
 ### TO_DO items
 
-- Window map thumbnail interactive
-- Toolbar customization
-- View fullscreen command and shortcut
-- Optional slice-position line display option (if implemented through layout/overlay config path)
+- [Window map thumbnail interactive](../TO_DO.md#L46)
+- [Toolbar customization](../TO_DO.md#L47)
+- [View fullscreen command and shortcut](../TO_DO.md#L65)
+- [Slice-position line display option](../TO_DO.md#L66)
 
 ### File ownership
 
