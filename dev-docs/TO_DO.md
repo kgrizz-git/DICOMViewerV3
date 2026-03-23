@@ -34,6 +34,9 @@ This file tracks active and near-term tasks.
 - [ ] **[P1]** If the base series for an MPR uses rescaled pixel values, the MPR pixel values should be rescaled the same way ([details](FUTURE_WORK_DETAIL_NOTES.md#multi-planar-reconstructions-mprs-and-oblique-reconstructions))
 - [ ] **[P0]** After creating MPRs, clearing, closing all files, and loading new files, creating new MPR does not load/display ([details](FUTURE_WORK_DETAIL_NOTES.md#multi-planar-reconstructions-mprs-and-oblique-reconstructions)) *NOTE: seems fixed*
 - [ ] **[P0]** "Close All" did not clear thumbnails in layout map
+- [ ] **Fix all type-check warnings in main.py**  
+  See [dev-docs/plans/FIX_TYPE_WARNINGS_MAIN.md](dev-docs/plans/FIX_TYPE_WARNINGS_MAIN.md) for the detailed plan and steps.
+
 
 ## Performance / Packaging
 
