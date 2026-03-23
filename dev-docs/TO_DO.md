@@ -32,14 +32,7 @@ This file tracks active and near-term tasks.
 - [ ] **[P1]**  After making an MPR in a window, clearing it, then making a new MPR in that window using a different series, the default (embedded) window/level from the first base series was applied instead of from the second.
 - [ ] **[P0]** If the base series for an MPR uses rescaled pixel values, the MPR pixel values should be rescaled the same way ([details](FUTURE_WORK_DETAIL_NOTES.md#multi-planar-reconstructions-mprs-and-oblique-reconstructions))
 - [ ] **[P0]** After creating MPRs, clearing, closing all files, and loading new files, creating new MPR does not load/display ([details](FUTURE_WORK_DETAIL_NOTES.md#multi-planar-reconstructions-mprs-and-oblique-reconstructions))
-
-- [ ] **[P0]** REFACTORING SMOKE TESTS:
-    - Launch app, open one study by file and by folder, confirm first image displays.
-    - Toggle privacy mode and confirm overlays/metadata hide correctly.
-    - Open overlay config and quick window/level dialog from focused pane.
-    - Open export dialog and verify it opens with populated options.
-    - Open tag export dialog, perform CSV export with one small study.
-    - Open quick start and fusion docs, verify content renders.
+- [ ] **[P1]** If tag viewer/editor is opened with Privacy Mode off and then they turn it on, the open viewer/editor window should update to show anonymization, not wait to be closed and reopened again.
 
 ## Performance / Packaging
 
@@ -73,6 +66,7 @@ This file tracks active and near-term tasks.
 - [ ] **[P1]** Make a "View Fullscreen" menu item and shortcut - make app full-screen, hide left/right/bottom panes, toolbar
 - [ ] **[P2]** Give options for slice position lines on windows to show middle of slice or begin and end
 - [ ] **[P2]** When show instances separately is enabled, allow left/right keys to switch between instances
+- [ ] **[P2]** When exporting PNG or JPG, allow anonymization and make using embedded window/level the default option
 
 
 ## Features (Near-Term)

@@ -14,7 +14,7 @@
         <body>
             <h1>DICOM Viewer V3 - Quick Start Guide</h1>
             
-            <h2>Table of Contents</h2>
+            <h2 id="table-of-contents">Table of Contents</h2>
             <ul>
                 <li><a href="#controls-overview">Controls Overview</a></li>
                 <li><a href="#multi-window-layouts">Multi-Window Layouts</a></li>
@@ -27,7 +27,6 @@
                 <li><a href="#intensity-projections">Intensity Projections (Combine Slices)</a></li>
                 <li><a href="#image-fusion">Image Fusion</a></li>
                 <li><a href="#image-inversion">Image Inversion</a></li>
-                <li><a href="#image-fusion">Image Fusion</a></li>
                 <li><a href="#window-level">Window/Level Adjustment</a></li>
                 <li><a href="#mouse-modes">Mouse Modes</a></li>
                 <li><a href="#scroll-wheel-modes">Scroll Wheel Modes</a></li>
@@ -59,22 +58,22 @@
             <p>You can switch between layouts using:</p>
             <ul>
                 <li><strong>Keyboard Shortcuts:</strong> Press <code>1</code>, <code>2</code>, <code>3</code>, or <code>4</code> to quickly switch layouts</li>
-                <li><strong>Menu:</strong> View â†’ Layout â†’ select desired layout</li>
-                <li><strong>Context Menu:</strong> Right-click on image â†’ Layout â†’ select desired layout</li>
+                <li><strong>Menu:</strong> View ? Layout ? select desired layout</li>
+                <li><strong>Context Menu:</strong> Right-click on image ? Layout ? select desired layout</li>
             </ul>
             <p><strong>Note:</strong> Layout shortcuts work when the image viewer, series navigator, left panel, or right panel has focus. They are disabled when editing text annotations.</p>
-            <p><strong>Expand and revert:</strong> Double-click a pane (on the image or empty area) to expand it to full 1x1 view. Double-click again in 1x1 to revert to the previous layout (or 2x2). <strong>1x2</strong> shows the row (in the 2x2 grid) containing the focused window; <strong>2x1</strong> shows the column containing the focused window. In 2x2 layout, right-click â†’ <strong>Swap</strong> â†’ "Swap with Window 1/2/3/4" (1=top-left, 2=top-right, 3=bottom-left, 4=bottom-right) to exchange positions; contents stay with each view.</p>
+            <p><strong>Expand and revert:</strong> Double-click a pane (on the image or empty area) to expand it to full 1x1 view. Double-click again in 1x1 to revert to the previous layout (or 2x2). <strong>1x2</strong> shows the row (in the 2x2 grid) containing the focused window; <strong>2x1</strong> shows the column containing the focused window. In 2x2 layout, right-click ? <strong>Swap</strong> ? "Swap with Window 1/2/3/4" (1=top-left, 2=top-right, 3=bottom-left, 4=bottom-right) to exchange positions; contents stay with each view.</p>
             
             <h2 id="navigation">Navigation</h2>
             <h3>Slice Navigation</h3>
             <ul>
-                <li><strong>Arrow Keys:</strong> <code>â†‘</code> (Up) for next slice, <code>â†“</code> (Down) for previous slice</li>
+                <li><strong>Arrow Keys:</strong> <code>?</code> (Up) for next slice, <code>?</code> (Down) for previous slice</li>
                 <li><strong>Scroll Wheel:</strong> When Scroll Wheel Mode is set to "Slice", scroll to navigate through slices</li>
             </ul>
             
             <h3>Series Navigation</h3>
             <ul>
-                <li><strong>Arrow Keys:</strong> <code>â†</code> (Left) for previous series, <code>â†’</code> (Right) for next series</li>
+                <li><strong>Arrow Keys:</strong> <code>?</code> (Left) for previous series, <code>?</code> (Right) for next series</li>
                 <li><strong>Context Menu:</strong> Right-click and select "Prev Series" or "Next Series"</li>
             </ul>
             
@@ -90,7 +89,7 @@
                 <li><strong>Setting Cine Limits:</strong> Right-click on the frame slider/progress bar to set cine start/end limits (applies to both looping and non-looping playback)</li>
                 <li><strong>Frame Position:</strong> Shows current frame number and total frames (e.g., "5 / 20")</li>
                 <li><strong>FPS Display:</strong> Shows current frame rate during playback</li>
-                <li><strong>Context Menu:</strong> Right-click on image â†’ "Loop Cine" to toggle loop mode</li>
+                <li><strong>Context Menu:</strong> Right-click on image ? "Loop Cine" to toggle loop mode</li>
             </ul>
             <p><strong>Note:</strong> Cine controls are only available for multi-frame DICOM series. Manual slice navigation pauses playback automatically.</p>
             
@@ -109,17 +108,17 @@
                         <li>Scrollbars: Use horizontal/vertical scrollbars when image is larger than viewport</li>
                     </ul>
                 </li>
-                <li><strong>Reset View:</strong> Press <code>V</code> or <code>Shift+V</code>, or use <strong>View â†’ Reset View</strong>, the toolbar button, or right-click context menu â†’ "Reset View (V, Shift+V)" to restore initial zoom, pan, and window/level for the focused subwindow</li>
+                <li><strong>Reset View:</strong> Press <code>V</code> or <code>Shift+V</code>, or use <strong>View ? Reset View</strong>, the toolbar button, or right-click context menu ? "Reset View (V, Shift+V)" to restore initial zoom, pan, and window/level for the focused subwindow</li>
                 <li><strong>Reset All Views:</strong> Press <code>Shift+A</code> or use the toolbar to reset zoom, pan, and window/level for all subwindows simultaneously</li>
-                <li><strong>Image Smoothing:</strong> When enabled (<strong>View â†’ Image Smoothing</strong> or context menu), the viewer uses bilinear smoothing when the image is zoomed (after a short idle); during zoom/pan it uses fast scaling for responsiveness. The magnifier follows the same setting. Off by default.</li>
-                <li><strong>Show/Hide Left Pane and Right Pane:</strong> Use <strong>View â†’ Show/Hide Left Pane</strong> or <strong>Show/Hide Right Pane</strong>, or right-click on image â†’ same items, to collapse or restore the left (metadata/cine) or right (tools) side panels. State is saved with the layout.</li>
-                <li><strong>Show/Hide Series Navigator:</strong> Use <strong>View â†’ Show/Hide Series Navigator</strong>, the toolbar button, key <code>N</code>, or right-click on image â†’ "Show/Hide Series Navigator" to show or hide the series navigator bar at the bottom.</li>
+                <li><strong>Image Smoothing:</strong> When enabled (<strong>View ? Image Smoothing</strong> or context menu), the viewer uses bilinear smoothing when the image is zoomed (after a short idle); during zoom/pan it uses fast scaling for responsiveness. The magnifier follows the same setting. Off by default.</li>
+                <li><strong>Show/Hide Left Pane and Right Pane:</strong> Use <strong>View ? Show/Hide Left Pane</strong> or <strong>Show/Hide Right Pane</strong>, or right-click on image ? same items, to collapse or restore the left (metadata/cine) or right (tools) side panels. State is saved with the layout.</li>
+                <li><strong>Show/Hide Series Navigator:</strong> Use <strong>View ? Show/Hide Series Navigator</strong>, the toolbar button, key <code>N</code>, or right-click on image ? "Show/Hide Series Navigator" to show or hide the series navigator bar at the bottom.</li>
             </ul>
             
             <h2 id="histogram">Histogram Display</h2>
             <p>View pixel value distribution for the currently focused image:</p>
             <ul>
-                <li><strong>Open Histogram:</strong> Press <code>Cmd+Shift+H</code> / <code>Ctrl+Shift+H</code>, or use Tools â†’ Histogram menu or context menu</li>
+                <li><strong>Open Histogram:</strong> Press <code>Cmd+Shift+H</code> / <code>Ctrl+Shift+H</code>, or use Tools ? Histogram menu or context menu</li>
                 <li><strong>Features:</strong>
                     <ul>
                         <li>Shows pixel value distribution as a histogram</li>
@@ -153,8 +152,8 @@
                 <li>Set mouse mode to <strong>"Select"</strong></li>
                 <li>Left-click on a measurement to select it (highlighted in yellow)</li>
                 <li>Press <code>Delete</code> key to delete selected measurement</li>
-                <li>Or right-click on measurement â†’ "Delete measurement"</li>
-                <li>Right-click on image â†’ "Clear Measurements" to remove all measurements</li>
+                <li>Or right-click on measurement ? "Delete measurement"</li>
+                <li>Right-click on image ? "Clear Measurements" to remove all measurements</li>
             </ul>
             
             <h3>Undo/Redo for Measurements</h3>
@@ -192,7 +191,7 @@
                 <li>Set mouse mode to <strong>"Select"</strong></li>
                 <li>Left-click on a text or arrow annotation to select it (highlighted in yellow)</li>
                 <li>Press <code>Delete</code> key to delete selected annotation</li>
-                <li>Or right-click on annotation â†’ "Delete Text Annotation" or "Delete Arrow"</li>
+                <li>Or right-click on annotation ? "Delete Text Annotation" or "Delete Arrow"</li>
             </ul>
             
             <h3>Undo/Redo for Text and Arrow Annotations</h3>
@@ -223,7 +222,7 @@
                 <li>Set mouse mode to <strong>"Select"</strong></li>
                 <li>Left-click on an ROI to select it (highlighted in yellow)</li>
                 <li>Press <code>Delete</code> key to delete selected ROI</li>
-                <li>Or right-click on ROI â†’ "Delete ROI"</li>
+                <li>Or right-click on ROI ? "Delete ROI"</li>
                 <li>Press <code>D</code> key to delete all ROIs on current slice (including crosshairs)</li>
             </ul>
             
@@ -237,7 +236,7 @@
             <h2 id="intensity-projections">Intensity Projections (Combine Slices)</h2>
             <p>Combine multiple slices to create intensity projections:</p>
             <ul>
-                <li><strong>Access:</strong> Use the "Combine Slices" widget in the right panel, or right-click on image â†’ "Combine..."</li>
+                <li><strong>Access:</strong> Use the "Combine Slices" widget in the right panel, or right-click on image ? "Combine..."</li>
                 <li><strong>Enable:</strong> Check "Enable Combine Slices" to activate projection mode</li>
                 <li><strong>Projection Types:</strong>
                     <ul>
@@ -300,7 +299,7 @@
             
             <h2 id="image-inversion">Image Inversion</h2>
             <ul>
-                <li><strong>Toggle Inversion:</strong> Press <code>I</code> key or right-click â†’ "Invert Image (I)"</li>
+                <li><strong>Toggle Inversion:</strong> Press <code>I</code> key or right-click ? "Invert Image (I)"</li>
                 <li>Inverts image colors (grayscale or RGB)</li>
                 <li>Inversion state is preserved per series</li>
             </ul>
@@ -325,7 +324,7 @@
             <ul>
                 <li>DICOM files may contain multiple window/level presets (WindowWidth and WindowCenter arrays)</li>
                 <li>First preset (W1, C1) is loaded by default</li>
-                <li>Right-click on image â†’ <strong>"Window/Level Presets"</strong> submenu to switch between presets</li>
+                <li>Right-click on image ? <strong>"Window/Level Presets"</strong> submenu to switch between presets</li>
                 <li>Status bar shows which preset is currently loaded (e.g., "Window/Level: Default" or "Window/Level: Preset 2")</li>
                 <li>If no presets are found in DICOM tags, window center uses median pixel value and width uses range (max-min)</li>
             </ul>
@@ -369,7 +368,7 @@
             </ul>
             
             <h2 id="scroll-wheel-modes">Scroll Wheel Modes</h2>
-            <p>Change via context menu â†’ "Scroll Wheel Mode":</p>
+            <p>Change via context menu ? "Scroll Wheel Mode":</p>
             <ul>
                 <li><strong>Slice:</strong> Scroll wheel navigates through slices (default)</li>
                 <li><strong>Zoom:</strong> Scroll wheel zooms in/out on the image</li>
@@ -389,10 +388,10 @@
                 <li><strong><code>A</code>:</strong> Arrow annotation mode (click and drag to draw arrows)</li>
                 <li><strong><code>C</code>:</strong> Clear all measurements on current slice</li>
                 <li><strong><code>D</code>:</strong> Delete all ROIs on current slice (including crosshairs)</li>
-                <li><strong><code>V</code> or <code>Shift+V</code>:</strong> Reset view for the focused subwindow (restore initial zoom, pan, and window/level). Also available via <strong>View â†’ Reset View</strong>.</li>
+                <li><strong><code>V</code> or <code>Shift+V</code>:</strong> Reset view for the focused subwindow (restore initial zoom, pan, and window/level). Also available via <strong>View ? Reset View</strong>.</li>
                 <li><strong><code>Shift+A</code>:</strong> Reset all views (reset zoom, pan, and window/level for all subwindows)</li>
                 <li><strong><code>H</code>:</strong> Crosshair mode (draw crosshairs to display pixel values and coordinates)</li>
-                <li><strong><code>N</code>:</strong> Show/Hide Series Navigator bar. Also available via <strong>View â†’ Show/Hide Series Navigator</strong> or right-click on image â†’ "Show/Hide Series Navigator".</li>
+                <li><strong><code>N</code>:</strong> Show/Hide Series Navigator bar. Also available via <strong>View ? Show/Hide Series Navigator</strong> or right-click on image ? "Show/Hide Series Navigator".</li>
                 <li><strong><code>I</code>:</strong> Invert image colors</li>
                 <li><strong><code>1</code>:</strong> Switch to 1x1 layout (single viewer)</li>
                 <li><strong><code>2</code>:</strong> Switch to 1x2 layout (two viewers side by side)</li>
@@ -409,8 +408,8 @@
                         <li>Third press: Shows everything again</li>
                     </ul>
                 </li>
-                <li><strong><code>â†‘</code> / <code>â†“</code>:</strong> Navigate slices (Up = next, Down = previous)</li>
-                <li><strong><code>â†</code> / <code>â†’</code>:</strong> Navigate series (Left = previous, Right = next)</li>
+                <li><strong><code>?</code> / <code>?</code>:</strong> Navigate slices (Up = next, Down = previous)</li>
+                <li><strong><code>?</code> / <code>?</code>:</strong> Navigate series (Left = previous, Right = next)</li>
                 <li><strong><code>Delete</code>:</strong> Delete selected ROI or measurement</li>
                 <li><strong><code>Ctrl+T</code>:</strong> View/Edit DICOM Tags</li>
                 <li><strong><code>Shift+Ctrl+T</code>:</strong> Export DICOM Tags</li>
@@ -418,7 +417,7 @@
             
             <h2 id="customization">Customization</h2>
             <h3>Annotation Appearance</h3>
-            <p>Customize the appearance of annotations via <strong>View â†’ Annotation Options</strong>:</p>
+            <p>Customize the appearance of annotations via <strong>View ? Annotation Options</strong>:</p>
             <ul>
                 <li><strong>ROI Settings:</strong> Adjust font size, line thickness, and color for ROI statistics overlays (unified color for both font and line)</li>
                 <li><strong>Measurement Settings:</strong> Adjust font size, line thickness, and color for measurement lines and text (unified color for both font and line)</li>
@@ -431,7 +430,7 @@
             <h2 id="export-import-customizations">Export/Import Customizations</h2>
             <p>Save and share your customization settings as JSON files:</p>
             <ul>
-                <li><strong>Export Customizations:</strong> Access via <strong>File â†’ Export Customizations</strong>
+                <li><strong>Export Customizations:</strong> Access via <strong>File ? Export Customizations</strong>
                     <ul>
                         <li>Saves your current overlay configuration (fields, tags, font size/color)</li>
                         <li>Saves annotation options (ROI and measurement appearance settings)</li>
@@ -440,7 +439,7 @@
                         <li>Exports to a JSON file that can be shared with others</li>
                     </ul>
                 </li>
-                <li><strong>Import Customizations:</strong> Access via <strong>File â†’ Import Customizations</strong>
+                <li><strong>Import Customizations:</strong> Access via <strong>File ? Import Customizations</strong>
                     <ul>
                         <li>Load customization settings from a JSON file</li>
                         <li>All settings are applied immediately (overlay, annotations, metadata panel, theme)</li>
@@ -462,17 +461,17 @@
                 <li>Use the context menu (right-click) for quick access to common functions</li>
                 <li>The status bar shows current slice information, window/level preset name, pixel value and cursor position, and loading progress</li>
                 <li>Status bar updates in real-time during file loading, showing number of studies, series, and files loaded</li>
-                <li>Overlay metadata can be customized and toggled on/off via View â†’ Overlay Tags Configuration or with the <code>Spacebar</code> key</li>
-                <li>Export selected DICOM tags to Excel or CSV via Tools â†’ Export Tags</li>
-                <li>Export ROI statistics and crosshair coordinates to TXT, CSV, or XLSX via <strong>Tools â†’ Export ROI Statisticsâ€¦</strong> or the image context menu (right-click on image)</li>
-                <li>Settings can be adjusted via Tools â†’ Settings</li>
+                <li>Overlay metadata can be customized and toggled on/off via View ? Overlay Tags Configuration or with the <code>Spacebar</code> key</li>
+                <li>Export selected DICOM tags to Excel or CSV via Tools ? Export Tags</li>
+                <li>Export ROI statistics and crosshair coordinates to TXT, CSV, or XLSX via <strong>Tools ? Export ROI Statistics�</strong> or the image context menu (right-click on image)</li>
+                <li>Settings can be adjusted via Tools ? Settings</li>
                 <li><strong>Annotations:</strong> The viewer automatically displays DICOM annotations including Presentation States, Key Object Selection Documents, and embedded overlays/graphic annotations</li>
             </ul>
             
             <h2 id="exporting">Exporting Images</h2>
             <p>Export DICOM images to common formats:</p>
             <ul>
-                <li>Access via <strong>File â†’ Export</strong> menu</li>
+                <li>Access via <strong>File ? Export</strong> menu</li>
                 <li><strong>Export Formats:</strong>
                     <ul>
                         <li><strong>PNG:</strong> High-quality image format with transparency support</li>
@@ -492,7 +491,7 @@
                         <li>Window/Level: Use current viewer settings or dataset default</li>
                         <li>Include overlays and ROIs: Export with metadata text, ROIs, and measurements visible</li>
                         <li>Export at displayed resolution: Apply current zoom level for high-resolution output</li>
-                        <li>When exporting at higher than native resolution (e.g. 1.5Ã—, 2Ã—, 4Ã—), images are scaled using Lanczos resampling for high quality (independent of the viewer's Image Smoothing setting).</li>
+                        <li>When exporting at higher than native resolution (e.g. 1.5�, 2�, 4�), images are scaled using Lanczos resampling for high quality (independent of the viewer's Image Smoothing setting).</li>
                     </ul>
                 </li>
             <li>Exported files are organized in folders: <code>Patient ID / Study Date - Study Description / Series Number - Series Description</code></li>
@@ -502,7 +501,7 @@
         <h2 id="metadata-tags">Metadata and Tags</h2>
         <p>View and edit DICOM metadata tags, including private tags:</p>
         <ul>
-        <li><strong>View/Edit Tags:</strong> Access via <strong>Tools â†’ View/Edit DICOM Tags</strong> or press <code>Ctrl+T</code>
+        <li><strong>View/Edit Tags:</strong> Access via <strong>Tools ? View/Edit DICOM Tags</strong> or press <code>Ctrl+T</code>
                 <ul>
                     <li>Browse all DICOM tags in a tree view organized by groups</li>
                     <li>Edit individual tag values (double-click or use Edit button)</li>
@@ -533,20 +532,20 @@
                     </li>
                     <li><strong>Undo/Redo:</strong> Use the Edit menu or right-click context menu to undo/redo tag edits</li>
                     <li><strong>Expand/Collapse Groups:</strong> Double-click on group headers (e.g., "Group 0008") to expand or collapse tag groups</li>
-                    <li><strong>Context Menu:</strong> Right-click on a group header or tag item â†’ "Expand" or "Collapse" to toggle group visibility</li>
+                    <li><strong>Context Menu:</strong> Right-click on a group header or tag item ? "Expand" or "Collapse" to toggle group visibility</li>
                     <li><strong>Reorder Columns:</strong> Drag column headers horizontally to reorder columns (Tag, Name, VR, Value)</li>
                     <li>Column order preferences are saved and remembered between sessions</li>
                     <li><strong>Resize Columns:</strong> Drag column borders to adjust column widths (preferences are saved)</li>
                 </ul>
             </li>
-            <li><strong>Export Tags:</strong> Access via <strong>Tools â†’ Export DICOM Tags</strong> or press <code>Shift+Ctrl+T</code>
+            <li><strong>Export Tags:</strong> Access via <strong>Tools ? Export DICOM Tags</strong> or press <code>Shift+Ctrl+T</code>
                 <ul>
                     <li>Export selected tags to Excel (.xlsx) or CSV format</li>
                     <li>Choose which tags to export</li>
                     <li>Export tags from multiple slices or entire series</li>
                 </ul>
             </li>
-            <li><strong>Export ROI Statistics:</strong> Access via <strong>Tools â†’ Export ROI Statisticsâ€¦</strong> or right-click on the image â†’ Export ROI Statisticsâ€¦
+            <li><strong>Export ROI Statistics:</strong> Access via <strong>Tools ? Export ROI Statistics�</strong> or right-click on the image ? Export ROI Statistics�
                 <ul>
                     <li>Export ROI statistics (ellipse/rectangle) and crosshair coordinates to TXT, CSV, or XLSX</li>
                     <li>Select one or more series; optional use of rescaled values (e.g. HU)</li>
@@ -556,15 +555,15 @@
             <li><strong>Tag Export Presets:</strong> Save and reuse named sets of DICOM tags for export
                 <ul>
                     <li>Use the <strong>Preset</strong> controls in the Export DICOM Tags dialog to save, load, and delete tag presets</li>
-                    <li>Export all tag export presets to JSON via <strong>File â†’ Export Tag Presetsâ€¦</strong> or the <strong>Exportâ€¦</strong> button in the Export DICOM Tags dialog</li>
-                    <li>Import tag export presets from JSON via <strong>File â†’ Import Tag Presetsâ€¦</strong> or the <strong>Importâ€¦</strong> button in the Export DICOM Tags dialog</li>
+                    <li>Export all tag export presets to JSON via <strong>File ? Export Tag Presets�</strong> or the <strong>Export�</strong> button in the Export DICOM Tags dialog</li>
+                    <li>Import tag export presets from JSON via <strong>File ? Import Tag Presets�</strong> or the <strong>Import�</strong> button in the Export DICOM Tags dialog</li>
                     <li>Imported presets are merged with existing ones; presets with the same name are kept from your current configuration</li>
                 </ul>
             </li>
             <li><strong>Tag Changes:</strong> Tag edits are preserved in memory and can be exported when exporting to DICOM format</li>
             <li><strong>Privacy View:</strong> Toggle privacy mode to mask patient-related DICOM tags
                 <ul>
-                    <li>Access via <strong>View â†’ Privacy View</strong> menu, right-click context menu â†’ "Privacy View (Cmd+P)", or press <code>Cmd+P</code> (Mac) / <code>Ctrl+P</code> (Windows/Linux)</li>
+                    <li>Access via <strong>View ? Privacy View</strong> menu, right-click context menu ? "Privacy View (Cmd+P)", or press <code>Cmd+P</code> (Mac) / <code>Ctrl+P</code> (Windows/Linux)</li>
                     <li>When enabled, patient-related tags (Patient Name, Patient ID, Patient Date of Birth, etc.) are displayed as "PRIVACY MODE" in:
                         <ul>
                             <li>Metadata panel (left side)</li>
