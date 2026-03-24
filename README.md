@@ -246,6 +246,18 @@ You can download the DICOM Viewer V3 in one of two ways:
    pip install -r requirements.txt
    ```
 
+   **Optional — local security CLI tools (contributors):** `requirements.txt` does not include semgrep, detect-secrets, or the TruffleHog v3 binary. To match the tooling described in `dev-docs/SECURITY_TOOLS_CLI_GUIDE.md`, install:
+
+   ```bash
+   pip install -r requirements-dev.txt
+   ```
+
+   Then install TruffleHog v3 (official binary line used by CI):
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\scripts\install-trufflehog-v3.ps1 -AddToUserPath
+   ```
+
 ### Running the Application
 
 1. **Make sure you're in the project root directory** (the same folder where `requirements.txt` is located)

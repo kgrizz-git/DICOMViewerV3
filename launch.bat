@@ -1,7 +1,13 @@
 @echo off
 setlocal EnableDelayedExpansion
 set "ROOT=%~dp0"
-set "VENV=%ROOT%venv"
+rem Resolve VENV: use first existing env among common names; default target for create is venv.
+set "VENV="
+if exist "%ROOT%venv\Scripts\activate.bat" set "VENV=%ROOT%venv"
+if not defined VENV if exist "%ROOT%.venv\Scripts\activate.bat" set "VENV=%ROOT%.venv"
+if not defined VENV if exist "%ROOT%env\Scripts\activate.bat" set "VENV=%ROOT%env"
+if not defined VENV if exist "%ROOT%virtualenv\Scripts\activate.bat" set "VENV=%ROOT%virtualenv"
+if not defined VENV set "VENV=%ROOT%venv"
 
 :MENU
 cls
@@ -26,6 +32,11 @@ if exist "%VENV%\Scripts\activate.bat" (
     goto :MENU
 ) else (
     echo Virtual environment: NOT FOUND
+    echo.
+    echo What is a venv? A separate folder of Python packages used only by this app.
+    echo It avoids mixing versions with other Python programs on your PC and makes
+    echo updates or cleanup simpler. Using one is recommended, not required.
+    echo You can run with system Python instead ^(option 2 below^) if you prefer.
     echo.
     echo   1  Create venv, install requirements, then run
     echo   2  Run using system Python ^(no venv^)

@@ -22,6 +22,8 @@ From project root, after activation:
 
 If no venv exists, create one: `python -m venv venv`, activate it, then `pip install -r requirements.txt`.
 
+Optional for contributors: `pip install -r requirements-dev.txt` adds local Python security scanners (semgrep, detect-secrets). Install TruffleHog v3 separately via `powershell -ExecutionPolicy Bypass -File .\scripts\install-trufflehog-v3.ps1 -AddToUserPath` so local scans align with CI's TruffleHog v3 action/binary line.
+
 ## Other conventions
 
 - See `.cursor/rules` and user rules.  Before major refactors only, backup files before changing. Do not proceed with edits until the backup is verified (e.g. file exists and has content) or the user has been asked.
