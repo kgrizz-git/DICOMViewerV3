@@ -25,31 +25,55 @@ jobs:
     
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Run Grype scan
-        uses: anchore/scan-action@v3
+        uses: anchore/scan-action@v7
         id: grype
         with:
           path: "."
-          fail-build: false  # Don't fail on findings; just report
+          fail-build: false  # Do not fail the job on CVE findings; still write SARIF
           severity-cutoff: high
-          
-      - name: Upload Grype SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+
+      # scan-action can leave an empty or non-JSON file in edge cases; upload-sarif then
+      # fails with "Invalid SARIF. JSON syntax error: Unexpected end of JSON input".
+      - name: Validate Grype SARIF for upload
+        id: grype_sarif
         if: always()
+        shell: bash
+        run: |
+          report="${{ steps.grype.outputs.sarif }}"
+          rm -f grype-upload.sarif
+          if [ -z "$report" ] || [ ! -f "$report" ] || [ ! -s "$report" ]; then
+            echo "upload=false" >> "$GITHUB_OUTPUT"
+            echo "Grype SARIF missing or empty; skipping Security tab upload."
+            exit 0
+          fi
+          if ! python3 -c "import json,sys; json.load(open(sys.argv[1],encoding='utf-8'))" "$report"; then
+            echo "upload=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Grype output is not valid JSON; skipping SARIF upload."
+            exit 0
+          fi
+          cp "$report" grype-upload.sarif
+          echo "upload=true" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Grype SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v4
+        if: always() && steps.grype_sarif.outputs.upload == 'true'
         with:
-          sarif_file: ${{ steps.grype.outputs.sarif }}
+          sarif_file: grype-upload.sarif
           category: grype
 
       - name: Comment on PR with CVE results
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+        if: github.event_name == 'pull_request' && steps.grype_sarif.outputs.upload == 'true'
+        uses: actions/github-script@v8
         with:
           script: |
             const fs = require('fs');
-            const sarif = JSON.parse(fs.readFileSync('${{ steps.grype.outputs.sarif }}', 'utf8'));
-            const findings = sarif.runs[0].results || [];
+            const sarifPath = 'grype-upload.sarif';
+            const sarif = JSON.parse(fs.readFileSync(sarifPath, 'utf8'));
+            const run0 = (sarif.runs && sarif.runs[0]) || {};
+            const findings = run0.results || [];
             
             // Filter by severity
             const critical = findings.filter(f => f.level === 'error');

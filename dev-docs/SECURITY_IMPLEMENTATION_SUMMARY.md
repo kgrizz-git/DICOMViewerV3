@@ -78,17 +78,17 @@ ResponsiblePersonRole, EmergencyContactTelephoneNumber
 
 **Problem:** No automated security scanning in CI/CD. Vulnerabilities remain undetected between manual scans.
 
-**Solution:** Four GitHub Actions workflows + Dependabot configuration
+**Solution:** Three GitHub Actions workflows (plus CodeQL via GitHub default setup) and Dependabot configuration
 
 #### Created Workflows:
 
 | Workflow | Trigger | Features | File |
 |----------|---------|----------|------|
-| **CodeQL** | Push to main/develop, weekly | Python SAST (semantic analysis) | `.github/workflows/codeql.yml` |
+| **CodeQL** | (GitHub default setup) | Python SAST (semantic analysis) | *Repository Settings → Code security → Code scanning (default)* — not `.github/workflows/codeql.yml` (a custom workflow conflicts with default setup) |
 | **Semgrep** | Every commit (feature, main, develop), weekly | SAST (security-audit, OWASP Top 10, secrets) + PR comments | `.github/workflows/semgrep.yml` |
 | **Grype** | Push to main/develop, weekly | CVE scanning (dependencies) + PR comments | `.github/workflows/grype.yml` |
 | **Security Checks** | Every PR, push to main/develop | Debug flags detection, secrets scan, PII validation | `.github/workflows/security-checks.yml` |
-| **Dependabot Config** | Automated (GitHub native) | Dependency updates (pip, GitHub Actions, Docker) | `.github/dependabot.yml` |
+| **Dependabot Config** | Automated (GitHub native) | Dependency updates (pip, GitHub Actions); add Docker only if a `Dockerfile` exists | `.github/dependabot.yml` |
 
 #### Results Location:
 
@@ -239,7 +239,6 @@ In GitHub repository settings:
 ```
 ✅ .git/hooks/pre-commit                      (git hook)
 ✅ .git/hooks/pre-push                        (git hook)
-✅ .github/workflows/codeql.yml               (GitHub Actions)
 ✅ .github/workflows/semgrep.yml              (GitHub Actions)
 ✅ .github/workflows/grype.yml                (GitHub Actions)
 ✅ .github/workflows/security-checks.yml      (GitHub Actions)

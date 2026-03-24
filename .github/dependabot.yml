@@ -32,17 +32,6 @@ updates:
       - "github-actions"
     commit-message:
       prefix: "ci(actions):"
-
-  # Docker (if using containerized builds in future)
-  - package-ecosystem: "docker"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "tuesday"
-      time: "03:00"
-    open-pull-requests-limit: 3
-    labels:
-      - "dependencies"
-      - "docker"
-    commit-message:
-      prefix: "ci(docker):"
+  # Docker: add a `docker` package-ecosystem block here only after a Dockerfile
+  # exists at the repo root (or set directory to the folder that contains it).
+  # Dependabot errors if `docker` is enabled without a matching Dockerfile.
