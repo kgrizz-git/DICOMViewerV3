@@ -4,6 +4,13 @@
 # 
 # Installation: pip install -r requirements.txt
 #
+# Python version (especially Windows):
+# - Prefer 3.11 or 3.12 (same family as CI). Wheels exist for native deps (e.g. pyjpegls).
+# - 3.14+ may have no pyjpegls wheel on Windows yet; pip then builds from source and needs
+#   Microsoft C++ Build Tools (https://visualstudio.microsoft.com/visual-cpp-build-tools/).
+# - Parallels + UNC paths (\\Mac\Home\...) can confuse venv/pip; a local clone under C:\ is
+#   often more reliable if you see odd path or pip self-upgrade issues.
+#
 # Requirements:
 # - PySide6: Cross-platform GUI framework for the application interface
 # - pydicom: Library for reading, writing, and working with DICOM files

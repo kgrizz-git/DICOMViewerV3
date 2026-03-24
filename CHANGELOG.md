@@ -4,6 +4,9 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 
 ## [Unreleased]
 
+### Changed
+- **Docs**: `requirements.txt` and `README.md` note that Windows installs work best on Python **3.11/3.12** (pre-built wheels for `pyjpegls`); **3.14** may require MSVC Build Tools to compile `pyjpegls`, and Parallels + `\\Mac\Home\...` paths can complicate venv/pip.
+
 ### Added
 - **Slice location lines across views**: Optional visualization showing the intersection of other views' slice planes on the current image. Toggle in View → Show Lines (Enable/Disable, Only Show For Same Group, Show Only For Focused Window) and in the image context menu (Show Lines submenu). Line colors match subwindow dot colors (blue, green, orange, magenta). Works with or without slice sync; when "Only Show For Same Group" is enabled, only subwindows in the same linked group show their slice line; when "Show Only For Focused Window" is enabled, only the focused subwindow's line is shown. Requires DICOM geometry (ImagePositionPatient, ImageOrientationPatient).
 - **Single-slice MPR**: MPR can be built from a series with a single slice (or a single unique position after deduplication), producing a "short" one-slice volume; the MPR dialog and volume builder now allow at least one slice instead of requiring two.
