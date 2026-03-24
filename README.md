@@ -175,7 +175,7 @@ DICOMViewerV3/
 
 ## Technology Stack
 
-- **Language**: Python 3.9+
+- **Language**: Python 3.9+ (for **Windows**, **3.11 or 3.12** is recommended so packages like **pyjpegls** install from pre-built wheels; very new versions such as **3.14** may require compiling native code and **Microsoft C++ Build Tools**)
 - **GUI Framework**: PySide6 (>=6.6.0)
 - **DICOM Library**: pydicom (>=2.4.0)
 - **Image Processing**: NumPy (>=1.24.0), Pillow (>=10.0.0)
@@ -309,4 +309,4 @@ Tests live in `tests/`: `test_dicom_parser.py`, `test_dicom_loader.py`, `test_di
 
 - **"Module not found" errors**: Make sure you've installed all dependencies with `pip install -r requirements.txt`
 - **"No such file or directory"**: Make sure you're running the command from the project root directory, or use the full path to `src/main.py`
-- **Python version issues**: Ensure you have Python 3.9 or higher installed. Check with `python --version`
+- **Python version issues**: Ensure you have Python 3.9 or higher installed. Check with `python --version`. On Windows, if **`pip install` fails building `pyjpegls`** with *Microsoft Visual C++ 14.0 or greater is required*, use **Python 3.11 or 3.12** for the venv, or install [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with the C++ workload. Parallels users: a project path on **`C:\`** sometimes avoids venv/pip quirks with `\\Mac\Home\...` paths.
