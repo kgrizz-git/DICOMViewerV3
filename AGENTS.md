@@ -99,6 +99,12 @@ All Qt signal connections for `DICOMViewerApp` are wired in a single call to `_c
 
 **Rule**: signal connections live only in the `_connect_signals` family. No `connect()` calls should be scattered across other `_init_*` helpers. The call order within `_connect_signals` is intentional: layout and file signals are wired before dialog signals so that subwindow/focus state is ready when dialogs are first triggered.
 
+## GitHub Actions (CI)
+
+- Workflows live under `.github/workflows/`. Use current **major tags** for first-party actions (`actions/checkout@v6`, `actions/upload-artifact@v7`, `github/codeql-action/*@v4`) so Dependabot can propose updates. Pin **third-party** actions to release tags when reproducibility matters (e.g. `trufflesecurity/trufflehog@v3.x.x` plus matching `version:` for the scanner image).
+- `actions/upload-artifact` v6+ and related actions may require **self-hosted runners ≥ 2.327.1** (Node 24); GitHub-hosted `ubuntu-latest` satisfies this.
+- If `.github/dependabot.yml` lists `labels:`, those labels must exist on the repo (e.g. `dependencies`, `github-actions`) or Dependabot will warn on PRs.
+
 ## View and display options
 
 - **Image Smoothing**: User-configurable option in the **View** menu and in the **image viewer context menu** (right-click on image). When enabled, the image uses smooth scaling when idle after zoom/pan; during zoom/pan it uses fast scaling for responsiveness. Default is **off** (no enhancement). Setting is persisted in config.

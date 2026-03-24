@@ -110,12 +110,12 @@ except Exception as e:
 
 # Location: .github/workflows/
 
-# Enabled workflows:
-# 1. codeql.yml         - CodeQL SAST (Python semantic analysis)
+# Enabled workflows / scanning:
+# 1. CodeQL             - Python SAST via GitHub default code scanning (not codeql.yml; custom workflow conflicts with default)
 # 2. semgrep.yml        - Semgrep SAST (rule-based security)
 # 3. grype.yml          - Grype (CVE scanning)
 # 4. security-checks.yml - Debug flags + secrets validation
-# 5. dependabot.yml     - Dependency updates (GitHub native)
+# 5. dependabot.yml     - Dependency updates: pip + GitHub Actions (add Docker only with a Dockerfile)
 
 # Results visible at: GitHub → Security → Code scanning
 

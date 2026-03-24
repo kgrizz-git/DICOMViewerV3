@@ -443,7 +443,7 @@ Modify the "Upload build artifacts" step to include the AppImage:
 
 ```yaml
 - name: Upload build artifacts
-  uses: actions/upload-artifact@v4
+  uses: actions/upload-artifact@v7
   with:
     name: ${{ matrix.artifact_name }}
     path: |
@@ -460,7 +460,7 @@ Modify the "Create Release" step to include the AppImage:
 ```yaml
 - name: Create Release (on tag push)
   if: startsWith(github.ref, 'refs/tags/')
-  uses: softprops/action-gh-release@v1
+  uses: softprops/action-gh-release@v2
   with:
     files: |
       dist/DICOMViewerV3*
