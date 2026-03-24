@@ -6,17 +6,50 @@ This guide shows how to use the security scanning tools installed in your venv. 
 
 ---
 
-## Installation Status
+## Installation
 
-All three main tools are installed in your venv:
+These tools are **not** in the main `requirements.txt` (that file is for running the app and tests).
+
+### Step 1: Install Python-based dev scanners
+
+```bash
+pip install -r requirements-dev.txt
+```
+
+This installs `requirements.txt` plus **semgrep** and **detect-secrets**.
+
+### Step 2: Install TruffleHog v3 binary (recommended; aligns with CI)
+
+From project root:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install-trufflehog-v3.ps1 -AddToUserPath
+```
+
+Optional version pin:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install-trufflehog-v3.ps1 -Version v3.94.0 -AddToUserPath
+```
+
+### Step 3: Verify versions
+
+```bash
+semgrep --version
+trufflehog --version
+detect-secrets --version
+```
+
+Example versions (your venv may differ slightly):
 
 ```
-✓ semgrep              1.156.0  (Python SAST scanner)
-✓ truffleHog           2.2.1    (Secrets scanner)
-✓ detect-secrets       1.5.0    (Secrets detector)
+semgrep         1.156.x  (Python SAST scanner)
+trufflehog      3.94.x   (Secrets scanner; official TruffleHog binary line)
+detect-secrets  1.5.x    (Secrets detector)
 ```
 
-**Activation (PowerShell):**
+**Activation (PowerShell) for Python tools:**
+
 ```powershell
 .\venv\Scripts\Activate.ps1
 ```
@@ -95,9 +128,9 @@ semgrep --config=p/python --config=p/owasp-top-ten src/
 
 ---
 
-## 2. TruffleHog (Advanced Secrets Scanning)
+## 2. TruffleHog v3 (Advanced Secrets Scanning)
 
-TruffleHog finds credentials by scanning git history and files. It uses **verified** secrets (high confidence).
+TruffleHog v3 finds credentials by scanning git history and files. It supports verified/unverified/unknown result types and can enforce failure with `--fail`.
 
 ### Basic Usage
 

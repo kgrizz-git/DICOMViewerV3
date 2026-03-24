@@ -1,0 +1,18 @@
+# Development and local security scanning (optional)
+#
+# Install everything needed to run the app, tests, and the CLI tools documented in
+# dev-docs/SECURITY_TOOLS_CLI_GUIDE.md:
+#   pip install -r requirements-dev.txt
+#
+# This pulls in application + test dependencies from requirements.txt, then adds
+# Python-based security scanners. End users who only run the viewer can use
+# requirements.txt alone.
+#
+# TruffleHog v3 is installed as an official binary (not from PyPI):
+#   powershell -ExecutionPolicy Bypass -File .\scripts\install-trufflehog-v3.ps1
+# See dev-docs/SECURITY_TOOLS_CLI_GUIDE.md for details.
+
+-r requirements.txt
+
+semgrep>=1.156.0
+detect-secrets>=1.5.0
