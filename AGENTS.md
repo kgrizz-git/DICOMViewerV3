@@ -9,18 +9,21 @@ Guidance for AI agents and developers working in this repository.
 
 ## Virtual environment (venv)
 
-**Always activate the venv in the `venv` directory before running tests or application code.**
+**Always activate the project virtual environment before running tests or application code.**
 
-- **Windows (Command Prompt):** `venv\Scripts\activate`
-- **Windows (PowerShell):** `.\venv\Scripts\Activate.ps1`
-- **macOS / Linux:** `source venv/bin/activate`
+The env folder may be named `venv`, `.venv`, `env`, or `virtualenv`. **`launch.bat`** picks the first that exists under the project root in that order; many setups use **`venv`** or **`.venv`** (tools like `uv` often create `.venv`).
+
+- **Windows (Command Prompt)** — replace `<dir>` with your env folder, e.g. `venv` or `.venv`:
+  - `<dir>\Scripts\activate`
+- **Windows (PowerShell):** `.\<dir>\Scripts\Activate.ps1` (e.g. `.\.venv\Scripts\Activate.ps1`)
+- **macOS / Linux:** `source <dir>/bin/activate` (e.g. `source .venv/bin/activate`)
 
 From project root, after activation:
 
 - Run the app: `python src/main.py`
 - Run tests: `python tests/run_tests.py` or `python -m pytest tests/ -v`
 
-If no venv exists, create one: `python -m venv venv`, activate it, then `pip install -r requirements.txt`.
+If no venv exists, create one, for example `python -m venv venv` or `python -m venv .venv`, activate it, then `pip install -r requirements.txt`.
 
 Optional for contributors: `pip install -r requirements-dev.txt` adds local Python security scanners (semgrep, detect-secrets). Install TruffleHog v3 separately via `powershell -ExecutionPolicy Bypass -File .\scripts\install-trufflehog-v3.ps1 -AddToUserPath` so local scans align with CI's TruffleHog v3 action/binary line.
 

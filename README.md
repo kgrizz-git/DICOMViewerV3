@@ -231,20 +231,25 @@ You can download the DICOM Viewer V3 in one of two ways:
    
    **Using a virtual environment (recommended for isolation but not required):**
    ```bash
-   # Create virtual environment
+   # Create virtual environment (folder name can be venv, .venv, etc.)
    python -m venv venv
+   # or: python -m venv .venv
    
    # Activate virtual environment (required before running the app or tests)
    # On Windows (Command Prompt):
    venv\Scripts\activate
+   rem or: .venv\Scripts\activate
    # On Windows (PowerShell):
    .\venv\Scripts\Activate.ps1
+   # or: .\.venv\Scripts\Activate.ps1
    # On macOS/Linux:
    source venv/bin/activate
+   # or: source .venv/bin/activate
    
    # Install dependencies
    pip install -r requirements.txt
    ```
+   **`launch.bat`** (Windows) uses the first existing env among `venv`, `.venv`, `env`, and `virtualenv` under the project root.
 
    **Optional — local security CLI tools (contributors):** `requirements.txt` does not include semgrep, detect-secrets, or the TruffleHog v3 binary. To match the tooling described in `dev-docs/SECURITY_TOOLS_CLI_GUIDE.md`, install:
 
@@ -283,7 +288,7 @@ You can download the DICOM Viewer V3 in one of two ways:
 
 ### Running tests
 
-**Activate the project venv first** (in the `venv` directory; see Installation). Then from the project root:
+**Activate the project virtual environment first** (see Installation — often `venv` or `.venv`). Then from the project root:
 
 Unit tests can be run from the project root (with the virtual environment activated).
 

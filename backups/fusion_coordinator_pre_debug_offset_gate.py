@@ -29,7 +29,7 @@ from gui.fusion_controls_widget import FusionControlsWidget
 from PySide6.QtWidgets import QMessageBox
 from PySide6.QtCore import QTimer
 
-from utils.debug_flags import DEBUG_OFFSET, DEBUG_SPATIAL_ALIGNMENT
+from utils.debug_flags import DEBUG_SPATIAL_ALIGNMENT
 
 
 class FusionCoordinator:
@@ -357,20 +357,17 @@ class FusionCoordinator:
                 raw_min, raw_max = DICOMProcessor.get_series_pixel_value_range(datasets_to_scan, apply_rescale=False)
                 if raw_min is not None and raw_max is not None:
                     raw_range = raw_max - raw_min
-                    if DEBUG_OFFSET:
-                        print(f"[OVERLAY PIXEL VALUES] Raw (entire series): min={raw_min:.2f}, max={raw_max:.2f}, range={raw_range:.2f}")
+                    print(f"[OVERLAY PIXEL VALUES] Raw (entire series): min={raw_min:.2f}, max={raw_max:.2f}, range={raw_range:.2f}")
 
                 # Get rescaled pixel value range (full or sampled series) if rescale parameters exist
                 if has_rescale:
                     rescaled_min, rescaled_max = DICOMProcessor.get_series_pixel_value_range(datasets_to_scan, apply_rescale=True)
                     if rescaled_min is not None and rescaled_max is not None:
                         rescaled_range = rescaled_max - rescaled_min
-                        if DEBUG_OFFSET:
-                            print(f"[OVERLAY PIXEL VALUES] Rescaled (entire series): min={rescaled_min:.2f}, max={rescaled_max:.2f}, range={rescaled_range:.2f}")
-                            print(f"[OVERLAY PIXEL VALUES] Rescale parameters: slope={rescale_slope}, intercept={rescale_intercept}")
+                        print(f"[OVERLAY PIXEL VALUES] Rescaled (entire series): min={rescaled_min:.2f}, max={rescaled_max:.2f}, range={rescaled_range:.2f}")
+                        print(f"[OVERLAY PIXEL VALUES] Rescale parameters: slope={rescale_slope}, intercept={rescale_intercept}")
                 else:
-                    if DEBUG_OFFSET:
-                        print(f"[OVERLAY PIXEL VALUES] No rescale parameters (RescaleSlope/RescaleIntercept not present)")
+                    print(f"[OVERLAY PIXEL VALUES] No rescale parameters (RescaleSlope/RescaleIntercept not present)")
 
                 # Try to get window/level from DICOM tags (with auto-calculation fallback for single slice)
                 window_center, window_width, is_rescaled = DICOMProcessor.get_window_level_from_dataset(
@@ -390,16 +387,13 @@ class FusionCoordinator:
                     if series_min is not None and series_max is not None:
                         window_center = (series_min + series_max) / 2.0
                         window_width = series_max - series_min
-                        if DEBUG_OFFSET:
-                            print(f"[OVERLAY W/L] Auto-calculated from series: window={window_width:.1f}, level={window_center:.1f}")
+                        print(f"[OVERLAY W/L] Auto-calculated from series: window={window_width:.1f}, level={window_center:.1f}")
                     else:
                         window_width = 1000.0
                         window_center = 500.0
-                        if DEBUG_OFFSET:
-                            print(f"[OVERLAY W/L] Using defaults: window={window_width:.1f}, level={window_center:.1f}")
+                        print(f"[OVERLAY W/L] Using defaults: window={window_width:.1f}, level={window_center:.1f}")
                 else:
-                    if DEBUG_OFFSET:
-                        print(f"[OVERLAY W/L] From DICOM tags: window={window_width:.1f}, level={window_center:.1f}")
+                    print(f"[OVERLAY W/L] From DICOM tags: window={window_width:.1f}, level={window_center:.1f}")
 
                 if window_center is not None and window_width is not None:
                     self.fusion_handler.overlay_window = window_width
@@ -733,15 +727,13 @@ class FusionCoordinator:
                     # Get translation offset from controls (user's current setting)
                     # Only for 2D mode - 3D resampling handles alignment automatically
                     translation_offset = self.fusion_controls.get_translation_offset()
-                    if DEBUG_OFFSET:
-                        print(f"[OFFSET DEBUG] get_fused_image (2D mode): Using offset from spinboxes: X={translation_offset[0]:.1f}, Y={translation_offset[1]:.1f}")
+                    print(f"[OFFSET DEBUG] get_fused_image (2D mode): Using offset from spinboxes: X={translation_offset[0]:.1f}, Y={translation_offset[1]:.1f}")
         else:
             # Phase 2: For 3D mode, translation offset is NOT applied
             # 3D resampling already handles spatial alignment through the resampling grid
             # Manual fine-tuning would require a different approach (e.g., transform matrix adjustment)
             translation_offset = None
-            if DEBUG_OFFSET:
-                print(f"[OFFSET DEBUG] get_fused_image (3D mode): Offset not applied - 3D resampling handles alignment")
+            print(f"[OFFSET DEBUG] get_fused_image (3D mode): Offset not applied - 3D resampling handles alignment")
         
         # Create fused image
         try:
