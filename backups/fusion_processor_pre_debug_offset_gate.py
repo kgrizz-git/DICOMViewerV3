@@ -23,8 +23,6 @@ from typing import Optional, Tuple
 from PIL import Image
 import matplotlib.cm as cm
 
-from utils.debug_flags import DEBUG_OFFSET
-
 
 class FusionProcessor:
     """
@@ -162,12 +160,18 @@ class FusionProcessor:
         base_array = base_array.astype(np.float32)
         overlay_array = overlay_array.astype(np.float32)
         
-        if DEBUG_OFFSET:
-            print(f"  base_pixel_spacing: {base_pixel_spacing}")
-            print(f"  overlay_pixel_spacing: {overlay_pixel_spacing}")
-            print(f"  translation_offset: {translation_offset}")
-            print(f"  overlay_wl: {overlay_wl}")
-            print(f"  skip_2d_resize: {skip_2d_resize}")
+        # DEBUG
+        # print(f"\n[FUSION DEBUG] create_fusion_image called")
+        # print(f"  base_array shape: {base_array.shape}, dtype: {base_array.dtype}")
+        # print(f"  base_array range: [{np.min(base_array):.2f}, {np.max(base_array):.2f}]")
+        # print(f"  overlay_array shape: {overlay_array.shape}, dtype: {overlay_array.dtype}")
+        # print(f"  overlay_array range: [{np.min(overlay_array):.2f}, {np.max(overlay_array):.2f}]")
+        # print(f"  alpha: {alpha}, threshold: {threshold}, colormap: {colormap}")
+        print(f"  base_pixel_spacing: {base_pixel_spacing}")
+        print(f"  overlay_pixel_spacing: {overlay_pixel_spacing}")
+        print(f"  translation_offset: {translation_offset}")
+        print(f"  overlay_wl: {overlay_wl}")
+        print(f"  skip_2d_resize: {skip_2d_resize}")
         
         # Phase 2: Skip 2D resize if 3D resampling was already applied
         if not skip_2d_resize:
@@ -191,12 +195,12 @@ class FusionProcessor:
                     PILImage.Resampling.BILINEAR
                 )
                 overlay_array = np.array(overlay_pil, dtype=np.float32)
-
-                if DEBUG_OFFSET:
-                    print(f"  [SCALING] scale_x: {scale_x:.4f}, scale_y: {scale_y:.4f}")
-                    print(f"  [SCALING] new dimensions: {new_width} x {new_height}")
-                    print(f"  [SCALING] overlay_array after resize shape: {overlay_array.shape}")
-                    print(f"  [SCALING] overlay_array after resize range: [{np.min(overlay_array):.2f}, {np.max(overlay_array):.2f}]")
+                
+                # DEBUG
+                print(f"  [SCALING] scale_x: {scale_x:.4f}, scale_y: {scale_y:.4f}")
+                print(f"  [SCALING] new dimensions: {new_width} x {new_height}")
+                print(f"  [SCALING] overlay_array after resize shape: {overlay_array.shape}")
+                print(f"  [SCALING] overlay_array after resize range: [{np.min(overlay_array):.2f}, {np.max(overlay_array):.2f}]")
             elif base_array.shape != overlay_array.shape:
                 # Fallback: simple resize to match base dimensions if no spacing info
                 from PIL import Image as PILImage
@@ -228,12 +232,12 @@ class FusionProcessor:
             overlay_array = FusionProcessor._apply_translation_offset(
                 overlay_array, offset_x, offset_y, base_array.shape
             )
-
-            if DEBUG_OFFSET:
-                print(f"  [TRANSLATION] offset applied (2D mode): ({offset_x:.2f}, {offset_y:.2f})")
-                print(f"  [TRANSLATION] overlay_array after translation shape: {overlay_array.shape}")
-                print(f"  [TRANSLATION] overlay_array after translation range: [{np.min(overlay_array):.2f}, {np.max(overlay_array):.2f}]")
-                print(f"  [TRANSLATION] non-zero pixels: {np.count_nonzero(overlay_array)}")
+            
+            # DEBUG
+            print(f"  [TRANSLATION] offset applied (2D mode): ({offset_x:.2f}, {offset_y:.2f})")
+            print(f"  [TRANSLATION] overlay_array after translation shape: {overlay_array.shape}")
+            print(f"  [TRANSLATION] overlay_array after translation range: [{np.min(overlay_array):.2f}, {np.max(overlay_array):.2f}]")
+            print(f"  [TRANSLATION] non-zero pixels: {np.count_nonzero(overlay_array)}")
         
         # Normalize base image
         if base_wl is not None:
@@ -268,12 +272,12 @@ class FusionProcessor:
             else:
                 overlay_normalized = np.zeros_like(overlay_array)
         
-        if DEBUG_OFFSET:
-            if overlay_wl is not None:
-                window, level = overlay_wl
-                print(f"  [OVERLAY W/L] window: {window}, level: {level}")
-            print(f"  overlay_normalized range: [{np.min(overlay_normalized):.4f}, {np.max(overlay_normalized):.4f}]")
-            print(f"  overlay_normalized non-zero: {np.count_nonzero(overlay_normalized)}")
+        # DEBUG
+        if overlay_wl is not None:
+            window, level = overlay_wl
+            print(f"  [OVERLAY W/L] window: {window}, level: {level}")
+        print(f"  overlay_normalized range: [{np.min(overlay_normalized):.4f}, {np.max(overlay_normalized):.4f}]")
+        print(f"  overlay_normalized non-zero: {np.count_nonzero(overlay_normalized)}")
         
         # Apply colormap to overlay
         overlay_rgb = FusionProcessor.apply_colormap(overlay_normalized, colormap)

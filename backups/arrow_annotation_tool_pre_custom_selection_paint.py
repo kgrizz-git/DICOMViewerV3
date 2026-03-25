@@ -15,17 +15,9 @@ Requirements:
     - ConfigManager for annotation settings
 """
 
-from PySide6.QtWidgets import (
-    QGraphicsItemGroup,
-    QGraphicsLineItem,
-    QGraphicsPathItem,
-    QGraphicsItem,
-    QGraphicsEllipseItem,
-    QGraphicsSceneMouseEvent,
-    QStyle,
-)
+from PySide6.QtWidgets import QGraphicsItemGroup, QGraphicsLineItem, QGraphicsPathItem, QGraphicsItem, QGraphicsEllipseItem, QGraphicsSceneMouseEvent
 from PySide6.QtCore import Qt, QPointF, QLineF, QRectF
-from PySide6.QtGui import QPen, QColor, QBrush, QPainterPath, QPainterPathStroker, QPainter
+from PySide6.QtGui import QPen, QColor, QBrush, QPainterPath, QPainterPathStroker
 from typing import List, Optional, Tuple, Dict
 import math
 from utils.config_manager import ConfigManager
@@ -346,47 +338,6 @@ class ArrowAnnotationItem(QGraphicsItemGroup):
         # Clear drag flag
         self._drag_in_progress = False
         super().mouseReleaseEvent(event)
-
-    def _selection_hull_path(self) -> QPainterPath:
-        """Closed path in group coords that hugs the visible shaft and filled arrowhead.
-
-        Used to draw a tight dashed selection outline via strokePath(). Matches visible
-        geometry (cosmetic line width + mapped head path), not the wider hit-test shape().
-        """
-        line = self.line_item.line()
-        shaft_path = QPainterPath()
-        shaft_path.moveTo(line.p1())
-        shaft_path.lineTo(line.p2())
-
-        pen_width = max(1.0, float(self.line_item.pen().widthF()))
-        pen = QPen(Qt.PenStyle.SolidLine)
-        pen.setWidthF(pen_width + 2.0)
-        stroker = QPainterPathStroker(pen)
-        shaft_hull = stroker.createStroke(shaft_path)
-
-        head_hull = self.arrowhead_item.mapToParent(self.arrowhead_item.path())
-        return shaft_hull.united(head_hull)
-
-    def paint(self, painter: QPainter, option, widget=None) -> None:
-        """Draw a tight dashed outline when selected; suppress Qt default selection box."""
-        is_selected = self.isSelected()
-        original_state = option.state
-        option.state = option.state & ~QStyle.StateFlag.State_Selected
-
-        super().paint(painter, option, widget)
-
-        option.state = original_state
-
-        if not is_selected:
-            return
-
-        painter.save()
-        outline_pen = QPen(QColor(255, 255, 0), 2, Qt.PenStyle.DashLine)
-        outline_pen.setCosmetic(True)
-        painter.setPen(outline_pen)
-        painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.strokePath(self._selection_hull_path(), outline_pen)
-        painter.restore()
 
     def shape(self) -> QPainterPath:
         """Return shape for hit testing - stroked shaft line plus arrowhead tip area.
