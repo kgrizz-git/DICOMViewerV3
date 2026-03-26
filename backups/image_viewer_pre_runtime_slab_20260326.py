@@ -1315,8 +1315,6 @@ class ImageViewer(QGraphicsView):
                 "roi_rectangle",
                 "measure",
                 "auto_window_level",
-                "text_annotation",
-                "arrow_annotation",
             }
             if mode not in allowed_modes:
                 mode = "pan"
@@ -2492,11 +2490,13 @@ class ImageViewer(QGraphicsView):
                             "Text Annotation (T)": "text_annotation",
                             "Window/Level ROI (W)": "auto_window_level"
                         }
-                        # MPR mode restricts interaction types. Crosshair ROI stays off;
-                        # text/arrow annotations are allowed (see MPR annotations plan).
-                        _mpr_disabled_modes = (
-                            {"crosshair"} if self._mpr_mode_override else set()
-                        )
+                        # MPR mode restricts interaction types. ROI/measurement/WL-ROI
+                        # must remain available, while annotation-only modes remain disabled.
+                        _mpr_disabled_modes = {
+                            "crosshair",
+                            "arrow_annotation",
+                            "text_annotation",
+                        } if self._mpr_mode_override else set()
                         for action_text, mode in left_mouse_actions.items():
                             action = context_menu.addAction(action_text)
                             action.setCheckable(True)

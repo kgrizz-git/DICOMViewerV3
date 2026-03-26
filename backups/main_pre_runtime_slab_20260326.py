@@ -85,7 +85,6 @@ from core.slice_display_manager import SliceDisplayManager
 from core.annotation_paste_handler import AnnotationPasteHandler
 from core.file_series_loading_coordinator import FileSeriesLoadingCoordinator
 from core.subwindow_lifecycle_controller import SubwindowLifecycleController
-from core.mpr_controller import apply_mpr_stack_combine
 from core.customization_handlers import CustomizationHandlers
 from core.privacy_controller import PrivacyController
 from gui.roi_coordinator import ROICoordinator
@@ -707,33 +706,9 @@ class DICOMViewerApp(QObject):
                 return None
             if slice_index < 0 or slice_index >= getattr(result, "n_slices", 0):
                 return None
-            return apply_mpr_stack_combine(
-                result.slices,
-                slice_index,
-                enabled=bool(data.get("mpr_combine_enabled", False)),
-                mode=str(data.get("mpr_combine_mode", "aip") or "aip"),
-                n_planes=int(data.get("mpr_combine_slice_count", 4) or 4),
-            )
+            return result.slices[slice_index]
         except Exception:
             return None
-
-    def _sync_intensity_projection_widget_from_mpr_data(self, data: dict) -> None:
-        """Push ``mpr_combine_*`` from *data* to the right-pane Combine Slices widget."""
-        w = self.intensity_projection_controls_widget
-        w.enable_checkbox.blockSignals(True)
-        w.projection_combo.blockSignals(True)
-        w.slice_count_combo.blockSignals(True)
-        try:
-            w.set_enabled(
-                bool(data.get("mpr_combine_enabled", False)),
-                keep_signals_blocked=True,
-            )
-            w.set_projection_type(str(data.get("mpr_combine_mode", "aip") or "aip"))
-            w.set_slice_count(int(data.get("mpr_combine_slice_count", 4) or 4))
-        finally:
-            w.enable_checkbox.blockSignals(False)
-            w.projection_combo.blockSignals(False)
-            w.slice_count_combo.blockSignals(False)
 
     def _get_subwindow_mpr_output_pixel_spacing(self, idx: int):
         """Return the (row, col) pixel spacing mm for the MPR output grid for subwindow *idx*."""
@@ -2056,37 +2031,14 @@ class DICOMViewerApp(QObject):
                             print(f"[DEBUG-PROJECTION] _on_projection_enabled_changed: WARNING - Callback state mismatch! "
                                   f"Callback={callback_state}, Manager={self.slice_display_manager.projection_enabled}")
 
-            focused_idx = self.focused_subwindow_index
-            if (
-                hasattr(self, "_mpr_controller")
-                and self._mpr_controller.is_mpr(focused_idx)
-                and not self._resetting_projection_state
-            ):
-                mp_data = self.subwindow_data.get(focused_idx)
-                if mp_data is not None:
-                    w = self.intensity_projection_controls_widget
-                    mp_data["mpr_combine_enabled"] = w.get_enabled()
-                    mp_data["mpr_combine_mode"] = w.get_projection_type()
-                    mp_data["mpr_combine_slice_count"] = w.get_slice_count()
-                    self._mpr_controller.display_mpr_slice(
-                        focused_idx, mp_data.get("mpr_slice_index", 0)
-                    )
-                selected_roi = self.roi_manager.get_selected_roi()
-                if selected_roi is not None:
-                    if DEBUG_PROJECTION:
-                        print(
-                            "[DEBUG-PROJECTION] _on_projection_enabled_changed: "
-                            "Selected ROI after MPR combine refresh"
-                        )
-            else:
-                self._display_slice(self.current_dataset)
+            self._display_slice(self.current_dataset)
 
-                # After redisplay, ensure statistics are updated if there's a selected ROI
-                # The _display_rois_for_slice should handle this, but we'll verify
-                selected_roi = self.roi_manager.get_selected_roi()
-                if selected_roi is not None:
-                    if DEBUG_PROJECTION:
-                        print(f"[DEBUG-PROJECTION] _on_projection_enabled_changed: Selected ROI exists, statistics should be updated by _display_rois_for_slice")
+            # After redisplay, ensure statistics are updated if there's a selected ROI
+            # The _display_rois_for_slice should handle this, but we'll verify
+            selected_roi = self.roi_manager.get_selected_roi()
+            if selected_roi is not None:
+                if DEBUG_PROJECTION:
+                    print(f"[DEBUG-PROJECTION] _on_projection_enabled_changed: Selected ROI exists, statistics should be updated by _display_rois_for_slice")
         else:
             if DEBUG_PROJECTION:
                 print(f"[DEBUG-PROJECTION] _on_projection_enabled_changed: current_dataset is None, cannot redisplay")
@@ -2103,18 +2055,6 @@ class DICOMViewerApp(QObject):
         self.slice_display_manager.set_projection_type(projection_type)
         # Update widget state
         self.intensity_projection_controls_widget.set_projection_type(projection_type)
-        focused_idx = self.focused_subwindow_index
-        if hasattr(self, "_mpr_controller") and self._mpr_controller.is_mpr(
-            focused_idx
-        ):
-            mp_data = self.subwindow_data.get(focused_idx)
-            if mp_data is not None:
-                mp_data["mpr_combine_mode"] = projection_type
-                if mp_data.get("mpr_combine_enabled"):
-                    self._mpr_controller.display_mpr_slice(
-                        focused_idx, mp_data.get("mpr_slice_index", 0)
-                    )
-            return
         # Redisplay current slice with new projection type
         if self.current_dataset is not None and self.slice_display_manager.projection_enabled:
             # print(f"[DEBUG-PROJECTION] _on_projection_type_changed: Redisplaying slice")
@@ -2133,18 +2073,6 @@ class DICOMViewerApp(QObject):
         self.slice_display_manager.set_projection_slice_count(count)
         # Update widget state
         self.intensity_projection_controls_widget.set_slice_count(count)
-        focused_idx = self.focused_subwindow_index
-        if hasattr(self, "_mpr_controller") and self._mpr_controller.is_mpr(
-            focused_idx
-        ):
-            mp_data = self.subwindow_data.get(focused_idx)
-            if mp_data is not None:
-                mp_data["mpr_combine_slice_count"] = count
-                if mp_data.get("mpr_combine_enabled"):
-                    self._mpr_controller.display_mpr_slice(
-                        focused_idx, mp_data.get("mpr_slice_index", 0)
-                    )
-            return
         # Redisplay current slice with new slice count
         if self.current_dataset is not None and self.slice_display_manager.projection_enabled:
             if DEBUG_PROJECTION:
