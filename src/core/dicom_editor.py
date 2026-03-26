@@ -21,7 +21,7 @@ Requirements:
 from typing import Optional, Any, Tuple, Union
 import pydicom
 from pydicom.dataset import Dataset
-from pydicom.tag import Tag
+from pydicom.tag import BaseTag, Tag as tag_factory
 from pydicom.dataelem import DataElement
 
 
@@ -73,7 +73,7 @@ class DICOMEditor:
             return self.dataset._original_dataset
         return self.dataset
     
-    def parse_tag(self, tag_identifier: Union[str, Tuple[int, int], Tag]) -> Tag:
+    def parse_tag(self, tag_identifier: Union[str, Tuple[int, int], BaseTag]) -> BaseTag:
         """
         Parse a tag identifier into a Tag object.
         
@@ -83,10 +83,12 @@ class DICOMEditor:
         Returns:
             Tag object
         """
-        if isinstance(tag_identifier, Tag):
+        # `pydicom.tag.Tag` is a *factory function* (returns a BaseTag instance),
+        # so `isinstance(x, Tag)` confuses the type checker. Check BaseTag instead.
+        if isinstance(tag_identifier, BaseTag):
             return tag_identifier
         elif isinstance(tag_identifier, tuple):
-            return Tag(tag_identifier[0], tag_identifier[1])
+            return tag_factory(tag_identifier[0], tag_identifier[1])
         elif isinstance(tag_identifier, str):
             # Parse string like "(0010,0010)"
             tag_identifier = tag_identifier.strip()
@@ -97,7 +99,7 @@ class DICOMEditor:
                 try:
                     group = int(parts[0].strip(), 16) if parts[0].strip().startswith(("0x", "0X")) else int(parts[0].strip(), 16)
                     element = int(parts[1].strip(), 16) if parts[1].strip().startswith(("0x", "0X")) else int(parts[1].strip(), 16)
-                    return Tag(group, element)
+                    return tag_factory(group, element)
                 except ValueError:
                     raise ValueError(f"Invalid tag format: {tag_identifier}")
             else:
@@ -105,7 +107,7 @@ class DICOMEditor:
         else:
             raise ValueError(f"Invalid tag identifier type: {type(tag_identifier)}")
     
-    def update_tag(self, tag_identifier: Union[str, Tuple[int, int], Tag],
+    def update_tag(self, tag_identifier: Union[str, Tuple[int, int], BaseTag],
                    value: Any, vr: Optional[str] = None) -> bool:
         """
         Update a tag value in the dataset.
@@ -125,6 +127,8 @@ class DICOMEditor:
             target_dataset = self.get_target_dataset()
             tag = self.parse_tag(tag_identifier)
             
+            existing_vr: Optional[str] = None
+
             # Check if tag exists
             if tag in target_dataset:
                 # Get existing element to preserve VR
@@ -132,7 +136,8 @@ class DICOMEditor:
                 existing_vr = existing_elem.VR if hasattr(existing_elem, 'VR') else vr
             
             # Convert value based on VR type if needed
-            converted_value = self._convert_value(value, vr or existing_vr if 'existing_vr' in locals() else None)
+            resolved_vr = vr if vr is not None else existing_vr
+            converted_value = self._convert_value(value, resolved_vr)
             
             # Update or create tag
             if tag in target_dataset:
@@ -215,7 +220,7 @@ class DICOMEditor:
         # Default: return as-is
         return value
     
-    def delete_tag(self, tag_identifier: Union[str, Tuple[int, int], Tag]) -> bool:
+    def delete_tag(self, tag_identifier: Union[str, Tuple[int, int], BaseTag]) -> bool:
         """
         Delete a tag from the dataset.
         

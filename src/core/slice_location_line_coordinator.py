@@ -184,7 +184,7 @@ class SliceLocationLineCoordinator:
             return subwindows[idx]
         return None
 
-    def _get_all_subwindows(self) -> list:
+    def _get_all_subwindows(self) -> list[Any]:
         """Return list of all subwindow containers."""
         layout = getattr(self.app, "multi_window_layout", None)
         if layout is None:

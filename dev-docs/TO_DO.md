@@ -1,7 +1,7 @@
 # To-Do Checklist
 
-**Last updated:** 2026-03-16  
-**Changes:** Reorganized into active categories; rolled FUTURE_WORK items into this checklist; added detail-note section links.
+**Last updated:** 2026-03-25  
+**Changes:** Linked MPR/cine/angle tasks, and hanging protocols / priors / RDSR tasks, to consolidated implementation plans.
 
 ---
 
@@ -27,6 +27,7 @@ This file tracks active and near-term tasks.
 - [ ] **[P1]** See qi-assessment recommendations
 - [ ] **[P1]** Also see to-dos on Unpushed Edits Google Sheet
 
+
 ## Bugs / Correctness
 
 - [ ] **[P0]** Sometimes when scrolling slices, the image seems to drift up or left. The scrollbars move, too. See [details](Image_Drift.md). *SEEMS TO BE RESOLVED*
@@ -35,7 +36,6 @@ This file tracks active and near-term tasks.
 - [ ] **[P0]** After creating MPRs, clearing, closing all files, and loading new files, creating new MPR does not load/display ([details](FUTURE_WORK_DETAIL_NOTES.md#multi-planar-reconstructions-mprs-and-oblique-reconstructions)) *NOTE: seems fixed*
 - [ ] **[P0]** "Close All" did not clear thumbnails in layout map
 - [ ] *Check for pyright warnings, errors - run pyright*
-  See [dev-docs/plans/FIX_TYPE_WARNINGS_MAIN.md](dev-docs/plans/FIX_TYPE_WARNINGS_MAIN.md) for the detailed plan and steps.
 
 
 ## Performance / Packaging
@@ -44,6 +44,7 @@ This file tracks active and near-term tasks.
     - [P2] Particularly w/ large dataset (large files or many files) - would loading compressed initially save time? If we make a database, keep compressed cache?
 - [ ] **[P2]** See if executables can be made smaller (especially on macOS) ([details](FUTURE_WORK_DETAIL_NOTES.md#executable-size-especially-on-macos))
 - [ ] **[P1]** Check fusion responsiveness on Parallels with 3D fusion
+
 
 ## UX / Workflow
 
@@ -58,8 +59,6 @@ This file tracks active and near-term tasks.
 - [ ] **[P2]** Consider more sophisticated smoothing (PIL/NumPy) vs Qt-only scaling
 - [ ] **[P2]** Add ability to edit a drawn ellipse or rectangle ROI ([plan](plans/VIEWER_UX_FEATURES_PLAN.md#1-roi-editing-resize-handles))
 - [ ] **[P2]** Make window/level settings remembered when switching series and then switching back ([plan](plans/VIEWER_UX_FEATURES_PLAN.md#2-windowlevel-remembered-per-series))
-- [ ] **[P1]** Add scale markers on left and bottom (small ticks every image mm, large every cm) ([plan](plans/VIEWER_UX_FEATURES_PLAN.md#3-scale-markers-ruler-ticks)) and allow enable/disable *implemented, verify behavior*
-- [ ] **[P1]** Add direction labels (A/P/L/R/S/I) on viewer window ([plan](plans/VIEWER_UX_FEATURES_PLAN.md#4-direction-labels-aplrsi)) and allow to enable/disable *implemented, verify behavior*
 - [ ] **[P2]** Allow flipping and rotating image ([plan](plans/VIEWER_UX_FEATURES_PLAN.md#5-flip-and-rotate-image))
 - [ ] **[P1]** Slice / frame slider bars in subwindows - ideally only appears when you mouse over near some edge of the window (right?) ([plan](plans/VIEWER_UX_FEATURES_PLAN.md#6-subwindow-slice--frame-slider-bars))
 - [ ] **[P1]** Hovering on a study label in the navigator should show a popup tooltip with the study description, date, and patient name (but should respect privacy mode). Hovering on a thumbnail should show a tooltip with that same info, plus series description ([plan](plans/NAVIGATOR_AND_FILE_LOADING_FEEDBACK_PLAN.md#1-navigator-tooltips-privacy-aware))
@@ -74,23 +73,23 @@ This file tracks active and near-term tasks.
 - [ ] **[P2]** Make a Settings menu for grouping lots of options?
 
 
-
 ## Features (Near-Term)
 
 - [ ] **[P1]** Be able to associate with DICOM extension and add to Open With menus ([details](FUTURE_WORK_DETAIL_NOTES.md#file-association-and-open-with-integration))
 - [ ] **[P2]** Add basic image processing for creating new DICOMs (kernels, smoothing, edge enhancement, sharpening, custom kernels) ([details](FUTURE_WORK_DETAIL_NOTES.md#basic-image-processing-and-creating-new-dicoms))
 - [ ] **[P2]** Integrate pylinac and other automated QC analysis tools ([details](FUTURE_WORK_DETAIL_NOTES.md#integrating-pylinac-and-other-automated-qc-tools))
-- [ ] **[P1]** Add ability to save MPRs as DICOM
-- [ ] **[P1]** Enable export mpg/gif/avi for cine
-- [ ] **[P2]** Add measure angle as another measurement/annoation - user clicks, line extends, clicks again to drop a second point, another line extends from there, click a third time to create endpoint. angle between these two line segments is measured and reported on-screen. can use same settings (color, line thickness, etc) as the measurement tool
+- [ ] **[P1]** Add ability to save MPRs as DICOM ([plan](plans/MPR_DICOM_SAVE_CINE_VIDEO_EXPORT_ANGLE_MEASUREMENT_PLAN.md#1-save-mprs-as-dicom))
+- [ ] **[P1]** Enable export mpg/gif/avi for cine ([plan](plans/MPR_DICOM_SAVE_CINE_VIDEO_EXPORT_ANGLE_MEASUREMENT_PLAN.md#2-cine-video-export-mpg-gif-avi))
+- [ ] **[P2]** Add measure angle as another measurement/annoation - user clicks, line extends, clicks again to drop a second point, another line extends from there, click a third time to create endpoint. angle between these two line segments is measured and reported on-screen. can use same settings (color, line thickness, etc) as the measurement tool ([plan](plans/MPR_DICOM_SAVE_CINE_VIDEO_EXPORT_ANGLE_MEASUREMENT_PLAN.md#3-angle-measurement-tool))
 - [ ] **[P2]** Interactive oblique rotation on MPR (drag handles/crosshairs) ([details](FUTURE_WORK_DETAIL_NOTES.md#interactive-oblique-rotation-on-mpr))
-- [ ] **[P2]** Add measurements and ROI tools on MPR subwindows, including window/level ROIs ([details](FUTURE_WORK_DETAIL_NOTES.md#measurements-and-roi-tools-on-mpr))
-- [ ] **[P1]** Combine slices on MPR (MIP/MinIP/AIP options) ([details](FUTURE_WORK_DETAIL_NOTES.md#combine-slices-on-mpr-mipminipaip))
+- [ ] **[P2]** Add measurements and ROI tools on MPR subwindows, including window/level ROIs ([plan](plans/MPR_MEASUREMENTS_ROI_TOOLS_AND_COMBINE_SLICES_PLAN.md))
+- [ ] **[P1]** Combine slices on MPR (MIP/MinIP/AIP options) ([plan](plans/MPR_MEASUREMENTS_ROI_TOOLS_AND_COMBINE_SLICES_PLAN.md))
 - [ ] **[P2]** Fusion overlays on MPR views ([details](FUTURE_WORK_DETAIL_NOTES.md#fusion-on-mpr))
-- [ ] **[P2]** Advanced ROI/contouring roadmap (contouring, auto-detect ROI, 3D ROI across views) ([details](FUTURE_WORK_DETAIL_NOTES.md#advanced-roi-and-contouring))
-- [ ] **[P2]** Allow hanging protocols? Configuration of windows/tiles, certain views/phases/priors loaded
-- [ ] **[P2]** Once database is added, allow pulling priors
-- [ ] **[P1]** Also try RDSR parsing/export support - have some examples, add to repo
+- [ ] **[P2]** Advanced ROI/contouring abilities (contouring, auto-detect ROI, 3D ROI across views) ([details](FUTURE_WORK_DETAIL_NOTES.md#advanced-roi-and-contouring))
+- [ ] **[P2]** Allow hanging protocols? Configuration of windows/tiles, certain views/phases/priors loaded ([plan](plans/HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md#1-hanging-protocols))
+- [ ] **[P2]** Once database is added, allow pulling priors ([plan](plans/HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md#2-pulling-priors-after-local-database))
+- [ ] **[P1]** Also try RDSR parsing/export support - have some examples, add to repo ([plan](plans/HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md#3-rdsr-parsing-and-export))
+
 
 ## Data / Platform (Future)
 
@@ -99,12 +98,14 @@ This file tracks active and near-term tasks.
 - [ ] **[P2]** Multi-tab / multi-workspace study sessions ([details](FUTURE_WORK_DETAIL_NOTES.md#multi-workspace--multi-tab-study-sessions))
 - [ ] **[P2]** Enhanced multi-frame IOD navigation (Tier 3): parse `PerFrameFunctionalGroupsSequence` / `SharedFunctionalGroupsSequence` to reconstruct per-frame spatial and temporal metadata; enable independent 2D-axis navigation (scroll = slice axis, Alt+scroll = secondary axis such as time or b-value) ([details](FUTURE_WORK_DETAIL_NOTES.md#differentiating-frame--vs-slice--vs-instance-))
 
+
 ## Fusion Follow-up
 
 - [ ] **[P1]** Check visual registration accuracy on usual PET/CT studies in 2D vs 3D
 - [ ] **[P2]** Ask AI/cloud agent to estimate registration differences for sample PET-to-CT points and capture screenshots
 - [ ] **[P1]** Check fusion with additional studies
 - [ ] **[P1]** Improve Window/Level preset/auto behavior in fusion mode
+
 
 ## Release / Product
 

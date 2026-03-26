@@ -265,14 +265,22 @@ class DICOMOrganizer:
             return os.path.normpath(os.path.abspath(p))
 
         datasets_new: List[Dataset] = []
-        file_paths_new: List[Optional[str]] = []
+        file_paths_new: Optional[List[str]] = [] if file_paths_input is not None else None
         for idx, ds in enumerate(datasets):
-            path = file_paths_input[idx] if file_paths_input and idx < len(file_paths_input) else None
+            path = (
+                file_paths_input[idx]
+                if file_paths_input is not None and idx < len(file_paths_input)
+                else None
+            )
             if path and norm(path) in self.loaded_file_paths:
                 result.skipped_file_count += 1
                 continue
             datasets_new.append(ds)
-            file_paths_new.append(path)
+            # Preserve behavior: if we don't have a file path for this dataset index,
+            # downstream organization will treat it as missing (no file-path mapping).
+            # We avoid `None` placeholders here to satisfy typing for `_organize_files_into_batch`.
+            if file_paths_new is not None and path is not None:
+                file_paths_new.append(path)
 
         if not datasets_new:
             return result
@@ -329,8 +337,8 @@ class DICOMOrganizer:
         self.key_objects.update(batch_ko)
 
         added_paths = set()
-        for idx, path in enumerate(file_paths_new):
-            if path:
+        if file_paths_new:
+            for path in file_paths_new:
                 added_paths.add(norm(path))
         self.loaded_file_paths.update(added_paths)
         result.added_file_count = len(added_paths)

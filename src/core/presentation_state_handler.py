@@ -34,6 +34,13 @@ class PresentationStateHandler:
     def __init__(self):
         """Initialize the Presentation State handler."""
         pass
+
+    def _coerce_float(self, value: Any, default: float = 0.0) -> float:
+        """Best-effort float conversion for loosely-typed DICOM values."""
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
     
     def parse_presentation_state(self, dataset: Dataset) -> Dict[str, Any]:
         """
@@ -150,7 +157,7 @@ class PresentationStateHandler:
                     graphic_obj_seq = annotation_item.GraphicObjectSequence
                     
                     for graphic_obj in graphic_obj_seq:
-                        annotation = {
+                        annotation: Dict[str, Any] = {
                             'type': '',
                             'coordinates': [],
                             'text': '',
@@ -165,7 +172,13 @@ class PresentationStateHandler:
                         
                         # Get graphic data (coordinates)
                         if hasattr(graphic_obj, 'GraphicData'):
-                            coords = self._parse_graphic_data(graphic_obj.GraphicData, annotation['type'])
+                            graphic_type_val = annotation.get('type', '')
+                            graphic_type = (
+                                graphic_type_val
+                                if isinstance(graphic_type_val, str)
+                                else str(graphic_type_val)
+                            )
+                            coords = self._parse_graphic_data(graphic_obj.GraphicData, graphic_type)
                             annotation['coordinates'] = coords
                         
                         # Get text content if this is a text annotation
@@ -193,7 +206,7 @@ class PresentationStateHandler:
         
         return annotations
     
-    def _parse_graphic_data(self, graphic_data: List[float], graphic_type: str) -> List[tuple]:
+    def _parse_graphic_data(self, graphic_data: Any, graphic_type: str) -> List[tuple[float, float]]:
         """
         Parse GraphicData coordinates based on graphic type.
         
@@ -207,32 +220,35 @@ class PresentationStateHandler:
         coords = []
         
         try:
+            if not isinstance(graphic_data, (list, tuple)):
+                return coords
+
             if graphic_type == 'POINT':
                 # Point: single (x, y) pair
                 if len(graphic_data) >= 2:
-                    coords.append((float(graphic_data[0]), float(graphic_data[1])))
+                    coords.append((self._coerce_float(graphic_data[0]), self._coerce_float(graphic_data[1])))
             elif graphic_type == 'CIRCLE':
                 # Circle: center (x, y) and point on circumference (x, y)
                 if len(graphic_data) >= 4:
-                    coords.append((float(graphic_data[0]), float(graphic_data[1])))  # Center
-                    coords.append((float(graphic_data[2]), float(graphic_data[3])))  # Point on circle
+                    coords.append((self._coerce_float(graphic_data[0]), self._coerce_float(graphic_data[1])))  # Center
+                    coords.append((self._coerce_float(graphic_data[2]), self._coerce_float(graphic_data[3])))  # Point on circle
             elif graphic_type == 'ELLIPSE':
                 # Ellipse: center (x, y) and two points on ellipse
                 if len(graphic_data) >= 6:
-                    coords.append((float(graphic_data[0]), float(graphic_data[1])))  # Center
-                    coords.append((float(graphic_data[2]), float(graphic_data[3])))  # Point 1
-                    coords.append((float(graphic_data[4]), float(graphic_data[5])))  # Point 2
+                    coords.append((self._coerce_float(graphic_data[0]), self._coerce_float(graphic_data[1])))  # Center
+                    coords.append((self._coerce_float(graphic_data[2]), self._coerce_float(graphic_data[3])))  # Point 1
+                    coords.append((self._coerce_float(graphic_data[4]), self._coerce_float(graphic_data[5])))  # Point 2
             elif graphic_type in ['POLYLINE', 'TEXT']:
                 # Polyline/Text: series of (x, y) pairs
                 for i in range(0, len(graphic_data), 2):
                     if i + 1 < len(graphic_data):
-                        coords.append((float(graphic_data[i]), float(graphic_data[i + 1])))
+                        coords.append((self._coerce_float(graphic_data[i]), self._coerce_float(graphic_data[i + 1])))
         except Exception as e:
             print(f"Error parsing graphic data: {e}")
         
         return coords
     
-    def _parse_bounding_box(self, top_left, bottom_right) -> List[tuple]:
+    def _parse_bounding_box(self, top_left: Any, bottom_right: Any) -> List[tuple[float, float]]:
         """
         Parse bounding box coordinates for text annotations.
         
@@ -247,9 +263,9 @@ class PresentationStateHandler:
         
         try:
             if top_left and len(top_left) >= 2:
-                coords.append((float(top_left[0]), float(top_left[1])))
+                coords.append((self._coerce_float(top_left[0]), self._coerce_float(top_left[1])))
             if bottom_right and len(bottom_right) >= 2:
-                coords.append((float(bottom_right[0]), float(bottom_right[1])))
+                coords.append((self._coerce_float(bottom_right[0]), self._coerce_float(bottom_right[1])))
         except Exception as e:
             print(f"Error parsing bounding box: {e}")
         
@@ -277,16 +293,16 @@ class PresentationStateHandler:
             if hasattr(dataset, 'WindowCenter'):
                 window_center = dataset.WindowCenter
                 if isinstance(window_center, (list, tuple)) and len(window_center) > 0:
-                    settings['window_center'] = float(window_center[0])
+                    settings['window_center'] = self._coerce_float(window_center[0])
                 else:
-                    settings['window_center'] = float(window_center)
+                    settings['window_center'] = self._coerce_float(window_center)
             
             if hasattr(dataset, 'WindowWidth'):
                 window_width = dataset.WindowWidth
                 if isinstance(window_width, (list, tuple)) and len(window_width) > 0:
-                    settings['window_width'] = float(window_width[0])
+                    settings['window_width'] = self._coerce_float(window_width[0])
                 else:
-                    settings['window_width'] = float(window_width)
+                    settings['window_width'] = self._coerce_float(window_width)
             
             # Displayed area selection (zoom/pan)
             if hasattr(dataset, 'DisplayedAreaSelectionSequence'):
@@ -299,17 +315,17 @@ class PresentationStateHandler:
                         # This indicates zoom level
                         spacing = display_item.PresentationPixelSpacing
                         if spacing and len(spacing) >= 2:
-                            settings['pixel_spacing'] = (float(spacing[0]), float(spacing[1]))
+                            settings['pixel_spacing'] = (self._coerce_float(spacing[0]), self._coerce_float(spacing[1]))
                     
                     # Pan (from DisplayedAreaTopLeftHandCorner)
                     if hasattr(display_item, 'DisplayedAreaTopLeftHandCorner'):
                         top_left = display_item.DisplayedAreaTopLeftHandCorner
                         if top_left and len(top_left) >= 2:
-                            settings['pan'] = (float(top_left[0]), float(top_left[1]))
+                            settings['pan'] = (self._coerce_float(top_left[0]), self._coerce_float(top_left[1]))
             
             # Rotation
             if hasattr(dataset, 'ImageRotation'):
-                settings['rotation'] = float(dataset.ImageRotation)
+                settings['rotation'] = self._coerce_float(dataset.ImageRotation)
         except Exception as e:
             print(f"Error parsing display settings: {e}")
         

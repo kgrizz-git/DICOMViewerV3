@@ -26,7 +26,7 @@ from PySide6.QtCore import QPointF
 from pydicom.dataset import Dataset
 from datetime import datetime
 from utils.debug_flags import DEBUG_LAYOUT, DEBUG_DIAG
-from typing import Optional, Dict, Callable, List, Tuple
+from typing import Optional, Dict, Callable, List, Tuple, Any
 import numpy as np
 from core.dicom_processor import DICOMProcessor
 from gui.image_viewer import ImageViewer
@@ -54,9 +54,9 @@ class ViewStateManager:
         window_level_controls: WindowLevelControls,
         main_window: MainWindow,
         overlay_manager,
-        overlay_coordinator: Optional[Callable] = None,
-        roi_coordinator: Optional[Callable] = None,
-        display_rois_for_slice: Optional[Callable] = None
+        overlay_coordinator: Optional[Callable[..., None]] = None,
+        roi_coordinator: Optional[Callable[..., None]] = None,
+        display_rois_for_slice: Optional[Callable[..., None]] = None
     ):
         """
         Initialize the view state manager.
@@ -102,7 +102,7 @@ class ViewStateManager:
         # Series defaults storage: key is series identifier (StudyInstanceUID + composite_series_key)
         # Value is dict with: window_center, window_width, zoom, h_scroll, v_scroll, scene_center, image_inverted
         # composite_series_key includes SeriesNumber if available
-        self.series_defaults: Dict[str, Dict] = {}
+        self.series_defaults: Dict[str, Dict[str, Any]] = {}
         
         # Track current series identifier for comparison
         self.current_series_identifier: Optional[str] = None
@@ -120,7 +120,7 @@ class ViewStateManager:
         self.current_dataset: Optional[Dataset] = None
         
         # Current studies and slice info (needed for reset view)
-        self.current_studies: dict = {}
+        self.current_studies: Dict[str, Dict[str, List[Dataset]]] = {}
         self.current_study_uid: str = ""
         self.current_series_uid: str = ""
         self.current_slice_index: int = 0
@@ -1057,7 +1057,7 @@ class ViewStateManager:
     def set_current_data_context(
         self,
         current_dataset: Optional[Dataset],
-        current_studies: dict,
+        current_studies: Dict[str, Dict[str, List[Dataset]]],
         current_study_uid: str,
         current_series_uid: str,
         current_slice_index: int

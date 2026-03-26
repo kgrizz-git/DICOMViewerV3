@@ -205,7 +205,7 @@ class SliceSyncCoordinator:
         data = self.app.subwindow_data.get(idx, {})
         return data.get("current_slice_index", 0)
 
-    def _get_datasets(self, idx: int) -> Optional[List]:
+    def _get_datasets(self, idx: int) -> Optional[List[Any]]:
         """Return current datasets list for subwindow ``idx``."""
         data = self.app.subwindow_data.get(idx, {})
         return data.get("current_datasets") or None

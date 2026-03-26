@@ -11,10 +11,12 @@ from typing import Optional, Tuple
 from pydicom.dataset import Dataset
 
 try:
-    from pydicom.pixels import convert_color_space
-    PYDICOM_CONVERT_AVAILABLE = True
+    # pydicom moved convert_color_space to pydicom.pixels.processing
+    from pydicom.pixels.processing import convert_color_space
+
+    pydicom_convert_available = True
 except ImportError:
-    PYDICOM_CONVERT_AVAILABLE = False
+    pydicom_convert_available = False
     convert_color_space = None
 
 
@@ -154,9 +156,9 @@ def _convert_ybr_to_rgb_2d(ybr_array: np.ndarray, use_rct: bool = False) -> np.n
         # B = Cb + G
         # Note: G must be calculated first, then R and B depend on G
         # No offset of 128 needed for YBR_RCT
-        G = Y - np.floor((Cr + Cb) / 4.0)
-        R = Cr + G
-        B = Cb + G
+        g_ch = Y - np.floor((Cr + Cb) / 4.0)
+        r_ch = Cr + g_ch
+        b_ch = Cb + g_ch
     else:
         # YBR_FULL, YBR_FULL_422, YBR_ICT use ITU-R BT.601 coefficients
         # Note: pydicom handles 4:2:2 subsampling for YBR_FULL_422 during decompression
@@ -168,12 +170,12 @@ def _convert_ybr_to_rgb_2d(ybr_array: np.ndarray, use_rct: bool = False) -> np.n
         # R = Y + 1.402 * Cr
         # G = Y - 0.344136 * Cb - 0.714136 * Cr
         # B = Y + 1.772 * Cb
-        R = Y + 1.402 * Cr
-        G = Y - 0.344136 * Cb - 0.714136 * Cr
-        B = Y + 1.772 * Cb
+        r_ch = Y + 1.402 * Cr
+        g_ch = Y - 0.344136 * Cb - 0.714136 * Cr
+        b_ch = Y + 1.772 * Cb
 
     # Stack channels and clip to valid range
-    rgb = np.stack([R, G, B], axis=2)
+    rgb = np.stack([r_ch, g_ch, b_ch], axis=2)
     rgb = np.clip(rgb, 0, 255).astype(np.uint8)
 
     return rgb
@@ -304,11 +306,11 @@ def convert_ybr_to_rgb(ybr_array: np.ndarray,
                     ybr_format = 'YBR_FULL_422'
                 else:
                     ybr_format = 'YBR_FULL'
-                use_pydicom_convert = PYDICOM_CONVERT_AVAILABLE
+                use_pydicom_convert = pydicom_convert_available
             elif 'YBR_ICT' in pi_upper:
                 # YBR_ICT uses same conversion as YBR_FULL
                 ybr_format = 'YBR_FULL'
-                use_pydicom_convert = PYDICOM_CONVERT_AVAILABLE
+                use_pydicom_convert = pydicom_convert_available
 
         # Try using pydicom's convert_color_space for YBR_FULL/YBR_FULL_422/YBR_ICT
         # Prefer pydicom's implementation as it's tested and handles edge cases

@@ -31,10 +31,12 @@ from pydicom.dataset import Dataset
 
 # Try to import pydicom's convert_color_space (available in pydicom 3.0+)
 try:
-    from pydicom.pixels import convert_color_space
-    PYDICOM_CONVERT_AVAILABLE = True
+    # pydicom moved convert_color_space to pydicom.pixels.processing
+    from pydicom.pixels.processing import convert_color_space
+
+    pydicom_convert_available = True
 except ImportError:
-    PYDICOM_CONVERT_AVAILABLE = False
+    pydicom_convert_available = False
     convert_color_space = None
 from core.multiframe_handler import get_frame_pixel_array, is_multiframe
 

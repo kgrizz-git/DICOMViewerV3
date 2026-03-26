@@ -759,7 +759,7 @@ class SubwindowLifecycleController:
             get_use_rescaled=lambda: app.view_state_manager.use_rescaled_values if app.view_state_manager else False
         )
 
-        def get_available_series() -> list:
+        def get_available_series() -> list[Any]:
             if not app.current_studies:
                 return []
             series_list = []
@@ -1044,7 +1044,7 @@ class SubwindowLifecycleController:
             print(f"[DEBUG-LAYOUT] [{ts}] on_main_window_layout_changed: scheduling deferred set_layout({mode!r})")
         QTimer.singleShot(0, lambda: self.app.multi_window_layout.set_layout(mode))
 
-    def capture_subwindow_view_states(self) -> Dict[int, Dict]:
+    def capture_subwindow_view_states(self) -> Dict[int, Dict[str, Any]]:
         """Capture view state for all existing subwindows before layout change."""
         view_states = {}
         app = self.app
@@ -1073,7 +1073,7 @@ class SubwindowLifecycleController:
             }
         return view_states
 
-    def restore_subwindow_views(self, view_states: Dict[int, Dict]) -> None:
+    def restore_subwindow_views(self, view_states: Dict[int, Dict[str, Any]]) -> None:
         """Restore subwindow views after layout change (fit to view)."""
         app = self.app
         subwindows = app.multi_window_layout.get_all_subwindows()

@@ -143,6 +143,10 @@ class SlicePlane:
             else:
                 return None
 
+        # `origin` is non-optional here: either we had ImagePositionPatient,
+        # or SliceLocation fallback produced a synthetic origin.
+        assert origin is not None
+
         spacing = get_pixel_spacing(ds)
         row_spacing = float(spacing[0]) if spacing else None
         col_spacing = float(spacing[1]) if spacing else None
@@ -477,6 +481,11 @@ def project_line_to_2d(
     if plane.row_spacing <= 0 or plane.col_spacing <= 0:
         return None
 
+    # Capture for type-checking inside nested functions.
+    row_spacing = plane.row_spacing
+    col_spacing = plane.col_spacing
+    assert row_spacing is not None and col_spacing is not None
+
     # If the line direction is nearly parallel to the plane normal,
     # the line appears as a point in 2-D — degenerate case.
     normal_dot = abs(float(np.dot(direction, plane.normal)))
@@ -485,8 +494,8 @@ def project_line_to_2d(
 
     def _to_pixel(p3d: np.ndarray) -> Tuple[float, float]:
         dp = p3d - plane.origin
-        col = float(np.dot(dp, plane.row_cosine)) / plane.col_spacing
-        row = float(np.dot(dp, plane.col_cosine)) / plane.row_spacing
+        col = float(np.dot(dp, plane.row_cosine)) / col_spacing
+        row = float(np.dot(dp, plane.col_cosine)) / row_spacing
         return col, row
 
     # Extend the line in both directions so clipping yields the full
