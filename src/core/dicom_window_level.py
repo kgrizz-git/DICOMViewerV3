@@ -16,7 +16,7 @@ Requirements:
 """
 
 import numpy as np
-from typing import Optional, List, Tuple
+from typing import Any, Optional, List, Tuple
 from pydicom.dataset import Dataset
 
 from core.dicom_pixel_array import get_pixel_array
@@ -154,15 +154,12 @@ def get_window_level_presets_from_dataset(
         window_widths = []
         from_dicom_tags = False
 
-        def parse_window_value(value):
+        def parse_window_value(value: Any) -> List[float]:
             if value is None:
                 return []
-            try:
-                from pydicom.multival import MultiValue
-                if isinstance(value, MultiValue):
-                    return [float(x) for x in value]
-            except ImportError:
-                pass
+            from pydicom.multival import MultiValue
+            if isinstance(value, MultiValue):
+                return [float(x) for x in value]
             if isinstance(value, (list, tuple)):
                 return [float(x) for x in value]
             if isinstance(value, str):
@@ -172,6 +169,7 @@ def get_window_level_presets_from_dataset(
                     inner = value.strip()[1:-1]
                     return [float(p.strip()) for p in inner.split(',') if p.strip()]
                 return [float(value)]
+            # Fallback for scalar numeric-ish values.
             return [float(value)]
 
         if hasattr(dataset, 'WindowCenter'):

@@ -24,7 +24,7 @@ Requirements:
 
 import os
 import gc
-from typing import Callable, Optional, Tuple
+from typing import Any, Callable, Optional, Tuple
 from PySide6.QtWidgets import QApplication
 from core.dicom_loader import DICOMLoader, should_skip_path_for_dicom
 from core.dicom_organizer import DICOMOrganizer
@@ -55,9 +55,9 @@ class FileOperationsHandler:
         file_dialog: FileDialog,
         config_manager: ConfigManager,
         main_window: MainWindow,
-        clear_data_callback: Callable,
-        load_first_slice_callback: Callable,
-        update_status_callback: Callable
+        clear_data_callback: Callable[..., None],
+        load_first_slice_callback: Callable[..., None],
+        update_status_callback: Callable[..., None],
     ):
         """
         Initialize the file operations handler.
@@ -132,7 +132,7 @@ class FileOperationsHandler:
             QApplication.processEvents()
     
 
-    def open_files(self) -> tuple[list, dict]:
+    def open_files(self) -> tuple[list[Any] | None, dict[str, Any] | None]:
         """
         Handle open files request.
 
@@ -182,7 +182,7 @@ class FileOperationsHandler:
         )
 
 
-    def open_folder(self) -> tuple[list, dict]:
+    def open_folder(self) -> tuple[list[Any] | None, dict[str, Any] | None]:
         """
         Handle open folder request.
 
@@ -230,7 +230,7 @@ class FileOperationsHandler:
         )
 
 
-    def open_recent_file(self, file_path: str) -> tuple[list, dict]:
+    def open_recent_file(self, file_path: str) -> tuple[list[Any] | None, dict[str, Any] | None]:
         """
         Handle open recent file/folder request.
 
@@ -322,7 +322,7 @@ class FileOperationsHandler:
         )
 
 
-    def open_paths(self, paths: list[str]) -> tuple[list, dict]:
+    def open_paths(self, paths: list[str]) -> tuple[list[Any] | None, dict[str, Any] | None]:
         """
         Handle open files/folders from drag-and-drop or direct paths.
 
@@ -424,7 +424,9 @@ class FileOperationsHandler:
 
         return None, None
 
-    def _get_first_study_series_by_dicom(self, studies: dict) -> Optional[Tuple[str, str]]:
+    def _get_first_study_series_by_dicom(
+        self, studies: dict[str, Any]
+    ) -> Optional[Tuple[str, str]]:
         """
         Return (study_uid, series_uid) for the first study/series using the same
         logic as the series navigator: first study in dict iteration order, then
@@ -459,7 +461,7 @@ class FileOperationsHandler:
             return (study_uid, series_list[0][1])
         return None
 
-    def load_first_slice(self, studies: dict) -> dict:
+    def load_first_slice(self, studies: dict[str, Any]) -> dict[str, Any] | None:
         """
         Load and return information about the first slice.
         First study/series uses the same order as the series navigator (first study, lowest SeriesNumber).

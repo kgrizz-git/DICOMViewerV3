@@ -20,7 +20,7 @@ Requirements:
 """
 
 import numpy as np
-from typing import Optional, List, Tuple, Dict
+from typing import Any, Optional, List, Tuple, Dict
 from pydicom.dataset import Dataset
 
 from core.image_resampler import ImageResampler
@@ -343,10 +343,14 @@ class FusionHandler:
         Returns:
             Tuple of (use_3d: bool, reason: str)
         """
-        # Check cache first
-        cache_key = (self.base_series_uid, self.overlay_series_uid)
-        if (self._resampling_decision_cache is not None and 
-            self._resampling_decision_cache_key == cache_key):
+        # Check cache first (only when both series UIDs are known).
+        cache_key: Optional[Tuple[str, str]] = None
+        if self.base_series_uid is not None and self.overlay_series_uid is not None:
+            cache_key = (self.base_series_uid, self.overlay_series_uid)
+        if (
+            self._resampling_decision_cache is not None
+            and self._resampling_decision_cache_key == cache_key
+        ):
             needs_3d, reason = self._resampling_decision_cache
         else:
             # Check compatibility
@@ -618,7 +622,7 @@ class FusionHandler:
         
         return None
     
-    def get_series_spatial_info(self, datasets: List[Dataset]) -> Dict:
+    def get_series_spatial_info(self, datasets: List[Dataset]) -> Dict[str, Any]:
         """
         Get spatial information for a series.
         
@@ -636,7 +640,7 @@ class FusionHandler:
             return {}
         
         first_ds = datasets[0]
-        info = {}
+        info: Dict[str, Any] = {}
         
         # Get pixel spacing
         pixel_spacing = self.get_pixel_spacing(first_ds)
@@ -810,7 +814,7 @@ class FusionHandler:
     
     def get_available_series_for_fusion(
         self,
-        studies: Dict,
+        studies: Dict[str, Dict[str, List[Dataset]]],
         current_study_uid: str
     ) -> List[Tuple[str, str]]:
         """

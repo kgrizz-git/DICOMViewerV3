@@ -64,8 +64,6 @@ class MprRequest:
         output_spacing_mm:   In-plane pixel spacing (mm).
         output_thickness_mm: Inter-slice spacing (mm).
         interpolation:       "linear" | "nearest" | "cubic".
-        combine_mode:        Slab combine mode: "none" | "mip" | "minip" | "aip".
-        slab_thickness_mm:   Slab thickness in mm used by combine modes.
         orientation_label:   Human-readable label ("Axial", "Coronal", etc.)
     """
     series_key: str
@@ -74,8 +72,6 @@ class MprRequest:
     output_spacing_mm: float
     output_thickness_mm: float
     interpolation: str
-    combine_mode: str
-    slab_thickness_mm: float
     orientation_label: str
 
 
@@ -224,36 +220,6 @@ class MprDialog(QDialog):
         params_layout.addRow("Slice Thickness:", self._thickness_spin)
         params_layout.addRow("Interpolation:", self._interp_combo)
 
-        # --- Slab combine ---
-        # These options modify the final displayed output slice by combining a
-        # small slab of neighboring MPR planes at the current slice index.
-        combine_group = QGroupBox("Slab Combine (for MIP/MinIP/AIP)")
-        combine_layout = QFormLayout(combine_group)
-
-        self._combine_mode_combo = QComboBox()
-        for label, val in (
-            ("None (single slice)", "none"),
-            ("MIP (max intensity)", "mip"),
-            ("MinIP (min intensity)", "minip"),
-            ("AIP (average intensity)", "aip"),
-        ):
-            self._combine_mode_combo.addItem(label, val)
-
-        self._slab_thickness_spin = QDoubleSpinBox()
-        self._slab_thickness_spin.setRange(0.1, 200.0)
-        self._slab_thickness_spin.setDecimals(2)
-        self._slab_thickness_spin.setSuffix(" mm")
-        self._slab_thickness_spin.setToolTip(
-            "Slab thickness in mm used by MIP/MinIP/AIP. "
-            "The MPR builder combines neighboring output planes around the current slice."
-        )
-
-        combine_layout.addRow("Mode:", self._combine_mode_combo)
-        combine_layout.addRow("Slab Thickness:", self._slab_thickness_spin)
-
-        # Keep this section visible; the combo mode itself disables effectiveness.
-        params_layout.addRow(combine_group)
-
         # Estimated output size (read-only).
         self._estimate_label = QLabel("")
         self._estimate_label.setStyleSheet("color: gray; font-size: 10px;")
@@ -318,10 +284,6 @@ class MprDialog(QDialog):
 
         self._spacing_spin.setValue(round(default_sp, 2))
         self._thickness_spin.setValue(round(default_th, 2))
-
-        # Default slab thickness: match the default output slice thickness
-        # so "None vs. combine" produces a sane starting behavior.
-        self._slab_thickness_spin.setValue(round(default_th, 2))
         self._update_estimate()
 
     def _update_estimate(self) -> None:
@@ -414,8 +376,6 @@ class MprDialog(QDialog):
         sp = self._spacing_spin.value()
         th = self._thickness_spin.value()
         interp = self._interp_combo.currentData() or "linear"
-        combine_mode = self._combine_mode_combo.currentData() or "none"
-        slab_thickness = float(self._slab_thickness_spin.value())
 
         req = MprRequest(
             series_key=key,
@@ -424,8 +384,6 @@ class MprDialog(QDialog):
             output_spacing_mm=sp,
             output_thickness_mm=th,
             interpolation=interp,
-            combine_mode=combine_mode,
-            slab_thickness_mm=slab_thickness,
             orientation_label=label,
         )
         # Close the dialog first so the orientation-choice or error dialogs

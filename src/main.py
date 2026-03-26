@@ -546,6 +546,8 @@ class DICOMViewerApp(QObject):
                 m.projection_slice_count if (m := self._get_subwindow_slice_display_manager(i)) else 4
             ),
             get_current_studies=lambda: self.current_studies,
+            get_mpr_pixel_array=lambda i=idx: self._get_subwindow_mpr_pixel_array(i),
+            get_mpr_output_pixel_spacing=lambda i=idx: self._get_subwindow_mpr_output_pixel_spacing(i),
             undo_redo_manager=self.undo_redo_manager,
             update_undo_redo_state_callback=self._update_undo_redo_state,
             crosshair_coordinator=managers['crosshair_coordinator']
@@ -689,6 +691,37 @@ class DICOMViewerApp(QObject):
     def _get_subwindow_slice_display_manager(self, idx: int):
         """Get slice display manager for a subwindow. Delegates to subwindow lifecycle controller."""
         return self._subwindow_lifecycle_controller.get_subwindow_slice_display_manager(idx)
+
+    def _get_subwindow_mpr_pixel_array(self, idx: int):
+        """Return the currently displayed MPR pixel array for subwindow *idx* (if any)."""
+        try:
+            data = self.subwindow_data.get(idx, {})
+            if not data.get("is_mpr"):
+                return None
+            result = data.get("mpr_result")
+            if result is None:
+                return None
+            slice_index = data.get("mpr_slice_index", 0)
+            if slice_index is None:
+                return None
+            if slice_index < 0 or slice_index >= getattr(result, "n_slices", 0):
+                return None
+            return result.slices[slice_index]
+        except Exception:
+            return None
+
+    def _get_subwindow_mpr_output_pixel_spacing(self, idx: int):
+        """Return the (row, col) pixel spacing mm for the MPR output grid for subwindow *idx*."""
+        try:
+            data = self.subwindow_data.get(idx, {})
+            if not data.get("is_mpr"):
+                return None
+            result = data.get("mpr_result")
+            if result is None:
+                return None
+            return getattr(result, "output_spacing_mm", None)
+        except Exception:
+            return None
 
     def _get_subwindow_study_uid(self, idx: int) -> str:
         """Get current study UID for a subwindow. Delegates to subwindow lifecycle controller."""

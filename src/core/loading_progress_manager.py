@@ -23,7 +23,7 @@ Requirements:
 from typing import Callable, Optional
 
 from PySide6.QtCore import QEvent, QObject, Qt, QTimer
-from PySide6.QtWidgets import QApplication, QProgressDialog
+from PySide6.QtWidgets import QApplication, QProgressDialog, QWidget
 
 
 class ProgressDialogEventFilter(QObject):
@@ -35,7 +35,7 @@ class ProgressDialogEventFilter(QObject):
     which can fire the ``canceled`` signal unexpectedly in some compiled builds.
     """
 
-    def __init__(self, cancel_callback: Callable) -> None:
+    def __init__(self, cancel_callback: Callable[[], None]) -> None:
         """
         Args:
             cancel_callback: Zero-argument callable invoked when Escape is pressed.
@@ -46,7 +46,7 @@ class ProgressDialogEventFilter(QObject):
     def eventFilter(self, obj: QObject, event: QEvent) -> bool:  # type: ignore[override]
         """Intercept Escape key presses and forward to the cancel callback."""
         if event.type() == QEvent.Type.KeyPress:
-            if event.key() == Qt.Key.Key_Escape:  # type: ignore[attr-defined]
+            if event.key() == Qt.Key.Key_Escape:  # pyright: ignore[reportAttributeAccessIssue]
                 self._cancel_callback()
                 return True
         return False
@@ -155,7 +155,7 @@ class LoadingProgressManager:
     # ------------------------------------------------------------------
 
     def create_progress_dialog(
-        self, parent: QObject, total_files: int, message: str
+        self, parent: QWidget | None, total_files: int, message: str
     ) -> QProgressDialog:
         """
         Create and return a new QProgressDialog.

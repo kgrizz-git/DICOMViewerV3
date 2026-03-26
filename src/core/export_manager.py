@@ -43,14 +43,16 @@ from gui.overlay_text_builder import get_modality, get_corner_text
 def _get_bundled_font_path(filename: str) -> str:
     """Return the absolute path to a font bundled in resources/fonts/, works in dev and PyInstaller."""
     if getattr(sys, 'frozen', False):
-        base = Path(sys._MEIPASS)
+        # PyInstaller sets sys._MEIPASS at runtime; keep a safe fallback for typing.
+        meipass = getattr(sys, "_MEIPASS", "")
+        base = Path(meipass) if meipass else Path(__file__).parent.parent.parent
     else:
         base = Path(__file__).parent.parent.parent
     return str(base / "resources" / "fonts" / filename)
 
 
 def _load_font_with_fallback(size: int, variant: str = "Bold",
-                             font_family: str = "IBM Plex Sans") -> ImageFont.FreeTypeFont:
+                             font_family: str = "IBM Plex Sans") -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     """Load a TrueType font at *size* with a robust cross-platform fallback chain.
 
     Priority:
@@ -967,6 +969,9 @@ class ExportManager:
                 
                 # Get original pixel characteristics
                 original_pixel_array = DICOMProcessor.get_pixel_array(dataset)
+                if original_pixel_array is None:
+                    # Cannot infer dtype / bounds for projection pixel conversion.
+                    return None
                 original_dtype = original_pixel_array.dtype
                 bits_stored = getattr(dataset, 'BitsStored', 16)
                 bits_allocated = getattr(dataset, 'BitsAllocated', 16)
@@ -1168,7 +1173,7 @@ class ExportManager:
         text_items_agg: List[Any] = []
         arrow_items_agg: List[Any] = []
         if use_aggregate and export_study_uid and export_series_uid and slice_index is not None:
-            for d in subwindow_annotation_managers:
+            for d in (subwindow_annotation_managers or []):
                 rm = d.get('roi_manager')
                 if rm:
                     rois_agg.extend(rm.get_rois_for_slice(export_study_uid, export_series_uid, slice_index))
@@ -1209,40 +1214,57 @@ class ExportManager:
                 )
                 for roi in rois:
                     bounds = roi.get_bounds()
-                x1 = int(max(0, min(bounds.left() * coordinate_scale, width)))
-                y1 = int(max(0, min(bounds.top() * coordinate_scale, height)))
-                x2 = int(max(0, min(bounds.right() * coordinate_scale, width)))
-                y2 = int(max(0, min(bounds.bottom() * coordinate_scale, height)))
-                
-                if roi.shape_type == "rectangle":
-                    draw.rectangle([x1, y1, x2, y2], outline=roi_line_color, width=roi_line_thickness)
-                elif roi.shape_type == "ellipse":
-                    draw.ellipse([x1, y1, x2, y2], outline=roi_line_color, width=roi_line_thickness)
-                
-                # Draw ROI statistics text if available and visible
-                if roi.statistics and roi.statistics_overlay_visible:
-                    _roi_font_family = config_manager.get_roi_font_family() if config_manager else "IBM Plex Sans"
-                    _roi_font_variant = config_manager.get_roi_font_variant() if config_manager else "Bold"
-                    roi_font = _load_font_with_fallback(roi_font_size, variant=_roi_font_variant, font_family=_roi_font_family)
-                    if roi_font:
-                        stats_lines = []
-                        if "mean" in roi.visible_statistics and "mean" in roi.statistics:
-                            stats_lines.append(f"Mean: {roi.statistics['mean']:.2f}")
-                        if "std" in roi.visible_statistics and "std" in roi.statistics:
-                            stats_lines.append(f"Std Dev: {roi.statistics['std']:.2f}")
-                        if "min" in roi.visible_statistics and "min" in roi.statistics:
-                            stats_lines.append(f"Min: {roi.statistics['min']:.2f}")
-                        if "max" in roi.visible_statistics and "max" in roi.statistics:
-                            stats_lines.append(f"Max: {roi.statistics['max']:.2f}")
-                        if "area" in roi.visible_statistics and "area" in roi.statistics:
-                            stats_lines.append(f"Area: {roi.statistics['area']:.2f}")
-                        if "count" in roi.visible_statistics and "count" in roi.statistics:
-                            stats_lines.append(f"Count: {int(roi.statistics['count'])}")
-                        if stats_lines:
-                            stats_text = "\n".join(stats_lines)
-                            text_x = int(x2 + 5)
-                            text_y = int(y1 + 5)
-                            draw.text((text_x, text_y), stats_text, fill=roi_font_color, font=roi_font)
+                    x1 = int(max(0, min(bounds.left() * coordinate_scale, width)))
+                    y1 = int(max(0, min(bounds.top() * coordinate_scale, height)))
+                    x2 = int(max(0, min(bounds.right() * coordinate_scale, width)))
+                    y2 = int(max(0, min(bounds.bottom() * coordinate_scale, height)))
+                    
+                    if roi.shape_type == "rectangle":
+                        draw.rectangle(
+                            [x1, y1, x2, y2],
+                            outline=roi_line_color,
+                            width=roi_line_thickness,
+                        )
+                    elif roi.shape_type == "ellipse":
+                        draw.ellipse(
+                            [x1, y1, x2, y2],
+                            outline=roi_line_color,
+                            width=roi_line_thickness,
+                        )
+                    
+                    # Draw ROI statistics text if available and visible
+                    if roi.statistics and roi.statistics_overlay_visible:
+                        _roi_font_family = config_manager.get_roi_font_family() if config_manager else "IBM Plex Sans"
+                        _roi_font_variant = config_manager.get_roi_font_variant() if config_manager else "Bold"
+                        roi_font = _load_font_with_fallback(
+                            roi_font_size,
+                            variant=_roi_font_variant,
+                            font_family=_roi_font_family,
+                        )
+                        if roi_font:
+                            stats_lines = []
+                            if "mean" in roi.visible_statistics and "mean" in roi.statistics:
+                                stats_lines.append(f"Mean: {roi.statistics['mean']:.2f}")
+                            if "std" in roi.visible_statistics and "std" in roi.statistics:
+                                stats_lines.append(f"Std Dev: {roi.statistics['std']:.2f}")
+                            if "min" in roi.visible_statistics and "min" in roi.statistics:
+                                stats_lines.append(f"Min: {roi.statistics['min']:.2f}")
+                            if "max" in roi.visible_statistics and "max" in roi.statistics:
+                                stats_lines.append(f"Max: {roi.statistics['max']:.2f}")
+                            if "area" in roi.visible_statistics and "area" in roi.statistics:
+                                stats_lines.append(f"Area: {roi.statistics['area']:.2f}")
+                            if "count" in roi.visible_statistics and "count" in roi.statistics:
+                                stats_lines.append(f"Count: {int(roi.statistics['count'])}")
+                            if stats_lines:
+                                stats_text = "\n".join(stats_lines)
+                                text_x = int(x2 + 5)
+                                text_y = int(y1 + 5)
+                                draw.text(
+                                    (text_x, text_y),
+                                    stats_text,
+                                    fill=roi_font_color,
+                                    font=roi_font,
+                                )
         
         # Draw measurements (coordinates by coordinate_scale; line/font from formula)
         if export_study_uid and export_series_uid and slice_index is not None:
@@ -1266,17 +1288,30 @@ class ExportManager:
                 measurement_line_thickness = max(2, measurement_line_thickness)
                 for measurement in measurements:
                     start_x = int(measurement.start_point.x() * coordinate_scale)
-                start_y = int(measurement.start_point.y() * coordinate_scale)
-                end_x = int((measurement.start_point.x() + measurement.end_relative.x()) * coordinate_scale)
-                end_y = int((measurement.start_point.y() + measurement.end_relative.y()) * coordinate_scale)
-                draw.line([(start_x, start_y), (end_x, end_y)], fill=measurement_line_color, width=measurement_line_thickness)
-                mid_x = int((start_x + end_x) / 2)
-                mid_y = int((start_y + end_y) / 2)
-                _meas_font_family = config_manager.get_measurement_font_family() if config_manager else "IBM Plex Sans"
-                _meas_font_variant = config_manager.get_measurement_font_variant() if config_manager else "Bold"
-                measurement_font = _load_font_with_fallback(measurement_font_size, variant=_meas_font_variant, font_family=_meas_font_family)
-                if measurement_font:
-                    draw.text((mid_x, mid_y), measurement.distance_formatted, fill=measurement_font_color, font=measurement_font)
+                    start_y = int(measurement.start_point.y() * coordinate_scale)
+                    end_x = int((measurement.start_point.x() + measurement.end_relative.x()) * coordinate_scale)
+                    end_y = int((measurement.start_point.y() + measurement.end_relative.y()) * coordinate_scale)
+                    draw.line(
+                        [(start_x, start_y), (end_x, end_y)],
+                        fill=measurement_line_color,
+                        width=measurement_line_thickness,
+                    )
+                    mid_x = int((start_x + end_x) / 2)
+                    mid_y = int((start_y + end_y) / 2)
+                    _meas_font_family = config_manager.get_measurement_font_family() if config_manager else "IBM Plex Sans"
+                    _meas_font_variant = config_manager.get_measurement_font_variant() if config_manager else "Bold"
+                    measurement_font = _load_font_with_fallback(
+                        measurement_font_size,
+                        variant=_meas_font_variant,
+                        font_family=_meas_font_family,
+                    )
+                    if measurement_font:
+                        draw.text(
+                            (mid_x, mid_y),
+                            measurement.distance_formatted,
+                            fill=measurement_font_color,
+                            font=measurement_font,
+                        )
         
         # Draw text annotations for this slice (formula-based font size; coordinates scaled by coordinate_scale)
         if export_study_uid and export_series_uid and slice_index is not None and config_manager:

@@ -24,7 +24,7 @@ from pydicom.dataset import Dataset
 from core.multiframe_handler import is_multiframe
 
 # Track files that have shown compression errors (suppress redundant messages)
-_compression_error_files: set = set()
+_compression_error_files: set[str] = set()
 
 
 def handle_planar_configuration(pixel_array: np.ndarray, dataset: Dataset) -> np.ndarray:

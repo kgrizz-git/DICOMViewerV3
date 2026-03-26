@@ -61,7 +61,7 @@ class DICOMProcessor:
     """
     
     # Class-level set to track files that have shown compression errors (to suppress redundant messages)
-    _compression_error_files: set = set()
+    _compression_error_files: set[str] = set()
     
     @staticmethod
     def get_rescale_parameters(dataset: Dataset) -> Tuple[Optional[float], Optional[float], Optional[str]]:
@@ -292,6 +292,8 @@ class DICOMProcessor:
                     red_lut = None
                     green_lut = None
                     blue_lut = None
+                    # Ensure this is always defined even if palette descriptors are missing.
+                    first_value = 0
                     
                     if hasattr(dataset, 'RedPaletteColorLookupTableDescriptor'):
                         # Get descriptor to determine LUT size and first value
