@@ -9,25 +9,20 @@ Mixin contract:
     the concrete ConfigManager class that inherits this mixin.
 """
 
-from typing import List, Literal, Optional, Tuple
-
-LayoutMode = Literal["1x1", "1x2", "2x1", "2x2"]
+from typing import List, Optional, Tuple
 
 
 class LayoutConfigMixin:
     """Config mixin: multi-window layout mode and 2x2 view-slot order."""
 
-    def get_multi_window_layout(self) -> LayoutMode:
+    def get_multi_window_layout(self) -> str:
         """
         Get the multi-window layout mode.
 
         Returns:
             Layout mode ("1x1", "1x2", "2x1", or "2x2")
         """
-        raw = self.config.get("multi_window_layout", "1x1")
-        if raw in ("1x1", "1x2", "2x1", "2x2"):
-            return raw
-        return "1x1"
+        return self.config.get("multi_window_layout", "1x1")
 
     def set_multi_window_layout(self, layout_mode: str) -> None:
         """

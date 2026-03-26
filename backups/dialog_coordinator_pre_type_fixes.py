@@ -16,7 +16,7 @@ Requirements:
     - ConfigManager for configuration
 """
 
-from typing import Optional, Callable, Any, Dict, Tuple
+from typing import Optional, Callable, Any, Dict
 from gui.dialogs.settings_dialog import SettingsDialog
 from gui.dialogs.overlay_settings_dialog import OverlaySettingsDialog
 from gui.dialogs.tag_viewer_dialog import TagViewerDialog
@@ -83,18 +83,10 @@ class DialogCoordinator:
         self.undo_redo_manager = undo_redo_manager
         self.ui_refresh_callback = ui_refresh_callback
         self.overlay_config_applied_callback = overlay_config_applied_callback
-        self.annotation_options_applied_callback: Optional[Callable[[], None]] = None
+        self.annotation_options_applied_callback = None  # Will be set from main.py
         self.tag_edit_history = tag_edit_history
-        self.tag_edited_callback: Optional[Callable[[str, Any], None]] = None
-        self.undo_redo_callbacks: Optional[
-            Tuple[
-                Callable[[], None],
-                Callable[[], None],
-                Callable[[], bool],
-                Callable[[], bool],
-            ]
-        ] = None
-
+        self.tag_edited_callback = None  # Will be set from main.py to handle tag edits
+        
         # Per-subwindow histogram dialogs (up to 4, keyed by subwindow index)
         self.get_histogram_callbacks_for_subwindow = get_histogram_callbacks_for_subwindow
         self.get_focused_subwindow_index = get_focused_subwindow_index
