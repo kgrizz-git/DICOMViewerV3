@@ -147,8 +147,8 @@ class ImageViewer(QGraphicsView):
         # This ensures small images are centered, not positioned at top-left
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
-        # Create graphics scene (annotated so type checkers prefer this over QGraphicsView.scene())
-        self.scene: QGraphicsScene = QGraphicsScene(self)
+        # Create graphics scene
+        self.scene = QGraphicsScene(self)
         self.setScene(self.scene)
         
         # Enable mouse tracking for hover events (pixel info updates)

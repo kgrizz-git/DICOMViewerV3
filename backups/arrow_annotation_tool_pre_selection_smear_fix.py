@@ -36,10 +36,6 @@ from utils.debug_flags import DEBUG_ANNOTATION
 ARROWHEAD_SIZE_MULTIPLIER = 3.5
 # Viewport pixels the line extends under the arrowhead to hide anti-aliasing seam
 ARROW_LINE_OVERLAP_VIEWPORT_PX = 3
-# Selected-state dashed outline in paint(); must be covered by boundingRect() or Graphics View
-# leaves yellow dash fragments on the image while dragging (Qt QGraphicsItem contract).
-_SELECTION_OUTLINE_PEN_WIDTH = 2.0
-_SELECTION_BOUNDS_INFLATE = 3.0  # ~half cosmetic stroke + slack for dash pattern/caps
 
 
 class ArrowHeadItem(QGraphicsPathItem):
@@ -185,22 +181,7 @@ class ArrowAnnotationItem(QGraphicsItemGroup):
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemSendsGeometryChanges, True)
-
-    def boundingRect(self) -> QRectF:
-        """Include full painted region: children plus dashed selection stroke hull when selected."""
-        rect = self.childrenBoundingRect()
-        if rect.isNull() or (rect.width() <= 0 and rect.height() <= 0):
-            rect = QRectF(0.0, 0.0, 1.0, 1.0)
-        if self.isSelected():
-            hull_path = self._selection_hull_path()
-            hull_bounds = hull_path.boundingRect()
-            if not hull_bounds.isNull():
-                inflate = _SELECTION_OUTLINE_PEN_WIDTH / 2.0 + _SELECTION_BOUNDS_INFLATE
-                rect = rect.united(
-                    hull_bounds.adjusted(-inflate, -inflate, inflate, inflate)
-                )
-        return rect
-
+    
     def update_endpoints(self, start_point: QPointF, end_point: QPointF) -> None:
         """
         Update arrow endpoints.
@@ -209,7 +190,6 @@ class ArrowAnnotationItem(QGraphicsItemGroup):
             start_point: New start point (scene coordinates)
             end_point: New end point (scene coordinates)
         """
-        self.prepareGeometryChange()
         self.start_point = start_point
         self.end_point = end_point
         
@@ -275,7 +255,6 @@ class ArrowAnnotationItem(QGraphicsItemGroup):
             line_end = QPointF(dx - unit_x * pullback, dy - unit_y * pullback)
         else:
             line_end = _line_end_shortened(relative_end)
-        self.prepareGeometryChange()
         self.line_item.setLine(QLineF(QPointF(0, 0), line_end))
     
     def update_line_end_for_view_scale(self, view: Optional[object] = None) -> None:
@@ -296,12 +275,9 @@ class ArrowAnnotationItem(QGraphicsItemGroup):
         Returns:
             Modified value
         """
-        if change == QGraphicsItem.GraphicsItemChange.ItemSelectedChange:
-            self.prepareGeometryChange()
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionChange:
             # When group is moved, update start and end points
             if not self._updating_position:
-                self.prepareGeometryChange()
                 new_pos = value
                 old_pos = self.pos()
                 delta = new_pos - old_pos
@@ -405,9 +381,7 @@ class ArrowAnnotationItem(QGraphicsItemGroup):
             return
 
         painter.save()
-        outline_pen = QPen(QColor(255, 255, 0))
-        outline_pen.setStyle(Qt.PenStyle.DashLine)
-        outline_pen.setWidthF(_SELECTION_OUTLINE_PEN_WIDTH)
+        outline_pen = QPen(QColor(255, 255, 0), 2, Qt.PenStyle.DashLine)
         outline_pen.setCosmetic(True)
         painter.setPen(outline_pen)
         painter.setBrush(Qt.BrushStyle.NoBrush)
@@ -777,7 +751,6 @@ class ArrowAnnotationTool:
         
         for key, arrow_list in self.arrows.items():
             for arrow in arrow_list:
-                arrow.prepareGeometryChange()
                 arrow.line_item.setPen(pen)
                 arrow.arrowhead_item.set_color(color)
                 arrow.color = color

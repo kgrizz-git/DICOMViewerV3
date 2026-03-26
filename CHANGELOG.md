@@ -5,11 +5,14 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ## [Unreleased]
 
 ### Fixed
-- **Arrow annotation selection**: Selected arrows use a tight dashed yellow outline drawn from the visible shaft and mapped arrowhead path instead of Qt’s default selection frame, avoiding white “smear” lines left on the image while dragging.
+- **Arrow annotation selection**: Selected arrows use a tight dashed yellow outline drawn from the visible shaft and mapped arrowhead path instead of Qt’s default selection frame (avoids Qt’s default selection box). When selected, `boundingRect()` unions the dashed-outline hull with pen margin and `prepareGeometryChange()` runs on selection, moves, and endpoint updates so Graphics View repaints the full stroke region, eliminating yellow dashed outline pixel trails while dragging (`src/tools/arrow_annotation_tool.py`).
+- **Pyright type warnings**: Resolved Pyright typing diagnostics in `src/main.py` by tightening Qt/viewer typing, optional narrowing, and callback/slot contracts.
 
 ### Changed
+- **Docs**: `AGENTS.md` notes a ~10 minute ceiling for long-running automation commands (e.g. full-tree typecheck or full test suite) when appropriate.
 - **Fusion debug logging**: Console prints from `fusion_coordinator.get_fused_image`, overlay series auto window/level setup, and `fusion_processor.create_fusion_image` (spacing, scaling, translation, normalized overlay stats) are gated behind `DEBUG_OFFSET` in `utils/debug_flags.py` (default `False`), consistent with `fusion_controls_widget` offset tracing.
 - **Docs**: `AGENTS.md` and `README.md` now document virtual environments under `venv`, `.venv`, and other common folder names, consistent with `launch.bat` resolution order.
+- **Pyright venv config**: `pyrightconfig.json` now points to `.venv` (instead of `venv`) so local type-check runs use the intended environment.
 - **launch.bat**: When no virtual environment is found, the launcher briefly explains what a venv is, why it helps, that using one is recommended but optional, and that system Python remains available. Also resolves an existing environment under the project root in order: `venv`, `.venv`, `env`, `virtualenv` (each must contain `Scripts\activate.bat`). Create/setup still targets `venv` by default when missing.
 - **Docs**: `requirements.txt` and `README.md` note that Windows installs work best on Python **3.11/3.12** (pre-built wheels for `pyjpegls`); **3.14** may require MSVC Build Tools to compile `pyjpegls`, and Parallels + `\\Mac\Home\...` paths can complicate venv/pip.
 - **Security tooling docs/setup**: `dev-docs/SECURITY_TOOLS_CLI_GUIDE.md`, `README.md`, and `AGENTS.md` now treat TruffleHog **v3 binary install** as the recommended local path (matching CI) and keep `requirements-dev.txt` focused on Python-installable scanners (`semgrep`, `detect-secrets`).

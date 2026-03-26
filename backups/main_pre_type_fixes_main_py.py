@@ -34,7 +34,7 @@ sys.path.insert(0, str(src_dir))
 from PySide6.QtWidgets import QApplication, QMessageBox, QStyleFactory
 from PySide6.QtCore import Qt, QPointF, QObject, QTimer, QRectF, QSize
 from PySide6.QtGui import QKeyEvent
-from typing import Any, Optional, Dict, List, Tuple, cast
+from typing import Optional, Dict, List, Tuple
 import pydicom
 from pydicom.dataset import Dataset
 
@@ -67,7 +67,7 @@ from core.dicom_processor import DICOMProcessor
 from core.tag_edit_history import TagEditHistoryManager
 from utils.config_manager import ConfigManager
 from utils.dicom_utils import get_composite_series_key
-from tools.roi_manager import ROIManager, ROIItem
+from tools.roi_manager import ROIManager
 from tools.measurement_tool import MeasurementTool
 from tools.crosshair_manager import CrosshairManager
 from tools.annotation_manager import AnnotationManager
@@ -116,9 +116,7 @@ class DICOMViewerApp(QObject):
     
     Coordinates all components and handles application logic.
     """
-
-    app: QApplication
-
+    
     def __init__(self):
         """
         Initialize the DICOM Viewer application.
@@ -177,8 +175,7 @@ class DICOMViewerApp(QObject):
         if existing_app is None:
             self.app = QApplication(sys.argv)
         else:
-            # Reuse existing app (tests / embedded); instance() is typed as QCoreApplication.
-            self.app = cast(QApplication, existing_app)
+            self.app = existing_app
         self.app.setApplicationName("DICOM Viewer V3")
         self.app.setStyle(QStyleFactory.create("Fusion"))
 
@@ -536,15 +533,9 @@ class DICOMViewerApp(QObject):
             get_current_slice_index=lambda i=idx: self._get_subwindow_slice_index(i),
             get_rescale_params=self._get_rescale_params,
             set_mouse_mode_callback=self._set_mouse_mode_via_handler,
-            get_projection_enabled=lambda i=idx: (
-                m.projection_enabled if (m := self._get_subwindow_slice_display_manager(i)) else False
-            ),
-            get_projection_type=lambda i=idx: (
-                m.projection_type if (m := self._get_subwindow_slice_display_manager(i)) else "aip"
-            ),
-            get_projection_slice_count=lambda i=idx: (
-                m.projection_slice_count if (m := self._get_subwindow_slice_display_manager(i)) else 4
-            ),
+            get_projection_enabled=lambda i=idx: (self._get_subwindow_slice_display_manager(i).projection_enabled if self._get_subwindow_slice_display_manager(i) else False),
+            get_projection_type=lambda i=idx: (self._get_subwindow_slice_display_manager(i).projection_type if self._get_subwindow_slice_display_manager(i) else "aip"),
+            get_projection_slice_count=lambda i=idx: (self._get_subwindow_slice_display_manager(i).projection_slice_count if self._get_subwindow_slice_display_manager(i) else 4),
             get_current_studies=lambda: self.current_studies,
             undo_redo_manager=self.undo_redo_manager,
             update_undo_redo_state_callback=self._update_undo_redo_state,
@@ -786,13 +777,7 @@ class DICOMViewerApp(QObject):
                     self.main_window.image_viewer = self.image_viewer
             else:
                 raise RuntimeError("No subwindow managers available. Cannot initialize handlers.")
-
-        if self.image_viewer is None:
-            raise RuntimeError(
-                "image_viewer must be set before initializing handlers that require a focused viewer."
-            )
-        focused_image_viewer = self.image_viewer
-
+        
         # Initialize file/series loading coordinator (owns load-first-slice and open entry points)
         self._file_series_coordinator = FileSeriesLoadingCoordinator(self)
         # Initialize FileOperationsHandler (shared, not per-subwindow)
@@ -853,7 +838,7 @@ class DICOMViewerApp(QObject):
         
         # Initialize MouseModeHandler
         self.mouse_mode_handler = MouseModeHandler(
-            focused_image_viewer,
+            self.image_viewer,
             self.main_window,
             self.slice_navigator,
             self.config_manager
@@ -891,19 +876,19 @@ class DICOMViewerApp(QObject):
             self.measurement_tool,
             self.slice_navigator,
             self.overlay_manager,
-            focused_image_viewer,
+            self.image_viewer,
             set_mouse_mode=self.mouse_mode_handler.set_mouse_mode,
             delete_all_rois_callback=self.roi_coordinator.delete_all_rois_current_slice,
             clear_measurements_callback=self.measurement_coordinator.handle_clear_measurements,
             toggle_overlay_callback=self.overlay_coordinator.handle_toggle_overlay,
             get_selected_roi=lambda: self.roi_manager.get_selected_roi(),
-            delete_roi_callback=self._keyboard_delete_roi,
+            delete_roi_callback=lambda roi: self.roi_coordinator.handle_roi_delete_requested(roi.item) if (hasattr(roi, 'item') and roi.item is not None) else (self.roi_manager.delete_roi(roi, self.image_viewer.scene) if roi else None),
             delete_measurement_callback=self.measurement_coordinator.handle_measurement_delete_requested,
             update_roi_list_callback=self._update_roi_list,
             clear_roi_statistics_callback=self.roi_statistics_panel.clear_statistics,
             reset_view_callback=self.view_state_manager.reset_view,
             toggle_series_navigator_callback=self.main_window.toggle_series_navigator,
-            invert_image_callback=focused_image_viewer.invert_image,
+            invert_image_callback=self.image_viewer.invert_image,
             open_histogram_callback=self.dialog_coordinator.open_histogram,
             reset_all_views_callback=self._on_reset_all_views,
             toggle_privacy_view_callback=lambda enabled: self._on_privacy_view_toggled(enabled),
@@ -914,16 +899,7 @@ class DICOMViewerApp(QObject):
             is_focus_ok_for_reset_view=lambda: self._is_widget_allowed_for_layout_shortcuts(QApplication.focusWidget()),
             open_quick_window_level_callback=self._open_quick_window_level,
         )
-
-    def _keyboard_delete_roi(self, roi: object) -> None:
-        """Delete ROI invoked from keyboard; supports wrapper objects with .item or bare ROIItem."""
-        item = getattr(roi, "item", None)
-        if item is not None:
-            self.roi_coordinator.handle_roi_delete_requested(item)
-            return
-        if roi is not None and self.image_viewer is not None:
-            self.roi_manager.delete_roi(cast(ROIItem, roi), self.image_viewer.scene)
-
+    
     def _clear_data(self) -> None:
         """Clear all ROIs, measurements, and related data for all subwindows."""
         # Clear slice_display_manager state for all subwindows so no stale cached state
@@ -2687,7 +2663,7 @@ class DICOMViewerApp(QObject):
                 if idx in self.subwindow_data:
                     data = self.subwindow_data[idx]
                     dataset = data.get('current_dataset')
-                    if dataset is not None and slice_display_manager is not None:
+                    if dataset is not None:
                         # Redisplay the slice to apply the reset
                         slice_display_manager.display_slice(
                             dataset,
@@ -2817,10 +2793,9 @@ class DICOMViewerApp(QObject):
                 self.window_level_controls.set_window_level(wc, ww, block_signals=False)
                 
                 # Update status bar widget
-                if self.image_viewer is not None:
-                    current_zoom = self.image_viewer.current_zoom
-                    preset_display_name = preset_name if preset_name else "Default"
-                    self.main_window.update_zoom_preset_status(current_zoom, preset_display_name)
+                current_zoom = self.image_viewer.current_zoom
+                preset_display_name = preset_name if preset_name else "Default"
+                self.main_window.update_zoom_preset_status(current_zoom, preset_display_name)
                 
                 # Reset user-modified flag since we're using a preset
                 self.view_state_manager.window_level_user_modified = False
@@ -2830,7 +2805,7 @@ class DICOMViewerApp(QObject):
         Update the zoom and preset status bar widget.
         Gets current zoom and preset info from view_state_manager.
         """
-        current_zoom = self.image_viewer.current_zoom if self.image_viewer is not None else 1.0
+        current_zoom = self.image_viewer.current_zoom
         preset_name = None
         
         # Check if presets exist and user hasn't manually modified window/level
@@ -3033,8 +3008,7 @@ class DICOMViewerApp(QObject):
         # Enable/disable cine controls
         self.cine_controls_widget.set_controls_enabled(is_cine_capable)
         # Also enable/disable cine controls in context menu
-        if self.image_viewer is not None:
-            self.image_viewer.set_cine_controls_enabled(is_cine_capable)
+        self.image_viewer.set_cine_controls_enabled(is_cine_capable)
         
         # Update frame slider with current frame and total frames
         if is_cine_capable:
