@@ -25,17 +25,20 @@ Requirements:
 
 from __future__ import annotations
 
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 from pydicom.dataset import Dataset
 
+sitk: Any = None
+sitk_available: bool = False
 try:
-    import SimpleITK as sitk
-    _SITK_AVAILABLE = True
+    import SimpleITK as _sitk
+
+    sitk = _sitk
+    sitk_available = True
 except ImportError:
-    _SITK_AVAILABLE = False
-    sitk = None  # type: ignore
+    pass
 
 from core.slice_geometry import SlicePlane, SliceStack
 from utils.dicom_utils import (
@@ -200,7 +203,7 @@ class MprVolume:
 
     def __init__(
         self,
-        sitk_image: "sitk.Image",
+        sitk_image: Any,
         source_datasets: List[Dataset],
         slice_stack: SliceStack,
         pixel_spacing_mm: Tuple[float, float],
@@ -254,7 +257,7 @@ class MprVolume:
         Raises:
             MprVolumeError: if the volume cannot be built.
         """
-        if not _SITK_AVAILABLE:
+        if not sitk_available:
             raise MprVolumeError(
                 "SimpleITK is not installed. MPR requires SimpleITK."
             )
@@ -393,7 +396,7 @@ class MprVolume:
         Returns:
             True if MPR should be possible, False otherwise.
         """
-        if not _SITK_AVAILABLE:
+        if not sitk_available:
             return False
         if len(datasets) < 1:
             return False
@@ -415,7 +418,7 @@ class MprVolume:
         sorted_datasets: List[Dataset],
         sorted_positions: List[float],
         tolerance_mm: float = 0.01,
-    ) -> Tuple[List[Dataset], List[float], dict]:
+    ) -> Tuple[List[Dataset], List[float], Dict[int, np.ndarray]]:
         """
         Deduplicate an already-sorted dataset list by position.
 
@@ -448,7 +451,7 @@ class MprVolume:
         # averaged_arrays: maps id(dataset) -> pre-averaged float32 ndarray for
         # groups that were merged.  Single-slice groups have no entry (use pixel_array
         # as normal).  Passed back to the caller so _build_sitk_image can use them.
-        averaged_arrays: dict = {}
+        averaged_arrays: Dict[int, np.ndarray] = {}
 
         def _flush_group(ds_group: List[Dataset], pos: float) -> None:
             rep = ds_group[0]
@@ -477,8 +480,8 @@ class MprVolume:
         sorted_datasets: List[Dataset],
         stack: SliceStack,
         pixel_spacing_mm: Tuple[float, float],
-        averaged_arrays: Optional[dict] = None,
-    ) -> "sitk.Image":
+        averaged_arrays: Optional[Dict[int, np.ndarray]] = None,
+    ) -> Any:
         """
         Build a SimpleITK image from sorted, deduplicated datasets.
 

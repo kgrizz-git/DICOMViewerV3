@@ -29,7 +29,7 @@ Requirements:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 from PIL import Image
@@ -141,10 +141,6 @@ def _mpr_log(message: str) -> None:
     if DEBUG_MPR:
         print(f"[DEBUG-MPR] {message}")
 
-if TYPE_CHECKING:
-    from main import DICOMViewerApp
-
-
 class MprController(QObject):
     """
     Manages MPR view state and lifecycle for all subwindows.
@@ -159,7 +155,7 @@ class MprController(QObject):
         mpr_slice_index (int):   Current MPR stack index (0-based).
     """
 
-    def __init__(self, app: "DICOMViewerApp") -> None:
+    def __init__(self, app: Any) -> None:
         """
         Args:
             app: The DICOMViewerApp instance (provides access to all
@@ -870,7 +866,7 @@ class MprController(QObject):
             pass
         return None
 
-    def _collect_loaded_series(self) -> dict:
+    def _collect_loaded_series(self) -> Dict[str, Dict[str, Any]]:
         """
         Build the ``loaded_series`` dict required by MprDialog.
 
@@ -881,9 +877,9 @@ class MprController(QObject):
             Dict with keys: "description", "modality", "n_slices",
             "study_uid", "datasets".
         """
-        result: dict = {}
+        result: Dict[str, Dict[str, Any]] = {}
         try:
-            current_studies: dict = self._app.current_studies
+            current_studies = self._app.current_studies
         except AttributeError:
             return result
 
