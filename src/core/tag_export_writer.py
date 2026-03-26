@@ -48,7 +48,9 @@ def write_excel_file(
         )
 
     wb = Workbook()
-    wb.remove(wb.active)  # Remove default sheet
+    default_ws = wb.active
+    if default_ws is not None:
+        wb.remove(default_ws)  # Remove default sheet
 
     # Create one sheet per study
     for study_uid, series_dict in selected_series.items():

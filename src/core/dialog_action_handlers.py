@@ -8,6 +8,11 @@ replacing ``self`` throughout.
 
 from __future__ import annotations
 
+# Pyright follows TYPE_CHECKING imports and can report a false-positive cycle here:
+# dialog_action_handlers -> main -> dialog_action_handlers (analysis-only).
+# Runtime keeps the import inside TYPE_CHECKING, so no circular import occurs at execution.
+# pyright: reportImportCycles=false
+
 from typing import TYPE_CHECKING
 
 from gui.dialogs.quick_window_level_dialog import QuickWindowLevelDialog

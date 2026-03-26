@@ -1,7 +1,7 @@
 # Quality Improvement Assessment Template - [PROJECT_NAME]
 
 **Template Version**: 2.0  
-**Last Updated**: 2026-02-18
+**Last Updated**: 2026-03-25
 
 ## Purpose
 
@@ -100,6 +100,10 @@ This approach ensures:
    - Assess implementation difficulty (EASY, MODERATE, DIFFICULT, VERY DIFFICULT)
    - Consider impact vs. effort
 
+6. **Static type checking (Python — Pyright / Based Pyright)**:
+   - For Python projects, run Pyright or Based Pyright over `src/` and `tests/` as described in **Step 2, section 2.0** below.
+   - Save full CLI output under `dev-docs/code-assessments/pyright-<timestamp>.txt` and add a short summary (≤10 lines) to the timestamped QI assessment markdown (see **Assessment Results Template → Pyright / Based Pyright summary**).
+
 ---
 
 ## Assessment Methodology
@@ -120,6 +124,78 @@ This approach ensures:
 ### Step 2: Error Detection
 
 For each code file, check for:
+
+#### 2.0: Static type checking — Pyright / Based Pyright (Python)
+
+For Python codebases, run the type checker on **`src`** and **`tests`** so every included file in those trees is analyzed (Pyright follows imports and `pyrightconfig.json`).
+
+1. **Install dev dependencies** (includes the Based Pyright CLI):
+
+   From the **project repository root**, with the project virtual environment activated:
+
+   ```bash
+   pip install -r requirements-dev.txt
+   ```
+
+   (`basedpyright` is listed there; it bundles a Node-based Pyright build.)
+
+2. **Run from the virtual environment `Scripts` folder (Windows) or `bin` (macOS/Linux)**:
+
+   Run commands from the **repository root** so `pyrightconfig.json` is picked up. Either **activate** the venv (which puts the type checker on `PATH`) or call the executable by path. If the env folder is not `.venv`, substitute your folder name (e.g. `venv`).
+
+   - **Windows (PowerShell), repository root** — activate then run:
+
+     ```powershell
+     .\.venv\Scripts\Activate.ps1
+     basedpyright src tests
+     ```
+
+     Or **without** activating, invoke the executable in `Scripts` explicitly:
+
+     ```powershell
+     .\.venv\Scripts\basedpyright.exe src tests
+     ```
+
+   - **macOS / Linux, repository root**:
+
+     ```bash
+     source .venv/bin/activate
+     basedpyright src tests
+     ```
+
+     Or: `./.venv/bin/basedpyright src tests`
+
+   Equivalent alternative (after activation): `python -m basedpyright src tests`
+
+3. **Capture full output to `dev-docs/code-assessments`**:
+
+   Create `dev-docs/code-assessments` if it does not exist. Use a **timestamped** log file name: `pyright-<timestamp>.txt` (recommended timestamp format: `YYYY-MM-DD-HHmmss`).
+
+   - **PowerShell** (repository root; writes log and still prints to console):
+
+     ```powershell
+     $ts = Get-Date -Format 'yyyy-MM-dd-HHmmss'
+     basedpyright src tests 2>&1 | Tee-Object -FilePath "dev-docs\code-assessments\pyright-$ts.txt"
+     ```
+
+   - **PowerShell** (log only):
+
+     ```powershell
+     $ts = Get-Date -Format 'yyyy-MM-dd-HHmmss'
+     .\.venv\Scripts\basedpyright.exe src tests *> "dev-docs\code-assessments\pyright-$ts.txt"
+     ```
+
+   - **Bash**:
+
+     ```bash
+     ts=$(date +%Y-%m-%d-%H%M%S)
+     mkdir -p dev-docs/code-assessments
+     basedpyright src tests 2>&1 | tee "dev-docs/code-assessments/pyright-${ts}.txt"
+     ```
+
+4. **Record a short summary in the QI assessment** (the timestamped copy of this template):
+
+   In the **Pyright / Based Pyright summary** section, add **no more than 10 lines**: e.g. date/time of run, exact command, link or filename of the full log under `dev-docs/code-assessments/`, counts of errors/warnings (if shown), exit code, and one or two high-level takeaways. Do not paste the entire log into the assessment file — keep the authoritative detail in `pyright-<timestamp>.txt`.
 
 #### 2.1: Repeated Lines or Sections
 
@@ -292,9 +368,11 @@ When evaluating each finding, consider:
 - [ ] List all code files to analyze (root, `src/`, `lib/`, `utils/`, `scripts/`, etc.)
 - [ ] **Exclude backup files** (files with "backup", "_BAK", ".bak" in name or in backup folders)
 - [ ] Set up analysis environment
+- [ ] **Python**: Install dev tools — `pip install -r requirements-dev.txt` (includes Based Pyright CLI)
 
 ### Error Detection
 
+- [ ] **Python**: Run `basedpyright` (or `pyright`) on `src` and `tests` from repo root; save full output to `dev-docs/code-assessments/pyright-<timestamp>.txt`; add ≤10-line summary to the assessment file (Step 2.0)
 - [ ] Check all files for repeated lines/sections
 - [ ] Check all files for garbled code
 - [ ] Check all files for undefined variables
@@ -354,6 +432,16 @@ Use this structure in your timestamped assessment file:
 | File | Location | Lines | Language | Status | Issues Found | Improvements Suggested |
 |------|----------|-------|----------|--------|--------------|------------------------|
 | filename.ext | path/to/file | XXX | [Language] | Analyzed | X | Y |
+
+## Pyright / Based Pyright summary
+
+<!-- Maximum 10 lines below. Full CLI output: dev-docs/code-assessments/pyright-<timestamp>.txt -->
+
+- **Log file**: `dev-docs/code-assessments/pyright-[timestamp].txt`
+- **Command**: [e.g. basedpyright src tests]
+- **Exit code**: [e.g. 0 / 1]
+- **Errors / warnings (summary)**: [e.g. N errors, M warnings — or “see log”]
+- **Notes**: [1–6 short bullets on top categories or next steps]
 
 ## Error Detection Results
 
@@ -601,6 +689,6 @@ The following files were analyzed and found to be in good condition with minimal
 
 ## Template Version
 
-- **Version**: 1.0
+- **Version**: 2.0
 - **Created**: 2026-01-22
-- **Last Updated**: 2026-01-22
+- **Last Updated**: 2026-03-25

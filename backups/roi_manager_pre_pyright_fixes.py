@@ -20,18 +20,14 @@ Requirements:
 
 import math
 
-from PySide6.QtWidgets import (QGraphicsEllipseItem, QGraphicsRectItem, QGraphicsItem,
-                               QGraphicsTextItem, QGraphicsSceneMouseEvent, QGraphicsScene)
+from PySide6.QtWidgets import (QGraphicsEllipseItem, QGraphicsRectItem, QGraphicsItem, 
+                               QGraphicsTextItem, QGraphicsSceneMouseEvent)
 from PySide6.QtCore import Qt, QRectF, QPointF
-from PySide6.QtGui import QPen, QColor, QTransform, QPainterPath, QPainterPathStroker
+from PySide6.QtGui import QPen, QColor, QFont, QTransform, QPainterPath, QPainterPathStroker
 from typing import List, Optional, Tuple, Dict, Set, Callable
 import numpy as np
-
+from PIL import Image
 from utils.bundled_fonts import make_qfont
-from utils.config_manager import ConfigManager
-
-# Statistics payloads use int for pixel counts and None for optional area in mm².
-RoiStatisticsMap = dict[str, float | int | None]
 
 
 class ROIGraphicsEllipseItem(QGraphicsEllipseItem):
@@ -164,7 +160,7 @@ class DraggableStatisticsOverlay(QGraphicsTextItem):
             offset_update_callback: Callback to update offset when overlay is moved
         """
         super().__init__()
-        self.roi: ROIItem | None = roi
+        self.roi = roi
         self.offset_update_callback = offset_update_callback
         self._updating_position = False  # Flag to prevent recursive updates
         self._is_deleted = False  # Guard against events after removal
@@ -235,14 +231,6 @@ class DraggableStatisticsOverlay(QGraphicsTextItem):
         """Mark overlay as deleted to short-circuit event handling."""
         self._is_deleted = True
 
-    def clear_deleted_flag(self) -> None:
-        """Reset deleted guard when reusing an overlay in a new scene."""
-        self._is_deleted = False
-
-    def set_updating_position(self, updating: bool) -> None:
-        """Set flag to suppress offset callbacks during programmatic moves."""
-        self._updating_position = updating
-
 
 class ROIItem:
     """
@@ -288,13 +276,12 @@ class ROIItem:
         
         # Statistics overlay properties
         self.statistics_overlay_visible = True  # Default: show overlay
-        self.visible_statistics: Set[str] = (
-            default_visible_statistics.copy()
-            if default_visible_statistics is not None
-            else {"mean", "std", "min", "max", "count", "area"}
-        )
-        self.statistics_overlay_item: DraggableStatisticsOverlay | None = None
-        self.statistics: RoiStatisticsMap | None = None
+        if default_visible_statistics is not None:
+            self.visible_statistics: Set[str] = default_visible_statistics.copy()
+        else:
+            self.visible_statistics: Set[str] = {"mean", "std", "min", "max", "count", "area"}  # Default: show all
+        self.statistics_overlay_item: Optional[QGraphicsTextItem] = None
+        self.statistics: Optional[Dict[str, float]] = None
         self.statistics_overlay_offset: Tuple[float, float] = (5.0, 5.0)  # Offset from ROI bounds (viewport pixels)
         
         # Set up movement detection callback on the graphics item
@@ -395,7 +382,7 @@ class ROIManager:
     - Clear ROIs from slice or dataset
     """
     
-    def __init__(self, config_manager: ConfigManager | None = None) -> None:
+    def __init__(self, config_manager=None):
         """
         Initialize the ROI manager.
         
@@ -413,7 +400,7 @@ class ROIManager:
         self.current_roi_item: Optional[ROIItem] = None
         self.current_shape_type = "rectangle"  # "rectangle" or "ellipse"
         self.selected_roi: Optional[ROIItem] = None  # Currently selected ROI
-        self.config_manager: ConfigManager | None = config_manager
+        self.config_manager = config_manager
     
     def set_current_slice(self, study_uid: str, series_uid: str, instance_identifier: int) -> None:
         """
@@ -445,7 +432,7 @@ class ROIManager:
         self.current_shape_type = shape_type
         self.current_roi_item = None
     
-    def update_drawing(self, pos: QPointF, scene: QGraphicsScene) -> None:
+    def update_drawing(self, pos: QPointF, scene) -> None:
         """
         Update ROI while drawing.
         
@@ -593,7 +580,7 @@ class ROIManager:
                     return roi
         return None
     
-    def delete_roi(self, roi: ROIItem, scene: QGraphicsScene) -> bool:
+    def delete_roi(self, roi: ROIItem, scene) -> bool:
         """
         Delete a ROI.
         
@@ -645,8 +632,7 @@ class ROIManager:
         key = (study_uid, series_uid, instance_identifier)
         return self.rois.get(key, [])
     
-    def clear_slice_rois(self, study_uid: str, series_uid: str, instance_identifier: int,
-                         scene: QGraphicsScene) -> None:
+    def clear_slice_rois(self, study_uid: str, series_uid: str, instance_identifier: int, scene) -> None:
         """
         Clear all ROIs from a slice using composite key.
         
@@ -668,7 +654,7 @@ class ROIManager:
                 roi.statistics = None
             del self.rois[key]
     
-    def clear_all_rois(self, scene: QGraphicsScene) -> None:
+    def clear_all_rois(self, scene) -> None:
         """
         Clear all ROIs from all slices.
         
@@ -686,7 +672,7 @@ class ROIManager:
                 roi.statistics = None
         self.rois.clear()
     
-    def update_all_roi_styles(self, config_manager: ConfigManager | None) -> None:
+    def update_all_roi_styles(self, config_manager) -> None:
         """
         Update styles (pen color, thickness, font size, font color) for all existing ROIs.
         
@@ -737,7 +723,7 @@ class ROIManager:
     def calculate_statistics(self, roi: ROIItem, pixel_array: np.ndarray, 
                             rescale_slope: Optional[float] = None,
                             rescale_intercept: Optional[float] = None,
-                            pixel_spacing: Optional[Tuple[float, float]] = None) -> RoiStatisticsMap:
+                            pixel_spacing: Optional[Tuple[float, float]] = None) -> Dict[str, float]:
         """
         Calculate statistics for an ROI.
         
@@ -835,9 +821,8 @@ class ROIManager:
         
         return stats
     
-    def create_statistics_overlay(self, roi: ROIItem, statistics: RoiStatisticsMap,
-                                  scene: QGraphicsScene, font_size: Optional[int] = None,
-                                  font_color: Optional[Tuple[int, int, int]] = None,
+    def create_statistics_overlay(self, roi: ROIItem, statistics: Dict[str, float], 
+                                  scene, font_size: Optional[int] = None, font_color: Optional[Tuple[int, int, int]] = None,
                                   rescale_type: Optional[str] = None) -> None:
         """
         Create or update statistics overlay text item for an ROI.
@@ -852,13 +837,11 @@ class ROIManager:
         """
         # Get font size and color from config if not provided
         if font_size is None:
-            if self.config_manager is not None:
-                resolved_font_size: int = self.config_manager.get_roi_font_size()
+            if self.config_manager:
+                font_size = self.config_manager.get_roi_font_size()
             else:
-                resolved_font_size = 6  # Default
-        else:
-            resolved_font_size = font_size
-
+                font_size = 6  # Default
+        
         if font_color is None:
             if self.config_manager:
                 font_color = self.config_manager.get_roi_font_color()
@@ -916,18 +899,20 @@ class ROIManager:
                 old_scene.removeItem(text_item)
             text_item.roi = roi
             text_item.offset_update_callback = update_offset
-            text_item.clear_deleted_flag()
+            if hasattr(text_item, '_is_deleted'):
+                text_item._is_deleted = False
         text_item.setDefaultTextColor(QColor(*font_color))
         
         # Set font - use absolute pixel size
-        if resolved_font_size < 6:
+        if font_size < 6:
             font = make_qfont(font_family, font_variant, 6)
-            scale_factor = resolved_font_size / 6.0
+            scale_factor = font_size / 6.0
+            from PySide6.QtGui import QTransform
             transform = QTransform()
             transform.scale(scale_factor, scale_factor)
             text_item.setTransform(transform)
         else:
-            font = make_qfont(font_family, font_variant, resolved_font_size)
+            font = make_qfont(font_family, font_variant, font_size)
         
         text_item.setFont(font)
         text_item.setPlainText(text)
@@ -992,9 +977,8 @@ class ROIManager:
         roi.statistics_overlay_item = text_item
         # print(f"[DEBUG-OVERLAY]   Final state: overlay.scene()={id(text_item.scene()) if text_item.scene() else None}")
     
-    def update_statistics_overlay(self, roi: ROIItem, statistics: RoiStatisticsMap,
-                                 scene: QGraphicsScene, font_size: int = 6,
-                                 font_color: Tuple[int, int, int] = (255, 255, 0),
+    def update_statistics_overlay(self, roi: ROIItem, statistics: Dict[str, float],
+                                 scene, font_size: int = 6, font_color: Tuple[int, int, int] = (255, 255, 0),
                                  rescale_type: Optional[str] = None) -> None:
         """
         Update existing statistics overlay with new statistics.
@@ -1010,7 +994,7 @@ class ROIManager:
         # Recreate overlay with new statistics
         self.create_statistics_overlay(roi, statistics, scene, font_size, font_color, rescale_type)
     
-    def update_statistics_overlay_position(self, roi: ROIItem, scene: QGraphicsScene) -> None:
+    def update_statistics_overlay_position(self, roi: ROIItem, scene) -> None:
         """
         Update statistics overlay position when ROI moves.
         
@@ -1028,8 +1012,9 @@ class ROIManager:
         offset_x, offset_y = roi.statistics_overlay_offset
         
         # Set updating flag to prevent recursive updates
-        roi.statistics_overlay_item.set_updating_position(True)
-
+        if isinstance(roi.statistics_overlay_item, DraggableStatisticsOverlay):
+            roi.statistics_overlay_item._updating_position = True
+        
         if view is not None:
             view_scale = view.transform().m11()
             if view_scale > 0:
@@ -1046,9 +1031,10 @@ class ROIManager:
         roi.statistics_overlay_item.setPos(x_pos, y_pos)
         
         # Clear updating flag
-        roi.statistics_overlay_item.set_updating_position(False)
+        if isinstance(roi.statistics_overlay_item, DraggableStatisticsOverlay):
+            roi.statistics_overlay_item._updating_position = False
     
-    def remove_statistics_overlay(self, roi: ROIItem, scene: QGraphicsScene) -> None:
+    def remove_statistics_overlay(self, roi: ROIItem, scene) -> None:
         """
         Remove statistics overlay from scene.
         
@@ -1104,7 +1090,7 @@ class ROIManager:
             scene.update()
             # print(f"[DEBUG-OVERLAY] Scene updated after overlay removal")
     
-    def remove_all_statistics_overlays_from_scene(self, scene: QGraphicsScene) -> None:
+    def remove_all_statistics_overlays_from_scene(self, scene) -> None:
         """
         Remove all statistics overlay items from the scene.
         This ensures orphaned overlays from previous slices are removed.
@@ -1116,6 +1102,9 @@ class ROIManager:
         Args:
             scene: QGraphicsScene to remove items from
         """
+        if scene is None:
+            return
+        
         # print(f"[DEBUG-OVERLAY] remove_all_statistics_overlays_from_scene: scene={id(scene)}, roi_manager={id(self)}")
         
         # First, clear references in our own ROIs to prevent dangling references
@@ -1169,7 +1158,7 @@ class ROIManager:
         scene.update()
         # print(f"[DEBUG-OVERLAY] Finished removing overlays from scene {id(scene)}")
     
-    def hide_all_statistics_overlays(self, scene: QGraphicsScene, hide: bool) -> None:
+    def hide_all_statistics_overlays(self, scene, hide: bool) -> None:
         """
         Hide or show all statistics overlays.
         

@@ -104,7 +104,7 @@ class DICOMLoader:
         """Initialize the DICOM loader."""
         self.loaded_files: List[pydicom.Dataset] = []
         self.failed_files: List[Tuple[str, str]] = []  # (path, error_message)
-        self._compression_error_files: set = set()  # Track files that have shown compression errors
+        self._compression_error_files: set[str] = set()  # Track files that have shown compression errors
         self._cancelled: bool = False  # Flag to track cancellation request
         self.attempted_file_count: int = 0  # Set at start of load_files/load_directory for status bar
         self.extension_skipped_count: int = 0  # Files skipped by extension (handler or directory scan)
@@ -243,8 +243,11 @@ class DICOMLoader:
             validation_time = time.time() - validation_start
             
             if not is_valid:
-                print(f"Validation failed for {os.path.basename(file_path)}: {error_msg}")
-                self.failed_files.append((file_path, error_msg))
+                # `validate_dicom_file()` returns `Optional[str]`, but `failed_files` is
+                # typed as `List[Tuple[str, str]]`, so normalize `None` to a string.
+                error_msg_str = error_msg if error_msg is not None else "Unknown validation error"
+                print(f"Validation failed for {os.path.basename(file_path)}: {error_msg_str}")
+                self.failed_files.append((file_path, error_msg_str))
                 return None
             
             # Check for cancellation after validation

@@ -1,3 +1,7 @@
+# Pyright follows TYPE_CHECKING imports; main imports this module, so mentioning
+# DICOMViewerApp for annotations would otherwise report a false-positive cycle.
+# Runtime has no circular import (TYPE_CHECKING is False when executing).
+# pyright: reportImportCycles=false
 from __future__ import annotations
 
 """
@@ -22,7 +26,13 @@ Requirements:
     - Called after all app managers, widgets, and controllers are created.
 """
 
-def wire_all_signals(app) -> None:
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from main import DICOMViewerApp
+
+
+def wire_all_signals(app: DICOMViewerApp) -> None:
     """
     Connect all application-level Qt signals for the given app.
     Preserves the order required for correct subwindow and dialog behavior.
@@ -38,14 +48,14 @@ def wire_all_signals(app) -> None:
     _wire_focused_subwindow_signals(app)
 
 
-def _wire_layout_signals(app: "DICOMViewerApp") -> None:
+def _wire_layout_signals(app: DICOMViewerApp) -> None:
     """Wire multi-window layout and main-window layout-change signals."""
     app.multi_window_layout.focused_subwindow_changed.connect(app._on_focused_subwindow_changed)
     app.multi_window_layout.layout_changed.connect(app._on_layout_changed)
     app.main_window.layout_changed.connect(app._on_main_window_layout_changed)
 
 
-def _wire_file_signals(app) -> None:
+def _wire_file_signals(app: DICOMViewerApp) -> None:
     """Wire file open/close and application-quit signals."""
     app.main_window.open_file_requested.connect(app._open_files)
     app.main_window.open_folder_requested.connect(app._open_folder)
@@ -55,7 +65,7 @@ def _wire_file_signals(app) -> None:
     app.app.aboutToQuit.connect(app._on_app_about_to_quit)
 
 
-def _wire_dialog_signals(app: "DICOMViewerApp") -> None:
+def _wire_dialog_signals(app: DICOMViewerApp) -> None:
     """Wire signals that open shared dialogs and panels (settings, overlays, export, etc.)."""
     app.main_window.settings_requested.connect(app._open_settings)
     app.main_window.overlay_settings_requested.connect(app._open_overlay_settings)
@@ -75,7 +85,7 @@ def _wire_dialog_signals(app: "DICOMViewerApp") -> None:
     app.series_navigator.close_study_requested.connect(app._close_study)
 
 
-def _wire_undo_redo_and_annotation_signals(app) -> None:
+def _wire_undo_redo_and_annotation_signals(app: DICOMViewerApp) -> None:
     """Wire undo/redo (tag edits and annotations) and annotation copy/paste signals."""
     app.main_window.undo_tag_edit_requested.connect(app._on_undo_requested)
     app.main_window.redo_tag_edit_requested.connect(app._on_redo_requested)
@@ -84,7 +94,7 @@ def _wire_undo_redo_and_annotation_signals(app) -> None:
     app.metadata_panel.tag_edited.connect(app._on_tag_edited)
 
 
-def _wire_cine_signals(app) -> None:
+def _wire_cine_signals(app: DICOMViewerApp) -> None:
     """Wire cine controls widget and cine player signals."""
     app.cine_controls_widget.play_requested.connect(app._on_cine_play)
     app.cine_controls_widget.pause_requested.connect(app._on_cine_pause)
@@ -99,7 +109,7 @@ def _wire_cine_signals(app) -> None:
     app.cine_player.playback_state_changed.connect(app._on_cine_playback_state_changed)
 
 
-def _wire_view_signals(app: "DICOMViewerApp") -> None:
+def _wire_view_signals(app: DICOMViewerApp) -> None:
     """Wire privacy, image-smoothing, theme-change, and slice-sync view signals."""
     app.main_window.privacy_view_toggled.connect(app._on_privacy_view_toggled)
     app.main_window.smooth_when_zoomed_toggled.connect(app._on_smooth_when_zoomed_toggled)
@@ -120,7 +130,7 @@ def _wire_view_signals(app: "DICOMViewerApp") -> None:
     )
 
 
-def _wire_customization_signals(app) -> None:
+def _wire_customization_signals(app: DICOMViewerApp) -> None:
     """Wire import/export signals for app customizations and tag-export presets."""
     app.main_window.export_customizations_requested.connect(app._on_export_customizations)
     app.main_window.import_customizations_requested.connect(app._on_import_customizations)
@@ -128,11 +138,11 @@ def _wire_customization_signals(app) -> None:
     app.main_window.import_tag_presets_requested.connect(app._on_import_tag_presets)
 
 
-def _wire_subwindow_signals(app: "DICOMViewerApp") -> None:
+def _wire_subwindow_signals(app: DICOMViewerApp) -> None:
     """Connect signals that apply to all subwindows. Delegates to subwindow lifecycle controller."""
     app._subwindow_lifecycle_controller.connect_subwindow_signals()
 
 
-def _wire_focused_subwindow_signals(app) -> None:
+def _wire_focused_subwindow_signals(app: DICOMViewerApp) -> None:
     """Connect signals for the currently focused subwindow. Delegates to subwindow lifecycle controller."""
     app._subwindow_lifecycle_controller.connect_focused_subwindow_signals()

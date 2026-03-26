@@ -105,7 +105,7 @@ def compute_roi_statistics(
     use_rescale: bool,
     roi_manager: Any,
     dicom_processor: type,
-) -> Tuple[Dict[str, float], Optional[str]]:
+) -> Tuple[Dict[str, float | int | None], Optional[str]]:
     """
     Recompute ROI statistics for an ROI item (never use roi_item.statistics cache).
 
@@ -248,21 +248,36 @@ def write_txt(
                         roi_item, dataset, use_rescale, roi_manager, dicom_processor
                     )
                     unit_str = rescale_unit or ""
-                    lines.append(f"    Mean       {stats.get('mean', 0):.2f}    {unit_str}")
-                    lines.append(f"    Std Dev    {stats.get('std', 0):.2f}    {unit_str}")
-                    lines.append(f"    Min        {stats.get('min', 0):.2f}    {unit_str}")
-                    lines.append(f"    Max        {stats.get('max', 0):.2f}    {unit_str}")
-                    lines.append(f"    Pixels     {int(stats.get('count', 0))}    ")
+                    mean_v = stats.get("mean")
+                    std_v = stats.get("std")
+                    min_v = stats.get("min")
+                    max_v = stats.get("max")
+                    count_v = stats.get("count")
+                    area_px_v = stats.get("area_pixels")
+
+                    mean_f = float(mean_v) if mean_v is not None else 0.0
+                    std_f = float(std_v) if std_v is not None else 0.0
+                    min_f = float(min_v) if min_v is not None else 0.0
+                    max_f = float(max_v) if max_v is not None else 0.0
+                    count_i = int(count_v) if count_v is not None else 0
+                    area_px_f = float(area_px_v) if area_px_v is not None else 0.0
+
+                    lines.append(f"    Mean       {mean_f:.2f}    {unit_str}")
+                    lines.append(f"    Std Dev    {std_f:.2f}    {unit_str}")
+                    lines.append(f"    Min        {min_f:.2f}    {unit_str}")
+                    lines.append(f"    Max        {max_f:.2f}    {unit_str}")
+                    lines.append(f"    Pixels     {count_i}    ")
+
                     area_mm2 = stats.get("area_mm2")
-                    area_px = stats.get("area_pixels", 0)
                     if area_mm2 is not None:
-                        if area_mm2 >= 100.0:
-                            area_cm2 = area_mm2 / 100.0
+                        area_mm2_f = float(area_mm2)
+                        if area_mm2_f >= 100.0:
+                            area_cm2 = area_mm2_f / 100.0
                             lines.append(f"    Area       {area_cm2:.2f}    cm²")
                         else:
-                            lines.append(f"    Area       {area_mm2:.2f}    mm²")
+                            lines.append(f"    Area       {area_mm2_f:.2f}    mm²")
                     else:
-                        lines.append(f"    Area       {area_px:.1f}    pixels")
+                        lines.append(f"    Area       {area_px_f:.1f}    pixels")
                 lines.append("")
             cross_idx = 0
             for cross_item in crosshairs:
@@ -368,13 +383,28 @@ def write_csv(
                     stats, rescale_unit = compute_roi_statistics(
                         roi_item, dataset, use_rescale, roi_manager, dicom_processor
                     )
-                    row[6] = f"{stats.get('mean', 0):.4f}"
-                    row[7] = f"{stats.get('std', 0):.4f}"
-                    row[8] = f"{stats.get('min', 0):.4f}"
-                    row[9] = f"{stats.get('max', 0):.4f}"
-                    row[10] = str(int(stats.get("count", 0)))
-                    row[11] = f"{stats.get('area_pixels', 0):.1f}"
-                    row[12] = f"{stats.get('area_mm2') or ''}"
+                    mean_v = stats.get("mean")
+                    std_v = stats.get("std")
+                    min_v = stats.get("min")
+                    max_v = stats.get("max")
+                    count_v = stats.get("count")
+                    area_px_v = stats.get("area_pixels")
+                    area_mm2_v = stats.get("area_mm2")
+
+                    mean_f = float(mean_v) if mean_v is not None else 0.0
+                    std_f = float(std_v) if std_v is not None else 0.0
+                    min_f = float(min_v) if min_v is not None else 0.0
+                    max_f = float(max_v) if max_v is not None else 0.0
+                    count_i = int(count_v) if count_v is not None else 0
+                    area_px_f = float(area_px_v) if area_px_v is not None else 0.0
+
+                    row[6] = f"{mean_f:.4f}"
+                    row[7] = f"{std_f:.4f}"
+                    row[8] = f"{min_f:.4f}"
+                    row[9] = f"{max_f:.4f}"
+                    row[10] = str(count_i)
+                    row[11] = f"{area_px_f:.1f}"
+                    row[12] = f"{float(area_mm2_v):.4f}" if area_mm2_v is not None else ""
                     row[13] = rescale_unit or ""
                 rows.append(row)
 
@@ -480,25 +510,55 @@ def write_xlsx(
                         roi_item, dataset, use_rescale, roi_manager, dicom_processor
                     )
                     unit_str = rescale_unit or ""
-                    ws.cell(row=row, column=1, value="Mean"); ws.cell(row=row, column=2, value=round(stats.get('mean', 0), 2)); ws.cell(row=row, column=3, value=unit_str)
+                    mean_v = stats.get("mean")
+                    std_v = stats.get("std")
+                    min_v = stats.get("min")
+                    max_v = stats.get("max")
+                    count_v = stats.get("count")
+                    area_px_v = stats.get("area_pixels")
+                    area_mm2_v = stats.get("area_mm2")
+
+                    mean_f = float(mean_v) if mean_v is not None else 0.0
+                    std_f = float(std_v) if std_v is not None else 0.0
+                    min_f = float(min_v) if min_v is not None else 0.0
+                    max_f = float(max_v) if max_v is not None else 0.0
+                    count_i = int(count_v) if count_v is not None else 0
+                    area_px_f = float(area_px_v) if area_px_v is not None else 0.0
+                    area_mm2_f = float(area_mm2_v) if area_mm2_v is not None else None
+
+                    ws.cell(row=row, column=1, value="Mean")
+                    ws.cell(row=row, column=2, value=round(mean_f, 2))
+                    ws.cell(row=row, column=3, value=unit_str)
                     row += 1
-                    ws.cell(row=row, column=1, value="Std Dev"); ws.cell(row=row, column=2, value=round(stats.get('std', 0), 2)); ws.cell(row=row, column=3, value=unit_str)
+                    ws.cell(row=row, column=1, value="Std Dev")
+                    ws.cell(row=row, column=2, value=round(std_f, 2))
+                    ws.cell(row=row, column=3, value=unit_str)
                     row += 1
-                    ws.cell(row=row, column=1, value="Min"); ws.cell(row=row, column=2, value=round(stats.get('min', 0), 2)); ws.cell(row=row, column=3, value=unit_str)
+                    ws.cell(row=row, column=1, value="Min")
+                    ws.cell(row=row, column=2, value=round(min_f, 2))
+                    ws.cell(row=row, column=3, value=unit_str)
                     row += 1
-                    ws.cell(row=row, column=1, value="Max"); ws.cell(row=row, column=2, value=round(stats.get('max', 0), 2)); ws.cell(row=row, column=3, value=unit_str)
+                    ws.cell(row=row, column=1, value="Max")
+                    ws.cell(row=row, column=2, value=round(max_f, 2))
+                    ws.cell(row=row, column=3, value=unit_str)
                     row += 1
-                    ws.cell(row=row, column=1, value="Pixels"); ws.cell(row=row, column=2, value=int(stats.get("count", 0))); ws.cell(row=row, column=3, value="")
+                    ws.cell(row=row, column=1, value="Pixels")
+                    ws.cell(row=row, column=2, value=count_i)
+                    ws.cell(row=row, column=3, value="")
                     row += 1
-                    area_mm2 = stats.get("area_mm2")
-                    area_px = stats.get("area_pixels", 0)
-                    if area_mm2 is not None:
-                        if area_mm2 >= 100.0:
-                            ws.cell(row=row, column=1, value="Area"); ws.cell(row=row, column=2, value=round(area_mm2 / 100.0, 2)); ws.cell(row=row, column=3, value="cm²")
+                    if area_mm2_f is not None:
+                        if area_mm2_f >= 100.0:
+                            ws.cell(row=row, column=1, value="Area")
+                            ws.cell(row=row, column=2, value=round(area_mm2_f / 100.0, 2))
+                            ws.cell(row=row, column=3, value="cm²")
                         else:
-                            ws.cell(row=row, column=1, value="Area"); ws.cell(row=row, column=2, value=round(area_mm2, 2)); ws.cell(row=row, column=3, value="mm²")
+                            ws.cell(row=row, column=1, value="Area")
+                            ws.cell(row=row, column=2, value=round(area_mm2_f, 2))
+                            ws.cell(row=row, column=3, value="mm²")
                     else:
-                        ws.cell(row=row, column=1, value="Area"); ws.cell(row=row, column=2, value=area_px); ws.cell(row=row, column=3, value="pixels")
+                        ws.cell(row=row, column=1, value="Area")
+                        ws.cell(row=row, column=2, value=area_px_f)
+                        ws.cell(row=row, column=3, value="pixels")
                     row += 1
             for cross_idx, cross_item in enumerate(crosshairs, start=1):
                 ws.cell(row=row, column=1, value=f"  Crosshair {cross_idx}")

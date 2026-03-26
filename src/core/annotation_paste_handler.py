@@ -6,10 +6,18 @@ annotations. Inputs are getters for current subwindow, managers, and scene
 (via an app reference). Outputs are copy/paste behavior.
 """
 
-from typing import Dict, Optional
+from typing import TYPE_CHECKING, Any
 
 from PySide6.QtCore import QPointF, Qt
 from gui.sub_window_container import SubWindowContainer
+
+
+if TYPE_CHECKING:
+    from tools.roi_manager import ROIItem
+    from tools.measurement_tool import MeasurementItem
+    from tools.crosshair_manager import CrosshairItem
+    from tools.text_annotation_tool import TextAnnotationItem
+    from tools.arrow_annotation_tool import ArrowAnnotationItem
 
 
 class AnnotationPasteHandler:
@@ -18,7 +26,7 @@ class AnnotationPasteHandler:
     def __init__(self, app):
         self._app = app
 
-    def get_selected_rois(self, subwindow: SubWindowContainer) -> list:
+    def get_selected_rois(self, subwindow: SubWindowContainer) -> list[ROIItem]:
         """
         Get selected ROI items from the scene.
 
@@ -52,7 +60,7 @@ class AnnotationPasteHandler:
                 pass
         return selected_rois
 
-    def get_selected_measurements(self, subwindow: SubWindowContainer) -> list:
+    def get_selected_measurements(self, subwindow: SubWindowContainer) -> list[MeasurementItem]:
         """
         Get selected measurement items from the scene.
 
@@ -75,7 +83,7 @@ class AnnotationPasteHandler:
                 pass
         return selected_measurements
 
-    def get_selected_crosshairs(self, subwindow: SubWindowContainer) -> list:
+    def get_selected_crosshairs(self, subwindow: SubWindowContainer) -> list[CrosshairItem]:
         """
         Get selected crosshair items from the scene.
 
@@ -98,7 +106,7 @@ class AnnotationPasteHandler:
                 pass
         return selected_crosshairs
 
-    def get_selected_text_annotations(self, subwindow: SubWindowContainer) -> list:
+    def get_selected_text_annotations(self, subwindow: SubWindowContainer) -> list[TextAnnotationItem]:
         """
         Get selected text annotation items from the scene.
 
@@ -121,7 +129,7 @@ class AnnotationPasteHandler:
                 pass
         return selected_text_annotations
 
-    def get_selected_arrow_annotations(self, subwindow: SubWindowContainer) -> list:
+    def get_selected_arrow_annotations(self, subwindow: SubWindowContainer) -> list[ArrowAnnotationItem]:
         """
         Get selected arrow annotation items from the scene.
 
@@ -265,7 +273,13 @@ class AnnotationPasteHandler:
                       len(data.get('arrow_annotations', [])))
         self._app.main_window.update_status(f"Pasted {total_count} annotation(s)")
 
-    def paste_roi(self, subwindow: SubWindowContainer, managers: Dict, roi_data: Dict, offset: QPointF):
+    def paste_roi(
+        self,
+        subwindow: SubWindowContainer,
+        managers: dict[str, Any],
+        roi_data: dict[str, Any],
+        offset: QPointF,
+    ) -> ROIItem | None:
         """
         Recreate an ROI from clipboard data.
 
@@ -346,7 +360,13 @@ class AnnotationPasteHandler:
 
         return roi_item
 
-    def paste_measurement(self, subwindow: SubWindowContainer, managers: Dict, meas_data: Dict, offset: QPointF):
+    def paste_measurement(
+        self,
+        subwindow: SubWindowContainer,
+        managers: dict[str, Any],
+        meas_data: dict[str, Any],
+        offset: QPointF,
+    ) -> MeasurementItem | None:
         """
         Recreate a measurement from clipboard data.
 
@@ -432,7 +452,13 @@ class AnnotationPasteHandler:
 
         return measurement
 
-    def paste_crosshair(self, subwindow: SubWindowContainer, managers: Dict, cross_data: Dict, offset: QPointF):
+    def paste_crosshair(
+        self,
+        subwindow: SubWindowContainer,
+        managers: dict[str, Any],
+        cross_data: dict[str, Any],
+        offset: QPointF,
+    ) -> CrosshairItem | None:
         """
         Recreate a crosshair from clipboard data.
 
@@ -500,7 +526,13 @@ class AnnotationPasteHandler:
 
         return crosshair
 
-    def paste_text_annotation(self, subwindow: SubWindowContainer, managers: Dict, text_data: Dict, offset: QPointF):
+    def paste_text_annotation(
+        self,
+        subwindow: SubWindowContainer,
+        managers: dict[str, Any],
+        text_data: dict[str, Any],
+        offset: QPointF,
+    ) -> TextAnnotationItem | None:
         """
         Recreate a text annotation from clipboard data.
 
@@ -562,7 +594,13 @@ class AnnotationPasteHandler:
 
         return text_item
 
-    def paste_arrow_annotation(self, subwindow: SubWindowContainer, managers: Dict, arrow_data: Dict, offset: QPointF):
+    def paste_arrow_annotation(
+        self,
+        subwindow: SubWindowContainer,
+        managers: dict[str, Any],
+        arrow_data: dict[str, Any],
+        offset: QPointF,
+    ) -> ArrowAnnotationItem | None:
         """
         Recreate an arrow annotation from clipboard data.
 

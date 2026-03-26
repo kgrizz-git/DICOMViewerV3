@@ -44,7 +44,7 @@ class EditTagCommand(TagEditCommand):
     Command for editing a DICOM tag.
     """
     
-    def __init__(self, dataset: Dataset, tag_identifier: Union[str, Tuple[int, int], Tag],
+    def __init__(self, dataset: Dataset, tag_identifier: Union[str, Tuple[int, int], Any],
                  old_value: Any, new_value: Any, vr: Optional[str] = None):
         """
         Initialize the edit tag command.
@@ -61,7 +61,7 @@ class EditTagCommand(TagEditCommand):
         self.old_value = old_value
         self.new_value = new_value
         self.vr = vr
-        self.tag: Optional[Tag] = None
+        self.tag: Optional[Any] = None
         self._parse_tag()
     
     def _parse_tag(self) -> None:
@@ -221,7 +221,7 @@ class TagEditHistoryManager:
         """
         self.max_history = max_history
         # Dictionary mapping dataset id to history stacks
-        self.histories: dict = {}  # dataset_id -> {"undo": [], "redo": []}
+        self.histories: Dict[int, Dict[str, List[EditTagCommand]]] = {}  # dataset_id -> {"undo": [], "redo": []}
         # Dictionary mapping dataset id to set of edited tag strings
         self.edited_tags: Dict[int, Set[str]] = {}  # dataset_id -> set of tag strings
         # Dictionary mapping dataset id to original tag values
@@ -239,7 +239,7 @@ class TagEditHistoryManager:
         """
         return id(dataset)
     
-    def _get_history(self, dataset: Dataset) -> dict:
+    def _get_history(self, dataset: Dataset) -> Dict[str, List[EditTagCommand]]:
         """
         Get history stacks for a dataset.
         
@@ -254,7 +254,7 @@ class TagEditHistoryManager:
             self.histories[dataset_id] = {"undo": [], "redo": []}
         return self.histories[dataset_id]
     
-    def execute_command(self, command: TagEditCommand) -> None:
+    def execute_command(self, command: EditTagCommand) -> None:
         """
         Execute a command and add it to undo stack.
         
@@ -278,7 +278,7 @@ class TagEditHistoryManager:
         if len(history["undo"]) > self.max_history:
             history["undo"].pop(0)
     
-    def _get_tag_string(self, command: TagEditCommand) -> Optional[str]:
+    def _get_tag_string(self, command: EditTagCommand) -> Optional[str]:
         """
         Get tag string from command.
         

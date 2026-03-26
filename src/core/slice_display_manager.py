@@ -70,12 +70,12 @@ class SliceDisplayManager:
         view_state_manager,
         text_annotation_tool=None,
         arrow_annotation_tool=None,
-        update_tag_viewer_callback: Optional[Callable] = None,
-        display_rois_callback: Optional[Callable] = None,
-        display_measurements_callback: Optional[Callable] = None,
+        update_tag_viewer_callback: Optional[Callable[..., None]] = None,
+        display_rois_callback: Optional[Callable[..., None]] = None,
+        display_measurements_callback: Optional[Callable[..., None]] = None,
         roi_list_panel: Optional[ROIListPanel] = None,
         roi_statistics_panel: Optional[ROIStatisticsPanel] = None,
-        update_roi_statistics_overlays_callback: Optional[Callable] = None,
+        update_roi_statistics_overlays_callback: Optional[Callable[..., None]] = None,
         annotation_manager: Optional[AnnotationManager] = None,
         dicom_organizer: Optional[DICOMOrganizer] = None,
         fusion_coordinator = None
@@ -124,7 +124,7 @@ class SliceDisplayManager:
         self.fusion_coordinator = fusion_coordinator
 
         # Current data context
-        self.current_studies: dict = {}
+        self.current_studies: Dict[str, Dict[str, list[Dataset]]] = {}
         self.current_study_uid: str = ""
         self.current_series_uid: str = ""
         self.current_slice_index: int = 0
@@ -218,7 +218,7 @@ class SliceDisplayManager:
     def _create_projection_image(
         self,
         dataset: Dataset,
-        current_studies: dict,
+        current_studies: Dict[str, Dict[str, list[Dataset]]],
         current_study_uid: str,
         current_series_uid: str,
         current_slice_index: int,
@@ -327,10 +327,10 @@ class SliceDisplayManager:
             print(f"Error converting projection array to PIL Image: {e}")
             return None
     
-    def display_slice(
+    def display_slice(  # pyright: ignore[reportGeneralTypeIssues]
         self,
         dataset: Dataset,
-        current_studies: dict,
+        current_studies: Dict[str, Dict[str, list[Dataset]]],
         current_study_uid: str,
         current_series_uid: str,
         current_slice_index: int,
@@ -1581,7 +1581,7 @@ class SliceDisplayManager:
     
     def set_current_data_context(
         self,
-        current_studies: dict,
+        current_studies: Dict[str, Dict[str, list[Dataset]]],
         current_study_uid: str,
         current_series_uid: str,
         current_slice_index: int
