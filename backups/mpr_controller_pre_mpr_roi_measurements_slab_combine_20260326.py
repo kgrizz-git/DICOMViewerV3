@@ -321,16 +321,6 @@ class MprController(QObject):
         if image_viewer is None:
             return
 
-        # Keep measurement scaling consistent with the displayed MPR slice.
-        # MPR bypasses the normal SliceDisplayManager path, so we must
-        # explicitly set the measurement tool's pixel spacing here.
-        try:
-            measurement_tool = managers.get("measurement_tool")
-            if measurement_tool is not None:
-                measurement_tool.set_pixel_spacing(result.output_spacing_mm)
-        except Exception:
-            pass
-
         raw_array = result.slices[slice_index]
         # Apply rescale slope/intercept from source series.
         array = result.apply_rescale(raw_array)
@@ -370,32 +360,6 @@ class MprController(QObject):
 
         is_same_series = True  # Always preserve zoom when scrolling MPR.
         image_viewer.set_image(pil_image, preserve_view=is_same_series)
-
-        # Render per-slice ROI + measurement overlays for this MPR slice.
-        # MPR bypasses SliceDisplayManager.display_slice(), so we need to
-        # invoke the slice-scoped display helpers explicitly.
-        slice_display_manager = managers.get("slice_display_manager")
-        roi_coordinator = managers.get("roi_coordinator")
-        if slice_display_manager is not None:
-            try:
-                slice_display_manager.set_current_data_context(
-                    self._app.current_studies,
-                    current_study_uid,
-                    current_series_uid,
-                    slice_index,
-                )
-                slice_display_manager.display_rois_for_slice(overlay_dataset)
-                slice_display_manager.display_measurements_for_slice(
-                    overlay_dataset
-                )
-                if roi_coordinator is not None and hasattr(
-                    roi_coordinator, "update_roi_statistics_overlays"
-                ):
-                    roi_coordinator.update_roi_statistics_overlays()
-            except Exception as exc:
-                print(
-                    f"[MprController] Failed to render ROIs/measurements for MPR slice: {exc}"
-                )
 
         overlay_manager = managers.get("overlay_manager")
         if overlay_manager is not None:
@@ -499,8 +463,6 @@ class MprController(QObject):
             f"spacing={request.output_spacing_mm:.4f} mm "
             f"thickness={request.output_thickness_mm:.4f} mm "
             f"interpolation={request.interpolation} "
-            f"combine_mode={getattr(request, 'combine_mode', 'none')} "
-            f"slab_thickness_mm={getattr(request, 'slab_thickness_mm', 0.0):.4f} mm "
             f"source_slices={len(datasets_to_use)}"
         )
 
@@ -520,8 +482,6 @@ class MprController(QObject):
                     output_spacing_mm=request.output_spacing_mm,
                     output_thickness_mm=request.output_thickness_mm,
                     interpolation=request.interpolation,
-                    combine_mode=getattr(request, "combine_mode", "none"),
-                    slab_thickness_mm=float(getattr(request, "slab_thickness_mm", 0.0)),
                     source_dataset_count=n_ds,
                 )
                 hit = self._cache.load(key)
@@ -538,8 +498,6 @@ class MprController(QObject):
                         interpolation=meta["interpolation"],
                         rescale_slope=meta.get("rescale_slope"),
                         rescale_intercept=meta.get("rescale_intercept"),
-                        combine_mode=meta.get("combine_mode", "none"),
-                        slab_thickness_mm=float(meta.get("slab_thickness_mm", 0.0)),
                     )
                     self._activate_mpr(target_idx, cached_result, request.orientation_label)
                     return
@@ -554,8 +512,6 @@ class MprController(QObject):
             output_spacing_mm=request.output_spacing_mm,
             output_thickness_mm=request.output_thickness_mm,
             interpolation=request.interpolation,
-            combine_mode=getattr(request, "combine_mode", "none"),
-            slab_thickness_mm=float(getattr(request, "slab_thickness_mm", 0.0)),
         )
 
         # Progress dialog.
@@ -691,10 +647,7 @@ class MprController(QObject):
         except Exception:
             pass
 
-        # Enter MPR mode interaction restrictions.
-        # We keep the existing _mpr_mode_override flag, but allow ROI/measurement
-        # and Window/Level ROI modes by narrowing the restrictions inside
-        # ImageViewer (see image_viewer.py changes).
+        # Disable ROI/measurement/annotation tools.
         self._set_tools_enabled(idx, enabled=False)
 
         # Reset window/level from the new MPR source series to avoid using

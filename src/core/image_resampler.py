@@ -20,15 +20,17 @@ Requirements:
 
 import threading
 import numpy as np
-from typing import Optional, List, Tuple, Dict
+from typing import Any, Optional, List, Tuple, Dict
 from pydicom.dataset import Dataset
 
+sitk: Any = None
+sitk_available: bool = False
 try:
-    import SimpleITK as sitk
-    SIMPLEITK_AVAILABLE = True
+    import SimpleITK as _sitk
+    sitk = _sitk
+    sitk_available = True
 except ImportError:
-    SIMPLEITK_AVAILABLE = False
-    sitk = None
+    pass
 
 from utils.dicom_utils import get_image_orientation, get_slice_thickness
 from core.dicom_processor import DICOMProcessor
@@ -47,26 +49,26 @@ class ImageResampler:
     
     # Interpolation method mapping
     INTERPOLATION_METHODS = {
-        'linear': sitk.sitkLinear if SIMPLEITK_AVAILABLE else None,
-        'nearest': sitk.sitkNearestNeighbor if SIMPLEITK_AVAILABLE else None,
-        'cubic': sitk.sitkBSpline if SIMPLEITK_AVAILABLE else None,
-        'b-spline': sitk.sitkBSpline if SIMPLEITK_AVAILABLE else None,
+        'linear': sitk.sitkLinear if sitk_available else None,
+        'nearest': sitk.sitkNearestNeighbor if sitk_available else None,
+        'cubic': sitk.sitkBSpline if sitk_available else None,
+        'b-spline': sitk.sitkBSpline if sitk_available else None,
     }
     
     def __init__(self):
         """Initialize image resampler with cache."""
-        if not SIMPLEITK_AVAILABLE:
+        if not sitk_available:
             print("Warning: SimpleITK not available. 3D resampling will not work.")
         
         # Cache for resampled volumes: key = (overlay_uid, base_uid), value = sitk.Image
-        self._cache: Dict[Tuple[str, str], sitk.Image] = {}
+        self._cache: Dict[Tuple[str, str], Any] = {}
         self._cache_lock = threading.Lock()  # For thread-safe caching
     
     def dicom_series_to_sitk(
         self,
         datasets: List[Dataset],
         series_uid: Optional[str] = None
-    ) -> Optional['sitk.Image']:
+    ) -> Optional[Any]:
         """
         Convert DICOM series to SimpleITK image with proper spatial metadata.
         
@@ -80,7 +82,7 @@ class ImageResampler:
         Returns:
             SimpleITK image with proper origin, spacing, and direction, or None if conversion fails
         """
-        if not SIMPLEITK_AVAILABLE:
+        if not sitk_available:
             return None
         
         if not datasets:
@@ -369,7 +371,7 @@ class ImageResampler:
         # Filter out datasets without valid location
         return [ds for ds in sorted_list if self._get_location(ds) is not None]
     
-    def sitk_to_numpy(self, sitk_image: 'sitk.Image') -> Optional[np.ndarray]:
+    def sitk_to_numpy(self, sitk_image: Any) -> Optional[np.ndarray]:
         """
         Convert SimpleITK image to numpy array.
         
@@ -379,7 +381,7 @@ class ImageResampler:
         Returns:
             Numpy array (z, y, x) or None if conversion fails
         """
-        if not SIMPLEITK_AVAILABLE or sitk_image is None:
+        if not sitk_available or sitk_image is None:
             return None
         
         try:
@@ -390,10 +392,10 @@ class ImageResampler:
     
     def resample_to_reference(
         self,
-        moving: 'sitk.Image',
-        reference: 'sitk.Image',
+        moving: Any,
+        reference: Any,
         interpolator: str = 'linear'
-    ) -> Optional['sitk.Image']:
+    ) -> Optional[Any]:
         """
         Resample moving image to match reference image's grid.
         
@@ -407,7 +409,7 @@ class ImageResampler:
         Returns:
             Resampled SimpleITK image, or None if resampling fails
         """
-        if not SIMPLEITK_AVAILABLE:
+        if not sitk_available:
             return None
         
         if moving is None or reference is None:
@@ -468,7 +470,7 @@ class ImageResampler:
         Returns:
             Resampled 2D numpy array for the requested slice, or None if resampling fails
         """
-        if not SIMPLEITK_AVAILABLE:
+        if not sitk_available:
             return None
         
         if slice_idx < 0 or not reference_datasets or slice_idx >= len(reference_datasets):
@@ -494,6 +496,7 @@ class ImageResampler:
         # print(f"[3D RESAMPLE DEBUG]   Total sorted reference_datasets: {len(sorted_reference_datasets)}")
         
         # Map unsorted index to sorted index
+        sorted_slice_idx = slice_idx
         try:
             sorted_slice_idx = sorted_reference_datasets.index(target_dataset)
             # print(f"[3D RESAMPLE DEBUG]   Slice index mapping: unsorted_idx={slice_idx} -> sorted_idx={sorted_slice_idx}")
@@ -719,7 +722,7 @@ class ImageResampler:
                     pass
         
         if spacings:
-            return np.mean(spacings)
+            return float(np.mean(spacings))
         
         return None
     

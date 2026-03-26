@@ -92,8 +92,6 @@ class MprResult:
     interpolation: str
     rescale_slope: Optional[float] = None
     rescale_intercept: Optional[float] = None
-    combine_mode: str = "none"
-    slab_thickness_mm: float = 0.0
 
     @property
     def n_slices(self) -> int:
@@ -147,8 +145,6 @@ class MprBuilderWorker(QThread):
         output_spacing_mm: float,
         output_thickness_mm: float,
         interpolation: str = "linear",
-        combine_mode: str = "none",
-        slab_thickness_mm: float = 0.0,
     ) -> None:
         """
         Args:
@@ -158,8 +154,6 @@ class MprBuilderWorker(QThread):
             output_spacing_mm:   In-plane pixel spacing (mm) for output.
             output_thickness_mm: Inter-slice spacing (mm) for output.
             interpolation:       "linear" | "nearest" | "cubic".
-            combine_mode:       "none" | "mip" | "minip" | "aip".
-            slab_thickness_mm: Slab thickness in mm used for combine modes.
         """
         super().__init__()
         self._volume = source_volume
@@ -167,8 +161,6 @@ class MprBuilderWorker(QThread):
         self._output_spacing = output_spacing_mm
         self._output_thickness = output_thickness_mm
         self._interpolation = interpolation.lower()
-        self._combine_mode = (combine_mode or "none").lower().strip()
-        self._slab_thickness_mm = float(slab_thickness_mm or 0.0)
         self._cancelled = False
 
         source_spacing = self._volume.sitk_image.GetSpacing()
@@ -314,52 +306,6 @@ class MprBuilderWorker(QThread):
             pct = 15 + int(80 * (i + 1) / max(n_slices, 1))
             self.progress.emit(pct)
 
-        # ------------------------------------------------------------------
-        # Slab combine (MIP / MinIP / AIP)
-        # ------------------------------------------------------------------
-        if self._combine_mode in ("mip", "minip", "aip") and self._slab_thickness_mm > 0:
-            # Compute an integer window size in terms of output planes.
-            # n_planes is clamped to at least 1.
-            safe_th = max(self._output_thickness, 1e-6)
-            n_planes = max(1, int(round(self._slab_thickness_mm / safe_th)))
-
-            _mpr_log(
-                "Applying slab combine: "
-                f"mode={self._combine_mode} "
-                f"slab_thickness_mm={self._slab_thickness_mm:.4f} "
-                f"output_thickness_mm={self._output_thickness:.4f} "
-                f"n_planes={n_planes}"
-            )
-
-            combined_slices: List[np.ndarray] = []
-            for i in range(n_slices):
-                start = i - (n_planes // 2)
-                end = start + n_planes - 1
-
-                if start < 0:
-                    start = 0
-                    end = min(n_slices - 1, n_planes - 1)
-                if end >= n_slices:
-                    end = n_slices - 1
-                    start = max(0, end - (n_planes - 1))
-
-                window = slices[start : end + 1]
-                if len(window) == 1:
-                    combined_slices.append(window[0])
-                    continue
-
-                stack = np.stack(window, axis=0)  # shape: (W, rows, cols)
-                if self._combine_mode == "mip":
-                    out = np.max(stack, axis=0)
-                elif self._combine_mode == "minip":
-                    out = np.min(stack, axis=0)
-                else:  # "aip"
-                    out = np.mean(stack, axis=0)
-
-                combined_slices.append(out.astype(np.float32))
-
-            slices = combined_slices
-
         # Build output SliceStack from the MPR planes.
         out_normal_arr = out_normal
         positions = [
@@ -395,8 +341,6 @@ class MprBuilderWorker(QThread):
             interpolation=self._interpolation,
             rescale_slope=rescale_slope,
             rescale_intercept=rescale_intercept,
-            combine_mode=self._combine_mode if self._combine_mode != "none" else "none",
-            slab_thickness_mm=self._slab_thickness_mm if self._combine_mode != "none" else 0.0,
         )
 
     def _compute_output_grid(self) -> tuple:
@@ -599,8 +543,6 @@ class MprBuilder:
         output_spacing_mm: float,
         output_thickness_mm: float,
         interpolation: str = "linear",
-        combine_mode: str = "none",
-        slab_thickness_mm: float = 0.0,
     ) -> MprBuilderWorker:
         """
         Create (but do not start) an MprBuilderWorker.
@@ -611,8 +553,6 @@ class MprBuilder:
             output_spacing_mm:   In-plane pixel spacing (mm).
             output_thickness_mm: Inter-slice spacing (mm).
             interpolation:       "linear" | "nearest" | "cubic".
-            combine_mode:       "none" | "mip" | "minip" | "aip".
-            slab_thickness_mm: Slab thickness in mm for combine modes.
 
         Returns:
             MprBuilderWorker ready to be started.
@@ -623,8 +563,6 @@ class MprBuilder:
             output_spacing_mm=output_spacing_mm,
             output_thickness_mm=output_thickness_mm,
             interpolation=interpolation,
-            combine_mode=combine_mode,
-            slab_thickness_mm=slab_thickness_mm,
         )
 
     @staticmethod

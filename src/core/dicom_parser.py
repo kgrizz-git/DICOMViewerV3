@@ -341,7 +341,8 @@ def get_frame_rate_from_dicom(dataset: Dataset) -> Optional[float]:
                         # Convert to FPS
                         fps = 1000.0 / avg_frame_time_ms
                         if fps > 0:
-                            return fps
+                            # numpy scalar -> plain float for typing consistency
+                            return float(fps)
                 except (ValueError, TypeError, AttributeError):
                     pass
         

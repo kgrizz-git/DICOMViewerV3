@@ -52,7 +52,7 @@ _WINDOW_LABELS = ["Window 1", "Window 2", "Window 3", "Window 4"]
 
 def _get_first_new_series_by_dicom(
     new_series: List[Tuple[str, str]],
-    current_studies: dict,
+    current_studies: Dict[str, Dict[str, List[Dataset]]],
 ) -> Optional[Tuple[str, str]]:
     """
     From the list of (study_uid, series_key) newly added in a batch, return the one
@@ -112,7 +112,9 @@ class FileSeriesLoadingCoordinator:
         """
         self.app = app
 
-    def handle_load_first_slice(self, studies: dict) -> None:
+    def handle_load_first_slice(
+        self, studies: Dict[str, Dict[str, List[Dataset]]]
+    ) -> None:
         """
         Handle loading first slice after file operations.
 
@@ -361,8 +363,8 @@ class FileSeriesLoadingCoordinator:
 
         # Load PS/KO additively for brand-new study UIDs only
         new_study_uids = {study_uid for study_uid, _ in merge_result.new_series}
-        new_ps: dict = {}
-        new_ko: dict = {}
+        new_ps: Dict[str, Any] = {}
+        new_ko: Dict[str, Any] = {}
         for study_uid in new_study_uids:
             ps = app.dicom_organizer.get_presentation_states(study_uid)
             ko = app.dicom_organizer.get_key_objects(study_uid)
@@ -567,7 +569,9 @@ class FileSeriesLoadingCoordinator:
             self.app.current_datasets = datasets
             self.app.current_studies = studies
 
-    def build_flat_series_list(self, studies: Dict) -> List[Tuple[int, str, str, Dataset]]:
+    def build_flat_series_list(
+        self, studies: Dict[str, Dict[str, List[Dataset]]]
+    ) -> List[Tuple[int, str, str, Dataset]]:
         """
         Build flat list of all series from all studies in navigator display order.
 
@@ -649,6 +653,7 @@ class FileSeriesLoadingCoordinator:
                 f"focused_idx={getattr(app, 'focused_subwindow_index', -1)}"
             )
         subwindow.set_assigned_series(series_uid, slice_index)
+        managers: Dict[str, Any] = {}
         if idx in app.subwindow_managers:
             managers = app.subwindow_managers[idx]
             slice_display_manager = managers['slice_display_manager']

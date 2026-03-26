@@ -6,6 +6,8 @@ annotations. Inputs are getters for current subwindow, managers, and scene
 (via an app reference). Outputs are copy/paste behavior.
 """
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Any
 
 from PySide6.QtCore import QPointF, Qt

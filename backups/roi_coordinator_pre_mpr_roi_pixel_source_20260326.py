@@ -22,7 +22,7 @@ Requirements:
 """
 
 from PySide6.QtCore import QPointF, QTimer
-from typing import Optional, Callable, TYPE_CHECKING, Dict, Tuple
+from typing import Optional, Callable, TYPE_CHECKING, Dict
 from pydicom.dataset import Dataset
 import numpy as np
 from tools.roi_manager import ROIManager
@@ -69,8 +69,6 @@ class ROICoordinator:
         get_projection_type: Optional[Callable[[], str]] = None,
         get_projection_slice_count: Optional[Callable[[], int]] = None,
         get_current_studies: Optional[Callable[[], dict]] = None,
-        get_mpr_pixel_array: Optional[Callable[[], Optional[np.ndarray]]] = None,
-        get_mpr_output_pixel_spacing: Optional[Callable[[], Optional[Tuple[float, float]]]] = None,
         undo_redo_manager: Optional['UndoRedoManager'] = None,
         update_undo_redo_state_callback: Optional[Callable[[], None]] = None,
         crosshair_coordinator: Optional['CrosshairCoordinator'] = None
@@ -110,8 +108,6 @@ class ROICoordinator:
         self.get_projection_type = get_projection_type
         self.get_projection_slice_count = get_projection_slice_count
         self.get_current_studies = get_current_studies
-        self.get_mpr_pixel_array = get_mpr_pixel_array
-        self.get_mpr_output_pixel_spacing = get_mpr_output_pixel_spacing
         self.undo_redo_manager = undo_redo_manager
         self.update_undo_redo_state_callback = update_undo_redo_state_callback
         self.crosshair_coordinator = crosshair_coordinator
@@ -119,16 +115,6 @@ class ROICoordinator:
         # ROI move tracking with batching
         self._roi_move_tracking: Dict[object, Dict] = {}  # Tracks ongoing moves
         self._move_batch_timer: Optional[QTimer] = None  # Timer for debouncing
-
-    def _is_mpr_view(self) -> bool:
-        """Return True when the active ImageViewer for this coordinator is in MPR mode."""
-        cb = getattr(self.image_viewer, "is_mpr_view_callback", None)
-        if cb is None:
-            return False
-        try:
-            return bool(cb())
-        except Exception:
-            return False
     
     def _get_pixel_array_for_statistics(self) -> Optional[np.ndarray]:
         """
@@ -140,15 +126,6 @@ class ROICoordinator:
         Returns:
             NumPy array (projection or original), or None if unavailable
         """
-        # In MPR mode, use the MprBuilder-produced pixel arrays directly.
-        if self._is_mpr_view() and self.get_mpr_pixel_array is not None:
-            try:
-                arr = self.get_mpr_pixel_array()
-                if arr is not None:
-                    return arr
-            except Exception:
-                return None
-
         current_dataset = self.get_current_dataset()
         if current_dataset is None:
             # print("[DEBUG-ROI-STATS] _get_pixel_array_for_statistics: current_dataset is None")
@@ -348,10 +325,7 @@ class ROICoordinator:
                     pixel_array = self._get_pixel_array_for_statistics()
                     if pixel_array is not None:
                         # Extract pixel spacing for area calculation
-                        if self._is_mpr_view() and self.get_mpr_output_pixel_spacing is not None:
-                            pixel_spacing = self.get_mpr_output_pixel_spacing()
-                        else:
-                            pixel_spacing = get_pixel_spacing(current_dataset)
+                        pixel_spacing = get_pixel_spacing(current_dataset)
                         
                         # Get rescale parameters
                         rescale_slope, rescale_intercept, rescale_type, use_rescaled = self.get_rescale_params()
@@ -732,10 +706,7 @@ class ROICoordinator:
                 #       f"min={pixel_array.min()}, max={pixel_array.max()}, mean={pixel_array.mean():.2f}")
                 
                 # Extract pixel spacing for area calculation
-                if self._is_mpr_view() and self.get_mpr_output_pixel_spacing is not None:
-                    pixel_spacing = self.get_mpr_output_pixel_spacing()
-                else:
-                    pixel_spacing = get_pixel_spacing(current_dataset)
+                pixel_spacing = get_pixel_spacing(current_dataset)
                 # print(f"[DEBUG-ROI-STATS] update_roi_statistics: pixel_spacing={pixel_spacing}")
                 
                 # Get rescale parameters
@@ -861,10 +832,7 @@ class ROICoordinator:
             return
         
         # Extract pixel spacing and rescale parameters
-        if self._is_mpr_view() and self.get_mpr_output_pixel_spacing is not None:
-            pixel_spacing = self.get_mpr_output_pixel_spacing()
-        else:
-            pixel_spacing = get_pixel_spacing(current_dataset)
+        pixel_spacing = get_pixel_spacing(current_dataset)
         rescale_slope, rescale_intercept, rescale_type, use_rescaled = self.get_rescale_params()
         display_rescale_type = rescale_type if use_rescaled else None
         

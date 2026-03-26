@@ -25,7 +25,7 @@ import gc
 import os
 import time
 import traceback
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 from PySide6.QtWidgets import QApplication
 
@@ -108,7 +108,7 @@ def batch_counts_from_merge_result(merge_result) -> tuple[int, int, int]:
 
 def run_load_pipeline(
     *,
-    loader_fn: Callable,
+    loader_fn: Callable[..., list[Any]],
     source_dir: str,
     source_name: str,
     file_paths_for_merge: Optional[list[str]],
@@ -119,10 +119,10 @@ def run_load_pipeline(
     progress_label: Optional[str] = None,
     main_window,
     file_dialog,
-    load_first_slice_callback: Callable,
-    update_status_callback: Callable,
+    load_first_slice_callback: Callable[..., None],
+    update_status_callback: Callable[..., None],
     check_compression_errors: bool = False,
-) -> tuple[list | None, dict | None]:
+) -> tuple[list[Any] | None, dict[str, Any] | None]:
     """Execute the shared DICOM load pipeline.
 
     Parameters
@@ -286,7 +286,11 @@ def run_load_pipeline(
         merge_paths = (
             file_paths_for_merge
             if not _is_folder_mode
-            else [getattr(ds, "filename", None) for ds in datasets]
+            else [
+                p
+                for p in (getattr(ds, "filename", None) for ds in datasets)
+                if isinstance(p, str)
+            ]
         )
         try:
             merge_result = organizer.merge_batch(datasets, merge_paths, source_dir)

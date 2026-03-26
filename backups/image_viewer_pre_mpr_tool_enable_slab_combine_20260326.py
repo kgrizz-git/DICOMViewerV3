@@ -1303,19 +1303,7 @@ class ImageViewer(QGraphicsView):
             mode: "select", "roi_ellipse", "roi_rectangle", "measure", "zoom", "pan", or "auto_window_level"
         """
         if getattr(self, "_mpr_mode_override", False):
-            # In MPR mode we intentionally restrict which tools can be
-            # activated to avoid half-implemented interaction types.
-            # ROI/measure/WL-ROI must remain enabled for the MPR feature work.
-            allowed_modes = {
-                "pan",
-                "zoom",
-                "magnifier",
-                "select",
-                "roi_ellipse",
-                "roi_rectangle",
-                "measure",
-                "auto_window_level",
-            }
+            allowed_modes = {"pan", "zoom", "magnifier", "select"}
             if mode not in allowed_modes:
                 mode = "pan"
 
@@ -2490,12 +2478,11 @@ class ImageViewer(QGraphicsView):
                             "Text Annotation (T)": "text_annotation",
                             "Window/Level ROI (W)": "auto_window_level"
                         }
-                        # MPR mode restricts interaction types. ROI/measurement/WL-ROI
-                        # must remain available, while annotation-only modes remain disabled.
+                        # Drawing/annotation modes are disabled in MPR mode.
                         _mpr_disabled_modes = {
-                            "crosshair",
-                            "arrow_annotation",
-                            "text_annotation",
+                            "roi_ellipse", "roi_rectangle", "crosshair",
+                            "measure", "arrow_annotation", "text_annotation",
+                            "auto_window_level",
                         } if self._mpr_mode_override else set()
                         for action_text, mode in left_mouse_actions.items():
                             action = context_menu.addAction(action_text)
@@ -2503,7 +2490,7 @@ class ImageViewer(QGraphicsView):
                             if mode in _mpr_disabled_modes:
                                 action.setEnabled(False)
                                 action.setToolTip(
-                                    "This interaction type is not available on MPR views."
+                                    "ROIs and annotations are not available on MPR views."
                                 )
                             else:
                                 if self.mouse_mode == mode:

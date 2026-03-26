@@ -129,11 +129,11 @@ class KeyObjectHandler:
             - 'value': Numeric value (if applicable)
             - 'referenced_images': List of referenced SOP Instance UIDs
         """
-        annotations = []
+        annotations: List[Dict[str, Any]] = []
         
         try:
             for content_item in content_seq:
-                annotation = {
+                annotation: Dict[str, Any] = {
                     'type': '',
                     'text': '',
                     'value': None,
