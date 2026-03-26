@@ -32,18 +32,21 @@ Requirements:
 from __future__ import annotations
 
 import traceback
-from dataclasses import dataclass, field
-from typing import List, Optional
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 from PySide6.QtCore import QThread, Signal
 
+sitk: Any = None
+sitk_available: bool = False
 try:
-    import SimpleITK as sitk
-    _SITK_AVAILABLE = True
+    import SimpleITK as _sitk
+
+    sitk = _sitk
+    sitk_available = True
 except ImportError:
-    _SITK_AVAILABLE = False
-    sitk = None  # type: ignore
+    pass
 
 from core.mpr_volume import MprVolume, MprVolumeError
 from core.slice_geometry import SlicePlane, SliceStack
@@ -86,7 +89,7 @@ class MprResult:
     """
     slices: List[np.ndarray]
     slice_stack: SliceStack
-    output_spacing_mm: tuple
+    output_spacing_mm: Tuple[float, float]
     output_thickness_mm: float
     source_volume: MprVolume
     interpolation: str
@@ -224,7 +227,7 @@ class MprBuilderWorker(QThread):
         Raises:
             MprVolumeError on validation or resampling failure.
         """
-        if not _SITK_AVAILABLE:
+        if not sitk_available:
             raise MprVolumeError(
                 "SimpleITK is not installed. MPR requires SimpleITK."
             )
@@ -357,7 +360,9 @@ class MprBuilderWorker(QThread):
             slab_thickness_mm=0.0,
         )
 
-    def _compute_output_grid(self) -> tuple:
+    def _compute_output_grid(
+        self,
+    ) -> Tuple[np.ndarray, Tuple[int, int], int]:
         """
         Compute the output origin, 2-D size (rows_px, cols_px), and slice count.
 
@@ -441,7 +446,7 @@ class MprBuilderWorker(QThread):
         slice_origin: np.ndarray,
         rows_px: int,
         cols_px: int,
-    ) -> "sitk.Image":
+    ) -> Any:
         """
         Build a 2-D SimpleITK reference image for one output MPR slice.
 
@@ -476,9 +481,7 @@ class MprBuilderWorker(QThread):
 
         return ref
 
-    def _resample_to_reference(
-        self, reference: "sitk.Image"
-    ) -> Optional["sitk.Image"]:
+    def _resample_to_reference(self, reference: Any) -> Optional[Any]:
         """
         Resample the source volume onto a reference grid using identity transform.
 
@@ -509,7 +512,9 @@ class MprBuilderWorker(QThread):
             _mpr_log(f"Resample failed: {exc}")
             return None
 
-    def _get_rescale_params(self) -> tuple:
+    def _get_rescale_params(
+        self,
+    ) -> Tuple[Optional[float], Optional[float]]:
         """
         Extract RescaleSlope and RescaleIntercept from the source series.
 
@@ -586,7 +591,7 @@ class MprBuilder:
         )
 
     @staticmethod
-    def standard_planes() -> dict:
+    def standard_planes() -> Dict[str, SlicePlane]:
         """
         Return standard anatomical output planes as a {name: SlicePlane} dict.
 

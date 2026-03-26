@@ -34,7 +34,7 @@ import os
 import threading
 import time
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -195,7 +195,7 @@ class MprCache:
         self._max_size_bytes = int(max_size_mb) * 1024 * 1024
         self._lock = threading.Lock()
         # In-memory index of all cache entries: key → _CacheEntry.
-        self._index: dict = {}
+        self._index: Dict[str, _CacheEntry] = {}
         self._scan_disk()
 
     # ------------------------------------------------------------------
@@ -210,7 +210,9 @@ class MprCache:
                 return False
             return entry.path_npz.exists() and entry.path_meta.exists()
 
-    def load(self, key: str) -> Optional[tuple]:
+    def load(
+        self, key: str
+    ) -> Optional[Tuple[List[np.ndarray], SliceStack, Dict[str, Any]]]:
         """
         Load cached MPR data for *key*.
 
@@ -242,7 +244,7 @@ class MprCache:
             ]
 
             with open(entry.path_meta, "r", encoding="utf-8") as f:
-                meta: dict = json.load(f)
+                meta: Dict[str, Any] = json.load(f)
 
             slice_stack = self._reconstruct_stack(meta, slices)
         except Exception as exc:
@@ -317,7 +319,7 @@ class MprCache:
         path_meta = self._cache_dir / (key + self._META_SUFFIX)
 
         try:
-            npz_payload: dict = {"n_slices": np.array(result.n_slices)}
+            npz_payload: Dict[str, Any] = {"n_slices": np.array(result.n_slices)}
             for i, arr in enumerate(result.slices):
                 npz_payload[f"slice_{i}"] = arr.astype(np.float32)
             np.savez_compressed(str(path_npz), **npz_payload)
@@ -470,7 +472,9 @@ class MprCache:
             return False
 
     @staticmethod
-    def _reconstruct_stack(meta: dict, slices: List[np.ndarray]) -> SliceStack:
+    def _reconstruct_stack(
+        meta: Dict[str, Any], slices: List[np.ndarray]
+    ) -> SliceStack:
         """
         Rebuild a SliceStack from cached metadata.
 
