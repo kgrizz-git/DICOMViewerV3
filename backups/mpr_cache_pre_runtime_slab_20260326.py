@@ -47,7 +47,7 @@ from core.slice_geometry import SlicePlane, SliceStack
 # Cache key helpers
 # ---------------------------------------------------------------------------
 
-_MPR_CACHE_FORMAT_VERSION = "4"
+_MPR_CACHE_FORMAT_VERSION = "3"
 
 def _quantise_float(value: float, decimals: int = 4) -> str:
     """Round a float and return its string representation for stable keys."""
@@ -60,6 +60,8 @@ def _make_cache_key(
     output_spacing_mm: float,
     output_thickness_mm: float,
     interpolation: str,
+    combine_mode: str,
+    slab_thickness_mm: float,
     source_dataset_count: int,
 ) -> str:
     """
@@ -68,9 +70,6 @@ def _make_cache_key(
     The key is derived from series UID + output orientation + spacing
     + interpolation + dataset count.  A changed dataset count is used
     as a lightweight proxy for series content change.
-
-    Slab combine parameters are intentionally excluded: the cached stack
-    is always uncombined; combine is applied at display time.
 
     Args:
         series_uid:          DICOM SeriesInstanceUID of the source.
@@ -92,6 +91,8 @@ def _make_cache_key(
         _quantise_float(output_spacing_mm),
         _quantise_float(output_thickness_mm),
         interpolation.lower().strip(),
+        (combine_mode or "none").lower().strip(),
+        _quantise_float(float(slab_thickness_mm), decimals=4),
         str(int(source_dataset_count)),
     ]
     key_str = "|".join(parts)
@@ -125,6 +126,8 @@ def make_result_key(result: MprResult) -> str:
         output_spacing_mm=sp,
         output_thickness_mm=th,
         interpolation=result.interpolation,
+        combine_mode=getattr(result, "combine_mode", "none"),
+        slab_thickness_mm=float(getattr(result, "slab_thickness_mm", 0.0)),
         source_dataset_count=len(ds_list),
     )
 
@@ -280,6 +283,8 @@ class MprCache:
             series_uid = "__unknown__"
 
         normal = result.slice_stack.stack_normal
+        combine_mode = getattr(result, "combine_mode", "none") or "none"
+        slab_thickness_mm = float(getattr(result, "slab_thickness_mm", 0.0))
         meta = {
             "key": key,
             "cache_format_version": _MPR_CACHE_FORMAT_VERSION,
@@ -291,8 +296,8 @@ class MprCache:
             "output_spacing_mm": list(result.output_spacing_mm),
             "output_thickness_mm": result.output_thickness_mm,
             "interpolation": result.interpolation,
-            "combine_mode": "none",
-            "slab_thickness_mm": 0.0,
+            "combine_mode": combine_mode,
+            "slab_thickness_mm": slab_thickness_mm,
             "stack_normal": [float(normal[0]), float(normal[1]), float(normal[2])],
             "stack_positions": list(result.slice_stack.positions),
             "slice_origins": [

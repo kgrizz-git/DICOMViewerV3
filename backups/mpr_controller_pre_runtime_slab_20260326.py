@@ -29,7 +29,7 @@ Requirements:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, Optional
 
 import numpy as np
 from PIL import Image
@@ -48,92 +48,6 @@ from core.dicom_parser import DICOMParser
 from gui.dialogs.mpr_orientation_choice_dialog import MprOrientationChoiceDialog
 from utils.dicom_utils import get_composite_series_key
 from utils.debug_flags import DEBUG_MPR
-
-# --- Runtime slab combine (right-pane “Combine Slices” + Create MPR dialog) ---
-
-_ALLOWED_MPR_COMBINE_COUNTS = (2, 3, 4, 6, 8)
-
-
-def normalize_mpr_combine_slice_count(n: int) -> int:
-    """Map a requested plane count to the nearest allowed UI value (2–8)."""
-    n = max(2, min(8, int(n)))
-    best = 4
-    best_d = 999
-    for c in _ALLOWED_MPR_COMBINE_COUNTS:
-        d = abs(c - n)
-        if d < best_d:
-            best_d = d
-            best = c
-    return best
-
-
-def apply_mpr_stack_combine(
-    stack: List[np.ndarray],
-    slice_index: int,
-    *,
-    enabled: bool,
-    mode: str,
-    n_planes: int,
-) -> np.ndarray:
-    """
-    Return one 2-D slice array, optionally averaged/max/min over *n_planes*
-    neighboring planes in *stack* (same algorithm as legacy builder slab).
-
-    Args:
-        stack:        Uncombined MPR planes (float32 2-D arrays).
-        slice_index:  Center plane index.
-        enabled:      If False, return stack[slice_index] unchanged.
-        mode:         ``aip`` | ``mip`` | ``minip``.
-        n_planes:     Number of planes in the slab window.
-    """
-    n_slices = len(stack)
-    if not enabled or n_slices == 0:
-        return stack[slice_index]
-    n_planes = max(1, int(n_planes))
-    mode_l = (mode or "aip").lower()
-    i = slice_index
-    start = i - (n_planes // 2)
-    end = start + n_planes - 1
-    if start < 0:
-        start = 0
-        end = min(n_slices - 1, n_planes - 1)
-    if end >= n_slices:
-        end = n_slices - 1
-        start = max(0, end - (n_planes - 1))
-    window = stack[start : end + 1]
-    if len(window) == 1:
-        return window[0]
-    arr = np.stack(window, axis=0)
-    if mode_l == "mip":
-        out = np.max(arr, axis=0)
-    elif mode_l == "minip":
-        out = np.min(arr, axis=0)
-    else:
-        out = np.mean(arr, axis=0)
-    return out.astype(np.float32)
-
-
-def seed_mpr_combine_state(
-    data: Dict[str, Any], request: Optional[Any], output_thickness_mm: float
-) -> None:
-    """
-    Initialise ``mpr_combine_*`` keys on *data* from *request* (dialog)
-    or defaults. Used when MPR is activated so runtime slab matches dialog.
-    """
-    if request is not None:
-        cm = (getattr(request, "combine_mode", None) or "none").lower()
-        slab_mm = float(getattr(request, "slab_thickness_mm", 0.0) or 0.0)
-        if cm in ("mip", "minip", "aip") and slab_mm > 0:
-            data["mpr_combine_enabled"] = True
-            data["mpr_combine_mode"] = cm
-            n = max(
-                1, int(round(slab_mm / max(float(output_thickness_mm), 1e-6)))
-            )
-            data["mpr_combine_slice_count"] = normalize_mpr_combine_slice_count(n)
-            return
-    data["mpr_combine_enabled"] = False
-    data["mpr_combine_mode"] = "aip"
-    data["mpr_combine_slice_count"] = 4
 
 
 def _mpr_log(message: str) -> None:
@@ -282,9 +196,6 @@ class MprController(QObject):
             "mpr_slice_index",
             "mpr_source_dataset",
             "mpr_previous_state",
-            "mpr_combine_enabled",
-            "mpr_combine_mode",
-            "mpr_combine_slice_count",
         ):
             data.pop(key, None)
 
@@ -420,13 +331,7 @@ class MprController(QObject):
         except Exception:
             pass
 
-        raw_array = apply_mpr_stack_combine(
-            result.slices,
-            slice_index,
-            enabled=bool(data.get("mpr_combine_enabled", False)),
-            mode=str(data.get("mpr_combine_mode", "aip") or "aip"),
-            n_planes=int(data.get("mpr_combine_slice_count", 4) or 4),
-        )
+        raw_array = result.slices[slice_index]
         # Apply rescale slope/intercept from source series.
         array = result.apply_rescale(raw_array)
 
@@ -481,12 +386,6 @@ class MprController(QObject):
                 )
                 slice_display_manager.display_rois_for_slice(overlay_dataset)
                 slice_display_manager.display_measurements_for_slice(
-                    overlay_dataset
-                )
-                slice_display_manager.display_text_annotations_for_slice(
-                    overlay_dataset
-                )
-                slice_display_manager.display_arrow_annotations_for_slice(
                     overlay_dataset
                 )
                 if roi_coordinator is not None and hasattr(
@@ -621,6 +520,8 @@ class MprController(QObject):
                     output_spacing_mm=request.output_spacing_mm,
                     output_thickness_mm=request.output_thickness_mm,
                     interpolation=request.interpolation,
+                    combine_mode=getattr(request, "combine_mode", "none"),
+                    slab_thickness_mm=float(getattr(request, "slab_thickness_mm", 0.0)),
                     source_dataset_count=n_ds,
                 )
                 hit = self._cache.load(key)
@@ -640,12 +541,7 @@ class MprController(QObject):
                         combine_mode=meta.get("combine_mode", "none"),
                         slab_thickness_mm=float(meta.get("slab_thickness_mm", 0.0)),
                     )
-                    self._activate_mpr(
-                        target_idx,
-                        cached_result,
-                        request.orientation_label,
-                        request=request,
-                    )
+                    self._activate_mpr(target_idx, cached_result, request.orientation_label)
                     return
                 _mpr_log(f"Cache miss: key={key[:12]}...")
             except Exception as exc:
@@ -706,9 +602,7 @@ class MprController(QObject):
                 )
                 return
 
-            self._activate_mpr(
-                target_idx, result, orientation_label, request=request
-            )
+            self._activate_mpr(target_idx, result, orientation_label)
 
         def on_error(msg: str) -> None:
             progress_dlg.close()
@@ -732,11 +626,7 @@ class MprController(QObject):
     # ------------------------------------------------------------------
 
     def _activate_mpr(
-        self,
-        idx: int,
-        result: MprResult,
-        orientation_label: str,
-        request: Optional[Any] = None,
+        self, idx: int, result: MprResult, orientation_label: str
     ) -> None:
         """
         Load an MprResult into subwindow *idx* and switch it to MPR mode.
@@ -745,8 +635,6 @@ class MprController(QObject):
             idx:               Target subwindow index.
             result:            Completed MPR build result.
             orientation_label: Human-readable orientation string.
-            request:           Optional ``MprRequest`` from the dialog (seeds
-                               ``mpr_combine_*`` from dialog slab settings).
         """
         data = self._app.subwindow_data.get(idx)
         if data is None:
@@ -780,9 +668,6 @@ class MprController(QObject):
         data["current_study_uid"] = str(getattr(source_ds, "StudyInstanceUID", ""))
         data["current_series_uid"] = get_composite_series_key(source_ds)
         data["current_datasets"] = result.source_volume.source_datasets
-        seed_mpr_combine_state(
-            data, request, float(result.output_thickness_mm)
-        )
         _mpr_log(
             f"Activate MPR in window {idx}: "
             f"orientation={orientation_label} "
@@ -837,13 +722,6 @@ class MprController(QObject):
                 subwindow.setFocus()
         except Exception:
             pass
-
-        if idx == getattr(self._app, "focused_subwindow_index", -1):
-            sync = getattr(
-                self._app, "_sync_intensity_projection_widget_from_mpr_data", None
-            )
-            if callable(sync):
-                sync(data)
 
     # ------------------------------------------------------------------
     # Internal helpers

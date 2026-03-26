@@ -261,39 +261,7 @@ class SubwindowLifecycleController:
                 )
             else:
                 app.window_level_controls.set_unit(unit)
-        focused_subwindow = app.multi_window_layout.get_focused_subwindow()
-        subwindows = app.multi_window_layout.get_all_subwindows()
-        focused_idx = (
-            subwindows.index(focused_subwindow)
-            if focused_subwindow and focused_subwindow in subwindows
-            else -1
-        )
-        if (
-            focused_idx >= 0
-            and hasattr(app, "_mpr_controller")
-            and app._mpr_controller.is_mpr(focused_idx)
-        ):
-            mp_data = app.subwindow_data.get(focused_idx, {})
-            w = app.intensity_projection_controls_widget
-            w.enable_checkbox.blockSignals(True)
-            w.projection_combo.blockSignals(True)
-            w.slice_count_combo.blockSignals(True)
-            try:
-                w.set_enabled(
-                    bool(mp_data.get("mpr_combine_enabled", False)),
-                    keep_signals_blocked=True,
-                )
-                w.set_projection_type(
-                    str(mp_data.get("mpr_combine_mode", "aip") or "aip")
-                )
-                w.set_slice_count(
-                    int(mp_data.get("mpr_combine_slice_count", 4) or 4)
-                )
-            finally:
-                w.enable_checkbox.blockSignals(False)
-                w.projection_combo.blockSignals(False)
-                w.slice_count_combo.blockSignals(False)
-        elif app.slice_display_manager:
+        if app.slice_display_manager:
             app.intensity_projection_controls_widget.set_enabled(
                 app.slice_display_manager.projection_enabled,
                 keep_signals_blocked=False
@@ -305,7 +273,10 @@ class SubwindowLifecycleController:
                 app.slice_display_manager.projection_slice_count
             )
         if hasattr(app, 'current_studies') and app.current_studies:
+            focused_subwindow = app.multi_window_layout.get_focused_subwindow()
             if focused_subwindow:
+                subwindows = app.multi_window_layout.get_all_subwindows()
+                focused_idx = subwindows.index(focused_subwindow) if focused_subwindow in subwindows else -1
                 if focused_idx >= 0 and focused_idx in app.subwindow_managers:
                     fusion_coordinator = app.subwindow_managers[focused_idx].get('fusion_coordinator')
                     if fusion_coordinator:

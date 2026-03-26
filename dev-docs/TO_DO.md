@@ -33,7 +33,7 @@ This file tracks active and near-term tasks.
 - [ ] **[P0]** Sometimes when scrolling slices, the image seems to drift up or left. The scrollbars move, too. See [details](Image_Drift.md). *SEEMS TO BE RESOLVED*
 - [ ] **[P1]**  After making an MPR in a window, clearing it, then making a new MPR in that window using a different series, the default (embedded) window/level from the first base series was applied instead of from the second.
 - [ ] **[P0]** If the base series for an MPR uses rescaled pixel values, the MPR pixel values should be rescaled the same way ([details](FUTURE_WORK_DETAIL_NOTES.md#multi-planar-reconstructions-mprs-and-oblique-reconstructions))
-- [ ] **[P0]** SliceThickness overlay on MPR should show the constructed MPR's slice thickness, not the underlying original series's
+- [ ] **[P0]** SliceThickness overlay on MPR should show the constructed MPR's slice thickness, not the underlying original series's. Also when using combine slices on an MPR window we should show an overlay like we do on a regular window showing which slices are combined and the type of combination (AvIP, etc). Similarly if an MPR is created using MIP or MinIP from th we should label the MPR window to say that.
 - [ ] **[P1]** Should we block showing DICOM tags when an MPR window is selected (show just "MPR")? Or add some kind of warning that it is the underlying series data somehow?
 - [ ] **[P0]** After creating MPRs, clearing, closing all files, and loading new files, creating new MPR does not load/display ([details](FUTURE_WORK_DETAIL_NOTES.md#multi-planar-reconstructions-mprs-and-oblique-reconstructions)) *NOTE: seems fixed*
 - [ ] **[P0]** "Close All" did not clear thumbnails in layout map
