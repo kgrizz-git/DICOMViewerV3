@@ -120,7 +120,7 @@ This section gives the **high‑level phases**; details and PoC flows are in Sec
   - Show a modal dialog summarizing key metrics and a pass/fail indication.
   - Allow the user to **export a PDF report** produced by pylinac.
 - Keep scope intentionally limited:
-  - ACR CT only.
+  - ACR CT and ACR MRI only (CatPhan deferred to Phase 2).
   - One series at a time.
   - Simple, text‑based results + optional single image preview.
 
@@ -169,12 +169,12 @@ This section gives a **more concrete design** for the initial ACR‑focused PoC 
 
 ### 4.2 Dependencies and Configuration
 
-**Requirements additions (conceptual):**
+**Requirements additions (initial proposal):**
 
 ```text
-pylinac>=3.0.0        # main QA library
-scipy>=1.9.0          # numeric routines required by pylinac
-scikit-image>=0.19.0  # image processing utilities used by pylinac
+pylinac              # main QA library (pin after initial compatibility test)
+scipy                # numeric routines used by pylinac
+scikit-image         # image processing utilities used by pylinac
 ```
 
 These should be added to `requirements.txt` once we commit to implementing integration.
@@ -190,26 +190,29 @@ Without changing existing behavior, we can introduce a small, focused set of new
 
 ```text
 src/
-  tools/
-    phantom_analysis/
-      __init__.py
-      pylinac_acr_wrapper.py      # ACR‑specific pylinac integration
-      pylinac_catphan_wrapper.py  # CatPhan‑specific integration (PoC or Phase 2)
-      common.py                   # Shared helpers (path handling, error processing)
+  qa/
+    __init__.py
+    analysis_types.py             # dataclasses for requests/results/errors
+    phantom_series_selector.py    # resolve active series into ordered file paths
+    pylinac_runner.py             # worker-safe pylinac orchestration entrypoints
+    pylinac_acr.py                # ACR CT/MRI-specific analysis adapters
+    pylinac_catphan.py            # CatPhan adapters (Phase 2)
+    qa_thresholds.py              # configurable pass/fail thresholds
   gui/
     dialogs/
-      phantom_analysis_dialog.py  # UI to show metrics/results and export options
+      qa_results_dialog.py        # UI presentation only (no direct pylinac imports)
 ```
 
 **Key ideas:**
-- `pylinac_acr_wrapper.py`:
-  - Encapsulate pylinac imports and usage for ACR analysis.
-  - Provide a **simple function/API** that takes a list of DICOM file paths or a directory and returns:
-    - A structured results object (metrics).
-    - Optionally, a temporary path to a generated PDF or image(s).
-- `phantom_analysis_dialog.py`:
-  - Pure UI layer: display ACR metrics, allow user to export PDF, and handle error messages.
-  - No direct pylinac calls—those go through the wrapper.
+- Keep all QA analysis code in a dedicated `src/qa` package so it can evolve independently from ROI/metadata/fusion logic.
+- `pylinac_runner.py`:
+  - Encapsulates imports and version compatibility checks.
+  - Provides one stable entrypoint used by UI/controllers.
+- `analysis_types.py`:
+  - Defines a normalized result schema (`status`, `metrics`, `warnings`, `artifacts`) independent of pylinac internals.
+- `qa_results_dialog.py`:
+  - Pure UI layer; no direct pylinac calls.
+  - Presents normalized metrics and report/export actions.
 
 This keeps pylinac‑specific logic in **one compartmentalized area**, making it easier to maintain or disable.
 
@@ -232,25 +235,21 @@ This keeps pylinac‑specific logic in **one compartmentalized area**, making it
      - Run pylinac in a **background thread or worker** to keep the GUI responsive.
      - Provide a simple progress indicator (spinner or “Analyzing…” message) in a small modal/progress dialog.
 
-4. **Pylinac analysis (inside `pylinac_acr_wrapper`)**
+4. **Pylinac analysis (inside `pylinac_acr.py`)**
    - Conceptually:
 
 ```python
-def run_acr_analysis(dicom_paths: list[str]) -> ACRAnalysisResult:
-    from pylinac import ACRCT  # example class; exact class may differ per pylinac version
+def run_acr_analysis(dicom_paths: list[str], modality: str) -> ACRAnalysisResult:
+    # Import classes lazily so QA remains optional.
+    from pylinac import ACRCT, ACRMRILarge  # class names/version support must be validated
 
     # pylinac can typically take either a folder path or a list of files
-    acr = ACRCT(dicom_paths)  # or ACRCT.from_folder(folder_path)
+    analyzer_cls = ACRCT if modality == "CT" else ACRMRILarge
+    acr = analyzer_cls(dicom_paths)  # or analyzer_cls.from_folder(folder_path)
     acr.analyze()             # perform the main analysis
 
     # extract useful metrics (names depend on pylinac API)
-    metrics = {
-        "hu_linearity": acr.hu_linearity,          # example
-        "geometry": acr.geometry,                  # e.g., size or scaling metrics
-        "uniformity": acr.uniformity,              # center vs periphery HU
-        "noise": acr.noise,                        # noise metrics
-        "low_contrast": acr.low_contrast          # number of visible low‑contrast objects
-    }
+    metrics = extract_metrics(acr, modality=modality)
 
     # optional: generate a PDF report to a temp path
     pdf_path = None
@@ -267,7 +266,7 @@ def run_acr_analysis(dicom_paths: list[str]) -> ACRAnalysisResult:
     )
 ```
 
-> **Note:** The specific class names and attributes (e.g., `ACRCT`, `hu_linearity`) depend on the pylinac version and its ACR API; the above is **conceptual** and will need to be aligned with the actual pylinac documentation and source.
+> **Important:** Pylinac class names/attributes vary across versions. Before implementation, lock a tested pylinac version in `requirements.txt`, then update adapter code to match that exact API.
 
 5. **Displaying results**
    - When the analysis completes, the main thread:
@@ -292,7 +291,7 @@ Once the ACR PoC is working, a **minimal CatPhan extension** can be introduced w
 
 ```python
 def run_catphan_analysis(dicom_paths: list[str], model: str = "504") -> CatPhanAnalysisResult:
-    from pylinac import CatPhan504, CatPhan604, CatPhan700  # etc.
+    from pylinac import CatPhan503, CatPhan504, CatPhan600, CatPhan604, CatPhan700
 
     model_class_map = {
         "503": CatPhan503,
@@ -355,6 +354,44 @@ To validate the PoC in a controlled way:
 
 - **Performance sanity checks**
   - Time the analysis for typical ACR and CatPhan datasets; verify it is acceptable for interactive use (seconds, not minutes, in normal scenarios).
+
+---
+
+## 6. Concrete Integration Observations and Suggestions
+
+1. **Use active-series identity, not only folder browsing**
+   - The viewer already tracks focused subwindows and active series. QA entrypoints should consume the same active-series abstraction used for measurement/overlay workflows, then resolve ordered source files from existing DICOM loading metadata.
+   - Suggestion: expose a small helper in `DICOMViewerApp` (or a thin controller) returning `(series_uid, modality, ordered_file_paths)`.
+
+2. **Normalize orientation and spacing before handing data to pylinac**
+   - Some QA failures are caused by slice order/orientation mismatches rather than phantom content.
+   - Suggestion: preflight checks should validate monotonic slice position and consistent pixel spacing/slice thickness; if inconsistent, surface a warning and offer "continue anyway".
+
+3. **Separate "analysis physics" from "acceptance criteria"**
+   - Pylinac calculates metrics; local clinics often apply site-specific tolerance thresholds.
+   - Suggestion: store thresholds in a local config (`qa_thresholds.py` + config persistence), and evaluate pass/fail in-app against that configuration rather than hard-coding logic in pylinac adapters.
+
+4. **Report reproducibility metadata**
+   - QA trend utility depends on reproducibility.
+   - Suggestion: every saved result should include analyzer version (`pylinac.__version__`), app version (`src/version.py`), phantom type, and acquisition date/time to avoid ambiguous trend comparisons.
+
+5. **Avoid direct GUI-thread analysis calls**
+   - Phantom analysis can be CPU-heavy and occasionally slow for large studies.
+   - Suggestion: use a worker thread with explicit cancellation support and deterministic UI states (`idle -> running -> complete/failed`), reusing existing progress-management patterns where possible.
+
+6. **Start with deterministic export outputs**
+   - A minimal but useful first deliverable is structured JSON + optional PDF.
+   - Suggestion: export machine-readable metrics (`.json`) alongside PDF from day one; this enables trend graphs and downstream integrations without reprocessing.
+
+---
+
+## 7. Immediate Implementation Milestones (Practical Order)
+
+- **Milestone A:** dependency spike branch, verify pylinac imports and one CT + one MRI sample analysis from a standalone script.
+- **Milestone B:** add `src/qa` package with normalized result dataclasses and a single `run_acr_analysis` entrypoint.
+- **Milestone C:** wire one menu action and results dialog; support active series + folder fallback.
+- **Milestone D:** add JSON/PDF export and a small set of preflight validations with clear user-facing warnings.
+- **Milestone E:** add CatPhan model selection and adapters once ACR workflow is stable.
 
 ---
 

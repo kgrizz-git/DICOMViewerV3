@@ -21,17 +21,11 @@ slice_location_lines_same_group_only : bool  – only show lines from same linke
 slice_location_lines_focused_only : bool  – only show lines from the focused subwindow (default False)
 """
 
-from typing import Any, Callable, List, cast
+from typing import List
 
 
 class SliceSyncConfigMixin:
     """Config mixin: slice sync enabled flag and linked group assignments."""
-    def _config(self) -> dict[str, Any]:
-        return cast(dict[str, Any], getattr(self, "config"))
-
-    def _save_config(self) -> None:
-        save_func = cast(Callable[[], None], getattr(self, "save_config"))
-        save_func()
 
     # ------------------------------------------------------------------
     # Master toggle
@@ -43,7 +37,7 @@ class SliceSyncConfigMixin:
 
         Default is ``False`` (sync off).
         """
-        return bool(self._config().get("slice_sync_enabled", False))
+        return bool(self.config.get("slice_sync_enabled", False))
 
     def set_slice_sync_enabled(self, enabled: bool) -> None:
         """
@@ -52,8 +46,8 @@ class SliceSyncConfigMixin:
         Args:
             enabled: True to enable sync, False to disable.
         """
-        self._config()["slice_sync_enabled"] = bool(enabled)
-        self._save_config()
+        self.config["slice_sync_enabled"] = bool(enabled)
+        self.save_config()
 
     # ------------------------------------------------------------------
     # Linked groups
@@ -69,7 +63,7 @@ class SliceSyncConfigMixin:
         Returns:
             List of groups, e.g. [[0, 2], [1, 3]].  May be empty.
         """
-        raw = self._config().get("slice_sync_groups", [])
+        raw = self.config.get("slice_sync_groups", [])
         if not isinstance(raw, list):
             return []
         validated: List[List[int]] = []
@@ -94,8 +88,8 @@ class SliceSyncConfigMixin:
             for group in groups
             if isinstance(group, list) and len(group) >= 2
         ]
-        self._config()["slice_sync_groups"] = cleaned
-        self._save_config()
+        self.config["slice_sync_groups"] = cleaned
+        self.save_config()
 
     # ------------------------------------------------------------------
     # Slice location lines
@@ -107,7 +101,7 @@ class SliceSyncConfigMixin:
 
         Default is ``False`` (off).
         """
-        return bool(self._config().get("slice_location_lines_visible", False))
+        return bool(self.config.get("slice_location_lines_visible", False))
 
     def set_slice_location_lines_visible(self, visible: bool) -> None:
         """
@@ -116,8 +110,8 @@ class SliceSyncConfigMixin:
         Args:
             visible: True to show lines, False to hide.
         """
-        self._config()["slice_location_lines_visible"] = bool(visible)
-        self._save_config()
+        self.config["slice_location_lines_visible"] = bool(visible)
+        self.save_config()
 
     def get_slice_location_lines_same_group_only(self) -> bool:
         """
@@ -127,7 +121,7 @@ class SliceSyncConfigMixin:
         line on the target. Default is ``False`` so all views show lines from
         all other views; enable for linked-group-only behavior.
         """
-        return bool(self._config().get("slice_location_lines_same_group_only", False))
+        return bool(self.config.get("slice_location_lines_same_group_only", False))
 
     def set_slice_location_lines_same_group_only(self, same_group_only: bool) -> None:
         """
@@ -136,8 +130,8 @@ class SliceSyncConfigMixin:
         Args:
             same_group_only: True to scope to linked group only.
         """
-        self._config()["slice_location_lines_same_group_only"] = bool(same_group_only)
-        self._save_config()
+        self.config["slice_location_lines_same_group_only"] = bool(same_group_only)
+        self.save_config()
 
     def get_slice_location_lines_focused_only(self) -> bool:
         """
@@ -146,7 +140,7 @@ class SliceSyncConfigMixin:
         When True, only the currently focused subwindow's slice plane intersection
         is drawn on other views. Default is ``False``.
         """
-        return bool(self._config().get("slice_location_lines_focused_only", False))
+        return bool(self.config.get("slice_location_lines_focused_only", False))
 
     def set_slice_location_lines_focused_only(self, focused_only: bool) -> None:
         """
@@ -155,5 +149,5 @@ class SliceSyncConfigMixin:
         Args:
             focused_only: True to show only the focused subwindow's line.
         """
-        self._config()["slice_location_lines_focused_only"] = bool(focused_only)
-        self._save_config()
+        self.config["slice_location_lines_focused_only"] = bool(focused_only)
+        self.save_config()
