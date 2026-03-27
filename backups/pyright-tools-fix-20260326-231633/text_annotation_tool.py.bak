@@ -182,9 +182,7 @@ class TextAnnotationItem(QGraphicsTextItem):
         # Call callback if provided (for new annotations)
         if has_callback:
             annotation_debug(f" TextAnnotationItem.finish_editing: calling callback with accept={accept}")
-            callback = self.on_editing_finished
-            if callback is not None:
-                callback(accept)
+            self.on_editing_finished(accept)
             annotation_debug(f" TextAnnotationItem.finish_editing: callback returned")
         else:
             annotation_debug(f" TextAnnotationItem.finish_editing: no callback to call")
@@ -276,12 +274,7 @@ class TextAnnotationItem(QGraphicsTextItem):
                 self.finish_editing(accept=True)
                 return
         
-        # QGraphicsTextItem does not expose insertFromMimeData like QTextEdit.
-        # Insert text via the current cursor to preserve expected paste behavior.
-        if source.hasText():
-            cursor = self.textCursor()
-            cursor.insertText(source.text())
-            self.setTextCursor(cursor)
+        super().insertFromMimeData(source)
     
     def focusOutEvent(self, event) -> None:
         """

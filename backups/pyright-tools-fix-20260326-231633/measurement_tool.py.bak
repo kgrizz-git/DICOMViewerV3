@@ -276,7 +276,7 @@ class MeasurementTool:
         
         # Create a temporary measurement to get callback reference
         # We'll update the reference after creating the actual measurement
-        temp_measurement_ref: Dict[str, Optional[MeasurementItem]] = {"measurement": None}
+        temp_measurement_ref = {'measurement': None}
         
         def update_text_offset(offset: QPointF) -> None:
             """Update stored text offset when text is moved."""

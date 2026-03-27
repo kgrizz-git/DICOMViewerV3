@@ -22,8 +22,7 @@ from PySide6.QtWidgets import (QGraphicsItem, QGraphicsTextItem, QGraphicsLineIt
                                 QGraphicsScene)
 from PySide6.QtCore import Qt, QPointF, QRectF
 from PySide6.QtGui import QPen, QColor, QBrush, QPainterPath, QPolygonF
-from typing import List, Optional, Dict, Any, Tuple
-import importlib
+from typing import List, Optional, Dict
 import pydicom
 from pydicom.dataset import Dataset
 from core.presentation_state_handler import PresentationStateHandler
@@ -88,7 +87,7 @@ class AnnotationManager:
         
         return False
     
-    def get_contours(self) -> List[Dict[str, Any]]:
+    def get_contours(self) -> List[Dict]:
         """
         Extract contours from RT STRUCT data.
         
@@ -138,7 +137,7 @@ class AnnotationManager:
         
         return contours
     
-    def create_overlay_items(self, scene, contours: List[Dict[str, Any]]) -> List[QGraphicsItem]:
+    def create_overlay_items(self, scene, contours: List[Dict]) -> List[QGraphicsItem]:
         """
         Create graphics items for contours.
         
@@ -226,7 +225,7 @@ class AnnotationManager:
         self.presentation_states.clear()
         self.key_objects.clear()
 
-    def get_annotations_for_image(self, dataset: Dataset, study_uid: str) -> List[Dict[str, Any]]:
+    def get_annotations_for_image(self, dataset: Dataset, study_uid: str) -> List[Dict]:
         """
         Get annotations for a specific image from Presentation States, Key Objects, and embedded annotations.
         
@@ -326,7 +325,7 @@ class AnnotationManager:
         
         return annotations
     
-    def create_presentation_state_items(self, scene, annotations: List[Dict[str, Any]], 
+    def create_presentation_state_items(self, scene, annotations: List[Dict], 
                                        image_width: float, image_height: float) -> List[QGraphicsItem]:
         """
         Create graphics items for Presentation State annotations.
@@ -529,13 +528,8 @@ class AnnotationManager:
         
         return items
     
-    def _transform_coordinates(
-        self,
-        coords: List[Tuple[float, float]],
-        units: str,
-        image_width: float,
-        image_height: float,
-    ) -> List[Tuple[float, float]]:
+    def _transform_coordinates(self, coords: List[tuple], units: str, 
+                               image_width: float, image_height: float) -> List[tuple]:
         """
         Transform coordinates based on their units.
         
@@ -578,7 +572,7 @@ class AnnotationManager:
         
         return transformed
     
-    def _get_embedded_annotations(self, dataset: Dataset) -> List[Dict[str, Any]]:
+    def _get_embedded_annotations(self, dataset: Dataset) -> List[Dict]:
         """
         Extract embedded annotations from an image dataset.
         
@@ -616,7 +610,7 @@ class AnnotationManager:
         
         return annotations
     
-    def _parse_overlay_data(self, dataset: Dataset) -> List[Dict[str, Any]]:
+    def _parse_overlay_data(self, dataset: Dataset) -> List[Dict]:
         """
         Parse OverlayData tags from DICOM dataset.
         
@@ -670,25 +664,16 @@ class AnnotationManager:
                     overlay_type_val = 'G'
                 
                 if overlay_rows and overlay_cols:
-                    def _coerce_to_int(raw_value: Any, default: int = 0) -> int:
-                        value = raw_value.value if hasattr(raw_value, "value") else raw_value
-                        try:
-                            return int(value)
-                        except (TypeError, ValueError):
-                            return default
-
-                    rows_raw = overlay_rows.value if hasattr(overlay_rows, "value") else overlay_rows
-                    cols_raw = overlay_cols.value if hasattr(overlay_cols, "value") else overlay_cols
-                    rows_val = _coerce_to_int(rows_raw, default=0)
-                    cols_val = _coerce_to_int(cols_raw, default=0)
+                    rows_val = int(overlay_rows.value) if hasattr(overlay_rows, 'value') else int(overlay_rows)
+                    cols_val = int(overlay_cols.value) if hasattr(overlay_cols, 'value') else int(overlay_cols)
                     
                     # Parse OverlayOrigin - stored as [row, column] pair (1-based indexing)
                     # Default to [1, 1] per DICOM standard if missing
                     if overlay_origin:
                         origin_value = overlay_origin.value if hasattr(overlay_origin, 'value') else overlay_origin
                         if isinstance(origin_value, (list, tuple)) and len(origin_value) >= 2:
-                            origin_row = _coerce_to_int(origin_value[0], default=1)  # Row (y coordinate)
-                            origin_col = _coerce_to_int(origin_value[1], default=1)  # Column (x coordinate)
+                            origin_row = int(origin_value[0])  # Row (y coordinate)
+                            origin_col = int(origin_value[1])  # Column (x coordinate)
                         else:
                             origin_row = 1
                             origin_col = 1
@@ -737,14 +722,8 @@ class AnnotationManager:
         
         return overlays
     
-    def _convert_overlay_bitmap_to_graphics(
-        self,
-        overlay_data,
-        cols: int,
-        rows: int,
-        origin_x: float,
-        origin_y: float,
-    ) -> Dict[str, Any]:
+    def _convert_overlay_bitmap_to_graphics(self, overlay_data, cols: int, rows: int, 
+                                           origin_x: float, origin_y: float) -> Dict:
         """
         Convert overlay bitmap data to graphics primitives.
         
@@ -772,6 +751,10 @@ class AnnotationManager:
                 # pydicom DataElement
                 overlay_bytes = overlay_data.value
             elif isinstance(overlay_data, (bytes, bytearray)):
+                overlay_bytes = bytes(overlay_data)
+            elif isinstance(overlay_data, pydicom.valuerep.OBvalue):
+                overlay_bytes = bytes(overlay_data)
+            elif isinstance(overlay_data, pydicom.valuerep.OWvalue):
                 overlay_bytes = bytes(overlay_data)
             else:
                 # Try to convert to bytes
@@ -873,7 +856,7 @@ class AnnotationManager:
             try:
                 # Try OpenCV for better contour extraction
                 try:
-                    cv2 = importlib.import_module("cv2")
+                    import cv2
                     # Find contours (external contours only for now)
                     contours, _ = cv2.findContours(
                         (bitmap > 0).astype(np.uint8) * 255,
@@ -914,7 +897,7 @@ class AnnotationManager:
                                 #     print(f"[ANNOTATIONS] First contour has {len(path_coords)} points")
                 except ImportError:
                     # OpenCV not available, use scipy connected components
-                    ndimage = importlib.import_module("scipy.ndimage")
+                    from scipy import ndimage
                     # Label connected components
                     labeled, num_features = ndimage.label(bitmap > 0)
                     
@@ -1022,6 +1005,10 @@ class AnnotationManager:
                 overlay_bytes = overlay_data.value
             elif isinstance(overlay_data, (bytes, bytearray)):
                 overlay_bytes = bytes(overlay_data)
+            elif isinstance(overlay_data, pydicom.valuerep.OBvalue):
+                overlay_bytes = bytes(overlay_data)
+            elif isinstance(overlay_data, pydicom.valuerep.OWvalue):
+                overlay_bytes = bytes(overlay_data)
             else:
                 try:
                     overlay_bytes = bytes(overlay_data)
@@ -1110,16 +1097,9 @@ class AnnotationManager:
             traceback.print_exc()
             return None
     
-    def _render_overlay_paths(
-        self,
-        overlay_paths: List[List[Tuple[float, float]]],
-        coords: List[Tuple[float, float]],
-        paths: List[List[Tuple[float, float]]],
-        pen: QPen,
-        color: QColor,
-        scene,
-        items: List[QGraphicsItem],
-    ) -> None:
+    def _render_overlay_paths(self, overlay_paths: List[List[tuple]], coords: List[tuple],
+                              paths: List[List[tuple]], pen: QPen, color: QColor,
+                              scene, items: List) -> None:
         """
         Render overlay paths with improved visibility and filtering.
         
