@@ -67,7 +67,7 @@ jobs:
 
       # Pin action + image tag so CI is reproducible; bump with Dependabot or when releasing.
       - name: Run TruffleHog secret scanner
-        uses: trufflesecurity/trufflehog@v3.94.0
+        uses: trufflesecurity/trufflehog@v3.94.1
         with:
           path: ./
           base: "main"
