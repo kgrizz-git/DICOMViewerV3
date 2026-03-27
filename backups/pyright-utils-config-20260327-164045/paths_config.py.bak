@@ -10,18 +10,11 @@ Mixin contract:
 """
 
 import os
-from typing import Any, Callable, List, Optional, cast
+from typing import List, Optional
 
 
 class PathsConfigMixin:
     """Config mixin: last-opened path, last-export path, and recent files."""
-
-    def _config(self) -> dict[str, Any]:
-        return cast(dict[str, Any], getattr(self, "config"))
-
-    def _save_config(self) -> None:
-        save_func = cast(Callable[[], None], getattr(self, "save_config"))
-        save_func()
 
     def get_last_path(self) -> str:
         """
@@ -30,7 +23,7 @@ class PathsConfigMixin:
         Returns:
             Path string, empty if not set
         """
-        return self._config().get("last_path", "")
+        return self.config.get("last_path", "")
 
     def set_last_path(self, path: str) -> None:
         """
@@ -39,8 +32,8 @@ class PathsConfigMixin:
         Args:
             path: Path to save
         """
-        self._config()["last_path"] = path
-        self._save_config()
+        self.config["last_path"] = path
+        self.save_config()
 
     def get_last_export_path(self) -> str:
         """
@@ -49,7 +42,7 @@ class PathsConfigMixin:
         Returns:
             Path string, empty if not set
         """
-        return self._config().get("last_export_path", "")
+        return self.config.get("last_export_path", "")
 
     def set_last_export_path(self, path: str) -> None:
         """
@@ -58,8 +51,8 @@ class PathsConfigMixin:
         Args:
             path: Path to save
         """
-        self._config()["last_export_path"] = path
-        self._save_config()
+        self.config["last_export_path"] = path
+        self.save_config()
 
     @staticmethod
     def normalize_path(file_path: str) -> Optional[str]:
@@ -111,7 +104,7 @@ class PathsConfigMixin:
         Returns:
             List of file/folder paths (most recent first)
         """
-        return self._config().get("recent_files", [])
+        return self.config.get("recent_files", [])
 
     def add_recent_file(self, file_path: str) -> None:
         """
@@ -127,7 +120,7 @@ class PathsConfigMixin:
         if not normalized_path:
             return
 
-        recent_files = self._config().get("recent_files", [])
+        recent_files = self.config.get("recent_files", [])
 
         if normalized_path in recent_files:
             recent_files.remove(normalized_path)
@@ -135,8 +128,8 @@ class PathsConfigMixin:
         recent_files.insert(0, normalized_path)
         recent_files = recent_files[:20]
 
-        self._config()["recent_files"] = recent_files
-        self._save_config()
+        self.config["recent_files"] = recent_files
+        self.save_config()
 
     def remove_recent_file(self, file_path: str) -> None:
         """
@@ -145,8 +138,8 @@ class PathsConfigMixin:
         Args:
             file_path: Path to file or folder to remove
         """
-        recent_files = self._config().get("recent_files", [])
+        recent_files = self.config.get("recent_files", [])
         if file_path in recent_files:
             recent_files.remove(file_path)
-            self._config()["recent_files"] = recent_files
-            self._save_config()
+            self.config["recent_files"] = recent_files
+            self.save_config()

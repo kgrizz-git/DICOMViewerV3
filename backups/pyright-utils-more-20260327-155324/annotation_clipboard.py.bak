@@ -36,14 +36,14 @@ class AnnotationClipboard:
     
     def copy_annotations(
         self,
-        rois: List[Any],
-        measurements: List[Any],
-        crosshairs: List[Any],
+        rois: List,
+        measurements: List,
+        crosshairs: List,
         source_study_uid: str,
         source_series_uid: str,
         source_instance_identifier: int,
-        text_annotations: Optional[List[Any]] = None,
-        arrow_annotations: Optional[List[Any]] = None
+        text_annotations: Optional[List] = None,
+        arrow_annotations: Optional[List] = None
     ) -> Dict[str, Any]:
         """
         Copy annotations to clipboard.
@@ -76,7 +76,7 @@ class AnnotationClipboard:
         
         return data
     
-    def _serialize_rois(self, rois: List[Any]) -> List[Dict[str, Any]]:
+    def _serialize_rois(self, rois: List) -> List[Dict[str, Any]]:
         """
         Serialize ROI items.
         
@@ -123,7 +123,7 @@ class AnnotationClipboard:
         
         return serialized
     
-    def _serialize_measurements(self, measurements: List[Any]) -> List[Dict[str, Any]]:
+    def _serialize_measurements(self, measurements: List) -> List[Dict[str, Any]]:
         """
         Serialize measurement items.
         
@@ -150,7 +150,7 @@ class AnnotationClipboard:
         
         return serialized
     
-    def _serialize_crosshairs(self, crosshairs: List[Any]) -> List[Dict[str, Any]]:
+    def _serialize_crosshairs(self, crosshairs: List) -> List[Dict[str, Any]]:
         """
         Serialize crosshair items.
         
@@ -177,7 +177,7 @@ class AnnotationClipboard:
         
         return serialized
     
-    def _serialize_text_annotations(self, text_annotations: List[Any]) -> List[Dict[str, Any]]:
+    def _serialize_text_annotations(self, text_annotations: List) -> List[Dict[str, Any]]:
         """
         Serialize text annotation items.
         
@@ -212,7 +212,7 @@ class AnnotationClipboard:
         
         return serialized
     
-    def _serialize_arrow_annotations(self, arrow_annotations: List[Any]) -> List[Dict[str, Any]]:
+    def _serialize_arrow_annotations(self, arrow_annotations: List) -> List[Dict[str, Any]]:
         """
         Serialize arrow annotation items.
         

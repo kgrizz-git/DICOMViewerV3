@@ -9,18 +9,9 @@ Mixin contract:
     the concrete ConfigManager class that inherits this mixin.
 """
 
-from typing import Any, Callable, cast
-
 
 class AppConfigMixin:
     """Config mixin: application-level settings (disclaimer acceptance)."""
-
-    def _config(self) -> dict[str, Any]:
-        return cast(dict[str, Any], getattr(self, "config"))
-
-    def _save_config(self) -> None:
-        save_func = cast(Callable[[], None], getattr(self, "save_config"))
-        save_func()
 
     def get_disclaimer_accepted(self) -> bool:
         """
@@ -29,7 +20,7 @@ class AppConfigMixin:
         Returns:
             True if disclaimer was accepted, False otherwise
         """
-        return self._config().get("disclaimer_accepted", False)
+        return self.config.get("disclaimer_accepted", False)
 
     def set_disclaimer_accepted(self, accepted: bool) -> None:
         """
@@ -38,5 +29,5 @@ class AppConfigMixin:
         Args:
             accepted: True if user accepted and chose not to see it again
         """
-        self._config()["disclaimer_accepted"] = accepted
-        self._save_config()
+        self.config["disclaimer_accepted"] = accepted
+        self.save_config()

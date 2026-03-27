@@ -7,6 +7,10 @@ The goals are:
 - **Keep DICOMViewerV3 modular**: pylinac is an optional analysis backend, not a core dependency for basic viewing.
 - **Provide a clear multi‑phase roadmap**: from proof‑of‑concept (PoC) to advanced QA workflows.
 
+### Progressive automation: manual-first, pipeline later
+
+Integration can start with **low automation** and still deliver value: the user **names or selects the phantom** (preset or modality), **chooses the series** (and, when relevant, **the slice, frame, or echo**), and **picks which analysis to run** (one module or a minimal subset) instead of relying on auto-identification or a full end‑to‑end suite on day one. Later work layers in **heuristic phantom detection**, **best-slice or best-volume hints**, **wizards**, **batch and queued runs**, and **combined QA pipelines**—all on top of the same wrappers so early, narrowly scoped workflows remain testable and valid. Complementary native QA (mammography MAP, CT primitives, calibration) follows the same idea in [AUTOMATED_QA_ADDITIONAL_ANALYSIS.md](AUTOMATED_QA_ADDITIONAL_ANALYSIS.md) §1.1.
+
 ---
 
 ## 1. Background: Pylinac and Phantom Types
@@ -113,6 +117,7 @@ This section gives the **high‑level phases**; details and PoC flows are in Sec
 
 **Goal:** Demonstrate end‑to‑end ACR analysis (CT and MRI) from inside DICOMViewerV3 with minimal new UI.
 
+- **Assume explicit human choices in Phase 1:** user confirms **phantom type / modality**, **data scope** (active series or folder), and any **slice or echo** needed when a single stack is ambiguous—see **Progressive automation** above; avoid blocking the PoC on auto‑detection.
 - Add optional dependencies (`pylinac`, `scipy`, `scikit-image`).
 - Add a **Tools → ACR Phantom Analysis (pylinac)** menu action.
 - For the currently loaded **ACR CT or MRI phantom series**, or via a simple folder picker:
@@ -383,6 +388,9 @@ To validate the PoC in a controlled way:
    - A minimal but useful first deliverable is structured JSON + optional PDF.
    - Suggestion: export machine-readable metrics (`.json`) alongside PDF from day one; this enables trend graphs and downstream integrations without reprocessing.
 
+7. **Progressive automation**
+   - Ship a **thin, manual‑driven** path first (phantom preset, series, slice/test selection). Defer **auto phantom ID**, **full‑suite single‑click**, and **batch pipelines** until wrappers and exports are stable—see the opening **Progressive automation** subsection.
+
 ---
 
 ## 7. Immediate Implementation Milestones (Practical Order)
@@ -392,6 +400,7 @@ To validate the PoC in a controlled way:
 - **Milestone C:** wire one menu action and results dialog; support active series + folder fallback.
 - **Milestone D:** add JSON/PDF export and a small set of preflight validations with clear user-facing warnings.
 - **Milestone E:** add CatPhan model selection and adapters once ACR workflow is stable.
+- **Milestone F (later):** optional auto‑detection of phantom type, recommended slices, and **full automated analysis suite** / batch pipeline—built incrementally on the manual‑first UI.
 
 ---
 

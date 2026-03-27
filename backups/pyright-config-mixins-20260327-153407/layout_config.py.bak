@@ -5,24 +5,17 @@ Manages multi-window layout settings: layout mode, view-slot order,
 and layout map popup position.
 
 Mixin contract:
-    Expects ``self.config`` (dict) and ``self.save_config()`` to be provided by
+    Expects `self.config` (dict) and `self.save_config()` to be provided by
     the concrete ConfigManager class that inherits this mixin.
 """
 
-from typing import Any, Callable, List, Literal, Optional, Tuple, cast
+from typing import List, Literal, Optional, Tuple
 
 LayoutMode = Literal["1x1", "1x2", "2x1", "2x2"]
 
 
 class LayoutConfigMixin:
     """Config mixin: multi-window layout mode and 2x2 view-slot order."""
-
-    def _config(self) -> dict[str, Any]:
-        return cast(dict[str, Any], getattr(self, "config"))
-
-    def _save_config(self) -> None:
-        save_func = cast(Callable[[], None], getattr(self, "save_config"))
-        save_func()
 
     def get_multi_window_layout(self) -> LayoutMode:
         """
@@ -31,7 +24,7 @@ class LayoutConfigMixin:
         Returns:
             Layout mode ("1x1", "1x2", "2x1", or "2x2")
         """
-        raw = self._config().get("multi_window_layout", "1x1")
+        raw = self.config.get("multi_window_layout", "1x1")
         if raw in ("1x1", "1x2", "2x1", "2x2"):
             return raw
         return "1x1"
@@ -44,8 +37,8 @@ class LayoutConfigMixin:
             layout_mode: Layout mode ("1x1", "1x2", "2x1", or "2x2")
         """
         if layout_mode in ["1x1", "1x2", "2x1", "2x2"]:
-            self._config()["multi_window_layout"] = layout_mode
-            self._save_config()
+            self.config["multi_window_layout"] = layout_mode
+            self.save_config()
 
     def get_view_slot_order(self) -> List[int]:
         """
@@ -56,7 +49,7 @@ class LayoutConfigMixin:
         Returns:
             List of 4 ints, a permutation of [0, 1, 2, 3]; default [0, 1, 2, 3]
         """
-        return list(self._config().get("view_slot_order", [0, 1, 2, 3]))
+        return list(self.config.get("view_slot_order", [0, 1, 2, 3]))
 
     def set_view_slot_order(self, order: List[int]) -> None:
         """
@@ -70,8 +63,8 @@ class LayoutConfigMixin:
             and len(order) == 4
             and set(order) == {0, 1, 2, 3}
         ):
-            self._config()["view_slot_order"] = list(order)
-            self._save_config()
+            self.config["view_slot_order"] = list(order)
+            self.save_config()
 
     def get_layout_map_popup_position(self) -> Optional[Tuple[int, int]]:
         """
@@ -81,7 +74,7 @@ class LayoutConfigMixin:
         Returns:
             (x, y) tuple or None if not set (e.g. first use)
         """
-        raw = self._config().get("layout_map_popup_position")
+        raw = self.config.get("layout_map_popup_position")
         if isinstance(raw, (list, tuple)) and len(raw) >= 2:
             try:
                 return (int(raw[0]), int(raw[1]))
@@ -97,5 +90,5 @@ class LayoutConfigMixin:
             x: Global x coordinate
             y: Global y coordinate
         """
-        self._config()["layout_map_popup_position"] = [x, y]
-        self._save_config()
+        self.config["layout_map_popup_position"] = [x, y]
+        self.save_config()
