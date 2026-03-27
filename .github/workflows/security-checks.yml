@@ -65,15 +65,60 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      - name: Resolve commit range for TruffleHog
+        id: trufflehog_range
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BASE_SHA=""
+          HEAD_SHA="${{ github.sha }}"
+          SKIP_REASON=""
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            BASE_SHA="${{ github.event.before }}"
+          else
+            SKIP_REASON="Unsupported event '${{ github.event_name }}' for TruffleHog range scan"
+          fi
+
+          ZERO_SHA="0000000000000000000000000000000000000000"
+          if [ -z "$SKIP_REASON" ] && { [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "$ZERO_SHA" ]; }; then
+            SKIP_REASON="Missing usable base commit (new branch, force-push edge case, or initial commit)"
+          fi
+
+          if [ -z "$SKIP_REASON" ] && [ "$BASE_SHA" = "$HEAD_SHA" ]; then
+            SKIP_REASON="No new commits between base and head"
+          fi
+
+          if [ -n "$SKIP_REASON" ]; then
+            echo "should_scan=false" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=$SKIP_REASON" >> "$GITHUB_OUTPUT"
+            echo "TruffleHog scan skipped: $SKIP_REASON"
+          else
+            echo "should_scan=true" >> "$GITHUB_OUTPUT"
+            echo "base_sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
+            echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+            echo "TruffleHog range: $BASE_SHA..$HEAD_SHA"
+          fi
+
       # Pin action + image tag so CI is reproducible; bump with Dependabot or when releasing.
       - name: Run TruffleHog secret scanner
-        uses: trufflesecurity/trufflehog@v3.94.0
+        if: steps.trufflehog_range.outputs.should_scan == 'true'
+        uses: trufflesecurity/trufflehog@v3.94.1
         with:
           path: ./
-          base: "main"
-          head: HEAD
-          version: "3.94.0"
+          base: ${{ steps.trufflehog_range.outputs.base_sha }}
+          head: ${{ steps.trufflehog_range.outputs.head_sha }}
+          version: "3.94.1"
           extra_args: --only-verified
+
+      - name: TruffleHog skipped
+        if: steps.trufflehog_range.outputs.should_scan != 'true'
+        run: |
+          echo "TruffleHog was skipped: ${{ steps.trufflehog_range.outputs.skip_reason }}"
           
       - name: Run detect-secrets
         continue-on-error: true
