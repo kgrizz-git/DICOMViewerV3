@@ -10,17 +10,11 @@ Mixin contract:
 """
 
 import json
-from typing import Any, Callable, Dict, List, Optional, cast
+from typing import Dict, List, Optional
 
 
 class TagExportConfigMixin:
     """Config mixin: tag export presets (CRUD and file import/export)."""
-    def _config(self) -> dict[str, Any]:
-        return cast(dict[str, Any], getattr(self, "config"))
-
-    def _save_config(self) -> None:
-        save_func = cast(Callable[[], None], getattr(self, "save_config"))
-        save_func()
 
     def get_tag_export_presets(self) -> Dict[str, List[str]]:
         """
@@ -29,7 +23,7 @@ class TagExportConfigMixin:
         Returns:
             Dictionary mapping preset names to lists of tag strings
         """
-        return self._config().get("tag_export_presets", {})
+        return self.config.get("tag_export_presets", {})
 
     def save_tag_export_preset(self, preset_name: str, tag_list: List[str]) -> None:
         """
@@ -39,11 +33,10 @@ class TagExportConfigMixin:
             preset_name: Name of the preset
             tag_list: List of tag strings to save
         """
-        cfg = self._config()
-        if "tag_export_presets" not in cfg:
-            cfg["tag_export_presets"] = {}
-        cfg["tag_export_presets"][preset_name] = tag_list
-        self._save_config()
+        if "tag_export_presets" not in self.config:
+            self.config["tag_export_presets"] = {}
+        self.config["tag_export_presets"][preset_name] = tag_list
+        self.save_config()
 
     def delete_tag_export_preset(self, preset_name: str) -> None:
         """
@@ -52,11 +45,10 @@ class TagExportConfigMixin:
         Args:
             preset_name: Name of the preset to delete
         """
-        cfg = self._config()
-        if "tag_export_presets" in cfg:
-            if preset_name in cfg["tag_export_presets"]:
-                del cfg["tag_export_presets"][preset_name]
-                self._save_config()
+        if "tag_export_presets" in self.config:
+            if preset_name in self.config["tag_export_presets"]:
+                del self.config["tag_export_presets"][preset_name]
+                self.save_config()
 
     def export_tag_export_presets(self, file_path: str) -> bool:
         """
@@ -114,13 +106,12 @@ class TagExportConfigMixin:
             print("Error importing tag export presets: 'presets' key missing or not a dict")
             return None
 
-        cfg = self._config()
-        if "tag_export_presets" not in cfg or not isinstance(
-            cfg.get("tag_export_presets"), dict
+        if "tag_export_presets" not in self.config or not isinstance(
+            self.config.get("tag_export_presets"), dict
         ):
-            cfg["tag_export_presets"] = {}
+            self.config["tag_export_presets"] = {}
 
-        existing_presets: Dict[str, List[str]] = cfg["tag_export_presets"]
+        existing_presets: Dict[str, List[str]] = self.config["tag_export_presets"]
         imported_count = 0
         skipped_conflicts = 0
 
@@ -138,6 +129,6 @@ class TagExportConfigMixin:
             imported_count += 1
 
         if imported_count > 0:
-            self._save_config()
+            self.save_config()
 
         return {"imported": imported_count, "skipped_conflicts": skipped_conflicts}

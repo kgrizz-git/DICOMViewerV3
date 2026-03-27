@@ -20,7 +20,6 @@ Requirements:
 
 from typing import List, Optional, Callable, Any, Tuple, Union
 from abc import ABC, abstractmethod
-from PySide6.QtCore import QPointF
 
 from utils.debug_log import debug_log, annotation_debug
 from utils.debug_flags import DEBUG_ANNOTATION
@@ -94,22 +93,20 @@ class UndoRedoManager:
         command = self.undo_stack.pop()
         command_type = type(command).__name__
         log_data = {"command_type": command_type, "undo_stack_size_before": len(self.undo_stack) + 1, "undo_stack_size_after": len(self.undo_stack)}
-        action = getattr(command, "action", None)
-        if action is not None:
-            log_data["command_action"] = action
-        arrow_item = getattr(command, "arrow_item", None)
-        if arrow_item is not None:
-            log_data["arrow_item_id"] = str(id(arrow_item))
+        if hasattr(command, 'action'):
+            log_data["command_action"] = command.action
+        if hasattr(command, 'arrow_item'):
+            log_data["arrow_item_id"] = str(id(command.arrow_item))
         if DEBUG_ANNOTATION:
             debug_log("undo_redo.py:90", "UndoRedoManager.undo: command being undone", log_data, hypothesis_id="D")
 
         annotation_debug(f" UndoRedoManager.undo: undoing command type={command_type}, undo stack size before={len(self.undo_stack) + 1}, after={len(self.undo_stack)}")
         
         # Log command details if it's an annotation command
-        if action is not None:
-            annotation_debug(f" UndoRedoManager.undo: command action={action}")
-        if arrow_item is not None:
-            annotation_debug(f" UndoRedoManager.undo: ArrowAnnotationMoveCommand, arrow_item={arrow_item}")
+        if hasattr(command, 'action'):
+            annotation_debug(f" UndoRedoManager.undo: command action={command.action}")
+        if hasattr(command, 'arrow_item'):
+            annotation_debug(f" UndoRedoManager.undo: ArrowAnnotationMoveCommand, arrow_item={command.arrow_item}")
         
         command.undo()
         self.redo_stack.append(command)
@@ -973,8 +970,8 @@ class TagEditCommand(Command):
             return ""
         # Convert tag to string format "(GGGG,EEEE)"
         try:
-            from pydicom.tag import BaseTag, Tag as make_tag
-            tag_obj = self.tag if isinstance(self.tag, BaseTag) else make_tag(self.tag)
+            from pydicom.tag import Tag as PydicomTag
+            tag_obj = PydicomTag(self.tag) if not isinstance(self.tag, PydicomTag) else self.tag
             return f"({tag_obj.group:04X},{tag_obj.element:04X})"
         except:
             return str(self.tag)

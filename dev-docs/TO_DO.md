@@ -1,7 +1,7 @@
 # To-Do Checklist
 
 **Last updated:** 2026-03-26  
-**Changes:** Added a dedicated MPR rescale + overlay/combine consistency plan and linked both related P0 bug items to anchor sections.
+**Changes:** Added links for pylinac integration and additional automated QA analysis planning.
 
 ---
 
@@ -32,8 +32,6 @@ This file tracks active and near-term tasks.
 
 - [ ] **[P0]** Sometimes when scrolling slices, the image seems to drift up or left. The scrollbars move, too. See [details](Image_Drift.md). *SEEMS TO BE RESOLVED*
 - [ ] **[P1]**  After making an MPR in a window, clearing it, then making a new MPR in that window using a different series, the default (embedded) window/level from the first base series was applied instead of from the second.
-- [ ] **[P0]** If the base series for an MPR uses rescaled pixel values, the MPR pixel values should be rescaled the same way ([plan](plans/MPR_RESCALE_AND_OVERLAY_COMBINE_PLAN.md#1-rescale-consistency-for-mpr-pixel-values))
-- [ ] **[P0]** SliceThickness overlay on MPR should show the constructed MPR's slice thickness, not the underlying original series's. Also when using combine slices on an MPR window we should show an overlay like we do for projections on a regular window, showing which slices are combined and the type of combination (AvIP, etc). Also if an MPR is created using MIP or MinIP from the beginning we should label the MPR window to say that. ([plan](plans/MPR_RESCALE_AND_OVERLAY_COMBINE_PLAN.md#2-mpr-overlay-slicethickness-and-combine-labeling))
 - [ ] **[P1]** Should we block showing DICOM tags when an MPR window is selected (show just "MPR")? Or add some kind of warning that it is the underlying series data somehow?
 - [ ] **[P0]** After creating MPRs, clearing, closing all files, and loading new files, creating new MPR does not load/display ([details](FUTURE_WORK_DETAIL_NOTES.md#multi-planar-reconstructions-mprs-and-oblique-reconstructions)) *NOTE: seems fixed*
 - [ ] **[P0]** "Close All" did not clear thumbnails in layout map
@@ -73,13 +71,14 @@ This file tracks active and near-term tasks.
 - [ ] **[P2]** When exporting PNG or JPG, allow anonymization and make using embedded window/level the default option ([plan](plans/EXPORT_PRIVACY_AND_WL_DEFAULT_PLAN.md#goal))
 - [ ] **[P2]** Make default pixel size and slice thickness more reasonable and make editing them easier (default to 1.0 mm, 1.0 mm?)
 - [ ] **[P2]** Make a Settings menu for grouping lots of options?
+- [ ] **[P2]** Allow dragging window dividers to make unequal divisions
 
 
 ## Features (Near-Term)
 
 - [ ] **[P1]** Be able to associate with DICOM extension and add to Open With menus ([details](FUTURE_WORK_DETAIL_NOTES.md#file-association-and-open-with-integration))
 - [ ] **[P2]** Add basic image processing for creating new DICOMs (kernels, smoothing, edge enhancement, sharpening, custom kernels) ([details](FUTURE_WORK_DETAIL_NOTES.md#basic-image-processing-and-creating-new-dicoms))
-- [ ] **[P2]** Integrate pylinac and other automated QC analysis tools ([details](FUTURE_WORK_DETAIL_NOTES.md#integrating-pylinac-and-other-automated-qc-tools))
+- [ ] **[P2]** Integrate pylinac and other automated QC analysis tools ([details](FUTURE_WORK_DETAIL_NOTES.md#integrating-pylinac-and-other-automated-qc-tools), [pylinac integration overview](info/PYLINAC_INTEGRATION_OVERVIEW.md), [additional automated QA analysis (ACR gaps + CT checks)](info/AUTOMATED_QA_ADDITIONAL_ANALYSIS.md))
 - [ ] **[P1]** Add ability to save MPRs as DICOM ([plan](plans/MPR_DICOM_SAVE_CINE_VIDEO_EXPORT_ANGLE_MEASUREMENT_PLAN.md#1-save-mprs-as-dicom))
 - [ ] **[P1]** Enable export mpg/gif/avi for cine ([plan](plans/MPR_DICOM_SAVE_CINE_VIDEO_EXPORT_ANGLE_MEASUREMENT_PLAN.md#2-cine-video-export-mpg-gif-avi))
 - [ ] **[P2]** Add measure angle as another measurement/annoation - user clicks, line extends, clicks again to drop a second point, another line extends from there, click a third time to create endpoint. angle between these two line segments is measured and reported on-screen. can use same settings (color, line thickness, etc) as the measurement tool ([plan](plans/MPR_DICOM_SAVE_CINE_VIDEO_EXPORT_ANGLE_MEASUREMENT_PLAN.md#3-angle-measurement-tool))
