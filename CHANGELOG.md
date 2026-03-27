@@ -5,6 +5,8 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ## [Unreleased]
 
 ### Fixed
+- **Tools package Based Pyright errors**: Cleared strict typing diagnostics in `src/tools/annotation_manager.py`, `src/tools/arrow_annotation_tool.py`, `src/tools/measurement_items.py`, `src/tools/measurement_tool.py`, and `src/tools/text_annotation_tool.py` by tightening generic annotations, optional callback narrowing, Qt view typing, and optional third-party import handling (`cv2`/`scipy`) without changing runtime behavior.
+- **Dev dependency install regression (`pygments`)**: Removed an invalid `pygments>=2.19.3` constraint from `requirements-dev.txt` after confirming that version is not available on PyPI yet, restoring normal `pip install -r requirements-dev.txt` behavior.
 - **Detect Secrets CI false failure on no-diff ranges**: Updated `.github/workflows/security-checks.yml` to resolve TruffleHog `base`/`head` from the current event (PR or push) and skip scanning when the range is empty/invalid (for example, identical commits or all-zero push base), preventing the job from failing when there are no new commits to scan.
 - **TruffleHog action patch update**: `Detect Secrets` in `.github/workflows/security-checks.yml` now pins `trufflesecurity/trufflehog` and the scanner `version` input to `3.94.1` (from `3.94.0`) to stay aligned with Dependabot patch updates.
 - **Annotation paste handler startup**: `src/core/annotation_paste_handler.py` imports `from __future__ import annotations` so return types like `list[ROIItem]` are not evaluated at class definition time. Previously `ROIItem` lived only under `TYPE_CHECKING`, which caused `NameError` when starting the app.

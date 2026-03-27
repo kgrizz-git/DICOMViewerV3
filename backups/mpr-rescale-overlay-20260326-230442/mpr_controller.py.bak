@@ -423,16 +423,8 @@ class MprController(QObject):
             mode=str(data.get("mpr_combine_mode", "aip") or "aip"),
             n_planes=int(data.get("mpr_combine_slice_count", 4) or 4),
         )
-        # Keep MPR rendering aligned with the global raw/rescaled toggle.
-        # Order must remain: combine raw planes -> optional rescale -> W/L.
-        view_state_manager = managers.get("view_state_manager")
-        use_rescaled_values = bool(
-            getattr(view_state_manager, "use_rescaled_values", True)
-        )
-        if use_rescaled_values:
-            array = result.apply_rescale(raw_array)
-        else:
-            array = raw_array.astype(np.float32)
+        # Apply rescale slope/intercept from source series.
+        array = result.apply_rescale(raw_array)
 
         # Determine window/level from controls (or fall back to data min/max).
         wc, ww = self._get_window_level(wl_controls, array)
@@ -451,6 +443,7 @@ class MprController(QObject):
         # Keep the normal view-state pipeline informed even though MPR bypasses
         # SliceDisplayManager. This preserves overlay anchoring on pan/zoom and
         # keeps viewer state in sync with what is on screen.
+        view_state_manager = managers.get("view_state_manager")
         if view_state_manager is not None:
             try:
                 view_state_manager.set_current_data_context(
@@ -504,34 +497,14 @@ class MprController(QObject):
         overlay_manager = managers.get("overlay_manager")
         if overlay_manager is not None:
             try:
-                combine_enabled = bool(data.get("mpr_combine_enabled", False))
-                combine_mode = str(data.get("mpr_combine_mode", "aip") or "aip")
-                combine_slice_count = int(data.get("mpr_combine_slice_count", 4) or 4)
-                projection_start_slice = None
-                projection_end_slice = None
-                projection_total_thickness = None
-                if combine_enabled:
-                    projection_start_slice, projection_end_slice = (
-                        self._compute_mpr_combine_range(
-                            result.n_slices, slice_index, combine_slice_count
-                        )
-                    )
-                    n_combined = max(0, projection_end_slice - projection_start_slice + 1)
-                    projection_total_thickness = (
-                        float(n_combined) * float(result.output_thickness_mm)
-                    )
                 overlay_manager.create_overlay_items(
                     image_viewer.scene,
                     DICOMParser(overlay_dataset),
                     total_slices=result.n_slices,
-                    projection_enabled=combine_enabled,
-                    projection_start_slice=projection_start_slice,
-                    projection_end_slice=projection_end_slice,
-                    projection_total_thickness=projection_total_thickness,
-                    projection_type=combine_mode if combine_enabled else None,
                 )
                 if hasattr(overlay_manager, "set_mpr_banner"):
-                    overlay_manager.set_mpr_banner(self._build_mpr_banner_text(data))
+                    orientation_label = data.get("mpr_orientation", "MPR")
+                    overlay_manager.set_mpr_banner(f"MPR - {orientation_label}")
             except Exception as exc:
                 print(f"[MprController] Failed to refresh MPR overlay in window {idx}: {exc}")
 
@@ -851,7 +824,7 @@ class MprController(QObject):
         # Show MPR banner via OverlayManager.
         overlay_manager = managers.get("overlay_manager")
         if overlay_manager is not None and hasattr(overlay_manager, "set_mpr_banner"):
-            overlay_manager.set_mpr_banner(self._build_mpr_banner_text(data))
+            overlay_manager.set_mpr_banner(f"MPR - {orientation_label}")
 
         # Focus the subwindow so the user sees the result immediately.
         try:
@@ -946,14 +919,6 @@ class MprController(QObject):
         """
         source_ds = result.source_volume.source_datasets[0].copy()
         source_ds.InstanceNumber = int(slice_index + 1)
-        try:
-            source_ds.SliceThickness = float(result.output_thickness_mm)
-        except Exception:
-            pass
-        try:
-            source_ds.SpacingBetweenSlices = float(result.output_thickness_mm)
-        except Exception:
-            pass
         for attr in ("SliceLocation", "ImagePositionPatient"):
             if hasattr(source_ds, attr):
                 try:
@@ -961,36 +926,6 @@ class MprController(QObject):
                 except Exception:
                     setattr(source_ds, attr, "")
         return source_ds
-
-    @staticmethod
-    def _compute_mpr_combine_range(
-        n_slices: int, slice_index: int, n_planes: int
-    ) -> tuple[int, int]:
-        """Return [start, end] slab indices for MPR combine at *slice_index*."""
-        if n_slices <= 0:
-            return 0, 0
-        n_planes = max(1, int(n_planes))
-        i = max(0, min(n_slices - 1, int(slice_index)))
-        start = i - (n_planes // 2)
-        end = start + n_planes - 1
-        if start < 0:
-            start = 0
-            end = min(n_slices - 1, n_planes - 1)
-        if end >= n_slices:
-            end = n_slices - 1
-            start = max(0, end - (n_planes - 1))
-        return start, end
-
-    @staticmethod
-    def _build_mpr_banner_text(data: Dict[str, Any]) -> str:
-        """Build the top banner text for the active MPR view."""
-        orientation_label = str(data.get("mpr_orientation", "MPR") or "MPR")
-        label = f"MPR - {orientation_label}"
-        if bool(data.get("mpr_combine_enabled", False)):
-            mode = str(data.get("mpr_combine_mode", "aip") or "aip").lower()
-            type_map = {"aip": "AIP", "mip": "MIP", "minip": "MinIP"}
-            label += f" ({type_map.get(mode, mode.upper())})"
-        return label
 
     def _set_tools_enabled(self, idx: int, enabled: bool) -> None:
         """
@@ -1055,16 +990,9 @@ class MprController(QObject):
             view_state_manager = managers.get("view_state_manager")
             if view_state_manager is not None:
                 view_state_manager.set_rescale_parameters(rescale_slope, rescale_intercept, rescale_type)
-                # Default MPR to rescaled values when slope/intercept exist.
-                use_rescaled_default = (
-                    rescale_slope is not None and rescale_intercept is not None
-                )
-                view_state_manager.use_rescaled_values = use_rescaled_default
-                if hasattr(self._app, "main_window"):
-                    self._app.main_window.set_rescale_toggle_state(use_rescaled_default)
-                image_viewer = self._get_image_viewer(idx)
-                if image_viewer is not None:
-                    image_viewer.set_rescale_toggle_state(use_rescaled_default)
+                # Set use_rescaled_values to True if rescale parameters exist
+                if rescale_slope is not None and rescale_intercept is not None:
+                    view_state_manager.use_rescaled_values = True
 
             # Try to get presets first
             presets = get_window_level_presets_from_dataset(

@@ -242,6 +242,14 @@ class SubwindowLifecycleController:
             return
         app.zoom_display_widget.update_zoom(app.image_viewer.current_zoom)
         if app.view_state_manager:
+            # Keep toolbar/context toggle text in sync with the focused subwindow,
+            # even when two windows show the same series with different local state.
+            app.main_window.set_rescale_toggle_state(
+                bool(app.view_state_manager.use_rescaled_values)
+            )
+            app.image_viewer.set_rescale_toggle_state(
+                bool(app.view_state_manager.use_rescaled_values)
+            )
             unit = None
             if app.view_state_manager.use_rescaled_values:
                 unit = app.view_state_manager.rescale_type

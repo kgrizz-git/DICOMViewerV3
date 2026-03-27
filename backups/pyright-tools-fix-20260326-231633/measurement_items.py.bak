@@ -40,12 +40,10 @@ HandleDragMoveCallback = Callable[[QPointF], None]
 HandleDragEndCallback = Callable[[], None]
 
 try:
-    from utils import debug_flags as _debug_flags
+    from utils.debug_flags import DEBUG_MEASUREMENT_DRAG, DEBUG_MAGNIFIER
 except ImportError:
-    _debug_flags = None
-
-DEBUG_MEASUREMENT_DRAG: bool = bool(getattr(_debug_flags, "DEBUG_MEASUREMENT_DRAG", False))
-DEBUG_MAGNIFIER: bool = bool(getattr(_debug_flags, "DEBUG_MAGNIFIER", False))
+    DEBUG_MEASUREMENT_DRAG = False
+    DEBUG_MAGNIFIER = False
 
 
 class DraggableMeasurementText(QGraphicsTextItem):
@@ -230,10 +228,9 @@ class MeasurementHandle(QGraphicsEllipseItem):
                     f"handle_scene_pos=({self.pos().x():.1f},{self.pos().y():.1f}), "
                     f"has_start_cb={bool(getattr(self.parent_measurement, 'on_handle_drag_start_callback', None))}"
                 )
-            start_callback = self.parent_measurement.on_handle_drag_start_callback
-            if start_callback is not None:
+            if getattr(self.parent_measurement, 'on_handle_drag_start_callback', None):
                 try:
-                    start_callback(self.pos(), shift_held)
+                    self.parent_measurement.on_handle_drag_start_callback(self.pos(), shift_held)
                 except Exception:
                     pass
 
@@ -250,10 +247,9 @@ class MeasurementHandle(QGraphicsEllipseItem):
 
         if self.parent_measurement is not None:
             # Notify end of handle drag (e.g. hide handle-drag magnifier)
-            end_callback = self.parent_measurement.on_handle_drag_end_callback
-            if end_callback is not None:
+            if getattr(self.parent_measurement, 'on_handle_drag_end_callback', None):
                 try:
-                    end_callback()
+                    self.parent_measurement.on_handle_drag_end_callback()
                 except Exception:
                     pass
             if hasattr(self.parent_measurement, '_handle_drag_in_progress'):
@@ -395,10 +391,9 @@ class MeasurementHandle(QGraphicsEllipseItem):
                         pass
 
                 # Notify handle-drag move for magnifier update (e.g. Shift+drag)
-                move_callback = self.parent_measurement.on_handle_drag_move_callback
-                if move_callback is not None:
+                if getattr(self.parent_measurement, 'on_handle_drag_move_callback', None):
                     try:
-                        move_callback(self.pos())
+                        self.parent_measurement.on_handle_drag_move_callback(self.pos())
                     except Exception:
                         pass
 

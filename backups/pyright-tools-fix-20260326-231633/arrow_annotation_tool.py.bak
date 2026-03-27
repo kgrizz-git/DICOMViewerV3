@@ -23,7 +23,6 @@ from PySide6.QtWidgets import (
     QGraphicsEllipseItem,
     QGraphicsSceneMouseEvent,
     QStyle,
-    QGraphicsView,
 )
 from PySide6.QtCore import Qt, QPointF, QLineF, QRectF
 from PySide6.QtGui import QPen, QColor, QBrush, QPainterPath, QPainterPathStroker, QPainter
@@ -174,10 +173,6 @@ class ArrowAnnotationItem(QGraphicsItemGroup):
         self.on_moved_callback = None  # Callback for move tracking
         self.on_mouse_release_callback = None  # Callback for mouse release (to finalize drag)
         self._drag_in_progress = False  # Flag to track if drag is in progress
-        self._pre_move_start_point: Optional[QPointF] = None
-        self._pre_move_end_point: Optional[QPointF] = None
-        self._pre_drag_start_point: Optional[QPointF] = None
-        self._pre_drag_end_point: Optional[QPointF] = None
         
         # Add items to group
         self.addToGroup(line_item)
@@ -227,7 +222,7 @@ class ArrowAnnotationItem(QGraphicsItemGroup):
         self.arrowhead_item.update_endpoints(QPointF(0, 0), relative_end)
         self._set_line_end(None)
     
-    def _compute_directional_pixels_per_scene_unit(self, view: QGraphicsView, unit_x: float, unit_y: float) -> Optional[float]:
+    def _compute_directional_pixels_per_scene_unit(self, view: object, unit_x: float, unit_y: float) -> Optional[float]:
         """
         Compute viewport pixels for 1 scene unit along the arrow direction using the view transform.
         Uses viewportTransform().map(QPointF) to preserve subpixel precision.
@@ -246,7 +241,7 @@ class ArrowAnnotationItem(QGraphicsItemGroup):
             return None
         return pixels_per_scene_unit
 
-    def _set_line_end(self, view: Optional[QGraphicsView] = None) -> None:
+    def _set_line_end(self, view: Optional[object] = None) -> None:
         """
         Set line end to meet the arrowhead base. Single authority for all line endpoint updates.
         If a view is provided and directional scene->viewport scale is available, compute pullback
@@ -283,7 +278,7 @@ class ArrowAnnotationItem(QGraphicsItemGroup):
         self.prepareGeometryChange()
         self.line_item.setLine(QLineF(QPointF(0, 0), line_end))
     
-    def update_line_end_for_view_scale(self, view: Optional[QGraphicsView] = None) -> None:
+    def update_line_end_for_view_scale(self, view: Optional[object] = None) -> None:
         """
         Set line end using active view directional mapping so the line meets arrowhead at any zoom.
         If view is None/invalid, _set_line_end uses fallback.

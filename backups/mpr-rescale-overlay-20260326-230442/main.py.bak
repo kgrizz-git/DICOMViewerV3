@@ -707,21 +707,13 @@ class DICOMViewerApp(QObject):
                 return None
             if slice_index < 0 or slice_index >= getattr(result, "n_slices", 0):
                 return None
-            raw = apply_mpr_stack_combine(
+            return apply_mpr_stack_combine(
                 result.slices,
                 slice_index,
                 enabled=bool(data.get("mpr_combine_enabled", False)),
                 mode=str(data.get("mpr_combine_mode", "aip") or "aip"),
                 n_planes=int(data.get("mpr_combine_slice_count", 4) or 4),
             )
-            managers = self.subwindow_managers.get(idx, {})
-            view_state_manager = managers.get("view_state_manager")
-            use_rescaled = bool(
-                getattr(view_state_manager, "use_rescaled_values", True)
-            )
-            if use_rescaled:
-                return result.apply_rescale(raw)
-            return raw
         except Exception:
             return None
 
@@ -1915,16 +1907,6 @@ class DICOMViewerApp(QObject):
         Args:
             preserve_view: True to preserve zoom/pan, False to refit
         """
-        focused_idx = self.focused_subwindow_index
-        if (
-            hasattr(self, "_mpr_controller")
-            and self._mpr_controller.is_mpr(focused_idx)
-        ):
-            data = self.subwindow_data.get(focused_idx, {})
-            self._mpr_controller.display_mpr_slice(
-                focused_idx, data.get("mpr_slice_index", 0)
-            )
-            return
         if self.current_dataset is not None:
             self._display_slice(self.current_dataset, preserve_view_override=preserve_view)
     
