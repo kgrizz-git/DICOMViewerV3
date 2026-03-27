@@ -24,6 +24,10 @@ However, there are two recurring needs:
 
 This document proposes a complementary "in-app QA primitives" layer for those needs.
 
+### 1.1 Progressive automation: manual-first, suite later
+
+Native QA features (CT primitives, MAP mammography scoring, Rose calibration, etc.) can follow the same product strategy as pylinac integration: **start with deliberate human steps**—user selects **phantom preset**, **series**, **slice or frame** where the metric is defined (e.g. DBT best slice, MPR source slice), and **which test or profile to run**—and only then add **defaults**, **suggestions**, **auto placement**, and **full multi-test pipelines**. That keeps physics validation tractable, avoids wrong automated answers on edge acquisitions, and matches how physicists usually roll out new QC software. Deeper automation should **reuse the same analysis entrypoints** so early manual workflows do not need to be thrown away. The same principle is stated for **pylinac-backed** QA in [PYLINAC_INTEGRATION_OVERVIEW.md](PYLINAC_INTEGRATION_OVERVIEW.md) under **Progressive automation**.
+
 ---
 
 ## 2. Cross-check: ACR documentation vs pylinac (coverage and phantom sizes)
@@ -364,9 +368,9 @@ src/
 
 ## 7.2 Workflow
 
-1. User selects active phantom series.
+1. User selects active phantom series (**early versions may require explicit phantom preset and slice/frame; later versions can suggest defaults**).
 2. App runs preflight checks (modality, spacing, slice consistency).
-3. User selects analysis profile:
+3. User selects analysis profile (single test or subset first; **full-suite “run all”** can be a later preset):
    - "CT uniform phantom quick checks"
    - "MRI LCD assisted analysis"
    - "Mammography MAP scoring (fibers / specks / masses) + optional Rose calibration"

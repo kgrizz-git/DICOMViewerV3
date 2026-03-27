@@ -18,13 +18,11 @@ Usage:
 import sys
 from pathlib import Path
 
-from PySide6.QtGui import QFont, QFontDatabase
-
 # Nested dict: family → {variant_display_name: relative_ttf_path}
 # Variants are listed in logical order (lightest to heaviest, then italic),
 # followed by SemiCondensed variants with the same ordering.
 # Excluded across all families: Thin, ExtraBold, Black, ExtraCondensed, Condensed.
-BUNDLED_FONTS: dict[str, dict[str, str]] = {
+BUNDLED_FONTS: dict = {
     "IBM Plex Sans": {
         "Light":                   "IBM_Plex_Sans/static/IBMPlexSans-Light.ttf",
         "Regular":                 "IBM_Plex_Sans/static/IBMPlexSans-Regular.ttf",
@@ -166,7 +164,7 @@ DEFAULT_FONT_VARIANT = "Bold"
 
 # Maps a bundled family name to the Qt-registered family name for its
 # SemiCondensed width.  Used by make_qfont for "SemiCond ..." variants.
-_SEMICOND_QT_FAMILY: dict[str, str] = {
+_SEMICOND_QT_FAMILY: dict = {
     "IBM Plex Sans": "IBM Plex Sans SemiCondensed",
     "Noto Sans":     "Noto Sans SemiCondensed",
     "Noto Serif":    "Noto Serif SemiCondensed",
@@ -177,7 +175,7 @@ _SEMICOND_QT_FAMILY: dict[str, str] = {
 # Qt weight values: Thin=100, ExtraLight=200, Light=300, Regular=400,
 #                   Medium=500, SemiBold=600, Bold=700, ExtraBold=800, Black=900
 # "SemiCond ..." variant names are resolved by stripping the prefix first.
-_VARIANT_ATTRS: dict[str, tuple[int, bool]] = {
+_VARIANT_ATTRS: dict = {
     "Thin":              (100, False),
     "ExtraLight":        (200, False),
     "Light":             (300, False),
@@ -202,18 +200,16 @@ _VARIANT_ATTRS: dict[str, tuple[int, bool]] = {
 def _fonts_dir() -> Path:
     """Return the absolute path to resources/fonts/, works in dev and PyInstaller."""
     if getattr(sys, "frozen", False):
-        meipass = getattr(sys, "_MEIPASS", None)
-        if meipass is not None:
-            return Path(str(meipass)) / "resources" / "fonts"
+        return Path(sys._MEIPASS) / "resources" / "fonts"
     return Path(__file__).parent.parent.parent / "resources" / "fonts"
 
 
-def get_font_families() -> list[str]:
+def get_font_families() -> list:
     """Return the ordered list of available bundled font family names."""
     return list(BUNDLED_FONTS.keys())
 
 
-def get_font_variants(family: str) -> list[str]:
+def get_font_variants(family: str) -> list:
     """Return the ordered list of variant names available for *family*.
 
     Falls back to DEFAULT_FONT_FAMILY if *family* is unknown.
@@ -221,7 +217,7 @@ def get_font_variants(family: str) -> list[str]:
     return list(BUNDLED_FONTS.get(family, BUNDLED_FONTS[DEFAULT_FONT_FAMILY]).keys())
 
 
-def resolve_font(family: str, variant: str = DEFAULT_FONT_VARIANT) -> tuple[str, str]:
+def resolve_font(family: str, variant: str = DEFAULT_FONT_VARIANT) -> tuple:
     """Return *(family, variant)* ensuring both are valid, with graceful fallback.
 
     - Unknown *family* falls back to DEFAULT_FONT_FAMILY.
@@ -250,7 +246,7 @@ def get_bundled_ttf_path(family: str, variant: str = DEFAULT_FONT_VARIANT) -> st
     return str(_fonts_dir() / BUNDLED_FONTS[family][variant])
 
 
-def get_variant_weight_italic(variant: str) -> tuple[int, bool]:
+def get_variant_weight_italic(variant: str) -> tuple:
     """Return *(qt_weight_int, is_italic)* for a variant display name.
 
     "SemiCond ..." variants are resolved by stripping the prefix.
@@ -260,13 +256,14 @@ def get_variant_weight_italic(variant: str) -> tuple[int, bool]:
     return _VARIANT_ATTRS.get(lookup, (700, False))
 
 
-def make_qfont(family: str, variant: str, size: int) -> QFont:
+def make_qfont(family: str, variant: str, size: int):
     """Create a :class:`PySide6.QtGui.QFont` for *family*, *variant*, *size*.
 
     Uses :func:`resolve_font` so invalid combinations fall back gracefully.
     All bundled TTFs are registered at startup via :func:`register_fonts_with_qt`,
     so Qt can honour weight/italic requests.
     """
+    from PySide6.QtGui import QFont
     family, variant = resolve_font(family, variant)
     weight, italic = get_variant_weight_italic(variant)
     # SemiCondensed TTFs register under a different Qt family name.
@@ -287,6 +284,7 @@ def register_fonts_with_qt() -> None:
     widget is shown.  Safe to call multiple times (Qt deduplicates).
     """
     try:
+        from PySide6.QtGui import QFontDatabase
         fonts_dir = _fonts_dir()
         for family, variants in BUNDLED_FONTS.items():
             for variant, relative in variants.items():

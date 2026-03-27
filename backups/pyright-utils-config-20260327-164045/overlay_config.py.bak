@@ -9,22 +9,11 @@ Mixin contract:
     the concrete ConfigManager class that inherits this mixin.
 """
 
-from typing import Any, Callable, Dict, List, MutableMapping, cast
-
-from utils.bundled_fonts import get_font_families, get_font_variants, resolve_font
-from utils.debug_flags import DEBUG_FONT_VARIANT
-from utils.debug_log import debug_log
+from typing import Dict, List
 
 
 class OverlayConfigMixin:
     """Config mixin: overlay display mode, visibility, font, and per-modality tags."""
-
-    def _config(self) -> dict[str, Any]:
-        return cast(dict[str, Any], getattr(self, "config"))
-
-    def _save_config(self) -> None:
-        save_func = cast(Callable[[], None], getattr(self, "save_config"))
-        save_func()
 
     def get_overlay_mode(self) -> str:
         """
@@ -33,7 +22,7 @@ class OverlayConfigMixin:
         Returns:
             Overlay mode ("minimal", "detailed", or "hidden")
         """
-        return self._config().get("overlay_mode", "minimal")
+        return self.config.get("overlay_mode", "minimal")
 
     def set_overlay_mode(self, mode: str) -> None:
         """
@@ -43,8 +32,8 @@ class OverlayConfigMixin:
             mode: Overlay mode ("minimal", "detailed", or "hidden")
         """
         if mode in ["minimal", "detailed", "hidden"]:
-            self._config()["overlay_mode"] = mode
-            self._save_config()
+            self.config["overlay_mode"] = mode
+            self.save_config()
 
     def get_overlay_visibility_state(self) -> int:
         """
@@ -53,7 +42,7 @@ class OverlayConfigMixin:
         Returns:
             Visibility state (0=show all, 1=hide corner text, 2=hide all text)
         """
-        return self._config().get("overlay_visibility_state", 0)
+        return self.config.get("overlay_visibility_state", 0)
 
     def set_overlay_visibility_state(self, state: int) -> None:
         """
@@ -63,27 +52,27 @@ class OverlayConfigMixin:
             state: Visibility state (0=show all, 1=hide corner text, 2=hide all text)
         """
         if state in [0, 1, 2]:
-            self._config()["overlay_visibility_state"] = state
-            self._save_config()
+            self.config["overlay_visibility_state"] = state
+            self.save_config()
 
-    def get_overlay_custom_fields(self) -> List[str]:
+    def get_overlay_custom_fields(self) -> list:
         """
         Get the list of custom overlay fields.
 
         Returns:
             List of field names
         """
-        return self._config().get("overlay_custom_fields", [])
+        return self.config.get("overlay_custom_fields", [])
 
-    def set_overlay_custom_fields(self, fields: List[str]) -> None:
+    def set_overlay_custom_fields(self, fields: list) -> None:
         """
         Set the list of custom overlay fields.
 
         Args:
             fields: List of field names
         """
-        self._config()["overlay_custom_fields"] = fields
-        self._save_config()
+        self.config["overlay_custom_fields"] = fields
+        self.save_config()
 
     def get_overlay_font_size(self) -> int:
         """
@@ -92,7 +81,7 @@ class OverlayConfigMixin:
         Returns:
             Font size in points
         """
-        return self._config().get("overlay_font_size", 10)
+        return self.config.get("overlay_font_size", 10)
 
     def set_overlay_font_size(self, size: int) -> None:
         """
@@ -102,20 +91,19 @@ class OverlayConfigMixin:
             size: Font size in points
         """
         if size > 0:
-            self._config()["overlay_font_size"] = size
-            self._save_config()
+            self.config["overlay_font_size"] = size
+            self.save_config()
 
-    def get_overlay_font_color(self) -> tuple[int, int, int]:
+    def get_overlay_font_color(self) -> tuple:
         """
         Get overlay font color as RGB tuple.
 
         Returns:
             Tuple of (r, g, b) values (0-255)
         """
-        cfg = self._config()
-        r = cfg.get("overlay_font_color_r", 255)
-        g = cfg.get("overlay_font_color_g", 255)
-        b = cfg.get("overlay_font_color_b", 0)
+        r = self.config.get("overlay_font_color_r", 255)
+        g = self.config.get("overlay_font_color_g", 255)
+        b = self.config.get("overlay_font_color_b", 0)
         return (r, g, b)
 
     def set_overlay_font_color(self, r: int, g: int, b: int) -> None:
@@ -128,31 +116,35 @@ class OverlayConfigMixin:
             b: Blue component (0-255)
         """
         if 0 <= r <= 255 and 0 <= g <= 255 and 0 <= b <= 255:
-            cfg = self._config()
-            cfg["overlay_font_color_r"] = r
-            cfg["overlay_font_color_g"] = g
-            cfg["overlay_font_color_b"] = b
-            self._save_config()
+            self.config["overlay_font_color_r"] = r
+            self.config["overlay_font_color_g"] = g
+            self.config["overlay_font_color_b"] = b
+            self.save_config()
 
     def get_overlay_font_family(self) -> str:
         """Get overlay font family name."""
-        return self._config().get("overlay_font_family", "IBM Plex Sans")
+        return self.config.get("overlay_font_family", "IBM Plex Sans")
 
     def set_overlay_font_family(self, family: str) -> None:
         """Set overlay font family name."""
+        from utils.bundled_fonts import get_font_families
         if family in get_font_families():
-            self._config()["overlay_font_family"] = family
-            self._save_config()
+            self.config["overlay_font_family"] = family
+            self.save_config()
 
     def get_overlay_font_variant(self) -> str:
         """Get overlay font variant (e.g. "Bold", "Regular")."""
+        from utils.bundled_fonts import resolve_font
         family = self.get_overlay_font_family()
-        variant = self._config().get("overlay_font_variant", "Bold")
+        variant = self.config.get("overlay_font_variant", "Bold")
         _, variant = resolve_font(family, variant)
         return variant
 
     def set_overlay_font_variant(self, variant: str) -> None:
         """Set overlay font variant."""
+        from utils.bundled_fonts import get_font_variants
+        from utils.debug_flags import DEBUG_FONT_VARIANT
+        from utils.debug_log import debug_log
         family = self.get_overlay_font_family()
         valid = get_font_variants(family)
         if DEBUG_FONT_VARIANT:
@@ -168,8 +160,8 @@ class OverlayConfigMixin:
                 hypothesis_id="FONTVAR",
             )
         if variant in valid:
-            self._config()["overlay_font_variant"] = variant
-            self._save_config()
+            self.config["overlay_font_variant"] = variant
+            self.save_config()
 
     def get_overlay_tags(self, modality: str = "default") -> Dict[str, List[str]]:
         """
@@ -182,12 +174,10 @@ class OverlayConfigMixin:
             Dictionary with keys "upper_left", "upper_right", "lower_left",
             "lower_right" and values as lists of tag keywords.
         """
-        cfg = self._config()
-        if "overlay_tags" not in cfg:
-            cfg["overlay_tags"] = {}
+        if "overlay_tags" not in self.config:
+            self.config["overlay_tags"] = {}
 
-        overlay_tags = cast(MutableMapping[str, Any], cfg["overlay_tags"])
-        if modality not in overlay_tags:
+        if modality not in self.config["overlay_tags"]:
             return {
                 "upper_left": ["PatientName", "PatientID", "StudyDate"],
                 "upper_right": ["StationName", "PerformedStationName"],
@@ -195,12 +185,12 @@ class OverlayConfigMixin:
                 "lower_right": ["SeriesNumber", "SeriesDescription", "StudyDescription"],
             }
 
-        tags = cast(MutableMapping[str, Any], overlay_tags[modality])
+        tags = self.config["overlay_tags"][modality]
         return {
-            "upper_left": list(tags.get("upper_left", [])),
-            "upper_right": list(tags.get("upper_right", [])),
-            "lower_left": list(tags.get("lower_left", [])),
-            "lower_right": list(tags.get("lower_right", [])),
+            "upper_left": tags.get("upper_left", []),
+            "upper_right": tags.get("upper_right", []),
+            "lower_left": tags.get("lower_left", []),
+            "lower_right": tags.get("lower_right", []),
         }
 
     def set_overlay_tags(self, modality: str, corner_tags: Dict[str, List[str]]) -> None:
@@ -212,11 +202,10 @@ class OverlayConfigMixin:
             corner_tags: Dict with keys "upper_left", "upper_right", "lower_left",
                          "lower_right" and values as lists of tag keywords.
         """
-        cfg = self._config()
-        if "overlay_tags" not in cfg:
-            cfg["overlay_tags"] = {}
-        cast(MutableMapping[str, Any], cfg["overlay_tags"])[modality] = corner_tags
-        self._save_config()
+        if "overlay_tags" not in self.config:
+            self.config["overlay_tags"] = {}
+        self.config["overlay_tags"][modality] = corner_tags
+        self.save_config()
 
     def get_all_modalities(self) -> List[str]:
         """
@@ -225,7 +214,6 @@ class OverlayConfigMixin:
         Returns:
             List of modality names
         """
-        cfg = self._config()
-        if "overlay_tags" not in cfg:
+        if "overlay_tags" not in self.config:
             return []
-        return list(cast(MutableMapping[str, Any], cfg["overlay_tags"]).keys())
+        return list(self.config["overlay_tags"].keys())

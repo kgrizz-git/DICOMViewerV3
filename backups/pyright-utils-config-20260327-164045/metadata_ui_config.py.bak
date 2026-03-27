@@ -8,18 +8,11 @@ Mixin contract:
     the concrete ConfigManager class that inherits this mixin.
 """
 
-from typing import Any, Callable, List, cast
+from typing import List
 
 
 class MetadataUIConfigMixin:
     """Config mixin: metadata panel column widths and column order."""
-
-    def _config(self) -> dict[str, Any]:
-        return cast(dict[str, Any], getattr(self, "config"))
-
-    def _save_config(self) -> None:
-        save_func = cast(Callable[[], None], getattr(self, "save_config"))
-        save_func()
 
     def get_metadata_panel_column_widths(self) -> List[int]:
         """
@@ -28,7 +21,7 @@ class MetadataUIConfigMixin:
         Returns:
             List of column widths [Tag, Name, VR, Value]
         """
-        return self._config().get("metadata_panel_column_widths", [100, 200, 50, 200])
+        return self.config.get("metadata_panel_column_widths", [100, 200, 50, 200])
 
     def set_metadata_panel_column_widths(self, widths: List[int]) -> None:
         """
@@ -37,8 +30,8 @@ class MetadataUIConfigMixin:
         Args:
             widths: List of column widths [Tag, Name, VR, Value]
         """
-        self._config()["metadata_panel_column_widths"] = widths
-        self._save_config()
+        self.config["metadata_panel_column_widths"] = widths
+        self.save_config()
 
     def get_metadata_panel_column_order(self) -> List[int]:
         """
@@ -47,7 +40,7 @@ class MetadataUIConfigMixin:
         Returns:
             List of logical indices in visual order; default [0, 1, 2, 3]
         """
-        return self._config().get("metadata_panel_column_order", [0, 1, 2, 3])
+        return self.config.get("metadata_panel_column_order", [0, 1, 2, 3])
 
     def set_metadata_panel_column_order(self, order: List[int]) -> None:
         """
@@ -57,5 +50,5 @@ class MetadataUIConfigMixin:
             order: List of logical indices in visual order
                    (e.g. [1, 0, 2, 3] means Name column is first visually)
         """
-        self._config()["metadata_panel_column_order"] = order
-        self._save_config()
+        self.config["metadata_panel_column_order"] = order
+        self.save_config()
