@@ -2,6 +2,8 @@
 
 This document outlines how **pylinac** could be integrated into DICOM Viewer V3 to provide **automated QA analysis of phantoms**, with a primary focus on **ACR CT/CBCT and MRI phantoms** and secondary support for **CatPhan** models.
 
+**Actionable Stage 1 checklist:** [PYLINAC_AND_AUTOMATED_QA_STAGE1_PLAN.md](../plans/PYLINAC_AND_AUTOMATED_QA_STAGE1_PLAN.md).
+
 The goals are:
 - **Leverage pylinac** for robust, validated phantom analysis rather than re‑implementing QA physics.
 - **Keep DICOMViewerV3 modular**: pylinac is an optional analysis backend, not a core dependency for basic viewing.
@@ -106,6 +108,22 @@ From a dependency standpoint, integration mostly means **adding pylinac + SciPy/
 - Providing a **GUI workflow** (menu actions, dialogs, progress reporting).
 - Displaying **summaries and images** from pylinac.
 - Managing **file paths**, export locations, and optional caching.
+
+### 2.4 ACR CT phantom datasets (`ACRCT`): slices, z‑coverage, and thickness
+
+These notes summarize how **pylinac** treats **Gammex 464 / ACR CT** stacks so integrators can preflight series from DICOM Viewer V3. Authoritative API and offset constants: [pylinac ACR phantoms](https://pylinac.readthedocs.io/en/latest/acr.html).
+
+**No fixed slice count for CT.** Pylinac does **not** document a required “exact *N* slices” for **`ACRCT`** (unlike **ACR MRI Large**, where the same module doc states **11 axial slices**, or **12** with sagittal, per the MRI guidance). In source, **`ACRCT`** sets **`min_num_images = 4`**, which is a **bare minimum** for the loader—not a claim that four slices suffice for meaningful QA.
+
+**Z coverage (scan range) matters, not slice count alone.** After **`ACRCT`** finds the **HU linearity (module 1) origin slice**, it maps other modules using **fixed offsets in mm** along the stack from that origin (defaults: **low contrast +30 mm**, **uniformity +70 mm**, **spatial resolution +100 mm**—see *Customizing module offsets* in the pylinac ACR page). The series must include slices whose **positions** span **at least through ~100 mm beyond the origin** (plus tolerance so the nearest slice to each target *z* is correct). **Thinner collimation** ⇒ **more slices** over the same physical length; **thicker slices** ⇒ **fewer slices**, but the **phantom length** must still be covered. Missing ends, wrong order, or large gaps usually break localization or assign the wrong slice to a module.
+
+**Nominal slice thickness:** Pylinac does **not** impose a single required **reconstruction thickness** for CT ACR in the public API; it **analyzes** the supplied volume. **Accreditation scanning** still follows **ACR / site protocol** (technique), which is separate from pylinac’s mechanics.
+
+**`origin_slice`:** If automatic HU‑module detection fails, **`ACRCT.analyze(..., origin_slice=...)`** can pass the **index** of the HU linearity module slice—useful for edge cases when wiring the viewer.
+
+**Clinical alignment:** ACR CT accreditation imaging is described as **contiguous coverage through the phantom** (module 1 → module 4). That matches the **z‑span** pylinac needs for its **offset‑based** module mapping; do not rely on **`min_num_images = 4`** as a QA standard.
+
+**MRI contrast (brief):** For **`ACRMRILarge`**, treat the **11/12‑slice** and **sagittal / `check_uid`** rules in pylinac’s MRI section as **harder prerequisites** than CT slice count when validating datasets.
 
 ---
 

@@ -146,8 +146,8 @@ class WindowSlotMapWidget(QWidget):
 
     def paintEvent(self, event) -> None:  # type: ignore[override]
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
 
         rect = self.rect().adjusted(1, 1, -1, -1)
         # Keep the drawn area square: four equal square cells
@@ -224,7 +224,7 @@ class WindowSlotMapWidget(QWidget):
             slot_num = slot + 1
             painter.drawText(
                 cell_rect.adjusted(2, 2, -2, -2),
-                Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft,
+                Qt.AlignTop | Qt.AlignLeft,
                 str(slot_num),
             )
 

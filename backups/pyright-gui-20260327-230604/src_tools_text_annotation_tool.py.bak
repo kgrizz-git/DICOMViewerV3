@@ -92,10 +92,10 @@ class TextAnnotationItem(QGraphicsTextItem):
         self.document().contentsChange.connect(self._on_contents_changed)
         
         # Move tracking callback (set by coordinator)
-        self.on_moved_callback: Optional[Callable[["TextAnnotationItem"], None]] = None
+        self.on_moved_callback = None
         # Text edit finished callback (set by coordinator for existing annotations)
         # Callback signature: (text_item, old_text: str, new_text: str) -> None
-        self.on_text_edit_finished: Optional[Callable[["TextAnnotationItem", str, str], None]] = None
+        self.on_text_edit_finished = None
     
     def mouseDoubleClickEvent(self, event: QGraphicsSceneMouseEvent) -> None:
         """

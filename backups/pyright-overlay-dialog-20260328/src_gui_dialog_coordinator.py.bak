@@ -16,7 +16,7 @@ Requirements:
     - ConfigManager for configuration
 """
 
-from typing import List, Optional, Callable, Any, Dict, Tuple
+from typing import Optional, Callable, Any, Dict, Tuple
 from gui.dialogs.settings_dialog import SettingsDialog
 from gui.dialogs.overlay_settings_dialog import OverlaySettingsDialog
 from gui.dialogs.tag_viewer_dialog import TagViewerDialog
@@ -54,11 +54,11 @@ class DialogCoordinator:
         self,
         config_manager: ConfigManager,
         main_window: MainWindow,
-        get_current_studies: Callable[[], dict[str, Any]],
+        get_current_studies: Callable[[], dict],
         settings_applied_callback: Optional[Callable[[], None]] = None,
         overlay_config_applied_callback: Optional[Callable[[], None]] = None,
         tag_edit_history: Optional[Any] = None,
-        get_histogram_callbacks_for_subwindow: Optional[Callable[[int], dict[str, Any]]] = None,
+        get_histogram_callbacks_for_subwindow: Optional[Callable[[int], dict]] = None,
         get_focused_subwindow_index: Optional[Callable[[], int]] = None,
         undo_redo_manager: Optional[Any] = None,
         ui_refresh_callback: Optional[Callable[[], None]] = None
@@ -248,7 +248,7 @@ class DialogCoordinator:
         projection_enabled: bool = False,
         projection_type: str = "aip",
         projection_slice_count: int = 4,
-        subwindow_annotation_managers: Optional[List[Any]] = None
+        subwindow_annotation_managers: Optional[list] = None
     ) -> None:
         """
         Handle Export dialog request. Resolution (Native / 1.5× / 2× / 4×) is chosen in the dialog.
@@ -358,8 +358,6 @@ class DialogCoordinator:
                 **callbacks
             )
         dialog = self.histogram_dialogs[idx]
-        if dialog is None:
-            return
         dialog.update_histogram()
         dialog.show()
         dialog.raise_()
@@ -381,7 +379,7 @@ class DialogCoordinator:
         if dialog is not None and dialog.isVisible():
             dialog.update_window_level_only()
     
-    def open_export_roi_statistics(self, subwindow_managers: dict[int, Any]) -> None:
+    def open_export_roi_statistics(self, subwindow_managers: dict) -> None:
         """
         Open the Export ROI Statistics dialog.
 

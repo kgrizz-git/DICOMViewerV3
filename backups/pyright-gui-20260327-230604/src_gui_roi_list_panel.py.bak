@@ -223,7 +223,7 @@ class ROIListPanel(QWidget):
             self.roi_list.blockSignals(True)
             self.roi_list.clearSelection()
             # Also clear the current item - clearSelection() doesn't do this
-            self.roi_list.setCurrentRow(-1)
+            self.roi_list.setCurrentItem(None)
             self.roi_list.blockSignals(False)
             current_item_after = self.roi_list.currentItem()
             # print(f"[DEBUG-DESELECT]   Current list item after clearSelection: {current_item_after.text() if current_item_after else None}")

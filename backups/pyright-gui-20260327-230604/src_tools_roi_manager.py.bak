@@ -993,8 +993,8 @@ class ROIManager:
         # print(f"[DEBUG-OVERLAY]   Final state: overlay.scene()={id(text_item.scene()) if text_item.scene() else None}")
     
     def update_statistics_overlay(self, roi: ROIItem, statistics: RoiStatisticsMap,
-                                 scene: QGraphicsScene, font_size: Optional[int] = None,
-                                 font_color: Optional[Tuple[int, int, int]] = None,
+                                 scene: QGraphicsScene, font_size: int = 6,
+                                 font_color: Tuple[int, int, int] = (255, 255, 0),
                                  rescale_type: Optional[str] = None) -> None:
         """
         Update existing statistics overlay with new statistics.

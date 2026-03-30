@@ -47,8 +47,8 @@ class WindowLevelControls(QWidget):
         
         self.window_center = 0.0
         self.window_width = 0.0
-        self.center_range: tuple[float, float] = (-10000.0, 10000.0)
-        self.width_range: tuple[float, float] = (1.0, 10000.0)
+        self.center_range = (-10000.0, 10000.0)
+        self.width_range = (1.0, 10000.0)
         self.unit: Optional[str] = None  # Unit string (e.g., "HU") to display in labels
         
         self._create_ui()
@@ -118,7 +118,7 @@ class WindowLevelControls(QWidget):
         
         layout.addLayout(width_layout)
     
-    def set_ranges(self, center_range: tuple[float, float], width_range: tuple[float, float]) -> None:
+    def set_ranges(self, center_range: tuple, width_range: tuple) -> None:
         """
         Set the value ranges for window center and width.
         
@@ -275,7 +275,7 @@ class WindowLevelControls(QWidget):
         # Emit signal
         self.window_changed.emit(self.window_center, self.window_width)
     
-    def get_window_level(self) -> tuple[float, float]:
+    def get_window_level(self) -> tuple:
         """
         Get current window center and width.
         

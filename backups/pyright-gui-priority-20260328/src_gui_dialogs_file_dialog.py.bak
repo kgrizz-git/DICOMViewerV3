@@ -95,7 +95,7 @@ class FileDialog:
             dialog.setNameFilter("All Files (*);;DICOM Files (*.dcm)")
             
             # Ensure dialog appears on top
-            dialog.setWindowFlags(dialog.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+            dialog.setWindowFlags(dialog.windowFlags() | Qt.WindowStaysOnTopHint)
             dialog.activateWindow()
             dialog.raise_()
             
@@ -156,7 +156,7 @@ class FileDialog:
             dialog.setDirectory(last_path)
             
             # Ensure dialog appears on top
-            dialog.setWindowFlags(dialog.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+            dialog.setWindowFlags(dialog.windowFlags() | Qt.WindowStaysOnTopHint)
             dialog.activateWindow()
             dialog.raise_()
             
@@ -187,7 +187,7 @@ class FileDialog:
         msg_box.setText(message)
         
         # Ensure dialog appears on top
-        msg_box.setWindowFlags(msg_box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+        msg_box.setWindowFlags(msg_box.windowFlags() | Qt.WindowStaysOnTopHint)
         msg_box.activateWindow()
         msg_box.raise_()
         
@@ -209,7 +209,7 @@ class FileDialog:
         msg_box.setText(message)
         
         # Ensure dialog appears on top
-        msg_box.setWindowFlags(msg_box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+        msg_box.setWindowFlags(msg_box.windowFlags() | Qt.WindowStaysOnTopHint)
         msg_box.activateWindow()
         msg_box.raise_()
         

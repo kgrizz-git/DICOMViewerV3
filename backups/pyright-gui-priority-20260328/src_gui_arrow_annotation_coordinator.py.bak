@@ -16,7 +16,7 @@ Requirements:
 """
 
 from PySide6.QtCore import QPointF, QTimer
-from typing import Any, Optional, Callable, TYPE_CHECKING, Dict
+from typing import Optional, Callable, TYPE_CHECKING, Dict
 from pydicom.dataset import Dataset
 from tools.arrow_annotation_tool import ArrowAnnotationTool
 from gui.image_viewer import ImageViewer
@@ -66,7 +66,7 @@ class ArrowAnnotationCoordinator:
         self.update_undo_redo_state_callback = update_undo_redo_state_callback
         
         # Move tracking for undo/redo
-        self._arrow_move_tracking: Dict[object, Dict[str, Any]] = {}  # Track arrow moves for batching
+        self._arrow_move_tracking: Dict = {}  # Track arrow moves for batching
         self._move_batch_timer: Optional[QTimer] = None
         
         # Scale-based line shortening: keep line meeting arrowhead at any zoom
@@ -372,24 +372,19 @@ class ArrowAnnotationCoordinator:
         
         # Only create command if position actually changed
         if position_changed and has_manager and has_scene:
-            urm = self.undo_redo_manager
-            scene = self.image_viewer.scene
-            if urm is None or scene is None:
-                annotation_debug(f" ArrowAnnotationCoordinator._finalize_arrow_move: skip command (urm or scene became None)")
-            else:
-                from utils.undo_redo import ArrowAnnotationMoveCommand
-                annotation_debug(f" ArrowAnnotationCoordinator._finalize_arrow_move: creating ArrowAnnotationMoveCommand")
-                command = ArrowAnnotationMoveCommand(
-                    arrow_item,
-                    initial_start,
-                    initial_end,
-                    final_start,
-                    final_end,
-                    scene
-                )
-                annotation_debug(f" ArrowAnnotationCoordinator._finalize_arrow_move: executing command, undo stack size before={len(urm.undo_stack)}")
-                urm.execute_command(command)
-                annotation_debug(f" ArrowAnnotationCoordinator._finalize_arrow_move: command executed, undo stack size after={len(urm.undo_stack)}")
+            from utils.undo_redo import ArrowAnnotationMoveCommand
+            annotation_debug(f" ArrowAnnotationCoordinator._finalize_arrow_move: creating ArrowAnnotationMoveCommand")
+            command = ArrowAnnotationMoveCommand(
+                arrow_item,
+                initial_start,
+                initial_end,
+                final_start,
+                final_end,
+                self.image_viewer.scene
+            )
+            annotation_debug(f" ArrowAnnotationCoordinator._finalize_arrow_move: executing command, undo stack size before={len(self.undo_redo_manager.undo_stack)}")
+            self.undo_redo_manager.execute_command(command)
+            annotation_debug(f" ArrowAnnotationCoordinator._finalize_arrow_move: command executed, undo stack size after={len(self.undo_redo_manager.undo_stack)}")
             # Update undo/redo state after command execution
             if self.update_undo_redo_state_callback:
                 self.update_undo_redo_state_callback()

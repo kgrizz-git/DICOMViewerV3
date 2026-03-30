@@ -21,7 +21,7 @@ Requirements:
 from PySide6.QtWidgets import QGraphicsTextItem, QGraphicsItem, QWidget, QLabel, QVBoxLayout
 from PySide6.QtCore import Qt, QRectF, QTimer
 from PySide6.QtGui import QFont, QColor, QTransform, QTextDocument, QTextOption
-from typing import Any, List, Dict, Optional
+from typing import List, Dict, Optional
 import pydicom
 from pydicom.dataset import Dataset
 
@@ -49,7 +49,7 @@ class ViewportOverlayWidget(QWidget):
     """
     
     def __init__(self, parent: Optional[QWidget] = None, font_size: int = 6,
-                 font_color: tuple[int, int, int] = (255, 255, 0), font_family: str = "IBM Plex Sans",
+                 font_color: tuple = (255, 255, 0), font_family: str = "IBM Plex Sans",
                  font_variant: str = "Bold"):
         """
         Initialize the viewport overlay widget.
@@ -251,7 +251,7 @@ class ViewportOverlayWidget(QWidget):
         mpr_font = make_qfont(self.font_family, variant, max(self.font_size + 4, 12))
         self.mpr_banner_label.setFont(mpr_font)
 
-    def set_font_color(self, font_color: tuple[int, int, int]) -> None:
+    def set_font_color(self, font_color: tuple) -> None:
         """
         Update font color for all labels.
         
@@ -283,7 +283,7 @@ class OverlayManager:
     - Customizable font size and color
     """
     
-    def __init__(self, font_size: int = 6, font_color: tuple[int, int, int] = (255, 255, 0),
+    def __init__(self, font_size: int = 6, font_color: tuple = (255, 255, 0),
                  config_manager=None, use_widget_overlays: bool = True,
                  font_family: str = "IBM Plex Sans", font_variant: str = "Bold"):
         """
@@ -312,8 +312,7 @@ class OverlayManager:
         # Store current parser and scene for updating positions
         self.current_parser: Optional[DICOMParser] = None
         self.current_scene = None
-        self.current_total_slices: Optional[int] = None
-
+        
         # QWidget overlay widget (viewport-based)
         self.viewport_overlay_widget: Optional[ViewportOverlayWidget] = None
         
@@ -534,11 +533,11 @@ class OverlayManager:
         return text_item
     
     def create_overlay_items(self, scene, parser: DICOMParser, 
-                            position: tuple[int, int] = (10, 10), total_slices: Optional[int] = None,
+                            position: tuple = (10, 10), total_slices: Optional[int] = None,
                             projection_enabled: bool = False, projection_start_slice: Optional[int] = None,
                             projection_end_slice: Optional[int] = None, projection_total_thickness: Optional[float] = None,
                             projection_type: Optional[str] = None,
-                            multiframe_context: Optional[dict[str, Any]] = None) -> List[QGraphicsTextItem]:
+                            multiframe_context: Optional[Dict[str, int]] = None) -> List[QGraphicsTextItem]:
         """
         Create overlay text items for a graphics scene (4 corners).
         
@@ -803,7 +802,7 @@ class OverlayManager:
                                 projection_end_slice: Optional[int] = None,
                                 projection_total_thickness: Optional[float] = None,
                                 projection_type: Optional[str] = None,
-                                multiframe_context: Optional[dict[str, Any]] = None) -> List[QGraphicsTextItem]:
+                                multiframe_context: Optional[Dict[str, int]] = None) -> List[QGraphicsTextItem]:
         """
         Create QWidget-based viewport overlays.
         

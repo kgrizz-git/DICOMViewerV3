@@ -16,7 +16,7 @@ Requirements:
 """
 
 from PySide6.QtCore import QPointF, QTimer
-from typing import Any, Optional, Callable, TYPE_CHECKING, Dict
+from typing import Optional, Callable, TYPE_CHECKING, Dict
 from pydicom.dataset import Dataset
 from tools.text_annotation_tool import TextAnnotationTool
 from gui.image_viewer import ImageViewer
@@ -68,7 +68,8 @@ class TextAnnotationCoordinator:
         self._annotation_in_progress = False  # Flag to prevent double initialization
         
         # Move tracking for undo/redo (similar to arrow annotations)
-        self._text_move_tracking: Dict[object, Dict[str, Any]] = {}  # Track text annotation moves for batching
+        from PySide6.QtCore import QTimer
+        self._text_move_tracking: Dict = {}  # Track text annotation moves for batching
         self._text_move_batch_timer: Optional[QTimer] = None
     
     def handle_text_annotation_started(self, pos: QPointF) -> None:

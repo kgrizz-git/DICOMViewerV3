@@ -20,9 +20,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QTableWidget,
                                 QAbstractItemView, QApplication)
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence
-from typing import Optional
-
-from tools.roi_manager import RoiStatisticsMap
+from typing import Optional, Dict
 
 
 class ROIStatisticsPanel(QWidget):
@@ -45,7 +43,7 @@ class ROIStatisticsPanel(QWidget):
         super().__init__(parent)
 
         self._create_ui()
-        self.current_statistics: Optional[RoiStatisticsMap] = None
+        self.current_statistics: Optional[Dict[str, float]] = None
 
     def _create_ui(self) -> None:
         """Create the UI components."""
@@ -178,7 +176,7 @@ class ROIStatisticsPanel(QWidget):
     # Data update helpers
     # ------------------------------------------------------------------
 
-    def update_statistics(self, statistics: RoiStatisticsMap, roi_identifier: Optional[str] = None,
+    def update_statistics(self, statistics: Dict[str, float], roi_identifier: Optional[str] = None,
                           rescale_type: Optional[str] = None) -> None:
         """
         Update displayed statistics.

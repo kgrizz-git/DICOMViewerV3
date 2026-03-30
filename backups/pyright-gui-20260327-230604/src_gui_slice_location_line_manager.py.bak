@@ -19,7 +19,7 @@ Requirements:
     - PySide6 (QGraphicsLineItem, QPen, QColor, QGraphicsScene)
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from PySide6.QtGui import QColor, QPen
 from PySide6.QtWidgets import QGraphicsLineItem, QGraphicsScene
@@ -28,7 +28,7 @@ from shiboken6 import isValid
 from gui.navigator_colors import SUBWINDOW_DOT_COLORS
 
 
-def _hex_to_rgb(hex_str: str) -> tuple[int, int, int]:
+def _hex_to_rgb(hex_str: str) -> tuple:
     """Convert hex color (e.g. #2196F3) to (r, g, b) tuple."""
     hex_str = hex_str.lstrip("#")
     return (
@@ -40,7 +40,7 @@ def _hex_to_rgb(hex_str: str) -> tuple[int, int, int]:
 
 # Colors match SUBWINDOW_DOT_COLORS: blue(0), green(1), orange(2), magenta(3).
 # Index 0 = Window 1, etc. Wraps for indices >= 4.
-_SOURCE_COLORS: list[tuple[int, int, int]] = [
+_SOURCE_COLORS = [
     _hex_to_rgb(SUBWINDOW_DOT_COLORS.get(i, "#2196F3"))
     for i in range(4)
 ]
@@ -48,7 +48,7 @@ _LINE_WIDTH = 1
 _Z_VALUE = 100
 
 
-def _color_for_source(source_idx: int) -> tuple[int, int, int]:
+def _color_for_source(source_idx: int) -> tuple:
     """Return (r, g, b) for the given source subwindow index. Matches navigator dot colors."""
     idx = source_idx % len(_SOURCE_COLORS)
     return _SOURCE_COLORS[idx]
@@ -83,7 +83,7 @@ class SliceLocationLineManager:
         """Return True if the manager has a valid scene."""
         return self._scene is not None
 
-    def update_lines(self, segments: List[dict[str, Any]]) -> None:
+    def update_lines(self, segments: List[Dict]) -> None:
         """
         Update line items to match the given segments.
 
@@ -97,7 +97,7 @@ class SliceLocationLineManager:
         if self._scene is None:
             return
 
-        seen_sources: set[int] = set()
+        seen_sources = set()
         for seg in segments:
             source_idx = seg.get("source_idx", -1)
             col1 = seg.get("col1", 0)

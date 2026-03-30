@@ -16,7 +16,17 @@ Requirements:
 
 import re
 
-from PySide6.QtWidgets import (QDialog, QVBoxLayout, QTextBrowser, QDialogButtonBox, QLineEdit, QLabel, QHBoxLayout, QPushButton)
+from PySide6.QtWidgets import (
+    QDialog,
+    QVBoxLayout,
+    QTextBrowser,
+    QDialogButtonBox,
+    QLineEdit,
+    QLabel,
+    QHBoxLayout,
+    QPushButton,
+    QWidget,
+)
 from PySide6.QtCore import Qt, QUrl
 from typing import Optional
 
@@ -161,7 +171,7 @@ class FusionTechnicalDocDialog(QDialog):
     # Class-level cache for HTML content by theme
     _content_cache: dict = {}  # {theme: html_content}
     
-    def __init__(self, config_manager: ConfigManager, parent: Optional[QDialog] = None):
+    def __init__(self, config_manager: ConfigManager, parent: Optional[QWidget] = None):
         """
         Initialize the Fusion Technical Documentation dialog.
         

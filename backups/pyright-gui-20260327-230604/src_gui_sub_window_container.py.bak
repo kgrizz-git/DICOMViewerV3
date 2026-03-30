@@ -22,7 +22,7 @@ Requirements:
 
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QFrame, QSizePolicy
 from PySide6.QtCore import Qt, Signal, QMimeData
-from PySide6.QtGui import QDragEnterEvent, QDragMoveEvent, QDropEvent, QColor, QPainter, QPen
+from PySide6.QtGui import QDragEnterEvent, QDropEvent, QColor, QPainter, QPen
 from typing import Optional
 
 from gui.image_viewer import ImageViewer
@@ -290,12 +290,12 @@ class SubWindowContainer(QFrame):
         
         event.ignore()
     
-    def dragMoveEvent(self, event: QDragMoveEvent) -> None:
+    def dragMoveEvent(self, event: QDragEnterEvent) -> None:
         """
         Handle drag move event - accept series UID drops.
         
         Args:
-            event: Drag move event
+            event: Drag move event (uses same type as drag enter)
         """
         # Check if mime data contains series UID
         if event.mimeData().hasText():

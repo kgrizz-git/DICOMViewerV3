@@ -17,7 +17,7 @@ Requirements:
 """
 
 from PySide6.QtCore import QPointF, QTimer
-from typing import Any, Optional, Callable, TYPE_CHECKING, Dict
+from typing import Optional, Callable, TYPE_CHECKING, Dict
 from pydicom.dataset import Dataset
 
 from tools.crosshair_manager import CrosshairManager
@@ -67,7 +67,7 @@ class CrosshairCoordinator:
         self.get_use_rescaled_values = get_use_rescaled_values
         
         # Crosshair move tracking with batching
-        self._crosshair_move_tracking: Dict[object, Dict[str, Any]] = {}  # Tracks ongoing moves
+        self._crosshair_move_tracking: Dict[object, Dict] = {}  # Tracks ongoing moves
         self._move_batch_timer: Optional[QTimer] = None  # Timer for debouncing
     
     def handle_crosshair_clicked(self, pos: QPointF, pixel_value_str: str, x: int, y: int, z: int) -> None:
@@ -84,15 +84,13 @@ class CrosshairCoordinator:
         if self.image_viewer.scene is None:
             return
         
-        # Set current slice context (always define UIDs for undo command below)
-        study_uid = ""
-        series_uid = ""
-        instance_identifier = self.get_current_slice_index()
+        # Set current slice context
         current_dataset = self.get_current_dataset()
         if current_dataset is not None:
             from utils.dicom_utils import get_composite_series_key, pixel_to_patient_coordinates
             study_uid = getattr(current_dataset, 'StudyInstanceUID', '')
             series_uid = get_composite_series_key(current_dataset)
+            instance_identifier = self.get_current_slice_index()
             self.crosshair_manager.set_current_slice(study_uid, series_uid, instance_identifier)
             
             # Calculate patient coordinates

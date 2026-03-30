@@ -1,0 +1,428 @@
+﻿c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\arrow_annotation_coordinator.py
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\arrow_annotation_coordinator.py:69:36 - error: Expected type arguments for generic class "Dict" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\arrow_annotation_coordinator.py:127:19 - error: Cannot assign to attribute "on_moved_callback" for class "ArrowAnnotationItem"
+  ┬á┬áExpression of type "(arrow_item: Unknown) -> None" cannot be assigned to attribute "on_moved_callback" of class "ArrowAnnotationItem"
+  ┬á┬á┬á┬á"MethodType" is not assignable to "None" (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\arrow_annotation_coordinator.py:129:19 - error: Cannot assign to attribute "on_mouse_release_callback" for class "ArrowAnnotationItem"
+  ┬á┬áExpression of type "(arrow_item: Unknown) -> None" cannot be assigned to attribute "on_mouse_release_callback" of class "ArrowAnnotationItem"
+  ┬á┬á┬á┬á"MethodType" is not assignable to "None" (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\arrow_annotation_coordinator.py:234:28 - error: Cannot assign to attribute "on_moved_callback" for class "ArrowAnnotationItem"
+  ┬á┬áExpression of type "(arrow_item: Unknown) -> None" cannot be assigned to attribute "on_moved_callback" of class "ArrowAnnotationItem"
+  ┬á┬á┬á┬á"MethodType" is not assignable to "None" (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\arrow_annotation_coordinator.py:236:28 - error: Cannot assign to attribute "on_mouse_release_callback" for class "ArrowAnnotationItem"
+  ┬á┬áExpression of type "(arrow_item: Unknown) -> None" cannot be assigned to attribute "on_mouse_release_callback" of class "ArrowAnnotationItem"
+  ┬á┬á┬á┬á"MethodType" is not assignable to "None" (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\arrow_annotation_coordinator.py:385:152 - error: "undo_stack" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\arrow_annotation_coordinator.py:386:36 - error: "execute_command" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\arrow_annotation_coordinator.py:387:150 - error: "undo_stack" is not a known attribute of "None" (reportOptionalMemberAccess)
+c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\cine_player.py
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\cine_player.py:85:40 - error: Expected type arguments for generic class "Dict" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\cine_player.py:96:52 - error: Expected type arguments for generic class "Dict" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\cine_player.py:146:49 - error: Expected type arguments for generic class "Dict" (reportMissingTypeArgument)
+c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\crosshair_coordinator.py
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\crosshair_coordinator.py:70:53 - error: Expected type arguments for generic class "Dict" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\crosshair_coordinator.py:121:17 - error: "study_uid" is possibly unbound (reportPossiblyUnboundVariable)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\crosshair_coordinator.py:122:17 - error: "series_uid" is possibly unbound (reportPossiblyUnboundVariable)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\crosshair_coordinator.py:123:17 - error: "instance_identifier" is possibly unbound (reportPossiblyUnboundVariable)
+c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialog_coordinator.py
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialog_coordinator.py:57:43 - error: Expected type arguments for generic class "dict" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialog_coordinator.py:61:73 - error: Expected type arguments for generic class "dict" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialog_coordinator.py:214:61 - error: Argument of type "MainWindow" cannot be assigned to parameter "parent" of type "QDialog | None" in function "__init__"
+  ┬á┬áType "MainWindow" is not assignable to type "QDialog | None"
+  ┬á┬á┬á┬á"MainWindow" is not assignable to "QDialog"
+  ┬á┬á┬á┬á"MainWindow" is not assignable to "None" (reportArgumentType)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialog_coordinator.py:219:64 - error: Argument of type "MainWindow" cannot be assigned to parameter "parent" of type "QDialog | None" in function "__init__"
+  ┬á┬áType "MainWindow" is not assignable to type "QDialog | None"
+  ┬á┬á┬á┬á"MainWindow" is not assignable to "QDialog"
+  ┬á┬á┬á┬á"MainWindow" is not assignable to "None" (reportArgumentType)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialog_coordinator.py:251:49 - error: Expected type arguments for generic class "list" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialog_coordinator.py:286:51 - error: Expected type arguments for generic class "list" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialog_coordinator.py:361:16 - error: "update_histogram" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialog_coordinator.py:362:16 - error: "show" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialog_coordinator.py:363:16 - error: "raise_" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialog_coordinator.py:364:16 - error: "activateWindow" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialog_coordinator.py:382:62 - error: Expected type arguments for generic class "dict" (reportMissingTypeArgument)
+c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\export_roi_statistics_dialog.py
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\export_roi_statistics_dialog.py:239:39 - error: "childCount" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\export_roi_statistics_dialog.py:240:28 - error: "child" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\export_roi_statistics_dialog.py:251:36 - error: "data" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\export_roi_statistics_dialog.py:252:39 - error: "childCount" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\export_roi_statistics_dialog.py:253:42 - error: "child" is not a known attribute of "None" (reportOptionalMemberAccess)
+c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\file_dialog.py
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\file_dialog.py:98:61 - error: Cannot access attribute "WindowStaysOnTopHint" for class "type[Qt]"
+  ┬á┬áAttribute "WindowStaysOnTopHint" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\file_dialog.py:159:61 - error: Cannot access attribute "WindowStaysOnTopHint" for class "type[Qt]"
+  ┬á┬áAttribute "WindowStaysOnTopHint" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\file_dialog.py:190:59 - error: Cannot access attribute "WindowStaysOnTopHint" for class "type[Qt]"
+  ┬á┬áAttribute "WindowStaysOnTopHint" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\file_dialog.py:212:59 - error: Cannot access attribute "WindowStaysOnTopHint" for class "type[Qt]"
+  ┬á┬áAttribute "WindowStaysOnTopHint" is unknown (reportAttributeAccessIssue)
+c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\fusion_technical_doc_dialog.py
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\fusion_technical_doc_dialog.py:162:21 - error: Expected type arguments for generic class "dict" (reportMissingTypeArgument)
+c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\histogram_dialog.py
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\histogram_dialog.py:51:51 - error: Expected type arguments for generic class "tuple" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\histogram_dialog.py:54:61 - error: Expected type arguments for generic class "list" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\histogram_dialog.py:55:57 - error: Expected type arguments for generic class "dict" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\histogram_dialog.py:57:62 - error: Expected type arguments for generic class "tuple" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\histogram_dialog.py:101:40 - error: Expected type arguments for generic class "tuple" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\histogram_dialog.py:248:51 - error: Argument of type "None" cannot be assigned to parameter "pixel_array" of type "ndarray[_AnyShape, dtype[Any]]" in function "set_pixel_array"
+  ┬á┬á"None" is not assignable to "ndarray[_AnyShape, dtype[Any]]" (reportArgumentType)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\histogram_dialog.py:273:51 - error: Argument of type "None" cannot be assigned to parameter "pixel_array" of type "ndarray[_AnyShape, dtype[Any]]" in function "set_pixel_array"
+  ┬á┬á"None" is not assignable to "ndarray[_AnyShape, dtype[Any]]" (reportArgumentType)
+c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\mpr_dialog.py
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\mpr_dialog.py:72:15 - error: Expected type arguments for generic class "list" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\mpr_dialog.py:98:34 - error: Expected type arguments for generic class "dict" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\mpr_dialog.py:379:31 - error: "setEnabled" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\mpr_dialog.py:456:40 - error: Expected type arguments for generic class "tuple" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\mpr_dialog.py:506:35 - error: Expected type arguments for generic class "dict" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\mpr_dialog.py:512:52 - error: Expected type arguments for generic class "tuple" (reportMissingTypeArgument)
+c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\overlay_config_dialog.py
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\overlay_config_dialog.py:225:14 - error: Instance variable "search_edit" is not initialized in the class body or __init__ method (reportUninitializedInstanceVariable)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\overlay_config_dialog.py:234:18 - error: Instance variable "search_edits" is not initialized in the class body or __init__ method (reportUninitializedInstanceVariable)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\overlay_config_dialog.py:248:18 - error: Instance variable "available_lists" is not initialized in the class body or __init__ method (reportUninitializedInstanceVariable)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\overlay_config_dialog.py:274:18 - error: Instance variable "selected_lists" is not initialized in the class body or __init__ method (reportUninitializedInstanceVariable)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\overlay_config_dialog.py:305:18 - error: Instance variable "move_up_buttons" is not initialized in the class body or __init__ method (reportUninitializedInstanceVariable)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\overlay_config_dialog.py:307:18 - error: Instance variable "move_down_buttons" is not initialized in the class body or __init__ method (reportUninitializedInstanceVariable)
+c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\quick_start_guide_dialog.py
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\quick_start_guide_dialog.py:110:21 - error: Expected type arguments for generic class "dict" (reportMissingTypeArgument)
+c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\screenshot_export_dialog.py
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\screenshot_export_dialog.py:37:21 - error: Expected type arguments for generic class "List" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\screenshot_export_dialog.py:72:27 - error: Argument of type "Any | bool | None" cannot be assigned to parameter "arg__1" of type "bool" in function "setChecked"
+  ┬á┬áType "Any | bool | None" is not assignable to type "bool"
+  ┬á┬á┬á┬á"None" is not assignable to "bool" (reportArgumentType)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\screenshot_export_dialog.py:73:27 - error: Argument of type "Any | bool | None" cannot be assigned to parameter "arg__1" of type "bool" in function "setEnabled"
+  ┬á┬áType "Any | bool | None" is not assignable to type "bool"
+  ┬á┬á┬á┬á"None" is not assignable to "bool" (reportArgumentType)
+c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\tag_edit_dialog.py
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\tag_edit_dialog.py:153:51 - error: Argument of type "Unknown | float | int" cannot be assigned to parameter "val" of type "int" in function "setValue"
+  ┬á┬áType "Unknown | float | int" is not assignable to type "int"
+  ┬á┬á┬á┬á"float" is not assignable to "int" (reportArgumentType)
+c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\tag_export_dialog.py
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\tag_export_dialog.py:129:14 - error: Instance variable "series_tree" is not initialized in the class body or __init__ method (reportUninitializedInstanceVariable)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\tag_export_dialog.py:147:18 - error: Instance variable "preset_combo" is not initialized in the class body or __init__ method (reportUninitializedInstanceVariable)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\tag_export_dialog.py:180:14 - error: Instance variable "tag_search" is not initialized in the class body or __init__ method (reportUninitializedInstanceVariable)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\tag_export_dialog.py:199:14 - error: Instance variable "private_tags_checkbox" is not initialized in the class body or __init__ method (reportUninitializedInstanceVariable)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\tag_export_dialog.py:207:14 - error: Instance variable "tags_tree" is not initialized in the class body or __init__ method (reportUninitializedInstanceVariable)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\tag_export_dialog.py:301:27 - error: Expected type arguments for generic class "list" (reportMissingTypeArgument)
+c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\tag_viewer_dialog.py
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\tag_viewer_dialog.py:65:44 - error: Expected type arguments for generic class "Callable" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\tag_viewer_dialog.py:72:29 - error: Expected type arguments for generic class "list" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\tag_viewer_dialog.py:77:38 - error: Expected type arguments for generic class "Callable" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\tag_viewer_dialog.py:78:38 - error: Expected type arguments for generic class "Callable" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\tag_viewer_dialog.py:79:42 - error: Expected type arguments for generic class "Callable" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\tag_viewer_dialog.py:80:42 - error: Expected type arguments for generic class "Callable" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\tag_viewer_dialog.py:108:48 - error: Expected type arguments for generic class "Callable" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\tag_viewer_dialog.py:108:67 - error: Expected type arguments for generic class "Callable" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\tag_viewer_dialog.py:109:46 - error: Expected type arguments for generic class "Callable" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\tag_viewer_dialog.py:109:69 - error: Expected type arguments for generic class "Callable" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\tag_viewer_dialog.py:243:48 - error: Cannot access attribute "Undo" for class "type[QKeySequence]"
+  ┬á┬áAttribute "Undo" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\tag_viewer_dialog.py:246:48 - error: Cannot access attribute "Redo" for class "type[QKeySequence]"
+  ┬á┬áAttribute "Redo" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\tag_viewer_dialog.py:317:43 - error: "items" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\tag_viewer_dialog.py:342:39 - error: "items" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\tag_viewer_dialog.py:345:31 - error: Expected type arguments for generic class "list" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\dialogs\tag_viewer_dialog.py:524:35 - error: Argument of type "tuple[int, ...]" cannot be assigned to parameter "arg" of type "TagType" in function "Tag"
+  ┬á┬áType "tuple[int, ...]" is not assignable to type "TagType"
+  ┬á┬á┬á┬á"tuple[int, ...]" is not assignable to "int"
+  ┬á┬á┬á┬á"tuple[int, ...]" is not assignable to "str"
+  ┬á┬á┬á┬á"tuple[int, ...]" is not assignable to "tuple[int, int]"
+  ┬á┬á┬á┬á┬á┬áTuple size mismatch; expected 2 but received indeterminate
+  ┬á┬á┬á┬á"tuple[int, ...]" is not assignable to "BaseTag" (reportArgumentType)
+c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\fusion_controls_widget.py
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\fusion_controls_widget.py:1075:48 - error: Argument of type "float" cannot be assigned to parameter "val" of type "int" in function "setValue"
+  ┬á┬á"float" is not assignable to "int" (reportArgumentType)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\fusion_controls_widget.py:1076:48 - error: Argument of type "float" cannot be assigned to parameter "val" of type "int" in function "setValue"
+  ┬á┬á"float" is not assignable to "int" (reportArgumentType)
+c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\fusion_coordinator.py
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\fusion_coordinator.py:52:43 - error: Expected type arguments for generic class "Dict" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\fusion_coordinator.py:482:93 - error: No parameter named "keep_signals_blocked" (reportCallIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\fusion_coordinator.py:904:45 - error: Cannot access attribute "status_label" for class "FusionControlsWidget"
+  ┬á┬áAttribute "status_label" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\fusion_coordinator.py:987:18 - error: Expected type arguments for generic class "Dict" (reportMissingTypeArgument)
+c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\image_viewer.py
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\image_viewer.py: error: Cycle detected in import chain
+    c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\image_viewer.py
+    c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\sub_window_container.py (reportImportCycles)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\image_viewer.py:144:52 - error: Cannot access attribute "AnchorViewCenter" for class "type[QGraphicsView]"
+  ┬á┬áAttribute "AnchorViewCenter" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\image_viewer.py:145:44 - error: Cannot access attribute "AnchorViewCenter" for class "type[QGraphicsView]"
+  ┬á┬áAttribute "AnchorViewCenter" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\image_viewer.py:151:14 - error: "scene" overrides method of same name in class "QGraphicsView" with incompatible type "QGraphicsScene" (reportIncompatibleMethodOverride)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\image_viewer.py:219:67 - error: Expected type arguments for generic class "list" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\image_viewer.py:426:9 - error: Method "drawForeground" overrides class "QGraphicsView" in an incompatible manner
+  ┬á┬áParameter 3 type mismatch: base parameter is type "QRectF | QRect", override parameter is type "QRectF"
+  ┬á┬á┬á┬áType "QRectF | QRect" is not assignable to type "QRectF"
+  ┬á┬á┬á┬á┬á┬á"QRect" is not assignable to "QRectF" (reportIncompatibleMethodOverride)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\image_viewer.py:614:67 - error: Expected type arguments for generic class "dict" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\image_viewer.py:984:51 - error: Argument of type "int | None" cannot be assigned to parameter "arg__1" of type "int" in function "setValue"
+  ┬á┬áType "int | None" is not assignable to type "int"
+  ┬á┬á┬á┬á"None" is not assignable to "int" (reportArgumentType)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\image_viewer.py:1405:31 - error: Cannot access attribute "setCursor" for class "QObject"
+  ┬á┬áAttribute "setCursor" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\image_viewer.py:1408:40 - error: Cannot access attribute "setCursor" for class "QObject"
+  ┬á┬áAttribute "setCursor" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\image_viewer.py:1433:31 - error: Cannot access attribute "setCursor" for class "QObject"
+  ┬á┬áAttribute "setCursor" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\image_viewer.py:1436:40 - error: Cannot access attribute "setCursor" for class "QObject"
+  ┬á┬áAttribute "setCursor" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\image_viewer.py:1847:50 - error: Cannot access attribute "statistics_overlay_visible" for class "object"
+  ┬á┬áAttribute "statistics_overlay_visible" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\image_viewer.py:1855:58 - error: Cannot access attribute "visible_statistics" for class "object"
+  ┬á┬áAttribute "visible_statistics" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\image_viewer.py:1860:56 - error: Cannot access attribute "visible_statistics" for class "object"
+  ┬á┬áAttribute "visible_statistics" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\image_viewer.py:1865:56 - error: Cannot access attribute "visible_statistics" for class "object"
+  ┬á┬áAttribute "visible_statistics" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\image_viewer.py:1870:56 - error: Cannot access attribute "visible_statistics" for class "object"
+  ┬á┬áAttribute "visible_statistics" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\image_viewer.py:1875:60 - error: Cannot access attribute "visible_statistics" for class "object"
+  ┬á┬áAttribute "visible_statistics" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\image_viewer.py:1880:58 - error: Cannot access attribute "visible_statistics" for class "object"
+  ┬á┬áAttribute "visible_statistics" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\image_viewer.py:2052:28 - error: Operator "*" not supported for "None" (reportOptionalOperand)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\image_viewer.py:2282:34 - error: Cannot access attribute "get_slice_location_lines_visible_callback" for class "ImageViewer*"
+  ┬á┬áAttribute "get_slice_location_lines_visible_callback" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\image_viewer.py:2284:38 - error: Cannot access attribute "get_slice_location_lines_visible_callback" for class "ImageViewer*"
+  ┬á┬áAttribute "get_slice_location_lines_visible_callback" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\image_viewer.py:2293:34 - error: Cannot access attribute "get_slice_location_lines_same_group_only_callback" for class "ImageViewer*"
+  ┬á┬áAttribute "get_slice_location_lines_same_group_only_callback" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\image_viewer.py:2295:38 - error: Cannot access attribute "get_slice_location_lines_same_group_only_callback" for class "ImageViewer*"
+  ┬á┬áAttribute "get_slice_location_lines_same_group_only_callback" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\image_viewer.py:2304:34 - error: Cannot access attribute "get_slice_location_lines_focused_only_callback" for class "ImageViewer*"
+  ┬á┬áAttribute "get_slice_location_lines_focused_only_callback" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\image_viewer.py:2306:38 - error: Cannot access attribute "get_slice_location_lines_focused_only_callback" for class "ImageViewer*"
+  ┬á┬áAttribute "get_slice_location_lines_focused_only_callback" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\image_viewer.py:2831:50 - error: Expected type arguments for generic class "tuple" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\image_viewer.py:2831:70 - error: Expected type arguments for generic class "tuple" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\image_viewer.py:3375:9 - error: Method "dragMoveEvent" overrides class "QGraphicsView" in an incompatible manner
+  ┬á┬áParameter 2 type mismatch: base parameter is type "QDragMoveEvent", override parameter is type "QDragEnterEvent"
+  ┬á┬á┬á┬á"QDragMoveEvent" is not assignable to "QDragEnterEvent" (reportIncompatibleMethodOverride)
+c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\magnifier_widget.py
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\magnifier_widget.py:26:5 - error: "DEBUG_MAGNIFIER" is constant (because it is uppercase) and cannot be redefined (reportConstantRedefinition)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\magnifier_widget.py:130:26 - error: Cannot access attribute "screenAt" for class "QCoreApplication"
+  ┬á┬áAttribute "screenAt" is unknown (reportAttributeAccessIssue)
+c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:62:30 - error: "_MEIPASS" is not a known attribute of module "sys" (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:432:14 - error: Instance variable "_toast_label" is not initialized in the class body or __init__ method (reportUninitializedInstanceVariable)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:433:14 - error: Instance variable "_toast_effect" is not initialized in the class body or __init__ method (reportUninitializedInstanceVariable)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:443:18 - error: Cannot assign to attribute "_toast_animation" for class "MainWindow*"
+  ┬á┬áAttribute "_toast_animation" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:445:14 - error: Instance variable "_toast_timer" is not initialized in the class body or __init__ method (reportUninitializedInstanceVariable)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:461:38 - error: Cannot access attribute "Horizontal" for class "type[Qt]"
+  ┬á┬áAttribute "Horizontal" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:515:18 - error: Cannot access attribute "show_left_pane_action" for class "MainWindow*"
+  ┬á┬áAttribute "show_left_pane_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:517:18 - error: Cannot access attribute "show_right_pane_action" for class "MainWindow*"
+  ┬á┬áAttribute "show_right_pane_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:535:34 - error: "_MEIPASS" is not a known attribute of module "sys" (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:550:33 - error: Cannot access attribute "setStyleSheet" for class "QCoreApplication"
+  ┬á┬áAttribute "setStyleSheet" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:550:33 - error: "setStyleSheet" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:564:18 - error: Cannot access attribute "light_theme_action" for class "MainWindow*"
+  ┬á┬áAttribute "light_theme_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:565:18 - error: Cannot access attribute "dark_theme_action" for class "MainWindow*"
+  ┬á┬áAttribute "dark_theme_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:567:18 - error: Cannot access attribute "light_theme_action" for class "MainWindow*"
+  ┬á┬áAttribute "light_theme_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:568:18 - error: Cannot access attribute "dark_theme_action" for class "MainWindow*"
+  ┬á┬áAttribute "dark_theme_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:631:67 - error: Cannot access attribute "smooth_when_zoomed_action" for class "MainWindow*"
+  ┬á┬áAttribute "smooth_when_zoomed_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:633:14 - error: Cannot access attribute "smooth_when_zoomed_action" for class "MainWindow*"
+  ┬á┬áAttribute "smooth_when_zoomed_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:634:14 - error: Cannot access attribute "smooth_when_zoomed_action" for class "MainWindow*"
+  ┬á┬áAttribute "smooth_when_zoomed_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:635:14 - error: Cannot access attribute "smooth_when_zoomed_action" for class "MainWindow*"
+  ┬á┬áAttribute "smooth_when_zoomed_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:639:62 - error: Cannot access attribute "scale_markers_action" for class "MainWindow*"
+  ┬á┬áAttribute "scale_markers_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:641:14 - error: Cannot access attribute "scale_markers_action" for class "MainWindow*"
+  ┬á┬áAttribute "scale_markers_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:642:14 - error: Cannot access attribute "scale_markers_action" for class "MainWindow*"
+  ┬á┬áAttribute "scale_markers_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:643:14 - error: Cannot access attribute "scale_markers_action" for class "MainWindow*"
+  ┬á┬áAttribute "scale_markers_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:647:65 - error: Cannot access attribute "direction_labels_action" for class "MainWindow*"
+  ┬á┬áAttribute "direction_labels_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:649:14 - error: Cannot access attribute "direction_labels_action" for class "MainWindow*"
+  ┬á┬áAttribute "direction_labels_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:650:14 - error: Cannot access attribute "direction_labels_action" for class "MainWindow*"
+  ┬á┬áAttribute "direction_labels_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:651:14 - error: Cannot access attribute "direction_labels_action" for class "MainWindow*"
+  ┬á┬áAttribute "direction_labels_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:660:74 - error: Cannot access attribute "show_instances_separately_action" for class "MainWindow*"
+  ┬á┬áAttribute "show_instances_separately_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:662:14 - error: Cannot access attribute "show_instances_separately_action" for class "MainWindow*"
+  ┬á┬áAttribute "show_instances_separately_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:663:14 - error: Cannot access attribute "show_instances_separately_action" for class "MainWindow*"
+  ┬á┬áAttribute "show_instances_separately_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:664:14 - error: Cannot access attribute "show_instances_separately_action" for class "MainWindow*"
+  ┬á┬áAttribute "show_instances_separately_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:668:74 - error: Cannot access attribute "show_instances_separately_action" for class "MainWindow*"
+  ┬á┬áAttribute "show_instances_separately_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:670:14 - error: Cannot access attribute "show_instances_separately_action" for class "MainWindow*"
+  ┬á┬áAttribute "show_instances_separately_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:674:76 - error: Cannot access attribute "slice_location_lines_enable_action" for class "MainWindow*"
+  ┬á┬áAttribute "slice_location_lines_enable_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:676:14 - error: Cannot access attribute "slice_location_lines_enable_action" for class "MainWindow*"
+  ┬á┬áAttribute "slice_location_lines_enable_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:677:14 - error: Cannot access attribute "slice_location_lines_enable_action" for class "MainWindow*"
+  ┬á┬áAttribute "slice_location_lines_enable_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:678:14 - error: Cannot access attribute "slice_location_lines_enable_action" for class "MainWindow*"
+  ┬á┬áAttribute "slice_location_lines_enable_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:682:85 - error: Cannot access attribute "slice_location_lines_same_group_only_action" for class "MainWindow*"
+  ┬á┬áAttribute "slice_location_lines_same_group_only_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:684:14 - error: Cannot access attribute "slice_location_lines_same_group_only_action" for class "MainWindow*"
+  ┬á┬áAttribute "slice_location_lines_same_group_only_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:685:14 - error: Cannot access attribute "slice_location_lines_same_group_only_action" for class "MainWindow*"
+  ┬á┬áAttribute "slice_location_lines_same_group_only_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:686:14 - error: Cannot access attribute "slice_location_lines_same_group_only_action" for class "MainWindow*"
+  ┬á┬áAttribute "slice_location_lines_same_group_only_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:690:82 - error: Cannot access attribute "slice_location_lines_focused_only_action" for class "MainWindow*"
+  ┬á┬áAttribute "slice_location_lines_focused_only_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:692:14 - error: Cannot access attribute "slice_location_lines_focused_only_action" for class "MainWindow*"
+  ┬á┬áAttribute "slice_location_lines_focused_only_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:693:14 - error: Cannot access attribute "slice_location_lines_focused_only_action" for class "MainWindow*"
+  ┬á┬áAttribute "slice_location_lines_focused_only_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:694:14 - error: Cannot access attribute "slice_location_lines_focused_only_action" for class "MainWindow*"
+  ┬á┬áAttribute "slice_location_lines_focused_only_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:711:68 - error: Cannot access attribute "defaultAction" for class "QWidget"
+  ┬á┬áAttribute "defaultAction" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:722:68 - error: Cannot access attribute "defaultAction" for class "QWidget"
+  ┬á┬áAttribute "defaultAction" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:778:57 - error: Cannot access attribute "decode" for class "memoryview[int]"
+  ┬á┬áAttribute "decode" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:1126:14 - error: Cannot access attribute "recent_menu" for class "MainWindow*"
+  ┬á┬áAttribute "recent_menu" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:1135:18 - error: Cannot access attribute "recent_menu" for class "MainWindow*"
+  ┬á┬áAttribute "recent_menu" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:1166:22 - error: Cannot access attribute "recent_menu" for class "MainWindow*"
+  ┬á┬áAttribute "recent_menu" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:1182:24 - error: Cannot access attribute "recent_menu" for class "MainWindow*"
+  ┬á┬áAttribute "recent_menu" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:1189:27 - error: Cannot access attribute "recent_menu" for class "MainWindow*"
+  ┬á┬áAttribute "recent_menu" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:1189:53 - error: Cannot access attribute "recent_menu" for class "MainWindow*"
+  ┬á┬áAttribute "recent_menu" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:1228:60 - error: Argument of type "Self@MainWindow" cannot be assigned to parameter "parent" of type "QDialog | None" in function "__init__"
+  ┬á┬áType "Self@MainWindow" is not assignable to type "QDialog | None"
+  ┬á┬á┬á┬á"MainWindow*" is not assignable to "QDialog"
+  ┬á┬á┬á┬á"MainWindow*" is not assignable to "None" (reportArgumentType)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:1256:18 - error: Cannot access attribute "show_left_pane_action" for class "MainWindow*"
+  ┬á┬áAttribute "show_left_pane_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:1258:18 - error: Cannot access attribute "show_right_pane_action" for class "MainWindow*"
+  ┬á┬áAttribute "show_right_pane_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:1283:18 - error: Cannot access attribute "show_left_pane_action" for class "MainWindow*"
+  ┬á┬áAttribute "show_left_pane_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:1303:18 - error: Cannot access attribute "show_right_pane_action" for class "MainWindow*"
+  ┬á┬áAttribute "show_right_pane_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:1336:14 - error: Cannot access attribute "undo_tag_edit_action" for class "MainWindow*"
+  ┬á┬áAttribute "undo_tag_edit_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:1337:14 - error: Cannot access attribute "redo_tag_edit_action" for class "MainWindow*"
+  ┬á┬áAttribute "redo_tag_edit_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:1368:22 - error: Instance variable "window_slot_map_widget" is not initialized in the class body or __init__ method (reportUninitializedInstanceVariable)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:1377:22 - error: Instance variable "series_navigator_container" is not initialized in the class body or __init__ method (reportUninitializedInstanceVariable)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:1399:18 - error: Cannot access attribute "show_series_navigator_action" for class "MainWindow*"
+  ┬á┬áAttribute "show_series_navigator_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:1505:14 - error: Cannot access attribute "layout_1x1_action" for class "MainWindow*"
+  ┬á┬áAttribute "layout_1x1_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:1506:14 - error: Cannot access attribute "layout_1x2_action" for class "MainWindow*"
+  ┬á┬áAttribute "layout_1x2_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:1507:14 - error: Cannot access attribute "layout_2x1_action" for class "MainWindow*"
+  ┬á┬áAttribute "layout_2x1_action" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window.py:1508:14 - error: Cannot access attribute "layout_2x2_action" for class "MainWindow*"
+  ┬á┬áAttribute "layout_2x2_action" is unknown (reportAttributeAccessIssue)
+c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window_layout_helper.py
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window_layout_helper.py:40:23 - error: Expected type arguments for generic class "Callable" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window_layout_helper.py:41:22 - error: Expected type arguments for generic class "Callable" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window_layout_helper.py:42:29 - error: Expected type arguments for generic class "Callable" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window_layout_helper.py:43:29 - error: Expected type arguments for generic class "Callable" (reportMissingTypeArgument)
+c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window_menu_builder.py
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window_menu_builder.py:46:47 - error: Cannot access attribute "Open" for class "type[QKeySequence]"
+  ┬á┬áAttribute "Open" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window_menu_builder.py:107:42 - error: Cannot access attribute "Quit" for class "type[QKeySequence]"
+  ┬á┬áAttribute "Quit" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window_menu_builder.py:115:65 - error: Cannot access attribute "Copy" for class "type[QKeySequence]"
+  ┬á┬áAttribute "Copy" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window_menu_builder.py:120:66 - error: Cannot access attribute "Paste" for class "type[QKeySequence]"
+  ┬á┬áAttribute "Paste" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window_menu_builder.py:127:63 - error: Cannot access attribute "Undo" for class "type[QKeySequence]"
+  ┬á┬áAttribute "Undo" is unknown (reportAttributeAccessIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\main_window_menu_builder.py:133:63 - error: Cannot access attribute "Redo" for class "type[QKeySequence]"
+  ┬á┬áAttribute "Redo" is unknown (reportAttributeAccessIssue)
+c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\measurement_coordinator.py
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\measurement_coordinator.py:71:55 - error: Expected type arguments for generic class "Dict" (reportMissingTypeArgument)
+c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\metadata_panel.py
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\metadata_panel.py:131:44 - error: Expected type arguments for generic class "Callable" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\metadata_panel.py:134:38 - error: Expected type arguments for generic class "Callable" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\metadata_panel.py:135:38 - error: Expected type arguments for generic class "Callable" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\metadata_panel.py:136:42 - error: Expected type arguments for generic class "Callable" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\metadata_panel.py:137:42 - error: Expected type arguments for generic class "Callable" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\metadata_panel.py:164:48 - error: Expected type arguments for generic class "Callable" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\metadata_panel.py:164:67 - error: Expected type arguments for generic class "Callable" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\metadata_panel.py:165:46 - error: Expected type arguments for generic class "Callable" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\metadata_panel.py:165:69 - error: Expected type arguments for generic class "Callable" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\metadata_panel.py:410:43 - error: "items" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\metadata_panel.py:441:39 - error: "items" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\metadata_panel.py:444:31 - error: Expected type arguments for generic class "list" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\metadata_panel.py:713:35 - error: Argument of type "tuple[int, ...]" cannot be assigned to parameter "arg" of type "TagType" in function "Tag"
+  ┬á┬áType "tuple[int, ...]" is not assignable to type "TagType"
+  ┬á┬á┬á┬á"tuple[int, ...]" is not assignable to "int"
+  ┬á┬á┬á┬á"tuple[int, ...]" is not assignable to "str"
+  ┬á┬á┬á┬á"tuple[int, ...]" is not assignable to "tuple[int, int]"
+  ┬á┬á┬á┬á┬á┬áTuple size mismatch; expected 2 but received indeterminate
+  ┬á┬á┬á┬á"tuple[int, ...]" is not assignable to "BaseTag" (reportArgumentType)
+c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\multi_window_layout.py
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\multi_window_layout.py:322:35 - error: "count" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\multi_window_layout.py:323:40 - error: "takeAt" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\multi_window_layout.py:324:21 - error: "widget" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\multi_window_layout.py:325:22 - error: "widget" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\multi_window_layout.py:325:31 - error: "hide" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\multi_window_layout.py:347:37 - error: "addWidget" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\multi_window_layout.py:357:37 - error: "addWidget" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\multi_window_layout.py:358:37 - error: "addWidget" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\multi_window_layout.py:368:37 - error: "addWidget" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\multi_window_layout.py:369:37 - error: "addWidget" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\multi_window_layout.py:377:41 - error: "addWidget" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\multi_window_layout.py:381:44 - error: "rowCount" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\multi_window_layout.py:382:44 - error: "columnCount" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\multi_window_layout.py:386:33 - error: "setRowStretch" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\multi_window_layout.py:389:33 - error: "setRowStretch" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\multi_window_layout.py:392:33 - error: "setColumnStretch" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\multi_window_layout.py:395:33 - error: "setColumnStretch" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\multi_window_layout.py:406:29 - error: "activate" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\multi_window_layout.py:415:32 - error: "updateGeometry" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\multi_window_layout.py:418:32 - error: "update" is not a known attribute of "None" (reportOptionalMemberAccess)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\multi_window_layout.py:431:36 - error: "updateGeometry" is not a known attribute of "None" (reportOptionalMemberAccess)
+c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\overlay_coordinator.py
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\overlay_coordinator.py:44:43 - error: Expected type arguments for generic class "dict" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\overlay_coordinator.py:48:119 - error: Expected type arguments for generic class "dict" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\overlay_coordinator.py:79:34 - error: Cannot assign to attribute "hide_roi_graphics" for class "OverlayCoordinator*"
+  ┬á┬áType "((bool) -> None) | None" is not assignable to type "(hide: bool) -> None"
+  ┬á┬á┬á┬áType "None" is not assignable to type "(hide: bool) -> None" (reportAttributeAccessIssue)
+c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\overlay_manager.py
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\overlay_manager.py:52:30 - error: Expected type arguments for generic class "tuple" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\overlay_manager.py:254:42 - error: Expected type arguments for generic class "tuple" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\overlay_manager.py:286:56 - error: Expected type arguments for generic class "tuple" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\overlay_manager.py:536:39 - error: Expected type arguments for generic class "tuple" (reportMissingTypeArgument)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\overlay_manager.py:563:18 - error: Instance variable "current_total_slices" is not initialized in the class body or __init__ method (reportUninitializedInstanceVariable)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\overlay_manager.py:693:54 - error: Argument of type "Dict[str, int] | None" cannot be assigned to parameter "multiframe_context" of type "Dict[str, object] | None" in function "get_corner_text"
+  ┬á┬áType "Dict[str, int] | None" is not assignable to type "Dict[str, object] | None"
+  ┬á┬á┬á┬áType "Dict[str, int]" is not assignable to type "Dict[str, object] | None"
+  ┬á┬á┬á┬á┬á┬á"Dict[str, int]" is not assignable to "Dict[str, object]"
+  ┬á┬á┬á┬á┬á┬á┬á┬áType parameter "_VT@dict" is invariant, but "int" is not the same as "object"
+  ┬á┬á┬á┬á┬á┬á┬á┬áConsider switching from "dict" to "Mapping" which is covariant in the value type
+  ┬á┬á┬á┬á┬á┬á"Dict[str, int]" is not assignable to "None" (reportArgumentType)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\overlay_manager.py:896:54 - error: Argument of type "Dict[str, int] | None" cannot be assigned to parameter "multiframe_context" of type "Dict[str, object] | None" in function "get_corner_text"
+  ┬á┬áType "Dict[str, int] | None" is not assignable to type "Dict[str, object] | None"
+  ┬á┬á┬á┬áType "Dict[str, int]" is not assignable to type "Dict[str, object] | None"
+  ┬á┬á┬á┬á┬á┬á"Dict[str, int]" is not assignable to "Dict[str, object]"
+  ┬á┬á┬á┬á┬á┬á┬á┬áType parameter "_VT@dict" is invariant, but "int" is not the same as "object"
+  ┬á┬á┬á┬á┬á┬á┬á┬áConsider switching from "dict" to "Mapping" which is covariant in the value type
+  ┬á┬á┬á┬á┬á┬á"Dict[str, int]" is not assignable to "None" (reportArgumentType)
+c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\overlay_text_builder.py
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\overlay_text_builder.py:148:51 - error: Operator ">" not supported for types "object" and "Literal[1]" (reportOperatorIssue)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\overlay_text_builder.py:212:37 - error: Operator "+" not supported for "None" (reportOptionalOperand)
+  c:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\src\gui\overlay_text_builder.py:271:25 - error: Operator "+" not supported for "None" (reportOptionalOperand)
+245 errors, 0 warnings, 0 notes
