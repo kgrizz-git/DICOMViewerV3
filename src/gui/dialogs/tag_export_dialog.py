@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                                 QPushButton, QCheckBox, QGroupBox, QSplitter,
                                 QFileDialog, QMessageBox, QComboBox)
 from PySide6.QtCore import Qt, Signal
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional, Tuple
 import pydicom
 from pydicom.dataset import Dataset
 from pathlib import Path
@@ -66,7 +66,14 @@ class TagExportDialog(QDialog):
         self.config_manager = config_manager
         self.selected_series: Dict[str, Dict[str, List[int]]] = {}  # {study_uid: {series_uid: [instance_indices]}}
         self.selected_tags: List[str] = []  # List of selected tag strings
-        
+
+        self.series_tree = QTreeWidget(self)
+        self.tags_tree = QTreeWidget(self)
+        self.tag_search = QLineEdit(self)
+        self.private_tags_checkbox = QCheckBox("Include Private Tags", self)
+        self.private_tags_checkbox.setChecked(True)
+        self.preset_combo: Optional[QComboBox] = None
+
         self._create_ui()
         self._populate_series()
         self._populate_tags()
@@ -126,7 +133,6 @@ class TagExportDialog(QDialog):
         layout.addLayout(button_layout)
         
         # Series tree
-        self.series_tree = QTreeWidget()
         self.series_tree.setHeaderLabels(["Series"])
         self.series_tree.setColumnWidth(0, 350)
         self.series_tree.itemChanged.connect(self._on_series_selection_changed)
@@ -177,7 +183,6 @@ class TagExportDialog(QDialog):
         # Search box
         search_layout = QHBoxLayout()
         search_label = QLabel("Filter:")
-        self.tag_search = QLineEdit()
         self.tag_search.setPlaceholderText("Search tags...")
         self.tag_search.textChanged.connect(self._filter_tags)
         search_layout.addWidget(search_label)
@@ -204,7 +209,6 @@ class TagExportDialog(QDialog):
         layout.addLayout(button_layout)
         
         # Tags tree
-        self.tags_tree = QTreeWidget()
         self.tags_tree.setHeaderLabels(["Tag", "Name"])
         self.tags_tree.setColumnWidth(0, 120)
         self.tags_tree.setColumnWidth(1, 300)
@@ -298,7 +302,7 @@ class TagExportDialog(QDialog):
         sorted_tags = sorted(tags.items(), key=lambda x: x[0])
         
         # Group by tag group (first 4 hex digits)
-        groups: Dict[str, list] = {}
+        groups: Dict[str, List[Tuple[str, Dict[str, Any]]]] = {}
         for tag_str, tag_data in sorted_tags:
             group = tag_str[:6]  # e.g., "(0008," for group 0008
             if group not in groups:
@@ -737,9 +741,9 @@ class TagExportDialog(QDialog):
     
     def _load_presets_list(self) -> None:
         """Load list of presets into combo box."""
-        if not self.config_manager:
+        if not self.config_manager or self.preset_combo is None:
             return
-        
+
         self.preset_combo.clear()
         presets = self.config_manager.get_tag_export_presets()
         if presets:
@@ -785,6 +789,8 @@ class TagExportDialog(QDialog):
         self._load_presets_list()
         
         # Select the newly saved preset
+        if self.preset_combo is None:
+            return
         index = self.preset_combo.findText(preset_name)
         if index >= 0:
             self.preset_combo.setCurrentIndex(index)
@@ -798,7 +804,9 @@ class TagExportDialog(QDialog):
             QMessageBox.warning(self, "No Config Manager",
                               "Preset loading is not available.")
             return
-        
+        if self.preset_combo is None:
+            return
+
         preset_name = self.preset_combo.currentText()
         if not preset_name or preset_name == "(No preset)":
             QMessageBox.warning(self, "No Preset Selected",
@@ -862,7 +870,9 @@ class TagExportDialog(QDialog):
             QMessageBox.warning(self, "No Config Manager",
                               "Preset deletion is not available.")
             return
-        
+        if self.preset_combo is None:
+            return
+
         preset_name = self.preset_combo.currentText()
         if not preset_name or preset_name == "(No preset)":
             QMessageBox.warning(self, "No Preset Selected",

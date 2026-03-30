@@ -21,9 +21,9 @@ Requirements:
 
 from PySide6.QtWidgets import (QGraphicsView, QGraphicsScene, QGraphicsPixmapItem,
                                 QWidget, QVBoxLayout, QMenu, QApplication)
-from PySide6.QtCore import Qt, QRectF, Signal, QPointF, QPoint, QTimer, QEvent
+from PySide6.QtCore import Qt, QRectF, QRect, Signal, QPointF, QPoint, QTimer, QEvent
 from PySide6.QtGui import (QPixmap, QImage, QWheelEvent, QKeyEvent, QMouseEvent,
-                          QPainter, QColor, QTransform, QDragEnterEvent, QDropEvent,
+                          QPainter, QColor, QTransform, QDragEnterEvent, QDragMoveEvent, QDropEvent,
                           QPen,
                           QNativeGestureEvent)
 from PIL import Image
@@ -32,7 +32,10 @@ from utils.debug_flags import DEBUG_NAV, DEBUG_MAGNIFIER, DEBUG_AGENT_LOG
 import numpy as np
 import os
 import time
-from typing import Optional, Callable, Any, List, Tuple
+from typing import Optional, Callable, Any, List, Tuple, Dict, Union, TYPE_CHECKING, cast
+
+if TYPE_CHECKING:
+    from tools.roi_manager import ROIItem
 
 
 class ImageViewer(QGraphicsView):
@@ -118,6 +121,11 @@ class ImageViewer(QGraphicsView):
     create_mpr_view_requested = Signal()  # Emitted when "Create MPR view…" is chosen from context menu
     clear_mpr_view_requested = Signal()  # Emitted when "Clear MPR view" is chosen from context menu
 
+    @property
+    def scene(self) -> QGraphicsScene:  # pyright: ignore[reportIncompatibleMethodOverride]
+        """Graphics scene for items in this viewer (legacy attribute-style access)."""
+        return self._graphics_scene
+
     def __init__(self, parent: Optional[QWidget] = None, config_manager=None):
         """
         Initialize the image viewer.
@@ -141,15 +149,15 @@ class ImageViewer(QGraphicsView):
         # Set transformation anchor to viewport center for consistent zoom behavior
         # This anchor should remain constant - when set, scale() automatically centers zooming on viewport center
         # No manual translation is needed when using scale() with AnchorViewCenter
-        self.setTransformationAnchor(QGraphicsView.AnchorViewCenter)
-        self.setResizeAnchor(QGraphicsView.AnchorViewCenter)
+        self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
+        self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
         # Set alignment to center the scene when it's smaller than viewport
         # This ensures small images are centered, not positioned at top-left
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
-        # Create graphics scene (annotated so type checkers prefer this over QGraphicsView.scene())
-        self.scene: QGraphicsScene = QGraphicsScene(self)
-        self.setScene(self.scene)
+        # Graphics scene for all viewer items
+        self._graphics_scene = QGraphicsScene(self)
+        self.setScene(self._graphics_scene)
         
         # Enable mouse tracking for hover events (pixel info updates)
         self.setMouseTracking(True)
@@ -216,7 +224,12 @@ class ImageViewer(QGraphicsView):
         
         # Callback to get cine loop state (set from main.py)
         self.get_cine_loop_state_callback: Optional[Callable[[], bool]] = None
-        self.get_available_series_callback: Optional[Callable[[], list]] = None  # Returns list of (series_uid, series_name) tuples
+        self.get_available_series_callback: Optional[Callable[[], List[Tuple[str, str]]]] = None
+
+        # Slice-location line visibility (optional; filled by app for context menu sync)
+        self.get_slice_location_lines_visible_callback: Optional[Callable[[], bool]] = None
+        self.get_slice_location_lines_same_group_only_callback: Optional[Callable[[], bool]] = None
+        self.get_slice_location_lines_focused_only_callback: Optional[Callable[[], bool]] = None
         
         # Rescale toggle state (for context menu)
         self.use_rescaled_values = False
@@ -265,7 +278,7 @@ class ImageViewer(QGraphicsView):
         self.get_current_preset_index_callback: Optional[Callable[[], int]] = None
         
         # Callback to get ROI from item (set from main.py)
-        self.get_roi_from_item_callback: Optional[Callable[[object], Optional[object]]] = None
+        self.get_roi_from_item_callback: Optional[Callable[[object], Optional["ROIItem"]]] = None
         self.delete_all_rois_callback: Optional[Callable[[], None]] = None
         
         # Callbacks for projection state (set from main.py)
@@ -423,7 +436,7 @@ class ImageViewer(QGraphicsView):
         self._scale_markers_minor_tick_interval_mm = max(1, int(minor_interval_mm))
         self.viewport().update()
 
-    def drawForeground(self, painter: QPainter, rect: QRectF) -> None:
+    def drawForeground(self, painter: QPainter, rect: Union[QRectF, QRect]) -> None:
         """
         Draw viewer-only overlays (scale markers and direction labels) on top of scene items.
         """
@@ -611,7 +624,7 @@ class ImageViewer(QGraphicsView):
             return None
         return (row_mm, col_mm)
 
-    def _compute_direction_labels(self, dataset: Any) -> Optional[dict]:
+    def _compute_direction_labels(self, dataset: Any) -> Optional[Dict[str, str]]:
         """Compute top/bottom/left/right patient orientation labels from ImageOrientationPatient."""
         iop = getattr(dataset, "ImageOrientationPatient", None)
         if iop is None or len(iop) < 6:
@@ -979,7 +992,7 @@ class ImageViewer(QGraphicsView):
             # unchanged (same-series slice scrolling); for one-off scene rect changes
             # (e.g. scrollbar appearance) it may shift by at most 1px, which is
             # acceptable and non-accumulating.
-            if saved_h_scroll is not None:
+            if saved_h_scroll is not None and saved_v_scroll is not None:
                 self.horizontalScrollBar().setValue(saved_h_scroll)
                 self.verticalScrollBar().setValue(saved_v_scroll)
 
@@ -1295,6 +1308,19 @@ class ImageViewer(QGraphicsView):
         
         event.accept()
     
+    def _sync_cursor_to_parent_chain(self) -> None:
+        """Mirror the active tool cursor onto the subwindow container and layout QWidget parents."""
+        parent = self.parent()
+        if not isinstance(parent, QWidget):
+            return
+        parent.setCursor(self.cursor())
+        layout_parent = parent.parent()
+        if isinstance(layout_parent, QWidget):
+            layout_parent.setCursor(self.cursor())
+            layout_grandparent = layout_parent.parent()
+            if isinstance(layout_grandparent, QWidget):
+                layout_grandparent.setCursor(self.cursor())
+
     def set_mouse_mode(self, mode: str) -> None:
         """
         Set mouse interaction mode.
@@ -1395,17 +1421,7 @@ class ImageViewer(QGraphicsView):
         # Also set cursor on the layout parent chain (layout_widget, MultiWindowLayout) so in 1x1
         # any background region shows the tool cursor and doesn't flicker to arrow.
         self._apply_cursor_for_mouse_mode()
-        from gui.sub_window_container import SubWindowContainer
-        parent = self.parent()
-        if isinstance(parent, SubWindowContainer):
-            parent.setCursor(self.cursor())
-            # Propagate to layout widget and MultiWindowLayout (parent of layout_widget)
-            layout_parent = parent.parent()
-            if layout_parent is not None:
-                layout_parent.setCursor(self.cursor())
-                layout_grandparent = layout_parent.parent()
-                if layout_grandparent is not None:
-                    layout_grandparent.setCursor(self.cursor())
+        self._sync_cursor_to_parent_chain()
 
     def _apply_cursor_for_mouse_mode(self) -> None:
         """Set cursor to the one appropriate for the current mouse_mode (used by set_mouse_mode and restore_cursor_for_current_mode)."""
@@ -1424,16 +1440,7 @@ class ImageViewer(QGraphicsView):
     def restore_cursor_for_current_mode(self) -> None:
         """Restore the cursor to match the current mouse mode (e.g. after hiding it during measurement draw or handle drag)."""
         self._apply_cursor_for_mouse_mode()
-        from gui.sub_window_container import SubWindowContainer
-        parent = self.parent()
-        if isinstance(parent, SubWindowContainer):
-            parent.setCursor(self.cursor())
-            layout_parent = parent.parent()
-            if layout_parent is not None:
-                layout_parent.setCursor(self.cursor())
-                layout_grandparent = layout_parent.parent()
-                if layout_grandparent is not None:
-                    layout_grandparent.setCursor(self.cursor())
+        self._sync_cursor_to_parent_chain()
 
     def set_roi_drawing_mode(self, mode: Optional[str]) -> None:
         """
@@ -1455,24 +1462,20 @@ class ImageViewer(QGraphicsView):
         Args:
             event: Mouse event
         """
-        # Hybrid approach: Check if parent is a SubWindowContainer and handle focus
-        # This works in conjunction with the event filter in SubWindowContainer
-        from gui.sub_window_container import SubWindowContainer
+        # Hybrid focus: parent is typically `SubWindowContainer`, but avoid importing it here
+        # to prevent a Pyright import-cycle with `gui.sub_window_container`.
         parent = self.parent()
-        if isinstance(parent, SubWindowContainer):
-            if not parent.is_focused:
-                # Parent container is not focused - request focus first
-                # This ensures single-click on unfocused subwindow sets focus
+        if (
+            parent is not None
+            and hasattr(parent, "is_focused")
+            and hasattr(parent, "set_focused")
+            and hasattr(parent, "focus_changed")
+        ):
+            if not bool(getattr(parent, "is_focused")):
                 if event.button() == Qt.MouseButton.LeftButton:
-                    # print(f"[DEBUG-FOCUS] ImageViewer.mousePressEvent: Parent SubWindowContainer not focused, setting focus")
-                    # Accept the event to prevent further processing
                     event.accept()
-                    # Request focus change
-                    parent.set_focused(True)
-                    parent.focus_changed.emit(True)
-                    # print(f"[DEBUG-FOCUS] ImageViewer.mousePressEvent: Focus set and signal emitted, returning early")
-                    # Return early - don't process the click as pan/zoom/etc
-                    # The user can click again if they want to interact
+                    getattr(parent, "set_focused")(True)
+                    getattr(parent, "focus_changed").emit(True)
                     return
         
         if event.button() == Qt.MouseButton.LeftButton:
@@ -2030,7 +2033,12 @@ class ImageViewer(QGraphicsView):
             super().mouseMoveEvent(event)
             return
         
-        if self.mouse_mode == "zoom" and self.zoom_start_pos is not None and event.buttons() & Qt.MouseButton.LeftButton:
+        if (
+            self.mouse_mode == "zoom"
+            and self.zoom_start_pos is not None
+            and self.zoom_start_zoom is not None
+            and event.buttons() & Qt.MouseButton.LeftButton
+        ):
             # Zoom mode - adjust zoom based on vertical drag distance
             # Ensure ScrollHandDrag is disabled for zoom mode
             if self.dragMode() == QGraphicsView.DragMode.ScrollHandDrag:
@@ -2038,6 +2046,7 @@ class ImageViewer(QGraphicsView):
             
             current_pos = event.position()
             start_pos = self.zoom_start_pos
+            base_zoom = self.zoom_start_zoom
             
             # Calculate vertical distance moved (in viewport coordinates)
             delta_y = current_pos.y() - start_pos.y()
@@ -2049,7 +2058,7 @@ class ImageViewer(QGraphicsView):
                 
                 # Convert to zoom factor (negative delta = zoom in, positive = zoom out)
                 zoom_delta = -delta_y / 350.0  # Reduced sensitivity (was 300.0)
-                new_zoom = self.zoom_start_zoom * (1.0 + zoom_delta)
+                new_zoom = base_zoom * (1.0 + zoom_delta)
                 
                 # Clamp zoom
                 new_zoom = max(self.min_zoom, min(self.max_zoom, new_zoom))
@@ -2278,34 +2287,22 @@ class ImageViewer(QGraphicsView):
                         show_lines_menu = context_menu.addMenu("Show Lines")
                         enable_lines_action = show_lines_menu.addAction("Enable/Disable")
                         enable_lines_action.setCheckable(True)
-                        enable_lines_action.setChecked(
-                            self.get_slice_location_lines_visible_callback()
-                            if hasattr(self, "get_slice_location_lines_visible_callback")
-                            and self.get_slice_location_lines_visible_callback
-                            else False
-                        )
+                        cb_vis = self.get_slice_location_lines_visible_callback
+                        enable_lines_action.setChecked(cb_vis() if cb_vis is not None else False)
                         enable_lines_action.triggered.connect(
                             lambda checked: self.slice_location_lines_toggled.emit(checked)
                         )
                         same_group_action = show_lines_menu.addAction("Only Show For Same Group")
                         same_group_action.setCheckable(True)
-                        same_group_action.setChecked(
-                            self.get_slice_location_lines_same_group_only_callback()
-                            if hasattr(self, "get_slice_location_lines_same_group_only_callback")
-                            and self.get_slice_location_lines_same_group_only_callback
-                            else False
-                        )
+                        cb_sg = self.get_slice_location_lines_same_group_only_callback
+                        same_group_action.setChecked(cb_sg() if cb_sg is not None else False)
                         same_group_action.triggered.connect(
                             lambda checked: self.slice_location_lines_same_group_only_toggled.emit(checked)
                         )
                         focused_only_action = show_lines_menu.addAction("Show Only For Focused Window")
                         focused_only_action.setCheckable(True)
-                        focused_only_action.setChecked(
-                            self.get_slice_location_lines_focused_only_callback()
-                            if hasattr(self, "get_slice_location_lines_focused_only_callback")
-                            and self.get_slice_location_lines_focused_only_callback
-                            else False
-                        )
+                        cb_fo = self.get_slice_location_lines_focused_only_callback
+                        focused_only_action.setChecked(cb_fo() if cb_fo is not None else False)
                         focused_only_action.triggered.connect(
                             lambda checked: self.slice_location_lines_focused_only_toggled.emit(checked)
                         )
@@ -2827,8 +2824,13 @@ class ImageViewer(QGraphicsView):
         else:
             super().keyPressEvent(event)
     
-    def set_window_level_for_drag(self, center: float, width: float, 
-                                   center_range: tuple, width_range: tuple) -> None:
+    def set_window_level_for_drag(
+        self,
+        center: float,
+        width: float,
+        center_range: Tuple[float, float],
+        width_range: Tuple[float, float],
+    ) -> None:
         """
         Set window/level values for right mouse drag adjustment.
         Also updates sensitivity based on ranges.
@@ -3372,12 +3374,12 @@ class ImageViewer(QGraphicsView):
         
         event.ignore()
     
-    def dragMoveEvent(self, event: QDragEnterEvent) -> None:
+    def dragMoveEvent(self, event: QDragMoveEvent) -> None:
         """
         Handle drag move event - accept files and folders.
         
         Args:
-            event: QDragEnterEvent (dragMoveEvent uses same event type)
+            event: QDragMoveEvent
         """
         if event.mimeData().hasUrls():
             # Check if any of the URLs are files or directories

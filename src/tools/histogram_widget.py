@@ -84,12 +84,12 @@ class HistogramWidget(QWidget):
         self.axes.set_ylabel("Frequency")
         self.axes.grid(True, alpha=0.3)
     
-    def set_pixel_array(self, pixel_array: np.ndarray) -> None:
+    def set_pixel_array(self, pixel_array: Optional[np.ndarray]) -> None:
         """
         Set the pixel array for histogram calculation.
         
         Args:
-            pixel_array: Image pixel array
+            pixel_array: Image pixel array, or None to clear
         """
         self.pixel_array = pixel_array
         self._update_histogram()

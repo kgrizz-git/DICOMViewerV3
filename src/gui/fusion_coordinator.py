@@ -18,7 +18,7 @@ Requirements:
     - FusionControlsWidget for UI
 """
 
-from typing import Optional, Callable, Dict, List, Tuple
+from typing import Any, Optional, Callable, Dict, List, Tuple
 import numpy as np
 from PIL import Image
 from pydicom.dataset import Dataset
@@ -49,7 +49,7 @@ class FusionCoordinator:
         fusion_handler: FusionHandler,
         fusion_processor: FusionProcessor,
         fusion_controls: FusionControlsWidget,
-        get_current_studies: Callable[[], Dict],
+        get_current_studies: Callable[[], Dict[str, Any]],
         get_current_study_uid: Callable[[], str],
         get_current_series_uid: Callable[[], str],
         get_current_slice_index: Callable[[], int],
@@ -477,11 +477,7 @@ class FusionCoordinator:
         
         # Update checkbox
         if hasattr(self.fusion_controls, 'set_fusion_enabled'):
-            # Check if method accepts keep_signals_blocked parameter
-            try:
-                self.fusion_controls.set_fusion_enabled(self.fusion_handler.fusion_enabled, keep_signals_blocked=True)
-            except TypeError:
-                self.fusion_controls.set_fusion_enabled(self.fusion_handler.fusion_enabled)
+            self.fusion_controls.set_fusion_enabled(self.fusion_handler.fusion_enabled)
         
         # Update opacity, threshold, colormap (set directly on controls)
         if hasattr(self.fusion_controls, 'opacity_slider'):
@@ -901,7 +897,11 @@ class FusionCoordinator:
                 stored_offset = (0.0, 0.0)
                 if not self.fusion_controls.has_user_modified_offset():
                     self.fusion_controls.set_calculated_offset(0.0, 0.0)
-                if not self.fusion_controls.status_label.text().startswith("Status: Warning"):
+                status_lbl = getattr(self.fusion_controls, "status_label", None)
+                if (
+                    status_lbl is None
+                    or not status_lbl.text().startswith("Status: Warning")
+                ):
                     self._append_status("Image position not available", severity="warning")
         else:
             stored_offset = (0.0, 0.0)
@@ -984,7 +984,7 @@ class FusionCoordinator:
     
     def _auto_detect_fusion_candidates(
         self,
-        studies: Dict,
+        studies: Dict[str, Any],
         study_uid: str,
         series_list: List[Tuple[str, str]]
     ) -> None:

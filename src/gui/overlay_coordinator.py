@@ -17,7 +17,7 @@ Requirements:
     - DICOMParser for metadata parsing
 """
 
-from typing import Optional, Callable
+from typing import Any, Callable, Dict, Optional
 from pydicom.dataset import Dataset
 from gui.overlay_manager import OverlayManager
 from core.dicom_parser import DICOMParser
@@ -41,11 +41,13 @@ class OverlayCoordinator:
         overlay_manager: OverlayManager,
         image_viewer: ImageViewer,
         get_current_dataset: Callable[[], Optional[Dataset]],
-        get_current_studies: Callable[[], dict],
+        get_current_studies: Callable[[], Dict[str, Any]],
         get_current_study_uid: Callable[[], str],
         get_current_series_uid: Callable[[], str],
         get_current_slice_index: Callable[[], int],
-        get_multiframe_overlay_context: Optional[Callable[[Optional[Dataset], Optional[str], Optional[str]], Optional[dict]]] = None,
+        get_multiframe_overlay_context: Optional[
+            Callable[[Optional[Dataset], Optional[str], Optional[str]], Optional[Dict[str, Any]]]
+        ] = None,
         hide_measurement_labels: Optional[Callable[[bool], None]] = None,
         hide_measurement_graphics: Optional[Callable[[bool], None]] = None,
         hide_roi_graphics: Optional[Callable[[bool], None]] = None,
@@ -76,7 +78,7 @@ class OverlayCoordinator:
         self.get_multiframe_overlay_context = get_multiframe_overlay_context
         self.hide_measurement_labels = hide_measurement_labels
         self.hide_measurement_graphics = hide_measurement_graphics
-        self.hide_roi_graphics = hide_roi_graphics
+        self._hide_roi_graphics_callback = hide_roi_graphics
         self.hide_roi_statistics_overlays = hide_roi_statistics_overlays
     
     def handle_overlay_config_applied(self) -> None:
@@ -198,8 +200,8 @@ class OverlayCoordinator:
                     self.hide_measurement_labels(True)
                 if self.hide_measurement_graphics:
                     self.hide_measurement_graphics(True)
-                if self.hide_roi_graphics:
-                    self.hide_roi_graphics(True)
+                if self._hide_roi_graphics_callback:
+                    self._hide_roi_graphics_callback(True)
                 if self.hide_roi_statistics_overlays:
                     self.hide_roi_statistics_overlays(True)
             else:
@@ -208,8 +210,8 @@ class OverlayCoordinator:
                     self.hide_measurement_labels(False)
                 if self.hide_measurement_graphics:
                     self.hide_measurement_graphics(False)
-                if self.hide_roi_graphics:
-                    self.hide_roi_graphics(False)
+                if self._hide_roi_graphics_callback:
+                    self._hide_roi_graphics_callback(False)
                 if self.hide_roi_statistics_overlays:
                     self.hide_roi_statistics_overlays(False)
             
@@ -233,9 +235,15 @@ class OverlayCoordinator:
         """
         Hide or show ROI graphics (shapes).
         
+        Delegates to the optional ROI callback when provided (e.g. ROICoordinator);
+        otherwise toggles rectangle/ellipse scene items on this viewer.
+        
         Args:
             hide: True to hide graphics, False to show them
         """
+        if self._hide_roi_graphics_callback is not None:
+            self._hide_roi_graphics_callback(hide)
+            return
         if self.image_viewer.scene is None:
             return
         

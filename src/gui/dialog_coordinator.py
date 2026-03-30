@@ -283,7 +283,7 @@ class DialogCoordinator:
         )
         dialog.exec()
 
-    def open_export_screenshots(self, subwindows: list) -> None:
+    def open_export_screenshots(self, subwindows: List[Any]) -> None:
         """
         Open Export Screenshots dialog. One file per selected subwindow (viewport grab).
         """

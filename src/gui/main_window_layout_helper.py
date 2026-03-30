@@ -21,7 +21,7 @@ Requirements:
     - PySide6 (QVBoxLayout, QTabWidget, QWidget)
 """
 
-from typing import Callable
+from typing import Any, Callable
 
 
 def setup_main_window_content(
@@ -37,10 +37,10 @@ def setup_main_window_content(
     fusion_controls_widget,
     series_navigator,
     *,
-    get_slot_to_view: Callable,
-    get_layout_mode: Callable,
-    get_focused_view_index: Callable,
-    get_thumbnail_for_view: Callable,
+    get_slot_to_view: Callable[..., Any],
+    get_layout_mode: Callable[..., Any],
+    get_focused_view_index: Callable[..., Any],
+    get_thumbnail_for_view: Callable[..., Any],
 ) -> None:
     """
     Assemble the main-window panel layout: center (multi-window), left (cine + metadata),

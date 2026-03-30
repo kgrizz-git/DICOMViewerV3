@@ -22,12 +22,20 @@ Requirements:
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QHBoxLayout, QPushButton
 from PySide6.QtCore import Qt, QRect
 from PySide6.QtGui import QResizeEvent, QCloseEvent
-from typing import Optional, Callable
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from pydicom.dataset import Dataset
 from tools.histogram_widget import HistogramWidget
 from core.dicom_processor import DICOMProcessor
 from core.multiframe_handler import get_frame_pixel_array, is_multiframe, get_frame_count
 import numpy as np
+
+# Callback type aliases (keeps ``__init__`` annotations readable for Pyright)
+HistogramDatasetFn = Callable[[], Optional[Dataset]]
+HistogramRescaleParamsFn = Callable[[], Tuple[Optional[float], Optional[float], Any]]
+HistogramSeriesDatasetsFn = Callable[[], Optional[List[Dataset]]]
+HistogramStudiesFn = Callable[[], Optional[Dict[str, Any]]]
+HistogramGeometryFn = Callable[[], Optional[Tuple[int, int, int, int]]]
+HistogramSaveGeometryFn = Callable[[int, int, int, int], None]
 
 
 class HistogramDialog(QDialog):
@@ -43,19 +51,19 @@ class HistogramDialog(QDialog):
     def __init__(
         self,
         parent=None,
-        get_current_dataset: Optional[Callable[[], Optional[Dataset]]] = None,
+        get_current_dataset: Optional[HistogramDatasetFn] = None,
         get_current_slice_index: Optional[Callable[[], int]] = None,
         get_window_center: Optional[Callable[[], Optional[float]]] = None,
         get_window_width: Optional[Callable[[], Optional[float]]] = None,
         get_use_rescaled: Optional[Callable[[], bool]] = None,
-        get_rescale_params: Optional[Callable[[], tuple]] = None,
+        get_rescale_params: Optional[HistogramRescaleParamsFn] = None,
         get_series_study_uid: Optional[Callable[[], Optional[str]]] = None,
         get_series_uid: Optional[Callable[[], Optional[str]]] = None,
-        get_series_datasets: Optional[Callable[[], Optional[list]]] = None,
-        get_all_studies: Optional[Callable[[], Optional[dict]]] = None,
+        get_series_datasets: Optional[HistogramSeriesDatasetsFn] = None,
+        get_all_studies: Optional[HistogramStudiesFn] = None,
         title_suffix: str = "",
-        get_restore_geometry: Optional[Callable[[], Optional[tuple]]] = None,
-        save_geometry_callback: Optional[Callable[[int, int, int, int], None]] = None,
+        get_restore_geometry: Optional[HistogramGeometryFn] = None,
+        save_geometry_callback: Optional[HistogramSaveGeometryFn] = None,
     ):
         """
         Initialize the histogram dialog.
@@ -98,7 +106,7 @@ class HistogramDialog(QDialog):
         self.series_global_frequency_max: Optional[float] = None
         self.series_global_x_min: Optional[float] = None
         self.series_global_x_max: Optional[float] = None
-        self.series_identity: Optional[tuple] = None
+        self.series_identity: Optional[Tuple[Any, ...]] = None
         
         self._create_ui()
         self.update_histogram()

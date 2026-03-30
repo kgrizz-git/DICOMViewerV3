@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                                 QMenu, QAbstractItemView, QApplication, QHeaderView)
 from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QAction, QKeySequence, QShortcut, QColor
-from typing import Optional, Dict, Any, Callable
+from typing import Optional, Dict, Any, Callable, List, Tuple
 import pydicom
 from pydicom.dataset import Dataset
 
@@ -62,22 +62,22 @@ class TagViewerDialog(QDialog):
         self.setWindowTitle("DICOM Tag Viewer/Editor")
         self.setModal(False)  # Non-modal so it can stay open
         self.undo_redo_manager: Optional['UndoRedoManager'] = undo_redo_manager
-        self.ui_refresh_callback: Optional[Callable] = None
+        self.ui_refresh_callback: Optional[Callable[[], None]] = None
         self.resize(800, 600)
         
         self.parser: Optional[DICOMParser] = None
         self.dataset: Optional[Dataset] = None
         self.show_private_tags = True
         self.privacy_mode: bool = False
-        self.all_tag_items: list = []  # Store all items for filtering
+        self.all_tag_items: List[QTreeWidgetItem] = []  # Store all items for filtering
         self.editor: Optional[DICOMEditor] = None
         self.history_manager: Optional[TagEditHistoryManager] = None
         
         # Undo/redo callbacks (for communicating with main window)
-        self.undo_callback: Optional[Callable] = None
-        self.redo_callback: Optional[Callable] = None
-        self.can_undo_callback: Optional[Callable] = None
-        self.can_redo_callback: Optional[Callable] = None
+        self.undo_callback: Optional[Callable[[], None]] = None
+        self.redo_callback: Optional[Callable[[], None]] = None
+        self.can_undo_callback: Optional[Callable[[], bool]] = None
+        self.can_redo_callback: Optional[Callable[[], bool]] = None
         
         # Caching for performance
         self._cached_tags: Optional[Dict[str, Any]] = None
@@ -105,8 +105,13 @@ class TagViewerDialog(QDialog):
         """
         self.history_manager = history_manager
     
-    def set_undo_redo_callbacks(self, undo_cb: Callable, redo_cb: Callable,
-                                can_undo_cb: Callable, can_redo_cb: Callable) -> None:
+    def set_undo_redo_callbacks(
+        self,
+        undo_cb: Callable[[], None],
+        redo_cb: Callable[[], None],
+        can_undo_cb: Callable[[], bool],
+        can_redo_cb: Callable[[], bool],
+    ) -> None:
         """
         Set callbacks for undo/redo operations.
         
@@ -240,10 +245,10 @@ class TagViewerDialog(QDialog):
         copy_shortcut.activated.connect(self._copy_selected_to_clipboard)
         
         # Add keyboard shortcuts for undo/redo (Cmd+Z / Ctrl+Z and Cmd+Shift+Z / Ctrl+Shift+Z)
-        undo_shortcut = QShortcut(QKeySequence.Undo, self)
+        undo_shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.Undo), self)
         undo_shortcut.activated.connect(self._on_undo_requested)
         
-        redo_shortcut = QShortcut(QKeySequence.Redo, self)
+        redo_shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.Redo), self)
         redo_shortcut.activated.connect(self._on_redo_requested)
         
         # Buttons
@@ -310,6 +315,9 @@ class TagViewerDialog(QDialog):
             # Use cached tags
             tags = self._cached_tags
         
+        if tags is None:
+            return
+        
         # Filter by search text if provided
         if search_text:
             search_lower = search_text.lower()
@@ -342,7 +350,7 @@ class TagViewerDialog(QDialog):
             sorted_tags = sorted(tags.items(), key=lambda x: x[0])
             
             # Group by tag group (first 4 hex digits)
-            groups: Dict[str, list] = {}
+            groups: Dict[str, List[Tuple[str, Dict[str, Any]]]] = {}
             for tag_str, tag_data in sorted_tags:
                 group = tag_str[:5]  # e.g., "(0008," for group 0008
                 if group not in groups:
@@ -520,8 +528,10 @@ class TagViewerDialog(QDialog):
                     if self.undo_redo_manager and self.dataset:
                         # Convert tag_str to tag object
                         from pydicom.tag import Tag
-                        tag_tuple = tuple(int(x, 16) for x in tag_str.strip("()").split(","))
-                        tag = Tag(tag_tuple)
+                        parts = [p.strip() for p in tag_str.strip("()").split(",")]
+                        if len(parts) != 2:
+                            return
+                        tag = Tag(int(parts[0], 16), int(parts[1], 16))
 
                         command = TagEditCommand(
                             self.dataset,

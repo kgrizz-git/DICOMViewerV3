@@ -14,7 +14,7 @@ Requirements:
     - ConfigManager for settings persistence
 """
 
-from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
+from PySide6.QtWidgets import (QDialog, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                                 QListWidget, QListWidgetItem, QPushButton,
                                 QDialogButtonBox, QMessageBox, QMenu)
 from PySide6.QtCore import Qt
@@ -35,7 +35,7 @@ class EditRecentListDialog(QDialog):
     - Update config when OK is clicked
     """
     
-    def __init__(self, config_manager: ConfigManager, parent: Optional[QDialog] = None):
+    def __init__(self, config_manager: ConfigManager, parent: Optional[QWidget] = None):
         """
         Initialize the Edit Recent List dialog.
         

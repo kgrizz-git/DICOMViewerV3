@@ -16,7 +16,7 @@ Requirements:
 """
 
 from PySide6.QtCore import QPointF, QTimer, Qt
-from typing import Optional, Callable, TYPE_CHECKING, Dict
+from typing import Any, Optional, Callable, TYPE_CHECKING, Dict
 from pydicom.dataset import Dataset
 from tools.measurement_tool import MeasurementTool
 from gui.image_viewer import ImageViewer
@@ -68,7 +68,7 @@ class MeasurementCoordinator:
         # press Shift while dragging" show the magnifier.
         self._handle_drag_magnifier_enabled: bool = False
         # Measurement move tracking with batching
-        self._measurement_move_tracking: Dict[object, Dict] = {}  # Tracks ongoing moves
+        self._measurement_move_tracking: Dict[object, Dict[str, Any]] = {}  # Tracks ongoing moves
         self._move_batch_timer: Optional[QTimer] = None  # Timer for debouncing
     
     def handle_measurement_started(self, pos: QPointF) -> None:

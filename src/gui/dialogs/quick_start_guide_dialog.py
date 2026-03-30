@@ -33,7 +33,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 from PySide6.QtCore import Qt, QUrl
-from typing import Optional
+from typing import ClassVar, Optional
 
 from pathlib import Path
 
@@ -117,7 +117,7 @@ class QuickStartGuideDialog(QDialog):
     """
     
     # Class-level cache for HTML content by theme
-    _content_cache: dict = {}  # {theme: html_content}
+    _content_cache: ClassVar[dict[str, str]] = {}
     
     def __init__(self, config_manager: ConfigManager, parent: Optional[QWidget] = None):
         """

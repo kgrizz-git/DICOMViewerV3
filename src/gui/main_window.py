@@ -21,10 +21,10 @@ from PySide6.QtWidgets import (QMainWindow, QMenuBar, QToolBar, QStatusBar,
                                 QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
                                 QMessageBox, QComboBox, QLabel, QSizePolicy, QColorDialog,
                                 QApplication, QDialog, QTextBrowser, QPushButton, QDialogButtonBox, QMenu,
-                                QScrollArea, QFrame, QGraphicsOpacityEffect)
+                                QScrollArea, QFrame, QGraphicsOpacityEffect, QToolButton)
 from PySide6.QtCore import Qt, Signal, QEvent, QBuffer, QByteArray, QIODevice, QDir, QTimer, QPropertyAnimation
 from PySide6.QtGui import QAction, QIcon, QKeySequence, QColor, QDragEnterEvent, QDropEvent, QPixmap
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from gui.image_viewer import ImageViewer
@@ -59,7 +59,7 @@ def _get_resource_path(relative_path: str) -> str:
     """
     if getattr(sys, 'frozen', False):
         # Running in a PyInstaller bundle
-        base_path = Path(sys._MEIPASS)
+        base_path = Path(cast(str, getattr(sys, "_MEIPASS")))
     else:
         # Running in development mode
         # main_window.py is in src/gui/, so go up to project root
@@ -139,6 +139,43 @@ class MainWindow(QMainWindow):
     import_tag_presets_requested = Signal()  # Emitted when Import Tag Presets is requested
     copy_annotation_requested = Signal()  # Emitted when copy annotation is requested
     paste_annotation_requested = Signal()  # Emitted when paste annotation is requested
+
+    # Filled by build_menu_bar in _create_menu_bar (Optional until menu is built).
+    recent_menu: Optional[QMenu] = None
+    light_theme_action: Optional[QAction] = None
+    dark_theme_action: Optional[QAction] = None
+    privacy_view_action: Optional[QAction] = None
+    smooth_when_zoomed_action: Optional[QAction] = None
+    scale_markers_action: Optional[QAction] = None
+    direction_labels_action: Optional[QAction] = None
+    show_instances_separately_action: Optional[QAction] = None
+    show_left_pane_action: Optional[QAction] = None
+    show_right_pane_action: Optional[QAction] = None
+    show_series_navigator_action: Optional[QAction] = None
+    show_window_slot_map_action: Optional[QAction] = None
+    slice_sync_action: Optional[QAction] = None
+    slice_location_lines_enable_action: Optional[QAction] = None
+    slice_location_lines_same_group_only_action: Optional[QAction] = None
+    slice_location_lines_focused_only_action: Optional[QAction] = None
+    copy_annotation_action: Optional[QAction] = None
+    paste_annotation_action: Optional[QAction] = None
+    undo_tag_edit_action: Optional[QAction] = None
+    redo_tag_edit_action: Optional[QAction] = None
+    layout_1x1_action: Optional[QAction] = None
+    layout_1x2_action: Optional[QAction] = None
+    layout_2x1_action: Optional[QAction] = None
+    layout_2x2_action: Optional[QAction] = None
+
+    # Populated when series navigator bar is assembled (may stay None until then).
+    window_slot_map_widget: Optional[WindowSlotMapWidget] = None
+    series_navigator_container: Optional[QWidget] = None
+
+    # Toast overlay (ephemeral QLabel + effects; cleared after fade).
+    _toast_label: Optional[QLabel] = None
+    _toast_effect: Optional[QGraphicsOpacityEffect] = None
+    _toast_timer: Optional[QTimer] = None
+    _toast_animation: Optional[QPropertyAnimation] = None
+
     # Note: Cine control signals moved to CineControlsWidget
     # Keeping these signals for backward compatibility but they're not used anymore
     
@@ -408,9 +445,9 @@ class MainWindow(QMainWindow):
             message: Text to display.
             timeout_ms: Time in milliseconds before starting fade-out (default 5000).
         """
-        if getattr(self, "_toast_timer", None) and self._toast_timer.isActive():
+        if self._toast_timer is not None and self._toast_timer.isActive():
             self._toast_timer.stop()
-        if getattr(self, "_toast_label", None):
+        if self._toast_label is not None:
             self._toast_label.deleteLater()
         label = QLabel(message, self)
         label.setStyleSheet(
@@ -433,7 +470,7 @@ class MainWindow(QMainWindow):
         self._toast_effect = effect
 
         def start_fade():
-            self._toast_timer = None
+            self._toast_timer = None  # single-shot fired; allow new toasts to schedule again
             anim = QPropertyAnimation(effect, b"opacity")
             anim.setDuration(300)
             anim.setStartValue(1.0)
@@ -458,7 +495,7 @@ class MainWindow(QMainWindow):
         main_layout.setSpacing(0)
         
         # Splitter for resizable panels
-        self.splitter = QSplitter(Qt.Horizontal)
+        self.splitter = QSplitter(Qt.Orientation.Horizontal)
         main_layout.addWidget(self.splitter)
         
         # Left panel (for metadata, series list, etc.) - Make scrollable
@@ -511,9 +548,9 @@ class MainWindow(QMainWindow):
         self.splitter.splitterMoved.connect(self._on_splitter_moved)
         
         # Sync View menu pane toggle check state from actual sizes (e.g. restored saved layout with a pane hidden)
-        if hasattr(self, "show_left_pane_action"):
+        if self.show_left_pane_action is not None:
             self.show_left_pane_action.setChecked(self.splitter.sizes()[0] > 0)
-        if hasattr(self, "show_right_pane_action"):
+        if self.show_right_pane_action is not None:
             self.show_right_pane_action.setChecked(self.splitter.sizes()[2] > 0)
         
         # Series navigator (initially hidden, will be set by main.py)
@@ -532,7 +569,7 @@ class MainWindow(QMainWindow):
 
         # Set up resource search path for images using QDir.addSearchPath
         if getattr(sys, 'frozen', False):
-            base_path = Path(sys._MEIPASS)
+            base_path = Path(cast(str, getattr(sys, "_MEIPASS")))
         else:
             base_path = Path(__file__).parent.parent.parent
 
@@ -547,7 +584,9 @@ class MainWindow(QMainWindow):
         if self.image_viewer is not None:
             self.image_viewer.set_background_color(get_theme_viewer_background_color(theme))
 
-        QApplication.instance().setStyleSheet(stylesheet)
+        app_instance = QApplication.instance()
+        if isinstance(app_instance, QApplication):
+            app_instance.setStyleSheet(stylesheet)
         QApplication.processEvents()
 
     def _set_theme(self, theme: str) -> None:
@@ -560,12 +599,13 @@ class MainWindow(QMainWindow):
             theme: Theme name ("light" or "dark")
         """
         # Update action states to ensure exclusivity
-        if theme == "light":
-            self.light_theme_action.setChecked(True)
-            self.dark_theme_action.setChecked(False)
-        else:  # dark
-            self.light_theme_action.setChecked(False)
-            self.dark_theme_action.setChecked(True)
+        if self.light_theme_action is not None and self.dark_theme_action is not None:
+            if theme == "light":
+                self.light_theme_action.setChecked(True)
+                self.dark_theme_action.setChecked(False)
+            else:  # dark
+                self.light_theme_action.setChecked(False)
+                self.dark_theme_action.setChecked(True)
 
         # Save to config and apply
         self.config_manager.set_theme(theme)
@@ -628,7 +668,7 @@ class MainWindow(QMainWindow):
 
     def set_smooth_when_zoomed_checked(self, checked: bool) -> None:
         """Sync the View menu Image Smoothing action check state without emitting triggered."""
-        if not hasattr(self, 'smooth_when_zoomed_action') or self.smooth_when_zoomed_action is None:
+        if self.smooth_when_zoomed_action is None:
             return
         self.smooth_when_zoomed_action.blockSignals(True)
         self.smooth_when_zoomed_action.setChecked(checked)
@@ -636,7 +676,7 @@ class MainWindow(QMainWindow):
 
     def set_scale_markers_checked(self, checked: bool) -> None:
         """Sync the View menu Show Scale Markers action check state without emitting triggered."""
-        if not hasattr(self, 'scale_markers_action') or self.scale_markers_action is None:
+        if self.scale_markers_action is None:
             return
         self.scale_markers_action.blockSignals(True)
         self.scale_markers_action.setChecked(checked)
@@ -644,7 +684,7 @@ class MainWindow(QMainWindow):
 
     def set_direction_labels_checked(self, checked: bool) -> None:
         """Sync the View menu Show Direction Labels action check state without emitting triggered."""
-        if not hasattr(self, 'direction_labels_action') or self.direction_labels_action is None:
+        if self.direction_labels_action is None:
             return
         self.direction_labels_action.blockSignals(True)
         self.direction_labels_action.setChecked(checked)
@@ -657,7 +697,7 @@ class MainWindow(QMainWindow):
 
     def set_show_instances_separately_checked(self, checked: bool) -> None:
         """Sync the View menu Show Instances Separately action check state without emitting triggered."""
-        if not hasattr(self, 'show_instances_separately_action') or self.show_instances_separately_action is None:
+        if self.show_instances_separately_action is None:
             return
         self.show_instances_separately_action.blockSignals(True)
         self.show_instances_separately_action.setChecked(checked)
@@ -665,13 +705,13 @@ class MainWindow(QMainWindow):
 
     def set_show_instances_separately_enabled(self, enabled: bool) -> None:
         """Enable or disable the View menu Show Instances Separately action."""
-        if not hasattr(self, 'show_instances_separately_action') or self.show_instances_separately_action is None:
+        if self.show_instances_separately_action is None:
             return
         self.show_instances_separately_action.setEnabled(enabled)
 
     def set_slice_location_lines_checked(self, checked: bool) -> None:
         """Sync the View menu Show Lines → Enable/Disable action check state without emitting triggered."""
-        if not hasattr(self, 'slice_location_lines_enable_action') or self.slice_location_lines_enable_action is None:
+        if self.slice_location_lines_enable_action is None:
             return
         self.slice_location_lines_enable_action.blockSignals(True)
         self.slice_location_lines_enable_action.setChecked(checked)
@@ -679,7 +719,7 @@ class MainWindow(QMainWindow):
 
     def set_slice_location_lines_same_group_only_checked(self, checked: bool) -> None:
         """Sync the View menu Show Lines → Only Show For Same Group action check state without emitting triggered."""
-        if not hasattr(self, 'slice_location_lines_same_group_only_action') or self.slice_location_lines_same_group_only_action is None:
+        if self.slice_location_lines_same_group_only_action is None:
             return
         self.slice_location_lines_same_group_only_action.blockSignals(True)
         self.slice_location_lines_same_group_only_action.setChecked(checked)
@@ -687,7 +727,7 @@ class MainWindow(QMainWindow):
 
     def set_slice_location_lines_focused_only_checked(self, checked: bool) -> None:
         """Sync the View menu Show Lines → Show Only For Focused Window action check state without emitting triggered."""
-        if not hasattr(self, 'slice_location_lines_focused_only_action') or self.slice_location_lines_focused_only_action is None:
+        if self.slice_location_lines_focused_only_action is None:
             return
         self.slice_location_lines_focused_only_action.blockSignals(True)
         self.slice_location_lines_focused_only_action.setChecked(checked)
@@ -706,10 +746,9 @@ class MainWindow(QMainWindow):
             self.privacy_mode_action.setChecked(False)
             # Remove red highlighting
             if hasattr(self, 'main_toolbar'):
-                widgets = self.main_toolbar.findChildren(QWidget)
-                for widget in widgets:
-                    if hasattr(widget, 'defaultAction') and widget.defaultAction() == self.privacy_mode_action:
-                        widget.setStyleSheet("")
+                for tool_button in self.main_toolbar.findChildren(QToolButton):
+                    if tool_button.defaultAction() == self.privacy_mode_action:
+                        tool_button.setStyleSheet("")
                         break
         else:
             # Privacy is OFF - button should say "Privacy is OFF" and be highlighted in red
@@ -717,10 +756,9 @@ class MainWindow(QMainWindow):
             self.privacy_mode_action.setChecked(True)
             # Apply red background highlighting
             if hasattr(self, 'main_toolbar'):
-                widgets = self.main_toolbar.findChildren(QWidget)
-                for widget in widgets:
-                    if hasattr(widget, 'defaultAction') and widget.defaultAction() == self.privacy_mode_action:
-                        widget.setStyleSheet("background-color: #ff0000; font-weight: bold;")
+                for tool_button in self.main_toolbar.findChildren(QToolButton):
+                    if tool_button.defaultAction() == self.privacy_mode_action:
+                        tool_button.setStyleSheet("background-color: #ff0000; font-weight: bold;")
                         break
     
     def _show_disclaimer(self) -> None:
@@ -775,7 +813,7 @@ class MainWindow(QMainWindow):
             buffer = QBuffer()
             buffer.open(QIODevice.OpenModeFlag.WriteOnly)
             scaled_pixmap.save(buffer, "PNG")
-            icon_data = buffer.data().toBase64().data().decode()
+            icon_data = bytes(buffer.data().toBase64().data()).decode("ascii")
             icon_html = f'<img src="data:image/png;base64,{icon_data}" style="vertical-align: middle; margin-right: 10px;" />'
         
         # Create HTML content with theme-based link styling
@@ -1122,6 +1160,8 @@ class MainWindow(QMainWindow):
     
     def _update_recent_menu(self) -> None:
         """Update the Recent Files submenu with current recent files."""
+        if self.recent_menu is None:
+            return
         # Clear existing actions
         self.recent_menu.clear()
         
@@ -1179,7 +1219,7 @@ class MainWindow(QMainWindow):
         from PySide6.QtGui import QContextMenuEvent
         
         # Only handle events for the recent menu
-        if obj != self.recent_menu:
+        if self.recent_menu is None or obj != self.recent_menu:
             return super().eventFilter(obj, event)
         
         # Check if it's a context menu event (right-click)
@@ -1252,9 +1292,9 @@ class MainWindow(QMainWindow):
         self.config_manager.save_config()
         
         # Sync View menu pane toggle check state when user drags splitter to 0 or expands
-        if hasattr(self, "show_left_pane_action"):
+        if self.show_left_pane_action is not None:
             self.show_left_pane_action.setChecked(sizes[0] > 0)
-        if hasattr(self, "show_right_pane_action"):
+        if self.show_right_pane_action is not None:
             self.show_right_pane_action.setChecked(sizes[2] > 0)
         
         # Emit signal to notify that viewport size changed
@@ -1279,7 +1319,7 @@ class MainWindow(QMainWindow):
         self.config_manager.save_config()
         self.viewport_resizing.emit()
         QTimer.singleShot(10, lambda: self.viewport_resized.emit())
-        if hasattr(self, "show_left_pane_action"):
+        if self.show_left_pane_action is not None:
             self.show_left_pane_action.setChecked(new_sizes[0] > 0)
     
     def _toggle_right_pane(self) -> None:
@@ -1299,7 +1339,7 @@ class MainWindow(QMainWindow):
         self.config_manager.save_config()
         self.viewport_resizing.emit()
         QTimer.singleShot(10, lambda: self.viewport_resized.emit())
-        if hasattr(self, "show_right_pane_action"):
+        if self.show_right_pane_action is not None:
             self.show_right_pane_action.setChecked(new_sizes[2] > 0)
     
     def update_status(self, message: str) -> None:
@@ -1333,8 +1373,10 @@ class MainWindow(QMainWindow):
             can_undo: True if undo is possible
             can_redo: True if redo is possible
         """
-        self.undo_tag_edit_action.setEnabled(can_undo)
-        self.redo_tag_edit_action.setEnabled(can_redo)
+        if self.undo_tag_edit_action is not None:
+            self.undo_tag_edit_action.setEnabled(can_undo)
+        if self.redo_tag_edit_action is not None:
+            self.redo_tag_edit_action.setEnabled(can_redo)
     
     def set_series_navigator(self, navigator_widget: QWidget) -> None:
         """
@@ -1395,7 +1437,7 @@ class MainWindow(QMainWindow):
             self.series_navigator.setVisible(self.series_navigator_visible)
 
         # Sync View menu check state
-        if hasattr(self, "show_series_navigator_action"):
+        if self.show_series_navigator_action is not None:
             self.show_series_navigator_action.setChecked(self.series_navigator_visible)
         self.series_navigator_visibility_changed.emit(self.series_navigator_visible)
 
@@ -1502,10 +1544,14 @@ class MainWindow(QMainWindow):
             ts = datetime.now().strftime("%H:%M:%S.%f")
             print(f"[DEBUG-LAYOUT] [{ts}] main_window._on_layout_changed: mode={layout_mode!r} callers={callers}")
         # Update menu checkmarks
-        self.layout_1x1_action.setChecked(layout_mode == "1x1")
-        self.layout_1x2_action.setChecked(layout_mode == "1x2")
-        self.layout_2x1_action.setChecked(layout_mode == "2x1")
-        self.layout_2x2_action.setChecked(layout_mode == "2x2")
+        if self.layout_1x1_action is not None:
+            self.layout_1x1_action.setChecked(layout_mode == "1x1")
+        if self.layout_1x2_action is not None:
+            self.layout_1x2_action.setChecked(layout_mode == "1x2")
+        if self.layout_2x1_action is not None:
+            self.layout_2x1_action.setChecked(layout_mode == "2x1")
+        if self.layout_2x2_action is not None:
+            self.layout_2x2_action.setChecked(layout_mode == "2x2")
         
         # Emit signal
         self.layout_changed.emit(layout_mode)

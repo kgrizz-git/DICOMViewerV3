@@ -22,10 +22,11 @@ Requirements:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 import numpy as np
+from pydicom.dataset import Dataset
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QComboBox,
@@ -38,6 +39,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
+    QPushButton,
     QRadioButton,
     QVBoxLayout,
     QWidget,
@@ -69,7 +71,7 @@ class MprRequest:
         orientation_label:   Human-readable label ("Axial", "Coronal", etc.)
     """
     series_key: str
-    datasets: list
+    datasets: List[Dataset]
     output_plane: SlicePlane
     output_spacing_mm: float
     output_thickness_mm: float
@@ -95,7 +97,7 @@ class MprDialog(QDialog):
 
     def __init__(
         self,
-        loaded_series: Dict[str, dict],
+        loaded_series: Dict[str, Dict[str, Any]],
         initial_series_key: Optional[str] = None,
         parent: Optional[QWidget] = None,
     ) -> None:
@@ -376,7 +378,9 @@ class MprDialog(QDialog):
         # Geometry check.
         ok = MprVolume.available(datasets) if datasets else False
         self._geometry_warning.setVisible(not ok)
-        self._button_box_ok().setEnabled(ok)
+        ok_btn = self._button_box_ok()
+        if ok_btn is not None:
+            ok_btn.setEnabled(ok)
 
         self._update_defaults()
 
@@ -444,16 +448,16 @@ class MprDialog(QDialog):
             return None
         return self._series_combo.itemData(idx)
 
-    def _button_box_ok(self):
+    def _button_box_ok(self) -> Optional[QPushButton]:
         """Return the OK button from the dialog's button box."""
         # Walk children to find the button box.
         for child in self.findChildren(QDialogButtonBox):
             btn = child.button(QDialogButtonBox.StandardButton.Ok)
             if btn is not None:
-                return btn
+                return cast(QPushButton, btn)
         return None
 
-    def _resolve_output_plane(self) -> tuple:
+    def _resolve_output_plane(self) -> Tuple[Optional[SlicePlane], str]:
         """
         Build the output SlicePlane from the selected orientation radio button.
 
@@ -503,13 +507,13 @@ class MprDialog(QDialog):
         return plane, label
 
     @staticmethod
-    def _get_standard_planes() -> dict:
+    def _get_standard_planes() -> Dict[str, SlicePlane]:
         """Return standard anatomical SlicePlane definitions."""
         from core.mpr_builder import MprBuilder
         return MprBuilder.standard_planes()
 
     @staticmethod
-    def _perpendicular_axes(normal: np.ndarray) -> tuple:
+    def _perpendicular_axes(normal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
         Build two perpendicular unit vectors for a given normal.
 

@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                                 QMessageBox)
 from PySide6.QtCore import Qt, Signal, QTimer, QPoint
 from PySide6.QtGui import QFont, QPainter, QAction, QColor
-from typing import Optional, Dict, Any, List, Callable
+from typing import Optional, Dict, Any, List, Callable, Tuple
 import pydicom
 from pydicom.dataset import Dataset
 
@@ -128,13 +128,13 @@ class MetadataPanel(QWidget):
         self.history_manager: Optional[TagEditHistoryManager] = None
         self.config_manager: Optional[ConfigManager] = config_manager
         self.undo_redo_manager: Optional[UndoRedoManager] = undo_redo_manager
-        self.ui_refresh_callback: Optional[Callable] = None
+        self.ui_refresh_callback: Optional[Callable[[], None]] = None
         
         # Undo/redo callbacks
-        self.undo_callback: Optional[Callable] = None
-        self.redo_callback: Optional[Callable] = None
-        self.can_undo_callback: Optional[Callable] = None
-        self.can_redo_callback: Optional[Callable] = None
+        self.undo_callback: Optional[Callable[[], None]] = None
+        self.redo_callback: Optional[Callable[[], None]] = None
+        self.can_undo_callback: Optional[Callable[[], bool]] = None
+        self.can_redo_callback: Optional[Callable[[], bool]] = None
         
         # Caching for performance
         self._cached_tags: Optional[Dict[str, Any]] = None
@@ -161,8 +161,13 @@ class MetadataPanel(QWidget):
         """
         self.history_manager = history_manager
     
-    def set_undo_redo_callbacks(self, undo_cb: Callable, redo_cb: Callable,
-                                can_undo_cb: Callable, can_redo_cb: Callable) -> None:
+    def set_undo_redo_callbacks(
+        self,
+        undo_cb: Callable[[], None],
+        redo_cb: Callable[[], None],
+        can_undo_cb: Callable[[], bool],
+        can_redo_cb: Callable[[], bool],
+    ) -> None:
         """
         Set callbacks for undo/redo operations.
         
@@ -403,6 +408,9 @@ class MetadataPanel(QWidget):
             # Use cached tags
             tags = self._cached_tags
         
+        if tags is None:
+            return
+        
         # Filter by search text if provided
         if search_text:
             search_lower = search_text.lower()
@@ -441,7 +449,7 @@ class MetadataPanel(QWidget):
             sorted_tags = sorted(tags.items(), key=lambda x: x[0])
             
             # Group by tag group (first 4 hex digits)
-            groups: Dict[str, list] = {}
+            groups: Dict[str, List[Tuple[str, Dict[str, Any]]]] = {}
             for tag_str, tag_data in sorted_tags:
                 group = tag_str[:5]  # e.g., "(0008," for group 0008
                 if group not in groups:
@@ -709,8 +717,10 @@ class MetadataPanel(QWidget):
                     if self.undo_redo_manager and self.dataset:
                         # Convert tag_str to tag object
                         from pydicom.tag import Tag
-                        tag_tuple = tuple(int(x, 16) for x in tag_str.strip("()").split(","))
-                        tag = Tag(tag_tuple)
+                        parts = [p.strip() for p in tag_str.strip("()").split(",")]
+                        if len(parts) != 2:
+                            return
+                        tag = Tag(int(parts[0], 16), int(parts[1], 16))
 
                         command = TagEditCommand(
                             self.dataset,

@@ -43,7 +43,7 @@ def build_menu_bar(main_window) -> None:
     file_menu = menubar.addMenu("&File")
 
     open_file_action = QAction("&Open File(s)...", main_window)
-    open_file_action.setShortcut(QKeySequence.Open)
+    open_file_action.setShortcut(QKeySequence(QKeySequence.StandardKey.Open))
     open_file_action.triggered.connect(main_window.open_file_requested.emit)
     file_menu.addAction(open_file_action)
 
@@ -104,7 +104,7 @@ def build_menu_bar(main_window) -> None:
     file_menu.addSeparator()
 
     exit_action = QAction("E&xit", main_window)
-    exit_action.setShortcut(QKeySequence.Quit)
+    exit_action.setShortcut(QKeySequence(QKeySequence.StandardKey.Quit))
     exit_action.triggered.connect(main_window.close)
     file_menu.addAction(exit_action)
 
@@ -112,25 +112,25 @@ def build_menu_bar(main_window) -> None:
     edit_menu = menubar.addMenu("&Edit")
 
     main_window.copy_annotation_action = QAction("&Copy", main_window)
-    main_window.copy_annotation_action.setShortcut(QKeySequence.Copy)
+    main_window.copy_annotation_action.setShortcut(QKeySequence(QKeySequence.StandardKey.Copy))
     main_window.copy_annotation_action.triggered.connect(main_window.copy_annotation_requested.emit)
     edit_menu.addAction(main_window.copy_annotation_action)
 
     main_window.paste_annotation_action = QAction("&Paste", main_window)
-    main_window.paste_annotation_action.setShortcut(QKeySequence.Paste)
+    main_window.paste_annotation_action.setShortcut(QKeySequence(QKeySequence.StandardKey.Paste))
     main_window.paste_annotation_action.triggered.connect(main_window.paste_annotation_requested.emit)
     edit_menu.addAction(main_window.paste_annotation_action)
 
     edit_menu.addSeparator()
 
     main_window.undo_tag_edit_action = QAction("&Undo", main_window)
-    main_window.undo_tag_edit_action.setShortcut(QKeySequence.Undo)
+    main_window.undo_tag_edit_action.setShortcut(QKeySequence(QKeySequence.StandardKey.Undo))
     main_window.undo_tag_edit_action.setEnabled(False)
     main_window.undo_tag_edit_action.triggered.connect(main_window.undo_tag_edit_requested.emit)
     edit_menu.addAction(main_window.undo_tag_edit_action)
 
     main_window.redo_tag_edit_action = QAction("&Redo", main_window)
-    main_window.redo_tag_edit_action.setShortcut(QKeySequence.Redo)
+    main_window.redo_tag_edit_action.setShortcut(QKeySequence(QKeySequence.StandardKey.Redo))
     main_window.redo_tag_edit_action.setEnabled(False)
     main_window.redo_tag_edit_action.triggered.connect(main_window.redo_tag_edit_requested.emit)
     edit_menu.addAction(main_window.redo_tag_edit_action)

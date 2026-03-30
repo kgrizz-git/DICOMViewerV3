@@ -147,10 +147,10 @@ class TagEditDialog(QDialog):
                     # Set current value
                     try:
                         if isinstance(self.current_value, list):
-                            val = self.current_value[0] if self.current_value else 0
+                            raw = self.current_value[0] if self.current_value else 0
                         else:
-                            val = num_type(self.current_value) if self.current_value else 0
-                        self.value_input.setValue(val)
+                            raw = num_type(self.current_value) if self.current_value else 0
+                        self.value_input.setValue(int(round(float(raw))))
                     except (ValueError, TypeError):
                         self.value_input.setValue(0)
         else:

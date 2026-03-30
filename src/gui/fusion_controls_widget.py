@@ -1072,8 +1072,8 @@ class FusionControlsWidget(QWidget):
             if self._offset_unit == "mm" and self._can_use_mm:
                 x_mm, y_mm = self._pixels_to_mm(x_px, y_px)
                 # One decimal place for mm display
-                self.x_offset_spinbox.setValue(round(x_mm * 10) / 10.0)
-                self.y_offset_spinbox.setValue(round(y_mm * 10) / 10.0)
+                self.x_offset_spinbox.setValue(int(round(x_mm * 10) / 10.0))
+                self.y_offset_spinbox.setValue(int(round(y_mm * 10) / 10.0))
             else:
                 # Display in integer pixels
                 self.x_offset_spinbox.setValue(int(round(x_px)))

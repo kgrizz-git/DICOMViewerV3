@@ -236,8 +236,12 @@ class ExportROIStatisticsDialog(QDialog):
         self.series_tree.blockSignals(True)
         for i in range(self.series_tree.topLevelItemCount()):
             study_item = self.series_tree.topLevelItem(i)
+            if study_item is None:
+                continue
             for j in range(study_item.childCount()):
-                study_item.child(j).setCheckState(0, state)
+                child = study_item.child(j)
+                if child is not None:
+                    child.setCheckState(0, state)
         self.series_tree.blockSignals(False)
         self._update_default_file_path()
 
@@ -248,9 +252,13 @@ class ExportROIStatisticsDialog(QDialog):
         selected: List[Tuple[str, str]] = []
         for i in range(self.series_tree.topLevelItemCount()):
             study_item = self.series_tree.topLevelItem(i)
+            if study_item is None:
+                continue
             study_uid = study_item.data(0, Qt.ItemDataRole.UserRole)
             for j in range(study_item.childCount()):
                 series_item = study_item.child(j)
+                if series_item is None:
+                    continue
                 if series_item.checkState(0) == Qt.CheckState.Checked:
                     series_uid = series_item.data(0, Qt.ItemDataRole.UserRole)
                     if study_uid and series_uid:

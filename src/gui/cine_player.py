@@ -20,7 +20,7 @@ Requirements:
 """
 
 from PySide6.QtCore import QObject, QTimer, Signal
-from typing import Optional, Dict, List
+from typing import Any, Optional, Dict, List
 from pydicom.dataset import Dataset
 from core.dicom_parser import get_frame_rate_from_dicom
 from core.multiframe_handler import is_multiframe, get_frame_count
@@ -82,7 +82,7 @@ class CinePlayer(QObject):
         self._is_cine_advancing = False
         
         # Current series context
-        self.current_studies: Optional[Dict] = None
+        self.current_studies: Optional[Dict[str, Any]] = None
         self.current_study_uid: Optional[str] = None
         self.current_series_uid: Optional[str] = None
         
@@ -93,7 +93,9 @@ class CinePlayer(QObject):
         self.loop_start_frame: Optional[int] = None
         self.loop_end_frame: Optional[int] = None
     
-    def set_series_context(self, studies: Optional[Dict], study_uid: Optional[str], series_uid: Optional[str]) -> None:
+    def set_series_context(
+        self, studies: Optional[Dict[str, Any]], study_uid: Optional[str], series_uid: Optional[str]
+    ) -> None:
         """
         Update the current series context.
         
@@ -143,7 +145,9 @@ class CinePlayer(QObject):
             return {}
         return group_datasets_by_slice(self.current_datasets)
     
-    def is_cine_capable(self, studies: Optional[Dict], study_uid: Optional[str], series_uid: Optional[str]) -> bool:
+    def is_cine_capable(
+        self, studies: Optional[Dict[str, Any]], study_uid: Optional[str], series_uid: Optional[str]
+    ) -> bool:
         """
         Check if a series can be played as cine.
         

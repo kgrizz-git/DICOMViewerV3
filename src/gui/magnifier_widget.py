@@ -21,9 +21,11 @@ from PySide6.QtGui import QPixmap, QPainter, QColor, QPen
 from typing import Optional
 
 try:
-    from utils.debug_flags import DEBUG_MAGNIFIER
+    from utils.debug_flags import DEBUG_MAGNIFIER as _debug_magnifier_imported
 except ImportError:
-    DEBUG_MAGNIFIER = False
+    _debug_magnifier_imported = False
+
+_debug_magnifier_enabled: bool = bool(_debug_magnifier_imported)
 
 
 class MagnifierWidget(QWidget):
@@ -95,7 +97,7 @@ class MagnifierWidget(QWidget):
             self.image_label.clear()
             return
         
-        if DEBUG_MAGNIFIER:
+        if _debug_magnifier_enabled:
             print(f"[DEBUG-MAGNIFIER] update_magnified_region: input_pixmap_size=({pixmap.width()}x{pixmap.height()}), widget_size={self.magnifier_size}")
         
         # Scale pixmap to fit label while maintaining aspect ratio
@@ -127,9 +129,17 @@ class MagnifierWidget(QWidget):
         # Ensure widget stays on screen – use the screen that contains the target point
         from PySide6.QtWidgets import QApplication
         app = QApplication.instance()
-        screen_obj = app.screenAt(global_pos) if app is not None else None
-        screen = (screen_obj.geometry() if screen_obj is not None
-                  else QApplication.primaryScreen().geometry())
+        screen_obj = (
+            app.screenAt(global_pos)
+            if isinstance(app, QApplication)
+            else None
+        )
+        primary = QApplication.primaryScreen()
+        screen = (
+            screen_obj.geometry()
+            if screen_obj is not None
+            else (primary.geometry() if primary is not None else self.screen().geometry())
+        )
         
         # Adjust if would go off left edge
         if x < screen.left():
@@ -147,7 +157,7 @@ class MagnifierWidget(QWidget):
         if y + self.magnifier_size > screen.bottom():
             y = screen.bottom() - self.magnifier_size
         
-        if DEBUG_MAGNIFIER:
+        if _debug_magnifier_enabled:
             print(
                 "[DEBUG-MAGNIFIER] MagnifierWidget.show_at_position: "
                 f"requested_global=({global_pos.x()},{global_pos.y()}), "

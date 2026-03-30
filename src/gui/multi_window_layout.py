@@ -318,11 +318,18 @@ class MultiWindowLayout(QWidget):
         Args:
             layout_mode: Layout mode
         """
+        grid = self.layout_manager
+        host = self.layout_widget
+        if grid is None or host is None:
+            return
         # Clear layout
-        while self.layout_manager.count():
-            item = self.layout_manager.takeAt(0)
-            if item.widget():
-                item.widget().hide()
+        while grid.count():
+            item = grid.takeAt(0)
+            if item is None:
+                continue
+            child = item.widget()
+            if child is not None:
+                child.hide()
         
         # Determine expected grid dimensions based on layout mode
         expected_rows = 1
@@ -344,7 +351,7 @@ class MultiWindowLayout(QWidget):
                 idx = self._get_focused_view_index()
                 container = self.subwindows[idx]
                 container.show()
-                self.layout_manager.addWidget(container, 0, 0, 1, 1)
+                grid.addWidget(container, 0, 0, 1, 1)
         elif layout_mode == "1x2":
             # Two windows side by side: row in 2x2 containing focused slot (slot-based)
             if len(self.subwindows) >= 2:
@@ -354,8 +361,8 @@ class MultiWindowLayout(QWidget):
                 v1 = self.slot_to_view[row * 2 + 1]
                 self.subwindows[v0].show()
                 self.subwindows[v1].show()
-                self.layout_manager.addWidget(self.subwindows[v0], 0, 0, 1, 1)
-                self.layout_manager.addWidget(self.subwindows[v1], 0, 1, 1, 1)
+                grid.addWidget(self.subwindows[v0], 0, 0, 1, 1)
+                grid.addWidget(self.subwindows[v1], 0, 1, 1, 1)
         elif layout_mode == "2x1":
             # Two windows stacked: column in 2x2 containing focused slot (slot-based)
             if len(self.subwindows) >= 2:
@@ -365,8 +372,8 @@ class MultiWindowLayout(QWidget):
                 v1 = self.slot_to_view[col + 2]
                 self.subwindows[v0].show()
                 self.subwindows[v1].show()
-                self.layout_manager.addWidget(self.subwindows[v0], 0, 0, 1, 1)
-                self.layout_manager.addWidget(self.subwindows[v1], 1, 0, 1, 1)
+                grid.addWidget(self.subwindows[v0], 0, 0, 1, 1)
+                grid.addWidget(self.subwindows[v1], 1, 0, 1, 1)
         elif layout_mode == "2x2":
             # Four windows in grid: order by slot_to_view (slot s -> row s//2, col s%2)
             if len(self.subwindows) >= 4:
@@ -374,25 +381,25 @@ class MultiWindowLayout(QWidget):
                     view_idx = self.slot_to_view[s]
                     self.subwindows[view_idx].show()
                     row, col = s // 2, s % 2
-                    self.layout_manager.addWidget(self.subwindows[view_idx], row, col, 1, 1)
+                    grid.addWidget(self.subwindows[view_idx], row, col, 1, 1)
         
         # Explicitly manage grid layout dimensions
         # Set stretch factors only for rows/columns that should exist
-        current_rows = self.layout_manager.rowCount()
-        current_cols = self.layout_manager.columnCount()
+        current_rows = grid.rowCount()
+        current_cols = grid.columnCount()
         
         # Set stretch factors for expected rows and columns
         for i in range(expected_rows):
-            self.layout_manager.setRowStretch(i, 1)
+            grid.setRowStretch(i, 1)
         # Remove stretch from any extra rows
         for i in range(expected_rows, current_rows):
-            self.layout_manager.setRowStretch(i, 0)
+            grid.setRowStretch(i, 0)
         
         for i in range(expected_cols):
-            self.layout_manager.setColumnStretch(i, 1)
+            grid.setColumnStretch(i, 1)
         # Remove stretch from any extra columns
         for i in range(expected_cols, current_cols):
-            self.layout_manager.setColumnStretch(i, 0)
+            grid.setColumnStretch(i, 0)
         
         # Ensure all visible subwindows have expanding size policy
         for subwindow in self.subwindows:
@@ -403,7 +410,7 @@ class MultiWindowLayout(QWidget):
                 subwindow.setMaximumSize(16777215, 16777215)  # QWIDGETSIZE_MAX
         
         # Force layout activation to recalculate geometry
-        self.layout_manager.activate()
+        grid.activate()
         
         # Force layout to recalculate geometry using QTimer to delay update
         # This ensures Qt has processed all layout changes before forcing recalculation
@@ -412,10 +419,10 @@ class MultiWindowLayout(QWidget):
         import os
         def force_layout_update():
             """Force layout geometry update after delay."""
-            self.layout_widget.updateGeometry()
+            host.updateGeometry()
             self.updateGeometry()
             # Force repaint
-            self.layout_widget.update()
+            host.update()
             self.update()
         
         QTimer.singleShot(10, force_layout_update)
@@ -428,7 +435,7 @@ class MultiWindowLayout(QWidget):
                     w = self.subwindows[i]
                     w.updateGeometry()
                     w.update()
-                self.layout_widget.updateGeometry()
+                host.updateGeometry()
                 self.updateGeometry()
                 # Log sizes for investigation
                 if DEBUG_RESIZE:

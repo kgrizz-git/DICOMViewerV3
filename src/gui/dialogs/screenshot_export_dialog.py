@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                                 QGroupBox, QCheckBox, QComboBox, QLineEdit)
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QImage
-from typing import Optional, List
+from typing import Any, List, Optional
 import os
 
 
@@ -34,7 +34,7 @@ class ScreenshotExportDialog(QDialog):
 
     def __init__(
         self,
-        subwindows: List,  # List of SubWindowContainer-like objects with .image_viewer
+        subwindows: List[Any],  # SubWindowContainer-like objects with .image_viewer
         config_manager=None,
         parent=None
     ):
@@ -65,9 +65,10 @@ class ScreenshotExportDialog(QDialog):
         group = QGroupBox("Subwindows to export (one file per selected view)")
         group_layout = QVBoxLayout()
         for i, subwindow in enumerate(self.subwindows):
-            has_image = getattr(subwindow, 'image_viewer', None) and getattr(
-                subwindow.image_viewer, 'image_item', None
-            ) is not None
+            has_image = bool(
+                getattr(subwindow, "image_viewer", None)
+                and getattr(subwindow.image_viewer, "image_item", None) is not None
+            )
             cb = QCheckBox(f"View {i + 1}")
             cb.setChecked(has_image)
             cb.setEnabled(has_image)

@@ -142,6 +142,13 @@ class OverlayConfigDialog(QDialog):
         # Store tag configurations per modality (working copy, updated on every change)
         self.modality_configs: Dict[str, Dict[str, List[str]]] = {}
 
+        # Per-corner UI references (populated in _create_corner_widget)
+        self.search_edits: Dict[str, QLineEdit] = {}
+        self.available_lists: Dict[str, QListWidget] = {}
+        self.selected_lists: Dict[str, QListWidget] = {}
+        self.move_up_buttons: Dict[str, QPushButton] = {}
+        self.move_down_buttons: Dict[str, QPushButton] = {}
+
         self._create_ui()
         self._load_configurations()
 
@@ -222,17 +229,14 @@ class OverlayConfigDialog(QDialog):
         # Search/filter
         search_layout = QHBoxLayout()
         search_label = QLabel("Search:")
-        self.search_edit = QLineEdit()
-        self.search_edit.setPlaceholderText("Filter tags...")
-        self.search_edit.textChanged.connect(lambda: self._filter_tags(corner_name))
+        search_edit = QLineEdit()
+        search_edit.setPlaceholderText("Filter tags...")
+        search_edit.textChanged.connect(lambda: self._filter_tags(corner_name))
         search_layout.addWidget(search_label)
-        search_layout.addWidget(self.search_edit)
+        search_layout.addWidget(search_edit)
         available_layout.addLayout(search_layout)
 
-        # Store reference to search edit by corner
-        if not hasattr(self, 'search_edits'):
-            self.search_edits = {}
-        self.search_edits[corner_name] = self.search_edit
+        self.search_edits[corner_name] = search_edit
 
         # Available tags list
         available_list = QListWidget()
@@ -243,9 +247,6 @@ class OverlayConfigDialog(QDialog):
             lambda item: self._add_tag_to_corner(corner_name, item.text())
         )
 
-        # Store reference to available list by corner
-        if not hasattr(self, 'available_lists'):
-            self.available_lists = {}
         self.available_lists[corner_name] = available_list
 
         available_layout.addWidget(available_list)
@@ -269,9 +270,6 @@ class OverlayConfigDialog(QDialog):
         selected_list = QListWidget()
         selected_list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
 
-        # Store reference to selected list by corner
-        if not hasattr(self, 'selected_lists'):
-            self.selected_lists = {}
         self.selected_lists[corner_name] = selected_list
 
         selected_layout.addWidget(selected_list)
@@ -300,11 +298,6 @@ class OverlayConfigDialog(QDialog):
         )
         button_layout.addWidget(move_down_button)
 
-        # Store button references by corner for enabling/disabling
-        if not hasattr(self, 'move_up_buttons'):
-            self.move_up_buttons = {}
-        if not hasattr(self, 'move_down_buttons'):
-            self.move_down_buttons = {}
         self.move_up_buttons[corner_name] = move_up_button
         self.move_down_buttons[corner_name] = move_down_button
 
