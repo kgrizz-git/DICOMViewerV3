@@ -25,13 +25,15 @@ import os
 import time
 import inspect
 import warnings
+import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 # Add src directory to path
 src_dir = Path(__file__).parent
 sys.path.insert(0, str(src_dir))
 
-from PySide6.QtWidgets import QApplication, QMessageBox, QStyleFactory
+from PySide6.QtWidgets import QApplication, QMessageBox, QStyleFactory, QFileDialog, QProgressDialog
 from PySide6.QtCore import Qt, QPointF, QObject, QTimer, QRectF, QSize
 from PySide6.QtGui import QKeyEvent
 from typing import Any, Optional, Dict, List, Tuple, cast
@@ -102,6 +104,10 @@ from core.fusion_processor import FusionProcessor
 from gui.fusion_controls_widget import FusionControlsWidget
 from gui.fusion_coordinator import FusionCoordinator
 from core.app_signal_wiring import wire_all_signals
+from qa.analysis_types import QARequest, QAResult
+from qa.preflight import collect_slice_position_warnings, modality_preflight_warning
+from qa.worker import QAAnalysisWorker
+from gui.dialogs.acr_mri_qa_dialog import prompt_acr_mri_options
 
 # Import slice sync components
 from core.slice_sync_coordinator import SliceSyncCoordinator
@@ -109,6 +115,7 @@ from core.slice_location_line_coordinator import SliceLocationLineCoordinator
 
 # Import debug flags
 from utils.debug_flags import DEBUG_PROJECTION
+from version import __version__ as APP_VERSION
 
 
 class DICOMViewerApp(QObject):
@@ -2403,6 +2410,397 @@ class DICOMViewerApp(QObject):
         """Handle Export Screenshots dialog request. One file per selected subwindow."""
         subwindows = self.multi_window_layout.get_all_subwindows()
         self.dialog_coordinator.open_export_screenshots(subwindows)
+
+    def _resolve_focused_series_ordered_paths(
+        self,
+    ) -> tuple[str, str, str, list[str], List[Dataset]]:
+        """
+        Resolve focused-subwindow series identity and ordered source file paths.
+
+        Returns:
+            Tuple of (study_uid, series_uid, modality, ordered_file_paths, datasets).
+        """
+        focused_idx = self.focused_subwindow_index
+        study_uid = self._get_subwindow_study_uid(focused_idx)
+        series_uid = self._get_subwindow_series_uid(focused_idx)
+        datasets = self.subwindow_data.get(focused_idx, {}).get("current_datasets", [])
+        if not isinstance(datasets, list):
+            datasets = []
+
+        ordered_paths: list[str] = []
+        modality = ""
+        for slice_index, dataset in enumerate(datasets):
+            if not modality:
+                modality = str(getattr(dataset, "Modality", "") or "")
+            path = self._file_series_coordinator.get_file_path_for_dataset(
+                dataset,
+                study_uid,
+                series_uid,
+                slice_index,
+            )
+            if path:
+                ordered_paths.append(path)
+
+        return study_uid, series_uid, modality, ordered_paths, datasets
+
+    def _prompt_save_path(
+        self,
+        title: str,
+        default_name: str,
+        filter_text: str,
+    ) -> str:
+        """Open a Save dialog that appears on top initially and return selected path."""
+        dialog = QFileDialog(self.main_window)
+        dialog.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
+        dialog.setFileMode(QFileDialog.FileMode.AnyFile)
+        dialog.setNameFilter(filter_text)
+        dialog.selectFile(default_name)
+        dialog.setWindowTitle(title)
+        dialog.setWindowFlags(dialog.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+        dialog.activateWindow()
+        dialog.raise_()
+        if dialog.exec():
+            selected = dialog.selectedFiles()
+            if selected:
+                return selected[0]
+        return ""
+
+    def _qa_build_preflight_warnings(
+        self,
+        expected_modality: str,
+        use_focused: bool,
+        folder_path: Optional[str],
+        datasets: List[Dataset],
+        modality: str,
+    ) -> List[str]:
+        """Collect Stage 1c preflight warnings (slice order, modality, folder mode)."""
+        warnings: List[str] = []
+        if folder_path:
+            warnings.append(
+                "Slice geometry was not verified from DICOM tags (folder input). "
+                "Ensure axial stack order matches what pylinac expects."
+            )
+        elif use_focused and datasets:
+            warnings.extend(collect_slice_position_warnings(datasets))
+        modality_warn = modality_preflight_warning(modality, expected_modality)
+        if modality_warn:
+            warnings.append(modality_warn)
+        return warnings
+
+    def _qa_user_confirms_preflight(self, warnings: List[str]) -> bool:
+        """If warnings exist, show them and return True only if the user continues."""
+        if not warnings:
+            return True
+        text = "Preflight warnings:\n\n- " + "\n- ".join(warnings)
+        text += "\n\nContinue with analysis?"
+        box = QMessageBox(self.main_window)
+        box.setWindowTitle("QA preflight")
+        box.setText(text)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setStandardButtons(
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        box.setDefaultButton(QMessageBox.StandardButton.No)
+        box.setWindowFlags(box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+        box.activateWindow()
+        box.raise_()
+        return box.exec() == int(QMessageBox.StandardButton.Yes)
+
+    def _show_qa_result_dialog(self, title: str, result: QAResult) -> None:
+        """Show a compact final status dialog for Stage 1 QA runs."""
+        status_text = "Completed successfully." if result.success else "Analysis failed."
+        warning_text = ""
+        if result.warnings:
+            warning_text = "\nWarnings:\n- " + "\n- ".join(result.warnings[:5])
+        error_text = ""
+        if result.errors:
+            error_text = "\nErrors:\n- " + "\n- ".join(result.errors[:5])
+        pdf_text = f"\nPDF: {result.pdf_report_path}" if result.pdf_report_path else "\nPDF: not generated"
+        summary = (
+            f"{status_text}\n"
+            f"Study UID: {result.study_uid or '(folder run)'}\n"
+            f"Series UID: {result.series_uid or '(folder run)'}\n"
+            f"Input images: {result.num_images}\n"
+            f"Pylinac: {result.pylinac_version or 'unknown'}"
+            f"{pdf_text}"
+            f"{warning_text}"
+            f"{error_text}"
+        )
+        box = QMessageBox(self.main_window)
+        box.setWindowTitle(title)
+        box.setText(summary)
+        box.setIcon(QMessageBox.Icon.Information if result.success else QMessageBox.Icon.Warning)
+        box.setWindowFlags(box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+        box.activateWindow()
+        box.raise_()
+        box.exec()
+
+    def _export_qa_json(
+        self,
+        result: QAResult,
+        default_stem: str,
+        inputs: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Offer JSON export for a finished Stage 1 QA run."""
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        json_path = self._prompt_save_path(
+            "Save QA Results JSON",
+            f"{default_stem}-{timestamp}.json",
+            "JSON Files (*.json)",
+        )
+        if not json_path:
+            return
+
+        payload: Dict[str, Any] = {
+            "schema_version": "1.0",
+            "run": {
+                "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+                "app_version": APP_VERSION,
+                "pylinac_version": result.pylinac_version or "",
+                "analysis_type": result.analysis_type,
+                "status": "success" if result.success else "failed",
+            },
+            "series": {
+                "study_uid": result.study_uid,
+                "series_uid": result.series_uid,
+                "modality": result.modality,
+                "num_images": result.num_images,
+            },
+            "inputs": inputs or {},
+            "metrics": result.metrics,
+            "warnings": result.warnings,
+            "errors": result.errors,
+            "artifacts": {"pdf_report_path": result.pdf_report_path or ""},
+            "raw_pylinac": result.raw_pylinac,
+        }
+        with open(json_path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2)
+        self.main_window.update_status(f"Saved QA JSON: {json_path}")
+
+    def _start_qa_worker(
+        self,
+        request: QARequest,
+        *,
+        progress_title: str,
+        progress_label: str,
+        result_dialog_title: str,
+        json_default_stem: str,
+        json_inputs: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Show progress, run QA in a background thread, then summary + JSON export."""
+        progress = QProgressDialog(progress_label, "Cancel", 0, 0, self.main_window)
+        progress.setWindowTitle(progress_title)
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.setWindowFlags(progress.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+        progress.show()
+        progress.activateWindow()
+        progress.raise_()
+
+        state = {"cancelled": False}
+
+        def on_cancel() -> None:
+            state["cancelled"] = True
+            self.main_window.update_status("QA analysis cancelled (best-effort).")
+            progress.close()
+
+        progress.canceled.connect(on_cancel)
+
+        self._qa_worker = QAAnalysisWorker(request)
+
+        def on_result(result: QAResult) -> None:
+            if state["cancelled"]:
+                self.main_window.update_status("Ignored late QA result after cancellation.")
+                return
+            progress.close()
+            self._show_qa_result_dialog(result_dialog_title, result)
+            self._export_qa_json(result, json_default_stem, json_inputs)
+
+        self._qa_worker.result_ready.connect(on_result)
+        self._qa_worker.finished.connect(progress.close)
+        self._qa_worker.start()
+
+    def _open_acr_ct_phantom_analysis(self) -> None:
+        """Open the Stage 1 ACR CT (pylinac) analysis flow."""
+        study_uid, series_uid, modality, ordered_paths, datasets = (
+            self._resolve_focused_series_ordered_paths()
+        )
+
+        use_focused = bool(ordered_paths)
+        if use_focused:
+            choice = QMessageBox(self.main_window)
+            choice.setWindowTitle("ACR CT Analysis Source")
+            choice.setText("Use the focused series or choose a folder?")
+            choice.addButton("Use Focused Series", QMessageBox.ButtonRole.AcceptRole)
+            choice.addButton("Choose Folder", QMessageBox.ButtonRole.ActionRole)
+            choice.addButton(QMessageBox.StandardButton.Cancel)
+            choice.setWindowFlags(choice.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+            choice.activateWindow()
+            choice.raise_()
+            choice.exec()
+            clicked = choice.clickedButton()
+            if clicked is None or clicked == choice.button(QMessageBox.StandardButton.Cancel):
+                return
+            if clicked.text() == "Choose Folder":
+                use_focused = False
+            elif clicked.text() == "Use Focused Series":
+                use_focused = True
+            else:
+                return
+
+        folder_path = None
+        if not use_focused:
+            folder_path = self.file_dialog.open_folder(self.main_window)
+            if not folder_path:
+                return
+            study_uid = ""
+            series_uid = ""
+            modality = modality or "CT"
+            ordered_paths = []
+            datasets = []
+
+        if use_focused and not ordered_paths:
+            QMessageBox.warning(
+                self.main_window,
+                "ACR CT Analysis",
+                "No DICOM file paths could be resolved for the focused series.",
+            )
+            return
+
+        preflight = self._qa_build_preflight_warnings(
+            "CT", use_focused, folder_path, datasets, modality or "CT"
+        )
+        if not self._qa_user_confirms_preflight(preflight):
+            return
+
+        pdf_path = self._prompt_save_path(
+            "Optional PDF Report Output",
+            f"acr-ct-report-{datetime.now().strftime('%Y%m%d-%H%M%S')}.pdf",
+            "PDF Files (*.pdf)",
+        )
+        if not pdf_path:
+            pdf_path = None
+
+        modality_eff = modality or "CT"
+        request = QARequest(
+            analysis_type="acr_ct",
+            dicom_paths=ordered_paths,
+            folder_path=folder_path,
+            output_pdf_path=pdf_path,
+            study_uid=study_uid,
+            series_uid=series_uid,
+            modality=modality_eff,
+            preflight_warnings=preflight,
+        )
+        json_inputs: Dict[str, Any] = {
+            "origin_slice_override": request.origin_slice,
+            "options": {},
+            "preflight_warnings": preflight,
+        }
+        self._start_qa_worker(
+            request,
+            progress_title="ACR CT Phantom Analysis",
+            progress_label="Running ACR CT analysis...",
+            result_dialog_title="ACR CT Phantom Analysis",
+            json_default_stem="qa-acr-ct",
+            json_inputs=json_inputs,
+        )
+
+    def _open_acr_mri_phantom_analysis(self) -> None:
+        """Open the Stage 1 ACR MRI Large (pylinac) analysis flow."""
+        study_uid, series_uid, modality, ordered_paths, datasets = (
+            self._resolve_focused_series_ordered_paths()
+        )
+
+        use_focused = bool(ordered_paths)
+        if use_focused:
+            choice = QMessageBox(self.main_window)
+            choice.setWindowTitle("ACR MRI Analysis Source")
+            choice.setText("Use the focused series or choose a folder?")
+            choice.addButton("Use Focused Series", QMessageBox.ButtonRole.AcceptRole)
+            choice.addButton("Choose Folder", QMessageBox.ButtonRole.ActionRole)
+            choice.addButton(QMessageBox.StandardButton.Cancel)
+            choice.setWindowFlags(choice.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+            choice.activateWindow()
+            choice.raise_()
+            choice.exec()
+            clicked = choice.clickedButton()
+            if clicked is None or clicked == choice.button(QMessageBox.StandardButton.Cancel):
+                return
+            if clicked.text() == "Choose Folder":
+                use_focused = False
+            elif clicked.text() == "Use Focused Series":
+                use_focused = True
+            else:
+                return
+
+        folder_path = None
+        if not use_focused:
+            folder_path = self.file_dialog.open_folder(self.main_window)
+            if not folder_path:
+                return
+            study_uid = ""
+            series_uid = ""
+            modality = modality or "MR"
+            ordered_paths = []
+            datasets = []
+
+        if use_focused and not ordered_paths:
+            QMessageBox.warning(
+                self.main_window,
+                "ACR MRI Analysis",
+                "No DICOM file paths could be resolved for the focused series.",
+            )
+            return
+
+        mri_opts = prompt_acr_mri_options(self.main_window)
+        if mri_opts is None:
+            return
+        echo_number, check_uid, origin_slice = mri_opts
+
+        preflight = self._qa_build_preflight_warnings(
+            "MR", use_focused, folder_path, datasets, modality or "MR"
+        )
+        if not self._qa_user_confirms_preflight(preflight):
+            return
+
+        pdf_path = self._prompt_save_path(
+            "Optional PDF Report Output",
+            f"acr-mri-report-{datetime.now().strftime('%Y%m%d-%H%M%S')}.pdf",
+            "PDF Files (*.pdf)",
+        )
+        if not pdf_path:
+            pdf_path = None
+
+        modality_eff = modality or "MR"
+        request = QARequest(
+            analysis_type="acr_mri_large",
+            dicom_paths=ordered_paths,
+            folder_path=folder_path,
+            origin_slice=origin_slice,
+            output_pdf_path=pdf_path,
+            study_uid=study_uid,
+            series_uid=series_uid,
+            modality=modality_eff,
+            echo_number=echo_number,
+            check_uid=check_uid,
+            preflight_warnings=preflight,
+        )
+        json_inputs = {
+            "origin_slice_override": origin_slice,
+            "options": {
+                "echo_number": echo_number,
+                "check_uid": check_uid,
+            },
+            "preflight_warnings": preflight,
+        }
+        self._start_qa_worker(
+            request,
+            progress_title="ACR MRI Phantom Analysis",
+            progress_label="Running ACR MRI Large analysis...",
+            result_dialog_title="ACR MRI Phantom Analysis",
+            json_default_stem="qa-acr-mri",
+            json_inputs=json_inputs,
+        )
 
     def _apply_imported_customizations(self) -> None:
         """Apply imported customization settings: overlay font, overlay refresh, annotations, theme, metadata columns."""

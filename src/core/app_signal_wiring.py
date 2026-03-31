@@ -77,6 +77,8 @@ def _wire_dialog_signals(app: DICOMViewerApp) -> None:
     app.main_window.tag_export_requested.connect(app._open_tag_export)
     app.main_window.histogram_requested.connect(app.dialog_coordinator.open_histogram)
     app.main_window.export_roi_statistics_requested.connect(app._open_export_roi_statistics)
+    app.main_window.acr_ct_phantom_requested.connect(app._open_acr_ct_phantom_analysis)
+    app.main_window.acr_mri_phantom_requested.connect(app._open_acr_mri_phantom_analysis)
     app.main_window.export_requested.connect(app._open_export)
     app.main_window.export_screenshots_requested.connect(app._open_export_screenshots)
     app.main_window.about_this_file_requested.connect(app._open_about_this_file)

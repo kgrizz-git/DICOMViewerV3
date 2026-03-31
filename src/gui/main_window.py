@@ -139,6 +139,8 @@ class MainWindow(QMainWindow):
     import_tag_presets_requested = Signal()  # Emitted when Import Tag Presets is requested
     copy_annotation_requested = Signal()  # Emitted when copy annotation is requested
     paste_annotation_requested = Signal()  # Emitted when paste annotation is requested
+    acr_ct_phantom_requested = Signal()  # Emitted when ACR CT (pylinac) analysis is requested
+    acr_mri_phantom_requested = Signal()  # Emitted when ACR MRI Large (pylinac) analysis is requested
 
     # Filled by build_menu_bar in _create_menu_bar (Optional until menu is built).
     recent_menu: Optional[QMenu] = None

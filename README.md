@@ -104,6 +104,10 @@ This application provides comprehensive DICOM image viewing capabilities with ad
   - Toggle between linear and logarithmic y-axis scaling
   - Automatically tracks focused subwindow and updates on focus/slice/window-level changes
   - Reflects raw or rescaled pixel values based on current setting
+- **ACR CT Phantom Analysis (Stage 1)**: Tools → **ACR CT Phantom (pylinac)...**
+  - Uses focused series paths or a folder picker fallback
+  - Runs analysis in a background worker and offers JSON export
+  - Supports optional user-chosen PDF output path via pylinac
 - Display RT STRUCT overlays (Not yet implemented)
 
 ### Data Management

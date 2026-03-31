@@ -363,6 +363,16 @@ def build_menu_bar(main_window) -> None:
     export_roi_stats_action.triggered.connect(main_window.export_roi_statistics_requested.emit)
     tools_menu.addAction(export_roi_stats_action)
 
+    tools_menu.addSeparator()
+
+    acr_ct_phantom_action = QAction("ACR CT Phantom (pylinac)...", main_window)
+    acr_ct_phantom_action.triggered.connect(main_window.acr_ct_phantom_requested.emit)
+    tools_menu.addAction(acr_ct_phantom_action)
+
+    acr_mri_phantom_action = QAction("ACR MRI Phantom (pylinac)...", main_window)
+    acr_mri_phantom_action.triggered.connect(main_window.acr_mri_phantom_requested.emit)
+    tools_menu.addAction(acr_mri_phantom_action)
+
     # --- Help menu ---
     help_menu = menubar.addMenu("&Help")
 

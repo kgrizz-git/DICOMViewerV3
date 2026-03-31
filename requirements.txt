@@ -26,6 +26,9 @@ Pillow>=10.0.0
 matplotlib>=3.8.0
 openpyxl>=3.1.0
 SimpleITK>=2.3.0  # For 3D image resampling in image fusion (Phase 2)
+pylinac>=3.38.0  # Automated phantom QA analysis (Stage 1 ACR CT integration)
+scipy>=1.11.0  # pylinac numerical dependency
+scikit-image>=0.22.0  # pylinac image processing dependency
 
 # Optional dependencies for compressed DICOM support
 # These are recommended for decoding JPEG-compressed DICOM files (JPEG, JPEG-LS, JPEG 2000)

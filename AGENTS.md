@@ -13,6 +13,12 @@ Guidance for AI agents and developers working in this repository.
 
 The env folder may be named `venv`, `.venv`, `env`, or `virtualenv`. **`launch.bat`** picks the first that exists under the project root in that order; many setups use **`venv`** or **`.venv`** (tools like `uv` often create `.venv`).
 
+On this machine/repo, a common layout is **`<project-root>\.venv`** (next to `requirements.txt` and `src\`). Example PowerShell activation from the repo root: `.\.venv\Scripts\Activate.ps1`.
+
+If workspace search/index ignores hidden virtualenv folders, use these explicit paths directly:
+- PowerShell activate: `C:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\.venv\Scripts\Activate.ps1`
+- Python interpreter: `C:\Users\kevingrizzard\Desktop\My-Codes-Windows-Local\DICOMViewerV3\.venv\Scripts\python.exe`
+
 - **Windows (Command Prompt)** — replace `<dir>` with your env folder, e.g. `venv` or `.venv`:
   - `<dir>\Scripts\activate`
 - **Windows (PowerShell):** `.\<dir>\Scripts\Activate.ps1` (e.g. `.\.venv\Scripts\Activate.ps1`)
