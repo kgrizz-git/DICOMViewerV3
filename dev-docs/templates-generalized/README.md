@@ -1,7 +1,7 @@
 # Generalized Project Assessment Templates
 
-**Version**: 2.0  
-**Last Updated**: 2026-02-18
+**Version**: 2.1  
+**Last Updated**: 2026-03-31
 
 ## Overview
 
@@ -53,6 +53,11 @@ Template for identifying and cataloging reusable documentation and information t
 Comprehensive testing assessment identifying what tests are needed, categorizing by automation feasibility, and prioritizing critical testing needs.
 
 **Use for:** Planning testing strategies and identifying test coverage gaps.
+
+### 10. **plan-and-todo-open-items-scan-template.md**
+Template for scanning repository Markdown files to find plan/to-do tracking content and assess which items are not marked complete.
+
+**Use for:** Building a prioritized unresolved-work view from documentation only, with explicit no-edit scan rules and backup-file exclusion.
 
 ## How to Use These Templates
 
@@ -223,6 +228,12 @@ your-project/
   - Standardized structure across all templates
   - Updated all templates to version 2.0
   - See `GENERALIZATION_SUMMARY.md` for detailed changes
+
+- **Version 2.1** (2026-03-31): Added plan/to-do open-items scanning template
+  - Added `plan-and-todo-open-items-scan-template.md`
+  - Focused on repo-wide markdown scanning for unresolved plan/to-do items
+  - Enforces no code/documentation edits during scan
+  - Includes backup folder/file exclusions and concise output guidance (~800 lines)
 
 - **Version 1.0** (2024-02-07): Initial generalized versions
   - Removed project-specific references

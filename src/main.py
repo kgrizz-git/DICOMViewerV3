@@ -36,7 +36,7 @@ sys.path.insert(0, str(src_dir))
 from PySide6.QtWidgets import QApplication, QMessageBox, QStyleFactory, QFileDialog, QProgressDialog
 from PySide6.QtCore import Qt, QPointF, QObject, QTimer, QRectF, QSize
 from PySide6.QtGui import QKeyEvent
-from typing import Any, Optional, Dict, List, Tuple, cast
+from typing import Any, Optional, Dict, List, Tuple, cast, Set
 import pydicom
 from pydicom.dataset import Dataset
 
@@ -62,6 +62,7 @@ from gui.zoom_display_widget import ZoomDisplayWidget
 from gui.cine_player import CinePlayer
 from gui.cine_controls_widget import CineControlsWidget
 from gui.intensity_projection_controls_widget import IntensityProjectionControlsWidget
+from gui.window_slot_map_widget import WindowSlotMapPopupDialog, WindowSlotMapWidget
 from core.dicom_loader import DICOMLoader
 from core.dicom_organizer import DICOMOrganizer
 from core.dicom_parser import DICOMParser
@@ -71,8 +72,11 @@ from utils.config_manager import ConfigManager
 from utils.dicom_utils import get_composite_series_key
 from tools.roi_manager import ROIManager, ROIItem
 from tools.measurement_tool import MeasurementTool
-from tools.crosshair_manager import CrosshairManager
+from tools.measurement_items import MeasurementItem
+from tools.crosshair_manager import CrosshairManager, CrosshairItem
 from tools.annotation_manager import AnnotationManager
+from tools.text_annotation_tool import TextAnnotationItem
+from tools.arrow_annotation_tool import ArrowAnnotationItem
 from tools.histogram_widget import HistogramWidget
 from gui.overlay_manager import OverlayManager
 from utils.annotation_clipboard import AnnotationClipboard
@@ -117,6 +121,9 @@ from core.slice_location_line_coordinator import SliceLocationLineCoordinator
 from utils.debug_flags import DEBUG_PROJECTION
 from version import __version__ as APP_VERSION
 
+# Studies structure: study UID → composite series key → ordered instance datasets.
+StudiesNestedDict = Dict[str, Dict[str, List[Dataset]]]
+
 
 class DICOMViewerApp(QObject):
     """
@@ -126,6 +133,25 @@ class DICOMViewerApp(QObject):
     """
 
     app: QApplication
+
+    # Set in __init__ (real objects in _initialize_handlers); placeholders use cast(object, None)
+    # so the checker accepts definite assignment before coordinator construction runs.
+    _file_series_coordinator: FileSeriesLoadingCoordinator
+    file_operations_handler: FileOperationsHandler
+    dialog_coordinator: DialogCoordinator
+    _privacy_controller: PrivacyController
+    _customization_handlers: CustomizationHandlers
+    mouse_mode_handler: MouseModeHandler
+    cine_player: CinePlayer
+    keyboard_event_handler: KeyboardEventHandler
+
+    # Lazily created UI / background workers (Optional avoids Pyright
+    # reportUninitializedInstanceVariable on first use).
+    _window_slot_map_dialog: Optional[WindowSlotMapPopupDialog] = None
+    _window_slot_map_widget_popup: Optional[WindowSlotMapWidget] = None
+    _qa_worker: Optional[QAAnalysisWorker] = None
+    _histogram_wl_update_timer: Optional[QTimer] = None
+    _histogram_update_timer: Optional[QTimer] = None
 
     def __init__(self):
         """
@@ -156,6 +182,19 @@ class DICOMViewerApp(QObject):
         """
         # Initialize QObject first (must be the very first statement)
         super().__init__()
+
+        # Typed placeholders; real instances are assigned in _initialize_handlers()
+        # (invoked from __init__ via _post_init_subwindows_and_handlers).
+        self._file_series_coordinator = cast(
+            FileSeriesLoadingCoordinator, cast(object, None)
+        )
+        self.file_operations_handler = cast(FileOperationsHandler, cast(object, None))
+        self.dialog_coordinator = cast(DialogCoordinator, cast(object, None))
+        self._privacy_controller = cast(PrivacyController, cast(object, None))
+        self._customization_handlers = cast(CustomizationHandlers, cast(object, None))
+        self.mouse_mode_handler = cast(MouseModeHandler, cast(object, None))
+        self.cine_player = cast(CinePlayer, cast(object, None))
+        self.keyboard_event_handler = cast(KeyboardEventHandler, cast(object, None))
 
         # Step 1 – Core application and data managers
         self._init_core_managers()
@@ -208,7 +247,7 @@ class DICOMViewerApp(QObject):
         # Application-wide flags read from persisted config
         self.privacy_view_enabled: bool = self.config_manager.get_privacy_view()
         # Studies that have already shown the fusion compatibility notification
-        self._fusion_notified_studies: set = set()
+        self._fusion_notified_studies: Set[str] = set()
 
     def _init_main_window_and_layout(self) -> None:
         """
@@ -235,7 +274,7 @@ class DICOMViewerApp(QObject):
         self.image_viewer: Optional[ImageViewer] = None
 
         # Per-subwindow manager registry: {subwindow_index: {manager_name: instance}}
-        self.subwindow_managers: Dict[int, Dict] = {}
+        self.subwindow_managers: Dict[int, Dict[str, Any]] = {}
 
         # Index of the subwindow that currently has input focus
         self.focused_subwindow_index: int = 0
@@ -303,7 +342,7 @@ class DICOMViewerApp(QObject):
         self._setup_ui()
 
         # Per-subwindow data: {index: {current_dataset, current_slice_index, ...}}
-        self.subwindow_data: Dict[int, Dict] = {}
+        self.subwindow_data: Dict[int, Dict[str, Any]] = {}
 
         # Subwindow lifecycle controller must precede _initialize_subwindow_managers
         # because that method calls _connect_all_subwindow_transform_signals().
@@ -406,8 +445,8 @@ class DICOMViewerApp(QObject):
 
         # Legacy current-data fields for backward compatibility with handlers
         # that predate the multi-window architecture.
-        self.current_datasets: list = []
-        self.current_studies: dict = {}
+        self.current_datasets: List[Dataset] = []
+        self.current_studies: StudiesNestedDict = {}
         self.current_slice_index = 0
         self.current_series_uid = ""
         self.current_study_uid = ""
@@ -460,7 +499,7 @@ class DICOMViewerApp(QObject):
         )
         self.roi_list_panel = self.roi_measurement_controller.roi_list_panel
 
-    def _build_managers_for_subwindow(self, idx: int, subwindow: SubWindowContainer) -> Dict:
+    def _build_managers_for_subwindow(self, idx: int, subwindow: SubWindowContainer) -> Dict[str, Any]:
         """
         Build the full set of per-subwindow managers for the given subwindow.
         Single place for manager creation; used by _initialize_subwindow_managers
@@ -471,7 +510,7 @@ class DICOMViewerApp(QObject):
         scroll_mode = self.config_manager.get_scroll_wheel_mode()
         image_viewer.set_scroll_wheel_mode(scroll_mode)
 
-        managers = {}
+        managers: Dict[str, Any] = {}
         managers['roi_manager'] = ROIManager(config_manager=self.config_manager)
         managers['measurement_tool'] = MeasurementTool(config_manager=self.config_manager)
         from tools.text_annotation_tool import TextAnnotationTool
@@ -732,7 +771,7 @@ class DICOMViewerApp(QObject):
         except Exception:
             return None
 
-    def _sync_intensity_projection_widget_from_mpr_data(self, data: dict) -> None:
+    def _sync_intensity_projection_widget_from_mpr_data(self, data: Dict[str, Any]) -> None:
         """Push ``mpr_combine_*`` from *data* to the right-pane Combine Slices widget."""
         w = self.intensity_projection_controls_widget
         w.enable_checkbox.blockSignals(True)
@@ -775,7 +814,7 @@ class DICOMViewerApp(QObject):
         """Return the currently focused subwindow index (0-3). Delegates to subwindow lifecycle controller."""
         return self._subwindow_lifecycle_controller.get_focused_subwindow_index()
 
-    def get_histogram_callbacks_for_subwindow(self, idx: int) -> dict:
+    def get_histogram_callbacks_for_subwindow(self, idx: int) -> Dict[str, Any]:
         """Return callbacks for the histogram dialog for subwindow idx. Delegates to subwindow lifecycle controller."""
         return self._subwindow_lifecycle_controller.get_histogram_callbacks_for_subwindow(idx)
     
@@ -1163,7 +1202,7 @@ class DICOMViewerApp(QObject):
     # Per-series / per-study close helpers (used by navigator right-click menu)
     # -------------------------------------------------------------------------
 
-    def _get_subwindow_assignments(self) -> dict:
+    def _get_subwindow_assignments(self) -> Dict[int, Tuple[str, str, int]]:
         """
         Build a mapping of subwindow slot index → (study_uid, series_key, slice_index) for every
         subwindow that currently has a dataset loaded.
@@ -1406,7 +1445,7 @@ class DICOMViewerApp(QObject):
         self.fusion_controls_widget.set_fusion_enabled(False)
         self.fusion_controls_widget.clear_status()
     
-    def _handle_load_first_slice(self, studies: dict) -> None:
+    def _handle_load_first_slice(self, studies: StudiesNestedDict) -> None:
         """
         Handle loading first slice after file operations.
 
@@ -1659,11 +1698,11 @@ class DICOMViewerApp(QObject):
         self._subwindow_lifecycle_controller.on_main_window_layout_changed(layout_mode)
         QTimer.singleShot(0, self._slice_location_line_coordinator.refresh_all)
     
-    def _capture_subwindow_view_states(self) -> Dict[int, Dict]:
+    def _capture_subwindow_view_states(self) -> Dict[int, Dict[str, Any]]:
         """Capture view state for all subwindows before layout change. Delegates to subwindow lifecycle controller."""
         return self._subwindow_lifecycle_controller.capture_subwindow_view_states()
     
-    def _restore_subwindow_views(self, view_states: Dict[int, Dict]) -> None:
+    def _restore_subwindow_views(self, view_states: Dict[int, Dict[str, Any]]) -> None:
         """Restore subwindow views after layout change. Delegates to subwindow lifecycle controller."""
         self._subwindow_lifecycle_controller.restore_subwindow_views(view_states)
     
@@ -1720,8 +1759,6 @@ class DICOMViewerApp(QObject):
         """Show or hide a small popup with the window-slot map near the cursor (toggle)."""
         from PySide6.QtCore import QPoint
         from PySide6.QtGui import QCursor
-        from gui.window_slot_map_widget import WindowSlotMapPopupDialog
-
         base_widget = getattr(self.main_window, "window_slot_map_widget", None)
         if base_widget is None:
             return
@@ -1748,11 +1785,13 @@ class DICOMViewerApp(QObject):
                 on_position_changed=on_position_changed,
             )
             self._window_slot_map_dialog = dlg
-            self._window_slot_map_widget_popup = dlg.get_map_widget()
         else:
             dlg = self._window_slot_map_dialog
 
-        widget = self._window_slot_map_widget_popup
+        widget = dlg.get_map_widget()
+        if widget is None:
+            return
+        self._window_slot_map_widget_popup = widget
 
         # Configure callbacks to mirror the main thumbnail (including thumbnails)
         try:
@@ -1835,7 +1874,7 @@ class DICOMViewerApp(QObject):
         """
         self._file_series_coordinator.on_series_navigation_requested(direction)
 
-    def _build_flat_series_list(self, studies: Dict) -> List[Tuple[int, str, str, Dataset]]:
+    def _build_flat_series_list(self, studies: StudiesNestedDict) -> List[Tuple[int, str, str, Dataset]]:
         """Build flat list of all series from all studies in navigator display order. Delegates to coordinator."""
         return self._file_series_coordinator.build_flat_series_list(studies)
 
@@ -3762,7 +3801,7 @@ class DICOMViewerApp(QObject):
             Qt.TransformationMode.SmoothTransformation,
         )
 
-    def _get_selected_rois(self, subwindow: SubWindowContainer) -> list:
+    def _get_selected_rois(self, subwindow: SubWindowContainer) -> List[ROIItem]:
         """
         Get selected ROI items from the scene.
         
@@ -3774,7 +3813,7 @@ class DICOMViewerApp(QObject):
         """
         return self._annotation_paste_handler.get_selected_rois(subwindow)
     
-    def _get_selected_measurements(self, subwindow: SubWindowContainer) -> list:
+    def _get_selected_measurements(self, subwindow: SubWindowContainer) -> List[MeasurementItem]:
         """
         Get selected measurement items from the scene.
         
@@ -3786,7 +3825,7 @@ class DICOMViewerApp(QObject):
         """
         return self._annotation_paste_handler.get_selected_measurements(subwindow)
     
-    def _get_selected_crosshairs(self, subwindow: SubWindowContainer) -> list:
+    def _get_selected_crosshairs(self, subwindow: SubWindowContainer) -> List[CrosshairItem]:
         """
         Get selected crosshair items from the scene.
         
@@ -3798,7 +3837,7 @@ class DICOMViewerApp(QObject):
         """
         return self._annotation_paste_handler.get_selected_crosshairs(subwindow)
     
-    def _get_selected_text_annotations(self, subwindow: SubWindowContainer) -> list:
+    def _get_selected_text_annotations(self, subwindow: SubWindowContainer) -> List[TextAnnotationItem]:
         """
         Get selected text annotation items from the scene.
         
@@ -3810,7 +3849,7 @@ class DICOMViewerApp(QObject):
         """
         return self._annotation_paste_handler.get_selected_text_annotations(subwindow)
     
-    def _get_selected_arrow_annotations(self, subwindow: SubWindowContainer) -> list:
+    def _get_selected_arrow_annotations(self, subwindow: SubWindowContainer) -> List[ArrowAnnotationItem]:
         """
         Get selected arrow annotation items from the scene.
         
@@ -3838,7 +3877,13 @@ class DICOMViewerApp(QObject):
         """
         self._annotation_paste_handler.paste_annotations()
     
-    def _paste_roi(self, subwindow: SubWindowContainer, managers: Dict, roi_data: Dict, offset: QPointF):
+    def _paste_roi(
+        self,
+        subwindow: SubWindowContainer,
+        managers: Dict[str, Any],
+        roi_data: Dict[str, Any],
+        offset: QPointF,
+    ):
         """
         Recreate an ROI from clipboard data.
         
@@ -3853,7 +3898,13 @@ class DICOMViewerApp(QObject):
         """
         return self._annotation_paste_handler.paste_roi(subwindow, managers, roi_data, offset)
     
-    def _paste_measurement(self, subwindow: SubWindowContainer, managers: Dict, meas_data: Dict, offset: QPointF):
+    def _paste_measurement(
+        self,
+        subwindow: SubWindowContainer,
+        managers: Dict[str, Any],
+        meas_data: Dict[str, Any],
+        offset: QPointF,
+    ):
         """
         Recreate a measurement from clipboard data.
         
@@ -3868,7 +3919,13 @@ class DICOMViewerApp(QObject):
         """
         return self._annotation_paste_handler.paste_measurement(subwindow, managers, meas_data, offset)
     
-    def _paste_crosshair(self, subwindow: SubWindowContainer, managers: Dict, cross_data: Dict, offset: QPointF):
+    def _paste_crosshair(
+        self,
+        subwindow: SubWindowContainer,
+        managers: Dict[str, Any],
+        cross_data: Dict[str, Any],
+        offset: QPointF,
+    ):
         """
         Recreate a crosshair from clipboard data.
         
@@ -3883,7 +3940,13 @@ class DICOMViewerApp(QObject):
         """
         return self._annotation_paste_handler.paste_crosshair(subwindow, managers, cross_data, offset)
     
-    def _paste_text_annotation(self, subwindow: SubWindowContainer, managers: Dict, text_data: Dict, offset: QPointF):
+    def _paste_text_annotation(
+        self,
+        subwindow: SubWindowContainer,
+        managers: Dict[str, Any],
+        text_data: Dict[str, Any],
+        offset: QPointF,
+    ):
         """
         Recreate a text annotation from clipboard data.
         
@@ -3898,7 +3961,13 @@ class DICOMViewerApp(QObject):
         """
         return self._annotation_paste_handler.paste_text_annotation(subwindow, managers, text_data, offset)
     
-    def _paste_arrow_annotation(self, subwindow: SubWindowContainer, managers: Dict, arrow_data: Dict, offset: QPointF):
+    def _paste_arrow_annotation(
+        self,
+        subwindow: SubWindowContainer,
+        managers: Dict[str, Any],
+        arrow_data: Dict[str, Any],
+        offset: QPointF,
+    ):
         """
         Recreate an arrow annotation from clipboard data.
         
