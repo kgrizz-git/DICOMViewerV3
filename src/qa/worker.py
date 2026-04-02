@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QThread, Signal
 
-from qa.analysis_types import QARequest, QAResult
+from qa.analysis_types import QARequest, QAResult, build_pylinac_analysis_profile
 from qa.pylinac_runner import run_acr_ct_analysis, run_acr_mri_large_analysis
 
 
@@ -30,6 +30,9 @@ class QAAnalysisWorker(QThread):
                 success=False,
                 analysis_type=self.request.analysis_type,
                 errors=[f"Unsupported analysis type: {self.request.analysis_type}"],
+                pylinac_analysis_profile=build_pylinac_analysis_profile(
+                    self.request, engine="(unsupported analysis_type)"
+                ),
             )
         if self.request.preflight_warnings:
             merged = list(self.request.preflight_warnings)

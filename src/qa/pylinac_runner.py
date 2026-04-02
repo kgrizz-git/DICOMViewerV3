@@ -11,7 +11,7 @@ from __future__ import annotations
 import inspect
 from typing import Any, Dict, Optional
 
-from qa.analysis_types import QARequest, QAResult
+from qa.analysis_types import QARequest, QAResult, build_pylinac_analysis_profile
 
 
 def _jsonable(value: Any) -> Any:
@@ -36,6 +36,23 @@ def _image_count(analyzer: Any, request: QARequest) -> int:
     return n
 
 
+def _missing_pylinac_result(request: QARequest) -> QAResult:
+    return QAResult(
+        success=False,
+        analysis_type=request.analysis_type,
+        errors=[
+            "pylinac is not installed. Install required dependencies and retry."
+        ],
+        study_uid=request.study_uid,
+        series_uid=request.series_uid,
+        modality=request.modality,
+        num_images=len(request.dicom_paths),
+        pylinac_analysis_profile=build_pylinac_analysis_profile(
+            request, engine="(pylinac not installed)"
+        ),
+    )
+
+
 def run_acr_ct_analysis(request: QARequest) -> QAResult:
     """
     Run ACR CT analysis through pylinac with normalized output.
@@ -49,24 +66,22 @@ def run_acr_ct_analysis(request: QARequest) -> QAResult:
     try:
         from pylinac import ACRCT  # type: ignore[import-not-found]
         import pylinac  # type: ignore[import-not-found]
+
+        from qa.pylinac_extent_subclasses import ACRCTRelaxedExtent
     except Exception:
-        return QAResult(
-            success=False,
-            analysis_type=request.analysis_type,
-            errors=[
-                "pylinac is not installed. Install required dependencies and retry."
-            ],
-            study_uid=request.study_uid,
-            series_uid=request.series_uid,
-            modality=request.modality,
-            num_images=len(request.dicom_paths),
-        )
+        return _missing_pylinac_result(request)
+
+    py_ver = getattr(pylinac, "__version__", None)
+    tol = float(request.scan_extent_tolerance_mm or 0.0)
+    engine = "ACRCTRelaxedExtent" if tol > 0 else "ACRCT"
+    profile = build_pylinac_analysis_profile(request, engine=engine)
 
     try:
+        cls = ACRCTRelaxedExtent if tol > 0 else ACRCT
         if request.dicom_paths:
-            analyzer = ACRCT(request.dicom_paths)
+            analyzer = cls(request.dicom_paths, check_uid=request.check_uid)
         elif request.folder_path:
-            analyzer = ACRCT.from_folder(request.folder_path)
+            analyzer = cls.from_folder(request.folder_path, check_uid=request.check_uid)
         else:
             return QAResult(
                 success=False,
@@ -75,8 +90,12 @@ def run_acr_ct_analysis(request: QARequest) -> QAResult:
                 study_uid=request.study_uid,
                 series_uid=request.series_uid,
                 modality=request.modality,
-                pylinac_version=getattr(pylinac, "__version__", None),
+                pylinac_version=py_ver,
+                pylinac_analysis_profile=profile,
             )
+
+        if tol > 0:
+            analyzer._scan_extent_tolerance_mm = tol
 
         analyze_kwargs: Dict[str, Any] = {}
         if request.origin_slice is not None:
@@ -105,6 +124,7 @@ def run_acr_ct_analysis(request: QARequest) -> QAResult:
         metrics: Dict[str, Any] = {
             "input_count": len(request.dicom_paths),
             "origin_slice_override": request.origin_slice,
+            "scan_extent_tolerance_mm": tol,
         }
         for key in ("num_images", "phantom_roll", "catphan_model", "origin_slice"):
             if key in raw:
@@ -122,7 +142,8 @@ def run_acr_ct_analysis(request: QARequest) -> QAResult:
             series_uid=request.series_uid,
             modality=request.modality,
             num_images=num_images,
-            pylinac_version=getattr(pylinac, "__version__", None),
+            pylinac_version=py_ver,
+            pylinac_analysis_profile=profile,
         )
     except Exception as exc:
         return QAResult(
@@ -133,7 +154,8 @@ def run_acr_ct_analysis(request: QARequest) -> QAResult:
             series_uid=request.series_uid,
             modality=request.modality,
             num_images=len(request.dicom_paths),
-            pylinac_version=getattr(pylinac, "__version__", None),
+            pylinac_version=py_ver,
+            pylinac_analysis_profile=profile,
         )
 
 
@@ -150,24 +172,22 @@ def run_acr_mri_large_analysis(request: QARequest) -> QAResult:
     try:
         from pylinac import ACRMRILarge  # type: ignore[import-not-found]
         import pylinac  # type: ignore[import-not-found]
+
+        from qa.pylinac_extent_subclasses import ACRMRILargeRelaxedExtent
     except Exception:
-        return QAResult(
-            success=False,
-            analysis_type=request.analysis_type,
-            errors=[
-                "pylinac is not installed. Install required dependencies and retry."
-            ],
-            study_uid=request.study_uid,
-            series_uid=request.series_uid,
-            modality=request.modality,
-            num_images=len(request.dicom_paths),
-        )
+        return _missing_pylinac_result(request)
+
+    py_ver = getattr(pylinac, "__version__", None)
+    tol = float(request.scan_extent_tolerance_mm or 0.0)
+    engine = "ACRMRILargeRelaxedExtent" if tol > 0 else "ACRMRILarge"
+    profile = build_pylinac_analysis_profile(request, engine=engine)
 
     try:
+        cls = ACRMRILargeRelaxedExtent if tol > 0 else ACRMRILarge
         if request.dicom_paths:
-            analyzer = ACRMRILarge(request.dicom_paths)
+            analyzer = cls(request.dicom_paths, check_uid=request.check_uid)
         elif request.folder_path:
-            analyzer = ACRMRILarge.from_folder(request.folder_path)
+            analyzer = cls.from_folder(request.folder_path, check_uid=request.check_uid)
         else:
             return QAResult(
                 success=False,
@@ -176,8 +196,12 @@ def run_acr_mri_large_analysis(request: QARequest) -> QAResult:
                 study_uid=request.study_uid,
                 series_uid=request.series_uid,
                 modality=request.modality,
-                pylinac_version=getattr(pylinac, "__version__", None),
+                pylinac_version=py_ver,
+                pylinac_analysis_profile=profile,
             )
+
+        if tol > 0:
+            analyzer._scan_extent_tolerance_mm = tol
 
         analyze_sig = inspect.signature(analyzer.analyze)
         analyze_kwargs: Dict[str, Any] = {}
@@ -214,6 +238,7 @@ def run_acr_mri_large_analysis(request: QARequest) -> QAResult:
             "echo_number": request.echo_number,
             "check_uid": request.check_uid,
             "origin_slice_override": request.origin_slice,
+            "scan_extent_tolerance_mm": tol,
         }
         for key in (
             "num_images",
@@ -243,7 +268,8 @@ def run_acr_mri_large_analysis(request: QARequest) -> QAResult:
             series_uid=request.series_uid,
             modality=request.modality,
             num_images=num_images,
-            pylinac_version=getattr(pylinac, "__version__", None),
+            pylinac_version=py_ver,
+            pylinac_analysis_profile=profile,
         )
     except Exception as exc:
         return QAResult(
@@ -254,6 +280,6 @@ def run_acr_mri_large_analysis(request: QARequest) -> QAResult:
             series_uid=request.series_uid,
             modality=request.modality,
             num_images=len(request.dicom_paths),
-            pylinac_version=getattr(pylinac, "__version__", None),
+            pylinac_version=py_ver,
+            pylinac_analysis_profile=profile,
         )
-

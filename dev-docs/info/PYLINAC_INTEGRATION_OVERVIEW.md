@@ -39,7 +39,7 @@ This is a **snapshot** of pylinac usage in **application code** (`src/qa`, Tools
 - **Automatic phantom identification** (metadata/heuristics) and a **single “phantom picker”** that routes to many analyzers—today the user picks **CT vs MRI ACR** via separate menu entries.
 - **Deep GUI integration**: showing pylinac **annotated images or ROIs** as **overlays** in the main image viewer; **batch** or **queued** runs; **site-configurable pass/fail thresholds** in the viewer (beyond exporting metrics and optional PDF).
 - **Broader pylinac domains** outside this project’s ACR focus—e.g. **Winston–Lutz**, **Picket Fence**, **Starshot**, **VMAT**, **log analysis**, and similar therapy-QA modules—unless/until explicitly scoped.
-- **Scan-extent tolerance + JSON run profiles** — implementation plan: [PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md](../plans/PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md). Background: [PYLINAC_FLEXIBILITY_AND_WORKAROUNDS.md](PYLINAC_FLEXIBILITY_AND_WORKAROUNDS.md).
+- **Scan-extent tolerance + JSON run profiles** — **shipped**: optional **0.5–2.0 mm** relaxed `_ensure_physical_scan_extent` via `ACRMRILargeRelaxedExtent` / `ACRCTRelaxedExtent` when `QARequest.scan_extent_tolerance_mm > 0`; proactive checkboxes in **ACR CT** and **ACR MRI** options dialogs; **reactive** retry after strict extent failure (`main._qa_offer_extent_retry`); every run sets **`QAResult.pylinac_analysis_profile`** and JSON **`schema_version` 1.1** top-level `pylinac_analysis_profile`. Plan: [PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md](../plans/PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md). Background: [PYLINAC_FLEXIBILITY_AND_WORKAROUNDS.md](PYLINAC_FLEXIBILITY_AND_WORKAROUNDS.md).
 
 ### Pylinac docs coverage snapshot (v3.43.0 index)
 
@@ -151,18 +151,22 @@ From a dependency standpoint, integration mostly means **adding pylinac + SciPy/
 
 Every pylinac-backed run should be **auditable**: a physicist or script must be able to tell whether the outcome used **stock pylinac behavior** or **viewer-assisted** behavior (subclasses, tolerances, manual overrides).
 
-**Guidance for implementers**
+**As implemented (2026-04-01)**
 
-1. **`QAResult`** should carry a structured **`pylinac_analysis_profile`** (dict or dedicated dataclass—see implementation plan) on every completion, **success or failure**. Populate it from a single helper in `src/qa` so CT and MRI stay consistent.
-2. **Vanilla default:** When the user does not opt into relaxations, set e.g. `vanilla_equivalent: true`, `scan_extent_tolerance_mm: 0`, and `engine` to the **upstream class name** actually invoked (`ACRMRILarge`, `ACRCT`).
-3. **Any deviation** from stock defaults must appear in the profile, including:
-   - **Scan extent tolerance** (mm) when using a relaxed subclass (planned).
-   - **`origin_slice`** override, **`echo_number`**, **`check_uid`**, and any future **`analyze()`** tuning (x/y/angle, ROI scale, CatPhan tolerances, etc.).
-   - **Attempt number** and **parent failure reason** when the user retries after a known error (e.g. strict extent failure).
-4. **JSON export** (`_export_qa_json` in `src/main.py`): include **`pylinac_analysis_profile`** at the **top level** alongside existing **`inputs`**, **`metrics`**, and **`raw_pylinac`**. When the schema gains this field, bump **`schema_version`** (planned **`1.1`**) and document the change in `CHANGELOG.md`. Keep **`inputs`** for backward compatibility; avoid duplicating the same keys in conflicting forms—either mirror request fields under `inputs` only, or state that **`pylinac_analysis_profile`** is canonical for “what differed from pylinac defaults.”
-5. **User-facing copy:** If `vanilla_equivalent` is false, the results dialog (and optional PDF notes later) should briefly direct users to the JSON profile.
+- **`build_pylinac_analysis_profile()`** in `src/qa/analysis_types.py` builds the dict; **`pylinac_runner`** and **`worker`** attach **`QAResult.pylinac_analysis_profile`** on success, failure, and missing-input paths.
+- **JSON** (`_export_qa_json` in `src/main.py`): top-level **`pylinac_analysis_profile`** with **`schema_version` `1.1`**; **`inputs`** unchanged for backward compatibility.
+- **Scan extent:** proactive tolerance from **ACR CT** / **ACR MRI** option dialogs; reactive **`_qa_offer_extent_retry`** after strict extent failure; profile records **`scan_extent_tolerance_mm`**, **`engine`**, **`qa_attempt`**, **`parent_attempt_outcome`** when applicable.
+- **Results dialog:** short note when **`vanilla_equivalent`** is false, pointing to JSON.
 
-**Implementation checklist:** [PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md](../plans/PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md).
+**Guidance for future extensions**
+
+1. Keep populating the profile from a **single helper** in `src/qa` so CT, MRI, and future analyzers stay consistent.
+2. **Vanilla default:** When the user does not opt into relaxations, **`vanilla_equivalent: true`**, **`scan_extent_tolerance_mm: 0`**, **`engine`** = upstream class name (`ACRMRILarge`, `ACRCT`, …).
+3. **Any deviation** from stock defaults must appear in the profile, including **`origin_slice`**, **`echo_number`**, **`check_uid`**, future **`analyze()`** tuning, and retry lineage.
+4. **Schema bumps:** When adding breaking JSON fields, increment **`schema_version`** and note in **`CHANGELOG.md`**.
+5. **PDF / reports:** If added later, mirror the “non‑vanilla” hint when **`vanilla_equivalent`** is false.
+
+**Plan (checklist complete):** [PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md](../plans/PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md).
 
 ### 2.5 ACR CT phantom datasets (`ACRCT`): slices, z‑coverage, and thickness
 

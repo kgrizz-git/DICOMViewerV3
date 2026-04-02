@@ -4,6 +4,8 @@ This note is for **DICOM Viewer V3** developers extending the Stage 1 **`src/qa`
 
 **Related:** [PYLINAC_INTEGRATION_OVERVIEW.md](PYLINAC_INTEGRATION_OVERVIEW.md) (integration scope + reproducibility guidance §2.4), [AUTOMATED_QA_ADDITIONAL_ANALYSIS.md](AUTOMATED_QA_ADDITIONAL_ANALYSIS.md) (physics gaps), [plans/PYLINAC_AND_AUTOMATED_QA_STAGE1_PLAN.md](../plans/PYLINAC_AND_AUTOMATED_QA_STAGE1_PLAN.md) (Stage 1 checklist), [plans/PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md](../plans/PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md) (vanilla default + optional extent tolerance + JSON profile).
 
+**Shipped in the viewer:** Approaches **A** (tolerant extent via `ACRCTRelaxedExtent` / `ACRMRILargeRelaxedExtent`) and **B** (retry after strict extent failure) are wired in **`src/qa`** and **`src/main.py`**, with **`pylinac_analysis_profile`** and JSON **`schema_version` 1.1** — details in **PYLINAC_INTEGRATION_OVERVIEW.md** §2.4.
+
 **Upstream docs (version your install separately; project pins `pylinac>=3.38.0` in `requirements.txt`):**
 
 - [ACR phantoms (ACRCT, ACRMRILarge)](https://pylinac.readthedocs.io/en/latest/acr.html)

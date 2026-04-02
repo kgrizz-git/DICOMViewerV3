@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
     QDialogButtonBox,
+    QDoubleSpinBox,
     QFormLayout,
     QGroupBox,
     QLabel,
@@ -28,8 +29,7 @@ class AcrMrIQaOptionsDialog(QDialog):
     Collect MRI-specific pylinac options before running analysis.
 
     Returns:
-        On accept: use_lowest_echo, echo_number (used when use_lowest_echo False),
-        check_uid_strict, origin_slice (None if spin <= -1 sentinel).
+        On accept: echo_number, check_uid, origin_slice, scan_extent_tolerance_mm.
     """
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
@@ -74,6 +74,23 @@ class AcrMrIQaOptionsDialog(QDialog):
         form.addRow("Origin slice index (optional, -1 = auto):", self._origin_spin)
         advanced.setLayout(form)
 
+        geom = QGroupBox("Scan extent (optional)")
+        gform = QFormLayout()
+        self._extent_tol = QCheckBox(
+            "Allow small scan-extent tolerance (DICOM z rounding)"
+        )
+        self._extent_tol.setChecked(False)
+        self._tol_spin = QDoubleSpinBox()
+        self._tol_spin.setRange(0.5, 2.0)
+        self._tol_spin.setSingleStep(0.5)
+        self._tol_spin.setDecimals(2)
+        self._tol_spin.setValue(1.0)
+        self._tol_spin.setEnabled(False)
+        self._extent_tol.toggled.connect(self._tol_spin.setEnabled)
+        gform.addRow(self._extent_tol)
+        gform.addRow("Tolerance (mm):", self._tol_spin)
+        geom.setLayout(gform)
+
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
@@ -83,6 +100,7 @@ class AcrMrIQaOptionsDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.addWidget(intro)
         layout.addWidget(advanced)
+        layout.addWidget(geom)
         layout.addWidget(buttons)
 
         self._on_use_lowest_toggled(self._use_lowest_echo.isChecked())
@@ -90,7 +108,9 @@ class AcrMrIQaOptionsDialog(QDialog):
     def _on_use_lowest_toggled(self, checked: bool) -> None:
         self._echo_spin.setEnabled(not checked)
 
-    def get_options(self) -> Tuple[Optional[int], bool, Optional[int]]:
+    def get_options(
+        self,
+    ) -> Tuple[Optional[int], bool, Optional[int], float]:
         if self._use_lowest_echo.isChecked():
             echo: Optional[int] = None
         else:
@@ -98,12 +118,18 @@ class AcrMrIQaOptionsDialog(QDialog):
         check_uid = bool(self._check_uid.isChecked())
         origin = int(self._origin_spin.value())
         origin_out: Optional[int] = None if origin < 0 else origin
-        return echo, check_uid, origin_out
+        scan_tol = 0.0
+        if self._extent_tol.isChecked():
+            scan_tol = float(self._tol_spin.value())
+        return echo, check_uid, origin_out, scan_tol
 
 
-def prompt_acr_mri_options(parent: Optional[QWidget] = None) -> Optional[Tuple[Optional[int], bool, Optional[int]]]:
+def prompt_acr_mri_options(
+    parent: Optional[QWidget] = None,
+) -> Optional[Tuple[Optional[int], bool, Optional[int], float]]:
     """
-    Show modal options dialog; return (echo_number, check_uid, origin_slice) or None if cancelled.
+    Show modal options dialog; return
+    (echo_number, check_uid, origin_slice, scan_extent_tolerance_mm) or None if cancelled.
     """
     dlg = AcrMrIQaOptionsDialog(parent)
     dlg.activateWindow()

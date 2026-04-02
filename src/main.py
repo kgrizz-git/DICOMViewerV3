@@ -33,7 +33,16 @@ from pathlib import Path
 src_dir = Path(__file__).parent
 sys.path.insert(0, str(src_dir))
 
-from PySide6.QtWidgets import QApplication, QMessageBox, QStyleFactory, QFileDialog, QProgressDialog
+from dataclasses import replace
+
+from PySide6.QtWidgets import (
+    QApplication,
+    QFileDialog,
+    QInputDialog,
+    QMessageBox,
+    QProgressDialog,
+    QStyleFactory,
+)
 from PySide6.QtCore import Qt, QPointF, QObject, QTimer, QRectF, QSize
 from PySide6.QtGui import QKeyEvent
 from typing import Any, Optional, Dict, List, Tuple, cast, Set
@@ -108,9 +117,14 @@ from core.fusion_processor import FusionProcessor
 from gui.fusion_controls_widget import FusionControlsWidget
 from gui.fusion_coordinator import FusionCoordinator
 from core.app_signal_wiring import wire_all_signals
-from qa.analysis_types import QARequest, QAResult
+from qa.analysis_types import (
+    QARequest,
+    QAResult,
+    is_physical_scan_extent_failure,
+)
 from qa.preflight import collect_slice_position_warnings, modality_preflight_warning
 from qa.worker import QAAnalysisWorker
+from gui.dialogs.acr_ct_qa_dialog import prompt_acr_ct_options
 from gui.dialogs.acr_mri_qa_dialog import prompt_acr_mri_options
 
 # Import slice sync components
@@ -2555,6 +2569,12 @@ class DICOMViewerApp(QObject):
         if result.errors:
             error_text = "\nErrors:\n- " + "\n- ".join(result.errors[:5])
         pdf_text = f"\nPDF: {result.pdf_report_path}" if result.pdf_report_path else "\nPDF: not generated"
+        profile = result.pylinac_analysis_profile or {}
+        nonvanilla = ""
+        if not profile.get("vanilla_equivalent", True):
+            nonvanilla = (
+                "\nNon-vanilla pylinac path: see JSON field pylinac_analysis_profile."
+            )
         summary = (
             f"{status_text}\n"
             f"Study UID: {result.study_uid or '(folder run)'}\n"
@@ -2562,6 +2582,7 @@ class DICOMViewerApp(QObject):
             f"Input images: {result.num_images}\n"
             f"Pylinac: {result.pylinac_version or 'unknown'}"
             f"{pdf_text}"
+            f"{nonvanilla}"
             f"{warning_text}"
             f"{error_text}"
         )
@@ -2591,7 +2612,7 @@ class DICOMViewerApp(QObject):
             return
 
         payload: Dict[str, Any] = {
-            "schema_version": "1.0",
+            "schema_version": "1.1",
             "run": {
                 "timestamp_utc": datetime.now(timezone.utc).isoformat(),
                 "app_version": APP_VERSION,
@@ -2606,6 +2627,7 @@ class DICOMViewerApp(QObject):
                 "num_images": result.num_images,
             },
             "inputs": inputs or {},
+            "pylinac_analysis_profile": result.pylinac_analysis_profile or {},
             "metrics": result.metrics,
             "warnings": result.warnings,
             "errors": result.errors,
@@ -2616,6 +2638,76 @@ class DICOMViewerApp(QObject):
             json.dump(payload, handle, indent=2)
         self.main_window.update_status(f"Saved QA JSON: {json_path}")
 
+    def _qa_offer_extent_retry(
+        self,
+        request: QARequest,
+        json_inputs: Optional[Dict[str, Any]],
+        *,
+        progress_title: str,
+        progress_label: str,
+        result_dialog_title: str,
+        json_default_stem: str,
+    ) -> None:
+        """After a strict scan-extent failure, offer a relaxed retry (one tier)."""
+        mb = QMessageBox(self.main_window)
+        mb.setWindowTitle("Scan extent")
+        mb.setText(
+            "Pylinac reported that the DICOM stack does not fully cover the "
+            "phantom module positions (strict z-extent check). This sometimes "
+            "happens when tags round slightly short of the true range.\n\n"
+            "Retry with a small tolerance? This is non-vanilla and is recorded "
+            "in the JSON export."
+        )
+        b_retry = mb.addButton(
+            "Retry with 1.0 mm tolerance", QMessageBox.ButtonRole.ActionRole
+        )
+        b_choose = mb.addButton(
+            "Choose tolerance…", QMessageBox.ButtonRole.ActionRole
+        )
+        mb.addButton(QMessageBox.StandardButton.Close)
+        mb.setIcon(QMessageBox.Icon.Question)
+        mb.setWindowFlags(mb.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+        mb.activateWindow()
+        mb.raise_()
+        mb.exec()
+        clicked = mb.clickedButton()
+        tol: Optional[float] = None
+        if clicked == b_retry:
+            tol = 1.0
+        elif clicked == b_choose:
+            val, ok = QInputDialog.getDouble(
+                self.main_window,
+                "Scan extent tolerance",
+                "Tolerance (mm):",
+                1.0,
+                0.5,
+                2.0,
+                2,
+            )
+            if ok:
+                tol = float(val)
+        if tol is None:
+            return
+        new_req = replace(
+            request,
+            scan_extent_tolerance_mm=tol,
+            qa_attempt=request.qa_attempt + 1,
+            parent_attempt_outcome="failed_strict_extent",
+        )
+        merged: Dict[str, Any] = dict(json_inputs or {})
+        merged["scan_extent_tolerance_mm"] = tol
+        merged["qa_attempt"] = new_req.qa_attempt
+        merged["parent_attempt_outcome"] = new_req.parent_attempt_outcome
+        self._start_qa_worker(
+            new_req,
+            progress_title=progress_title,
+            progress_label=progress_label,
+            result_dialog_title=result_dialog_title,
+            json_default_stem=json_default_stem,
+            json_inputs=merged,
+            allow_extent_retry=False,
+        )
+
     def _start_qa_worker(
         self,
         request: QARequest,
@@ -2625,6 +2717,7 @@ class DICOMViewerApp(QObject):
         result_dialog_title: str,
         json_default_stem: str,
         json_inputs: Optional[Dict[str, Any]] = None,
+        allow_extent_retry: bool = True,
     ) -> None:
         """Show progress, run QA in a background thread, then summary + JSON export."""
         progress = QProgressDialog(progress_label, "Cancel", 0, 0, self.main_window)
@@ -2653,6 +2746,21 @@ class DICOMViewerApp(QObject):
             progress.close()
             self._show_qa_result_dialog(result_dialog_title, result)
             self._export_qa_json(result, json_default_stem, json_inputs)
+            if (
+                allow_extent_retry
+                and not result.success
+                and is_physical_scan_extent_failure(result.errors)
+                and float(request.scan_extent_tolerance_mm or 0) <= 0.0
+                and request.qa_attempt < 2
+            ):
+                self._qa_offer_extent_retry(
+                    request,
+                    json_inputs,
+                    progress_title=progress_title,
+                    progress_label=progress_label,
+                    result_dialog_title=result_dialog_title,
+                    json_default_stem=json_default_stem,
+                )
 
         self._qa_worker.result_ready.connect(on_result)
         self._qa_worker.finished.connect(progress.close)
@@ -2711,6 +2819,10 @@ class DICOMViewerApp(QObject):
         if not self._qa_user_confirms_preflight(preflight):
             return
 
+        ct_scan_tol = prompt_acr_ct_options(self.main_window)
+        if ct_scan_tol is None:
+            return
+
         pdf_path = self._prompt_save_path(
             "Optional PDF Report Output",
             f"acr-ct-report-{datetime.now().strftime('%Y%m%d-%H%M%S')}.pdf",
@@ -2729,9 +2841,12 @@ class DICOMViewerApp(QObject):
             series_uid=series_uid,
             modality=modality_eff,
             preflight_warnings=preflight,
+            scan_extent_tolerance_mm=float(ct_scan_tol),
         )
         json_inputs: Dict[str, Any] = {
             "origin_slice_override": request.origin_slice,
+            "scan_extent_tolerance_mm": float(ct_scan_tol),
+            "qa_attempt": request.qa_attempt,
             "options": {},
             "preflight_warnings": preflight,
         }
@@ -2794,7 +2909,7 @@ class DICOMViewerApp(QObject):
         mri_opts = prompt_acr_mri_options(self.main_window)
         if mri_opts is None:
             return
-        echo_number, check_uid, origin_slice = mri_opts
+        echo_number, check_uid, origin_slice, mri_scan_tol = mri_opts
 
         preflight = self._qa_build_preflight_warnings(
             "MR", use_focused, folder_path, datasets, modality or "MR"
@@ -2823,9 +2938,12 @@ class DICOMViewerApp(QObject):
             echo_number=echo_number,
             check_uid=check_uid,
             preflight_warnings=preflight,
+            scan_extent_tolerance_mm=float(mri_scan_tol),
         )
         json_inputs = {
             "origin_slice_override": origin_slice,
+            "scan_extent_tolerance_mm": float(mri_scan_tol),
+            "qa_attempt": request.qa_attempt,
             "options": {
                 "echo_number": echo_number,
                 "check_uid": check_uid,

@@ -6,6 +6,21 @@
 
 **Primary pain:** `ACRMRILarge.localize()` → `CatPhanBase._ensure_physical_scan_extent()` raises when nominal module z-range (from fixed mm offsets) is not strictly inside stack min/max z (0.1 mm rounding). **ACR CT** uses the same base check and may benefit from the same machinery later.
 
+**Status:** Implemented in application code (2026-04-01). Checklist below is complete.
+
+### Implementation checklist (completed)
+
+- [x] **`src/qa/analysis_types.py`**: `physical_scan_extent_passes_relaxed()`, `is_physical_scan_extent_failure()`, `build_pylinac_analysis_profile()`; `QARequest.scan_extent_tolerance_mm`, `qa_attempt`, `parent_attempt_outcome`; `QAResult.pylinac_analysis_profile`.
+- [x] **`src/qa/pylinac_extent_subclasses.py`**: `_RelaxedPhysicalScanExtentMixin`, `ACRMRILargeRelaxedExtent`, `ACRCTRelaxedExtent` (delegate math to `analysis_types`).
+- [x] **`src/qa/pylinac_runner.py`**: Stock vs relaxed class selection; set `analyzer._scan_extent_tolerance_mm`; pass `check_uid` into constructors; attach profile on success/failure/missing-input paths; `_missing_pylinac_result` includes profile.
+- [x] **`src/qa/worker.py`**: Unsupported `analysis_type` result includes profile.
+- [x] **`src/gui/dialogs/acr_mri_qa_dialog.py`**: Optional scan-extent group (checkbox + 0.5–2.0 mm spin); `get_options` returns 4-tuple including tolerance.
+- [x] **`src/gui/dialogs/acr_ct_qa_dialog.py`**: New CT options dialog (same extent UX as MRI).
+- [x] **`src/main.py`**: CT/MRI flows pass tolerance into `QARequest` and `json_inputs`; `_qa_offer_extent_retry` + `_start_qa_worker(..., allow_extent_retry=)`; JSON `schema_version` **1.1** + top-level `pylinac_analysis_profile`; result dialog note when not vanilla.
+- [x] **`tests/test_pylinac_extent_relaxed.py`**: Detection + relaxed math tests (no DICOM).
+- [x] **`CHANGELOG.md`**: User-visible note + schema bump.
+- [x] **`PYLINAC_INTEGRATION_OVERVIEW.md`**: Integration status updated for shipped feature.
+
 ---
 
 ## 1. Principles
@@ -124,10 +139,10 @@ In **`on_result`** (or a small helper called from it) for MRI (and later CT):
 
 ## 7. Documentation updates (checklist)
 
-- [ ] [PYLINAC_INTEGRATION_OVERVIEW.md](../info/PYLINAC_INTEGRATION_OVERVIEW.md) — reproducibility / JSON guidance (see plan handoff in repo).
-- [ ] [PYLINAC_FLEXIBILITY_AND_WORKAROUNDS.md](../info/PYLINAC_FLEXIBILITY_AND_WORKAROUNDS.md) — link to this plan under §1 / §5.
-- [ ] [PYLINAC_AND_AUTOMATED_QA_STAGE1_PLAN.md](PYLINAC_AND_AUTOMATED_QA_STAGE1_PLAN.md) — optional pointer “Stage 1b+ extent tolerance” if still active.
-- [ ] `CHANGELOG.md` — user-visible behavior + schema_version bump when implemented.
+- [x] [PYLINAC_INTEGRATION_OVERVIEW.md](../info/PYLINAC_INTEGRATION_OVERVIEW.md) — reproducibility / JSON guidance (§2.4); integration status updated to **shipped** extent tolerance + profile.
+- [x] [PYLINAC_FLEXIBILITY_AND_WORKAROUNDS.md](../info/PYLINAC_FLEXIBILITY_AND_WORKAROUNDS.md) — already links this plan (§1).
+- [x] [PYLINAC_AND_AUTOMATED_QA_STAGE1_PLAN.md](PYLINAC_AND_AUTOMATED_QA_STAGE1_PLAN.md) — Stage 1b+ pointer present in Related docs.
+- [x] `CHANGELOG.md` — user-visible behavior + schema_version bump.
 
 ---
 

@@ -4,6 +4,9 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 
 ## [Unreleased]
 
+### Added
+- **Pylinac QA scan-extent tolerance + reproducibility**: Optional **0.5–2.0 mm** tolerance for pylinac’s strict physical scan-extent check (**ACR CT** and **ACR MRI Large**) via `ACRCTRelaxedExtent` / `ACRMRILargeRelaxedExtent` (`src/qa/pylinac_extent_subclasses.py`); proactive options in **ACR CT** and **ACR MRI** dialogs; after a strict extent failure, user can **retry** with 1.0 mm or a chosen tolerance. Every run records **`pylinac_analysis_profile`** on **`QAResult`** and in QA JSON export (**`schema_version` 1.1**). Helpers in `src/qa/analysis_types.py`; tests in `tests/test_pylinac_extent_relaxed.py`.
+
 ### Changed
 - **Docs**: `dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md` adds a top-level **Integration status (pylinac in DICOMViewerV3)** living section (integrated **ACRCT** / **ACRMRILarge** vs not-yet CatPhan, overlays, batch, broader therapy QA), linked from the intro.
 - **Docs**: `dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md` now includes a **pylinac docs coverage snapshot** listing additional documented pylinac modules/capabilities not yet exposed in the app.
