@@ -220,9 +220,10 @@ class SubwindowLifecycleController:
                 app.window_level_controls.set_unit(None)
         self.update_right_panel_for_focused_subwindow()
         self.update_left_panel_for_focused_subwindow()
-        if hasattr(app, 'keyboard_event_handler') and app.image_viewer:
+        # Handlers may be unset until _initialize_handlers() (e.g. early init); do not use hasattr alone.
+        if app.keyboard_event_handler is not None and app.image_viewer:
             app.keyboard_event_handler.image_viewer = app.image_viewer
-        if hasattr(app, 'mouse_mode_handler') and app.image_viewer:
+        if app.mouse_mode_handler is not None and app.image_viewer:
             app.mouse_mode_handler.image_viewer = app.image_viewer
             if hasattr(app, "_mpr_controller") and app._mpr_controller.is_mpr(focused_idx):
                 app.image_viewer.set_mouse_mode("pan")

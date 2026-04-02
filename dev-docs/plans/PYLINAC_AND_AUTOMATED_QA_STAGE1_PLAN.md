@@ -2,7 +2,7 @@
 
 **Scope:** First integration slice for [TO_DO: pylinac and automated QC](../TO_DO.md) — prove the **spine** (dependency, wrapper, UI hook, worker, results, export) with **minimal automation**, before mammography MAP, native CT primitives, auto phantom detection, or full multi-test pipelines.
 
-**Related docs:** [PYLINAC_INTEGRATION_OVERVIEW.md](../info/PYLINAC_INTEGRATION_OVERVIEW.md) (architecture, phases), [AUTOMATED_QA_ADDITIONAL_ANALYSIS.md](../info/AUTOMATED_QA_ADDITIONAL_ANALYSIS.md) (gaps, MAP, Rose calibration — mostly **after** Stage 1), [FUTURE_WORK_DETAIL_NOTES.md](../FUTURE_WORK_DETAIL_NOTES.md) (Integrating Pylinac section).
+**Related docs:** [PYLINAC_INTEGRATION_OVERVIEW.md](../info/PYLINAC_INTEGRATION_OVERVIEW.md) (architecture, phases), [AUTOMATED_QA_ADDITIONAL_ANALYSIS.md](../info/AUTOMATED_QA_ADDITIONAL_ANALYSIS.md) (gaps, MAP, Rose calibration — mostly **after** Stage 1), [FUTURE_WORK_DETAIL_NOTES.md](../FUTURE_WORK_DETAIL_NOTES.md) (Integrating Pylinac section). **Stage 1b+ robustness:** [PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md](PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md) (optional scan-extent tolerance, `pylinac_analysis_profile` / JSON).
 
 ---
 

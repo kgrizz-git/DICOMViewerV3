@@ -4,6 +4,10 @@ This document outlines how **pylinac** could be integrated into DICOM Viewer V3 
 
 **Actionable Stage 1 checklist:** [PYLINAC_AND_AUTOMATED_QA_STAGE1_PLAN.md](../plans/PYLINAC_AND_AUTOMATED_QA_STAGE1_PLAN.md).
 
+**Scan-extent tolerance + reproducibility metadata (planned implementation):** [PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md](../plans/PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md).
+
+**What is already in the codebase vs planned:** see [Integration status (pylinac in DICOMViewerV3)](#integration-status-pylinac-in-dicomviewerv3) (living section—update it as integration progresses).
+
 The goals are:
 - **Leverage pylinac** for robust, validated phantom analysis rather than re‑implementing QA physics.
 - **Keep DICOMViewerV3 modular**: pylinac is an optional analysis backend, not a core dependency for basic viewing.
@@ -12,6 +16,40 @@ The goals are:
 ### Progressive automation: manual-first, pipeline later
 
 Integration can start with **low automation** and still deliver value: the user **names or selects the phantom** (preset or modality), **chooses the series** (and, when relevant, **the slice, frame, or echo**), and **picks which analysis to run** (one module or a minimal subset) instead of relying on auto-identification or a full end‑to‑end suite on day one. Later work layers in **heuristic phantom detection**, **best-slice or best-volume hints**, **wizards**, **batch and queued runs**, and **combined QA pipelines**—all on top of the same wrappers so early, narrowly scoped workflows remain testable and valid. Complementary native QA (mammography MAP, CT primitives, calibration) follows the same idea in [AUTOMATED_QA_ADDITIONAL_ANALYSIS.md](AUTOMATED_QA_ADDITIONAL_ANALYSIS.md) §1.1.
+
+---
+
+## Integration status (pylinac in DICOMViewerV3)
+
+**Living section:** keep this block current whenever pylinac-backed behavior is added, extended, or intentionally out of scope.
+
+This is a **snapshot** of pylinac usage in **application code** (`src/qa`, Tools menu wiring in `src/main.py` / `src/gui`). It is not an exhaustive catalog of every class in the upstream library.
+
+**Integrated in the application**
+
+| Area | What is wired |
+|------|----------------|
+| **ACR CT** | **`ACRCT`** via `src/qa/pylinac_runner.py`: user runs **Tools → ACR CT Phantom (pylinac)…**; input is the **focused series** (ordered slice paths from the viewer) or a **folder** fallback; analysis runs on a **worker thread**; optional **PDF** path; normalized **`QAResult`** (metrics, warnings, errors, `raw_pylinac`, version string). |
+| **ACR MRI Large** | **`ACRMRILarge`** same runner module and worker pattern; **Tools → ACR MRI Phantom (pylinac)…**; dialog **`src/gui/dialogs/acr_mri_qa_dialog.py`** collects **echo** and related options (`check_uid` where the installed pylinac supports it on `analyze`). |
+| **Supporting code** | **`QARequest` / `QAResult`** (`src/qa/analysis_types.py`); **`src/qa/worker.py`** (`QThread`); **`src/qa/preflight.py`** stack **geometry warnings** (monotonicity along slice normal) when using in-viewer series; **JSON export** scaffold with reproducibility fields in `main.py`; **lazy import** so the viewer runs if pylinac is missing until the menu action is used. |
+
+**Not integrated yet** (roadmap, other docs, spike-only, or explicitly deferred)
+
+- **CatPhan** (503 / 504 / 600 / 604 / 700), **Quart DVT**, and other **non‑ACR** phantom families described in pylinac’s CBCT/phantom docs.
+- **Automatic phantom identification** (metadata/heuristics) and a **single “phantom picker”** that routes to many analyzers—today the user picks **CT vs MRI ACR** via separate menu entries.
+- **Deep GUI integration**: showing pylinac **annotated images or ROIs** as **overlays** in the main image viewer; **batch** or **queued** runs; **site-configurable pass/fail thresholds** in the viewer (beyond exporting metrics and optional PDF).
+- **Broader pylinac domains** outside this project’s ACR focus—e.g. **Winston–Lutz**, **Picket Fence**, **Starshot**, **VMAT**, **log analysis**, and similar therapy-QA modules—unless/until explicitly scoped.
+- **Scan-extent tolerance + JSON run profiles** — implementation plan: [PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md](../plans/PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md). Background: [PYLINAC_FLEXIBILITY_AND_WORKAROUNDS.md](PYLINAC_FLEXIBILITY_AND_WORKAROUNDS.md).
+
+### Pylinac docs coverage snapshot (v3.43.0 index)
+
+Compared against pylinac’s public docs TOC, the app currently wires **ACR CT** and **ACR MRI Large** only. Additional documented areas not currently exposed in DICOMViewerV3 include:
+
+- **Main modules not exposed**: Calibration (TG-51/TRS-398), Starshot, VMAT, CatPhan, "Cheese" phantoms, GE Helios, Quart, Log Analyzer, Picket Fence, Winston-Lutz (single + multi-target), Planar Imaging, Field Profile Analysis, Field Analysis, Nuclear.
+- **ACR-class capabilities not yet exposed in UI/runner surface**: zip-based load paths (`from_zip`), broader `analyze(...)` tuning knobs (e.g. x/y/angle and ROI/scale adjustments where supported), and subimage plotting/saving helpers (e.g. `plot_analyzed_subimage`, `save_analyzed_subimage`) as first-class app features.
+- **Topic/ancillary tooling not surfaced as app features**: image/gamma/MTF/contrast/noise-power utilities, XIM handling, DICOM conversion helpers, and image/plan generators remain library-level tools rather than integrated user workflows.
+
+**Related:** phased checklist and ordering of near-term work—[PYLINAC_AND_AUTOMATED_QA_STAGE1_PLAN.md](../plans/PYLINAC_AND_AUTOMATED_QA_STAGE1_PLAN.md) (Stage 1 plan; not a duplicate of this status section).
 
 ---
 
@@ -109,7 +147,24 @@ From a dependency standpoint, integration mostly means **adding pylinac + SciPy/
 - Displaying **summaries and images** from pylinac.
 - Managing **file paths**, export locations, and optional caching.
 
-### 2.4 ACR CT phantom datasets (`ACRCT`): slices, z‑coverage, and thickness
+### 2.4 Reproducibility, JSON export, and non‑vanilla pylinac settings
+
+Every pylinac-backed run should be **auditable**: a physicist or script must be able to tell whether the outcome used **stock pylinac behavior** or **viewer-assisted** behavior (subclasses, tolerances, manual overrides).
+
+**Guidance for implementers**
+
+1. **`QAResult`** should carry a structured **`pylinac_analysis_profile`** (dict or dedicated dataclass—see implementation plan) on every completion, **success or failure**. Populate it from a single helper in `src/qa` so CT and MRI stay consistent.
+2. **Vanilla default:** When the user does not opt into relaxations, set e.g. `vanilla_equivalent: true`, `scan_extent_tolerance_mm: 0`, and `engine` to the **upstream class name** actually invoked (`ACRMRILarge`, `ACRCT`).
+3. **Any deviation** from stock defaults must appear in the profile, including:
+   - **Scan extent tolerance** (mm) when using a relaxed subclass (planned).
+   - **`origin_slice`** override, **`echo_number`**, **`check_uid`**, and any future **`analyze()`** tuning (x/y/angle, ROI scale, CatPhan tolerances, etc.).
+   - **Attempt number** and **parent failure reason** when the user retries after a known error (e.g. strict extent failure).
+4. **JSON export** (`_export_qa_json` in `src/main.py`): include **`pylinac_analysis_profile`** at the **top level** alongside existing **`inputs`**, **`metrics`**, and **`raw_pylinac`**. When the schema gains this field, bump **`schema_version`** (planned **`1.1`**) and document the change in `CHANGELOG.md`. Keep **`inputs`** for backward compatibility; avoid duplicating the same keys in conflicting forms—either mirror request fields under `inputs` only, or state that **`pylinac_analysis_profile`** is canonical for “what differed from pylinac defaults.”
+5. **User-facing copy:** If `vanilla_equivalent` is false, the results dialog (and optional PDF notes later) should briefly direct users to the JSON profile.
+
+**Implementation checklist:** [PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md](../plans/PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md).
+
+### 2.5 ACR CT phantom datasets (`ACRCT`): slices, z‑coverage, and thickness
 
 These notes summarize how **pylinac** treats **Gammex 464 / ACR CT** stacks so integrators can preflight series from DICOM Viewer V3. Authoritative API and offset constants: [pylinac ACR phantoms](https://pylinac.readthedocs.io/en/latest/acr.html).
 
@@ -124,6 +179,8 @@ These notes summarize how **pylinac** treats **Gammex 464 / ACR CT** stacks so i
 **Clinical alignment:** ACR CT accreditation imaging is described as **contiguous coverage through the phantom** (module 1 → module 4). That matches the **z‑span** pylinac needs for its **offset‑based** module mapping; do not rely on **`min_num_images = 4`** as a QA standard.
 
 **MRI contrast (brief):** For **`ACRMRILarge`**, treat the **11/12‑slice** and **sagittal / `check_uid`** rules in pylinac’s MRI section as **harder prerequisites** than CT slice count when validating datasets.
+
+**Flexibility beyond stock pylinac** (tolerant scan-extent checks, offset tweaks, parameter surface): see [PYLINAC_FLEXIBILITY_AND_WORKAROUNDS.md](PYLINAC_FLEXIBILITY_AND_WORKAROUNDS.md).
 
 ---
 
