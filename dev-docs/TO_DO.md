@@ -85,6 +85,8 @@ This file tracks active and near-term tasks.
 
 ## Features (Near-Term)
 
+
+- [ ] **[P1]** Add a "Deep Anonymizer" export option that strips out all tag data that could be used to indentify a scanner, institution, address, etc., as well as patient informaion. Should include institution name, address, station name, device serial number, etc.
 - [ ] **[P1]** Add a simple "DICOM metadata browser" mode that can ingest, browse, and export DICOM metadata, without any image display or processing (hopefully fast and efficient)
 - [x] **[P2]** ACR MRI compare mode: run low-contrast analysis with up to 3 parameter sets; comparison table dialog, compare JSON export (schema 1.2), and PDF notes ([plan](plans/PYLINAC_MRI_COMPARE_RUNS_AND_PDF_INTERPRETATION_PLAN.md))
 - [ ] **[P1]** Be able to associate with DICOM extension and add to Open With menus ([details](FUTURE_WORK_DETAIL_NOTES.md#file-association-and-open-with-integration))
