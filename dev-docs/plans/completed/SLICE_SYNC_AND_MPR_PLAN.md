@@ -297,7 +297,7 @@ Once `MprBuilder.build()` completes, load the resulting stack into the target su
 #### 3.7 Entry point (UI wiring)
 
 - [x] Add **"Create MPR view…"** to the subwindow context menu (right-click on image → "Create MPR view…").
-- [ ] Optionally add to the **View** menu as well.
+- [ ] Optionally add **"Create MPR view…"** to the **Tools** or **View** menu as well.
 - [x] Show **"Clear MPR view"** in the same menu when the subwindow already contains an MPR (with confirmation dialog).
 - [x] While MPR is building, show a `QProgressDialog` (reuse `LoadingProgressManager` pattern if applicable) with a Cancel button that aborts the background thread.
 

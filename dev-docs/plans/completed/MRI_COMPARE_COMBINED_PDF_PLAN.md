@@ -177,7 +177,7 @@ The combined PDF is written there.
 - [x] **5.2** Update `dev-docs/info/PYLINAC_CUSTOMIZATION_AND_EXTENSIONS.md` to document
   the combined PDF assembly as a viewer extension.
 
-- [ ] **5.3** Update `requirements.txt` note in `dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md`
+- [x] **5.3** Update `requirements.txt` note in `dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md`
   (or README) if `pypdf` warrants mention.
 
 ---

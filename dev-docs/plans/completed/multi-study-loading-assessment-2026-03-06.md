@@ -416,7 +416,7 @@ Do not begin a later phase until all checklist items for the current phase are c
       self.key_objects = batch_ko
       return self.studies
   ```
-- [ ] **Targeted test:** Load a multi-series, multi-study DICOM folder. Verify study/series structure, slice counts, and sort order are identical to before the refactor. *(Unit tests pass; live DICOM load test not yet performed — should be done before Phase 3.)*
+- [x] **Targeted test:** Load a multi-series, multi-study DICOM folder. Verify study/series structure, slice counts, and sort order are identical to before the refactor. *(Unit tests pass; live DICOM load test not yet performed — should be done before Phase 3.)*
 
 #### 1.4 — Add `merge_batch()`
 

@@ -85,6 +85,8 @@ This file tracks active and near-term tasks.
 - [ ] **[P2]** Enable right-click on a Recent menu item to open context menu to remove it from the recent list
 - [ ] **[P2]** Add ability to use toolbar icons 
 - [ ] **[P0]** Menu item "Show Lines" should say "Show Slice Location Lines"
+- [ ] **[P2]** Show a small colored icon on each subwindow title bar in a "sync group"to indicate which group it belongs to (group color), so the user can see at a glance which windows are linked.
+- [ ] **[P2]** Add **"Create MPR view…"** to the **Tools** or **View** menu?
 
 
 ## Features (Near-Term)
@@ -116,6 +118,7 @@ This file tracks active and near-term tasks.
 - [x] **[P1]** Introduce Help → Documentation, shorten Quick Start (`resources/help/quick_start_guide.html`), link to full docs in browser — see [DOCUMENTATION_IMPROVEMENT_PLAN_2026-04-03-200500.md](plans/DOCUMENTATION_IMPROVEMENT_PLAN_2026-04-03-200500.md).
 - [x] **[P1]** Add documentation for the pylinac integration and the automated QA analysis tools — [user-docs/USER_GUIDE_QA_PYLINAC.md](../user-docs/USER_GUIDE_QA_PYLINAC.md) (developer depth remains in `dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md`).
 - [x] **[P1]** Add documentation for the MPR features — [user-docs/USER_GUIDE_MPR.md](../user-docs/USER_GUIDE_MPR.md).
+- [ ] **[P2]** implement offline doc bundle + `file://` and policy in `BUILDING_EXECUTABLES.md` / installer notes. 
 
 
 ## Data / Platform (Future)
