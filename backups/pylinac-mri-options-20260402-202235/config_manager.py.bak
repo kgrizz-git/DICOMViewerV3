@@ -88,7 +88,7 @@ class ConfigManager(
         CustomizationsConfigMixin – bulk export/import of all visual settings
         AppConfigMixin          – disclaimer acceptance flag
         SliceSyncConfigMixin    – slice sync enabled flag and linked groups
-        QaPylinacConfigMixin    – persisted pylinac QA options (e.g. MRI LC method/threshold/sanity)
+        QaPylinacConfigMixin    – persisted pylinac QA options (e.g. MRI LC visibility threshold)
     """
 
     def __init__(self, config_filename: str = "dicom_viewer_config.json"):
@@ -165,10 +165,8 @@ class ConfigManager(
             "window_width_default": None,
             # App
             "disclaimer_accepted": False,
-            # QA / pylinac (ACR MRI Large low-contrast detectability; see QaPylinacConfigMixin)
-            "acr_mri_low_contrast_method": "Weber",
+            # QA / pylinac (ACR MRI Large low-contrast visibility; see QaPylinacConfigMixin)
             "acr_mri_low_contrast_visibility_threshold": 0.001,
-            "acr_mri_low_contrast_visibility_sanity_multiplier": 3.0,
             # Slice sync
             "slice_sync_enabled": False,
             "slice_sync_groups": [],

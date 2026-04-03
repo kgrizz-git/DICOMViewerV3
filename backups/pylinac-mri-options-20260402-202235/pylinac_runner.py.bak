@@ -12,11 +12,6 @@ import inspect
 from typing import Any, Dict, Optional
 
 from qa.analysis_types import QARequest, QAResult, build_pylinac_analysis_profile
-from utils.config.qa_pylinac_config import (
-    DEFAULT_ACR_MRI_LOW_CONTRAST_METHOD,
-    DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_SANITY_MULTIPLIER,
-    DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_THRESHOLD,
-)
 
 
 def _jsonable(value: Any) -> Any:
@@ -216,36 +211,9 @@ def run_acr_mri_large_analysis(request: QARequest) -> QAResult:
             analyze_kwargs["check_uid"] = request.check_uid
         if request.origin_slice is not None and "origin_slice" in analyze_sig.parameters:
             analyze_kwargs["origin_slice"] = int(request.origin_slice)
-        lc_method = str(
-            getattr(
-                request,
-                "low_contrast_method",
-                DEFAULT_ACR_MRI_LOW_CONTRAST_METHOD,
-            )
-            or DEFAULT_ACR_MRI_LOW_CONTRAST_METHOD
-        )
-        lc_vis = float(
-            getattr(
-                request,
-                "low_contrast_visibility_threshold",
-                DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_THRESHOLD,
-            )
-            or DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_THRESHOLD
-        )
-        lc_sanity = float(
-            getattr(
-                request,
-                "low_contrast_visibility_sanity_multiplier",
-                DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_SANITY_MULTIPLIER,
-            )
-            or DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_SANITY_MULTIPLIER
-        )
-        if "low_contrast_method" in analyze_sig.parameters:
-            analyze_kwargs["low_contrast_method"] = lc_method
+        lc_vis = float(getattr(request, "low_contrast_visibility_threshold", 0.001) or 0.001)
         if "low_contrast_visibility_threshold" in analyze_sig.parameters:
             analyze_kwargs["low_contrast_visibility_threshold"] = lc_vis
-        if "low_contrast_visibility_sanity_multiplier" in analyze_sig.parameters:
-            analyze_kwargs["low_contrast_visibility_sanity_multiplier"] = lc_sanity
 
         analyzer.analyze(**analyze_kwargs)
 
@@ -274,9 +242,9 @@ def run_acr_mri_large_analysis(request: QARequest) -> QAResult:
             "check_uid": request.check_uid,
             "origin_slice_override": request.origin_slice,
             "scan_extent_tolerance_mm": tol,
-            "low_contrast_method": lc_method,
-            "low_contrast_visibility_threshold": lc_vis,
-            "low_contrast_visibility_sanity_multiplier": lc_sanity,
+            "low_contrast_visibility_threshold": float(
+                getattr(request, "low_contrast_visibility_threshold", 0.001) or 0.001
+            ),
         }
         for key in (
             "num_images",
@@ -297,18 +265,6 @@ def run_acr_mri_large_analysis(request: QARequest) -> QAResult:
             extra_warnings.append(
                 "This pylinac build does not expose "
                 "analyze(low_contrast_visibility_threshold=...); "
-                "the value is stored in JSON for reproducibility only."
-            )
-        if "low_contrast_method" not in analyze_sig.parameters:
-            extra_warnings.append(
-                "This pylinac build does not expose "
-                "analyze(low_contrast_method=...); "
-                "the value is stored in JSON for reproducibility only."
-            )
-        if "low_contrast_visibility_sanity_multiplier" not in analyze_sig.parameters:
-            extra_warnings.append(
-                "This pylinac build does not expose "
-                "analyze(low_contrast_visibility_sanity_multiplier=...); "
                 "the value is stored in JSON for reproducibility only."
             )
 

@@ -1,8 +1,8 @@
 """
 Stage 1 dialog: ACR MRI Large (pylinac) advanced options.
 
-Surfaces echo selection and MRI low-contrast tuning options for reproducibility
-in exports. Does not import pylinac.
+Surfaces echo selection and optional check_uid for reproducibility in exports.
+Does not import pylinac.
 """
 
 from __future__ import annotations
@@ -12,24 +12,15 @@ from typing import Optional, Tuple
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
-    QComboBox,
     QDialog,
     QDialogButtonBox,
     QDoubleSpinBox,
     QFormLayout,
     QGroupBox,
     QLabel,
-    QPushButton,
     QSpinBox,
     QVBoxLayout,
     QWidget,
-)
-
-from utils.config.qa_pylinac_config import (
-    ACR_MRI_LOW_CONTRAST_METHODS,
-    DEFAULT_ACR_MRI_LOW_CONTRAST_METHOD,
-    DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_SANITY_MULTIPLIER,
-    DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_THRESHOLD,
 )
 
 
@@ -39,21 +30,14 @@ class AcrMrIQaOptionsDialog(QDialog):
 
     Returns:
         On accept: echo_number, check_uid, origin_slice, scan_extent_tolerance_mm,
-        low_contrast_method, low_contrast_visibility_threshold,
-        low_contrast_visibility_sanity_multiplier.
+        low_contrast_visibility_threshold.
     """
 
     def __init__(
         self,
         parent: Optional[QWidget] = None,
         *,
-        low_contrast_method: str = DEFAULT_ACR_MRI_LOW_CONTRAST_METHOD,
-        low_contrast_visibility_threshold: float = (
-            DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_THRESHOLD
-        ),
-        low_contrast_visibility_sanity_multiplier: float = (
-            DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_SANITY_MULTIPLIER
-        ),
+        low_contrast_visibility_threshold: float = 0.001,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("ACR MRI (pylinac) — Options")
@@ -115,43 +99,19 @@ class AcrMrIQaOptionsDialog(QDialog):
 
         lc = QGroupBox("Low-contrast detectability (pylinac)")
         lc_form = QFormLayout()
-        self._lc_method_combo = QComboBox()
-        for method in ACR_MRI_LOW_CONTRAST_METHODS:
-            self._lc_method_combo.addItem(method, method)
-        method_idx = self._lc_method_combo.findData(str(low_contrast_method))
-        if method_idx < 0:
-            method_idx = self._lc_method_combo.findData(
-                DEFAULT_ACR_MRI_LOW_CONTRAST_METHOD
-            )
-        self._lc_method_combo.setCurrentIndex(max(method_idx, 0))
         self._lc_vis_spin = QDoubleSpinBox()
-        self._lc_vis_spin.setRange(0.0, 100.0)
+        self._lc_vis_spin.setRange(1e-6, 1.0)
         self._lc_vis_spin.setDecimals(6)
         self._lc_vis_spin.setSingleStep(0.0001)
         self._lc_vis_spin.setValue(float(low_contrast_visibility_threshold))
-        self._lc_sanity_spin = QDoubleSpinBox()
-        self._lc_sanity_spin.setRange(0.01, 100.0)
-        self._lc_sanity_spin.setDecimals(3)
-        self._lc_sanity_spin.setSingleStep(0.5)
-        self._lc_sanity_spin.setValue(
-            float(low_contrast_visibility_sanity_multiplier)
-        )
         lc_hint = QLabel(
-            "Method chooses how contrast is measured before pylinac computes "
-            "visibility. Threshold decides how much visibility is needed for a "
-            "disk to count as seen; lower values are more permissive, while "
-            "higher values are stricter. The sanity multiplier suppresses "
-            "unrealistically large visibility values on tiny disks. These values "
-            "are saved when you click OK and passed to each new analysis."
+            "Visibility threshold for low-contrast disks (pylinac default 0.001). "
+            "Lower values require stronger visibility to count a disk as “seen.” "
+            "The value is saved when you click OK and passed to each new analysis."
         )
         lc_hint.setWordWrap(True)
-        reset_button = QPushButton("Reset to pylinac defaults")
-        reset_button.clicked.connect(self._reset_low_contrast_defaults)
         lc_form.addRow(lc_hint)
-        lc_form.addRow("Contrast method:", self._lc_method_combo)
         lc_form.addRow("Visibility threshold:", self._lc_vis_spin)
-        lc_form.addRow("Sanity multiplier:", self._lc_sanity_spin)
-        lc_form.addRow(reset_button)
         lc.setLayout(lc_form)
 
         buttons = QDialogButtonBox(
@@ -172,17 +132,9 @@ class AcrMrIQaOptionsDialog(QDialog):
     def _on_use_lowest_toggled(self, checked: bool) -> None:
         self._echo_spin.setEnabled(not checked)
 
-    def _reset_low_contrast_defaults(self) -> None:
-        idx = self._lc_method_combo.findData(DEFAULT_ACR_MRI_LOW_CONTRAST_METHOD)
-        self._lc_method_combo.setCurrentIndex(max(idx, 0))
-        self._lc_vis_spin.setValue(DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_THRESHOLD)
-        self._lc_sanity_spin.setValue(
-            DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_SANITY_MULTIPLIER
-        )
-
     def get_options(
         self,
-    ) -> Tuple[Optional[int], bool, Optional[int], float, str, float, float]:
+    ) -> Tuple[Optional[int], bool, Optional[int], float, float]:
         if self._use_lowest_echo.isChecked():
             echo: Optional[int] = None
         else:
@@ -193,36 +145,23 @@ class AcrMrIQaOptionsDialog(QDialog):
         scan_tol = 0.0
         if self._extent_tol.isChecked():
             scan_tol = float(self._tol_spin.value())
-        method = str(self._lc_method_combo.currentData() or DEFAULT_ACR_MRI_LOW_CONTRAST_METHOD)
         lc_vis = float(self._lc_vis_spin.value())
-        lc_sanity = float(self._lc_sanity_spin.value())
-        return echo, check_uid, origin_out, scan_tol, method, lc_vis, lc_sanity
+        return echo, check_uid, origin_out, scan_tol, lc_vis
 
 
 def prompt_acr_mri_options(
     parent: Optional[QWidget] = None,
     *,
-    low_contrast_method: str = DEFAULT_ACR_MRI_LOW_CONTRAST_METHOD,
-    low_contrast_visibility_threshold: float = (
-        DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_THRESHOLD
-    ),
-    low_contrast_visibility_sanity_multiplier: float = (
-        DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_SANITY_MULTIPLIER
-    ),
-) -> Optional[Tuple[Optional[int], bool, Optional[int], float, str, float, float]]:
+    low_contrast_visibility_threshold: float = 0.001,
+) -> Optional[Tuple[Optional[int], bool, Optional[int], float, float]]:
     """
     Show modal options dialog; return
     (echo_number, check_uid, origin_slice, scan_extent_tolerance_mm,
-    low_contrast_method, low_contrast_visibility_threshold,
-    low_contrast_visibility_sanity_multiplier) or None if cancelled.
+    low_contrast_visibility_threshold) or None if cancelled.
     """
     dlg = AcrMrIQaOptionsDialog(
         parent,
-        low_contrast_method=low_contrast_method,
         low_contrast_visibility_threshold=low_contrast_visibility_threshold,
-        low_contrast_visibility_sanity_multiplier=(
-            low_contrast_visibility_sanity_multiplier
-        ),
     )
     dlg.activateWindow()
     dlg.raise_()

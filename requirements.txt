@@ -26,7 +26,8 @@ Pillow>=10.0.0
 matplotlib>=3.8.0
 openpyxl>=3.1.0
 SimpleITK>=2.3.0  # For 3D image resampling in image fusion (Phase 2)
-pylinac>=3.38.0  # Automated phantom QA analysis (Stage 1 ACR CT integration)
+# Pinned: only 3.42.0 has been verified with ACR CT/MRI pylinac integration (see dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md).
+pylinac==3.42.0  # Automated phantom QA analysis (ACR CT + ACR MRI Large)
 scipy>=1.11.0  # pylinac numerical dependency
 scikit-image>=0.22.0  # pylinac image processing dependency
 

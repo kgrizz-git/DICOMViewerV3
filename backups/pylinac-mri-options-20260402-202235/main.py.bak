@@ -2906,35 +2906,15 @@ class DICOMViewerApp(QObject):
             )
             return
 
-        lc_method_default = self.config_manager.get_acr_mri_low_contrast_method()
-        lc_vis_default = (
-            self.config_manager.get_acr_mri_low_contrast_visibility_threshold()
-        )
-        lc_sanity_default = (
-            self.config_manager.get_acr_mri_low_contrast_visibility_sanity_multiplier()
-        )
+        lc_vis_default = self.config_manager.get_acr_mri_low_contrast_visibility_threshold()
         mri_opts = prompt_acr_mri_options(
             self.main_window,
-            low_contrast_method=lc_method_default,
             low_contrast_visibility_threshold=lc_vis_default,
-            low_contrast_visibility_sanity_multiplier=lc_sanity_default,
         )
         if mri_opts is None:
             return
-        (
-            echo_number,
-            check_uid,
-            origin_slice,
-            mri_scan_tol,
-            lc_method,
-            lc_vis,
-            lc_sanity,
-        ) = mri_opts
-        self.config_manager.set_acr_mri_low_contrast_method(lc_method)
+        echo_number, check_uid, origin_slice, mri_scan_tol, lc_vis = mri_opts
         self.config_manager.set_acr_mri_low_contrast_visibility_threshold(lc_vis)
-        self.config_manager.set_acr_mri_low_contrast_visibility_sanity_multiplier(
-            lc_sanity
-        )
 
         preflight = self._qa_build_preflight_warnings(
             "MR", use_focused, folder_path, datasets, modality or "MR"
@@ -2964,16 +2944,12 @@ class DICOMViewerApp(QObject):
             check_uid=check_uid,
             preflight_warnings=preflight,
             scan_extent_tolerance_mm=float(mri_scan_tol),
-            low_contrast_method=lc_method,
             low_contrast_visibility_threshold=float(lc_vis),
-            low_contrast_visibility_sanity_multiplier=float(lc_sanity),
         )
         json_inputs = {
             "origin_slice_override": origin_slice,
             "scan_extent_tolerance_mm": float(mri_scan_tol),
-            "low_contrast_method": lc_method,
             "low_contrast_visibility_threshold": float(lc_vis),
-            "low_contrast_visibility_sanity_multiplier": float(lc_sanity),
             "qa_attempt": request.qa_attempt,
             "options": {
                 "echo_number": echo_number,

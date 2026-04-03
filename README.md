@@ -108,6 +108,7 @@ This application provides comprehensive DICOM image viewing capabilities with ad
   - Uses focused series paths or a folder picker fallback
   - Runs analysis in a background worker and offers JSON export
   - Supports optional user-chosen PDF output path via pylinac
+  - **ACR MRI Large** is also available under Tools (same pylinac stack; version pinned as in **Technology Stack**)
 - Display RT STRUCT overlays (Not yet implemented)
 
 ### Data Management
@@ -186,6 +187,7 @@ DICOMViewerV3/
 - **Additional Libraries**: 
   - matplotlib (>=3.8.0) for histogram display
   - openpyxl (>=3.1.0) for Excel export functionality
+  - **pylinac** **3.42.0** (exact pin in `requirements.txt`) with scipy / scikit-image for **ACR phantom QA** tools; this is the only upstream pylinac version verified with the integration so far — see `dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md`
   - pylibjpeg, pyjpegls, pylibjpeg-libjpeg for compressed DICOM support (optional but recommended)
 
 ## Installation

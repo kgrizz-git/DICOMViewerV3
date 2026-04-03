@@ -11,12 +11,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from utils.config.qa_pylinac_config import (
-    DEFAULT_ACR_MRI_LOW_CONTRAST_METHOD,
-    DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_SANITY_MULTIPLIER,
-    DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_THRESHOLD,
-)
-
 # Substrings that identify pylinac's physical scan extent ValueError (CT/MRI/CatPhan base).
 _PHYSICAL_SCAN_EXTENT_MARKERS = (
     "physical scan extent",
@@ -75,40 +69,9 @@ def build_pylinac_analysis_profile(
         "check_uid": request.check_uid,
     }
     if request.analysis_type == "acr_mri_large":
-        lc_method = str(
-            getattr(
-                request,
-                "low_contrast_method",
-                DEFAULT_ACR_MRI_LOW_CONTRAST_METHOD,
-            )
-            or DEFAULT_ACR_MRI_LOW_CONTRAST_METHOD
-        )
-        lc_threshold = float(
-            getattr(
-                request,
-                "low_contrast_visibility_threshold",
-                DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_THRESHOLD,
-            )
-            or DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_THRESHOLD
-        )
-        lc_sanity = float(
-            getattr(
-                request,
-                "low_contrast_visibility_sanity_multiplier",
-                DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_SANITY_MULTIPLIER,
-            )
-            or DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_SANITY_MULTIPLIER
-        )
         profile["echo_number"] = request.echo_number
-        profile["low_contrast_method"] = lc_method
-        profile["low_contrast_visibility_threshold"] = lc_threshold
-        profile["low_contrast_visibility_sanity_multiplier"] = lc_sanity
-        profile["vanilla_equivalent"] = (
-            vanilla
-            and lc_method == DEFAULT_ACR_MRI_LOW_CONTRAST_METHOD
-            and lc_threshold == DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_THRESHOLD
-            and lc_sanity
-            == DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_SANITY_MULTIPLIER
+        profile["low_contrast_visibility_threshold"] = float(
+            getattr(request, "low_contrast_visibility_threshold", 0.001) or 0.001
         )
     return profile
 
@@ -133,16 +96,8 @@ class QARequest:
     preflight_warnings: List[str] = field(default_factory=list)
     # Relaxed CatPhanBase scan-extent check (mm). 0 = stock pylinac behavior.
     scan_extent_tolerance_mm: float = 0.0
-    # ACR MRI Large: passed to pylinac analyze(low_contrast_method=...).
-    low_contrast_method: str = DEFAULT_ACR_MRI_LOW_CONTRAST_METHOD
     # ACR MRI Large: passed to pylinac analyze(low_contrast_visibility_threshold=...).
-    low_contrast_visibility_threshold: float = (
-        DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_THRESHOLD
-    )
-    # ACR MRI Large: passed to pylinac analyze(low_contrast_visibility_sanity_multiplier=...).
-    low_contrast_visibility_sanity_multiplier: float = (
-        DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_SANITY_MULTIPLIER
-    )
+    low_contrast_visibility_threshold: float = 0.001
     # Run attempt for user-visible retries (1 = first run).
     qa_attempt: int = 1
     # When set, documents why this attempt was started (e.g. strict extent failure).

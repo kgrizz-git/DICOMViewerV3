@@ -8,6 +8,11 @@ This document outlines how **pylinac** could be integrated into DICOM Viewer V3 
 
 **What is already in the codebase vs planned:** see [Integration status (pylinac in DICOMViewerV3)](#integration-status-pylinac-in-dicomviewerv3) (living section—update it as integration progresses).
 
+**Pylinac reference notes (project docs):**
+
+- [PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md](PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md) — ACR MRI Large **low-contrast detectability** (algorithm, scoring, PDF/figure circle colors); aligned with **pylinac 3.42.0** (project pin).
+- [PYLINAC_CUSTOMIZATION_AND_EXTENSIONS.md](PYLINAC_CUSTOMIZATION_AND_EXTENSIONS.md) — **Living tracker**: how we customize, extend, or wrap pylinac (config, runners, subclasses); persist vs per-run `analyze()` kwargs.
+
 The goals are:
 - **Leverage pylinac** for robust, validated phantom analysis rather than re‑implementing QA physics.
 - **Keep DICOMViewerV3 modular**: pylinac is an optional analysis backend, not a core dependency for basic viewing.
@@ -25,12 +30,16 @@ Integration can start with **low automation** and still deliver value: the user 
 
 This is a **snapshot** of pylinac usage in **application code** (`src/qa`, Tools menu wiring in `src/main.py` / `src/gui`). It is not an exhaustive catalog of every class in the upstream library.
 
+### Verified pylinac package version
+
+**`requirements.txt` pins `pylinac==3.42.0`.** That is the **only** upstream pylinac release **verified end-to-end** with this project’s ACR CT / ACR MRI Large integration so far (constructors, `analyze()`, optional `check_uid`, and the relaxed scan-extent subclasses). Other versions may work but have **not** been regression-tested here; bump the pin only after explicit verification and update this subsection (and the comment in `requirements.txt`).
+
 **Integrated in the application**
 
 | Area | What is wired |
 |------|----------------|
 | **ACR CT** | **`ACRCT`** via `src/qa/pylinac_runner.py`: user runs **Tools → ACR CT Phantom (pylinac)…**; input is the **focused series** (ordered slice paths from the viewer) or a **folder** fallback; analysis runs on a **worker thread**; optional **PDF** path; normalized **`QAResult`** (metrics, warnings, errors, `raw_pylinac`, version string). |
-| **ACR MRI Large** | **`ACRMRILarge`** same runner module and worker pattern; **Tools → ACR MRI Phantom (pylinac)…**; dialog **`src/gui/dialogs/acr_mri_qa_dialog.py`** collects **echo** and related options (`check_uid` where the installed pylinac supports it on `analyze`). |
+| **ACR MRI Large** | **`ACRMRILarge`** same runner module and worker pattern; **Tools → ACR MRI Phantom (pylinac)…**; dialog **`src/gui/dialogs/acr_mri_qa_dialog.py`** collects **echo**, **`low_contrast_method`**, **`low_contrast_visibility_threshold`**, **`low_contrast_visibility_sanity_multiplier`** (persisted in config), scan-extent tolerance, and related options (`check_uid` where the installed pylinac supports it on `analyze`). |
 | **Supporting code** | **`QARequest` / `QAResult`** (`src/qa/analysis_types.py`); **`src/qa/worker.py`** (`QThread`); **`src/qa/preflight.py`** stack **geometry warnings** (monotonicity along slice normal) when using in-viewer series; **JSON export** scaffold with reproducibility fields in `main.py`; **lazy import** so the viewer runs if pylinac is missing until the menu action is used. |
 
 **Not integrated yet** (roadmap, other docs, spike-only, or explicitly deferred)
@@ -41,9 +50,9 @@ This is a **snapshot** of pylinac usage in **application code** (`src/qa`, Tools
 - **Broader pylinac domains** outside this project’s ACR focus—e.g. **Winston–Lutz**, **Picket Fence**, **Starshot**, **VMAT**, **log analysis**, and similar therapy-QA modules—unless/until explicitly scoped.
 - **Scan-extent tolerance + JSON run profiles** — **shipped**: optional **0.5–2.0 mm** relaxed `_ensure_physical_scan_extent` via `ACRMRILargeRelaxedExtent` / `ACRCTRelaxedExtent` when `QARequest.scan_extent_tolerance_mm > 0`; proactive checkboxes in **ACR CT** and **ACR MRI** options dialogs; **reactive** retry after strict extent failure (`main._qa_offer_extent_retry`); every run sets **`QAResult.pylinac_analysis_profile`** and JSON **`schema_version` 1.1** top-level `pylinac_analysis_profile`. Plan: [PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md](../plans/PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md). Background: [PYLINAC_FLEXIBILITY_AND_WORKAROUNDS.md](PYLINAC_FLEXIBILITY_AND_WORKAROUNDS.md).
 
-### Pylinac docs coverage snapshot (v3.43.0 index)
+### Pylinac docs coverage snapshot (public docs TOC)
 
-Compared against pylinac’s public docs TOC, the app currently wires **ACR CT** and **ACR MRI Large** only. Additional documented areas not currently exposed in DICOMViewerV3 include:
+Compared against pylinac’s public docs TOC (wording may vary slightly by release; **runtime is pinned to 3.42.0** — see [Verified pylinac package version](#verified-pylinac-package-version)), the app currently wires **ACR CT** and **ACR MRI Large** only. Additional documented areas not currently exposed in DICOMViewerV3 include:
 
 - **Main modules not exposed**: Calibration (TG-51/TRS-398), Starshot, VMAT, CatPhan, "Cheese" phantoms, GE Helios, Quart, Log Analyzer, Picket Fence, Winston-Lutz (single + multi-target), Planar Imaging, Field Profile Analysis, Field Analysis, Nuclear.
 - **ACR-class capabilities not yet exposed in UI/runner surface**: zip-based load paths (`from_zip`), broader `analyze(...)` tuning knobs (e.g. x/y/angle and ROI/scale adjustments where supported), and subimage plotting/saving helpers (e.g. `plot_analyzed_subimage`, `save_analyzed_subimage`) as first-class app features.
