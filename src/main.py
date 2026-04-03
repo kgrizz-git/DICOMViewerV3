@@ -118,12 +118,14 @@ from gui.fusion_controls_widget import FusionControlsWidget
 from gui.fusion_coordinator import FusionCoordinator
 from core.app_signal_wiring import wire_all_signals
 from qa.analysis_types import (
+    MRIBatchResult,
+    MRICompareRequest,
     QARequest,
     QAResult,
     is_physical_scan_extent_failure,
 )
 from qa.preflight import collect_slice_position_warnings, modality_preflight_warning
-from qa.worker import QAAnalysisWorker
+from qa.worker import QAAnalysisWorker, QABatchWorker
 from gui.dialogs.acr_ct_qa_dialog import prompt_acr_ct_options
 from gui.dialogs.acr_mri_qa_dialog import prompt_acr_mri_options
 
@@ -164,6 +166,7 @@ class DICOMViewerApp(QObject):
     _window_slot_map_dialog: Optional[WindowSlotMapPopupDialog] = None
     _window_slot_map_widget_popup: Optional[WindowSlotMapWidget] = None
     _qa_worker: Optional[QAAnalysisWorker] = None
+    _qa_batch_worker: Optional[QABatchWorker] = None
     _histogram_wl_update_timer: Optional[QTimer] = None
     _histogram_update_timer: Optional[QTimer] = None
 
@@ -2929,6 +2932,7 @@ class DICOMViewerApp(QObject):
             lc_method,
             lc_vis,
             lc_sanity,
+            compare_request,
         ) = mri_opts
         self.config_manager.set_acr_mri_low_contrast_method(lc_method)
         self.config_manager.set_acr_mri_low_contrast_visibility_threshold(lc_vis)
@@ -2951,6 +2955,8 @@ class DICOMViewerApp(QObject):
             pdf_path = None
 
         modality_eff = modality or "MR"
+
+        # Base request used for both single-run and compare-mode (first run).
         request = QARequest(
             analysis_type="acr_mri_large",
             dicom_paths=ordered_paths,
@@ -2981,14 +2987,274 @@ class DICOMViewerApp(QObject):
             },
             "preflight_warnings": preflight,
         }
-        self._start_qa_worker(
-            request,
-            progress_title="ACR MRI Phantom Analysis",
-            progress_label="Running ACR MRI Large analysis...",
-            result_dialog_title="ACR MRI Phantom Analysis",
-            json_default_stem="qa-acr-mri",
-            json_inputs=json_inputs,
+
+        if compare_request is not None:
+            # Compare mode: launch batch worker
+            self._start_mri_batch_worker(
+                request,
+                compare_request,
+                json_inputs=json_inputs,
+            )
+        else:
+            self._start_qa_worker(
+                request,
+                progress_title="ACR MRI Phantom Analysis",
+                progress_label="Running ACR MRI Large analysis...",
+                result_dialog_title="ACR MRI Phantom Analysis",
+                json_default_stem="qa-acr-mri",
+                json_inputs=json_inputs,
+            )
+
+    # ------------------------------------------------------------------
+    # ACR MRI compare-mode helpers
+    # ------------------------------------------------------------------
+
+    def _start_mri_batch_worker(
+        self,
+        base_request: QARequest,
+        compare_request: MRICompareRequest,
+        *,
+        json_inputs: Optional[Dict[str, Any]],
+    ) -> None:
+        """
+        Launch a QABatchWorker for compare-mode MRI analysis.
+
+        Shows a progress dialog, then on completion calls the compare result
+        dialog and JSON export.
+
+        Args:
+            base_request: Base QARequest carrying shared options (DICOM paths,
+                echo, scan-extent, etc.).  The first run's LC config overrides
+                the LC fields on this request inside the batch runner.
+            compare_request: MRICompareRequest with 1-3 LcRunConfig rows.
+            json_inputs: Dict of top-level inputs to embed in the compare JSON.
+        """
+        n_runs = len(compare_request.run_configs)
+        progress = QProgressDialog(
+            f"Running ACR MRI Large compare analysis ({n_runs} run(s))...",
+            "Cancel",
+            0,
+            0,
+            self.main_window,
         )
+        progress.setWindowTitle("ACR MRI Phantom Analysis — Compare Mode")
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.setWindowFlags(progress.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+        progress.show()
+        progress.activateWindow()
+        progress.raise_()
+
+        state = {"cancelled": False}
+
+        def on_cancel() -> None:
+            state["cancelled"] = True
+            self.main_window.update_status("QA batch analysis cancelled (best-effort).")
+            progress.close()
+
+        progress.canceled.connect(on_cancel)
+
+        self._qa_batch_worker = QABatchWorker(
+            base_request, compare_request, app_version=APP_VERSION
+        )
+
+        def on_batch_result(batch: MRIBatchResult) -> None:
+            if state["cancelled"]:
+                self.main_window.update_status(
+                    "Ignored late QA batch result after cancellation."
+                )
+                return
+            progress.close()
+            self._show_mri_compare_result_dialog(batch)
+            self._export_mri_compare_json(batch, json_inputs)
+
+        self._qa_batch_worker.batch_result_ready.connect(on_batch_result)
+        self._qa_batch_worker.finished.connect(progress.close)
+        self._qa_batch_worker.start()
+
+    def _show_mri_compare_result_dialog(self, batch: MRIBatchResult) -> None:
+        """
+        Show a modal summary dialog for a compare-mode MRI batch result.
+
+        Displays a table row per key metric with one column per run.  When a
+        combined PDF was produced, shows its path and provides an "Open PDF"
+        button that opens the file in the system default viewer.
+
+        Args:
+            batch: MRIBatchResult from QABatchWorker.
+        """
+        configs = batch.run_configs
+        results = batch.run_results
+
+        n = len(configs)
+        if n == 0:
+            return
+
+        # Build summary text
+        col_w = 22
+        label_w = 20
+
+        def row_text(label: str, values: list[str]) -> str:
+            return label.ljust(label_w) + "".join(v.ljust(col_w) for v in values)
+
+        lines = [
+            "ACR MRI — Low-Contrast Compare Results",
+            "=" * (label_w + col_w * n),
+            row_text("", [cfg.label for cfg in configs]),
+            "-" * (label_w + col_w * n),
+            row_text("Status", ["OK" if r.success else "FAILED" for r in results]),
+            row_text("Method", [cfg.low_contrast_method for cfg in configs]),
+            row_text(
+                "Threshold",
+                [f"{cfg.low_contrast_visibility_threshold:.6f}" for cfg in configs],
+            ),
+            row_text(
+                "Sanity mult",
+                [
+                    f"{cfg.low_contrast_visibility_sanity_multiplier:.3f}"
+                    for cfg in configs
+                ],
+            ),
+            row_text(
+                "LC Score",
+                [
+                    str(r.metrics.get("low_contrast_score", "N/A"))
+                    if r.success
+                    else "FAILED"
+                    for r in results
+                ],
+            ),
+            "-" * (label_w + col_w * n),
+        ]
+
+        # Per-run warnings/errors
+        for cfg, r in zip(configs, results):
+            if r.warnings:
+                lines.append(f"{cfg.label} warnings:")
+                for w in r.warnings:
+                    lines.append(f"  \u2022 {w}")
+            if r.errors:
+                lines.append(f"{cfg.label} errors:")
+                for e in r.errors:
+                    lines.append(f"  \u2022 {e}")
+
+        # Combined PDF path (stored on run_results[0] by the batch runner)
+        combined_pdf: Optional[str] = None
+        if results and results[0].pdf_report_path:
+            combined_pdf = results[0].pdf_report_path
+            lines.append("")
+            lines.append(f"Combined PDF: {combined_pdf}")
+        else:
+            lines.append("")
+            lines.append("Combined PDF: not generated")
+
+        summary = "\n".join(lines)
+        box = QMessageBox(self.main_window)
+        box.setWindowTitle("ACR MRI Phantom Analysis — Compare Results")
+        box.setText(summary)
+        all_ok = all(r.success for r in results)
+        box.setIcon(
+            QMessageBox.Icon.Information if all_ok else QMessageBox.Icon.Warning
+        )
+        box.setWindowFlags(box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+
+        # "Open PDF" button — only shown when a combined PDF exists
+        open_pdf_btn = None
+        if combined_pdf:
+            open_pdf_btn = box.addButton(
+                "Open PDF", QMessageBox.ButtonRole.ActionRole
+            )
+        box.addButton(QMessageBox.StandardButton.Ok)
+        box.setDefaultButton(QMessageBox.StandardButton.Ok)
+
+        box.activateWindow()
+        box.raise_()
+        box.exec()
+
+        # Handle "Open PDF" click after exec returns
+        if open_pdf_btn is not None and box.clickedButton() is open_pdf_btn:
+            try:
+                os.startfile(combined_pdf)  # type: ignore[attr-defined]
+            except AttributeError:
+                # Non-Windows fallback
+                import subprocess
+                subprocess.Popen(["xdg-open", combined_pdf])  # noqa: S603
+            except Exception as exc:
+                QMessageBox.warning(
+                    self.main_window,
+                    "Open PDF",
+                    f"Could not open PDF:\n{exc}",
+                )
+
+    def _export_mri_compare_json(
+        self,
+        batch: MRIBatchResult,
+        inputs: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """
+        Offer JSON export for a finished compare-mode MRI batch.
+
+        Produces schema_version '1.2' with compare_mode=true and a 'runs'
+        array.  Single-run exports keep schema_version '1.1'.
+
+        Args:
+            batch: MRIBatchResult from QABatchWorker.
+            inputs: Top-level inputs dict to embed (from json_inputs).
+        """
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        json_path = self._prompt_save_path(
+            "Save QA Compare Results JSON",
+            f"qa-acr-mri-compare-{timestamp}.json",
+            "JSON Files (*.json)",
+        )
+        if not json_path:
+            return
+
+        runs_data = []
+        for cfg, result in zip(batch.run_configs, batch.run_results):
+            runs_data.append(
+                {
+                    "run_label": cfg.label,
+                    "run_config": {
+                        "low_contrast_method": cfg.low_contrast_method,
+                        "low_contrast_visibility_threshold": cfg.low_contrast_visibility_threshold,
+                        "low_contrast_visibility_sanity_multiplier": cfg.low_contrast_visibility_sanity_multiplier,
+                    },
+                    "run": {
+                        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+                        "app_version": APP_VERSION,
+                        "pylinac_version": result.pylinac_version or "",
+                        "analysis_type": result.analysis_type,
+                        "status": "success" if result.success else "failed",
+                    },
+                    "series": {
+                        "study_uid": result.study_uid,
+                        "series_uid": result.series_uid,
+                        "modality": result.modality,
+                        "num_images": result.num_images,
+                    },
+                    "pylinac_analysis_profile": result.pylinac_analysis_profile or {},
+                    "metrics": result.metrics,
+                    "warnings": result.warnings,
+                    "errors": result.errors,
+                    "artifacts": {"pdf_report_path": result.pdf_report_path or ""},
+                }
+            )
+
+        # combined_pdf_path is stored on run_results[0] by the batch runner
+        combined_pdf_path: str = ""
+        if batch.run_results and batch.run_results[0].pdf_report_path:
+            combined_pdf_path = batch.run_results[0].pdf_report_path
+
+        payload: Dict[str, Any] = {
+            "schema_version": "1.2",
+            "compare_mode": True,
+            "inputs": inputs or {},
+            "combined_pdf_path": combined_pdf_path,
+            "runs": runs_data,
+        }
+        with open(json_path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2)
+        self.main_window.update_status(f"Saved QA compare JSON: {json_path}")
 
     def _apply_imported_customizations(self) -> None:
         """Apply imported customization settings: overlay font, overlay refresh, annotations, theme, metadata columns."""

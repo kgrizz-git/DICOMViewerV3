@@ -31,6 +31,13 @@ _MAX_LC_VIS_THRESHOLD: float = 100.0
 _MIN_LC_VIS_SANITY_MULTIPLIER: float = 0.01
 _MAX_LC_VIS_SANITY_MULTIPLIER: float = 100.0
 
+# Compare-mode multiplier sets — applied to pylinac defaults to produce combo items.
+# Values are relative multipliers; e.g. 0.75 means "default × 0.75".
+LC_COMPARE_MULTIPLIERS: tuple[float, ...] = (0.75, 0.8, 0.9, 1.0, 1.1, 1.2, 1.25)
+# Default multiplier indices (0-based within LC_COMPARE_MULTIPLIERS) for each row.
+# Row 1 → 1.0 (index 3), Row 2 → 0.9 (index 2), Row 3 → 1.1 (index 4).
+LC_COMPARE_ROW_DEFAULT_MULTIPLIER_INDICES: tuple[int, int, int] = (3, 2, 4)
+
 
 class QaPylinacConfigMixin:
     """Config mixin: persisted pylinac-related QA options."""

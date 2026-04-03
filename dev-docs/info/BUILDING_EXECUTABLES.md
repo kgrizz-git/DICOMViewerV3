@@ -381,7 +381,7 @@ A GitHub Actions workflow file is already included in the project at `.github/wo
 
 1. **Trigger automatically** when you push a version tag (e.g., `v1.0.0`)
 2. **Build on all platforms** simultaneously (Windows, macOS, Linux)
-3. **Upload artifacts** that are available for 90 days
+3. **Upload artifacts** that are available for 90 days (see **`dev-docs/info/GITHUB_ACTIONS_STORAGE_AND_BILLING.md`** for how artifact size and **retention** count toward GitHub’s **GB-hour** storage allowance on small plans)
 4. **Create releases** with executables attached when you push tags
 
 ### How to Use

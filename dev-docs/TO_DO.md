@@ -46,6 +46,13 @@ This file tracks active and near-term tasks.
 - [ ] **[P1]** Check fusion responsiveness on Parallels with 3D fusion
 
 
+## Maintenance
+
+- [ ] **[P1]** Review what is included in git repo unnecessarily
+- [ ] **[P1]** Massively trim down old backup files, possibly exclude from git
+- [ ] **[P1]** Regularly run all scan templates and update TO_DO.md
+- [ ] **[P1]** Examine github actions, CI, CD, etc., and look for opportunities to optimize, simplify, or improve, including reducing use of limited storage quota
+
 ## UX / Workflow
 
 - [ ] **[P2]** Make window map thumbnail in navigator interactive (click square to focus and reveal) ([plan](plans/UX_IMPROVEMENTS_BATCH1_PLAN.md#1-window-map-thumbnail-interactive))
@@ -78,6 +85,8 @@ This file tracks active and near-term tasks.
 
 ## Features (Near-Term)
 
+- [ ] **[P1]** Add a simple "DICOM metadata browser" mode that can ingest, browse, and export DICOM metadata, without any image display or processing (hopefully fast and efficient)
+- [x] **[P2]** ACR MRI compare mode: run low-contrast analysis with up to 3 parameter sets; comparison table dialog, compare JSON export (schema 1.2), and PDF notes ([plan](plans/PYLINAC_MRI_COMPARE_RUNS_AND_PDF_INTERPRETATION_PLAN.md))
 - [ ] **[P1]** Be able to associate with DICOM extension and add to Open With menus ([details](FUTURE_WORK_DETAIL_NOTES.md#file-association-and-open-with-integration))
 - [ ] **[P2]** Add basic image processing for creating new DICOMs (kernels, smoothing, edge enhancement, sharpening, custom kernels) ([details](FUTURE_WORK_DETAIL_NOTES.md#basic-image-processing-and-creating-new-dicoms))
 - [ ] **[P2]** Integrate pylinac and other automated QC analysis tools ([details](FUTURE_WORK_DETAIL_NOTES.md#integrating-pylinac-and-other-automated-qc-tools), [pylinac integration overview](info/PYLINAC_INTEGRATION_OVERVIEW.md), [additional automated QA analysis (ACR gaps + CT checks)](info/AUTOMATED_QA_ADDITIONAL_ANALYSIS.md), [Stage 1 implementation plan](plans/PYLINAC_AND_AUTOMATED_QA_STAGE1_PLAN.md))

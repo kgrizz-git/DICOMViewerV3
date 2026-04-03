@@ -4,6 +4,16 @@ Normalized QA analysis types for Stage 1 pylinac integration.
 This module defines small dataclasses used by the UI and worker thread to pass
 requests/results without exposing pylinac internals directly to the rest of the
 application.
+
+Exports:
+    LcRunConfig          -- one low-contrast parameter set for compare mode
+    MRICompareRequest    -- batch of up to 3 LcRunConfig rows from the dialog
+    MRIBatchResult       -- collected QAResult objects for a compare-mode run
+    QARequest            -- input payload for a single QA analysis run
+    QAResult             -- normalized output payload for a single QA run
+    build_pylinac_analysis_profile -- audit-trail dict for a QARequest
+    physical_scan_extent_passes_relaxed -- relaxed z-extent helper
+    is_physical_scan_extent_failure     -- error-list classifier
 """
 
 from __future__ import annotations
@@ -166,3 +176,65 @@ class QAResult:
     num_images: int = 0
     pylinac_version: Optional[str] = None
     pylinac_analysis_profile: Dict[str, Any] = field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# Compare-mode types (multi-run low-contrast analysis)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class LcRunConfig:
+    """
+    One low-contrast parameter set for a compare-mode batch.
+
+    Each enabled row in the compare table produces one LcRunConfig which is
+    passed to run_acr_mri_large_batch().  The label is shown in the results
+    table and stored in JSON for traceability.
+
+    Fields:
+        label: Short user-visible name, e.g. "Run 1".
+        low_contrast_method: Contrast algorithm (one of ACR_MRI_LOW_CONTRAST_METHODS).
+        low_contrast_visibility_threshold: Rose-model visibility cut-off passed to
+            pylinac analyze().
+        low_contrast_visibility_sanity_multiplier: Spoke-1 sanity cap multiplier passed
+            to pylinac analyze().
+    """
+
+    label: str
+    low_contrast_method: str
+    low_contrast_visibility_threshold: float
+    low_contrast_visibility_sanity_multiplier: float
+
+
+@dataclass
+class MRICompareRequest:
+    """
+    Carries the per-run low-contrast configs chosen in the options dialog.
+
+    Populated only when the user enables compare mode.  The base QARequest
+    (first enabled row) still drives the standard pylinac PDF; MRICompareRequest
+    drives the remaining runs and the batch JSON export.
+
+    Fields:
+        run_configs: 1–3 LcRunConfig entries, guaranteed non-empty and
+            in the order the user configured them.
+    """
+
+    run_configs: List[LcRunConfig] = field(default_factory=list)
+
+
+@dataclass
+class MRIBatchResult:
+    """
+    Result container for a multi-run low-contrast comparison.
+
+    run_results and run_configs are parallel lists (same length).
+
+    Fields:
+        run_results: One QAResult per LcRunConfig, in the same order.
+        run_configs: The LcRunConfig list that drove this batch.
+    """
+
+    run_results: List[QAResult] = field(default_factory=list)
+    run_configs: List[LcRunConfig] = field(default_factory=list)

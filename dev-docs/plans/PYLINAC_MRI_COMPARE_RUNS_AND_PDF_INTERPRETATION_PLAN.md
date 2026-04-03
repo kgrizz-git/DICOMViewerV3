@@ -223,9 +223,13 @@ Score    32           29           34
 
 ### 2.3 Implementation
 
-- In `src/qa/pylinac_runner.py`, add a helper `build_mri_pdf_notes(result: QAResult) -> str` that composes Sections A and B as a string (or list of strings), reading interpretation text from a module-level constant so it can be updated without touching logic.
+- Interpretation notes are **always-on** — every MRI PDF (single-run and compare-mode) receives the notes block. There is no per-run toggle.
+- In `src/qa/pylinac_runner.py`, add a helper `build_mri_pdf_notes(result: QAResult) -> str` that composes Sections A and B as a string, reading interpretation text from module-level string constants so the text can be updated without touching logic.
+- The notes include links to the relevant pylinac documentation:
+  - ACR MRI phantom analysis: `https://pylinac.readthedocs.io/en/latest/acr.html`
+  - Contrast / Visibility topic: `https://pylinac.readthedocs.io/en/latest/topics/contrast.html`
 - Pass the result of `build_mri_pdf_notes(result)` to `analyzer.publish_pdf(path, notes=...)`. Pylinac's `ACRMRILarge.publish_pdf` already accepts `notes: str | None` and renders it on the first page of the PDF; the text will appear there automatically.
-- For the compare-mode settings table, add `build_mri_compare_pdf_notes(batch_result: MRIBatchResult) -> str` that prepends the comparison table to the notes string for the primary run PDF.
+- For compare-mode runs, add `build_mri_compare_pdf_notes(batch_result: MRIBatchResult) -> str` that prepends the comparison table to the same notes string for the primary run PDF.
 
 > **Note on PDF layout:** pylinac's `publish_pdf` inserts `notes` as free text on the first page above the analysis images. If the note text is long, it will overflow. The implementation should either trim the notes to a safe character count, split across multiple text lines carefully, or accept that overflow wraps off-page and provide guidance that the full interpretation is in the JSON.
 

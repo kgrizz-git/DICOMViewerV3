@@ -34,6 +34,8 @@ This is a **snapshot** of pylinac usage in **application code** (`src/qa`, Tools
 
 **`requirements.txt` pins `pylinac==3.42.0`.** That is the **only** upstream pylinac release **verified end-to-end** with this project’s ACR CT / ACR MRI Large integration so far (constructors, `analyze()`, optional `check_uid`, and the relaxed scan-extent subclasses). Other versions may work but have **not** been regression-tested here; bump the pin only after explicit verification and update this subsection (and the comment in `requirements.txt`).
 
+`reportlab` (a pylinac transitive dependency) is also used directly by the viewer to build the compare-mode summary page. **`pypdf>=4.0.0`** was added to `requirements.txt` as an explicit direct dependency for merging per-run pylinac PDFs into the combined compare report (see `dev-docs/plans/MRI_COMPARE_COMBINED_PDF_PLAN.md`).
+
 **Integrated in the application**
 
 | Area | What is wired |

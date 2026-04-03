@@ -211,28 +211,21 @@ class AcrMrIQaOptionsDialog(QDialog):
         self.setWindowFlags(
             self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint
         )
-        self.setMinimumWidth(1000)
-
-        # ----------------------------------------------------------------
-        # Left column: intro + Advanced + Scan extent
-        # ----------------------------------------------------------------
-        left_col = QVBoxLayout()
 
         intro = QLabel(
             "Echo: pylinac uses the lowest echo by default if you leave "
-            '"Use lowest echo number" checked. '
+            '"Use lowest echo number" checked.\n'
             "Match SeriesInstanceUID: enable for strict series matching when "
             "your pylinac version supports analyze(check_uid=...); otherwise "
             "the choice is recorded in JSON only."
         )
         intro.setWordWrap(True)
-        left_col.addWidget(intro)
 
         # --- Advanced group ---
         advanced = QGroupBox("Advanced")
         form = QFormLayout()
 
-        self._use_lowest_echo = QCheckBox("Use lowest echo number (recommended)")
+        self._use_lowest_echo = QCheckBox("Use lowest echo number (recommended default)")
         self._use_lowest_echo.setChecked(True)
         self._use_lowest_echo.toggled.connect(self._on_use_lowest_toggled)
 
@@ -242,7 +235,7 @@ class AcrMrIQaOptionsDialog(QDialog):
         self._echo_spin.setEnabled(False)
 
         self._check_uid = QCheckBox(
-            "Strict Series Instance UID matching (check_uid)"
+            "Strict Series Instance UID matching (check_uid) when supported"
         )
         self._check_uid.setChecked(True)
 
@@ -254,9 +247,8 @@ class AcrMrIQaOptionsDialog(QDialog):
         form.addRow(self._use_lowest_echo)
         form.addRow("Echo number:", self._echo_spin)
         form.addRow(self._check_uid)
-        form.addRow("Origin slice index (-1 = auto):", self._origin_spin)
+        form.addRow("Origin slice index (optional, -1 = auto):", self._origin_spin)
         advanced.setLayout(form)
-        left_col.addWidget(advanced)
 
         # --- Scan extent group ---
         geom = QGroupBox("Scan extent (optional)")
@@ -275,16 +267,9 @@ class AcrMrIQaOptionsDialog(QDialog):
         gform.addRow(self._extent_tol)
         gform.addRow("Tolerance (mm):", self._tol_spin)
         geom.setLayout(gform)
-        left_col.addWidget(geom)
-        left_col.addStretch()
-
-        # ----------------------------------------------------------------
-        # Right column: Low-contrast (single run) + Compare mode
-        # ----------------------------------------------------------------
-        right_col = QVBoxLayout()
 
         # --- Single-run low-contrast group ---
-        lc = QGroupBox("Low-contrast detectability — single run")
+        lc = QGroupBox("Low-contrast detectability (pylinac) — single run")
         lc_form = QFormLayout()
         self._lc_method_combo = QComboBox()
         for method in ACR_MRI_LOW_CONTRAST_METHODS:
@@ -295,24 +280,23 @@ class AcrMrIQaOptionsDialog(QDialog):
                 DEFAULT_ACR_MRI_LOW_CONTRAST_METHOD
             )
         self._lc_method_combo.setCurrentIndex(max(method_idx, 0))
-
         self._lc_vis_spin = QDoubleSpinBox()
         self._lc_vis_spin.setRange(0.0, 100.0)
         self._lc_vis_spin.setDecimals(6)
         self._lc_vis_spin.setSingleStep(0.0001)
         self._lc_vis_spin.setValue(float(low_contrast_visibility_threshold))
-
         self._lc_sanity_spin = QDoubleSpinBox()
         self._lc_sanity_spin.setRange(0.01, 100.0)
         self._lc_sanity_spin.setDecimals(3)
         self._lc_sanity_spin.setSingleStep(0.5)
         self._lc_sanity_spin.setValue(float(low_contrast_visibility_sanity_multiplier))
-
         lc_hint = QLabel(
-            "Method: how contrast is measured before pylinac computes visibility. "
-            "Threshold: minimum visibility for a disk to count as seen (lower = more "
-            "permissive). Sanity multiplier: suppresses unrealistically large values "
-            "on tiny disks. Values are saved on OK and used for each new analysis."
+            "Method chooses how contrast is measured before pylinac computes "
+            "visibility. Threshold decides how much visibility is needed for a "
+            "disk to count as seen; lower values are more permissive, while "
+            "higher values are stricter. The sanity multiplier suppresses "
+            "unrealistically large visibility values on tiny disks. These values "
+            "are saved when you click OK and passed to each new analysis."
         )
         lc_hint.setWordWrap(True)
         reset_button = QPushButton("Reset to pylinac defaults")
@@ -323,7 +307,6 @@ class AcrMrIQaOptionsDialog(QDialog):
         lc_form.addRow("Sanity multiplier:", self._lc_sanity_spin)
         lc_form.addRow(reset_button)
         lc.setLayout(lc_form)
-        right_col.addWidget(lc)
 
         # --- Compare mode group ---
         compare_group = QGroupBox("Compare low-contrast settings (up to 3 runs)")
@@ -337,8 +320,8 @@ class AcrMrIQaOptionsDialog(QDialog):
         compare_hint = QLabel(
             "Enable up to 3 parameter sets to run side-by-side. Each row uses "
             "a multiplier applied to the pylinac defaults "
-            f"(threshold \u00d7\u00a0{DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_THRESHOLD:.3f}, "
-            f"sanity \u00d7\u00a0{DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_SANITY_MULTIPLIER:.1f}). "
+            f"(threshold \u00d7 default {DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_THRESHOLD:.3f}, "
+            f"sanity \u00d7 default {DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_SANITY_MULTIPLIER:.1f}). "
             "Run 1 also drives the standard single-run PDF. "
             "Results and a comparison table are exported in the JSON."
         )
@@ -363,15 +346,6 @@ class AcrMrIQaOptionsDialog(QDialog):
         btn_row.addStretch()
         compare_layout.addLayout(btn_row)
         compare_group.setLayout(compare_layout)
-        right_col.addWidget(compare_group)
-        right_col.addStretch()
-
-        # ----------------------------------------------------------------
-        # Assemble two-column layout + dialog buttons
-        # ----------------------------------------------------------------
-        columns = QHBoxLayout()
-        columns.addLayout(left_col, 1)
-        columns.addLayout(right_col, 3)
 
         # --- Dialog buttons ---
         buttons = QDialogButtonBox(
@@ -381,7 +355,11 @@ class AcrMrIQaOptionsDialog(QDialog):
         buttons.rejected.connect(self.reject)
 
         layout = QVBoxLayout(self)
-        layout.addLayout(columns)
+        layout.addWidget(intro)
+        layout.addWidget(advanced)
+        layout.addWidget(geom)
+        layout.addWidget(lc)
+        layout.addWidget(compare_group)
         layout.addWidget(buttons)
 
         self._on_use_lowest_toggled(self._use_lowest_echo.isChecked())
