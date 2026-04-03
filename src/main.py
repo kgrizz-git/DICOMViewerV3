@@ -2445,7 +2445,11 @@ class DICOMViewerApp(QObject):
     def _open_quick_start_guide(self) -> None:
         """Handle Quick Start Guide dialog request."""
         self.dialog_coordinator.open_quick_start_guide()
-    
+
+    def _open_user_documentation_in_browser(self) -> None:
+        """Open the user guide hub (Markdown on GitHub) in the system browser."""
+        self.dialog_coordinator.open_user_documentation_in_browser()
+
     def _open_fusion_technical_doc(self) -> None:
         """Handle Fusion Technical Documentation dialog request."""
         self.dialog_coordinator.open_fusion_technical_doc()

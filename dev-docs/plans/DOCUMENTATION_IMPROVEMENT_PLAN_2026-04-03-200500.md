@@ -1,7 +1,7 @@
 # Documentation improvement plan
 
 **Plan ID / timestamp**: 2026-04-03-200500  
-**Status**: Draft for implementation  
+**Status**: Phases A–C implemented (2026-04-03); Phase D documented only (offline bundle TBD)  
 **Inputs**: [Documentation assessment](../doc-assessments/doc-assessment-2026-04-03-111903.md), [TO_DO.md § Documentation](../TO_DO.md#documentation) (lines 111–116), product goal: **in-app Quick Start with TOC and links**, **slimmer README** (no developer/test depth), **browser-accessible fuller docs**.
 
 ---
@@ -127,27 +127,28 @@ Reuse patterns from any existing “open URL” flows in the app (About, pylinac
 
 ### Phase A — Structure and README (high value, low risk)
 
-- [ ] Add `tests/README.md` with test-running instructions (migrate text from README).  
-- [ ] Slim `README.md` per §4; fix project tree; remove duplicate bullet; drop enumerated test list.  
-- [ ] Add `user-docs/USER_GUIDE.md` hub (can start as stubs linking to existing `IMAGE_FUSION_TECHNICAL_DOCUMENTATION.md`).  
-- [ ] Update `AGENTS.md` to point to `tests/README.md` and `user-docs/` hub if not already obvious.
+- [x] Add `tests/README.md` with test-running instructions (migrate text from README).  
+- [x] Slim `README.md` per §4; fix project tree; remove duplicate bullet; drop enumerated test list.  
+- [x] Add `user-docs/USER_GUIDE.md` hub (can start as stubs linking to existing `IMAGE_FUSION_TECHNICAL_DOCUMENTATION.md`).  
+- [x] Update `AGENTS.md` to point to `tests/README.md` and `user-docs/` hub if not already obvious.
 
 ### Phase B — In-app Quick Start + browser links
 
-- [ ] Shorten `resources/help/quick_start_guide.html`; ensure TOC + ids; add “Full documentation” external links.  
-- [ ] Update `quick_start_guide_dialog.py` for external HTTP(S) links + fix module docstring maintenance note.  
-- [ ] Add **Help → Documentation** (or equivalent) in `main_window_menu_builder.py` + `dialog_coordinator.py`.  
-- [ ] Update `dev-docs/CODE_DOCUMENTATION.md` Quick Start section to match HTML + dialog behavior.
+- [x] Shorten `resources/help/quick_start_guide.html`; ensure TOC + ids; add “Full documentation” external links.  
+- [x] Update `quick_start_guide_dialog.py` for external HTTP(S) links + fix module docstring maintenance note.  
+- [x] Add **Help → Documentation** (or equivalent) in `main_window_menu_builder.py` + `dialog_coordinator.py`.  
+- [x] Update `dev-docs/CODE_DOCUMENTATION.md` Quick Start section to match HTML + dialog behavior.
 
 ### Phase C — TO_DO topics
 
-- [ ] Author `user-docs/USER_GUIDE_QA_PYLINAC.md` (and link from hub + Quick Start).  
-- [ ] Author `user-docs/USER_GUIDE_MPR.md` (and link from hub + Quick Start).  
-- [ ] Optional: `dev-docs/DEVELOPER_SETUP.md` for moved README troubleshooting.
+- [x] Author `user-docs/USER_GUIDE_QA_PYLINAC.md` (and link from hub + Quick Start).  
+- [x] Author `user-docs/USER_GUIDE_MPR.md` (and link from hub + Quick Start).  
+- [x] Optional: `dev-docs/DEVELOPER_SETUP.md` for moved README troubleshooting.
 
 ### Phase D — Packaged builds (when needed)
 
-- [ ] Document and implement offline doc bundle + `file://` policy in `BUILDING_EXECUTABLES.md` / installer notes.
+- [x] Document and implement offline doc bundle + `file://` policy in `BUILDING_EXECUTABLES.md` / installer notes.  
+  - **Done:** “Bundled vs online documentation” section added; **offline bundle not implemented** (future work).
 
 ---
 

@@ -380,6 +380,11 @@ def build_menu_bar(main_window) -> None:
     quick_start_action.triggered.connect(main_window.quick_start_guide_requested.emit)
     help_menu.addAction(quick_start_action)
 
+    documentation_action = QAction("&Documentation (browser)...", main_window)
+    documentation_action.setStatusTip("Open the user guide hub on GitHub in your web browser")
+    documentation_action.triggered.connect(main_window.user_documentation_requested.emit)
+    help_menu.addAction(documentation_action)
+
     fusion_tech_doc_action = QAction("Fusion &Technical Documentation", main_window)
     fusion_tech_doc_action.triggered.connect(main_window.fusion_technical_doc_requested.emit)
     help_menu.addAction(fusion_tech_doc_action)

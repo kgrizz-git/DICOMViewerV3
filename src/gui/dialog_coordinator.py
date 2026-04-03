@@ -32,6 +32,9 @@ from gui.dialogs.fusion_technical_doc_dialog import FusionTechnicalDocDialog
 from gui.dialogs.export_roi_statistics_dialog import ExportROIStatisticsDialog
 from gui.main_window import MainWindow
 from utils.config_manager import ConfigManager
+from utils.doc_urls import user_guide_hub_url
+from PySide6.QtCore import QUrl
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QMessageBox
 from pydicom.dataset import Dataset
 
@@ -213,7 +216,11 @@ class DialogCoordinator:
         """Handle Quick Start Guide dialog request."""
         dialog = QuickStartGuideDialog(self.config_manager, self.main_window)
         dialog.exec()
-    
+
+    def open_user_documentation_in_browser(self) -> None:
+        """Open the user guide hub in the system default web browser (https only)."""
+        QDesktopServices.openUrl(QUrl(user_guide_hub_url()))
+
     def open_fusion_technical_doc(self) -> None:
         """Handle Fusion Technical Documentation dialog request."""
         dialog = FusionTechnicalDocDialog(self.config_manager, self.main_window)

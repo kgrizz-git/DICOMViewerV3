@@ -4,6 +4,8 @@
 
 The DICOM Viewer V3 image fusion feature allows overlaying functional imaging (PET/SPECT) on anatomical imaging (CT/MR) from different series within the same study. This document provides detailed technical information about the fusion algorithms, options, error sources, and accuracy estimates.
 
+**Other user guides:** See the hub [USER_GUIDE.md](USER_GUIDE.md) (MPR, pylinac QA, and this fusion doc). In the app: **Help → Quick Start Guide** or **Help → Documentation**.
+
 ## Table of Contents
 
 1. [Architecture Overview](#architecture-overview)
@@ -543,4 +545,4 @@ The tables below summarize the main error sources across 2D and 3D fusion, group
 
 The image fusion feature provides flexible and accurate spatial alignment between different imaging series. The choice between 2D and 3D modes depends on the spatial relationship between series and the required accuracy. Overall, the system achieves sub-millimeter to low-millimeter accuracy in typical use cases, with 3D mode providing better accuracy for complex spatial relationships.
 
-For detailed usage instructions, see the Quick Start Guide in the application Help menu.
+For detailed usage instructions, see **Help → Quick Start Guide** or **Help → Documentation** in the application, or the [user guide hub](USER_GUIDE.md).

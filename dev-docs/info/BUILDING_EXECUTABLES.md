@@ -885,3 +885,9 @@ The following build-related files and directories should be in `.gitignore`:
 - **Spec file**: The `DICOMViewerV3.spec` file should be committed to version control for reproducible builds
 - **GitHub Actions**: A workflow file (`.github/workflows/build.yml`) is included for automated cross-platform builds
 
+## Bundled vs online documentation (executables)
+
+Frozen builds ship **Help → Quick Start** HTML from `resources/help/`. **Help → Documentation** and links inside the Quick Start guide open **GitHub** (`user-docs/` on `main`) in the default browser and require network access.
+
+For a future **offline** doc pack (e.g. generated HTML under `resources/help/docs/` and `file://` URLs), record the packaging choice here and gate URL schemes in `QuickStartGuideDialog` / `DialogCoordinator` accordingly.
+

@@ -1,26 +1,26 @@
 """
 Quick Start Guide Dialog
 
-This module provides a Quick Start Guide dialog with comprehensive instructions
-on how to use the DICOM viewer application.
+Loads themed HTML from ``resources/help/quick_start_guide.html`` and shows it in a
+QTextBrowser with search, table-of-contents navigation, and in-page anchors.
 
-IMPORTANT MAINTENANCE RULE:
-    After making changes to functionality or controls in this project, this Quick Start
-    Guide should be updated if necessary to reflect the changes. The guide content
-    is in the _get_guide_content() method.
+MAINTENANCE: When behavior or primary workflows change, update the HTML file above.
+Links with http/https open in the system default browser; fragment links scroll
+inside the dialog.
 
 Inputs:
-    - User opens Help menu and selects Quick Start Guide
-    
+    - User opens Help → Quick Start Guide
+
 Outputs:
-    - Displayed guide with instructions
-    
+    - Modal dialog with the quick start content
+
 Requirements:
-    - PySide6 for dialog components
+    - PySide6 (QDialog, QTextBrowser, QDesktopServices for external URLs)
 """
 
 import re
 
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -38,6 +38,7 @@ from typing import ClassVar, Optional
 from pathlib import Path
 
 from utils.config_manager import ConfigManager
+from utils.doc_urls import user_doc_url
 
 _HELP_DIR = Path(__file__).parent.parent.parent.parent / "resources" / "help"
 
@@ -248,6 +249,14 @@ class QuickStartGuideDialog(QDialog):
         content = template
         for key, val in colors.items():
             content = content.replace(f"{{{key}}}", val)
+        doc_placeholders = {
+            "doc_USER_GUIDE": user_doc_url("USER_GUIDE.md"),
+            "doc_USER_GUIDE_MPR": user_doc_url("USER_GUIDE_MPR.md"),
+            "doc_USER_GUIDE_QA_PYLINAC": user_doc_url("USER_GUIDE_QA_PYLINAC.md"),
+            "doc_IMAGE_FUSION": user_doc_url("IMAGE_FUSION_TECHNICAL_DOCUMENTATION.md"),
+        }
+        for key, val in doc_placeholders.items():
+            content = content.replace(f"{{{key}}}", val)
 
         QuickStartGuideDialog._content_cache[theme] = content
         return content
@@ -306,7 +315,11 @@ class QuickStartGuideDialog(QDialog):
         self._update_navigation_buttons()
 
     def _on_anchor_clicked(self, url: QUrl) -> None:
-        """Handle internal documentation anchor navigation."""
+        """Scroll to in-page anchors; open http(s) links in the system browser."""
+        scheme = (url.scheme() or "").lower()
+        if scheme in ("http", "https"):
+            QDesktopServices.openUrl(url)
+            return
         anchor = url.fragment()
         if not anchor:
             return

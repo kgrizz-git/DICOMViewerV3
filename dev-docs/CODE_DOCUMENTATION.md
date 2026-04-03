@@ -10,7 +10,8 @@ This file lists documentation that explains how the application works or serves 
 
 | Document | Description |
 |----------|-------------|
-| [README.md](../README.md) | Project overview, setup, running the application, and high-level usage. |
+| [README.md](../README.md) | Project overview, install, run, and pointers to in-app help and `user-docs/`. |
+| [USER_GUIDE.md](../user-docs/USER_GUIDE.md) | User guide hub (links to MPR, pylinac QA, fusion, etc.). |
 | [IMAGE_FUSION_TECHNICAL_DOCUMENTATION.md](../user-docs/IMAGE_FUSION_TECHNICAL_DOCUMENTATION.md) | Technical and user-facing documentation for the image fusion feature (PET/SPECT on CT/MR). |
 
 ### Developer and technical (dev-docs)
@@ -40,9 +41,15 @@ Text shown in the running application for **Quick Start Guide** and **About** is
 ### Quick Start Guide
 
 - **Menu:** Help → Quick Start Guide  
-- **Source:** [src/gui/dialogs/quick_start_guide_dialog.py](../src/gui/dialogs/quick_start_guide_dialog.py)  
-- **Content:** The full guide HTML is built in **`_get_guide_content()`** (approximately lines 119–497).  
-- **Note:** The module docstring states that after changing functionality or controls, this guide should be updated in `_get_guide_content()` as needed.
+- **Content file:** [resources/help/quick_start_guide.html](../resources/help/quick_start_guide.html) — short HTML with a table of contents; **http(s)** links open in the system browser.  
+- **Loader / UI:** [src/gui/dialogs/quick_start_guide_dialog.py](../src/gui/dialogs/quick_start_guide_dialog.py) — reads the HTML file, applies theme placeholders, and displays it in a `QTextBrowser`.  
+- **Maintenance:** Edit the HTML when workflows or menu paths change; keep GitHub URLs in that file aligned with `main` branch paths under `user-docs/`.
+
+### User documentation (browser)
+
+- **Menu:** Help → Documentation (browser)…  
+- **Behavior:** Opens the user guide hub on GitHub via `QDesktopServices` from [src/gui/dialog_coordinator.py](../src/gui/dialog_coordinator.py) (`open_user_documentation_in_browser`).  
+- **Configurable URL:** Edit **`USER_DOCS_GITHUB_PREFIX`** in [src/utils/doc_urls.py](../src/utils/doc_urls.py) (forks / different branch). Quick Start HTML uses placeholders `{doc_*}` filled in [src/gui/dialogs/quick_start_guide_dialog.py](../src/gui/dialogs/quick_start_guide_dialog.py).
 
 ### About dialog
 

@@ -1,0 +1,19 @@
+# DICOM Viewer V3 — User guide
+
+This hub links topic guides for the application. **In the running app**, use **Help → Quick Start Guide** for a short overview (with a table of contents and links that open these pages in your browser when you are online).
+
+## Topics
+
+| Guide | Contents |
+|-------|-----------|
+| [USER_GUIDE_MPR.md](USER_GUIDE_MPR.md) | Multi-planar reformation (MPR): creating and clearing MPR views |
+| [USER_GUIDE_QA_PYLINAC.md](USER_GUIDE_QA_PYLINAC.md) | ACR CT / ACR MRI phantom analysis (pylinac), JSON/PDF, compare mode |
+| [IMAGE_FUSION_TECHNICAL_DOCUMENTATION.md](IMAGE_FUSION_TECHNICAL_DOCUMENTATION.md) | Image fusion (PET/SPECT on CT/MR): options, accuracy, algorithms |
+
+## Source and versioning
+
+These files live in the repository under `user-docs/` and match the **main** branch on [GitHub](https://github.com/kgrizz-git/DICOMViewerV3). For release-specific behavior, check [CHANGELOG.md](../CHANGELOG.md).
+
+## Further reading (developers / deep dives)
+
+Implementation notes, research, and plans are under `dev-docs/` (for example [PYLINAC_INTEGRATION_OVERVIEW.md](../dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md)).

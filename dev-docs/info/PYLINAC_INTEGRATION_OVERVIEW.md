@@ -1,5 +1,7 @@
 ## Pylinac Integration for Phantom QA (ACR Focus, CatPhan Aware)
 
+**End-user guide (menus, inputs, exports):** [USER_GUIDE_QA_PYLINAC.md](../../user-docs/USER_GUIDE_QA_PYLINAC.md) in `user-docs/`.
+
 This document outlines how **pylinac** could be integrated into DICOM Viewer V3 to provide **automated QA analysis of phantoms**, with a primary focus on **ACR CT/CBCT and MRI phantoms** and secondary support for **CatPhan** models.
 
 **Actionable Stage 1 checklist:** [PYLINAC_AND_AUTOMATED_QA_STAGE1_PLAN.md](../plans/PYLINAC_AND_AUTOMATED_QA_STAGE1_PLAN.md).

@@ -27,7 +27,7 @@ If workspace search/index ignores hidden virtualenv folders, use these explicit 
 From project root, after activation:
 
 - Run the app: `python src/main.py`
-- Run tests: `python tests/run_tests.py` or `python -m pytest tests/ -v`
+- Run tests: `python tests/run_tests.py` or `python -m pytest tests/ -v` (see **`tests/README.md`** for layout and options).
 
 If no venv exists, create one, for example `python -m venv venv` or `python -m venv .venv`, activate it, then `pip install -r requirements.txt`.
 
@@ -37,7 +37,7 @@ Optional for contributors: `pip install -r requirements-dev.txt` adds local Pyth
 
 - See `.cursor/rules` and user rules.  Before major refactors only, backup files before changing. Do not proceed with edits until the backup is verified (e.g. file exists and has content) or the user has been asked.
 - **Long-running commands (agents / automation):** When type-checking large trees (`pyright` on all of `src/`), running the full test suite, or similar heavy work, use a **conservative timeout on the order of 10 minutes** (e.g. 600000 ms where the tool measures wait time) so runs are not cut off on slower machines. Shorter limits remain fine for single-file checks or quick smoke steps.
-- Project layout: `src/` (application), `tests/` (tests), `dev-docs/` (plans, assessments).
+- Project layout: `src/` (application), `tests/` (tests; run instructions in **`tests/README.md`**), `user-docs/` (user guide hub **`USER_GUIDE.md`**), `dev-docs/` (plans, assessments).
 - **Pylinac (ACR QA)**: `requirements.txt` pins an exact **`pylinac`** version; that pin is the only upstream release **verified** with the viewer’s ACR CT / MRI integration. When bumping the pin, re-verify and update `dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md` (**Verified pylinac package version**).
 - **Versioning**: Application version is defined in a single place, `src/version.py` (`__version__`). Use semantic versioning; release steps are in `dev-docs/RELEASING.md`, with full rules in `dev-docs/info/SEMANTIC_VERSIONING_GUIDE.md`.
 
@@ -57,6 +57,7 @@ src/
 ├── tools/                         # Interactive tools (ROI, measurement, annotation, crosshair)
 └── utils/                         # Utilities (config, undo/redo, DICOM helpers, etc.)
     ├── config_manager.py          # Thin facade: inherits all config mixins; owns __init__, _load_config, save_config, get, set
+    ├── doc_urls.py                # GitHub base URL for in-app user-docs links (Help → Documentation, Quick Start); edit USER_DOCS_GITHUB_PREFIX for forks
     ├── debug_flags.py             # Central on/off switches for diagnostic print statements (DEBUG_LAYOUT, DEBUG_LOADING, DEBUG_NAV)
     └── config/                    # Feature-domain config mixin package
         ├── __init__.py

@@ -5,6 +5,8 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ## [Unreleased]
 
 ### Changed
+- **Docs URLs**: Central **`src/utils/doc_urls.py`** (`USER_DOCS_GITHUB_PREFIX`) drives Help → Documentation and Quick Start GitHub links; edit one place for forks/branches.
+- **Documentation (user + repo)**: Slim **`README.md`** (install/run/pointers); moved test commands to **`tests/README.md`** and dev troubleshooting to **`dev-docs/DEVELOPER_SETUP.md`**. New **`user-docs/USER_GUIDE.md`** hub plus **`USER_GUIDE_MPR.md`** and **`USER_GUIDE_QA_PYLINAC.md`**. **`resources/help/quick_start_guide.html`** shortened with TOC and **https** links to `user-docs/` on GitHub; **`QuickStartGuideDialog`** opens **http(s)** in the system browser. **Help → Documentation (browser)** opens the hub URL via **`DialogCoordinator.open_user_documentation_in_browser`**. Updated **`dev-docs/CODE_DOCUMENTATION.md`**, **`AGENTS.md`**, **`PYLINAC_INTEGRATION_OVERVIEW.md`** (pointer to user QA guide), **`IMAGE_FUSION_TECHNICAL_DOCUMENTATION.md`**, and **`BUILDING_EXECUTABLES.md`** (online vs future offline docs). Plan checklist: **`dev-docs/plans/DOCUMENTATION_IMPROVEMENT_PLAN_2026-04-03-200500.md`**.
 - **Docs**: `dev-docs/templates-generalized/doc-assessment-template.md` now instructs assessors to inventory **bundled / in-app user documentation** (e.g. HTML Quick Start under `resources/help/`), not only Markdown. `dev-docs/doc-assessments/doc-assessment-2026-04-03-111903.md` updated accordingly.
 
 ### Added

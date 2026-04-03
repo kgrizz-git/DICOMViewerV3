@@ -112,6 +112,7 @@ class MainWindow(QMainWindow):
     rescale_toggle_changed = Signal(bool)  # Emitted when rescale toggle changes (True = use rescaled values)
     clear_measurements_requested = Signal()  # Emitted when clear measurements is requested
     quick_start_guide_requested = Signal()  # Emitted when Quick Start Guide is requested
+    user_documentation_requested = Signal()  # Opens user guide hub in default browser (Help → Documentation)
     fusion_technical_doc_requested = Signal()  # Emitted when Fusion Technical Documentation is requested
     tag_export_requested = Signal()  # Emitted when tag export is requested
     theme_changed = Signal(str)  # Emitted when theme changes (theme name)
