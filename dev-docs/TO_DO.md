@@ -91,6 +91,7 @@ This file tracks active and near-term tasks.
 - [ ] **[P2]** Allow hanging protocols? Configuration of windows/tiles, certain views/phases/priors loaded ([plan](plans/HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md#1-hanging-protocols))
 - [ ] **[P2]** Once database is added, allow pulling priors ([plan](plans/HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md#2-pulling-priors-after-local-database))
 - [ ] **[P1]** Also try RDSR parsing/export support - have some examples, add to repo ([plan](plans/HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md#3-rdsr-parsing-and-export))
+- [ ] **[P1]** Allow some configuration to interpret MTF results (separately for MRI and CT) where the user needs to review some images along with pylinac MTF plots and decide the "visibility cutoff" MTF value which they think corresponds to the limit of visibility and we report the (interpolated) spatial frequency that gives that MTF value, OR we could have them define a "passing" MTF value and state which inserts pass/fail a visibility check based on that. ([details](FUTURE_WORK_DETAIL_NOTES.md#interpreting-mtf-results))
 
 ## Documentation
 
