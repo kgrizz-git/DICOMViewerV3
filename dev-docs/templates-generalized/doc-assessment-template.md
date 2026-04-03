@@ -1,7 +1,7 @@
 # Documentation Assessment Template - [PROJECT_NAME]
 
 **Template Version**: 2.0  
-**Last Updated**: 2026-02-18
+**Last Updated**: 2026-04-03
 
 ## Purpose
 
@@ -94,6 +94,11 @@ This approach ensures:
    - `user-docs/CONFIGURATION.md` - Configuration reference
    - Any other user-facing guides
 
+   **Bundled or in-app documentation (often not Markdown)**  
+   Many applications ship a **Quick Start Guide**, onboarding text, or feature help as **HTML**, **Qt resources**, **rich text**, **CHM**, or other assets rather than `.md` files. Examples: `resources/help/quick_start_guide.html`, `assets/docs/`, installer-readme.txt, or strings loaded by a Help menu action.
+
+   During Step 1, **search the repo and UI wiring** (e.g. Help menu, `QTextBrowser`, `QWebEngineView`, resource bundles) so these assets are listed in the assessment inventory and cross-checked for **accuracy vs code**, **agreement with README/USER_GUIDE**, and **completion** the same way as Markdown docs. Treat the **rendered in-app help** as user-facing documentation even when there is no `USER_GUIDE.md`.
+
 2. **Developer documentation**:
    - `[DEV_DOCS]/TECHNICAL_DETAILS.md` - Technical implementation details
    - Platform-specific documentation in `[DEV_DOCS]/`
@@ -140,6 +145,7 @@ Evaluate whether each documentation file is serving its intended purpose and is 
 
 1. **Document Purpose Alignment**:
    - **README.md**: Should be accessible, relatively brief, and provide a quick overview. It should help users quickly understand what the project does and how to get started.
+   - **Bundled Quick Start / in-app help (HTML, etc.)**: Should give end users a concise, discoverable path from inside the app; should not contradict README or USER_GUIDE on shared facts; verify it is included in the assessment inventory even when not `.md`.
    - **USER_GUIDE.md**: Should be more detailed and comprehensive, providing thorough guidance for end users on all features, configuration, troubleshooting, and usage scenarios.
    - **TECHNICAL_DETAILS.md**: Should be targeted at developers, providing implementation details, architecture, code structure, and technical specifications.
    - **GETTING_STARTED.md**: Should focus on initial setup and installation, providing a clear path for new users.
@@ -173,11 +179,21 @@ Evaluate whether each documentation file is serving its intended purpose and is 
 
 - [ ] Create timestamped copy of this template
 - [ ] **Remember: Only edit the timestamped assessment file - do not modify any code or documentation files**
-- [ ] Identify all documentation files in the project
+- [ ] Identify all documentation files in the project (**including non-Markdown**: HTML help, bundled guides, in-app help sources)
 - [ ] Identify all code files that should be documented
 - [ ] Create inventory of documentation files and their purposes
 
 ### User-Facing Documentation Assessment
+
+#### Bundled / in-app documentation (non-Markdown), if present
+
+Use this section when the project ships a Quick Start or similar **outside** `.md` files (common: `.html` under `resources/help/`, etc.).
+
+- [ ] **Inventory**: List each asset path and how users open it (menu path, first-run dialog, etc.)
+- [ ] **Accuracy**: Verify described behavior matches the running application and codebase
+- [ ] **Agreement**: Verify consistency with `README.md` and any `USER_GUIDE.md` on overlapping topics
+- [ ] **Completion**: Verify notable features surfaced in README or code are reflected in the bundled guide where appropriate
+- [ ] **Maintenance pointers**: Verify developer docs (e.g. `CODE_DOCUMENTATION.md`, `AGENTS.md`) point maintainers to the correct **file** or **loader** (HTML vs embedded strings), if such an index exists
 
 #### README.md
 
@@ -374,6 +390,7 @@ Use this structure in your timestamped assessment file:
 | File | Type | Status | Issues Found | Notes |
 |------|------|--------|--------------|-------|
 | README.md | User-facing | Reviewed | X | [Notes] |
+| [e.g. resources/help/quick_start_guide.html] | User-facing (bundled) | Reviewed | X | [Notes — not Markdown] |
 | GETTING_STARTED.md | User-facing | Reviewed | X | [Notes] |
 | USER_GUIDE.md | User-facing | Reviewed | X | [Notes] |
 | CONFIGURATION.md | User-facing | Reviewed | X | [Notes] |
@@ -651,7 +668,8 @@ Use this structure in your timestamped assessment file:
 
 ## Template Version
 
-- **Version**: 1.1
+- **Version**: 2.1
 - **Created**: 2026-01-20
-- **Last Updated**: 2026-01-26
+- **Last Updated**: 2026-04-03
+- **Changes in v2.1**: Step 1 and checklist: bundled / in-app user documentation (non-Markdown, e.g. HTML Quick Start); purpose alignment bullet; assessment results table example row.
 - **Changes in v1.1**: Added documentation purpose and organization evaluation criteria

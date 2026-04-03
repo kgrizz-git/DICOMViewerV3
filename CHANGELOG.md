@@ -4,6 +4,9 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 
 ## [Unreleased]
 
+### Changed
+- **Docs**: `dev-docs/templates-generalized/doc-assessment-template.md` now instructs assessors to inventory **bundled / in-app user documentation** (e.g. HTML Quick Start under `resources/help/`), not only Markdown. `dev-docs/doc-assessments/doc-assessment-2026-04-03-111903.md` updated accordingly.
+
 ### Added
 - **ACR MRI (pylinac) — combined PDF for compare mode**: Compare-mode runs now produce a single combined PDF at the user-chosen path. The file opens with a **viewer-authored summary page** (built with `reportlab.platypus`) containing the run parameter/score comparison table, phantom metadata, and full interpretation notes (MTF, LC score, circle colors, parameter explanations, docs links — unconstrained by pylinac's 6-line footer area). The per-run pylinac PDF pages follow in order. Assembly uses `pypdf` (`assemble_mri_compare_pdf`). Temp files are cleaned up automatically. The compare results dialog now shows the combined PDF path and an **Open PDF** button. `combined_pdf_path` is also written to the compare-mode JSON export (`schema_version 1.2`). New helpers: `build_mri_compare_summary_pdf`, `assemble_mri_compare_pdf`, `_write_per_run_temp_pdf`, `_NOTES_LINES_FULL`.
 - **Dependencies**: Added **`pypdf>=4.0.0`** to `requirements.txt` (pure-Python PDF merger; installed version 6.9.2).

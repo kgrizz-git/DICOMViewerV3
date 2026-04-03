@@ -35,8 +35,9 @@ This file tracks active and near-term tasks.
 - [ ] **[P1]** Should we block showing DICOM tags when an MPR window is selected (show just "MPR")? Or add some kind of warning that it is the underlying series data somehow?
 - [ ] **[P0]** After creating MPRs, clearing, closing all files, and loading new files, creating new MPR does not load/display ([details](FUTURE_WORK_DETAIL_NOTES.md#multi-planar-reconstructions-mprs-and-oblique-reconstructions)) *NOTE: seems fixed*
 - [ ] **[P0]** "Close All" did not clear thumbnails in layout map
-- [ ] *Check for pyright warnings, errors - run pyright*
-
+- [ ] **[P1]** Fusion seems to add two sets of scale markers? Or for some reason markers look too dense. Goes away when focusing on window, reappaears when unfocused. Appears (and disappears) on windows without fusion enabled as well (maybe only ones showing same series as fusion base or overlay).
+- [ ] **[P1]** Found one weird instance of slice markers not being correct - QAMR the 3-plane loc when displaying axial slices shows lines on T1 and T2 axial when they display the same approximate slice location, and vice versa - they position and slope of the lines are the same on both. Saved a screenshot. Lines are angled (not vertical or horizontal) and offset from center of image. IOP for T1 [0.99986, -0.00006, -0.01671, 0.00011, 1.00000, 0.00290], for 3-plane axial slice [1.00000, -0.00000, 0.00000, -0.00000, 1.00000, 0.00000] - maybe it is correct. IPP for 3-plane [-124.5117034912, -124.5117034912, 10.0000000000], for T1 is [-123.6437759399, -129.4394531250, 10.5523557663]. *NOTE: seems correct actually -slightly angled. Took another screenshot.*
+- [ ] **[P1]** Fusion not working for T2 dual-echo as base series (QAMR) - no T1 overlay appears. It did after switching to T2 as overlay (still on T2) and then back to T1.
 
 ## Performance / Packaging
 
@@ -52,6 +53,7 @@ This file tracks active and near-term tasks.
 - [ ] **[P1]** Massively trim down old backup files, possibly exclude from git
 - [ ] **[P1]** Regularly run all scan templates and update TO_DO.md
 - [ ] **[P1]** Examine github actions, CI, CD, etc., and look for opportunities to optimize, simplify, or improve, including reducing use of limited storage quota
+- [ ] **[P1]** Check for pyright warnings, errors - run pyright
 
 ## UX / Workflow
 
@@ -81,6 +83,8 @@ This file tracks active and near-term tasks.
 - [ ] **[P2]** Consider a dedicated **Pylinac Configuration...** menu/dialog if more persisted QA customization options are added (likely), so pylinac/site defaults do not keep expanding the per-analysis Tools dialogs.
 - [ ] **[P2]** Allow dragging window dividers to make unequal divisions
 - [ ] **[P2]** Enable right-click on a Recent menu item to open context menu to remove it from the recent list
+- [ ] **[P2]** Add ability to use toolbar icons 
+- [ ] **[P0]** Menu item "Show Lines" should say "Show Slice Location Lines"
 
 
 ## Features (Near-Term)
@@ -127,6 +131,7 @@ This file tracks active and near-term tasks.
 - [ ] **[P2]** Ask AI/cloud agent to estimate registration differences for sample PET-to-CT points and capture screenshots
 - [ ] **[P1]** Check fusion with additional studies
 - [ ] **[P1]** Improve Window/Level preset/auto behavior in fusion mode
+- [ ] **[P1]** Use slice sync to quick check fusion on several studies
 
 
 ## Release / Product
