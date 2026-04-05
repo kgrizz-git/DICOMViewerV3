@@ -4,46 +4,495 @@ Series Navigator Widget
 This module provides a horizontal series navigator bar that displays thumbnails
 of the first slice of each series with series numbers overlaid.
 
-View widgets live in gui.series_navigator_view; study/instance helpers in
-gui.series_navigator_model.
-
 Inputs:
     - Studies dictionary with series data
     - Current study and series UIDs
     - DICOMProcessor for thumbnail generation
-
+    
 Outputs:
     - Visual series navigator with clickable thumbnails
     - Series selection signal
-
+    
 Requirements:
     - PySide6 for GUI components
     - PIL/Pillow for image handling
     - DICOMProcessor for image conversion
 """
 
-from PySide6.QtWidgets import (
-    QWidget,
-    QHBoxLayout,
-    QScrollArea,
-    QVBoxLayout,
-    QFrame,
-)
-from PySide6.QtCore import Qt, Signal, QPoint
-from PySide6.QtGui import QKeyEvent, QMouseEvent
+from PySide6.QtWidgets import (QWidget, QHBoxLayout, QScrollArea, QVBoxLayout,
+                                QLabel, QFrame, QStyleOption)
+from PySide6.QtCore import Qt, Signal, QSize, QPoint, QMimeData, QTimer
+from PySide6.QtGui import QPixmap, QImage, QPainter, QFont, QColor, QDrag, QMouseEvent, QKeyEvent, QPalette
 from typing import Any, Optional, Dict, List, Tuple
 from pydicom.dataset import Dataset
 from core.dicom_processor import DICOMProcessor
 from core.dicom_organizer import MultiFrameSeriesInfo
 from PIL import Image
+from utils.debug_flags import DEBUG_NAV
+from gui.navigator_colors import SUBWINDOW_DOT_COLORS
+import numpy as np
 import time
 
-from utils.debug_flags import DEBUG_NAV
-from gui.series_navigator_view import StudyDivider, StudyLabel, SeriesThumbnail
-from gui.series_navigator_model import (
-    build_instance_entries_for_navigator,
-    study_label_from_dataset,
-)
+class StudyDivider(QFrame):
+    """
+    Visual separator widget between studies in the series navigator.
+    
+    Displays a thin vertical line to separate series from different studies.
+    Spans both the label row and thumbnail row.
+    """
+    
+    def __init__(self, parent=None):
+        """
+        Initialize study divider.
+        
+        Args:
+            parent: Parent widget
+        """
+        super().__init__(parent)
+        # Set fixed width, height will span both rows (label + thumbnail)
+        # Height: label row (18px) + thumbnail row (68px) + border (2px) + margins = 95px
+        # Narrower divider: 2px instead of 3px, lighter color: #666666 instead of #888888
+        self.setFixedSize(2, 95)
+        self.setStyleSheet("QFrame { background-color: #666666; border: none; }")
+
+
+class StudyLabel(QFrame):
+    """
+    Study label widget displaying study description or UID.
+    
+    Shows StudyDescription if available, otherwise displays truncated StudyInstanceUID.
+    Thin row above thumbnails, left-aligned, spans full width of study's thumbnails.
+    """
+    
+    def __init__(self, study_label_text: str, parent=None):
+        """
+        Initialize study label.
+        
+        Args:
+            study_label_text: Text to display (study description or UID)
+            parent: Parent widget
+        """
+        super().__init__(parent)
+        # Set fixed height for thin row, width will be set dynamically
+        self.setFixedHeight(18)
+        self.setMinimumWidth(68)  # Minimum width of one thumbnail
+        # No frame style - we don't want any borders
+        self.setFrameStyle(QFrame.Shape.NoFrame)
+        # Background color is set via global stylesheet in main_window.py for theme awareness
+        # Dark theme: #2a2a2a, Light theme: #e0e0e0
+        # No borders
+        self.setStyleSheet(
+            "QFrame { "
+            "border: none; "
+            "border-radius: 0px; "
+            "}"
+        )
+        
+        # Create label for text
+        self.label = QLabel(study_label_text, self)
+        self.label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.label.setWordWrap(False)
+        # Text color will adapt to theme via parent stylesheet
+        self.label.setStyleSheet(
+            "QLabel { "
+            "background-color: transparent; "
+            "font-weight: bold; "
+            "font-size: 9pt; "
+            "padding: 2px 5px; "
+            "}"
+        )
+        
+        # Layout for label
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.label)
+    
+    def set_text(self, text: str) -> None:
+        """
+        Update the label text.
+        
+        Args:
+            text: New text to display
+        """
+        self.label.setText(text)
+    
+    def set_width(self, width: int) -> None:
+        """
+        Set the width of the label to span thumbnails.
+        
+        Args:
+            width: Width in pixels
+        """
+        self.setFixedWidth(width)
+
+
+class SeriesThumbnail(QFrame):
+    """
+    Individual thumbnail widget for a series.
+    
+    Displays first slice image with series number overlaid.
+    """
+    
+    clicked = Signal(str)  # Emitted with series_uid when clicked
+    instance_clicked = Signal(str, str, int)  # Emitted with (study_uid, series_uid, target_slice_index)
+    show_file_requested = Signal(str, str)  # Emitted with (study_uid, series_uid) when "Show file" is requested
+    about_this_file_requested = Signal(str, str)  # Emitted with (study_uid, series_uid) when "About This File" is requested
+    close_series_signal = Signal(str, str)  # Emitted with (study_uid, series_uid) when "Close This Series" is selected
+    close_study_signal = Signal(str)  # Emitted with study_uid when "Close This Study" is selected
+
+    def __init__(self, series_uid: str, series_number: int, thumbnail_image: Optional[Image.Image], study_uid: str = "", parent=None,
+                 display_label: Optional[str] = None, target_slice_index: Optional[int] = None,
+                 thumbnail_size: int = 68):
+        """
+        Initialize series thumbnail.
+        
+        Args:
+            series_uid: Series instance UID
+            series_number: Series number to display
+            thumbnail_image: PIL Image for thumbnail (or None)
+            study_uid: Study Instance UID (required for file path lookup)
+            parent: Parent widget
+        """
+        super().__init__(parent)
+        self.series_uid = series_uid
+        self.series_number = series_number
+        self.thumbnail_image = thumbnail_image
+        self.study_uid = study_uid
+        self.display_label = display_label
+        self.target_slice_index = target_slice_index
+        self.is_current = False
+        self._instance_count = 1
+        self._max_frame_count = 1
+        # Subwindow slot indices whose series is displayed here (for dot indicators)
+        self._dot_slots: List[int] = []
+        self.drag_start_position = QPoint()
+        self._drag_started = False
+
+        # Set fixed size for thumbnails (85% of 80x80 to fit smaller navigator height)
+        self.setFixedSize(thumbnail_size, thumbnail_size)
+        self.setFrameStyle(QFrame.Shape.Box)
+        self.setLineWidth(1)
+        # Darker border: #444444 instead of #555555
+        self.setStyleSheet("QFrame { border: 1px solid #444444; }")
+        
+        # Enable mouse tracking for hover effects
+        self.setMouseTracking(True)
+        
+    def set_current(self, is_current: bool) -> None:
+        """
+        Set whether this is the current series.
+        
+        Args:
+            is_current: True if this is the current series
+        """
+        self.is_current = is_current
+        if is_current:
+            self.setStyleSheet("QFrame { border: 2px solid #00aaff; background-color: rgba(0, 170, 255, 0.1); }")
+        else:
+            # Darker border: #444444 instead of #555555
+            self.setStyleSheet("QFrame { border: 1px solid #444444; }")
+        self.update()
+    
+    def set_subwindow_dots(self, slot_indices: List[int]) -> None:
+        """
+        Set which subwindow slot indices are currently displaying this series.
+        Each occupied slot will render a small colored dot in the top-right corner.
+
+        Args:
+            slot_indices: List of subwindow slot indices (0–3) currently showing
+                          this series.  Pass an empty list to clear all dots.
+        """
+        self._dot_slots = list(slot_indices)
+        self.update()  # Trigger repaint
+
+    def set_multiframe_info(self, instance_count: int, max_frame_count: int) -> None:
+        """Store per-series multiframe summary for painting the thumbnail badge."""
+        self._instance_count = max(1, int(instance_count))
+        self._max_frame_count = max(1, int(max_frame_count))
+        self.update()
+
+    def _get_multiframe_indicator_text(self) -> str:
+        """Return a compact badge for multi-frame series, or empty string."""
+        if self._max_frame_count <= 1:
+            return ""
+        if self._instance_count > 1:
+            return f"{self._instance_count}i x {self._max_frame_count}f"
+        return f"{self._max_frame_count}fr"
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        """Handle mouse press and start possible drag operation."""
+        if event.button() == Qt.MouseButton.LeftButton:
+            # Store press position for drag detection and reset drag flag
+            self.drag_start_position = event.pos()
+            self._drag_started = False
+        super().mousePressEvent(event)
+    
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        """Handle mouse move to start drag operation."""
+        if not (event.buttons() & Qt.MouseButton.LeftButton):
+            return
+        
+        if not hasattr(self, 'drag_start_position'):
+            return
+        
+        # Check if mouse has moved enough to start drag
+        if (event.pos() - self.drag_start_position).manhattanLength() < 10:
+            return  # Not enough movement
+        
+        # We are starting a drag, so later mouseRelease should not count as a click.
+        self._drag_started = True
+
+        # Create drag object
+        drag = QDrag(self)
+        mime_data = QMimeData()
+        
+        # Set mime data with series UID
+        # Format: "series_uid:UID" (slice_index will default to 0 in drop handler)
+        mime_data.setText(f"series_uid:{self.series_uid}")
+        drag.setMimeData(mime_data)
+        
+        # Create drag pixmap (thumbnail of this series)
+        if self.thumbnail_image is not None:
+            # Create a small pixmap from thumbnail
+            pixmap = QPixmap.fromImage(self._thumbnail_to_qimage(self.thumbnail_image))
+            # Scale to reasonable drag size
+            drag_pixmap = pixmap.scaled(64, 64, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            drag.setPixmap(drag_pixmap)
+            drag.setHotSpot(QPoint(32, 32))
+        
+        # Execute drag
+        drag.exec(Qt.DropAction.CopyAction)
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        """Emit clicked only if this was not part of a drag."""
+        if event.button() == Qt.MouseButton.LeftButton:
+            if not getattr(self, "_drag_started", False):
+                if self.target_slice_index is not None and self.study_uid:
+                    self.instance_clicked.emit(self.study_uid, self.series_uid, self.target_slice_index)
+                else:
+                    self.clicked.emit(self.series_uid)
+        super().mouseReleaseEvent(event)
+    
+    def contextMenuEvent(self, event) -> None:
+        """
+        Handle right-click context menu event.
+        
+        Args:
+            event: Context menu event
+        """
+        from PySide6.QtWidgets import QMenu
+        
+        # Only show context menu if we have study_uid (required for file path lookup)
+        if not self.study_uid:
+            return
+        
+        context_menu = QMenu(self)
+        navigator = self._get_series_navigator()
+
+        # Close actions (top of menu — primary new feature)
+        close_series_action = context_menu.addAction("Close This Series")
+        close_series_action.triggered.connect(
+            lambda: self.close_series_signal.emit(self.study_uid, self.series_uid)
+        )
+
+        close_study_action = context_menu.addAction("Close This Study")
+        close_study_action.triggered.connect(
+            lambda: self.close_study_signal.emit(self.study_uid)
+        )
+
+        if navigator is not None:
+            context_menu.addSeparator()
+            navigator._add_show_instances_action(context_menu, self.study_uid, self.series_uid)
+
+        context_menu.addSeparator()
+
+        # Add "About This File" action
+        about_this_file_action = context_menu.addAction("About This File...")
+        about_this_file_action.triggered.connect(
+            lambda: self.about_this_file_requested.emit(self.study_uid, self.series_uid)
+        )
+        
+        # Add "Show File in File Explorer" action
+        show_file_action = context_menu.addAction("Show File in File Explorer")
+        show_file_action.triggered.connect(
+            lambda: self.show_file_requested.emit(self.study_uid, self.series_uid)
+        )
+        
+        # Show context menu at cursor position
+        context_menu.exec(event.globalPos())
+
+    def _get_series_navigator(self) -> Optional["SeriesNavigator"]:
+        """Walk up the parent chain to find the owning series navigator."""
+        parent = self.parentWidget()
+        while parent is not None:
+            if isinstance(parent, SeriesNavigator):
+                return parent
+            parent = parent.parentWidget()
+        return None
+    
+    def _thumbnail_to_qimage(self, pil_image) -> QImage:
+        """Convert PIL Image to QImage for drag pixmap."""
+        import numpy as np
+        try:
+            img_array = np.array(pil_image)
+            if not img_array.flags['C_CONTIGUOUS']:
+                img_array = np.ascontiguousarray(img_array)
+            
+            if pil_image.mode == 'L':
+                height, width = img_array.shape
+                return QImage(img_array.data, width, height, width, QImage.Format.Format_Grayscale8)
+            elif pil_image.mode == 'RGB':
+                height, width, channels = img_array.shape
+                return QImage(img_array.data, width, height, width * 3, QImage.Format.Format_RGB888)
+            else:
+                rgb_image = pil_image.convert('RGB')
+                img_array = np.array(rgb_image)
+                if not img_array.flags['C_CONTIGUOUS']:
+                    img_array = np.ascontiguousarray(img_array)
+                height, width, channels = img_array.shape
+                return QImage(img_array.data, width, height, width * 3, QImage.Format.Format_RGB888)
+        except Exception:
+            # Fallback: create empty QImage
+            return QImage(64, 64, QImage.Format.Format_RGB888)
+    
+    def paintEvent(self, event) -> None:
+        """Paint thumbnail image with series number overlay."""
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        # Draw thumbnail image if available
+        if self.thumbnail_image is not None:
+            try:
+                # Validate image dimensions
+                if self.thumbnail_image.width <= 0 or self.thumbnail_image.height <= 0:
+                    raise ValueError("Invalid image dimensions")
+                
+                # Convert PIL Image to QPixmap via numpy array (more reliable than tobytes)
+                # Convert PIL Image to numpy array first
+                img_array = np.array(self.thumbnail_image)
+                
+                # Ensure array is contiguous and in correct format
+                if not img_array.flags['C_CONTIGUOUS']:
+                    img_array = np.ascontiguousarray(img_array)
+                
+                # Convert to QImage based on image mode
+                if self.thumbnail_image.mode == 'L':
+                    # Grayscale: shape is (height, width)
+                    height, width = img_array.shape
+                    qimage = QImage(img_array.data, width, height, 
+                                  width, QImage.Format.Format_Grayscale8)
+                elif self.thumbnail_image.mode == 'RGB':
+                    # RGB: shape is (height, width, 3)
+                    height, width, channels = img_array.shape
+                    qimage = QImage(img_array.data, width, height, 
+                                  width * 3, QImage.Format.Format_RGB888)
+                else:
+                    # Convert to RGB first
+                    rgb_image = self.thumbnail_image.convert('RGB')
+                    img_array = np.array(rgb_image)
+                    if not img_array.flags['C_CONTIGUOUS']:
+                        img_array = np.ascontiguousarray(img_array)
+                    height, width, channels = img_array.shape
+                    qimage = QImage(img_array.data, width, height, 
+                                  width * 3, QImage.Format.Format_RGB888)
+                
+                # Validate QImage was created successfully
+                if qimage.isNull():
+                    raise ValueError("Failed to create QImage")
+                
+                pixmap = QPixmap.fromImage(qimage)
+                if pixmap.isNull():
+                    raise ValueError("Failed to create QPixmap")
+                
+                # Scale to fit thumbnail size (maintain aspect ratio)
+                scaled_pixmap = pixmap.scaled(self.width() - 4, self.height() - 4,
+                                             Qt.AspectRatioMode.KeepAspectRatio,
+                                             Qt.TransformationMode.SmoothTransformation)
+                # Center the image
+                x = (self.width() - scaled_pixmap.width()) // 2
+                y = (self.height() - scaled_pixmap.height()) // 2
+                painter.drawPixmap(x, y, scaled_pixmap)
+            except Exception as e:
+                # Draw placeholder if image conversion fails
+                print(f"Error painting thumbnail: {e}")
+                painter.fillRect(self.rect(), QColor(128, 128, 128))
+                painter.setPen(QColor(255, 255, 255))
+                painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "Error")
+        else:
+            # Draw placeholder if no image
+            # Check if this might be a compression error by checking if thumbnail is compression error marker
+            if (self.thumbnail_image is not None and 
+                hasattr(self.thumbnail_image, 'size') and 
+                self.thumbnail_image.size == (57, 57)):
+                # Might be compression error thumbnail - use different color
+                painter.fillRect(self.rect(), QColor(200, 150, 150))  # Light red
+                painter.setPen(QColor(255, 255, 255))
+                painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "COMP")
+            else:
+                painter.fillRect(self.rect(), QColor(128, 128, 128))
+                painter.setPen(QColor(255, 255, 255))
+                painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "No Image")
+        
+        # Draw series number overlay (top-left corner)
+        painter.setPen(QColor(255, 255, 0))  # Yellow text
+        painter.setBrush(QColor(0, 0, 0, 180))  # Semi-transparent black background
+        font = QFont()
+        font.setBold(True)
+        font.setPointSize(9)
+        painter.setFont(font)
+        
+        series_text = self.display_label if self.display_label else f"S{self.series_number}"
+        text_rect = painter.fontMetrics().boundingRect(series_text)
+        padding = 4
+        bg_rect = text_rect.adjusted(-padding, -padding, padding, padding)
+        # Position in top-left corner with padding
+        top_left = self.rect().topLeft()
+        bg_rect.moveTopLeft(QPoint(int(top_left.x()) + padding, int(top_left.y()) + padding))
+        
+        # Draw background rectangle
+        painter.drawRect(bg_rect)
+        # Draw text
+        painter.drawText(bg_rect, Qt.AlignmentFlag.AlignCenter, series_text)
+
+        indicator_text = self._get_multiframe_indicator_text()
+        if indicator_text:
+            indicator_font = QFont()
+            indicator_font.setBold(True)
+            indicator_font.setPointSize(7)
+            painter.setFont(indicator_font)
+            indicator_rect = painter.fontMetrics().boundingRect(indicator_text)
+            indicator_padding = 3
+            indicator_bg_rect = indicator_rect.adjusted(
+                -indicator_padding,
+                -indicator_padding,
+                indicator_padding,
+                indicator_padding,
+            )
+            bottom_left = self.rect().bottomLeft()
+            indicator_bg_rect.moveBottomLeft(
+                QPoint(
+                    int(bottom_left.x()) + indicator_padding,
+                    int(bottom_left.y()) - indicator_padding,
+                )
+            )
+            painter.setPen(QColor(255, 255, 0))
+            painter.setBrush(QColor(0, 0, 0, 180))
+            painter.drawRect(indicator_bg_rect)
+            painter.drawText(indicator_bg_rect, Qt.AlignmentFlag.AlignCenter, indicator_text)
+
+        # Draw colored subwindow-assignment dots in the top-right corner.
+        # Each dot is 8 px diameter; consecutive dots are spaced 10 px apart leftward.
+        DOT_DIAMETER = 8
+        DOT_SPACING = 10
+        DOT_MARGIN = 3  # distance from right/top edge
+        for i, slot_idx in enumerate(self._dot_slots):
+            color_str = SUBWINDOW_DOT_COLORS.get(slot_idx, "#FFFFFF")
+            dot_color = QColor(color_str)
+            x = self.width() - DOT_MARGIN - DOT_DIAMETER - i * DOT_SPACING
+            y = DOT_MARGIN
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(dot_color)
+            painter.drawEllipse(x, y, DOT_DIAMETER, DOT_DIAMETER)
 
 
 class SeriesNavigator(QWidget):
@@ -147,13 +596,7 @@ class SeriesNavigator(QWidget):
         action.setChecked(self._show_instances_separately)
         can_toggle = self._show_instances_separately or self.can_expand_series(study_uid, series_uid)
         action.setEnabled(can_toggle)
-        # Do not connect triggered → Signal.emit directly: PySide6 may invoke the slot
-        # with no arguments while show_instances_separately_toggled is Signal(bool).
-        action.triggered.connect(
-            lambda *args, act=action: self.show_instances_separately_toggled.emit(
-                act.isChecked()
-            )
-        )
+        action.triggered.connect(self.show_instances_separately_toggled.emit)
 
     def _show_navigator_context_menu(self, global_pos: QPoint) -> None:
         """Show a context menu for the navigator background/blank space."""
@@ -206,6 +649,67 @@ class SeriesNavigator(QWidget):
         # Top margin (5px) + label row (18px) + thumbnail row (68px) + border (2px) + bottom margin (1px) = 94px
         # Round up to 95px for safety
         self.setFixedHeight(95)
+    
+    def _get_study_label(self, dataset: Dataset) -> str:
+        """
+        Extract study label from dataset.
+        
+        Returns StudyDescription if available, otherwise returns truncated StudyInstanceUID.
+        
+        Args:
+            dataset: DICOM dataset to extract study information from
+            
+        Returns:
+            Study label string (description or truncated UID)
+        """
+        # Try to get StudyDescription first
+        study_desc = getattr(dataset, 'StudyDescription', None)
+        if study_desc and str(study_desc).strip():
+            # Truncate if too long (max 30 chars)
+            desc_str = str(study_desc).strip()
+            if len(desc_str) > 30:
+                return desc_str[:27] + "..."
+            return desc_str
+        
+        # Fallback to StudyInstanceUID (truncated)
+        study_uid = getattr(dataset, 'StudyInstanceUID', None)
+        if study_uid:
+            uid_str = str(study_uid)
+            if len(uid_str) > 30:
+                return uid_str[:27] + "..."
+            return uid_str
+        
+        # Final fallback
+        return "Unknown Study"
+
+    def _build_instance_entries(self, datasets: List[Dataset]) -> List[Tuple[int, Dataset, str]]:
+        """Return one entry per original instance in a flattened series list."""
+        entries: List[Tuple[int, Dataset, str]] = []
+        seen_original_ids: set[int] = set()
+        used_instance_numbers: set[str] = set()
+        ordinal = 1
+
+        for slice_index, dataset in enumerate(datasets):
+            original_dataset = getattr(dataset, '_original_dataset', dataset)
+            original_id = id(original_dataset)
+            if original_id in seen_original_ids:
+                continue
+            seen_original_ids.add(original_id)
+
+            instance_number = getattr(original_dataset, 'InstanceNumber', None)
+            label = None
+            if instance_number is not None:
+                instance_number_str = str(instance_number).strip()
+                if instance_number_str and instance_number_str not in used_instance_numbers:
+                    label = f"I{instance_number_str}"
+                    used_instance_numbers.add(instance_number_str)
+            if not label:
+                label = f"#{ordinal}"
+
+            entries.append((slice_index, dataset, label))
+            ordinal += 1
+
+        return entries
     
     def update_series_list(self, studies: Dict[str, Any], current_study_uid: str, current_series_uid: str) -> None:
         """
@@ -269,7 +773,7 @@ class SeriesNavigator(QWidget):
                     break
             
             if first_dataset:
-                study_label_text = study_label_from_dataset(first_dataset)
+                study_label_text = self._get_study_label(first_dataset)
             
             # Build list of (series_number, series_uid, first_dataset) for this study
             series_list = []
@@ -384,7 +888,7 @@ class SeriesNavigator(QWidget):
                     and multiframe_info.instance_count > 1
                     and multiframe_info.max_frame_count > 1
                 ):
-                    instance_entries = build_instance_entries_for_navigator(study_series[series_uid])
+                    instance_entries = self._build_instance_entries(study_series[series_uid])
                     self._instance_start_indices[(study_uid, series_uid)] = [
                         slice_index for slice_index, _, _ in instance_entries
                     ]

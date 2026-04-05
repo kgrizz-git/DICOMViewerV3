@@ -111,6 +111,8 @@ This file tracks active and near-term tasks.
 - [ ] **[P2]** For ROIs, allow computing and displaying stats per color channel (RGB, etc.) (off by default, can be enabled in settings)
 - [ ] **[P2]** For screenshot export, allow choosing to export multi-window view as single image, as well. Maybe also entire application window as single image, including left/right panes and toolbar etc (if currently displayed).
 - [ ] **[P2]** In overlay  config, allow something like "simple view" and "detailed view", where additional tags can be shown, and spacebar cycles through simple, detailed, and hidden views.
+- [ ] **[P2]** When projection is enabled, allow to show projection pixel values on histogram.
+- [ ] **[P2]** Enable adding multiple images distributions to histogram for comparison (probably via button histogram). Use different colors for each distribution.
 
 ## Documentation
 

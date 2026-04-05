@@ -1233,24 +1233,35 @@ class DICOMViewerApp(QObject):
 
     def _get_subwindow_assignments(self) -> Dict[int, Tuple[str, str, int]]:
         """
-        Build a mapping of subwindow slot index → (study_uid, series_key, slice_index) for every
-        subwindow that currently has a dataset loaded.
+        Build a mapping of grid **slot** index → (study_uid, series_key, slice_index) for each
+        slot that has a loaded series.
 
-        Used to drive the colored dot indicators in SeriesNavigator.
+        Slot indices (0–3) match the colored window dots in SeriesNavigator and the 2×2 grid
+        positions. ``multi_window_layout.get_slot_to_view()[s]`` is the **view** index shown
+        in slot ``s``; dataset state for that view lives in ``subwindow_data[view_idx]``.
+        After **Swap Windows**, slot→view changes while ``subwindow_data`` stays keyed by view,
+        so assignments must be derived from ``slot_to_view`` (not raw ``subwindow_data`` keys).
 
         Returns:
-            Dict[int, Tuple[str, str, int]] — keys are subwindow indices (0–3), values are
-            (current_study_uid, current_series_uid, current_slice_index) for that slot.
+            Dict mapping slot index (0–3) to
+            (current_study_uid, current_series_uid, current_slice_index).
         """
-        return {
-            idx: (
-                data['current_study_uid'],
-                data['current_series_uid'],
-                data.get('current_slice_index', 0),
+        slot_to_view = self.multi_window_layout.get_slot_to_view()
+        assignments: Dict[int, Tuple[str, str, int]] = {}
+        for slot_idx, view_idx in enumerate(slot_to_view):
+            if slot_idx >= 4:
+                break
+            if not isinstance(view_idx, int) or view_idx < 0 or view_idx > 3:
+                continue
+            data = self.subwindow_data.get(view_idx, {})
+            if data.get("current_dataset") is None:
+                continue
+            assignments[slot_idx] = (
+                data["current_study_uid"],
+                data["current_series_uid"],
+                data.get("current_slice_index", 0),
             )
-            for idx, data in self.subwindow_data.items()
-            if data.get('current_dataset') is not None
-        }
+        return assignments
 
     def _clear_subwindow(self, idx: int) -> None:
         """
@@ -1776,6 +1787,8 @@ class DICOMViewerApp(QObject):
         self._subwindow_lifecycle_controller.schedule_viewport_resized()
         if self.multi_window_layout.get_layout_mode() != "2x2":
             self.main_window.update_status("Slot order updated; switch to 2x2 to see positions.")
+        # Navigator dots are keyed by grid slot; slot_to_view changed, so refresh assignments.
+        self.series_navigator.set_subwindow_assignments(self._get_subwindow_assignments())
         # Refresh window-slot thumbnail if present
         widget = getattr(self.main_window, "window_slot_map_widget", None)
         if widget is not None:

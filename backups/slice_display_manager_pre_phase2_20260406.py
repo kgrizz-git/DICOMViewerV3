@@ -30,8 +30,6 @@ import numpy as np
 from PIL import Image
 from pydicom.dataset import Dataset
 from core.dicom_processor import DICOMProcessor
-from core.slice_display_lut import apply_window_level_rescale_conversion
-from core.slice_display_pixels import create_slice_projection_pil_image
 from core.dicom_parser import DICOMParser
 from core.dicom_organizer import DICOMOrganizer
 from gui.image_viewer import ImageViewer
@@ -232,7 +230,7 @@ class SliceDisplayManager:
     ) -> Optional[Image.Image]:
         """
         Create a projection image from multiple slices.
-
+        
         Args:
             dataset: Current dataset (for metadata)
             current_studies: Dictionary of studies
@@ -244,24 +242,90 @@ class SliceDisplayManager:
             use_rescaled_values: Whether to use rescaled values
             rescale_slope: Rescale slope
             rescale_intercept: Rescale intercept
-
+            
         Returns:
             PIL Image or None if projection failed
         """
-        return create_slice_projection_pil_image(
-            self.dicom_processor,
-            self.projection_type,
-            self.projection_slice_count,
-            current_studies,
-            current_study_uid,
-            current_series_uid,
-            current_slice_index,
-            window_center,
-            window_width,
-            use_rescaled_values,
-            rescale_slope,
-            rescale_intercept,
-        )
+        # Get series datasets
+        if not current_studies or not current_study_uid or not current_series_uid:
+            return None
+        
+        if (current_study_uid not in current_studies or 
+            current_series_uid not in current_studies[current_study_uid]):
+            return None
+        
+        series_datasets = current_studies[current_study_uid][current_series_uid]
+        total_slices = len(series_datasets)
+        
+        if total_slices < 2:
+            # Need at least 2 slices for projection
+            return None
+        
+        # Calculate slice range
+        # Start from current_slice_index, gather projection_slice_count slices
+        start_slice = max(0, current_slice_index)
+        end_slice = min(total_slices - 1, current_slice_index + self.projection_slice_count - 1)
+        
+        # Ensure we have at least 2 slices
+        if end_slice - start_slice + 1 < 2:
+            # Not enough slices available
+            return None
+        
+        # Gather slices for projection
+        projection_slices = []
+        for i in range(start_slice, end_slice + 1):
+            if 0 <= i < total_slices:
+                projection_slices.append(series_datasets[i])
+        
+        if len(projection_slices) < 2:
+            return None
+        
+        # Calculate projection based on type
+        projection_array = None
+        if self.projection_type == "aip":
+            projection_array = self.dicom_processor.average_intensity_projection(projection_slices)
+        elif self.projection_type == "mip":
+            projection_array = self.dicom_processor.maximum_intensity_projection(projection_slices)
+        elif self.projection_type == "minip":
+            projection_array = self.dicom_processor.minimum_intensity_projection(projection_slices)
+        
+        if projection_array is None:
+            return None
+        
+        # Apply rescale if needed
+        if use_rescaled_values and rescale_slope is not None and rescale_intercept is not None:
+            projection_array = projection_array.astype(np.float32) * float(rescale_slope) + float(rescale_intercept)
+        
+        # Apply window/level
+        if window_center is not None and window_width is not None:
+            processed_array = self.dicom_processor.apply_window_level(
+                projection_array,
+                window_center,
+                window_width
+            )
+        else:
+            # No window/level, normalize to 0-255
+            processed_array = projection_array.astype(np.float32)
+            if processed_array.max() > processed_array.min():
+                processed_array = ((processed_array - processed_array.min()) / 
+                                 (processed_array.max() - processed_array.min()) * 255.0)
+            processed_array = np.clip(processed_array, 0, 255).astype(np.uint8)
+        
+        # Convert to PIL Image
+        try:
+            if len(processed_array.shape) == 2:
+                # Grayscale
+                image = Image.fromarray(processed_array, mode='L')
+            elif len(processed_array.shape) == 3 and processed_array.shape[2] == 3:
+                # RGB
+                image = Image.fromarray(processed_array, mode='RGB')
+            else:
+                # Fallback
+                image = Image.fromarray(processed_array)
+            return image
+        except Exception as e:
+            print(f"Error converting projection array to PIL Image: {e}")
+            return None
     
     def display_slice(  # pyright: ignore[reportGeneralTypeIssues]
         self,
@@ -485,20 +549,23 @@ class SliceDisplayManager:
                             if DEBUG_WL:
                                 print(f"[DEBUG-WL] embedded from get_window_level_from_dataset: wc={wc} ww={ww} is_rescaled={is_rescaled}")
                         if wc is not None and ww is not None:
-                            orig_wc, orig_ww = wc, ww
-                            wc, ww = apply_window_level_rescale_conversion(
-                                wc,
-                                ww,
-                                is_rescaled=is_rescaled,
-                                use_rescaled_values=use_rescaled_values,
-                                rescale_slope=rescale_slope,
-                                rescale_intercept=rescale_intercept,
-                                dicom_processor=self.dicom_processor,
-                            )
-                            if DEBUG_WL and (wc != orig_wc or ww != orig_ww):
-                                print(
-                                    f"[DEBUG-WL] WL rescale conversion: ({orig_wc}, {orig_ww}) -> ({wc}, {ww})"
-                                )
+                            # Convert if needed
+                            if is_rescaled and not use_rescaled_values:
+                                if (rescale_slope is not None and rescale_intercept is not None and rescale_slope != 0.0):
+                                    orig_wc, orig_ww = wc, ww
+                                    wc, ww = self.dicom_processor.convert_window_level_rescaled_to_raw(
+                                        wc, ww, rescale_slope, rescale_intercept
+                                    )
+                                    if DEBUG_WL:
+                                        print(f"[DEBUG-WL] converted rescaled->raw: ({orig_wc}, {orig_ww}) -> ({wc}, {ww})")
+                            elif not is_rescaled and use_rescaled_values:
+                                if (rescale_slope is not None and rescale_intercept is not None):
+                                    orig_wc, orig_ww = wc, ww
+                                    wc, ww = self.dicom_processor.convert_window_level_raw_to_rescaled(
+                                        wc, ww, rescale_slope, rescale_intercept
+                                    )
+                                    if DEBUG_WL:
+                                        print(f"[DEBUG-WL] converted raw->rescaled: ({orig_wc}, {orig_ww}) -> ({wc}, {ww})")
                             stored_window_center = wc
                             stored_window_width = ww
                             if DEBUG_WL:
@@ -653,20 +720,20 @@ class SliceDisplayManager:
                         if DEBUG_WL:
                             print(f"[DEBUG-WL] fallback from get_window_level_from_dataset: wc={wc} ww={ww} is_rescaled={is_rescaled}")
                     if wc is not None and ww is not None:
-                        orig_wc, orig_ww = wc, ww
-                        wc, ww = apply_window_level_rescale_conversion(
-                            wc,
-                            ww,
-                            is_rescaled=is_rescaled,
-                            use_rescaled_values=use_rescaled_values,
-                            rescale_slope=rescale_slope,
-                            rescale_intercept=rescale_intercept,
-                            dicom_processor=self.dicom_processor,
-                        )
-                        if DEBUG_WL and (wc != orig_wc or ww != orig_ww):
-                            print(
-                                f"[DEBUG-WL] fallback WL rescale conversion: ({orig_wc}, {orig_ww}) -> ({wc}, {ww})"
-                            )
+                        if is_rescaled and not use_rescaled_values:
+                            if (rescale_slope is not None and rescale_intercept is not None and rescale_slope != 0.0):
+                                wc, ww = self.dicom_processor.convert_window_level_rescaled_to_raw(
+                                    wc, ww, rescale_slope, rescale_intercept
+                                )
+                                if DEBUG_WL:
+                                    print(f"[DEBUG-WL] fallback converted rescaled->raw -> wc={wc} ww={ww}")
+                        elif not is_rescaled and use_rescaled_values:
+                            if (rescale_slope is not None and rescale_intercept is not None):
+                                wc, ww = self.dicom_processor.convert_window_level_raw_to_rescaled(
+                                    wc, ww, rescale_slope, rescale_intercept
+                                )
+                                if DEBUG_WL:
+                                    print(f"[DEBUG-WL] fallback converted raw->rescaled -> wc={wc} ww={ww}")
                         window_center = wc
                         window_width = ww
                         self.view_state_manager.current_window_center = wc
@@ -966,15 +1033,17 @@ class SliceDisplayManager:
                         rescale_intercept=rescale_intercept
                     )
                     if wc is not None and ww is not None:
-                        wc, ww = apply_window_level_rescale_conversion(
-                            wc,
-                            ww,
-                            is_rescaled=is_rescaled,
-                            use_rescaled_values=use_rescaled_values,
-                            rescale_slope=rescale_slope,
-                            rescale_intercept=rescale_intercept,
-                            dicom_processor=self.dicom_processor,
-                        )
+                        # Convert if needed
+                        if is_rescaled and not use_rescaled_values:
+                            if (rescale_slope is not None and rescale_intercept is not None and rescale_slope != 0.0):
+                                wc, ww = self.dicom_processor.convert_window_level_rescaled_to_raw(
+                                    wc, ww, rescale_slope, rescale_intercept
+                                )
+                        elif not is_rescaled and use_rescaled_values:
+                            if (rescale_slope is not None and rescale_intercept is not None):
+                                wc, ww = self.dicom_processor.convert_window_level_raw_to_rescaled(
+                                    wc, ww, rescale_slope, rescale_intercept
+                                )
                         # print(f"[DEBUG-PRESET-MATCH] Setting window/level from dataset: wc={wc:.2f}, ww={ww:.2f}, block_signals=True")
                         if update_controls:
                             self.window_level_controls.set_window_level(wc, ww, block_signals=True, unit=unit)

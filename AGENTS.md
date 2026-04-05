@@ -54,8 +54,10 @@ src/
 │   ├── loading_progress_manager.py    # Animated loading dots, QProgressDialog, cancellation (used by FileOperationsHandler)
 │   ├── privacy_controller.py          # Privacy-mode propagation and overlay refresh (called from main on privacy toggle)
 │   ├── export_manager.py              # Export orchestration (paths, progress, slice/selection export)
-│   └── export_rendering.py            # Pillow projection, photometric handling, overlay/ROI rasterization for export
-├── gui/                           # All Qt widgets, dialogs, layout; e.g. overlay_items_factory (QGraphics overlays), main_window_*_builder (menus/toolbar)
+│   ├── export_rendering.py            # Pillow projection, photometric handling, overlay/ROI rasterization for export
+│   ├── slice_display_lut.py           # Window/level raw vs rescaled alignment helpers (used by SliceDisplayManager)
+│   └── slice_display_pixels.py        # Intensity projection → PIL pipeline (used by SliceDisplayManager)
+├── gui/                           # All Qt widgets, dialogs, layout; e.g. overlay_items_factory, series_navigator_view (thumbnails), series_navigator_model (labels/instance entries), main_window_*_builder (menus/toolbar)
 ├── tools/                         # Interactive tools (ROI, measurement, annotation, crosshair)
 └── utils/                         # Utilities (config, undo/redo, DICOM helpers, etc.)
     ├── config_manager.py          # Thin facade: inherits all config mixins; owns __init__, _load_config, save_config, get, set
