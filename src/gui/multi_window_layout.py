@@ -521,13 +521,14 @@ class MultiWindowLayout(QWidget):
         """
         return self.subwindows.copy()
     
-    def _on_assign_series_requested(self, series_uid: str, slice_index: int) -> None:
+    def _on_assign_series_requested(self, series_uid: str, slice_index: int, study_uid: str = "") -> None:
         """
         Handle series assignment request from a subwindow.
         
         Args:
             series_uid: Series UID to assign
             slice_index: Slice index to assign
+            study_uid: Study UID when known from drag payload (may be empty)
         """
         # This will be handled by the main application
         # Emit a signal that main.py can connect to

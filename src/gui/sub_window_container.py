@@ -29,6 +29,38 @@ from gui.image_viewer import ImageViewer
 from gui.style_constants import FOCUS_BORDER_COLOR
 
 
+def _parse_series_drop_mime(text: str) -> tuple[str, int, str]:
+    """
+    Parse navigator / thumbnail drag text into (series_uid, slice_index, study_uid).
+
+    Formats:
+    - dv3_assign\\t<study_uid>\\t<series_uid>\\t<slice_index> — per-instance thumbnail drag
+    - series_uid:<uid> — whole series, first slice; study resolved at drop
+    - series_uid:<uid>:<n> — slice index n (composite UIDs use dots/underscores, not extra colons)
+    """
+    study_uid = ""
+    if text.startswith("dv3_assign\t"):
+        parts = text.split("\t")
+        if len(parts) >= 4:
+            try:
+                return parts[2], int(parts[3]), parts[1]
+            except ValueError:
+                return "", 0, ""
+        return "", 0, ""
+    if text.startswith("series_uid:"):
+        rest = text[len("series_uid:") :]
+        if not rest:
+            return "", 0, ""
+        if ":" in rest:
+            uid_part, slice_part = rest.rsplit(":", 1)
+            try:
+                return uid_part, int(slice_part), study_uid
+            except ValueError:
+                return rest, 0, study_uid
+        return rest, 0, study_uid
+    return "", 0, ""
+
+
 class SubWindowContainer(QFrame):
     """
     Container widget wrapping an ImageViewer for multi-window layouts.
@@ -42,7 +74,8 @@ class SubWindowContainer(QFrame):
     
     # Signals
     focus_changed = Signal(bool)  # Emitted when focus state changes (True = focused)
-    assign_series_requested = Signal(str, int)  # Emitted when series/slice assignment requested (series_uid, slice_index)
+    # series_uid, slice_index in flattened series list; study_uid "" = resolve from series (legacy drops)
+    assign_series_requested = Signal(str, int, str)
     context_menu_requested = Signal()  # Emitted when context menu is requested
     expand_to_1x1_requested = Signal()  # Emitted when user double-clicks on image/background to expand this pane to 1x1
     
@@ -280,11 +313,9 @@ class SubWindowContainer(QFrame):
         Args:
             event: Drag enter event
         """
-        # Check if mime data contains series UID
         if event.mimeData().hasText():
             text = event.mimeData().text()
-            # Check if it's a series UID (starts with "series_uid:")
-            if text.startswith("series_uid:"):
+            if text.startswith("series_uid:") or text.startswith("dv3_assign\t"):
                 event.acceptProposedAction()
                 return
         
@@ -297,10 +328,9 @@ class SubWindowContainer(QFrame):
         Args:
             event: Drag move event
         """
-        # Check if mime data contains series UID
         if event.mimeData().hasText():
             text = event.mimeData().text()
-            if text.startswith("series_uid:"):
+            if text.startswith("series_uid:") or text.startswith("dv3_assign\t"):
                 event.acceptProposedAction()
                 return
         
@@ -318,29 +348,12 @@ class SubWindowContainer(QFrame):
             return
         
         text = event.mimeData().text()
-        if not text.startswith("series_uid:"):
+        series_uid, slice_index, study_uid = _parse_series_drop_mime(text)
+        if not series_uid:
             event.ignore()
             return
-        
-        # Extract series UID and optional slice index
-        # Format: "series_uid:UID:slice_index" or "series_uid:UID"
-        parts = text.split(":")
-        if len(parts) < 2:
-            event.ignore()
-            return
-        
-        series_uid = parts[1]
-        slice_index = 0  # Default to first slice
-        
-        # Check if slice index is provided
-        if len(parts) >= 3:
-            try:
-                slice_index = int(parts[2])
-            except ValueError:
-                slice_index = 0
-        
-        # Emit signal to assign series/slice
-        self.assign_series_requested.emit(series_uid, slice_index)
+
+        self.assign_series_requested.emit(series_uid, slice_index, study_uid)
         
         event.acceptProposedAction()
     

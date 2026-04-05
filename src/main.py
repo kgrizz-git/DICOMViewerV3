@@ -1865,11 +1865,16 @@ class DICOMViewerApp(QObject):
         dlg.show()
         dlg.raise_()
     
-    def _on_assign_series_requested(self, series_uid: str, slice_index: int) -> None:
+    def _on_assign_series_requested(
+        self, series_uid: str, slice_index: int, study_uid: str = ""
+    ) -> None:
         """Handle series assignment request from subwindow; sender() identifies which subwindow."""
         sender = self.sender()
         if isinstance(sender, SubWindowContainer):
-            self._subwindow_lifecycle_controller.assign_series_to_subwindow(sender, series_uid, slice_index)
+            target_study = study_uid if study_uid else None
+            self._subwindow_lifecycle_controller.assign_series_to_subwindow(
+                sender, series_uid, slice_index, target_study_uid=target_study
+            )
     
     def _assign_series_to_subwindow(self, subwindow: SubWindowContainer, series_uid: str, slice_index: int) -> None:
         """Assign a series/slice to a specific subwindow. Delegates to subwindow lifecycle controller."""

@@ -45,6 +45,7 @@ from PySide6.QtCore import QTimer
 
 from utils.dicom_utils import get_composite_series_key
 from utils.debug_flags import DEBUG_LOADING, DEBUG_NAV, DEBUG_SERIES, DEBUG_MEASUREMENT_SERIES
+from gui.series_navigator_model import build_instance_entries_for_navigator
 
 # Human-readable window labels for error messages (1-based).
 _WINDOW_LABELS = ["Window 1", "Window 2", "Window 3", "Window 4"]
@@ -755,6 +756,61 @@ class FileSeriesLoadingCoordinator:
         """Handle series assignment request from context menu (assigns to focused subwindow)."""
         self.on_series_navigator_selected(series_uid)
 
+    def _try_navigate_multiframe_instance(
+        self,
+        app: Any,
+        focused_idx: int,
+        study_uid: str,
+        series_uid: str,
+        slice_index: int,
+        direction: int,
+    ) -> bool:
+        """
+        When Show Instances Separately is on and the series is multi-instance multiframe,
+        jump to the previous/next instance start slice. Return False so caller runs
+        series-level navigation (at first/last instance).
+        """
+        if not app.config_manager.get_show_instances_separately():
+            return False
+        if not study_uid or not series_uid:
+            return False
+        studies = app.current_studies
+        if study_uid not in studies or series_uid not in studies[study_uid]:
+            return False
+        series_datasets = studies[study_uid][series_uid]
+        if not series_datasets:
+            return False
+        info = app.dicom_organizer.get_series_multiframe_info(study_uid, series_uid)
+        if info is None or info.instance_count <= 1 or info.max_frame_count <= 1:
+            return False
+        entries = build_instance_entries_for_navigator(series_datasets)
+        if len(entries) <= 1:
+            return False
+        starts = [e[0] for e in entries]
+        inst_i = 0
+        for j in range(len(starts) - 1, -1, -1):
+            if slice_index >= starts[j]:
+                inst_i = j
+                break
+        focused_subwindow = app.multi_window_layout.get_focused_subwindow()
+        if focused_subwindow is None:
+            return False
+        if direction < 0:
+            if inst_i <= 0:
+                return False
+            target_slice = starts[inst_i - 1]
+        else:
+            if inst_i >= len(starts) - 1:
+                return False
+            target_slice = starts[inst_i + 1]
+        self.assign_series_to_subwindow(
+            focused_subwindow,
+            series_uid,
+            target_slice,
+            target_study_uid=study_uid,
+        )
+        return True
+
     def on_series_navigation_requested(self, direction: int) -> None:
         """
         Handle series navigation request from image viewer (focused subwindow only).
@@ -943,6 +999,15 @@ class FileSeriesLoadingCoordinator:
                 app.slice_display_manager.set_current_data_context(
                     app.current_studies, focused_study_uid, focused_series_uid, focused_slice_index
                 )
+            if self._try_navigate_multiframe_instance(
+                app,
+                focused_idx,
+                focused_study_uid,
+                focused_series_uid,
+                focused_slice_index,
+                direction,
+            ):
+                return
             flat_series_list = self.build_flat_series_list(app.current_studies)
             if not flat_series_list:
                 if DEBUG_NAV:

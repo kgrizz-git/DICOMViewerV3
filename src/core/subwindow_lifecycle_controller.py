@@ -1140,6 +1140,14 @@ class SubwindowLifecycleController:
         """Handle layout change request from image viewer context menu."""
         self.app.multi_window_layout.set_layout(layout_mode)
 
-    def assign_series_to_subwindow(self, subwindow: Any, series_uid: str, slice_index: int) -> None:
+    def assign_series_to_subwindow(
+        self,
+        subwindow: Any,
+        series_uid: str,
+        slice_index: int,
+        target_study_uid: Optional[str] = None,
+    ) -> None:
         """Assign a series/slice to a specific subwindow. Delegates to file/series loading coordinator."""
-        self.app._file_series_coordinator.assign_series_to_subwindow(subwindow, series_uid, slice_index)
+        self.app._file_series_coordinator.assign_series_to_subwindow(
+            subwindow, series_uid, slice_index, target_study_uid=target_study_uid
+        )

@@ -5,7 +5,11 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ## [Unreleased]
 
 ### Fixed
+- **Series navigator — instance thumbnail drag-and-drop**: Dragging a per-instance thumbnail now encodes study, series, and **slice index** (`dv3_assign` MIME); subwindow drop passes **study_uid** into `assign_series_to_subwindow` so the correct instance loads (`series_navigator_view.py`, `sub_window_container.py`, `main.py`, `subwindow_lifecycle_controller.py`).
 - **Series navigator dots after Swap Windows**: `_get_subwindow_assignments()` now maps **grid slot** (0–3) → series using `multi_window_layout.get_slot_to_view()`, matching dot colors to on-screen window positions; **Swap** also calls `set_subwindow_assignments` so thumbnails repaint immediately (`main.py`).
+
+### Changed
+- **Multiframe + Show Instances Separately — keyboard**: Left/right series navigation (image viewer / main window) steps **previous/next instance** within the current series when applicable; at the **first** or **last** instance it falls through to **previous/next series** as before (`file_series_loading_coordinator.py`).
 - **Annotation Options live preview**: ROI / measurement line thickness, unified ROI and measurement colors, text annotation color, arrow color and size, and **ROI statistics visibility** checkboxes update the viewer **as you change them** (same as font size). **Cancel** restores all values—including default statistics visibility—from when the dialog opened (`annotation_options_dialog.py`).
 - **Multi-pane overlay refresh**: Overlay font/color/family changes from **Settings**, **Overlay Settings** (live preview), and **overlay tag configuration** now rebuild corner overlays in **every** subwindow, not only the focused pane (toolbar +/- already refreshed all panes).
 - **Multi-pane annotation / ROI style refresh**: **Annotation Options** (and customization import, which reuses the same path) now updates ROI line/font settings, measurements, text/arrow annotations, default ROI statistics visibility, and per-slice display for **each** loaded subwindow so colors and fonts stay in sync without changing slice.

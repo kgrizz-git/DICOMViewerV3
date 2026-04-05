@@ -244,10 +244,22 @@ class SeriesThumbnail(QFrame):
         # Create drag object
         drag = QDrag(self)
         mime_data = QMimeData()
-        
-        # Set mime data with series UID
-        # Format: "series_uid:UID" (slice_index will default to 0 in drop handler)
-        mime_data.setText(f"series_uid:{self.series_uid}")
+        # Per-instance thumbnail: include study + slice so drop opens that instance, not slice 0.
+        if (
+            self.target_slice_index is not None
+            and self.study_uid
+            and str(self.study_uid).strip()
+        ):
+            mime_data.setText(
+                "dv3_assign\t"
+                f"{self.study_uid}\t{self.series_uid}\t{int(self.target_slice_index)}"
+            )
+        elif self.target_slice_index is not None:
+            mime_data.setText(
+                f"series_uid:{self.series_uid}:{int(self.target_slice_index)}"
+            )
+        else:
+            mime_data.setText(f"series_uid:{self.series_uid}")
         drag.setMimeData(mime_data)
         
         # Create drag pixmap (thumbnail of this series)
