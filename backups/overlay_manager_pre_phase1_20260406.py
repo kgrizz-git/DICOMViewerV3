@@ -20,6 +20,7 @@ Requirements:
 
 from PySide6.QtWidgets import QGraphicsTextItem, QGraphicsItem, QWidget, QLabel, QVBoxLayout
 from PySide6.QtCore import Qt, QRectF, QTimer
+from PySide6.QtGui import QFont, QColor, QTransform, QTextDocument, QTextOption
 from typing import Any, List, Dict, Optional
 import pydicom
 from pydicom.dataset import Dataset
@@ -30,7 +31,6 @@ from utils.dicom_utils import get_patient_tag_keywords
 
 from utils.bundled_fonts import make_qfont
 from gui.overlay_text_builder import get_corner_text, get_modality, get_overlay_text
-from gui.overlay_items_factory import create_graphics_overlay_text_item
 from utils.debug_flags import DEBUG_WIDGET_PAN
 
 
@@ -405,8 +405,6 @@ class OverlayManager:
         """
         if size > 0:
             self.font_size = size
-            if self.viewport_overlay_widget is not None:
-                self.viewport_overlay_widget.set_font_size(size)
     
     def set_font_color(self, r: int, g: int, b: int) -> None:
         """
@@ -418,8 +416,6 @@ class OverlayManager:
             b: Blue component (0-255)
         """
         self.font_color = (r, g, b)
-        if self.viewport_overlay_widget is not None:
-            self.viewport_overlay_widget.set_font_color((r, g, b))
 
     def set_font_family(self, family: str) -> None:
         """
@@ -468,10 +464,74 @@ class OverlayManager:
             self.viewport_overlay_widget.set_mpr_banner(text)
     
     def _create_text_item(self, text: str, x: float, y: float, alignment: Qt.AlignmentFlag = Qt.AlignmentFlag.AlignLeft, text_width: Optional[float] = None) -> QGraphicsTextItem:
-        """Delegate QGraphicsTextItem construction to ``overlay_items_factory``."""
-        return create_graphics_overlay_text_item(
-            text, x, y, self.font_color, self.font_size, alignment, text_width
-        )
+        """
+        Create a text item with proper font and styling.
+        
+        Font size is set in absolute pixels, independent of image dimensions.
+        Uses ItemIgnoresTransformations to keep font size constant.
+        
+        Args:
+            text: Text to display
+            x: X position
+            y: Y position
+            alignment: Text alignment (AlignLeft, AlignRight, etc.)
+            
+        Returns:
+            QGraphicsTextItem
+        """
+        text_item = QGraphicsTextItem()
+        text_item.setDefaultTextColor(QColor(*self.font_color))
+        
+        # Set font - use absolute pixel size
+        # Use 6pt minimum, scale if smaller using QTransform
+        if self.font_size < 6:
+            # Use 6pt font and scale down with transform for sizes < 6pt
+            font = QFont("Arial", 6)
+            scale_factor = self.font_size / 6.0
+            transform = QTransform()
+            transform.scale(scale_factor, scale_factor)
+            text_item.setTransform(transform)
+        else:
+            # Use actual font size in points
+            font = QFont("Arial", self.font_size)
+        
+        font.setBold(True)
+        text_item.setFont(font)
+        
+        # Set text with alignment using QTextDocument
+        document = QTextDocument()
+        document.setDefaultFont(font)
+        # Remove default margins to get accurate bounding rect and tighter spacing
+        document.setDocumentMargin(0)
+        # Set text option with proper alignment
+        text_option = QTextOption()
+        if alignment & Qt.AlignmentFlag.AlignRight:
+            text_option.setAlignment(Qt.AlignmentFlag.AlignRight)
+        elif alignment & Qt.AlignmentFlag.AlignLeft:
+            text_option.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        else:
+            text_option.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        document.setDefaultTextOption(text_option)
+        document.setPlainText(text)
+        # For right-aligned text, set a fixed width if provided
+        # This ensures all lines in a corner have the same width and align properly
+        if text_width is not None and (alignment & Qt.AlignmentFlag.AlignRight):
+            document.setTextWidth(text_width)
+        text_item.setDocument(document)
+        
+        # Set flag to ignore parent transformations (keeps font size consistent)
+        # This ensures font size doesn't change when view is zoomed or image size changes
+        text_item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations, True)
+        text_item.setZValue(1000)  # High Z-value to stay above image
+        
+        # Set position - for right-aligned text, adjust x position
+        if alignment & Qt.AlignmentFlag.AlignRight:
+            # Position at x, then adjust based on text width
+            text_item.setPos(x, y)
+        else:
+            text_item.setPos(x, y)
+        
+        return text_item
     
     def create_overlay_items(self, scene, parser: DICOMParser, 
                             position: tuple[int, int] = (10, 10), total_slices: Optional[int] = None,

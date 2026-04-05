@@ -99,3 +99,7 @@ DEBUG_PATIENT_COORDS: bool = False
 # Affects: file_series_loading_coordinator.py, slice_display_manager.py.
 DEBUG_SERIES: bool = False
 
+# Enables verbose YBR→RGB conversion tracing (PhotometricInterpretation, transfer syntax, chroma/RGB means).
+# Affects: core.dicom_color (convert_ybr_to_rgb diagnostic prints).
+DEBUG_YBR: bool = False
+

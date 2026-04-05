@@ -17,9 +17,9 @@ Requirements:
     - ConfigManager for settings
 """
 
-from PySide6.QtWidgets import (QMainWindow, QMenuBar, QStatusBar,
+from PySide6.QtWidgets import (QMainWindow, QMenuBar, QToolBar, QStatusBar,
                                 QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
-                                QMessageBox, QLabel, QSizePolicy, QColorDialog,
+                                QMessageBox, QComboBox, QLabel, QSizePolicy, QColorDialog,
                                 QApplication, QDialog, QTextBrowser, QPushButton, QDialogButtonBox, QMenu,
                                 QScrollArea, QFrame, QGraphicsOpacityEffect, QToolButton)
 from PySide6.QtCore import Qt, Signal, QEvent, QBuffer, QByteArray, QIODevice, QDir, QTimer, QPropertyAnimation
@@ -43,7 +43,6 @@ from version import __version__ as APP_VERSION
 from utils.debug_flags import DEBUG_LAYOUT
 from gui.dialogs.edit_recent_list_dialog import EditRecentListDialog
 from gui.main_window_menu_builder import build_menu_bar
-from gui.main_window_toolbar_builder import build_main_toolbar
 from gui.window_slot_map_widget import WindowSlotMapWidget
 
 
@@ -228,9 +227,200 @@ class MainWindow(QMainWindow):
         build_menu_bar(self)
 
     def _create_toolbar(self) -> None:
-        """Create the application toolbar via the toolbar builder."""
-        build_main_toolbar(self)
-
+        """Create the application toolbar."""
+        toolbar = QToolBar("Main Toolbar", self)
+        toolbar.setMovable(False)
+        self.addToolBar(toolbar)
+        
+        # Mouse interaction mode buttons (exclusive)
+        self.mouse_mode_ellipse_roi_action = QAction("Ellipse ROI", self)
+        self.mouse_mode_ellipse_roi_action.setCheckable(True)
+        self.mouse_mode_ellipse_roi_action.triggered.connect(
+            lambda: self._on_mouse_mode_changed("roi_ellipse")
+        )
+        toolbar.addAction(self.mouse_mode_ellipse_roi_action)
+        
+        self.mouse_mode_rectangle_roi_action = QAction("Rectangle ROI", self)
+        self.mouse_mode_rectangle_roi_action.setCheckable(True)
+        self.mouse_mode_rectangle_roi_action.triggered.connect(
+            lambda: self._on_mouse_mode_changed("roi_rectangle")
+        )
+        toolbar.addAction(self.mouse_mode_rectangle_roi_action)
+        
+        self.mouse_mode_measure_action = QAction("Measure", self)
+        self.mouse_mode_measure_action.setCheckable(True)
+        self.mouse_mode_measure_action.triggered.connect(
+            lambda: self._on_mouse_mode_changed("measure")
+        )
+        toolbar.addAction(self.mouse_mode_measure_action)
+        
+        # Text Annotation tool
+        self.mouse_mode_text_annotation_action = QAction("Text", self)
+        self.mouse_mode_text_annotation_action.setCheckable(True)
+        self.mouse_mode_text_annotation_action.setShortcut(QKeySequence("T"))
+        self.mouse_mode_text_annotation_action.triggered.connect(
+            lambda: self._on_mouse_mode_changed("text_annotation")
+        )
+        toolbar.addAction(self.mouse_mode_text_annotation_action)
+        
+        # Arrow Annotation tool
+        self.mouse_mode_arrow_annotation_action = QAction("Arrow", self)
+        self.mouse_mode_arrow_annotation_action.setCheckable(True)
+        self.mouse_mode_arrow_annotation_action.setShortcut(QKeySequence("A"))
+        self.mouse_mode_arrow_annotation_action.triggered.connect(
+            lambda: self._on_mouse_mode_changed("arrow_annotation")
+        )
+        toolbar.addAction(self.mouse_mode_arrow_annotation_action)
+        
+        self.mouse_mode_crosshair_action = QAction("Crosshair", self)
+        self.mouse_mode_crosshair_action.setCheckable(True)
+        self.mouse_mode_crosshair_action.triggered.connect(
+            lambda: self._on_mouse_mode_changed("crosshair")
+        )
+        toolbar.addAction(self.mouse_mode_crosshair_action)
+        
+        self.mouse_mode_zoom_action = QAction("Zoom", self)
+        self.mouse_mode_zoom_action.setCheckable(True)
+        self.mouse_mode_zoom_action.triggered.connect(
+            lambda: self._on_mouse_mode_changed("zoom")
+        )
+        toolbar.addAction(self.mouse_mode_zoom_action)
+        
+        self.mouse_mode_magnifier_action = QAction("Magnifier", self)
+        self.mouse_mode_magnifier_action.setCheckable(True)
+        self.mouse_mode_magnifier_action.triggered.connect(
+            lambda: self._on_mouse_mode_changed("magnifier")
+        )
+        toolbar.addAction(self.mouse_mode_magnifier_action)
+        
+        self.mouse_mode_pan_action = QAction("Pan", self)
+        self.mouse_mode_pan_action.setCheckable(True)
+        self.mouse_mode_pan_action.setChecked(True)  # Default mode
+        self.mouse_mode_pan_action.triggered.connect(
+            lambda: self._on_mouse_mode_changed("pan")
+        )
+        toolbar.addAction(self.mouse_mode_pan_action)
+        
+        self.mouse_mode_select_action = QAction("Select", self)
+        self.mouse_mode_select_action.setCheckable(True)
+        self.mouse_mode_select_action.triggered.connect(
+            lambda: self._on_mouse_mode_changed("select")
+        )
+        toolbar.addAction(self.mouse_mode_select_action)
+        
+        # Window/Level ROI tool
+        self.mouse_mode_auto_window_level_action = QAction("Window/Level ROI", self)
+        self.mouse_mode_auto_window_level_action.setCheckable(True)
+        self.mouse_mode_auto_window_level_action.triggered.connect(
+            lambda: self._on_mouse_mode_changed("auto_window_level")
+        )
+        toolbar.addAction(self.mouse_mode_auto_window_level_action)
+        
+        toolbar.addSeparator()
+        
+        # Privacy Mode button
+        self.privacy_mode_action = QAction("Privacy is OFF", self)
+        self.privacy_mode_action.setCheckable(True)
+        # Initialize from config - when privacy is OFF, button should be highlighted (checked)
+        privacy_enabled = self.config_manager.get_privacy_view()
+        self.privacy_mode_action.setChecked(not privacy_enabled)  # Checked when privacy is OFF
+        self.privacy_mode_action.triggered.connect(self._on_privacy_mode_button_clicked)
+        toolbar.addAction(self.privacy_mode_action)
+        # Store toolbar reference for styling
+        self.main_toolbar = toolbar
+        # Update button appearance
+        self._update_privacy_mode_button()
+        
+        toolbar.addSeparator()
+        
+        # Reset View button (shared action with View menu; V or Shift+V for focused subwindow)
+        toolbar.addAction(self.reset_view_action)
+        
+        # Reset All Views button
+        reset_all_views_action = QAction("Reset All Views", self)
+        reset_all_views_action.setToolTip("Reset zoom, pan, window center and level for all subwindows")
+        reset_all_views_action.setShortcut(QKeySequence("Shift+A"))
+        reset_all_views_action.triggered.connect(self.reset_all_views_requested.emit)
+        toolbar.addAction(reset_all_views_action)
+        
+        toolbar.addSeparator()
+        
+        # Series Navigator toggle button
+        self.series_navigator_action = QAction("Show Series Navigator", self)
+        self.series_navigator_action.setToolTip("Show/hide series navigator bar at bottom")
+        self.series_navigator_action.triggered.connect(self.toggle_series_navigator)
+        toolbar.addAction(self.series_navigator_action)
+        
+        toolbar.addSeparator()
+        
+        # Series navigation buttons
+        self.prev_series_action = QAction("Prev Series", self)
+        self.prev_series_action.setToolTip("Navigate to previous series (left arrow key)")
+        self.prev_series_action.triggered.connect(self._on_prev_series)
+        toolbar.addAction(self.prev_series_action)
+        
+        self.next_series_action = QAction("Next Series", self)
+        self.next_series_action.setToolTip("Navigate to next series (right arrow key)")
+        self.next_series_action.triggered.connect(self._on_next_series)
+        toolbar.addAction(self.next_series_action)
+        
+        toolbar.addSeparator()
+        
+        # Overlay font size controls
+        toolbar.addWidget(QLabel("Font Size:"))
+        
+        # Font size decrease button
+        font_size_decrease_action = QAction("−", self)
+        font_size_decrease_action.setToolTip("Decrease overlay font size")
+        font_size_decrease_action.triggered.connect(self._on_font_size_decrease)
+        toolbar.addAction(font_size_decrease_action)
+        
+        # Font size increase button
+        font_size_increase_action = QAction("+", self)
+        font_size_increase_action.setToolTip("Increase overlay font size")
+        font_size_increase_action.triggered.connect(self._on_font_size_increase)
+        toolbar.addAction(font_size_increase_action)
+        
+        toolbar.addSeparator()
+        
+        # Font color picker button
+        font_color_action = QAction("Font Color", self)
+        font_color_action.setToolTip("Change overlay font color")
+        font_color_action.triggered.connect(self._on_font_color_picker)
+        toolbar.addAction(font_color_action)
+        
+        toolbar.addSeparator()
+        
+        # Use Rescaled Values toggle button (non-checkable, text alternates)
+        self.use_rescaled_values_action = QAction("Use Rescaled Values", self)
+        self.use_rescaled_values_action.setCheckable(False)  # Not checkable, text shows current state
+        self.use_rescaled_values_action.setToolTip("Toggle between rescaled and raw pixel values")
+        self.use_rescaled_values_action.triggered.connect(self._on_rescale_toggle_changed)
+        toolbar.addAction(self.use_rescaled_values_action)
+        
+        # Add stretch to push scroll wheel mode toggle to the right
+        toolbar.addSeparator()
+        
+        # Create spacer widget that expands
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        toolbar.addWidget(spacer)
+        
+        toolbar.addWidget(QLabel("Scroll Wheel:"))
+        
+        # Scroll wheel mode toggle (right-aligned)
+        self.scroll_wheel_mode_combo = QComboBox()
+        self.scroll_wheel_mode_combo.setObjectName("scroll_wheel_mode_combo")
+        self.scroll_wheel_mode_combo.addItems(["Slice", "Zoom"])
+        # Set current mode from config
+        current_mode = self.config_manager.get_scroll_wheel_mode() if self.config_manager else "slice"
+        if current_mode == "zoom":
+            self.scroll_wheel_mode_combo.setCurrentIndex(1)
+        else:
+            self.scroll_wheel_mode_combo.setCurrentIndex(0)
+        self.scroll_wheel_mode_combo.currentTextChanged.connect(self._on_scroll_wheel_mode_combo_changed)
+        toolbar.addWidget(self.scroll_wheel_mode_combo)
+    
     def _create_status_bar(self) -> None:
         """Create the status bar."""
         # Create three permanent widgets with equal stretch factors (1:1:1) for fixed 1/3 widths

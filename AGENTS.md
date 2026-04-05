@@ -52,13 +52,15 @@ src/
 │   └── roi_measurement_controller.py  # Owns ROIManager, MeasurementTool, AnnotationManager, panels
 ├── core/                          # Core processing, loading, and coordination logic
 │   ├── loading_progress_manager.py    # Animated loading dots, QProgressDialog, cancellation (used by FileOperationsHandler)
-│   └── privacy_controller.py          # Privacy-mode propagation and overlay refresh (called from main on privacy toggle)
-├── gui/                           # All Qt widgets, dialogs, and layout components
+│   ├── privacy_controller.py          # Privacy-mode propagation and overlay refresh (called from main on privacy toggle)
+│   ├── export_manager.py              # Export orchestration (paths, progress, slice/selection export)
+│   └── export_rendering.py            # Pillow projection, photometric handling, overlay/ROI rasterization for export
+├── gui/                           # All Qt widgets, dialogs, layout; e.g. overlay_items_factory (QGraphics overlays), main_window_*_builder (menus/toolbar)
 ├── tools/                         # Interactive tools (ROI, measurement, annotation, crosshair)
 └── utils/                         # Utilities (config, undo/redo, DICOM helpers, etc.)
     ├── config_manager.py          # Thin facade: inherits all config mixins; owns __init__, _load_config, save_config, get, set
     ├── doc_urls.py                # GitHub base URL for in-app user-docs links (Help → Documentation, Quick Start); edit USER_DOCS_GITHUB_PREFIX for forks
-    ├── debug_flags.py             # Central on/off switches for diagnostic print statements (DEBUG_LAYOUT, DEBUG_LOADING, DEBUG_NAV)
+    ├── debug_flags.py             # Central on/off switches for diagnostic prints (e.g. DEBUG_LAYOUT, DEBUG_LOADING, DEBUG_NAV, DEBUG_YBR)
     └── config/                    # Feature-domain config mixin package
         ├── __init__.py
         ├── paths_config.py        # last_path, last_export_path, recent_files, normalize_path

@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                                 QFormLayout, QDialogButtonBox, QCheckBox, QComboBox)
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
-from typing import Optional
+from typing import List, Optional
 
 from utils.config_manager import ConfigManager
 from utils.bundled_fonts import get_font_families, get_font_variants
@@ -102,12 +102,18 @@ class AnnotationOptionsDialog(QDialog):
         self.original_measurement_font_variant = self.config_manager.get_measurement_font_variant()
         self.original_arrow_annotation_color = self.config_manager.get_arrow_annotation_color()
         self.original_arrow_annotation_size = self.config_manager.get_arrow_annotation_size()
+        self.original_roi_default_visible_statistics = list(
+            self.config_manager.get_roi_default_visible_statistics()
+        )
 
     def _connect_live_preview_signals(self) -> None:
-        """Connect font controls that should live-update before OK is pressed."""
+        """Connect controls that should live-update the viewer before OK (Cancel restores originals)."""
         self.roi_font_size_spinbox.valueChanged.connect(self._on_live_update)
+        self.roi_line_thickness_spinbox.valueChanged.connect(self._on_live_update)
         self.measurement_font_size_spinbox.valueChanged.connect(self._on_live_update)
+        self.measurement_line_thickness_spinbox.valueChanged.connect(self._on_live_update)
         self.text_font_size_spinbox.valueChanged.connect(self._on_live_update)
+        self.arrow_size_spinbox.valueChanged.connect(self._on_live_update)
 
         self.roi_font_family_combo.currentIndexChanged.connect(
             lambda: self._on_family_changed(self.roi_font_family_combo, self.roi_font_variant_combo)
@@ -125,6 +131,16 @@ class AnnotationOptionsDialog(QDialog):
         self.roi_font_variant_combo.currentIndexChanged.connect(self._on_live_update)
         self.measurement_font_variant_combo.currentIndexChanged.connect(self._on_live_update)
         self.text_font_variant_combo.currentIndexChanged.connect(self._on_live_update)
+
+        for cb in (
+            self.mean_checkbox,
+            self.std_checkbox,
+            self.min_checkbox,
+            self.max_checkbox,
+            self.pixels_checkbox,
+            self.area_checkbox,
+        ):
+            cb.toggled.connect(self._on_live_update)
     
     def _create_ui(self) -> None:
         """Create the UI components."""
@@ -546,6 +562,23 @@ class AnnotationOptionsDialog(QDialog):
         self._repopulate_variant_combo(family_combo, variant_combo, current_variant)
         self._on_live_update()
 
+    def _selected_stats_from_checkboxes(self) -> List[str]:
+        """Build the ROI default visible-statistics list from the statistics checkboxes."""
+        selected_stats: List[str] = []
+        if self.mean_checkbox.isChecked():
+            selected_stats.append("mean")
+        if self.std_checkbox.isChecked():
+            selected_stats.append("std")
+        if self.min_checkbox.isChecked():
+            selected_stats.append("min")
+        if self.max_checkbox.isChecked():
+            selected_stats.append("max")
+        if self.pixels_checkbox.isChecked():
+            selected_stats.append("count")
+        if self.area_checkbox.isChecked():
+            selected_stats.append("area")
+        return selected_stats
+
     def _save_live_font_settings(self) -> None:
         """Persist font size/family/variant settings used by the live preview."""
         self.config_manager.set_roi_font_size(self.roi_font_size_spinbox.value())
@@ -560,9 +593,32 @@ class AnnotationOptionsDialog(QDialog):
         self.config_manager.set_text_annotation_font_family(self.text_font_family_combo.currentText())
         self.config_manager.set_text_annotation_font_variant(self.text_font_variant_combo.currentText())
 
+    def _save_live_appearance_settings(self) -> None:
+        """Persist colors, line thickness, and arrow size (same rules as OK) for live preview."""
+        self.config_manager.set_roi_line_thickness(self.roi_line_thickness_spinbox.value())
+        self.config_manager.set_roi_font_color(*self.roi_color)
+        self.config_manager.set_roi_line_color(*self.roi_color)
+
+        self.config_manager.set_measurement_line_thickness(self.measurement_line_thickness_spinbox.value())
+        self.config_manager.set_measurement_font_color(*self.measurement_color)
+        self.config_manager.set_measurement_line_color(*self.measurement_color)
+
+        self.config_manager.set_text_annotation_color(*self.text_color)
+
+        self.config_manager.set_arrow_annotation_color(*self.arrow_color)
+        self.config_manager.set_arrow_annotation_size(self.arrow_size_spinbox.value())
+
+    def _save_live_statistics_defaults(self) -> None:
+        """Persist default ROI statistics visibility for live preview (same list as OK)."""
+        self.config_manager.set_roi_default_visible_statistics(
+            self._selected_stats_from_checkboxes()
+        )
+
     def _on_live_update(self) -> None:
-        """Apply font changes immediately so annotation styling updates before OK."""
+        """Apply dialog values to config immediately so annotations update before OK."""
         self._save_live_font_settings()
+        self._save_live_appearance_settings()
+        self._save_live_statistics_defaults()
         self.settings_changed.emit()
 
     def _update_color_display(self, color_type: str, r: int, g: int, b: int) -> None:
@@ -627,6 +683,7 @@ class AnnotationOptionsDialog(QDialog):
             elif color_type == "arrow":
                 self.arrow_color = new_color
             self._update_color_display(color_type, *new_color)
+            self._on_live_update()
     
     def _apply_settings(self) -> None:
         """Apply settings and close dialog."""
@@ -674,21 +731,9 @@ class AnnotationOptionsDialog(QDialog):
         self.config_manager.set_arrow_annotation_color(*self.arrow_color)
         self.config_manager.set_arrow_annotation_size(self.arrow_size_spinbox.value())
         
-        # Save ROI statistics visibility settings
-        selected_stats = []
-        if self.mean_checkbox.isChecked():
-            selected_stats.append("mean")
-        if self.std_checkbox.isChecked():
-            selected_stats.append("std")
-        if self.min_checkbox.isChecked():
-            selected_stats.append("min")
-        if self.max_checkbox.isChecked():
-            selected_stats.append("max")
-        if self.pixels_checkbox.isChecked():
-            selected_stats.append("count")
-        if self.area_checkbox.isChecked():
-            selected_stats.append("area")
-        self.config_manager.set_roi_default_visible_statistics(selected_stats)
+        self.config_manager.set_roi_default_visible_statistics(
+            self._selected_stats_from_checkboxes()
+        )
         
         # Emit signal to notify that settings were applied
         self.settings_applied.emit()
@@ -718,6 +763,9 @@ class AnnotationOptionsDialog(QDialog):
 
         self.config_manager.set_arrow_annotation_color(*self.original_arrow_annotation_color)
         self.config_manager.set_arrow_annotation_size(self.original_arrow_annotation_size)
+        self.config_manager.set_roi_default_visible_statistics(
+            list(self.original_roi_default_visible_statistics)
+        )
         self.settings_changed.emit()
         super().reject()
 

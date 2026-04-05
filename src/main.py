@@ -3301,7 +3301,7 @@ class DICOMViewerApp(QObject):
         self.overlay_manager.set_font_family(font_family)
         self.overlay_manager.set_font_variant(font_variant)
         subwindows = self.multi_window_layout.get_all_subwindows()
-        for subwindow in subwindows:
+        for idx, subwindow in enumerate(subwindows):
             if subwindow and subwindow.image_viewer:
                 subwindow.image_viewer.set_scale_markers_color_state(scale_markers_color)
                 subwindow.image_viewer.set_direction_labels_color_state(direction_labels_color)
@@ -3310,7 +3310,14 @@ class DICOMViewerApp(QObject):
                     major_tick_interval_mm,
                     minor_tick_interval_mm,
                 )
-        self.overlay_coordinator.handle_overlay_config_applied()
+            if subwindow and idx in self.subwindow_managers:
+                om = self.subwindow_managers[idx].get("overlay_manager")
+                if om:
+                    om.set_font_size(font_size)
+                    om.set_font_color(*font_color)
+                    om.set_font_family(font_family)
+                    om.set_font_variant(font_variant)
+        self._refresh_overlay_all_subwindows()
         self._on_annotation_options_applied()
         theme = self.config_manager.get_theme()
         self.main_window._set_theme(theme)
@@ -3339,48 +3346,49 @@ class DICOMViewerApp(QObject):
 
     def _on_overlay_config_applied(self) -> None:
         """Handle overlay configuration being applied."""
-        self.overlay_coordinator.handle_overlay_config_applied()
+        self._refresh_overlay_all_subwindows()
+
+    def _refresh_overlay_all_subwindows(self) -> None:
+        """Recreate corner overlays in every subwindow that has overlay coordinators (keeps multi-pane views in sync)."""
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        for idx, subwindow in enumerate(subwindows):
+            if subwindow and idx in self.subwindow_managers:
+                oc = self.subwindow_managers[idx].get("overlay_coordinator")
+                if oc:
+                    oc.handle_overlay_config_applied()
     
     def _on_annotation_options_applied(self) -> None:
         """Handle annotation options applied - refresh all annotations."""
-        # Update default visible statistics for all existing ROIs
         default_stats_list = self.config_manager.get_roi_default_visible_statistics()
         default_stats_set = set(default_stats_list)
-        
-        # Update all ROIs to use new default statistics
-        for key, roi_list in self.roi_manager.rois.items():
-            for roi in roi_list:
-                roi.visible_statistics = default_stats_set.copy()
-        
-        # Update styles for all existing ROIs and measurements via controller
-        self.roi_measurement_controller.update_styles(self.config_manager)
-        
-        # Update styles for text and arrow annotations
-        if hasattr(self, 'text_annotation_tool') and self.text_annotation_tool:
-            self.text_annotation_tool.update_all_annotation_styles(self.config_manager)
-        if hasattr(self, 'arrow_annotation_tool') and self.arrow_annotation_tool:
-            self.arrow_annotation_tool.update_all_arrow_styles(self.config_manager)
-        
-        # Also update for all subwindows
+
         subwindows = self.multi_window_layout.get_all_subwindows()
         for idx, subwindow in enumerate(subwindows):
-            if idx in self.subwindow_managers:
-                managers = self.subwindow_managers[idx]
-                text_tool = managers.get('text_annotation_tool')
-                arrow_tool = managers.get('arrow_annotation_tool')
-                if text_tool:
-                    text_tool.update_all_annotation_styles(self.config_manager)
-                if arrow_tool:
-                    arrow_tool.update_all_arrow_styles(self.config_manager)
-        
-        # Update ROI statistics overlays (this will also refresh with new font settings)
-        if self.current_dataset is not None:
-            self.roi_coordinator.update_roi_statistics_overlays()
-        
-        # Ensure ROIs and measurements are displayed for current slice
-        if self.current_dataset is not None:
-            self.slice_display_manager.display_rois_for_slice(self.current_dataset)
-            self.slice_display_manager.display_measurements_for_slice(self.current_dataset)
+            if idx not in self.subwindow_managers:
+                continue
+            managers = self.subwindow_managers[idx]
+            roi_mgr = managers.get("roi_manager")
+            if roi_mgr:
+                for _key, roi_list in roi_mgr.rois.items():
+                    for roi in roi_list:
+                        roi.visible_statistics = default_stats_set.copy()
+                roi_mgr.update_all_roi_styles(self.config_manager)
+            meas_tool = managers.get("measurement_tool")
+            if meas_tool:
+                meas_tool.update_all_measurement_styles(self.config_manager)
+            text_tool = managers.get("text_annotation_tool")
+            if text_tool:
+                text_tool.update_all_annotation_styles(self.config_manager)
+            arrow_tool = managers.get("arrow_annotation_tool")
+            if arrow_tool:
+                arrow_tool.update_all_arrow_styles(self.config_manager)
+            data = self.subwindow_data.get(idx, {})
+            current_ds = data.get("current_dataset")
+            sdm = managers.get("slice_display_manager")
+            if sdm and current_ds is not None:
+                # display_rois_for_slice refreshes ROI stats overlays via slice_display_manager callback
+                sdm.display_rois_for_slice(current_ds)
+                sdm.display_measurements_for_slice(current_ds)
     
     def _on_settings_applied(self) -> None:
         """Handle settings being applied."""
@@ -3425,8 +3433,7 @@ class DICOMViewerApp(QObject):
                     minor_tick_interval_mm,
                 )
 
-        # Recreate overlay for the focused subwindow
-        self.overlay_coordinator.handle_overlay_config_applied()
+        self._refresh_overlay_all_subwindows()
     
     def _on_window_changed(self, center: float, width: float) -> None:
         """

@@ -4,22 +4,11 @@ DICOM color handling.
 This module provides color detection, YBR to RGB conversion, and planar/RGB channel
 handling for DICOM images. Used to determine if an image is color, convert YBR
 color space to RGB, and detect/fix RGB/BGR channel order (e.g. for JPEG-LS).
-
-Verbose YBR conversion diagnostics are gated by ``DEBUG_YBR`` in
-``utils.debug_flags`` (default off).
 """
 
 import numpy as np
 from typing import Optional, Tuple
 from pydicom.dataset import Dataset
-
-from utils.debug_flags import DEBUG_YBR
-
-
-def _log_ybr(message: str) -> None:
-    """Emit a YBR conversion diagnostic line when DEBUG_YBR is True."""
-    if DEBUG_YBR:
-        print(message)
 
 try:
     # pydicom moved convert_color_space to pydicom.pixels.processing
@@ -230,7 +219,7 @@ def convert_ybr_to_rgb(ybr_array: np.ndarray,
         # Only convert if PhotometricInterpretation explicitly indicates YBR
         # Trust the DICOM tag - always convert when tag says YBR
         if not photometric_interpretation:
-            _log_ybr("[YBR] Warning: No PhotometricInterpretation provided, skipping conversion")
+            print(f"[YBR] Warning: No PhotometricInterpretation provided, skipping conversion")
             return ybr_array
 
         # Check if pydicom already converted YBR to RGB (common for JPEG2000)
@@ -282,10 +271,8 @@ def convert_ybr_to_rgb(ybr_array: np.ndarray,
                         # already has RGB-like statistics, skip conversion
                         if rgb_mean < 50 or rgb_mean > 200 or rgb_std > 100:
                             already_rgb = True
-                            _log_ybr(
-                                "[YBR] Test conversion produces extreme values "
-                                f"(mean={rgb_mean:.1f}, std={rgb_std:.1f}), likely already RGB, skipping conversion"
-                            )
+                            print(f"[YBR] Test conversion produces extreme values "
+                                  f"(mean={rgb_mean:.1f}, std={rgb_std:.1f}), likely already RGB, skipping conversion")
                         elif abs(rgb_mean - original_mean) > 50 or abs(rgb_std - original_std) > 30:
                             # Conversion significantly changes statistics, likely already RGB
                             already_rgb = True
@@ -293,17 +280,13 @@ def convert_ybr_to_rgb(ybr_array: np.ndarray,
                         # If test conversion fails, check variance ratios only
                         if cb_var_ratio > 0.85 and cr_var_ratio > 0.85:
                             already_rgb = True
-                            _log_ybr(
-                                "[YBR] High variance ratios suggest already RGB "
-                                f"(Cb_var_ratio={cb_var_ratio:.2f}, Cr_var_ratio={cr_var_ratio:.2f}), skipping conversion"
-                            )
+                            print(f"[YBR] High variance ratios suggest already RGB "
+                                  f"(Cb_var_ratio={cb_var_ratio:.2f}, Cr_var_ratio={cr_var_ratio:.2f}), skipping conversion")
 
                 if not already_rgb:
-                    _log_ybr(
-                        f"[YBR] Converting YBR to RGB - PhotometricInterpretation: {photometric_interpretation}, "
-                        f"TransferSyntax: {transfer_syntax or 'Unknown'}, "
-                        f"Chroma means: Cb={cb_mean:.1f}, Cr={cr_mean:.1f}"
-                    )
+                    print(f"[YBR] Converting YBR to RGB - PhotometricInterpretation: {photometric_interpretation}, "
+                          f"TransferSyntax: {transfer_syntax or 'Unknown'}, "
+                          f"Chroma means: Cb={cb_mean:.1f}, Cr={cr_mean:.1f}")
 
         if already_rgb:
             return ybr_array
@@ -344,7 +327,7 @@ def convert_ybr_to_rgb(ybr_array: np.ndarray,
                     ybr_array_normalized = ybr_array
 
                 # Use pydicom's tested conversion
-                _log_ybr(f"[YBR] Using pydicom convert_color_space for {ybr_format}")
+                print(f"[YBR] Using pydicom convert_color_space for {ybr_format}")
                 rgb_array = convert_color_space(ybr_array_normalized, ybr_format, 'RGB')
 
                 # Ensure output is uint8
@@ -354,7 +337,7 @@ def convert_ybr_to_rgb(ybr_array: np.ndarray,
                 return rgb_array
             except Exception as e:
                 # Fall back to custom implementation if pydicom conversion fails
-                _log_ybr(f"[YBR] pydicom convert_color_space failed, using custom conversion: {e}")
+                print(f"[YBR] pydicom convert_color_space failed, using custom conversion: {e}")
                 use_pydicom_convert = False
 
         # Use custom implementation for YBR_RCT or if pydicom is not available/failed
@@ -374,15 +357,11 @@ def convert_ybr_to_rgb(ybr_array: np.ndarray,
 
         # Validate conversion result
         if rgb_array.shape != original_shape:
-            _log_ybr(
-                f"[YBR] Warning: Shape changed during conversion: {original_shape} -> {rgb_array.shape}"
-            )
+            print(f"[YBR] Warning: Shape changed during conversion: {original_shape} -> {rgb_array.shape}")
 
         # Check if result is valid RGB (values in 0-255 range)
         if rgb_array.min() < 0 or rgb_array.max() > 255:
-            _log_ybr(
-                f"[YBR] Warning: RGB values out of range: min={rgb_array.min()}, max={rgb_array.max()}"
-            )
+            print(f"[YBR] Warning: RGB values out of range: min={rgb_array.min()}, max={rgb_array.max()}")
             rgb_array = np.clip(rgb_array, 0, 255).astype(np.uint8)
 
         # Log conversion result statistics
@@ -392,9 +371,7 @@ def convert_ybr_to_rgb(ybr_array: np.ndarray,
                 r_mean = np.mean(check_rgb[:, :, 0].astype(np.float32))
                 g_mean = np.mean(check_rgb[:, :, 1].astype(np.float32))
                 b_mean = np.mean(check_rgb[:, :, 2].astype(np.float32))
-                _log_ybr(
-                    f"[YBR] Conversion complete - RGB means: R={r_mean:.1f}, G={g_mean:.1f}, B={b_mean:.1f}"
-                )
+                print(f"[YBR] Conversion complete - RGB means: R={r_mean:.1f}, G={g_mean:.1f}, B={b_mean:.1f}")
 
         return rgb_array
 

@@ -35,8 +35,7 @@ This file tracks active and near-term tasks.
 - [ ] **[P1]** Should we block showing DICOM tags when an MPR window is selected (show just "MPR")? Or add some kind of warning that it is the underlying series data somehow?
 - [ ] **[P0]** After creating MPRs, clearing, closing all files, and loading new files, creating new MPR does not load/display ([details](FUTURE_WORK_DETAIL_NOTES.md#multi-planar-reconstructions-mprs-and-oblique-reconstructions)) *NOTE: seems fixed*
 - [ ] **[P0]** "Close All" did not clear thumbnails in layout map
-- [ ] **[P1]** Fusion seems to add two sets of scale markers? Or for some reason markers look too dense. Goes away when focusing on window, reappaears when unfocused. Appears (and disappears) on windows without fusion enabled as well (maybe only ones showing same series as fusion base or overlay).
-- [ ] **[P1]** Found one weird instance of slice markers not being correct - QAMR the 3-plane loc when displaying axial slices shows lines on T1 and T2 axial when they display the same approximate slice location, and vice versa - they position and slope of the lines are the same on both. Saved a screenshot. Lines are angled (not vertical or horizontal) and offset from center of image. IOP for T1 [0.99986, -0.00006, -0.01671, 0.00011, 1.00000, 0.00290], for 3-plane axial slice [1.00000, -0.00000, 0.00000, -0.00000, 1.00000, 0.00000] - maybe it is correct. IPP for 3-plane [-124.5117034912, -124.5117034912, 10.0000000000], for T1 is [-123.6437759399, -129.4394531250, 10.5523557663]. *NOTE: seems correct actually -slightly angled. Took another screenshot.*
+- [ ] **[P0]** Fusion seems to add two sets of scale markers? Or for some reason markers look too dense. Goes away when focusing on window, reappaears when unfocused. Appears (and disappears) on windows without fusion enabled as well (maybe only ones showing same series as fusion base or overlay). Actually this happened when first loading a US study with no pixel size data (and no markers displayed), then loading an MR study with pixel size data (and markers displayed on the US images subwindows while the MR image window was focused). Also happened with a CT study and MR study - took screenshots.
 - [ ] **[P1]** Fusion not working for T2 dual-echo as base series (QAMR) - no T1 overlay appears. It did after switching to T2 as overlay (still on T2) and then back to T1.
 
 ## Performance / Packaging
@@ -109,6 +108,9 @@ This file tracks active and near-term tasks.
 - [ ] **[P2]** Once database is added, allow pulling priors ([plan](plans/HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md#2-pulling-priors-after-local-database))
 - [ ] **[P1]** Also try RDSR parsing/export support - have some examples, add to repo ([plan](plans/HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md#3-rdsr-parsing-and-export))
 - [ ] **[P1]** Allow some configuration to interpret MTF results (separately for MRI and CT) where the user needs to review some images along with pylinac MTF plots and decide the "visibility cutoff" MTF value which they think corresponds to the limit of visibility and we report the (interpolated) spatial frequency that gives that MTF value, OR we could have them define a "passing" MTF value and state which inserts pass/fail a visibility check based on that. ([details](FUTURE_WORK_DETAIL_NOTES.md#interpreting-mtf-results))
+- [ ] **[P2]** For ROIs, allow computing and displaying stats per color channel (RGB, etc.) (off by default, can be enabled in settings)
+- [ ] **[P2]** For screenshot export, allow choosing to export multi-window view as single image, as well. Maybe also entire application window as single image, including left/right panes and toolbar etc (if currently displayed).
+- [ ] **[P2]** In overlay  config, allow something like "simple view" and "detailed view", where additional tags can be shown, and spacebar cycles through simple, detailed, and hidden views.
 
 ## Documentation
 
