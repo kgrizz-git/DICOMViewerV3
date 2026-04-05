@@ -1,0 +1,30 @@
+Last updated: 2026-04-04 01:38:35
+
+# `.cursor` Directory Files
+
+Cursor loads **custom subagents** and **Agent Skills** from this tree; keep it in sync with the portable copy under `agents_and_skills/` when maintaining this repo.
+
+## Root and agents
+
+- [README.md](.cursor/README.md) - Short map of `agents/` and `skills/` with links to Cursor’s Subagents and Agent Skills documentation and notes on copying definitions to `~/.cursor/` for global use. It clarifies that project-local paths and conventions may still live in rules or orchestration prompts.
+- [coder.md](.cursor/agents/coder.md) - Implementation subagent that executes plans with modular code, docstrings, lint awareness, trusted official docs, and optional tests while updating plan checklists. It implements features, refactors, and bugfixes assigned by the orchestrator from `plans/`.
+- [docreviewer.md](.cursor/agents/docreviewer.md) - Documentation review subagent that assesses accuracy and clarity and writes timestamped `logs/docs_log-*.md` without editing product source. It recommends whether follow-up belongs with **coder** (comments, docstrings) or **docwriter** (prose docs).
+- [docwriter.md](.cursor/agents/docwriter.md) - Documentation writing subagent that updates markdown, README, and `docs/` per orchestrator instructions with clear structure and working links. It avoids drive-by code edits and typically suggests a **docreviewer** pass when finished.
+- [orchestrator.md](.cursor/agents/orchestrator.md) - Multi-agent orchestrator that breaks goals into tasks, delegates to planner, coder, ux, reviewer, secops, tester, docreviewer, and docwriter, and chooses safe parallelism plus git branches or worktrees. It does not implement product features and limits release edits to `VERSION` and `CHANGELOG.md`.
+- [planner.md](.cursor/agents/planner.md) - Planning subagent that writes phased markdown under `plans/` with `[ ]` checklists, compares specs to the repo, and flags gaps without implementing code. Ambiguities become explicit questions for the user via the orchestrator.
+- [reviewer.md](.cursor/agents/reviewer.md) - Review subagent that compares plans and instructions to code and artifacts, runs lint where appropriate, and updates plan checklists when work is verified. It returns a concise verdict to the orchestrator: approved, changes required with owners, or blocked.
+- [secops.md](.cursor/agents/secops.md) - Security subagent that runs scanners such as semgrep, grype, and secret-detection tools and writes timestamped assessments under `assessments/`. It reports vulnerabilities, dependency risk, and CI hygiene issues with remediation ordering for the orchestrator.
+- [tester.md](.cursor/agents/tester.md) - Testing subagent that runs suites, verifies tests promised in plans actually exist, and maintains `logs/test-ledger.md` without editing source or tests to force green builds. Failures are reproduced and reported with logs and suggested owners.
+- [ux.md](.cursor/agents/ux.md) - UX and UI subagent that evaluates flows with Playwright, screenshots, and modern accessibility-oriented layout guidance. It returns prioritized recommendations and tradeoffs to the orchestrator without overriding product-owner priorities.
+
+## Skills (`skills/*/SKILL.md`)
+
+- [coder-implementation-standards/SKILL.md](.cursor/skills/coder-implementation-standards/SKILL.md) - Procedure pack for implementing from plans: small modules, docstrings on public APIs, lint runs, and marking plan tasks complete with short notes. Load when the **coder** runs or the orchestrator assigns implementation work.
+- [documentation-review-write-handoff/SKILL.md](.cursor/skills/documentation-review-write-handoff/SKILL.md) - Defines docreviewer outputs under `logs/`, docwriter editing boundaries, and handoffs between documentation and code owners. Use for **docreviewer**, **docwriter**, or coordinated documentation audits.
+- [plans-folder-authoring/SKILL.md](.cursor/skills/plans-folder-authoring/SKILL.md) - Authoring rules for `plans/` markdown: phased checklists, open questions, and no product code unless scope explicitly expands. Use when **planner** writes or refreshes implementation plans.
+- [python-venv-dependencies/SKILL.md](.cursor/skills/python-venv-dependencies/SKILL.md) - Detects virtual environments, respects `requirements*.txt`, and runs Python tooling with the correct interpreter after activation. Use before pip, pytest, or scanners when the repo uses Python.
+- [reviewer-spec-alignment/SKILL.md](.cursor/skills/reviewer-spec-alignment/SKILL.md) - Checklist mindset for comparing specs and `plans/` to diffs, running lint, and updating plan items only when fully satisfied. Use for **reviewer** or PR-style alignment reviews.
+- [security-scanning-secops/SKILL.md](.cursor/skills/security-scanning-secops/SKILL.md) - Maps security concerns to tools (semgrep, grype, gitleaks, trufflehog, workflow review) and assessment file conventions. Use for **secops** runs and dependency or secret-risk triage.
+- [team-orchestration-delegation/SKILL.md](.cursor/skills/team-orchestration-delegation/SKILL.md) - Covers delegation patterns, parallel versus sequential safety, git worktrees, and semver or changelog hygiene across subagents. Load when acting as **orchestrator** or when routing multi-step team work.
+- [test-ledger-runner/SKILL.md](.cursor/skills/test-ledger-runner/SKILL.md) - Standardizes test execution logging in `logs/test-ledger.md` and forbids editing product or test code to fake passes. Use for **tester** or when reporting automated suite outcomes.
+- [ux-evaluation-web/SKILL.md](.cursor/skills/ux-evaluation-web/SKILL.md) - Workflow for web UX review using Playwright, screenshots, typography and layout guidance, and accessibility checks against reputable sources. Use for **ux** or front-end quality assessments.
