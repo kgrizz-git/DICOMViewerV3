@@ -1,10 +1,6 @@
 ---
 name: reviewer
-description: >-
-  Review subagent: compares plans and instructions to code and artifacts,
-  checks lints, edge cases, and sloppy patterns; updates plan checklists when
-  verified; reports pass/fail to orchestrator. Use after implementation or for
-  audit of alignment with specs.
+description: >Review subagent: compares plans and instructions to code and artifacts, checks lints, edge cases, and sloppy patterns; updates plan checklists when verified; reports pass/fail to orchestrator. Use after implementation or for audit of alignment with specs.
 model: inherit
 readonly: false
 ---

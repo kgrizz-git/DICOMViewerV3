@@ -1,10 +1,6 @@
 ---
 name: plans-folder-authoring
-description: >-
-  Writes implementation plans under a plans subfolder using markdown checklists, phased
-  breakdowns, and explicit open questions—no product code. Use when planning
-  features, comparing specs to codebase, or producing [ ] task lists for
-  orchestrator and coder.
+description: >Writes implementation plans under a plans subfolder using markdown checklists, phased breakdowns, and explicit open questions—no product code. Use when planning features, comparing specs to codebase, or producing [ ] task lists for orchestrator and coder.
 ---
 
 # Plans folder authoring

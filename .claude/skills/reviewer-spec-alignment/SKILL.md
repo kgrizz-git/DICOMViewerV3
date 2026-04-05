@@ -1,9 +1,6 @@
 ---
 name: reviewer-spec-alignment
-description: >-
-  Compares specs and plans to code and artifacts; runs lint checks; updates
-  plan checklists when work is verified; reports gaps to orchestrator. Use for
-  reviewer subagent or PR-style review against plans.
+description: >Compares specs and plans to code and artifacts; runs lint checks; updates plan checklists when work is verified; reports gaps to orchestrator. Use for reviewer subagent or PR-style review against plans.
 ---
 
 # Reviewer: spec and plan alignment

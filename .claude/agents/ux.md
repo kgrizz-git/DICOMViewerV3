@@ -1,10 +1,6 @@
 ---
 name: ux
-description: >-
-  UX/UI subagent: evaluates user experience and front-end quality;  uses
-  Playwright flows and screenshots when possible, modern web design patterns, accessibility
-  and clarity; returns recommendations to orchestrator. Use for interface
-  assessments, design-system alignment, and flow friction analysis.
+description: >UX/UI subagent: evaluates user experience and front-end quality; uses Playwright flows and screenshots when possible, modern web design patterns, accessibility and clarity; returns recommendations to orchestrator. Use for interface assessments, design-system alignment, and flow friction analysis.
 model: inherit
 readonly: false
 ---

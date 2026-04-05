@@ -1,9 +1,6 @@
 ---
 name: ux-evaluation-web
-description: >-
-  Evaluates web and application UX/UI against intent using tools like Playwright (screenshots, flows) where possible,
-  modern typography/layout/color guidance, and accessible patterns. Use for ux
-  subagent tasks, front-end review, or visual regression assessment.
+description: >Evaluates web and application UX/UI against intent using tools like Playwright (screenshots, flows) where possible, modern typography/layout/color guidance, and accessible patterns. Use for ux subagent tasks, front-end review, or visual regression assessment.
 ---
 
 # UX evaluation

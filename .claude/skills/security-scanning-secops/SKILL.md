@@ -1,9 +1,6 @@
 ---
 name: security-scanning-secops
-description: >-
-  Runs and interprets security tooling—semgrep, grype, GitHub Actions hygiene,
-  trufflehog, gitleaks—and records timestamped assessments. Use for secops
-  subagent work, dependency vulnerability review, or secret scanning.
+description: >Runs and interprets security tooling—semgrep, grype, GitHub Actions hygiene, trufflehog, gitleaks—and records timestamped assessments. Use for secops subagent work, dependency vulnerability review, or secret scanning.
 ---
 
 # Security scanning (secops)

@@ -1,10 +1,6 @@
 ---
 name: tester
-description: >-
-  Testing subagent: runs test suites, verifies tests promised in plans exist,
-  maintains tests/test-ledger.md, investigates failures without editing code.
-  Use for test execution, coverage of plan test tasks, and reporting flaky or
-  failing suites to orchestrator.
+description: >Testing subagent: runs test suites, verifies tests promised in plans exist, maintains tests/test-ledger.md, investigates failures without editing code. Use for test execution, coverage of plan test tasks, and reporting flaky or failing suites to orchestrator.
 model: fast
 readonly: false
 ---

@@ -1,9 +1,6 @@
 ---
 name: coder-implementation-standards
-description: >-
-  Implements plans with modular structure, docstrings, lint awareness, trusted
-  online docs for APIs, and checklist updates on plans when tasks complete. Use
-  when coding from plans or when orchestrator assigns implementation work.
+description: >Implements plans with modular structure, docstrings, lint awareness, trusted online docs for APIs, and checklist updates on plans when tasks complete. Use when coding from plans or when orchestrator assigns implementation work.
 ---
 
 # Coder implementation standards

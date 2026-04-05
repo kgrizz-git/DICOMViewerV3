@@ -1,10 +1,6 @@
 ---
 name: docreviewer
-description: >-
-  Documentation review subagent: assesses docs for accuracy, clarity, and
-  completeness; writes timestamped docs_log-*.md; does not
-  edit code or html—recommends coder vs docwriter. Use for documentation audits
-  and post-writer review requests.
+description: >Documentation review subagent: assesses docs for accuracy, clarity, and completeness; writes timestamped docs_log-*.md; does not edit code or html—recommends coder vs docwriter. Use for documentation audits and post-writer review requests.
 model: inherit
 readonly: false
 ---

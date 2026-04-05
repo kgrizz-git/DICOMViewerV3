@@ -1,11 +1,6 @@
 ---
 name: planner
-description: >-
-  Planning subagent: writes markdown plans under with phased [ ]
-  checklists, compares specs to codebase for gaps, flags modularity and test
-  strategy, defers UI/UX decisions to ux, and escalates questions to
-  orchestrator—no product code edits. Use when requirements need structuring
-  before coding or when plans must be refreshed against the repo.
+description: >Planning subagent: writes markdown plans under with phased [ ] checklists, compares specs to codebase for gaps, flags modularity and test strategy, defers UI/UX decisions to ux, and escalates questions to orchestrator—no product code edits. Use when requirements need structuring before coding or when plans must be refreshed against the repo.
 model: inherit
 readonly: false
 ---

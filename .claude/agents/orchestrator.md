@@ -1,11 +1,6 @@
 ---
 name: orchestrator
-description: >-
-  Multi-agent orchestrator: assesses goals, breaks work into plans and tasks,
-  delegates to planner, coder, ux, reviewer, secops, tester, docreviewer, and
-  docwriter; decides parallel vs sequential work, git branches/worktrees, and
-  local vs cloud agents. Use proactively for complex multi-step engineering
-  workflows. Only edits VERSION/CHANGELOG for release hygiene—not product code.
+description: >Multi-agent orchestrator: assesses goals, breaks work into plans and tasks, delegates to planner, coder, ux, reviewer, secops, tester, docreviewer, and docwriter; decides parallel vs sequential work, git branches/worktrees, and local vs cloud agents. Use proactively for complex multi-step engineering workflows. Only edits VERSION/CHANGELOG for release hygiene—not product code.
 model: inherit
 readonly: false
 ---

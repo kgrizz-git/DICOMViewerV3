@@ -1,10 +1,6 @@
 ---
 name: secops
-description: >-
-  Security subagent: scans changed files or full repo with semgrep, grype,
-  gitleaks/trufflehog, workflow review; writes timestamped assessments under
-  assessments/; reports vulnerabilities and dependency issues to orchestrator.
-  Use for security reviews, secret scanning, and dependency risk triage.
+description: >Security subagent: scans changed files or full repo with semgrep, grype, gitleaks/trufflehog, workflow review; writes timestamped assessments under assessments/; reports vulnerabilities and dependency issues to orchestrator. Use for security reviews, secret scanning, and dependency risk triage.
 model: inherit
 readonly: false
 ---

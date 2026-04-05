@@ -1,10 +1,6 @@
 ---
 name: coder
-description: >-
-  Implementation subagent: executes plans with modular code, docstrings,
-  trusted official docs, lint checks, optional tests per plan, and checklist
-  updates in plans. Notifies orchestrator on completion. Use for feature work,
-  refactors, and bugfixes assigned from plans.
+description: >Implementation subagent: executes plans with modular code, docstrings, trusted official docs, lint checks, optional tests per plan, and checklist updates in plans. Notifies orchestrator on completion. Use for feature work, refactors, and bugfixes assigned from plans.
 model: inherit
 readonly: false
 ---

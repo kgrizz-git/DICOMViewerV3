@@ -1,9 +1,6 @@
 ---
 name: test-ledger-runner
-description: >-
-  Runs test suites, tracks results in tests/test-ledger.md, and verifies tests
-  promised in plans exist—without editing product code or tests. Use for tester
-  subagent or when reporting pytest/jest/npm test outcomes.
+description: >Runs test suites, tracks results in tests/test-ledger.md, and verifies tests promised in plans exist—without editing product code or tests. Use for tester subagent or when reporting pytest/jest/npm test outcomes.
 ---
 
 # Test ledger and execution (tester)

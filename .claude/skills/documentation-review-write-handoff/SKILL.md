@@ -1,9 +1,6 @@
 ---
 name: documentation-review-write-handoff
-description: >-
-  Reviews or updates documentation with timestamped logs, clear
-  handoffs between docwriter and coder, and optional Sphinx/ReadTheDocs
-  structure notes. Use for docreviewer or docwriter subagents or doc audits.
+description: >Reviews or updates documentation with timestamped logs, clear handoffs between docwriter and coder, and optional Sphinx/ReadTheDocs structure notes. Use for docreviewer or docwriter subagents or doc audits.
 ---
 
 # Documentation review, writing, and handoff

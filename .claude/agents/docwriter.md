@@ -1,10 +1,6 @@
 ---
 name: docwriter
-description: >-
-  Documentation writing subagent: updates and reorganizes docs per
-  instructions—clarity, structure, tooling (Sphinx/RTD/md/html); hands back to
-  orchestrator with file list and suggests docreviewer pass. Use when prose
-  docs need creation, correction, or reorganization.
+description: >Documentation writing subagent: updates and reorganizes docs per instructions—clarity, structure, tooling (Sphinx/RTD/md/html); hands back to orchestrator with file list and suggests docreviewer pass. Use when prose docs need creation, correction, or reorganization.
 model: inherit
 readonly: false
 ---
