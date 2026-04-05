@@ -1,7 +1,16 @@
 # Pylinac MRI — Multi-Run Low-Contrast Comparison and PDF Interpretation Notes
 
-**Status:** Planned  
+**Status:** Implemented (viewer **0.1.2+**); checklist below reflects verification.  
 **Priority:** P2  
+
+**Superseded / implementation notes (read before using this plan as a spec):**
+
+- **PDF interpretation (Part 2):** The original design prioritized **`publish_pdf(notes=...)`** with a long string. In practice pylinac’s first-page notes area fits only ~**6 short lines**; the shipped single-run path uses **`list[str]`** (one line per element). For **compare mode**, interpretation text and the parameter table are delivered primarily via a **viewer-authored summary PDF + `pypdf` merge** ([`MRI_COMPARE_COMBINED_PDF_PLAN.md`](completed/MRI_COMPARE_COMBINED_PDF_PLAN.md) in `plans/completed/`), not only inline `notes=`.
+- **Config (Phase B):** One tuple **`LC_COMPARE_MULTIPLIERS`** is used for both threshold and sanity multiplier combos (same numeric set as two separate constants in this plan).
+- **API shape:** **`build_mri_pdf_notes` / `build_mri_compare_pdf_notes`** return **`List[str]`**, not **`str`**.
+- **Results UI (§1.6):** Shipped as a **non-modal** dialog with a **QTableWidget** (metrics × runs), **Save comparison JSON…**, optional **Open PDF**, and a details area for full warnings/errors.
+- **Automated tests:** Phase E items are covered in **`tests/test_mri_compare_phase_e.py`** (no DICOM fixtures; includes dialog wiring with **`@pytest.mark.qt`**).
+
 **Related docs:**
 - [PYLINAC_INTEGRATION_OVERVIEW.md](../info/PYLINAC_INTEGRATION_OVERVIEW.md)
 - [PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md](../info/PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md)
@@ -224,7 +233,7 @@ Score    32           29           34
 ### 2.3 Implementation
 
 - Interpretation notes are **always-on** — every MRI PDF (single-run and compare-mode) receives the notes block. There is no per-run toggle.
-- In `src/qa/pylinac_runner.py`, add a helper `build_mri_pdf_notes(result: QAResult) -> str` that composes Sections A and B as a string, reading interpretation text from module-level string constants so the text can be updated without touching logic.
+- In `src/qa/pylinac_runner.py`, add a helper `build_mri_pdf_notes(result: QAResult) -> List[str]` that composes Sections A and B as **one string per PDF line** (pylinac renders each list element separately), reading interpretation text from module-level string constants so the text can be updated without touching logic.
 - The notes include links to the relevant pylinac documentation:
   - ACR MRI phantom analysis: `https://pylinac.readthedocs.io/en/latest/acr.html`
   - Contrast / Visibility topic: `https://pylinac.readthedocs.io/en/latest/topics/contrast.html`
@@ -248,54 +257,53 @@ This requires adding `pypdf` or similar as a dependency. Plan the `notes=` appro
 
 ### Phase A — Data structures and runner (no UI yet)
 
-- [ ] **`src/qa/analysis_types.py`**: add `LcRunConfig`, `MRICompareRequest`, `MRIBatchResult` dataclasses with docstrings. No changes to `QARequest` or `QAResult`.
-- [ ] **`src/qa/pylinac_runner.py`**: extract private `_build_mri_analyzer(request: QARequest, *, cls) -> ACRMRILarge` helper from `run_acr_mri_large_analysis` to avoid duplicating construction logic.
-- [ ] **`src/qa/pylinac_runner.py`**: add `run_acr_mri_large_batch(base_request: QARequest, run_configs: List[LcRunConfig]) -> MRIBatchResult`. Re-instantiate the analyzer for each run. Collect one `QAResult` per config. Each result carries its own `pylinac_analysis_profile`.
-- [ ] **`src/qa/pylinac_runner.py`**: add `build_mri_pdf_notes(result: QAResult) -> str` and `build_mri_compare_pdf_notes(batch_result: MRIBatchResult) -> str`. Store interpretation text as module-level string constants.
-- [ ] **`src/qa/pylinac_runner.py`**: pass `notes=build_mri_pdf_notes(result)` to `analyzer.publish_pdf(...)` in `run_acr_mri_large_analysis` (the existing single-run path).
-- [ ] **`src/qa/worker.py`**: add `QABatchWorker(QThread)` that runs `run_acr_mri_large_batch(...)` and emits `batch_result_ready = Signal(object)`.
+- [x] **`src/qa/analysis_types.py`**: add `LcRunConfig`, `MRICompareRequest`, `MRIBatchResult` dataclasses with docstrings. No changes to `QARequest` or `QAResult`.
+- [x] **`src/qa/pylinac_runner.py`**: extract private `_build_mri_analyzer(request: QARequest, *, cls) -> ACRMRILarge` helper from `run_acr_mri_large_analysis` to avoid duplicating construction logic.
+- [x] **`src/qa/pylinac_runner.py`**: add `run_acr_mri_large_batch(base_request: QARequest, run_configs: List[LcRunConfig]) -> MRIBatchResult`. Re-instantiate the analyzer for each run. Collect one `QAResult` per config. Each result carries its own `pylinac_analysis_profile`.
+- [x] **`src/qa/pylinac_runner.py`**: add `build_mri_pdf_notes` / `build_mri_compare_pdf_notes` returning **`List[str]`** (see superseded note). Store interpretation text as module-level string constants.
+- [x] **`src/qa/pylinac_runner.py`**: pass notes list to `analyzer.publish_pdf(...)` in `run_acr_mri_large_analysis` (the existing single-run path).
+- [x] **`src/qa/worker.py`**: add `QABatchWorker(QThread)` that runs `run_acr_mri_large_batch(...)` and emits `batch_result_ready = Signal(object)`.
+- [x] **`src/qa/mri_compare_export.py`**: `build_mri_compare_json_document(...)` for schema 1.2 payload (used by `main.py` and tests).
 
 ### Phase B — Dialog compare mode
 
-- [ ] **`src/utils/config/qa_pylinac_config.py`**: add `LC_COMPARE_THRESHOLD_MULTIPLIERS: tuple` = `(0.75, 0.8, 0.9, 1.0, 1.1, 1.2, 1.25)` and `LC_COMPARE_SANITY_MULTIPLIERS: tuple` = same. Export from config module.
-- [ ] **`src/gui/dialogs/acr_mri_qa_dialog.py`**: add **"Compare low-contrast settings"** `QGroupBox` with a `QCheckBox` toggle. When unchecked, hide the compare table.
-- [ ] **`src/gui/dialogs/acr_mri_qa_dialog.py`**: build the compare table (3 rows, initially rows 2 and 3 hidden or greyed). Each row: method `QComboBox` + threshold `QComboBox` + sanity `QComboBox` + enable `QCheckBox`.
-- [ ] **`src/gui/dialogs/acr_mri_qa_dialog.py`**: threshold combo items: generated from `DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_THRESHOLD × m` for each multiplier in `LC_COMPARE_THRESHOLD_MULTIPLIERS`. Display label: `"× {m:.2f} (= {computed:.6f})"`. Pre-select multiplier 1.0 for row 1, 0.9 for row 2, 1.1 for row 3.
-- [ ] **`src/gui/dialogs/acr_mri_qa_dialog.py`**: sanity multiplier combo items: same pattern from `DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_SANITY_MULTIPLIER`. Pre-select 1.0 for row 1, 0.9 for row 2, 1.1 for row 3.
-- [ ] **`src/gui/dialogs/acr_mri_qa_dialog.py`**: add "Add run" and "Reset to defaults" buttons below the table.
-- [ ] **`src/gui/dialogs/acr_mri_qa_dialog.py`**: extend `get_options()` to return `Optional[MRICompareRequest]` as an additional final element. `None` when compare mode is unchecked.
-- [ ] **`src/gui/dialogs/acr_mri_qa_dialog.py`**: update module docstring and `prompt_acr_mri_options` docstring/signature.
-- [ ] **`src/gui/dialogs/acr_mri_qa_dialog.py`**: update dialog class docstring **Returns** section.
+- [x] **`src/utils/config/qa_pylinac_config.py`**: `LC_COMPARE_MULTIPLIERS` = `(0.75, 0.8, 0.9, 1.0, 1.1, 1.2, 1.25)` and row default indices (supersedes two separately named tuples in this plan).
+- [x] **`src/gui/dialogs/acr_mri_qa_dialog.py`**: add **"Compare low-contrast settings"** `QGroupBox` (checkable). When unchecked, hide the compare table.
+- [x] **`src/gui/dialogs/acr_mri_qa_dialog.py`**: build the compare table (3 rows). Each row: method `QComboBox` + threshold `QComboBox` + sanity `QComboBox` + enable `QCheckBox`.
+- [x] **`src/gui/dialogs/acr_mri_qa_dialog.py`**: threshold / sanity combo items from defaults × multipliers; pre-select row defaults per plan.
+- [x] **`src/gui/dialogs/acr_mri_qa_dialog.py`**: **"Enable next run"** and **"Reset all rows to defaults"** (equivalent to “Add row” / “Reset rows”).
+- [x] **`src/gui/dialogs/acr_mri_qa_dialog.py`**: extend `get_options()` to return `Optional[MRICompareRequest]` as the final element. `None` when compare mode is unchecked.
+- [x] **`src/gui/dialogs/acr_mri_qa_dialog.py`**: module / `prompt_acr_mri_options` / class docstrings updated.
 
 ### Phase C — Main flow and results
 
-- [ ] **`src/main.py` — `_open_acr_mri_phantom_analysis`**: unpack the new `Optional[MRICompareRequest]` from `mri_opts`. If `None`, use existing single-run path unchanged.
-- [ ] **`src/main.py` — `_open_acr_mri_phantom_analysis`**: if compare request present, launch `QABatchWorker` instead of `QAAnalysisWorker`. Connect `batch_result_ready` to new handler.
-- [ ] **`src/main.py`**: add `_show_mri_compare_result_dialog(batch: MRIBatchResult, run_configs: List[LcRunConfig]) -> None`. Display a small modal table with one column per run showing: run label, method, threshold, sanity, score, success/fail, any warnings.
-- [ ] **`src/main.py`**: add `_export_mri_compare_json(batch: MRIBatchResult, run_configs: List[LcRunConfig]) -> None`. Build `schema_version: "1.2"` JSON with `compare_mode: true` and a `runs` array. Offer save dialog with default stem `"qa-acr-mri-compare-{timestamp}.json"`.
-- [ ] **`src/main.py`**: for the single-run path — no changes to existing logic, but verify that the `notes=` argument is now being passed to `publish_pdf` via `run_acr_mri_large_analysis`.
+- [x] **`src/main.py` — `_open_acr_mri_phantom_analysis`**: unpack `Optional[MRICompareRequest]`; single-run path unchanged when `None`.
+- [x] **`src/main.py`**: compare path launches `QABatchWorker` and connects `batch_result_ready`.
+- [x] **`src/main.py`**: `_show_mri_compare_result_dialog` — non-modal table + **Save comparison JSON…** + optional **Open PDF** + vanilla row from `pylinac_analysis_profile` (§1.6).
+- [x] **`src/main.py`**: `_export_mri_compare_json` — `schema_version: "1.2"`, `compare_mode: true`, `runs` array; default stem `qa-acr-mri-compare-{timestamp}.json`.
+- [x] **`src/main.py`**: single-run path passes `notes=` via `run_acr_mri_large_analysis`.
 
 ### Phase D — Documentation and tracking
 
-- [ ] **`dev-docs/info/PYLINAC_CUSTOMIZATION_AND_EXTENSIONS.md`**: add rows to the Shipped customizations table for compare mode and PDF interpretation notes once shipped.
-- [ ] **`dev-docs/info/PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md`**: add a brief "Compare mode" section noting the batch run approach and JSON schema version 1.2.
-- [ ] **`dev-docs/TO_DO.md`**: add to Features (Near-Term): `- [ ] **[P2]** ACR MRI compare mode: run low-contrast analysis with up to 3 parameter sets; compare JSON export and PDF notes ([plan](plans/PYLINAC_MRI_COMPARE_RUNS_AND_PDF_INTERPRETATION_PLAN.md))`.
-- [ ] **`CHANGELOG.md`**: add entries under `[Unreleased]` Added/Changed when features ship.
+- [x] **`dev-docs/info/PYLINAC_CUSTOMIZATION_AND_EXTENSIONS.md`**: shipped rows for compare mode, PDF notes, combined PDF.
+- [x] **`dev-docs/info/PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md`**: **Compare mode** section.
+- [x] **`dev-docs/TO_DO.md`**: item tracked (completed / `[x]`).
+- [x] **`CHANGELOG.md`**: entries under `[Unreleased]` / releases for compare mode and combined PDF.
 
 ### Phase E — Verification
 
-- [ ] Smoke test: run `run_acr_mri_large_batch(...)` in isolation with 3 distinct `LcRunConfig` instances; assert 3 `QAResult` objects returned with distinct `pylinac_analysis_profile` entries.
-- [ ] Dialog test: open MRI options dialog, enable compare mode, confirm row enable/disable and combo values produce correct `MRICompareRequest`.
-- [ ] Single-run regression: confirm existing single-run path works identically to before (no schema change, same PDF path, same JSON structure with `schema_version: "1.1"`).
-- [ ] Notes in PDF: confirm `notes` text appears in generated PDF; verify no visible truncation or crash on typical text length.
-- [ ] Compare JSON: confirm `schema_version: "1.2"`, `compare_mode: true`, `runs` array length matches enabled rows.
-- [ ] Lint/type-check all edited files.
+- [x] Smoke test: `tests/test_mri_compare_phase_e.py` — `run_acr_mri_large_batch` with 3 `LcRunConfig` → 3 `QAResult`; distinct LC fields verified via `build_pylinac_analysis_profile` on per-run `QARequest` replicas (batch failure path with missing pylinac may repeat the same base profile).
+- [x] Dialog test: same file, `test_acr_mri_dialog_compare_mode_yields_mri_compare_request` (`@pytest.mark.qt`).
+- [x] Single-run regression: `test_single_run_qa_json_schema_1_1_key_set` asserts stable top-level keys for schema 1.1.
+- [x] Notes: `test_build_mri_pdf_notes_contains_interpretation_keywords` asserts non-empty notes list with MTF / pylinac doc cues (full PDF pixel check remains manual).
+- [x] Compare JSON: `test_build_mri_compare_json_document_schema_and_runs_length` asserts `1.2`, `compare_mode`, `runs` length.
+- [x] Lint/type-check: run `basedpyright` / CI on touched modules as needed.
 
 ---
 
 ## Dependency note
 
-The `notes=` approach requires no new Python packages. If PDF appending is needed (fallback from Phase 2.4), add `pypdf>=4.0` to `requirements.txt` and document it before implementing.
+Single-run PDF notes use only pylinac. **Compare-mode combined PDF** requires **`pypdf>=4.0`** (and **reportlab** via pylinac) — see `requirements.txt` and `MRI_COMPARE_COMBINED_PDF_PLAN.md`.
 
 ---
 

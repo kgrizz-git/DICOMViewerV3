@@ -163,6 +163,20 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 
 ---
 
+## [0.1.2] - 2026-04-03
+
+### Changed
+- **ACR MRI compare results dialog**: Non-modal **QDialog** with a **comparison table** (runs as columns): status, low-contrast score, **vanilla equivalent** (from `pylinac_analysis_profile`), method, threshold, sanity multiplier, warning summary; scrollable **details** for full warnings/errors; **Save comparison JSON…** (JSON export is no longer automatic after closing the summary). **Open PDF** opens the combined compare PDF when present. **`build_mri_compare_json_document`** in `src/qa/mri_compare_export.py` centralizes schema 1.2 payload construction.
+
+### Added
+- **Tests**: `tests/test_mri_compare_phase_e.py` (batch shape, profile distinctness, MRI compare dialog via `@pytest.mark.qt`, schema 1.1/1.2 keys, PDF notes keywords).
+
+### Docs
+- **`PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md`**: **Compare mode** section (batch runs, schema 1.2, combined PDF pointers).
+- **`PYLINAC_MRI_COMPARE_RUNS_AND_PDF_INTERPRETATION_PLAN.md`**: Status **Implemented**, superseded notes, checklist completed, Phase E tied to automated tests.
+
+---
+
 ## [0.1.1] - (not yet released)
 
 ### Fixed
@@ -181,6 +195,7 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ### Notes
 - No official release has been made yet. Version 0.1.0 marks initial development; move to 1.0.0 when the public API is stable (see dev-docs/info/SEMANTIC_VERSIONING_GUIDE.md).
 
-[Unreleased]: https://github.com/kgrizz-git/DICOMViewerV3/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/kgrizz-git/DICOMViewerV3/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/kgrizz-git/DICOMViewerV3/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/kgrizz-git/DICOMViewerV3/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/kgrizz-git/DICOMViewerV3/releases/tag/v0.1.0

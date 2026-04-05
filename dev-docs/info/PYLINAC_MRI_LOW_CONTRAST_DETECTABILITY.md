@@ -84,6 +84,18 @@ Fine-tuning of phantom localization (**`x_adjustment`**, **`y_adjustment`**, **`
 
 ---
 
+## Compare mode (DICOM Viewer V3)
+
+The viewer can run **up to three** independent low-contrast analyses on the **same** DICOM stack in one batch (**Tools → ACR MRI (pylinac)…** → enable **Compare low-contrast settings**). Each row is a full **`ACRMRILarge.analyze(...)`** with its own **`low_contrast_method`**, **`low_contrast_visibility_threshold`**, and **`low_contrast_visibility_sanity_multiplier`**; the pylinac analyzer is **re-instantiated per run** so internal state does not leak between parameter sets.
+
+- **Scoring and overlays** on each run follow the same rules as in the sections above (spoke counting, sanity cap, green/red/blue circles on the per-run pylinac PDF pages).
+- **JSON export** uses **`schema_version` `1.2`**, top-level **`compare_mode`: true**, a **`runs`** array (one object per enabled row, each with its own **`pylinac_analysis_profile`** and metrics), and **`combined_pdf_path`** when a merged PDF was written.
+- **Combined PDF**: a viewer-authored **summary page** (full interpretation text + parameter/score table) plus each run’s pylinac PDF concatenated — see **`PYLINAC_CUSTOMIZATION_AND_EXTENSIONS.md`** and **`dev-docs/plans/completed/MRI_COMPARE_COMBINED_PDF_PLAN.md`**.
+
+For the original feature checklist and design notes, see **`dev-docs/plans/PYLINAC_MRI_COMPARE_RUNS_AND_PDF_INTERPRETATION_PLAN.md`** (marked implemented; some checklist items superseded by the combined-PDF approach).
+
+---
+
 ## References (pylinac 3.42.0–aligned)
 
 - Package: `pylinac.acr` — `ACRMRILarge`, `MRLowContrastModule`, `MRLowContrastMultiSliceModule`, `analyze()`, `publish_pdf()`, `results()`.

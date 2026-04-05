@@ -36,12 +36,22 @@ sys.path.insert(0, str(src_dir))
 from dataclasses import replace
 
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QApplication,
+    QDialog,
     QFileDialog,
+    QHBoxLayout,
+    QHeaderView,
     QInputDialog,
+    QLabel,
     QMessageBox,
     QProgressDialog,
+    QPushButton,
     QStyleFactory,
+    QTableWidget,
+    QTableWidgetItem,
+    QTextEdit,
+    QVBoxLayout,
 )
 from PySide6.QtCore import Qt, QPointF, QObject, QTimer, QRectF, QSize
 from PySide6.QtGui import QKeyEvent
@@ -125,6 +135,7 @@ from qa.analysis_types import (
     is_physical_scan_extent_failure,
 )
 from qa.preflight import collect_slice_position_warnings, modality_preflight_warning
+from qa.mri_compare_export import build_mri_compare_json_document
 from qa.worker import QAAnalysisWorker, QABatchWorker
 from gui.dialogs.acr_ct_qa_dialog import prompt_acr_ct_options
 from gui.dialogs.acr_mri_qa_dialog import prompt_acr_mri_options
@@ -167,6 +178,7 @@ class DICOMViewerApp(QObject):
     _window_slot_map_widget_popup: Optional[WindowSlotMapWidget] = None
     _qa_worker: Optional[QAAnalysisWorker] = None
     _qa_batch_worker: Optional[QABatchWorker] = None
+    _mri_compare_result_dialog: Optional[QDialog] = None
     _histogram_wl_update_timer: Optional[QTimer] = None
     _histogram_update_timer: Optional[QTimer] = None
 
@@ -3068,126 +3080,179 @@ class DICOMViewerApp(QObject):
                 )
                 return
             progress.close()
-            self._show_mri_compare_result_dialog(batch)
-            self._export_mri_compare_json(batch, json_inputs)
+            self._show_mri_compare_result_dialog(batch, json_inputs=json_inputs)
 
         self._qa_batch_worker.batch_result_ready.connect(on_batch_result)
         self._qa_batch_worker.finished.connect(progress.close)
         self._qa_batch_worker.start()
 
-    def _show_mri_compare_result_dialog(self, batch: MRIBatchResult) -> None:
-        """
-        Show a modal summary dialog for a compare-mode MRI batch result.
+    def _note_mri_compare_dialog_closed(self, *_args: Any) -> None:
+        """Clear compare-results dialog reference after WA_DeleteOnClose."""
+        self._mri_compare_result_dialog = None
 
-        Displays a table row per key metric with one column per run.  When a
-        combined PDF was produced, shows its path and provides an "Open PDF"
-        button that opens the file in the system default viewer.
+    def _open_path_in_system_viewer(self, path: str) -> None:
+        """Open a file path with the OS default application (PDF viewer, etc.)."""
+        try:
+            os.startfile(path)  # type: ignore[attr-defined]
+        except AttributeError:
+            import subprocess
+
+            subprocess.Popen(["xdg-open", path])  # noqa: S603
+        except Exception as exc:
+            QMessageBox.warning(
+                self.main_window,
+                "Open file",
+                f"Could not open file:\n{exc}",
+            )
+
+    def _show_mri_compare_result_dialog(
+        self,
+        batch: MRIBatchResult,
+        *,
+        json_inputs: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """
+        Show a non-modal compare summary matching plan §1.6.
+
+        Presents a table (metrics × runs) including low-contrast score,
+        pylinac ``vanilla_equivalent`` (from ``pylinac_analysis_profile``),
+        LC parameters, and warning summaries; a details area lists full
+        warnings/errors. User saves JSON via **Save comparison JSON…**;
+        **Open PDF** appears when a combined PDF path exists.
 
         Args:
-            batch: MRIBatchResult from QABatchWorker.
+            batch: MRIBatchResult from ``QABatchWorker``.
+            json_inputs: Top-level inputs dict for optional JSON export.
         """
         configs = batch.run_configs
         results = batch.run_results
-
         n = len(configs)
         if n == 0:
             return
 
-        # Build summary text
-        col_w = 22
-        label_w = 20
+        if self._mri_compare_result_dialog is not None:
+            self._mri_compare_result_dialog.close()
+            self._mri_compare_result_dialog = None
 
-        def row_text(label: str, values: list[str]) -> str:
-            return label.ljust(label_w) + "".join(v.ljust(col_w) for v in values)
+        dialog = QDialog(self.main_window)
+        self._mri_compare_result_dialog = dialog
+        dialog.setWindowTitle("ACR MRI Phantom Analysis — Compare Results")
+        dialog.setModal(False)
+        dialog.setWindowFlags(
+            dialog.windowFlags() | Qt.WindowType.WindowStaysOnTopHint
+        )
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        dialog.destroyed.connect(self._note_mri_compare_dialog_closed)
 
-        lines = [
-            "ACR MRI — Low-Contrast Compare Results",
-            "=" * (label_w + col_w * n),
-            row_text("", [cfg.label for cfg in configs]),
-            "-" * (label_w + col_w * n),
-            row_text("Status", ["OK" if r.success else "FAILED" for r in results]),
-            row_text("Method", [cfg.low_contrast_method for cfg in configs]),
-            row_text(
-                "Threshold",
-                [f"{cfg.low_contrast_visibility_threshold:.6f}" for cfg in configs],
-            ),
-            row_text(
-                "Sanity mult",
-                [
-                    f"{cfg.low_contrast_visibility_sanity_multiplier:.3f}"
-                    for cfg in configs
-                ],
-            ),
-            row_text(
-                "LC Score",
-                [
-                    str(r.metrics.get("low_contrast_score", "N/A"))
-                    if r.success
-                    else "FAILED"
-                    for r in results
-                ],
-            ),
-            "-" * (label_w + col_w * n),
+        outer = QVBoxLayout(dialog)
+        outer.addWidget(
+            QLabel("Comparison table — one column per run (see plan §1.6).")
+        )
+
+        row_labels = [
+            "Status",
+            "Low contrast score",
+            "Vanilla equivalent",
+            "Contrast method",
+            "Visibility threshold",
+            "Sanity multiplier",
+            "Warnings (summary)",
         ]
+        n_rows = len(row_labels)
+        table = QTableWidget(n_rows, n)
+        table.setHorizontalHeaderLabels([c.label for c in configs])
+        table.setVerticalHeaderLabels(row_labels)
+        table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Stretch
+        )
+        table.verticalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.ResizeToContents
+        )
 
-        # Per-run warnings/errors
-        for cfg, r in zip(configs, results):
+        for col, (cfg, r) in enumerate(zip(configs, results)):
+            prof = r.pylinac_analysis_profile or {}
+            vanilla = "Yes" if prof.get("vanilla_equivalent", True) else "No"
+            lc_score = (
+                str(r.metrics.get("low_contrast_score", "N/A"))
+                if r.success
+                else "N/A"
+            )
             if r.warnings:
-                lines.append(f"{cfg.label} warnings:")
-                for w in r.warnings:
-                    lines.append(f"  \u2022 {w}")
-            if r.errors:
-                lines.append(f"{cfg.label} errors:")
-                for e in r.errors:
-                    lines.append(f"  \u2022 {e}")
+                wsum = "; ".join(r.warnings[:3])
+                if len(r.warnings) > 3:
+                    wsum += " …"
+            else:
+                wsum = "—"
 
-        # Combined PDF path (stored on run_results[0] by the batch runner)
+            column_values = [
+                "OK" if r.success else "FAILED",
+                lc_score,
+                vanilla,
+                cfg.low_contrast_method,
+                f"{cfg.low_contrast_visibility_threshold:.6f}",
+                f"{cfg.low_contrast_visibility_sanity_multiplier:.3f}",
+                wsum,
+            ]
+            for row, text in enumerate(column_values):
+                table.setItem(row, col, QTableWidgetItem(text))
+
+        outer.addWidget(table)
+
         combined_pdf: Optional[str] = None
         if results and results[0].pdf_report_path:
             combined_pdf = results[0].pdf_report_path
-            lines.append("")
-            lines.append(f"Combined PDF: {combined_pdf}")
-        else:
-            lines.append("")
-            lines.append("Combined PDF: not generated")
 
-        summary = "\n".join(lines)
-        box = QMessageBox(self.main_window)
-        box.setWindowTitle("ACR MRI Phantom Analysis — Compare Results")
-        box.setText(summary)
-        all_ok = all(r.success for r in results)
-        box.setIcon(
-            QMessageBox.Icon.Information if all_ok else QMessageBox.Icon.Warning
-        )
-        box.setWindowFlags(box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
-
-        # "Open PDF" button — only shown when a combined PDF exists
-        open_pdf_btn = None
+        detail_lines: List[str] = []
         if combined_pdf:
-            open_pdf_btn = box.addButton(
-                "Open PDF", QMessageBox.ButtonRole.ActionRole
+            detail_lines.append(f"Combined PDF: {combined_pdf}")
+        else:
+            detail_lines.append("Combined PDF: not generated")
+        detail_lines.append("")
+        for cfg, r in zip(configs, results):
+            if r.warnings:
+                detail_lines.append(f"{cfg.label} — warnings:")
+                for w in r.warnings:
+                    detail_lines.append(f"  • {w}")
+            if r.errors:
+                detail_lines.append(f"{cfg.label} — errors:")
+                for e in r.errors:
+                    detail_lines.append(f"  • {e}")
+
+        details = QTextEdit()
+        details.setReadOnly(True)
+        details.setPlainText("\n".join(detail_lines))
+        details.setMinimumHeight(120)
+        outer.addWidget(QLabel("Warnings and errors (full)"))
+        outer.addWidget(details)
+
+        btn_row = QHBoxLayout()
+        save_json_btn = QPushButton("Save comparison JSON…")
+        save_json_btn.clicked.connect(
+            lambda: self._export_mri_compare_json(batch, json_inputs)
+        )
+        btn_row.addWidget(save_json_btn)
+        if combined_pdf:
+            open_pdf_btn = QPushButton("Open PDF")
+            open_pdf_btn.clicked.connect(
+                lambda p=combined_pdf: self._open_path_in_system_viewer(p)
             )
-        box.addButton(QMessageBox.StandardButton.Ok)
-        box.setDefaultButton(QMessageBox.StandardButton.Ok)
+            btn_row.addWidget(open_pdf_btn)
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dialog.close)
+        btn_row.addWidget(close_btn)
+        btn_row.addStretch()
+        outer.addLayout(btn_row)
 
-        box.activateWindow()
-        box.raise_()
-        box.exec()
+        if not all(r.success for r in results):
+            dialog.setWindowTitle(
+                dialog.windowTitle() + " (one or more runs failed)"
+            )
 
-        # Handle "Open PDF" click after exec returns
-        if open_pdf_btn is not None and box.clickedButton() is open_pdf_btn:
-            try:
-                os.startfile(combined_pdf)  # type: ignore[attr-defined]
-            except AttributeError:
-                # Non-Windows fallback
-                import subprocess
-                subprocess.Popen(["xdg-open", combined_pdf])  # noqa: S603
-            except Exception as exc:
-                QMessageBox.warning(
-                    self.main_window,
-                    "Open PDF",
-                    f"Could not open PDF:\n{exc}",
-                )
+        dialog.resize(min(920, 240 + n * 130), 540)
+        dialog.activateWindow()
+        dialog.raise_()
+        dialog.show()
 
     def _export_mri_compare_json(
         self,
@@ -3213,49 +3278,9 @@ class DICOMViewerApp(QObject):
         if not json_path:
             return
 
-        runs_data = []
-        for cfg, result in zip(batch.run_configs, batch.run_results):
-            runs_data.append(
-                {
-                    "run_label": cfg.label,
-                    "run_config": {
-                        "low_contrast_method": cfg.low_contrast_method,
-                        "low_contrast_visibility_threshold": cfg.low_contrast_visibility_threshold,
-                        "low_contrast_visibility_sanity_multiplier": cfg.low_contrast_visibility_sanity_multiplier,
-                    },
-                    "run": {
-                        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
-                        "app_version": APP_VERSION,
-                        "pylinac_version": result.pylinac_version or "",
-                        "analysis_type": result.analysis_type,
-                        "status": "success" if result.success else "failed",
-                    },
-                    "series": {
-                        "study_uid": result.study_uid,
-                        "series_uid": result.series_uid,
-                        "modality": result.modality,
-                        "num_images": result.num_images,
-                    },
-                    "pylinac_analysis_profile": result.pylinac_analysis_profile or {},
-                    "metrics": result.metrics,
-                    "warnings": result.warnings,
-                    "errors": result.errors,
-                    "artifacts": {"pdf_report_path": result.pdf_report_path or ""},
-                }
-            )
-
-        # combined_pdf_path is stored on run_results[0] by the batch runner
-        combined_pdf_path: str = ""
-        if batch.run_results and batch.run_results[0].pdf_report_path:
-            combined_pdf_path = batch.run_results[0].pdf_report_path
-
-        payload: Dict[str, Any] = {
-            "schema_version": "1.2",
-            "compare_mode": True,
-            "inputs": inputs or {},
-            "combined_pdf_path": combined_pdf_path,
-            "runs": runs_data,
-        }
+        payload = build_mri_compare_json_document(
+            batch, inputs, app_version=APP_VERSION
+        )
         with open(json_path, "w", encoding="utf-8") as handle:
             json.dump(payload, handle, indent=2)
         self.main_window.update_status(f"Saved QA compare JSON: {json_path}")
