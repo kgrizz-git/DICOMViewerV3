@@ -64,7 +64,8 @@ class DialogCoordinator:
         get_histogram_callbacks_for_subwindow: Optional[Callable[[int], dict[str, Any]]] = None,
         get_focused_subwindow_index: Optional[Callable[[], int]] = None,
         undo_redo_manager: Optional[Any] = None,
-        ui_refresh_callback: Optional[Callable[[], None]] = None
+        ui_refresh_callback: Optional[Callable[[], None]] = None,
+        tag_export_union_host: Optional[Any] = None,
     ):
         """
         Initialize the dialog coordinator.
@@ -85,6 +86,7 @@ class DialogCoordinator:
         self.settings_applied_callback = settings_applied_callback
         self.undo_redo_manager = undo_redo_manager
         self.ui_refresh_callback = ui_refresh_callback
+        self.tag_export_union_host = tag_export_union_host
         self.overlay_config_applied_callback = overlay_config_applied_callback
         self.annotation_options_applied_callback: Optional[Callable[[], None]] = None
         self.tag_edit_history = tag_edit_history
@@ -238,7 +240,12 @@ class DialogCoordinator:
             )
             return
         
-        dialog = TagExportDialog(current_studies, self.config_manager, self.main_window)
+        dialog = TagExportDialog(
+            current_studies,
+            self.config_manager,
+            self.main_window,
+            tag_export_union_host=self.tag_export_union_host,
+        )
         dialog.exec()
     
     def open_export(

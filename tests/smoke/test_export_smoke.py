@@ -1,7 +1,7 @@
 """
 Smoke tests for tag export writer backends.
 
-Covers default filename generation and minimal CSV/XLSX output creation.
+Covers default filename generation and minimal CSV/XLSX/TXT output creation.
 """
 
 import csv
@@ -16,7 +16,12 @@ from pydicom.tag import Tag
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
-from core.tag_export_writer import generate_default_filename, write_csv_files, write_excel_file
+from core.tag_export_writer import (
+    generate_default_filename,
+    write_csv_files,
+    write_excel_file,
+    write_txt_files,
+)
 
 
 class TestTagExportWriterSmoke(unittest.TestCase):
@@ -111,6 +116,32 @@ class TestTagExportWriterSmoke(unittest.TestCase):
             self.assertEqual(ws["B1"].value, "Tag Number")
             self.assertEqual(ws["C1"].value, "Name")
             self.assertEqual(ws["D1"].value, "Value")
+
+    def test_write_txt_files_smoke(self):
+        studies, selected_series, selected_tags, variation_analysis = self._build_sample_data()
+
+        with TemporaryDirectory() as tmp_dir:
+            out_base = str(Path(tmp_dir) / "tag_export.txt")
+            exported = write_txt_files(
+                out_base,
+                variation_analysis,
+                studies,
+                selected_series,
+                selected_tags,
+                include_private=False,
+            )
+
+            self.assertEqual(len(exported), 1)
+            txt_path = exported[0]
+            self.assertTrue(txt_path.exists())
+
+            with open(txt_path, newline="", encoding="utf-8") as f:
+                rows = list(csv.reader(f, delimiter="\t"))
+
+            self.assertGreaterEqual(len(rows), 4)
+            self.assertEqual(rows[0], ["Instance", "Tag Number", "Name", "Value"])
+            self.assertTrue(any(r and r[0] == "All" for r in rows))
+            self.assertTrue(any(r and r[0].startswith("Instance ") for r in rows))
 
 
 if __name__ == "__main__":

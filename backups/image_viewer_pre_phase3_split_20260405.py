@@ -1,0 +1,3428 @@
+"""
+Image Viewer Widget
+
+This module implements the image display widget with zoom, pan, and
+resizable display capabilities using QGraphicsView.
+
+Inputs:
+    - PIL Image objects or NumPy arrays
+    - Zoom/pan user interactions
+    - Window resize events
+    
+Outputs:
+    - Displayed DICOM images
+    - Zoom/pan state
+    
+Requirements:
+    - PySide6 for graphics view
+    - PIL/Pillow for image handling
+    - numpy for array operations
+"""
+
+from PySide6.QtWidgets import (QGraphicsView, QGraphicsScene, QGraphicsPixmapItem,
+                                QWidget, QVBoxLayout, QMenu, QApplication)
+from PySide6.QtCore import Qt, QRectF, QRect, Signal, QPointF, QPoint, QTimer, QEvent
+from PySide6.QtGui import (QPixmap, QImage, QWheelEvent, QKeyEvent, QMouseEvent,
+                          QPainter, QColor, QTransform, QDragEnterEvent, QDragMoveEvent, QDropEvent,
+                          QPen,
+                          QNativeGestureEvent)
+from PIL import Image
+from utils.bundled_fonts import make_qfont
+from utils.debug_flags import DEBUG_NAV, DEBUG_MAGNIFIER, DEBUG_AGENT_LOG
+import numpy as np
+import os
+import time
+from typing import Optional, Callable, Any, List, Tuple, Dict, Union, TYPE_CHECKING, cast
+
+if TYPE_CHECKING:
+    from tools.roi_manager import ROIItem
+
+
+class ImageViewer(QGraphicsView):
+    """
+    Image viewer widget with zoom and pan capabilities.
+    
+    Features:
+    - Display DICOM images
+    - Zoom with mouse wheel or gestures
+    - Pan by dragging
+    - Fit to window
+    - Resizable display area
+    """
+    
+    # Signals
+    zoom_changed = Signal(float)  # Emitted when zoom level changes
+    transform_changed = Signal()  # Emitted when view transform changes (zoom/pan)
+    image_clicked = Signal(QPointF)  # Emitted when image is clicked
+    image_clicked_no_roi = Signal()  # Emitted when image is clicked but not on an ROI (for deselection)
+    roi_drawing_started = Signal(QPointF)  # Emitted when ROI drawing starts
+    roi_drawing_updated = Signal(QPointF)  # Emitted when ROI drawing updates
+    roi_drawing_finished = Signal()  # Emitted when ROI drawing finishes
+    wheel_event_for_slice = Signal(int)  # Emitted when wheel event should navigate slices
+    arrow_key_pressed = Signal(int)  # Emitted when arrow key is pressed (1 = up, -1 = down)
+    roi_clicked = Signal(object)  # Emitted when ROI is clicked (ROIItem)
+    roi_delete_requested = Signal(object)  # Emitted when ROI deletion is requested (QGraphicsItem)
+    roi_statistics_overlay_toggle_requested = Signal(object, bool)  # Emitted when ROI statistics overlay toggle is requested (ROIItem, visible)
+    roi_statistics_selection_changed = Signal(object, set)  # Emitted when ROI statistics selection changes (ROIItem, statistics_set)
+    reset_view_requested = Signal()  # Emitted when reset view is requested from context menu
+    reset_all_views_requested = Signal()  # Emitted when reset all views is requested from context menu
+    context_menu_mouse_mode_changed = Signal(str)  # Emitted when mouse mode is changed from context menu
+    context_menu_scroll_wheel_mode_changed = Signal(str)  # Emitted when scroll wheel mode is changed from context menu
+    context_menu_rescale_toggle_changed = Signal(bool)  # Emitted when rescale toggle is changed from context menu
+    window_level_drag_changed = Signal(float, float)  # Emitted when window/level is adjusted via right mouse drag (center_delta, width_delta)
+    right_mouse_press_for_drag = Signal()  # Emitted when right mouse is pressed (not on ROI) to request window/level values for drag
+    series_navigation_requested = Signal(int)  # Emitted when series navigation is requested (-1 for left/previous, 1 for right/next)
+    toggle_series_navigator_requested = Signal()  # Emitted when series navigator toggle is requested
+    window_level_preset_selected = Signal(int)  # Emitted when preset is selected (preset_index)
+    cine_play_requested = Signal()  # Emitted when cine play is requested from context menu
+    cine_pause_requested = Signal()  # Emitted when cine pause is requested from context menu
+    cine_stop_requested = Signal()  # Emitted when cine stop is requested from context menu
+    cine_loop_toggled = Signal(bool)  # Emitted when cine loop is toggled from context menu (True = enabled)
+    histogram_requested = Signal()  # Emitted when histogram dialog is requested from context menu
+    quick_window_level_requested = Signal()  # Emitted when Quick Window/Level dialog is requested (context menu or shortcut Q)
+    export_roi_statistics_requested = Signal()  # Emitted when Export ROI Statistics is requested from context menu
+    measurement_started = Signal(QPointF)  # Emitted when measurement starts (start position)
+    measurement_updated = Signal(QPointF)  # Emitted when measurement is updated (current position)
+    measurement_finished = Signal()  # Emitted when measurement is finished
+    measurement_delete_requested = Signal(object)  # Emitted when measurement deletion is requested (MeasurementItem)
+    text_annotation_started = Signal(QPointF)  # Emitted when text annotation starts (position)
+    text_annotation_finished = Signal()  # Emitted when text annotation is finished
+    arrow_annotation_started = Signal(QPointF)  # Emitted when arrow annotation starts (start position)
+    arrow_annotation_updated = Signal(QPointF)  # Emitted when arrow annotation is updated (current position)
+    arrow_annotation_finished = Signal()  # Emitted when arrow annotation is finished
+    text_annotation_delete_requested = Signal(object)  # Emitted when text annotation deletion is requested (TextAnnotationItem)
+    arrow_annotation_delete_requested = Signal(object)  # Emitted when arrow annotation deletion is requested (ArrowAnnotationItem)
+    crosshair_delete_requested = Signal(object)  # Emitted when crosshair deletion is requested (CrosshairItem)
+    clear_measurements_requested = Signal()  # Emitted when clear measurements is requested
+    toggle_overlay_requested = Signal()  # Emitted when toggle overlay is requested
+    privacy_view_toggled = Signal(bool)  # Emitted when privacy view is toggled from context menu (True = enabled)
+    smooth_when_zoomed_toggled = Signal(bool)  # Emitted when smooth when zoomed is toggled from context menu (True = enabled)
+    scale_markers_toggled = Signal(bool)  # Emitted when scale markers are toggled from context menu (True = enabled)
+    direction_labels_toggled = Signal(bool)  # Emitted when direction labels are toggled from context menu (True = enabled)
+    slice_sync_toggled = Signal(bool)  # Emitted when slice sync is toggled from context menu (True = enabled)
+    slice_sync_manage_requested = Signal()  # Emitted when slice sync group management is requested from context menu
+    slice_location_lines_toggled = Signal(bool)  # Emitted when slice location lines toggled from context menu (True = show)
+    slice_location_lines_same_group_only_toggled = Signal(bool)  # Emitted when same-group-only toggled (True = only same group)
+    slice_location_lines_focused_only_toggled = Signal(bool)  # Emitted when focused-only toggled (True = only focused window)
+    left_pane_toggle_requested = Signal()  # Emitted when Show/Hide Left Pane is requested from context menu
+    right_pane_toggle_requested = Signal()  # Emitted when Show/Hide Right Pane is requested from context menu
+    annotation_options_requested = Signal()  # Emitted when annotation options dialog is requested
+    crosshair_clicked = Signal(QPointF, str, int, int, int)  # Emitted when crosshair tool is clicked (pos, pixel_value_str, x, y, z)
+    about_this_file_requested = Signal()  # Emitted when About this File is requested from context menu
+    assign_series_requested = Signal(str)  # Emitted when series assignment is requested (series_uid)
+    pixel_info_changed = Signal(str, int, int, int)  # Emitted when pixel info changes (pixel_value_str, x, y, z)
+    files_dropped = Signal(list)  # Emitted when files/folders are dropped (list of paths)
+    projection_enabled_changed = Signal(bool)  # Emitted when projection enabled state changes from context menu
+    projection_type_changed = Signal(str)  # Emitted when projection type changes from context menu ("aip", "mip", "minip")
+    projection_slice_count_changed = Signal(int)  # Emitted when projection slice count changes from context menu
+    layout_change_requested = Signal(str)  # Emitted when layout change is requested from context menu ("1x1", "1x2", "2x1", "2x2")
+    swap_view_requested = Signal(int)  # Emitted when user chooses Swap with View X (argument = other view index 0-3)
+    window_slot_map_popup_requested = Signal()  # Emitted when user requests window-slot map popup from Swap menu
+    create_mpr_view_requested = Signal()  # Emitted when "Create MPR view…" is chosen from context menu
+    clear_mpr_view_requested = Signal()  # Emitted when "Clear MPR view" is chosen from context menu
+
+    @property
+    def scene(self) -> QGraphicsScene:  # pyright: ignore[reportIncompatibleMethodOverride]
+        """Graphics scene for items in this viewer (legacy attribute-style access)."""
+        return self._graphics_scene
+
+    def __init__(self, parent: Optional[QWidget] = None, config_manager=None):
+        """
+        Initialize the image viewer.
+        
+        Args:
+            parent: Parent widget
+            config_manager: Optional ConfigManager instance for overlay font settings
+        """
+        super().__init__(parent)
+        self.config_manager = config_manager
+        
+        # View index (0-3) when used in multi-window layout; set by app so context menu can build Swap submenu
+        self.subwindow_index: Optional[int] = None
+        # Callback to get current slot_to_view [4 ints] for Swap menu (Window 1-4 = slot 0-3). Set by app.
+        self.get_slot_to_view_callback: Optional[Callable[[], List[int]]] = None
+        # Callback returning True when this subwindow is in MPR mode (used to show Clear vs Create).
+        self.is_mpr_view_callback: Optional[Callable[[], bool]] = None
+        # Per-subwindow override flag set by MprController to suppress tool activation in MPR mode.
+        self._mpr_mode_override: bool = False
+        
+        # Set transformation anchor to viewport center for consistent zoom behavior
+        # This anchor should remain constant - when set, scale() automatically centers zooming on viewport center
+        # No manual translation is needed when using scale() with AnchorViewCenter
+        self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
+        self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
+        # Set alignment to center the scene when it's smaller than viewport
+        # This ensures small images are centered, not positioned at top-left
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # Graphics scene for all viewer items
+        self._graphics_scene = QGraphicsScene(self)
+        self.setScene(self._graphics_scene)
+        
+        # Enable mouse tracking for hover events (pixel info updates)
+        self.setMouseTracking(True)
+        
+        # Image item
+        self.image_item: Optional[QGraphicsPixmapItem] = None
+        
+        # Image inversion state
+        self.image_inverted: bool = False
+        self.original_image: Optional[Image.Image] = None  # Store original image for inversion
+        
+        # Callback to notify when inversion state changes (for persistence per series)
+        self.inversion_state_changed_callback: Optional[Callable[[bool], None]] = None
+        
+        # Callbacks to get current dataset and slice index for pixel value display
+        self.get_current_dataset_callback: Optional[Callable[[], Any]] = None
+        self.get_current_slice_index_callback: Optional[Callable[[], int]] = None
+        self.get_use_rescaled_values_callback: Optional[Callable[[], bool]] = None
+        # Callback to get file path for current slice (for "Show file" context menu)
+        self.get_file_path_callback: Optional[Callable[[], Optional[str]]] = None
+        
+        # Zoom settings
+        self.min_zoom = 0.1
+        self.max_zoom = 10.0
+        self.zoom_factor = 1.08  # Reduced from 1.1 for less sensitive scroll wheel zoom
+        self.current_zoom = 1.0
+        
+        # Mouse interaction mode
+        self.mouse_mode = "pan"  # "roi_ellipse", "roi_rectangle", "measure", "zoom", "pan"
+        
+        # ROI drawing mode (derived from mouse_mode)
+        self.roi_drawing_mode: Optional[str] = None  # "rectangle", "ellipse", or None
+        self.roi_drawing_start: Optional[QPointF] = None
+        
+        # Measurement state
+        self.measuring = False
+        self.measurement_start_pos: Optional[QPointF] = None
+        
+        # Text annotation state
+        self.text_annotating = False
+        self.text_annotation_start_pos: Optional[QPointF] = None
+        
+        # Arrow annotation state
+        self.arrow_annotating = False
+        self.arrow_annotation_start_pos: Optional[QPointF] = None
+        
+        # Zoom mode state
+        self.zoom_start_pos: Optional[QPointF] = None
+        self.zoom_start_zoom: Optional[float] = None
+        self.zoom_mouse_moved = False  # Track if mouse actually moved during zoom drag
+        
+        # Magnifier state
+        from gui.magnifier_widget import MagnifierWidget
+        self.magnifier_widget: Optional[MagnifierWidget] = None
+        self.magnifier_active: bool = False
+        # Note: magnifier zoom is calculated dynamically as 1.5 * current_zoom
+        # Handle-drag magnifier: separate widget for Shift+drag on measurement handle
+        self.handle_drag_magnifier_widget: Optional[MagnifierWidget] = None
+        self.handle_drag_magnifier_active: bool = False
+        self._handle_drag_magnifier_size = 200
+        
+        # Scroll wheel mode
+        self.scroll_wheel_mode = "slice"  # "slice" or "zoom"
+        
+        # Callback to get cine loop state (set from main.py)
+        self.get_cine_loop_state_callback: Optional[Callable[[], bool]] = None
+        self.get_available_series_callback: Optional[Callable[[], List[Tuple[str, str]]]] = None
+
+        # Slice-location line visibility (optional; filled by app for context menu sync)
+        self.get_slice_location_lines_visible_callback: Optional[Callable[[], bool]] = None
+        self.get_slice_location_lines_same_group_only_callback: Optional[Callable[[], bool]] = None
+        self.get_slice_location_lines_focused_only_callback: Optional[Callable[[], bool]] = None
+        
+        # Rescale toggle state (for context menu)
+        self.use_rescaled_values = False
+        
+        # Track transform for change detection
+        self.last_transform = QTransform()
+        
+        # Track scrollbar positions for panning detection
+        self.last_horizontal_scroll = 0
+        self.last_vertical_scroll = 0
+        
+        # Debounced timer for panning updates (prevents jitter during rapid panning)
+        self._pan_update_timer: Optional[QTimer] = None
+        
+        # Right mouse drag for window/level adjustment
+        self.right_mouse_drag_start_pos: Optional[QPointF] = None
+        self.right_mouse_drag_start_center: Optional[float] = None
+        self.right_mouse_drag_start_width: Optional[float] = None
+        self.right_mouse_context_menu_shown = False  # Track if context menu was shown
+        self.cine_controls_enabled = False  # Track if cine controls should be enabled in context menu
+        
+        # Privacy view state (for context menu synchronization)
+        self._privacy_view_enabled: bool = False
+
+        # Smooth image when zoomed (display option; applied to view and image item)
+        self._smooth_when_zoomed: bool = False
+        # Viewer overlays (independent from metadata corner overlays)
+        self._show_scale_markers: bool = False
+        self._show_direction_labels: bool = False
+        self._scale_markers_color: Tuple[int, int, int] = (255, 255, 0)
+        self._direction_labels_color: Tuple[int, int, int] = (255, 255, 0)
+        self._direction_label_size: int = 16
+        self._scale_markers_major_tick_interval_mm: int = 10
+        self._scale_markers_minor_tick_interval_mm: int = 5
+        # Slice sync state (for context menu synchronization)
+        self._slice_sync_enabled: bool = False
+        # When True, we are in "interacting" state (zoom/pan just happened); use fast transform until idle timer fires
+        self._smooth_idle_interacting: bool = False
+        # Single-shot timer: when it fires, we leave "interacting" state and apply smooth mode if enabled
+        self._smooth_idle_timer = QTimer(self)
+        self._smooth_idle_timer.setSingleShot(True)
+        self._smooth_idle_timer.timeout.connect(self._on_smooth_idle_timeout)
+        
+        # Callbacks for window/level presets (set from main.py)
+        self.get_window_level_presets_callback: Optional[Callable[[], List[Tuple[float, float, bool, Optional[str]]]]] = None
+        self.get_current_preset_index_callback: Optional[Callable[[], int]] = None
+        
+        # Callback to get ROI from item (set from main.py)
+        self.get_roi_from_item_callback: Optional[Callable[[object], Optional["ROIItem"]]] = None
+        self.delete_all_rois_callback: Optional[Callable[[], None]] = None
+        
+        # Callbacks for projection state (set from main.py)
+        self.get_projection_enabled_callback: Optional[Callable[[], bool]] = None
+        self.get_projection_type_callback: Optional[Callable[[], str]] = None
+        self.get_projection_slice_count_callback: Optional[Callable[[], int]] = None
+        
+        # Sensitivity factors for window/level adjustment (pixels to units)
+        # These will be set dynamically based on current ranges
+        self.window_center_sensitivity = 1.0  # pixels per unit
+        self.window_width_sensitivity = 1.0  # pixels per unit
+        
+        # View settings
+        self.setDragMode(QGraphicsView.DragMode.NoDrag)
+        # Transformation anchor is already set to AnchorViewCenter above for viewport-centered zoom
+        # Resize anchor is already set to AnchorViewCenter above
+        
+        # Enable drag-and-drop on image viewer
+        self.setAcceptDrops(True)
+        # Also enable drag-and-drop on viewport (the actual widget that receives mouse events)
+        self.viewport().setAcceptDrops(True)
+        self.setRenderHint(QPainter.RenderHint.Antialiasing)
+        # SmoothPixmapTransform is set/cleared by _apply_smoothing_mode() based on _smooth_when_zoomed
+        
+        # Enable focus to receive key events
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        
+        # Set scrollbar policies to allow scrollbars when content fits
+        # ScrollBarAsNeeded allows scrollbars to appear when needed, but we'll enable them explicitly
+        # when setting custom ranges for images that fit
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        
+        # Connect scrollbar signals to detect panning
+        # Panning via scrollbars doesn't change the transform, so we need to track scrollbar changes
+        self.horizontalScrollBar().valueChanged.connect(self._on_scrollbar_changed)
+        self.verticalScrollBar().valueChanged.connect(self._on_scrollbar_changed)
+        
+        # Background - darker grey for better yellow text contrast
+        darker_grey = QColor(64, 64, 64)
+        self.setBackgroundBrush(darker_grey)
+
+        # Apply initial smoothing mode (view hint only when no image yet)
+        self._apply_smoothing_mode()
+
+    def set_background_color(self, color: QColor) -> None:
+        """
+        Set the background color of the image viewer.
+
+        Args:
+            color: QColor for the background
+        """
+        self.setBackgroundBrush(color)
+
+    def set_subwindow_index(self, idx: int) -> None:
+        """
+        Set this viewer's index (0-3) in the multi-window layout.
+        Used so the context menu can build the Swap submenu and identify the source view.
+        """
+        self.subwindow_index = idx
+
+    def _apply_smoothing_mode(self) -> None:
+        """
+        Apply the current smooth-when-zoomed setting to the view and image item.
+        When smoothing is enabled, uses fast transformation during zoom/pan (interacting)
+        and smooth transformation after idle. Sets or clears SmoothPixmapTransform on the view
+        and sets the image item's transformation mode. Antialiasing hint is unchanged.
+        """
+        # When smoothing is on but we're interacting (zoom/pan), use fast until idle
+        effective_smooth = self._smooth_when_zoomed and not self._smooth_idle_interacting
+        if effective_smooth:
+            self.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+            if self.image_item is not None:
+                self.image_item.setTransformationMode(Qt.TransformationMode.SmoothTransformation)
+        else:
+            self.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
+            if self.image_item is not None:
+                self.image_item.setTransformationMode(Qt.TransformationMode.FastTransformation)
+
+    def _on_smooth_idle_timeout(self) -> None:
+        """Leave interacting state and apply smooth mode if smoothing is enabled."""
+        self._smooth_idle_interacting = False
+        self._apply_smoothing_mode()
+
+    def _restart_smooth_idle_timer(self) -> None:
+        """
+        Restart the smooth-idle timer and switch to fast mode while interacting.
+        Call on zoom, pan, or scrollbar change when smoothing is enabled.
+        """
+        if not self._smooth_when_zoomed:
+            return
+        self._smooth_idle_interacting = True
+        self._apply_smoothing_mode()
+        self._smooth_idle_timer.start(300)
+
+    def set_smooth_when_zoomed_state(self, enabled: bool) -> None:
+        """
+        Set the smooth-when-zoomed state for this viewer. Used by main to sync the global config to this viewer.
+
+        Args:
+            enabled: True to enable image smoothing when zoomed, False for fast (blocky) scaling
+        """
+        self._smooth_when_zoomed = enabled
+        self._smooth_idle_interacting = False
+        self._smooth_idle_timer.stop()
+        self._apply_smoothing_mode()
+
+    def set_slice_sync_enabled_state(self, enabled: bool) -> None:
+        """
+        Set the slice-sync enabled state for this viewer's context menu.
+
+        Args:
+            enabled: True if global slice sync is enabled, False otherwise
+        """
+        self._slice_sync_enabled = enabled
+
+    def set_scale_markers_state(self, enabled: bool) -> None:
+        """
+        Set whether scale markers should be rendered.
+
+        Args:
+            enabled: True to show scale markers, False to hide
+        """
+        self._show_scale_markers = enabled
+        self.viewport().update()
+
+    def set_direction_labels_state(self, enabled: bool) -> None:
+        """
+        Set whether orientation direction labels should be rendered.
+
+        Args:
+            enabled: True to show direction labels, False to hide
+        """
+        self._show_direction_labels = enabled
+        self.viewport().update()
+
+    def set_scale_markers_color_state(self, color: Tuple[int, int, int]) -> None:
+        """Set the RGB color used when drawing scale markers."""
+        self._scale_markers_color = color
+        self.viewport().update()
+
+    def set_direction_labels_color_state(self, color: Tuple[int, int, int]) -> None:
+        """Set the RGB color used when drawing direction labels."""
+        self._direction_labels_color = color
+        self.viewport().update()
+
+    def set_direction_label_size_state(self, size: int) -> None:
+        """Set the point size used for direction labels."""
+        self._direction_label_size = max(1, int(size))
+        self.viewport().update()
+
+    def set_scale_markers_tick_intervals_state(self, major_interval_mm: int, minor_interval_mm: int) -> None:
+        """Set the scale markers major/minor tick intervals in millimetres."""
+        self._scale_markers_major_tick_interval_mm = max(1, int(major_interval_mm))
+        self._scale_markers_minor_tick_interval_mm = max(1, int(minor_interval_mm))
+        self.viewport().update()
+
+    def drawForeground(self, painter: QPainter, rect: Union[QRectF, QRect]) -> None:
+        """
+        Draw viewer-only overlays (scale markers and direction labels) on top of scene items.
+        """
+        super().drawForeground(painter, rect)
+
+        if self.image_item is None:
+            return
+
+        dataset = self.get_current_dataset_callback() if self.get_current_dataset_callback else None
+        if dataset is None:
+            return
+
+        painter.save()
+        try:
+            painter.resetTransform()
+            if self._show_scale_markers:
+                self._draw_scale_markers(painter, dataset)
+            if self._show_direction_labels:
+                self._draw_direction_labels(painter, dataset)
+        finally:
+            painter.restore()
+
+    def _draw_scale_markers(self, painter: QPainter, dataset: Any) -> None:
+        """Draw mm/cm ruler ticks on viewport left and bottom edges using PixelSpacing."""
+        spacing = self._extract_pixel_spacing(dataset)
+        if spacing is None or self.image_item is None:
+            return
+
+        row_spacing_mm, col_spacing_mm = spacing
+        if row_spacing_mm <= 0.0 or col_spacing_mm <= 0.0:
+            return
+
+        image_rect = self.image_item.sceneBoundingRect()
+        view_scene_rect = self.mapToScene(self.viewport().rect()).boundingRect()
+        visible_rect = image_rect.intersected(view_scene_rect)
+        if visible_rect.isEmpty():
+            return
+
+        zoom = max(0.0001, self.transform().m11())
+        viewport_rect = self.viewport().rect()
+        major_tick_len_px = 14.0
+        minor_tick_len_px = 8.0
+
+        pen = QPen(QColor(self._scale_markers_color[0], self._scale_markers_color[1], self._scale_markers_color[2], 220))
+        pen.setWidthF(1.0)
+        painter.setPen(pen)
+
+        minor_tick_mm = max(1, self._scale_markers_minor_tick_interval_mm)
+        major_tick_mm = max(1, self._scale_markers_major_tick_interval_mm)
+
+        # Bottom ruler: minor ticks and major ticks are drawn independently.
+        minor_step_x = minor_tick_mm / col_spacing_mm
+        if minor_step_x >= 1e-6:
+            start_mm_x = int(max(0.0, np.floor((visible_rect.left() - image_rect.left()) / minor_step_x)))
+            end_mm_x = int(np.ceil((visible_rect.right() - image_rect.left()) / minor_step_x))
+            bottom_y = float(viewport_rect.bottom())
+            for mm_idx in range(start_mm_x, end_mm_x + 1):
+                scene_x = image_rect.left() + (mm_idx * minor_step_x)
+                if scene_x < visible_rect.left() - 0.5 or scene_x > visible_rect.right() + 0.5:
+                    continue
+                viewport_x = float(self.mapFromScene(QPointF(scene_x, visible_rect.center().y())).x())
+                if viewport_x < viewport_rect.left() - 1 or viewport_x > viewport_rect.right() + 1:
+                    continue
+                painter.drawLine(QPointF(viewport_x, bottom_y), QPointF(viewport_x, bottom_y - minor_tick_len_px))
+
+        major_step_x = major_tick_mm / col_spacing_mm
+        if major_step_x >= 1e-6:
+            start_major_x = int(max(0.0, np.floor((visible_rect.left() - image_rect.left()) / major_step_x)))
+            end_major_x = int(np.ceil((visible_rect.right() - image_rect.left()) / major_step_x))
+            bottom_y = float(viewport_rect.bottom())
+            for major_idx in range(start_major_x, end_major_x + 1):
+                scene_x = image_rect.left() + (major_idx * major_step_x)
+                if scene_x < visible_rect.left() - 0.5 or scene_x > visible_rect.right() + 0.5:
+                    continue
+                viewport_x = float(self.mapFromScene(QPointF(scene_x, visible_rect.center().y())).x())
+                if viewport_x < viewport_rect.left() - 1 or viewport_x > viewport_rect.right() + 1:
+                    continue
+                painter.drawLine(QPointF(viewport_x, bottom_y), QPointF(viewport_x, bottom_y - major_tick_len_px))
+
+        # Left ruler: minor ticks and major ticks are drawn independently.
+        minor_step_y = minor_tick_mm / row_spacing_mm
+        if minor_step_y >= 1e-6:
+            start_mm_y = int(max(0.0, np.floor((visible_rect.top() - image_rect.top()) / minor_step_y)))
+            end_mm_y = int(np.ceil((visible_rect.bottom() - image_rect.top()) / minor_step_y))
+            left_x = float(viewport_rect.left())
+            for mm_idx in range(start_mm_y, end_mm_y + 1):
+                scene_y = image_rect.top() + (mm_idx * minor_step_y)
+                if scene_y < visible_rect.top() - 0.5 or scene_y > visible_rect.bottom() + 0.5:
+                    continue
+                viewport_y = float(self.mapFromScene(QPointF(visible_rect.center().x(), scene_y)).y())
+                if viewport_y < viewport_rect.top() - 1 or viewport_y > viewport_rect.bottom() + 1:
+                    continue
+                painter.drawLine(QPointF(left_x, viewport_y), QPointF(left_x + minor_tick_len_px, viewport_y))
+
+        major_step_y = major_tick_mm / row_spacing_mm
+        if major_step_y >= 1e-6:
+            start_major_y = int(max(0.0, np.floor((visible_rect.top() - image_rect.top()) / major_step_y)))
+            end_major_y = int(np.ceil((visible_rect.bottom() - image_rect.top()) / major_step_y))
+            left_x = float(viewport_rect.left())
+            for major_idx in range(start_major_y, end_major_y + 1):
+                scene_y = image_rect.top() + (major_idx * major_step_y)
+                if scene_y < visible_rect.top() - 0.5 or scene_y > visible_rect.bottom() + 0.5:
+                    continue
+                viewport_y = float(self.mapFromScene(QPointF(visible_rect.center().x(), scene_y)).y())
+                if viewport_y < viewport_rect.top() - 1 or viewport_y > viewport_rect.bottom() + 1:
+                    continue
+                painter.drawLine(QPointF(left_x, viewport_y), QPointF(left_x + major_tick_len_px, viewport_y))
+
+    def _draw_direction_labels(self, painter: QPainter, dataset: Any) -> None:
+        """Draw patient-orientation direction labels on viewport edges."""
+        if self.image_item is None:
+            return
+
+        labels = self._compute_direction_labels(dataset)
+        if labels is None:
+            return
+
+        viewport_rect = self.viewport().rect()
+        top_bottom_margin_px = 16.0
+        side_margin_px = 14.0
+
+        overlay_font_family = "IBM Plex Sans"
+        overlay_font_variant = "Bold"
+        if self.config_manager is not None:
+            try:
+                overlay_font_family = self.config_manager.get_overlay_font_family()
+                overlay_font_variant = self.config_manager.get_overlay_font_variant()
+            except Exception:
+                pass
+        font_px = max(self._direction_label_size, 1)
+
+        font = make_qfont(overlay_font_family, overlay_font_variant, font_px)
+        painter.setFont(font)
+        painter.setPen(QPen(QColor(self._direction_labels_color[0], self._direction_labels_color[1], self._direction_labels_color[2], 230)))
+
+        font_metrics = painter.fontMetrics()
+        center_x = viewport_rect.center().x()
+        center_y = viewport_rect.center().y()
+
+        top_width = font_metrics.horizontalAdvance(labels["top"])
+        bottom_width = font_metrics.horizontalAdvance(labels["bottom"])
+        right_width = font_metrics.horizontalAdvance(labels["right"])
+        ascent = font_metrics.ascent()
+        cap_center_offset = (ascent - font_metrics.descent()) / 2.0
+
+        painter.drawText(
+            QPointF(
+                center_x - (top_width / 2.0),
+                viewport_rect.top() + top_bottom_margin_px + ascent,
+            ),
+            labels["top"],
+        )
+        painter.drawText(
+            QPointF(
+                center_x - (bottom_width / 2.0),
+                viewport_rect.bottom() - top_bottom_margin_px,
+            ),
+            labels["bottom"],
+        )
+        painter.drawText(
+            QPointF(
+                viewport_rect.left() + side_margin_px,
+                center_y + cap_center_offset,
+            ),
+            labels["left"],
+        )
+        painter.drawText(
+            QPointF(
+                viewport_rect.right() - side_margin_px - right_width,
+                center_y + cap_center_offset,
+            ),
+            labels["right"],
+        )
+
+    def _extract_pixel_spacing(self, dataset: Any) -> Optional[Tuple[float, float]]:
+        """Extract row and column pixel spacing in mm from the dataset."""
+        pixel_spacing = getattr(dataset, "PixelSpacing", None)
+        if pixel_spacing is None or len(pixel_spacing) < 2:
+            return None
+
+        try:
+            row_mm = float(pixel_spacing[0])
+            col_mm = float(pixel_spacing[1])
+        except (TypeError, ValueError):
+            return None
+        return (row_mm, col_mm)
+
+    def _compute_direction_labels(self, dataset: Any) -> Optional[Dict[str, str]]:
+        """Compute top/bottom/left/right patient orientation labels from ImageOrientationPatient."""
+        iop = getattr(dataset, "ImageOrientationPatient", None)
+        if iop is None or len(iop) < 6:
+            return None
+
+        try:
+            row_cos = np.array([float(iop[0]), float(iop[1]), float(iop[2])], dtype=np.float64)
+            col_cos = np.array([float(iop[3]), float(iop[4]), float(iop[5])], dtype=np.float64)
+        except (TypeError, ValueError):
+            return None
+
+        left_dir = self._axis_label_from_vector(-row_cos)
+        right_dir = self._axis_label_from_vector(row_cos)
+        top_dir = self._axis_label_from_vector(-col_cos)
+        bottom_dir = self._axis_label_from_vector(col_cos)
+
+        return {
+            "left": left_dir,
+            "right": right_dir,
+            "top": top_dir,
+            "bottom": bottom_dir,
+        }
+
+    def _axis_label_from_vector(self, vec: np.ndarray) -> str:
+        """Map a DICOM LPS direction vector to nearest cardinal patient label."""
+        if vec is None or vec.size != 3:
+            return ""
+        if np.linalg.norm(vec) < 1e-6:
+            return ""
+
+        axes = [
+            (abs(vec[0]), "L" if vec[0] >= 0 else "R"),
+            (abs(vec[1]), "P" if vec[1] >= 0 else "A"),
+            (abs(vec[2]), "S" if vec[2] >= 0 else "I"),
+        ]
+        axes.sort(key=lambda item: item[0], reverse=True)
+        return axes[0][1]
+
+    def _apply_inversion(self, image: Image.Image) -> Image.Image:
+        """
+        Apply inversion to a PIL Image.
+        
+        Args:
+            image: PIL Image to invert
+            
+        Returns:
+            Inverted PIL Image
+        """
+        try:
+            img_array = np.array(image)
+            if image.mode == 'L':
+                # Grayscale: invert each pixel value
+                img_array = 255 - img_array
+                return Image.fromarray(img_array, mode='L')
+            elif image.mode == 'RGB':
+                # RGB: invert each channel
+                img_array = 255 - img_array
+                return Image.fromarray(img_array, mode='RGB')
+            else:
+                # Convert to RGB first, then invert
+                rgb_image = image.convert('RGB')
+                img_array = np.array(rgb_image)
+                img_array = 255 - img_array
+                return Image.fromarray(img_array, mode='RGB')
+        except Exception as e:
+            print(f"Error inverting image: {e}")
+            return image  # Return original on error
+    
+    def invert_image(self) -> None:
+        """
+        Toggle image inversion state and update display.
+        """
+        if self.original_image is None:
+            # If no original image stored, we can't invert
+            # This should not happen in normal operation as set_image stores the original
+            return
+        
+        # Toggle inversion state FIRST
+        self.image_inverted = not self.image_inverted
+        
+        # Notify callback of state change (for persistence per series)
+        # This must happen BEFORE calling set_image to ensure state is stored
+        if self.inversion_state_changed_callback:
+            self.inversion_state_changed_callback(self.image_inverted)
+        
+        # Apply inversion to the original image and update display
+        # Pass the new inversion state explicitly to ensure synchronization
+        if self.image_inverted:
+            display_image = self._apply_inversion(self.original_image)
+        else:
+            display_image = self.original_image
+        
+        # Update the pixmap without changing zoom/pan
+        # Pass apply_inversion explicitly to ensure state synchronization
+        preserve_view = True
+        self.set_image(display_image, preserve_view=preserve_view, apply_inversion=self.image_inverted)
+    
+    def set_image(self, image: Image.Image, preserve_view: bool = False, apply_inversion: Optional[bool] = None) -> None:
+        """
+        Set the image to display.
+        
+        Preserves existing ROIs and overlay items when changing images.
+        
+        Args:
+            image: PIL Image to display
+            preserve_view: If True, preserve current zoom and pan position
+            apply_inversion: Optional bool to override inversion state. If None, uses self.image_inverted
+        """
+        # print(f"[VIEWER] set_image called")
+        # print(f"[VIEWER] Image size: {image.size}, mode: {image.mode}, preserve_view: {preserve_view}")
+        # print(f"[VIEWER] Image id: {id(image)}")
+        # print(f"[VIEWER] Apply inversion: {apply_inversion}")
+        # print(f"[VIEWER] Current image_inverted: {self.image_inverted}")
+        # print(f"[VIEWER] Current original_image id: {id(self.original_image) if self.original_image else 'None'}")
+        
+        # Store original image for inversion
+        # When preserve_view=False: new slice, always store new original_image
+        # When preserve_view=True and apply_inversion is not None: same slice, inversion toggle, preserve original_image
+        # When preserve_view=True and apply_inversion is None: new slice (scrolling), store new original_image
+        if not preserve_view:
+            # New slice - always store new original image (non-inverted)
+            # print(f"[VIEWER] Storing new original_image (preserve_view=False)")
+            # print(f"[VIEWER] Before: original_image id = {id(self.original_image) if self.original_image else 'None'}")
+            # print(f"[VIEWER] Image to copy id = {id(image)}")
+            self.original_image = image.copy()
+            # print(f"[VIEWER] After: original_image id = {id(self.original_image)}")
+            
+            # Update inversion state FIRST before determining if we need to invert
+            # If apply_inversion is provided, use it (stored state for this series)
+            # If apply_inversion is None, reset to False (no stored state for this series)
+            if apply_inversion is not None:
+                self.image_inverted = apply_inversion
+            else:
+                # No stored inversion state for this series - reset to False
+                self.image_inverted = False
+            
+            # Determine if we need to invert the image for display
+            # Use apply_inversion if provided, otherwise use current self.image_inverted state
+            should_invert = apply_inversion if apply_inversion is not None else self.image_inverted
+            
+            # Apply inversion if needed
+            if should_invert:
+                image = self._apply_inversion(image)
+        elif preserve_view:
+            # print(f"[VIEWER] preserve_view=True branch")
+            # print(f"[VIEWER] apply_inversion = {apply_inversion}")
+            # Same series - might be same slice (inversion toggle) or new slice (scrolling)
+            if apply_inversion is not None:
+                # Same slice - inversion toggle, preserve existing original_image
+                # Update inversion state to match apply_inversion
+                self.image_inverted = apply_inversion
+                # Apply inversion to the stored original image based on the state
+                if self.original_image is not None:
+                    if self.image_inverted:
+                        image = self._apply_inversion(self.original_image)
+                    else:
+                        image = self.original_image
+            else:
+                # New slice (scrolling within same series) - store new original_image
+                # print(f"[VIEWER] Storing new original_image (scrolling within same series)")
+                # print(f"[VIEWER] Before: original_image id = {id(self.original_image) if self.original_image else 'None'}")
+                # print(f"[VIEWER] Image to copy id = {id(image)}")
+                self.original_image = image.copy()
+                # print(f"[VIEWER] After: original_image id = {id(self.original_image)}")
+                # Don't reset inversion state - preserve it for the series
+                # Apply inversion if the series is currently inverted
+                if self.image_inverted:
+                    # print(f"[VIEWER] Applying inversion to new slice (series is inverted)")
+                    image = self._apply_inversion(image)
+                # If image_inverted is False, image is already non-inverted (from dataset), use as-is
+        # If preserve_view is True and apply_inversion is None,
+        # the image passed in is already in the correct state (inverted or not), so don't apply inversion again
+        
+        # Store current view state if preserving
+        if preserve_view and self.image_item is not None:
+            saved_zoom = self.current_zoom
+            # Save integer scrollbar positions directly.
+            # These are restored after the scene/transform change to avoid the
+            # float->int quantization error that accumulates when using
+            # mapToScene() + centerOn() across many slices (H5 drift bug).
+            saved_h_scroll = self.horizontalScrollBar().value()
+            saved_v_scroll = self.verticalScrollBar().value()
+            # Also compute scene center for logging only (not used for positioning)
+            viewport_center_viewport = QPointF(self.viewport().width() / 2.0, self.viewport().height() / 2.0)
+            saved_scene_center = self.mapToScene(viewport_center_viewport.toPoint())
+
+            # region agent log: set_image preserve_view before scene change (H5-fix)
+            if DEBUG_AGENT_LOG:
+                try:
+                    import json as _json  # Local alias
+                    from time import time as _time
+                    _vp_w_before = int(self.viewport().width())
+                    _vsb_vis_before = bool(
+                        self.verticalScrollBar() is not None
+                        and self.verticalScrollBar().maximum() > self.verticalScrollBar().minimum()
+                    )
+                    before_preserve_log = {
+                        "sessionId": "088dbc",
+                        "runId": "post-H5-fix",
+                        "hypothesisId": "H5",
+                        "location": "image_viewer.set_image:before_preserve_view",
+                        "message": "set_image preserve_view BEFORE scene change",
+                        "data": {
+                            "saved_zoom": float(saved_zoom),
+                            "saved_h_scroll": saved_h_scroll,
+                            "saved_v_scroll": saved_v_scroll,
+                            "saved_scene_center_x": float(saved_scene_center.x()),
+                            "saved_scene_center_y": float(saved_scene_center.y()),
+                            "viewport_width": _vp_w_before,
+                            "v_scrollbar_active": _vsb_vis_before,
+                        },
+                        "timestamp": int(_time() * 1000),
+                    }
+                    with open("debug-088dbc.log", "a", encoding="utf-8") as _f:
+                        _f.write(_json.dumps(before_preserve_log) + "\n")
+                except Exception:
+                    pass
+            # endregion agent log
+        else:
+            saved_zoom = None
+            saved_h_scroll = None
+            saved_v_scroll = None
+            saved_scene_center = None
+        
+        # Convert PIL Image to QPixmap
+        # print(f"[VIEWER] Converting PIL Image to QImage...")
+        
+        # IMPORTANT: Keep a reference to the bytes buffer to prevent garbage collection
+        # before Qt finishes reading it. For large images, Python may GC the temporary
+        # bytes object returned by image.tobytes() before QImage/QPixmap finishes,
+        # causing a segfault.
+        image_bytes = image.tobytes()
+        
+        if image.mode == 'L':
+            # Grayscale - explicitly specify bytesPerLine (stride)
+            # print(f"[VIEWER] Converting grayscale image...")
+            bytes_per_line = image.width * 1  # 1 byte per pixel for grayscale
+            # print(f"[VIEWER] Image dimensions: {image.width}x{image.height}, bytes_per_line: {bytes_per_line}")
+            qimage = QImage(image_bytes, image.width, image.height, bytes_per_line,
+                          QImage.Format.Format_Grayscale8)
+        elif image.mode == 'RGB':
+            # RGB - explicitly specify bytesPerLine (stride)
+            # print(f"[VIEWER] Converting RGB image...")
+            bytes_per_line = image.width * 3  # 3 bytes per pixel for RGB
+            # print(f"[VIEWER] Image dimensions: {image.width}x{image.height}, bytes_per_line: {bytes_per_line}")
+            qimage = QImage(image_bytes, image.width, image.height, bytes_per_line,
+                          QImage.Format.Format_RGB888)
+        else:
+            # Convert to RGB
+            # print(f"[VIEWER] Converting {image.mode} to RGB...")
+            image = image.convert('RGB')
+            image_bytes = image.tobytes()
+            bytes_per_line = image.width * 3  # 3 bytes per pixel for RGB
+            # print(f"[VIEWER] Image dimensions: {image.width}x{image.height}, bytes_per_line: {bytes_per_line}")
+            qimage = QImage(image_bytes, image.width, image.height, bytes_per_line,
+                          QImage.Format.Format_RGB888)
+        
+        # Make a deep copy of the QImage so Qt owns the data
+        # This prevents crashes if the Python bytes buffer is garbage collected
+        # print(f"[VIEWER] Creating QImage copy...")
+        qimage = qimage.copy()
+        # print(f"[VIEWER] QImage copy created successfully")
+        
+        # print(f"[VIEWER] QImage created, converting to QPixmap...")
+        pixmap = QPixmap.fromImage(qimage)
+        # print(f"[VIEWER] QPixmap created: {pixmap.width()}x{pixmap.height()}, isNull: {pixmap.isNull()}")
+        # print(f"[VIEWER] Pixmap cache key: {pixmap.cacheKey() if hasattr(pixmap, 'cacheKey') else 'N/A'}")
+        
+        # Remove old image item only
+        # Note: ROIs and overlays will be preserved and re-added by their managers
+        if self.image_item is not None:
+            old_pixmap = self.image_item.pixmap()
+            # print(f"[VIEWER] Removing old image item, pixmap cache key: {old_pixmap.cacheKey() if old_pixmap and hasattr(old_pixmap, 'cacheKey') else 'None'}")
+            self.scene.removeItem(self.image_item)
+        
+        # Create new image item
+        # print(f"[VIEWER] Creating QGraphicsPixmapItem...")
+        self.image_item = QGraphicsPixmapItem(pixmap)
+        # Set image item to lowest Z-value so other items appear on top
+        self.image_item.setZValue(0)
+        # print(f"[VIEWER] New image item created, pixmap cache key: {self.image_item.pixmap().cacheKey() if self.image_item.pixmap() and hasattr(self.image_item.pixmap(), 'cacheKey') else 'None'}")
+        # print(f"[VIEWER] Adding item to scene...")
+        self.scene.addItem(self.image_item)
+        # print(f"[VIEWER] Item added to scene successfully")
+        self._apply_smoothing_mode()
+
+        # Force scene and viewport update to ensure display refreshes
+        # print(f"[VIEWER] Forcing scene and viewport update...")
+        self.scene.invalidate(self.scene.sceneRect())
+        self.viewport().update()
+        # print(f"[VIEWER] Scene and viewport updated")
+        
+        # Set scene rect to image dimensions to ensure proper overlay positioning
+        # print(f"[VIEWER] Getting image bounding rect...")
+        image_rect = self.image_item.boundingRect()
+        # print(f"[VIEWER] Image rect: {image_rect}")
+        
+        # Calculate fixed scene rect size that accommodates:
+        # - If image is larger than viewport: 2x image size
+        # - If image is smaller than viewport: 1.0x viewport at min zoom
+        # This ensures mapToScene() accuracy at all zoom levels without recalculation
+        image_width = image_rect.width()  # Scene coordinates
+        image_height = image_rect.height()  # Scene coordinates
+        
+        # Calculate viewport size in scene coordinates at zoom = 1.0
+        # At zoom = 1.0, viewport pixels = scene coordinates
+        viewport_width_pixels = self.viewport().width()
+        viewport_height_pixels = self.viewport().height()
+        viewport_width_scene = viewport_width_pixels  # At zoom = 1.0, they're equal
+        viewport_height_scene = viewport_height_pixels  # At zoom = 1.0, they're equal
+        
+        # Calculate viewport size in scene coordinates at minimum zoom (for else case)
+        viewport_at_min_zoom_width = viewport_width_pixels / self.min_zoom if self.min_zoom > 0 else viewport_width_pixels
+        viewport_at_min_zoom_height = viewport_height_pixels / self.min_zoom if self.min_zoom > 0 else viewport_height_pixels
+        
+        # Calculate viewport size in scene coordinates at zoom = 0.5
+        # At zoom = 0.5, each viewport pixel represents 2 scene coordinate units
+        viewport_at_zoom_0_5_width = viewport_width_pixels / 0.5
+        viewport_at_zoom_0_5_height = viewport_height_pixels / 0.5
+        
+        # Compare both in scene coordinates (at zoom = 1.0 for the comparison)
+        # If image is larger than viewport, use 2x image size
+        # Otherwise, use 3x image size + viewport at zoom 0.5
+        if image_width > viewport_width_scene:
+            scene_width = image_width * 2.0
+            # print(f"[SCENE_RECT] Image width ({image_width:.2f}) > viewport width in scene coords ({viewport_width_scene:.2f}) - using 2x image size: {scene_width:.2f}")
+        else:
+            scene_width = 3.0 * image_width + viewport_at_zoom_0_5_width
+            # print(f"[SCENE_RECT] Image width ({image_width:.2f}) <= viewport width in scene coords ({viewport_width_scene:.2f}) - using 3x image size + viewport at zoom 0.5: {scene_width:.2f}")
+        
+        if image_height > viewport_height_scene:
+            scene_height = image_height * 2.0
+            # print(f"[SCENE_RECT] Image height ({image_height:.2f}) > viewport height in scene coords ({viewport_height_scene:.2f}) - using 2x image size: {scene_height:.2f}")
+        else:
+            scene_height = 3.0 * image_height + viewport_at_zoom_0_5_height
+            # print(f"[SCENE_RECT] Image height ({image_height:.2f}) <= viewport height in scene coords ({viewport_height_scene:.2f}) - using 3x image size + viewport at zoom 0.5: {scene_height:.2f}")
+        
+        # Calculate margins to center the image in the expanded scene rect
+        margin_x = (scene_width - image_width) / 2.0
+        margin_y = (scene_height - image_height) / 2.0
+        
+        expanded_rect = QRectF(
+            image_rect.x() - margin_x,
+            image_rect.y() - margin_y,
+            scene_width,
+            scene_height
+        )
+        self.scene.setSceneRect(expanded_rect)
+        
+        # Centering is now handled by fit_to_view() when appropriate
+        # Don't center here as fit_to_view() will be called and may override it
+        if preserve_view and saved_zoom is not None:
+            # Restore zoom.
+            # Use setTransform() directly instead of resetTransform()+scale() to avoid
+            # the spurious intermediate state where AnchorViewCenter fires at zoom=1.0
+            # before the intended zoom is applied (H4).
+            self.setTransform(QTransform.fromScale(saved_zoom, saved_zoom))
+            self.current_zoom = saved_zoom
+
+            # Restore pan by setting scrollbar integers directly.
+            # Using centerOn(saved_scene_center) introduces a float->int quantization
+            # error of up to 1/zoom per call. Over many slice changes this accumulates
+            # into visible pan drift (H5). Restoring the saved integer values bypasses
+            # the round-trip entirely. This is exact when the scene rect geometry is
+            # unchanged (same-series slice scrolling); for one-off scene rect changes
+            # (e.g. scrollbar appearance) it may shift by at most 1px, which is
+            # acceptable and non-accumulating.
+            if saved_h_scroll is not None and saved_v_scroll is not None:
+                self.horizontalScrollBar().setValue(saved_h_scroll)
+                self.verticalScrollBar().setValue(saved_v_scroll)
+
+            self.last_transform = self.transform()
+            self.zoom_changed.emit(self.current_zoom)
+
+            # region agent log: set_image preserve_view after restore (H5-fix)
+            if DEBUG_AGENT_LOG:
+                try:
+                    import json as _json  # Local alias
+                    from time import time as _time
+                    _sc_x = float(saved_scene_center.x()) if saved_scene_center is not None else None
+                    _sc_y = float(saved_scene_center.y()) if saved_scene_center is not None else None
+                    _vp_w_after = int(self.viewport().width())
+                    _vsb_vis_after = bool(
+                        self.verticalScrollBar() is not None
+                        and self.verticalScrollBar().maximum() > self.verticalScrollBar().minimum()
+                    )
+                    after_preserve_log = {
+                        "sessionId": "088dbc",
+                        "runId": "post-H5-fix",
+                        "hypothesisId": "H5",
+                        "location": "image_viewer.set_image:after_preserve_view",
+                        "message": "set_image preserve_view AFTER restore",
+                        "data": {
+                            "saved_zoom": float(saved_zoom),
+                            "saved_h_scroll": saved_h_scroll,
+                            "saved_v_scroll": saved_v_scroll,
+                            "h_scroll": int(self.horizontalScrollBar().value())
+                            if self.horizontalScrollBar() is not None
+                            else 0,
+                            "v_scroll": int(self.verticalScrollBar().value())
+                            if self.verticalScrollBar() is not None
+                            else 0,
+                            "h_scroll_matches": int(self.horizontalScrollBar().value()) == saved_h_scroll,
+                            "v_scroll_matches": int(self.verticalScrollBar().value()) == saved_v_scroll,
+                            "scene_center_x_for_log": _sc_x,
+                            "scene_center_y_for_log": _sc_y,
+                            "viewport_width": _vp_w_after,
+                            "v_scrollbar_active": _vsb_vis_after,
+                            "expanded_rect_x": float(expanded_rect.x()),
+                            "expanded_rect_width": float(expanded_rect.width()),
+                        },
+                        "timestamp": int(_time() * 1000),
+                    }
+                    with open("debug-088dbc.log", "a", encoding="utf-8") as _f:
+                        _f.write(_json.dumps(after_preserve_log) + "\n")
+                except Exception:
+                    pass
+            # endregion agent log
+        else:
+            # Reset zoom and fit to view
+            # Don't center here - centering should only happen when initializing new series or resetting view
+            self.current_zoom = 1.0
+            self.fit_to_view(center_image=False)
+        
+    
+    def fit_to_view(self, center_image: bool = False) -> None:
+        """
+        Fit the image to the current view size.
+        
+        Args:
+            center_image: If True, center the image in the viewport (for initialization/reset).
+                         If False, preserve current view position.
+        """
+        if self.image_item is None:
+            return
+        
+        # Get scene rect
+        scene_rect = self.image_item.boundingRect()
+        if scene_rect.isEmpty():
+            return
+
+        viewport = self.viewport()
+        if viewport:
+            viewport_size = f"{viewport.width()}x{viewport.height()}"
+        else:
+            viewport_size = "None"
+        
+        # Fit in view
+        # print(f"[DEBUG-FIT] fit_to_view: Calling fitInView")
+        self.fitInView(scene_rect, Qt.AspectRatioMode.KeepAspectRatio)
+        
+        # Update zoom level
+        transform = self.transform()
+        self.current_zoom = transform.m11()
+        self.last_transform = transform
+        # print(f"[DEBUG-FIT] fit_to_view: After fitInView, zoom = {self.current_zoom:.6f}")
+        self.zoom_changed.emit(self.current_zoom)
+        
+        # If image is smaller than viewport and center_image is True, manually center it
+        # fitInView() may not center properly with AnchorViewCenter when image is smaller
+        if center_image:
+            viewport_width = self.viewport().width()
+            viewport_height = self.viewport().height()
+            scaled_width = scene_rect.width() * self.current_zoom
+            scaled_height = scene_rect.height() * self.current_zoom
+            if scaled_width < viewport_width or scaled_height < viewport_height:
+                # Image is smaller than viewport - center it
+                image_center = scene_rect.center()
+                # print(f"[DEBUG-FIT] fit_to_view: Centering on {image_center}")
+                self.centerOn(image_center)
+
+        self._restart_smooth_idle_timer()
+
+    def zoom_in(self) -> None:
+        """Zoom in on the image, centered on viewport center."""
+        if self.image_item is None:
+            return
+        
+        # AnchorViewCenter is set in __init__ and should remain constant
+        # When AnchorViewCenter is set, scale() automatically centers zooming on viewport center
+        # No manual translation is needed
+        
+        # Calculate new zoom level
+        new_zoom = self.current_zoom * self.zoom_factor
+        
+        # Clamp to max zoom
+        if new_zoom > self.max_zoom:
+            new_zoom = self.max_zoom
+        
+        # Calculate scale factor needed to reach target zoom
+        current_scale = self.transform().m11()
+        scale_factor = new_zoom / current_scale
+        
+        # Apply zoom - AnchorViewCenter ensures it's centered on viewport center
+        self.scale(scale_factor, scale_factor)
+        self.current_zoom = new_zoom
+        
+        self.zoom_changed.emit(self.current_zoom)
+        self._check_transform_changed()
+    
+    def zoom_out(self) -> None:
+        """Zoom out from the image, centered on viewport center."""
+        if self.image_item is None:
+            return
+        
+        # AnchorViewCenter is set in __init__ and should remain constant
+        # When AnchorViewCenter is set, scale() automatically centers zooming on viewport center
+        # No manual translation is needed
+        
+        # Calculate new zoom level
+        new_zoom = self.current_zoom / self.zoom_factor
+        
+        # Clamp to min zoom
+        if new_zoom < self.min_zoom:
+            new_zoom = self.min_zoom
+        
+        # Calculate scale factor needed to reach target zoom
+        current_scale = self.transform().m11()
+        scale_factor = new_zoom / current_scale
+        
+        # Apply zoom - AnchorViewCenter ensures it's centered on viewport center
+        self.scale(scale_factor, scale_factor)
+        self.current_zoom = new_zoom
+        
+        self.zoom_changed.emit(self.current_zoom)
+        self._check_transform_changed()
+    
+    def reset_zoom(self) -> None:
+        """Reset zoom to 1:1."""
+        self.resetTransform()
+        self.current_zoom = 1.0
+        self.zoom_changed.emit(self.current_zoom)
+        self._check_transform_changed()
+    
+    def set_zoom(self, zoom_value: float) -> None:
+        """
+        Set zoom to a specific value, centered on viewport center.
+        
+        Args:
+            zoom_value: Target zoom level
+        """
+        if self.image_item is None:
+            return
+        
+        # Clamp to valid range
+        zoom_value = max(self.min_zoom, min(self.max_zoom, zoom_value))
+        
+        # Calculate scale factor needed to reach target zoom
+        current_scale = self.transform().m11()
+        scale_factor = zoom_value / current_scale
+        
+        # Apply zoom - AnchorViewCenter ensures it's centered on viewport center
+        self.scale(scale_factor, scale_factor)
+        self.current_zoom = zoom_value
+        
+        self.zoom_changed.emit(self.current_zoom)
+        self._check_transform_changed()
+    
+    def set_scroll_wheel_mode(self, mode: str) -> None:
+        """
+        Set scroll wheel mode.
+        
+        Args:
+            mode: "slice" or "zoom"
+        """
+        if mode in ["slice", "zoom"]:
+            self.scroll_wheel_mode = mode
+    
+    def set_rescale_toggle_state(self, checked: bool) -> None:
+        """
+        Set the rescale toggle state (for context menu).
+        
+        Args:
+            checked: True to use rescaled values, False to use raw values
+        """
+        self.use_rescaled_values = checked
+    
+    def set_cine_controls_enabled(self, enabled: bool) -> None:
+        """
+        Set whether cine controls should be enabled in the context menu.
+        
+        Args:
+            enabled: True to enable cine controls in context menu, False to disable
+        """
+        self.cine_controls_enabled = enabled
+    
+    def set_privacy_view_state(self, enabled: bool) -> None:
+        """
+        Set the privacy view state (for context menu synchronization).
+        
+        Args:
+            enabled: True if privacy view is enabled, False otherwise
+        """
+        self._privacy_view_enabled = enabled
+
+    def event(self, event: QEvent) -> bool:
+        """
+        Handle native gesture events (e.g. trackpad pinch-to-zoom).
+        Pinch zoom is independent of scroll wheel mode: pinch always zooms the image
+        without affecting slice navigation or other wheel behavior.
+        """
+        if event.type() == QEvent.Type.NativeGesture and isinstance(event, QNativeGestureEvent):
+            if event.gestureType() == Qt.NativeGestureType.ZoomNativeGesture:
+                self._apply_pinch_zoom(event.value())
+                event.accept()
+                return True
+        return super().event(event)
+
+    def _apply_pinch_zoom(self, value: float) -> None:
+        """
+        Apply incremental zoom from a native pinch gesture.
+        value is the scale delta: new_scale = current_scale * (1 + value).
+        Called only when an image is displayed; no-op otherwise.
+        """
+        if self.image_item is None:
+            return
+        # Qt: item.scale = item.scale * (1 + event.value()); value is typically small
+        new_zoom = self.current_zoom * (1.0 + value)
+        new_zoom = max(self.min_zoom, min(self.max_zoom, new_zoom))
+        current_scale = self.transform().m11()
+        scale_factor = new_zoom / current_scale
+        self.scale(scale_factor, scale_factor)
+        self.current_zoom = new_zoom
+        self.zoom_changed.emit(self.current_zoom)
+        self._check_transform_changed()
+        self._restart_smooth_idle_timer()
+
+    def wheelEvent(self, event: QWheelEvent) -> None:
+        """
+        Handle mouse wheel events for zooming or slice navigation.
+        Ctrl+wheel is always treated as zoom (e.g. Windows trackpad pinch sent as Ctrl+wheel).
+        """
+        # Ctrl+wheel: always zoom (common for trackpad pinch on Windows)
+        if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            if event.angleDelta().y() > 0:
+                self.zoom_in()
+            elif event.angleDelta().y() < 0:
+                self.zoom_out()
+            event.accept()
+            return
+        # Use scroll wheel mode to determine behavior
+        if self.scroll_wheel_mode == "zoom":
+            # Perform zoom - AnchorViewCenter is set in __init__ and ensures zooming is centered on viewport center
+            if event.angleDelta().y() > 0:
+                self.zoom_in()
+            else:
+                self.zoom_out()
+        else:
+            # Slice navigation mode - emit signal for slice navigator
+            # region agent log: wheel slice navigation (H2 - wheel slice vs pan)
+            if DEBUG_AGENT_LOG:
+                try:
+                    import json as _json  # Local alias to avoid conflicts
+                    from time import time as _time
+                    wheel_log = {
+                        "sessionId": "088dbc",
+                        "runId": "pre-fix",
+                        "hypothesisId": "H2",
+                        "location": "image_viewer.wheelEvent",
+                        "message": "wheelEvent slice navigation",
+                        "data": {
+                            "angle_delta_y": int(event.angleDelta().y()),
+                            "scroll_wheel_mode": str(self.scroll_wheel_mode),
+                            "zoom": float(self.current_zoom),
+                            "h_scroll": int(self.horizontalScrollBar().value())
+                            if self.horizontalScrollBar() is not None
+                            else 0,
+                            "v_scroll": int(self.verticalScrollBar().value())
+                            if self.verticalScrollBar() is not None
+                            else 0,
+                        },
+                        "timestamp": int(_time() * 1000),
+                    }
+                    with open("debug-088dbc.log", "a", encoding="utf-8") as f:
+                        f.write(_json.dumps(wheel_log) + "\n")
+                except Exception:
+                    pass
+            # endregion agent log
+
+            self.wheel_event_for_slice.emit(event.angleDelta().y())
+        
+        event.accept()
+    
+    def _sync_cursor_to_parent_chain(self) -> None:
+        """Mirror the active tool cursor onto the subwindow container and layout QWidget parents."""
+        parent = self.parent()
+        if not isinstance(parent, QWidget):
+            return
+        parent.setCursor(self.cursor())
+        layout_parent = parent.parent()
+        if isinstance(layout_parent, QWidget):
+            layout_parent.setCursor(self.cursor())
+            layout_grandparent = layout_parent.parent()
+            if isinstance(layout_grandparent, QWidget):
+                layout_grandparent.setCursor(self.cursor())
+
+    def set_mouse_mode(self, mode: str) -> None:
+        """
+        Set mouse interaction mode.
+        
+        Args:
+            mode: "select", "roi_ellipse", "roi_rectangle", "measure", "zoom", "pan", or "auto_window_level"
+        """
+        if getattr(self, "_mpr_mode_override", False):
+            # In MPR mode we intentionally restrict which tools can be
+            # activated to avoid half-implemented interaction types.
+            # ROI/measure/WL-ROI must remain enabled for the MPR feature work.
+            allowed_modes = {
+                "pan",
+                "zoom",
+                "magnifier",
+                "select",
+                "roi_ellipse",
+                "roi_rectangle",
+                "measure",
+                "auto_window_level",
+                "text_annotation",
+                "arrow_annotation",
+            }
+            if mode not in allowed_modes:
+                mode = "pan"
+
+        self.mouse_mode = mode
+        
+        # Update ROI drawing mode based on mouse mode
+        if mode == "select":
+            # Select mode - allow clicking on ROIs and measurements to select them
+            self.roi_drawing_mode = None
+            self.setDragMode(QGraphicsView.DragMode.NoDrag)
+            self.setCursor(Qt.CursorShape.ArrowCursor)
+        elif mode == "roi_ellipse":
+            self.roi_drawing_mode = "ellipse"
+            self.setDragMode(QGraphicsView.DragMode.NoDrag)
+            self.setCursor(Qt.CursorShape.CrossCursor)
+        elif mode == "roi_rectangle":
+            self.roi_drawing_mode = "rectangle"
+            self.setDragMode(QGraphicsView.DragMode.NoDrag)
+            self.setCursor(Qt.CursorShape.CrossCursor)
+        elif mode == "auto_window_level":
+            # Auto window/level mode - use rectangle ROI drawing
+            self.roi_drawing_mode = "rectangle"
+            self.setDragMode(QGraphicsView.DragMode.NoDrag)
+            self.setCursor(Qt.CursorShape.CrossCursor)
+        elif mode == "measure":
+            self.roi_drawing_mode = None
+            self.setDragMode(QGraphicsView.DragMode.NoDrag)
+            # Cursor set by _apply_cursor_for_mouse_mode() below
+            # Reset measurement state when switching to measure mode
+            self.measuring = False
+            self.measurement_start_pos = None
+        elif mode == "zoom":
+            self.roi_drawing_mode = None
+            self.setDragMode(QGraphicsView.DragMode.NoDrag)
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
+            # Store zoom start position for click-to-zoom
+            self.zoom_start_pos: Optional[QPointF] = None
+        elif mode == "magnifier":
+            self.roi_drawing_mode = None
+            self.setDragMode(QGraphicsView.DragMode.NoDrag)
+            # Use cross cursor for magnifier mode
+            self.setCursor(Qt.CursorShape.CrossCursor)
+            # Reset magnifier state when switching to magnifier mode
+            if self.magnifier_widget is not None:
+                self.magnifier_widget.hide()
+            self.magnifier_active = False
+        elif mode == "crosshair":
+            self.roi_drawing_mode = None
+            self.setDragMode(QGraphicsView.DragMode.NoDrag)
+            self.setCursor(Qt.CursorShape.CrossCursor)
+        elif mode == "text_annotation":
+            self.roi_drawing_mode = None
+            self.setDragMode(QGraphicsView.DragMode.NoDrag)
+            self.setCursor(Qt.CursorShape.IBeamCursor)  # Text cursor for text annotation
+            # Reset text annotation state when switching to text annotation mode
+            self.text_annotating = False
+            self.text_annotation_start_pos = None
+        elif mode == "arrow_annotation":
+            self.roi_drawing_mode = None
+            self.setDragMode(QGraphicsView.DragMode.NoDrag)
+            self.setCursor(Qt.CursorShape.CrossCursor)  # Cross cursor for arrow annotation
+            # Reset arrow annotation state when switching to arrow annotation mode
+            self.arrow_annotating = False
+            self.arrow_annotation_start_pos = None
+        else:  # pan
+            self.roi_drawing_mode = None
+            # Use ScrollHandDrag for panning - this works even when image fits viewport
+            self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+            self.setCursor(Qt.CursorShape.OpenHandCursor)
+            # Ensure scrollbars are enabled for ScrollHandDrag to work
+            self.horizontalScrollBar().setEnabled(True)
+            self.verticalScrollBar().setEnabled(True)
+
+        # Keep SubWindowContainer cursor in sync so hit-test on container border shows tool cursor.
+        # Also set cursor on the layout parent chain (layout_widget, MultiWindowLayout) so in 1x1
+        # any background region shows the tool cursor and doesn't flicker to arrow.
+        self._apply_cursor_for_mouse_mode()
+        self._sync_cursor_to_parent_chain()
+
+    def _apply_cursor_for_mouse_mode(self) -> None:
+        """Set cursor to the one appropriate for the current mouse_mode (used by set_mouse_mode and restore_cursor_for_current_mode)."""
+        mode = self.mouse_mode
+        if mode == "select":
+            self.setCursor(Qt.CursorShape.ArrowCursor)
+        elif mode in ("roi_ellipse", "roi_rectangle", "measure", "magnifier", "crosshair", "arrow_annotation") or mode == "auto_window_level":
+            self.setCursor(Qt.CursorShape.CrossCursor)
+        elif mode == "zoom":
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
+        elif mode == "text_annotation":
+            self.setCursor(Qt.CursorShape.IBeamCursor)
+        else:  # pan
+            self.setCursor(Qt.CursorShape.OpenHandCursor)
+
+    def restore_cursor_for_current_mode(self) -> None:
+        """Restore the cursor to match the current mouse mode (e.g. after hiding it during measurement draw or handle drag)."""
+        self._apply_cursor_for_mouse_mode()
+        self._sync_cursor_to_parent_chain()
+
+    def set_roi_drawing_mode(self, mode: Optional[str]) -> None:
+        """
+        Set ROI drawing mode (legacy method for backward compatibility).
+        
+        Args:
+            mode: "rectangle", "ellipse", or None to disable
+        """
+        self.roi_drawing_mode = mode
+        if mode:
+            self.setCursor(Qt.CursorShape.CrossCursor)
+        else:
+            self.setCursor(Qt.CursorShape.ArrowCursor)
+    
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        """
+        Handle mouse press events for panning or ROI drawing.
+        
+        Args:
+            event: Mouse event
+        """
+        # Hybrid focus: parent is typically `SubWindowContainer`, but avoid importing it here
+        # to prevent a Pyright import-cycle with `gui.sub_window_container`.
+        parent = self.parent()
+        if (
+            parent is not None
+            and hasattr(parent, "is_focused")
+            and hasattr(parent, "set_focused")
+            and hasattr(parent, "focus_changed")
+        ):
+            if not bool(getattr(parent, "is_focused")):
+                if event.button() == Qt.MouseButton.LeftButton:
+                    event.accept()
+                    getattr(parent, "set_focused")(True)
+                    getattr(parent, "focus_changed").emit(True)
+                    return
+        
+        if event.button() == Qt.MouseButton.LeftButton:
+            # Handle select mode - allow default Qt selection behavior
+            if self.mouse_mode == "select":
+                # Check what item is at the click position
+                scene_pos = self.mapToScene(event.position().toPoint())
+                item = self.scene.itemAt(scene_pos, self.transform())
+                
+                # Check if clicking on empty space (image item or None)
+                from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsEllipseItem
+                from tools.measurement_tool import MeasurementItem, MeasurementHandle, DraggableMeasurementText
+                
+                is_empty_space = (item is None or item == self.image_item)
+                
+                # Check if item is an ROI - use ROI manager callback for accurate detection
+                is_roi_item = False
+                if item is not None and hasattr(self, 'get_roi_from_item_callback') and self.get_roi_from_item_callback:
+                    roi = self.get_roi_from_item_callback(item)
+                    if roi is not None:
+                        is_roi_item = True
+                
+                # Fallback: check by type if callback not available
+                if not is_roi_item:
+                    is_roi_item = isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem)) and item != self.image_item
+                
+                is_measurement_item = isinstance(item, MeasurementItem)
+                is_handle = isinstance(item, MeasurementHandle)
+                is_measurement_text = isinstance(item, DraggableMeasurementText)
+                
+                # Check for text and arrow annotation items
+                from tools.text_annotation_tool import TextAnnotationItem
+                from tools.arrow_annotation_tool import ArrowAnnotationItem
+                is_text_annotation_item = isinstance(item, TextAnnotationItem)
+                is_arrow_annotation_item = isinstance(item, ArrowAnnotationItem)
+                
+                # Check if item is a child of a measurement (line or text)
+                is_measurement_child = False
+                if item is not None:
+                    parent = item.parentItem()
+                    while parent is not None:
+                        if isinstance(parent, MeasurementItem):
+                            is_measurement_child = True
+                            break
+                        parent = parent.parentItem()
+                if is_empty_space and not (is_roi_item or is_measurement_item or is_handle or is_measurement_text or is_measurement_child or is_text_annotation_item or is_arrow_annotation_item):
+                    # Clicking on empty space - deselect everything
+                    # print(f"[DEBUG-DESELECT] Empty space click detected in Select mode")
+                    # print(f"[DEBUG-DESELECT]   is_empty_space: {is_empty_space}, is_roi_item: {is_roi_item}, is_measurement_item: {is_measurement_item}")
+                    
+                    if self.scene is not None:
+                        # First, explicitly deselect all measurements, text annotations, arrow annotations, and their text labels
+                        from tools.text_annotation_tool import TextAnnotationItem
+                        from tools.arrow_annotation_tool import ArrowAnnotationItem
+                        for scene_item in self.scene.items():
+                            if isinstance(scene_item, (MeasurementItem, DraggableMeasurementText, TextAnnotationItem, ArrowAnnotationItem)):
+                                scene_item.setSelected(False)
+                        
+                        # Clear scene selection (this will visually deselect ROIs)
+                        selected_before = [item for item in self.scene.selectedItems()]
+                        # print(f"[DEBUG-DESELECT]   Selected items in scene before clear: {len(selected_before)}")
+                        # for item in selected_before:
+                        #     print(f"[DEBUG-DESELECT]     Item: {type(item).__name__}, isSelected: {item.isSelected()}")
+                        self.scene.clearSelection()
+                        selected_after = [item for item in self.scene.selectedItems()]
+                        # print(f"[DEBUG-DESELECT]   Selected items in scene after clear: {len(selected_after)}")
+                    
+                    # Emit signal to clear ROI selection - this is critical for proper ROI deselection
+                    # This must happen BEFORE calling super() to prevent Qt's default behavior from interfering
+                    # print(f"[DEBUG-DESELECT]   Emitting image_clicked_no_roi signal")
+                    self.image_clicked_no_roi.emit()
+                    
+                    # Accept the event to prevent further processing
+                    event.accept()
+                    return
+                
+                # Let Qt handle selection of ROIs and measurements
+                super().mousePressEvent(event)
+                return
+            
+            # If ScrollHandDrag is active (pan mode), let Qt handle it unless clicking on ROI
+            if self.dragMode() == QGraphicsView.DragMode.ScrollHandDrag:
+                # Check if clicking on ROI item first
+                scene_pos = self.mapToScene(event.position().toPoint())
+                item = self.scene.itemAt(scene_pos, self.transform())
+                
+                from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsEllipseItem
+                # Check if item is an ROI item (but not the image item)
+                is_roi_item = (item is not None and 
+                              item != self.image_item and
+                              isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem)))
+                
+                if is_roi_item:
+                    # Clicking on ROI - disable ScrollHandDrag temporarily
+                    self.setDragMode(QGraphicsView.DragMode.NoDrag)
+                    self.roi_clicked.emit(item)
+                    return
+                else:
+                    # Not clicking on ROI (clicking on image item, empty space, or other items) - deselect measurements and emit signal for deselection
+                    from tools.measurement_tool import MeasurementItem, DraggableMeasurementText
+                    from tools.text_annotation_tool import TextAnnotationItem
+                    from tools.arrow_annotation_tool import ArrowAnnotationItem
+                    if self.scene is not None:
+                        # Deselect all measurements, text annotations, arrow annotations, and their text labels
+                        for scene_item in self.scene.items():
+                            if isinstance(scene_item, (MeasurementItem, DraggableMeasurementText, TextAnnotationItem, ArrowAnnotationItem)):
+                                scene_item.setSelected(False)
+                        # Also clear scene selection to ensure everything is deselected
+                        self.scene.clearSelection()
+                    # Emit before calling super() to ensure signal is processed
+                    self.image_clicked_no_roi.emit()
+                    # This is critical: we must let Qt handle the event for ScrollHandDrag to work
+                    super().mousePressEvent(event)
+                    return
+            
+            # For other modes, handle normally
+            # First check if clicking on existing ROI item
+            scene_pos = self.mapToScene(event.position().toPoint())
+            item = self.scene.itemAt(scene_pos, self.transform())
+            
+            # Check if it's a ROI item (QGraphicsRectItem or QGraphicsEllipseItem) but not the image item
+            from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsEllipseItem
+            from tools.measurement_tool import MeasurementItem, MeasurementHandle, DraggableMeasurementText
+            
+            is_roi_item = (item is not None and 
+                          item != self.image_item and
+                          isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem)))
+            
+            # Check if clicking on measurement-related items
+            is_measurement_item = isinstance(item, MeasurementItem)
+            is_handle = isinstance(item, MeasurementHandle)
+            is_measurement_text = isinstance(item, DraggableMeasurementText)
+            
+            # Check for text and arrow annotation items
+            from tools.text_annotation_tool import TextAnnotationItem
+            from tools.arrow_annotation_tool import ArrowAnnotationItem
+            is_text_annotation_item = isinstance(item, TextAnnotationItem)
+            is_arrow_annotation_item = isinstance(item, ArrowAnnotationItem)
+            
+            # Check if item is a child of a measurement
+            is_measurement_child = False
+            if item is not None:
+                parent = item.parentItem()
+                while parent is not None:
+                    if isinstance(parent, MeasurementItem):
+                        is_measurement_child = True
+                        break
+                    parent = parent.parentItem()
+            
+            if is_roi_item:
+                # Clicking on existing ROI - emit signal for ROI click
+                self.roi_clicked.emit(item)
+            elif is_measurement_item or is_handle or is_measurement_text or is_measurement_child:
+                # Clicking on measurement, handle, text, or measurement child - let Qt handle it
+                # Don't deselect here - allow normal selection behavior
+                pass
+            elif is_text_annotation_item or is_arrow_annotation_item:
+                # Clicking on text or arrow annotation - let Qt handle it for selection
+                # Don't start new annotation if clicking on existing one
+                pass
+            elif item is None or item == self.image_item:
+                # Clicking on empty space or image item - deselect measurements and emit deselection signal
+                # This ensures measurements are deselected even after handle dragging
+                from tools.text_annotation_tool import TextAnnotationItem
+                from tools.arrow_annotation_tool import ArrowAnnotationItem
+                if self.scene is not None:
+                    # Deselect all measurements, text annotations, arrow annotations, and their text labels
+                    for scene_item in self.scene.items():
+                        if isinstance(scene_item, (MeasurementItem, DraggableMeasurementText, TextAnnotationItem, ArrowAnnotationItem)):
+                            scene_item.setSelected(False)
+                    # Also clear scene selection to ensure everything is deselected
+                    self.scene.clearSelection()
+                self.image_clicked_no_roi.emit()
+                # Continue with mode-specific handling
+                if self.mouse_mode == "zoom":
+                    # Zoom mode - start zoom operation
+                    # Use viewport position for zoom tracking (more accurate for vertical movement)
+                    self.zoom_start_pos = event.position()
+                    self.zoom_start_zoom = self.current_zoom
+                    self.zoom_mouse_moved = False  # Track if mouse actually moved
+                elif self.mouse_mode == "measure":
+                    # Measurement mode - start or finish measurement
+                    if not self.measuring:
+                        # Start new measurement (first end placed); hide cursor while drawing line
+                        self.measuring = True
+                        self.measurement_start_pos = scene_pos
+                        self.setCursor(Qt.CursorShape.BlankCursor)
+                        self.measurement_started.emit(scene_pos)
+                    else:
+                        # Finish current measurement
+                        self.measuring = False
+                        self.measurement_start_pos = None
+                        self.measurement_finished.emit()
+                elif self.mouse_mode == "magnifier":
+                    # Magnifier mode - activate magnifier
+                    if not self.magnifier_active:
+                        # Create magnifier widget if it doesn't exist
+                        if self.magnifier_widget is None:
+                            from gui.magnifier_widget import MagnifierWidget
+                            self.magnifier_widget = MagnifierWidget()
+                        
+                        self.magnifier_active = True
+                        # Hide cursor when magnifier is active
+                        self.setCursor(Qt.CursorShape.BlankCursor)
+                        # Extract and show magnified region
+                        # Get current zoom from view transform (most accurate)
+                        current_zoom = self.transform().m11()
+                        # Magnifier zoom is 2.0x the current view zoom
+                        magnifier_zoom = 2.0 * current_zoom
+                        # Extract region size calculation for 2.0x zoom
+                        # To achieve true 2.0x zoom: we want final pixmap to be 200px (widget size)
+                        # After scaling by magnifier_zoom, we need: region_size * magnifier_zoom = 200
+                        # So: region_size = 200 / magnifier_zoom = 200 / (2.0 * current_zoom)
+                        # This ensures the extracted region, when scaled, fills the 200px widget at 2.0x zoom
+                        adjusted_region_size = 200.0 / (2.0 * current_zoom) if current_zoom > 0 else 200.0 / 2.0
+                        if DEBUG_MAGNIFIER:
+                            print(f"[DEBUG-MAGNIFIER] Press: current_zoom={current_zoom:.3f}, magnifier_zoom={magnifier_zoom:.3f}, adjusted_region_size={adjusted_region_size:.3f}")
+                        magnified_pixmap = self._render_scene_region(
+                            scene_pos.x(), scene_pos.y(), adjusted_region_size, magnifier_zoom
+                        )
+                        if magnified_pixmap is not None and DEBUG_MAGNIFIER:
+                            print(f"[DEBUG-MAGNIFIER] Press: extracted_region_size=({int(adjusted_region_size):d}x{int(adjusted_region_size):d}), scaled_pixmap_size=({magnified_pixmap.width()}x{magnified_pixmap.height()})")
+                        if magnified_pixmap is not None:
+                            self.magnifier_widget.update_magnified_region(magnified_pixmap)
+                            # Position magnifier centered on cursor
+                            global_pos = self.mapToGlobal(event.position().toPoint())
+                            self.magnifier_widget.show_at_position(global_pos)
+                elif self.mouse_mode == "crosshair":
+                    # Crosshair mode - get pixel value and coordinates, emit signal
+                    if self.get_current_dataset_callback:
+                        dataset = self.get_current_dataset_callback()
+                        if dataset is not None:
+                            # Convert scene position to image coordinates
+                            x = int(scene_pos.x())
+                            y = int(scene_pos.y())
+                            z = 0
+                            if self.get_current_slice_index_callback:
+                                z = self.get_current_slice_index_callback()
+                            
+                            # Get pixel value
+                            use_rescaled = False
+                            if self.get_use_rescaled_values_callback:
+                                use_rescaled = self.get_use_rescaled_values_callback()
+                            
+                            pixel_value_str = self._get_pixel_value_at_coords(dataset, x, y, z, use_rescaled)
+                            
+                            # Emit signal with crosshair information
+                            self.crosshair_clicked.emit(scene_pos, pixel_value_str, x, y, z)
+                elif self.mouse_mode == "text_annotation":
+                    # Text annotation mode - start text annotation (if not clicking on existing annotation)
+                    if not is_text_annotation_item:
+                        # Finish any current annotation first (if editing)
+                        if self.text_annotating:
+                            # Cancel current annotation if it exists
+                            self.text_annotation_finished.emit()
+                        # Start new annotation
+                        self.text_annotating = True
+                        self.text_annotation_start_pos = scene_pos
+                        self.text_annotation_started.emit(scene_pos)
+                    else:
+                        # Clicking on existing text annotation - let it handle the event (for selection/editing)
+                        pass
+                elif self.mouse_mode == "arrow_annotation":
+                    # Arrow annotation mode - start arrow annotation (if not clicking on existing annotation)
+                    if not is_arrow_annotation_item:
+                        # Cancel any current arrow first
+                        if self.arrow_annotating:
+                            self.arrow_annotation_finished.emit()
+                        # Start new arrow
+                        self.arrow_annotating = True
+                        self.arrow_annotation_start_pos = scene_pos
+                        self.arrow_annotation_started.emit(scene_pos)
+                elif self.roi_drawing_mode:
+                    # Start ROI drawing
+                    self.roi_drawing_start = scene_pos
+                    self.roi_drawing_started.emit(scene_pos)
+            elif self.mouse_mode == "zoom":
+                # Zoom mode - start zoom operation (clicking on overlay or other items)
+                # Use viewport position for zoom tracking (more accurate for vertical movement)
+                self.zoom_start_pos = event.position()
+                self.zoom_start_zoom = self.current_zoom
+                self.zoom_mouse_moved = False  # Track if mouse actually moved
+                # Deselect measurements when clicking away
+                from tools.measurement_tool import MeasurementItem, DraggableMeasurementText
+                if self.scene is not None:
+                    for scene_item in self.scene.items():
+                        if isinstance(scene_item, (MeasurementItem, DraggableMeasurementText)):
+                            scene_item.setSelected(False)
+                    self.scene.clearSelection()
+                # Emit signal for clicking on image (not ROI) to allow deselection
+                self.image_clicked_no_roi.emit()
+            elif self.mouse_mode == "measure":
+                # Measurement mode - start or finish measurement
+                if not self.measuring:
+                    # Start new measurement
+                    self.measuring = True
+                    self.measurement_start_pos = scene_pos
+                    self.measurement_started.emit(scene_pos)
+                else:
+                    # Finish current measurement
+                    self.measuring = False
+                    self.measurement_start_pos = None
+                    self.measurement_finished.emit()
+            elif self.roi_drawing_mode:
+                # Start ROI drawing only if not clicking on existing ROI
+                self.roi_drawing_start = scene_pos
+                self.roi_drawing_started.emit(scene_pos)
+            else:
+                # Clicking on other items (overlay, etc.) but not on ROI or measurement - deselect measurements and allow deselection
+                # This ensures measurements are deselected when clicking on overlays or other items after dragging handles
+                from tools.text_annotation_tool import TextAnnotationItem
+                from tools.arrow_annotation_tool import ArrowAnnotationItem
+                if self.scene is not None:
+                    # Deselect all measurements, text annotations, arrow annotations, and their text labels
+                    for scene_item in self.scene.items():
+                        if isinstance(scene_item, (MeasurementItem, DraggableMeasurementText, TextAnnotationItem, ArrowAnnotationItem)):
+                            scene_item.setSelected(False)
+                    # Also clear scene selection to ensure everything is deselected
+                    self.scene.clearSelection()
+                self.image_clicked_no_roi.emit()
+        elif event.button() == Qt.MouseButton.RightButton:
+            # Right click - prepare for potential drag or context menu
+            scene_pos = self.mapToScene(event.position().toPoint())
+            item = self.scene.itemAt(scene_pos, self.transform())
+            
+            # Check if it's a ROI item or measurement item
+            from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsEllipseItem
+            from tools.measurement_tool import MeasurementItem
+            
+            # Check if item is directly a ROI or measurement
+            is_roi_item = isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem))
+            is_measurement_item = isinstance(item, MeasurementItem)
+            
+            # If not directly a measurement, check if it's a child of a measurement
+            if not is_measurement_item and item is not None:
+                # Walk up parent chain to find MeasurementItem
+                parent = item.parentItem()
+                while parent is not None:
+                    if isinstance(parent, MeasurementItem):
+                        is_measurement_item = True
+                        item = parent  # Use the parent MeasurementItem for the menu
+                        break
+                    parent = parent.parentItem()
+            
+            if is_roi_item:
+                # Show context menu for ROI immediately
+                context_menu = QMenu(self)
+                
+                # Delete action
+                delete_action = context_menu.addAction("Delete ROI")
+                delete_action.triggered.connect(lambda: self.roi_delete_requested.emit(item))
+                
+                # Delete all ROIs action
+                delete_all_action = context_menu.addAction("Delete all ROIs (D)")
+                if self.delete_all_rois_callback:
+                    delete_all_action.triggered.connect(self.delete_all_rois_callback)
+                
+                context_menu.addSeparator()
+                
+                # Statistics Overlay submenu
+                stats_submenu = context_menu.addMenu("Statistics Overlay")
+                
+                # Get ROI from item using callback
+                roi = None
+                if self.get_roi_from_item_callback:
+                    roi = self.get_roi_from_item_callback(item)
+                
+                if roi is not None:
+                    # Toggle overlay visibility
+                    toggle_action = stats_submenu.addAction("Show Statistics Overlay")
+                    toggle_action.setCheckable(True)
+                    toggle_action.setChecked(roi.statistics_overlay_visible)
+                    toggle_action.triggered.connect(lambda checked: self.roi_statistics_overlay_toggle_requested.emit(roi, checked))
+                    
+                    stats_submenu.addSeparator()
+                    
+                    # Statistics checkboxes
+                    mean_action = stats_submenu.addAction("Show Mean")
+                    mean_action.setCheckable(True)
+                    mean_action.setChecked("mean" in roi.visible_statistics)
+                    mean_action.triggered.connect(lambda checked: self._toggle_statistic(roi, "mean", checked))
+                    
+                    std_action = stats_submenu.addAction("Show Std Dev")
+                    std_action.setCheckable(True)
+                    std_action.setChecked("std" in roi.visible_statistics)
+                    std_action.triggered.connect(lambda checked: self._toggle_statistic(roi, "std", checked))
+                    
+                    min_action = stats_submenu.addAction("Show Min")
+                    min_action.setCheckable(True)
+                    min_action.setChecked("min" in roi.visible_statistics)
+                    min_action.triggered.connect(lambda checked: self._toggle_statistic(roi, "min", checked))
+                    
+                    max_action = stats_submenu.addAction("Show Max")
+                    max_action.setCheckable(True)
+                    max_action.setChecked("max" in roi.visible_statistics)
+                    max_action.triggered.connect(lambda checked: self._toggle_statistic(roi, "max", checked))
+                    
+                    count_action = stats_submenu.addAction("Show Pixels")
+                    count_action.setCheckable(True)
+                    count_action.setChecked("count" in roi.visible_statistics)
+                    count_action.triggered.connect(lambda checked: self._toggle_statistic(roi, "count", checked))
+                    
+                    area_action = stats_submenu.addAction("Show Area")
+                    area_action.setCheckable(True)
+                    area_action.setChecked("area" in roi.visible_statistics)
+                    area_action.triggered.connect(lambda checked: self._toggle_statistic(roi, "area", checked))
+                
+                context_menu.addSeparator()
+                
+                # Annotation Options action
+                annotation_options_action = context_menu.addAction("Annotation Options...")
+                annotation_options_action.triggered.connect(self.annotation_options_requested.emit)
+                
+                context_menu.exec(event.globalPosition().toPoint())
+                self.right_mouse_context_menu_shown = True
+                return
+            elif is_measurement_item:
+                # Show context menu for measurement immediately
+                context_menu = QMenu(self)
+                delete_action = context_menu.addAction("Delete Measurement")
+                delete_action.triggered.connect(lambda: self.measurement_delete_requested.emit(item))
+                
+                context_menu.addSeparator()
+                
+                # Annotation Options action
+                annotation_options_action = context_menu.addAction("Annotation Options...")
+                annotation_options_action.triggered.connect(self.annotation_options_requested.emit)
+            
+            # Check if clicking on text annotation item
+            from tools.text_annotation_tool import TextAnnotationItem
+            is_text_annotation_item = isinstance(item, TextAnnotationItem)
+            
+            if is_text_annotation_item:
+                # Show context menu for text annotation immediately
+                context_menu = QMenu(self)
+                delete_action = context_menu.addAction("Delete Text Annotation")
+                delete_action.triggered.connect(lambda: self.text_annotation_delete_requested.emit(item))
+                
+                context_menu.addSeparator()
+                
+                # Annotation Options action
+                annotation_options_action = context_menu.addAction("Annotation Options...")
+                annotation_options_action.triggered.connect(self.annotation_options_requested.emit)
+                
+                context_menu.exec(event.globalPosition().toPoint())
+                self.right_mouse_context_menu_shown = True
+                return
+            
+            # Check if clicking on arrow annotation item
+            from tools.arrow_annotation_tool import ArrowAnnotationItem
+            is_arrow_annotation_item = isinstance(item, ArrowAnnotationItem)
+            
+            if is_arrow_annotation_item:
+                # Show context menu for arrow annotation immediately
+                context_menu = QMenu(self)
+                delete_action = context_menu.addAction("Delete Arrow")
+                delete_action.triggered.connect(lambda: self.arrow_annotation_delete_requested.emit(item))
+                
+                context_menu.addSeparator()
+                
+                # Annotation Options action
+                annotation_options_action = context_menu.addAction("Annotation Options...")
+                annotation_options_action.triggered.connect(self.annotation_options_requested.emit)
+                
+                context_menu.exec(event.globalPosition().toPoint())
+                self.right_mouse_context_menu_shown = True
+                return
+            
+            # Check if clicking on crosshair item
+            from tools.crosshair_manager import CrosshairItem
+            is_crosshair_item = (item is not None and 
+                               item != self.image_item and
+                               isinstance(item, CrosshairItem))
+            
+            if is_crosshair_item:
+                # Show context menu for crosshair immediately
+                context_menu = QMenu(self)
+                delete_action = context_menu.addAction("Delete Crosshair")
+                delete_action.triggered.connect(lambda: self.crosshair_delete_requested.emit(item))
+                
+                context_menu.addSeparator()
+                
+                # Annotation Options action
+                annotation_options_action = context_menu.addAction("Annotation Options...")
+                annotation_options_action.triggered.connect(self.annotation_options_requested.emit)
+                
+                context_menu.exec(event.globalPosition().toPoint())
+                self.right_mouse_context_menu_shown = True
+                return
+            else:
+                # Not clicking on ROI - prepare for drag or context menu
+                # Store initial position for potential drag
+                self.right_mouse_drag_start_pos = event.position()
+                self.right_mouse_context_menu_shown = False
+                # Request window/level values from main.py
+                self.right_mouse_press_for_drag.emit()
+                return
+        
+        super().mousePressEvent(event)
+    
+    def _toggle_statistic(self, roi, stat_name: str, checked: bool) -> None:
+        """
+        Toggle a statistic in the ROI's visible_statistics set.
+        
+        Args:
+            roi: ROI item
+            stat_name: Name of statistic ("mean", "std", "min", "max", "count", "area")
+            checked: True to include statistic, False to exclude
+        """
+        if checked:
+            roi.visible_statistics.add(stat_name)
+        else:
+            roi.visible_statistics.discard(stat_name)
+        
+        # Emit signal to update overlay
+        self.roi_statistics_selection_changed.emit(roi, roi.visible_statistics)
+    
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        """
+        Handle mouse move events for panning, ROI drawing, or zooming.
+        
+        Args:
+            event: Mouse event
+        """
+        # Track cursor position and pixel values for status bar display
+        # This should happen in all mouse modes, regardless of tool selection
+        self._update_pixel_info(event)
+        
+        # Check for right mouse drag FIRST, before any mode-specific checks
+        # This allows window/level adjustment to work in all modes (Select, Pan, etc.)
+        if event.buttons() & Qt.MouseButton.RightButton and self.right_mouse_drag_start_pos is not None:
+            # Right mouse drag for window/level adjustment
+            # Only if we have initial window/level values and context menu wasn't shown
+            if (self.right_mouse_drag_start_center is not None and 
+                self.right_mouse_drag_start_width is not None and
+                not self.right_mouse_context_menu_shown):
+                
+                current_pos = event.position()
+                start_pos = self.right_mouse_drag_start_pos
+                
+                # Calculate deltas (in viewport pixels)
+                delta_x = current_pos.x() - start_pos.x()  # Horizontal: positive = right (wider), negative = left (narrower)
+                delta_y = start_pos.y() - current_pos.y()  # Vertical: positive = up (higher center), negative = down (lower center)
+                
+                # Convert to window/level units using sensitivity
+                center_delta = delta_y * self.window_center_sensitivity
+                width_delta = delta_x * self.window_width_sensitivity
+                
+                # Emit signal with deltas
+                self.window_level_drag_changed.emit(center_delta, width_delta)
+                return  # Return early to prevent other mode handling
+        
+        # In select mode, allow default Qt behavior (selection dragging, etc.)
+        if self.mouse_mode == "select":
+            super().mouseMoveEvent(event)
+            return
+        
+        if (
+            self.mouse_mode == "zoom"
+            and self.zoom_start_pos is not None
+            and self.zoom_start_zoom is not None
+            and event.buttons() & Qt.MouseButton.LeftButton
+        ):
+            # Zoom mode - adjust zoom based on vertical drag distance
+            # Ensure ScrollHandDrag is disabled for zoom mode
+            if self.dragMode() == QGraphicsView.DragMode.ScrollHandDrag:
+                self.setDragMode(QGraphicsView.DragMode.NoDrag)
+            
+            current_pos = event.position()
+            start_pos = self.zoom_start_pos
+            base_zoom = self.zoom_start_zoom
+            
+            # Calculate vertical distance moved (in viewport coordinates)
+            delta_y = current_pos.y() - start_pos.y()
+            
+            # Only zoom if mouse moved significantly (threshold: 2 pixels)
+            # This prevents zoom on just a click
+            if abs(delta_y) > 2.0:
+                self.zoom_mouse_moved = True
+                
+                # Convert to zoom factor (negative delta = zoom in, positive = zoom out)
+                zoom_delta = -delta_y / 350.0  # Reduced sensitivity (was 300.0)
+                new_zoom = base_zoom * (1.0 + zoom_delta)
+                
+                # Clamp zoom
+                new_zoom = max(self.min_zoom, min(self.max_zoom, new_zoom))
+                
+                # Apply zoom - AnchorViewCenter is set in __init__ and ensures zooming is centered on viewport center
+                # Calculate scale factor from current transform for consistency with zoom_in/zoom_out
+                current_scale = self.transform().m11()
+                scale_factor = new_zoom / current_scale
+                self.scale(scale_factor, scale_factor)
+                self.current_zoom = new_zoom
+                
+                self.zoom_changed.emit(self.current_zoom)
+                self._check_transform_changed()
+        elif self.mouse_mode == "measure" and self.measuring and self.measurement_start_pos is not None:
+            # Measurement mode - update measurement while dragging; keep cursor hidden
+            if self.cursor().shape() != Qt.CursorShape.BlankCursor:
+                self.setCursor(Qt.CursorShape.BlankCursor)
+            if self.dragMode() == QGraphicsView.DragMode.ScrollHandDrag:
+                self.setDragMode(QGraphicsView.DragMode.NoDrag)
+            
+            if event.buttons() & Qt.MouseButton.LeftButton:
+                scene_pos = self.mapToScene(event.position().toPoint())
+                self.measurement_updated.emit(scene_pos)
+        elif self.mouse_mode == "arrow_annotation" and self.arrow_annotating and self.arrow_annotation_start_pos is not None:
+            # Arrow annotation mode - update arrow while dragging
+            if self.dragMode() == QGraphicsView.DragMode.ScrollHandDrag:
+                self.setDragMode(QGraphicsView.DragMode.NoDrag)
+            
+            if event.buttons() & Qt.MouseButton.LeftButton:
+                scene_pos = self.mapToScene(event.position().toPoint())
+                self.arrow_annotation_updated.emit(scene_pos)
+        elif self.roi_drawing_mode and self.roi_drawing_start is not None:
+            # ROI drawing mode - ensure ScrollHandDrag is disabled
+            if self.dragMode() == QGraphicsView.DragMode.ScrollHandDrag:
+                self.setDragMode(QGraphicsView.DragMode.NoDrag)
+            
+            if event.buttons() & Qt.MouseButton.LeftButton:
+                scene_pos = self.mapToScene(event.position().toPoint())
+                self.roi_drawing_updated.emit(scene_pos)
+        elif self.mouse_mode == "magnifier" and self.magnifier_active:
+            # Magnifier mode - update magnifier position and content
+            if event.buttons() & Qt.MouseButton.LeftButton:
+                # Ensure cursor stays hidden
+                if self.cursor().shape() != Qt.CursorShape.BlankCursor:
+                    self.setCursor(Qt.CursorShape.BlankCursor)
+                scene_pos = self.mapToScene(event.position().toPoint())
+                # Extract and update magnified region
+                # Get current zoom from view transform (most accurate)
+                current_zoom = self.transform().m11()
+                # Magnifier zoom is 2.0x the current view zoom
+                magnifier_zoom = 2.0 * current_zoom
+                # Extract region size calculation for 2.0x zoom
+                # To achieve true 2.0x zoom: we want final pixmap to be 200px (widget size)
+                # After scaling by magnifier_zoom, we need: region_size * magnifier_zoom = 200
+                # So: region_size = 200 / magnifier_zoom = 200 / (2.0 * current_zoom)
+                # This ensures the extracted region, when scaled, fills the 200px widget at 2.0x zoom
+                adjusted_region_size = 200.0 / (2.0 * current_zoom) if current_zoom > 0 else 200.0 / 2.0
+                magnified_pixmap = self._render_scene_region(
+                    scene_pos.x(), scene_pos.y(), adjusted_region_size, magnifier_zoom
+                )
+                if magnified_pixmap is not None and DEBUG_MAGNIFIER:
+                    print(f"[DEBUG-MAGNIFIER] Move: current_zoom={current_zoom:.3f}, magnifier_zoom={magnifier_zoom:.3f}, adjusted_region_size={adjusted_region_size:.3f}, scaled_pixmap_size=({magnified_pixmap.width()}x{magnified_pixmap.height()})")
+                if magnified_pixmap is not None and self.magnifier_widget is not None:
+                    self.magnifier_widget.update_magnified_region(magnified_pixmap)
+                    # Update magnifier position (centered on cursor)
+                    global_pos = self.mapToGlobal(event.position().toPoint())
+                    self.magnifier_widget.show_at_position(global_pos)
+        elif self.mouse_mode == "pan":
+            # Pan mode - ensure ScrollHandDrag is enabled (it may have been disabled by other operations)
+            if self.dragMode() != QGraphicsView.DragMode.ScrollHandDrag:
+                self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+        # Pan mode is handled automatically by ScrollHandDrag, no manual code needed
+        # But we need to emit transform_changed signal when panning occurs
+        # This is handled by connecting to scrollbar valueChanged signals
+        
+        super().mouseMoveEvent(event)
+    
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        """
+        Handle mouse release events.
+        
+        Args:
+            event: Mouse event
+        """
+        # In select mode, allow default Qt behavior for left button
+        if self.mouse_mode == "select":
+            # Only use default behavior for left button
+            if event.button() == Qt.MouseButton.LeftButton:
+                super().mouseReleaseEvent(event)
+                return
+            # Fall through for right button to allow context menu
+        
+        if event.button() == Qt.MouseButton.LeftButton:
+            if self.mouse_mode == "zoom" and self.zoom_start_pos is not None:
+                # Finish zoom operation - clear state regardless of whether mouse moved
+                # (zoom only happens in mouseMoveEvent if mouse actually moved)
+                self.zoom_start_pos = None
+                self.zoom_start_zoom = None
+                self.zoom_mouse_moved = False
+                # Restore ScrollHandDrag if we're in pan mode
+                if self.mouse_mode == "pan":
+                    self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+            elif self.mouse_mode == "measure" and self.measuring:
+                # Finish measurement (if not already finished by second click); restore cursor
+                self.measuring = False
+                self.measurement_start_pos = None
+                self.setCursor(Qt.CursorShape.CrossCursor)
+                self.measurement_finished.emit()
+            elif self.mouse_mode == "text_annotation" and self.text_annotating:
+                # Text annotation finishing is handled by the text item's editing callback
+                # Don't emit signal here - it will be emitted when editing finishes
+                # Just clear the state
+                # Note: The text item will call its callback when editing finishes
+                pass
+            elif self.mouse_mode == "arrow_annotation" and self.arrow_annotating:
+                # Finish arrow annotation
+                self.arrow_annotating = False
+                self.arrow_annotation_start_pos = None
+                self.arrow_annotation_finished.emit()
+            elif self.roi_drawing_mode and self.roi_drawing_start is not None:
+                # Finish ROI drawing
+                self.roi_drawing_finished.emit()
+                self.roi_drawing_start = None
+                # Restore ScrollHandDrag if we're in pan mode
+                if self.mouse_mode == "pan":
+                    self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+            elif self.mouse_mode == "magnifier" and self.magnifier_active:
+                # Finish magnifier - hide widget and restore cursor
+                self.magnifier_active = False
+                if self.magnifier_widget is not None:
+                    self.magnifier_widget.hide()
+                # Restore cursor visibility (cross cursor for magnifier mode)
+                self.setCursor(Qt.CursorShape.CrossCursor)
+            # Pan mode is handled automatically by ScrollHandDrag, no cleanup needed
+        elif event.button() == Qt.MouseButton.RightButton:
+            # Right mouse release - check if we were dragging or should show context menu
+            if (self.right_mouse_drag_start_pos is not None and 
+                not self.right_mouse_context_menu_shown):
+                
+                # Check if mouse moved significantly (drag threshold: 5 pixels)
+                current_pos = event.position()
+                start_pos = self.right_mouse_drag_start_pos
+                drag_distance = ((current_pos.x() - start_pos.x()) ** 2 + 
+                               (current_pos.y() - start_pos.y()) ** 2) ** 0.5
+                
+                if drag_distance < 5.0:
+                    # Mouse didn't move much - show context menu
+                    scene_pos = self.mapToScene(event.position().toPoint())
+                    item = self.scene.itemAt(scene_pos, self.transform())
+                    
+                    from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsEllipseItem
+                    from tools.measurement_tool import MeasurementItem
+                    
+                    # Check if item is directly a ROI or measurement
+                    is_roi_item = isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem))
+                    is_measurement_item = isinstance(item, MeasurementItem)
+                    
+                    # If not directly a measurement, check if it's a child of a measurement
+                    if not is_measurement_item and item is not None:
+                        # Walk up parent chain to find MeasurementItem
+                        parent = item.parentItem()
+                        while parent is not None:
+                            if isinstance(parent, MeasurementItem):
+                                is_measurement_item = True
+                                item = parent  # Use the parent MeasurementItem for the menu
+                                break
+                            parent = parent.parentItem()
+                    
+                    if not is_roi_item and not is_measurement_item:
+                        # Show context menu for image (not on ROI)
+                        context_menu = QMenu(self)
+                        
+                        # Reset View action
+                        reset_action = context_menu.addAction("Reset View (V, Shift+V)")
+                        reset_action.triggered.connect(self.reset_view_requested.emit)
+                        
+                        # Reset All Views action
+                        if hasattr(self, 'reset_all_views_requested'):
+                            reset_all_action = context_menu.addAction("Reset All Views (A)")
+                            reset_all_action.triggered.connect(self.reset_all_views_requested.emit)
+                        
+                        # Toggle Overlay action
+                        toggle_overlay_action = context_menu.addAction("Toggle Overlay (Spacebar)")
+                        toggle_overlay_action.triggered.connect(self.toggle_overlay_requested.emit)
+                        
+                        # Privacy View action
+                        privacy_view_action = context_menu.addAction("Privacy View (Cmd+P)")
+                        privacy_view_action.setCheckable(True)
+                        privacy_view_action.setChecked(self._privacy_view_enabled)
+                        privacy_view_action.triggered.connect(lambda checked: self.privacy_view_toggled.emit(checked))
+
+                        # Image Smoothing action
+                        smooth_when_zoomed_action = context_menu.addAction("Image Smoothing")
+                        smooth_when_zoomed_action.setCheckable(True)
+                        smooth_when_zoomed_action.setChecked(self._smooth_when_zoomed)
+                        smooth_when_zoomed_action.triggered.connect(lambda checked: self.smooth_when_zoomed_toggled.emit(checked))
+
+                        scale_markers_action = context_menu.addAction("Show Scale Markers")
+                        scale_markers_action.setCheckable(True)
+                        scale_markers_action.setChecked(self._show_scale_markers)
+                        scale_markers_action.triggered.connect(
+                            lambda checked: self.scale_markers_toggled.emit(checked)
+                        )
+
+                        direction_labels_action = context_menu.addAction("Show Direction Labels")
+                        direction_labels_action.setCheckable(True)
+                        direction_labels_action.setChecked(self._show_direction_labels)
+                        direction_labels_action.triggered.connect(
+                            lambda checked: self.direction_labels_toggled.emit(checked)
+                        )
+
+                        # Slice Sync submenu
+                        slice_sync_menu = context_menu.addMenu("Slice Sync")
+                        slice_sync_action = slice_sync_menu.addAction("Enable Slice Sync")
+                        slice_sync_action.setCheckable(True)
+                        slice_sync_action.setChecked(self._slice_sync_enabled)
+                        slice_sync_action.triggered.connect(
+                            lambda checked: self.slice_sync_toggled.emit(checked)
+                        )
+                        manage_sync_groups_action = slice_sync_menu.addAction("Manage Sync Groups...")
+                        manage_sync_groups_action.triggered.connect(
+                            self.slice_sync_manage_requested.emit
+                        )
+
+                        # Show Lines submenu (slice location lines across views)
+                        show_lines_menu = context_menu.addMenu("Show Lines")
+                        enable_lines_action = show_lines_menu.addAction("Enable/Disable")
+                        enable_lines_action.setCheckable(True)
+                        cb_vis = self.get_slice_location_lines_visible_callback
+                        enable_lines_action.setChecked(cb_vis() if cb_vis is not None else False)
+                        enable_lines_action.triggered.connect(
+                            lambda checked: self.slice_location_lines_toggled.emit(checked)
+                        )
+                        same_group_action = show_lines_menu.addAction("Only Show For Same Group")
+                        same_group_action.setCheckable(True)
+                        cb_sg = self.get_slice_location_lines_same_group_only_callback
+                        same_group_action.setChecked(cb_sg() if cb_sg is not None else False)
+                        same_group_action.triggered.connect(
+                            lambda checked: self.slice_location_lines_same_group_only_toggled.emit(checked)
+                        )
+                        focused_only_action = show_lines_menu.addAction("Show Only For Focused Window")
+                        focused_only_action.setCheckable(True)
+                        cb_fo = self.get_slice_location_lines_focused_only_callback
+                        focused_only_action.setChecked(cb_fo() if cb_fo is not None else False)
+                        focused_only_action.triggered.connect(
+                            lambda checked: self.slice_location_lines_focused_only_toggled.emit(checked)
+                        )
+
+                        # Show/Hide Left Pane and Right Pane
+                        show_hide_left_pane_action = context_menu.addAction("Show/Hide Left Pane")
+                        show_hide_left_pane_action.triggered.connect(self.left_pane_toggle_requested.emit)
+                        show_hide_right_pane_action = context_menu.addAction("Show/Hide Right Pane")
+                        show_hide_right_pane_action.triggered.connect(self.right_pane_toggle_requested.emit)
+
+                        # Show/Hide Series Navigator (right after pane toggles)
+                        show_hide_series_navigator_action = context_menu.addAction("Show/Hide Series Navigator")
+                        show_hide_series_navigator_action.triggered.connect(self.toggle_series_navigator_requested.emit)
+
+                        context_menu.addSeparator()
+
+                        # Series navigation actions
+                        prev_series_action = context_menu.addAction("Prev Series (←)")
+                        prev_series_action.triggered.connect(lambda: self.series_navigation_requested.emit(-1))
+                        
+                        next_series_action = context_menu.addAction("Next Series (→)")
+                        next_series_action.triggered.connect(lambda: self.series_navigation_requested.emit(1))
+                        
+                        # Assign Series submenu (for multi-window layout)
+                        assign_series_menu = context_menu.addMenu("Assign Series to Focused Window")
+                        if hasattr(self, 'get_available_series_callback') and self.get_available_series_callback:
+                            series_list = self.get_available_series_callback()
+                            if series_list:
+                                for series_uid, series_name in series_list:
+                                    action = assign_series_menu.addAction(series_name)
+                                    action.triggered.connect(lambda checked, uid=series_uid: self.assign_series_requested.emit(uid))
+                            else:
+                                assign_series_menu.setEnabled(False)
+                        else:
+                            assign_series_menu.setEnabled(False)
+                        
+                        context_menu.addSeparator()
+                        
+                        # Layout submenu
+                        layout_menu = context_menu.addMenu("Layout")
+                        layout_1x1_action = layout_menu.addAction("1x1  (1)")
+                        layout_1x1_action.setCheckable(True)
+                        layout_1x1_action.triggered.connect(lambda: self.layout_change_requested.emit("1x1"))
+                        
+                        layout_1x2_action = layout_menu.addAction("1x2  (2)")
+                        layout_1x2_action.setCheckable(True)
+                        layout_1x2_action.triggered.connect(lambda: self.layout_change_requested.emit("1x2"))
+                        
+                        layout_2x1_action = layout_menu.addAction("2x1  (3)")
+                        layout_2x1_action.setCheckable(True)
+                        layout_2x1_action.triggered.connect(lambda: self.layout_change_requested.emit("2x1"))
+                        
+                        layout_2x2_action = layout_menu.addAction("2x2  (4)")
+                        layout_2x2_action.setCheckable(True)
+                        layout_2x2_action.triggered.connect(lambda: self.layout_change_requested.emit("2x2"))
+                        
+                        # Swap submenu: "Swap with Window 1/2/3/4" (grid positions); source = this view
+                        if self.subwindow_index is not None:
+                            swap_menu = context_menu.addMenu("Swap")
+
+                            # Optional: show a small window-slot map popup
+                            show_map_action = swap_menu.addAction("Show Window Map")
+                            show_map_action.triggered.connect(self.window_slot_map_popup_requested.emit)
+                            swap_menu.addSeparator()
+
+                            slot_to_view = [0, 1, 2, 3]
+                            if self.get_slot_to_view_callback:
+                                try:
+                                    stv = self.get_slot_to_view_callback()
+                                    if isinstance(stv, list) and len(stv) >= 4:
+                                        slot_to_view = stv[:4]
+                                except Exception:
+                                    pass
+                            for k in range(1, 5):
+                                other_view_index = slot_to_view[k - 1]
+                                action = swap_menu.addAction(f"Swap with Window {k}")
+                                if other_view_index == self.subwindow_index:
+                                    action.setEnabled(False)
+                                else:
+                                    action.triggered.connect(
+                                        lambda checked, o=other_view_index: self.swap_view_requested.emit(o)
+                                    )
+                        
+                        # Note: Checkmarks will be updated by main.py based on current layout
+
+                        # MPR view actions (Create or Clear, depending on current mode).
+                        context_menu.addSeparator()
+                        _is_mpr = False
+                        if self.is_mpr_view_callback is not None:
+                            try:
+                                _is_mpr = bool(self.is_mpr_view_callback())
+                            except Exception:
+                                pass
+                        if _is_mpr:
+                            clear_mpr_action = context_menu.addAction("Clear MPR View")
+                            clear_mpr_action.triggered.connect(self.clear_mpr_view_requested.emit)
+                        else:
+                            create_mpr_action = context_menu.addAction("Create MPR View…")
+                            create_mpr_action.triggered.connect(self.create_mpr_view_requested.emit)
+
+                        context_menu.addSeparator()
+
+                        # Annotation Options action
+                        annotation_options_action = context_menu.addAction("Annotation Options...")
+                        annotation_options_action.triggered.connect(self.annotation_options_requested.emit)
+
+                        # Export ROI Statistics action
+                        export_roi_stats_action = context_menu.addAction("Export ROI Statistics...")
+                        export_roi_stats_action.triggered.connect(self.export_roi_statistics_requested.emit)
+
+                        context_menu.addSeparator()
+                        
+                        # Window/Level Presets submenu (if presets available)
+                        if hasattr(self, 'get_window_level_presets_callback') and self.get_window_level_presets_callback:
+                            presets = self.get_window_level_presets_callback()
+                            # print(f"[DEBUG-WL-PRESETS] ImageViewer context menu: callback exists, got {len(presets) if presets else 0} preset(s)")
+                            if presets and len(presets) >= 1:  # Show menu even with single preset
+                                preset_menu = context_menu.addMenu("Window/Level Presets")
+                                current_index = 0
+                                if hasattr(self, 'get_current_preset_index_callback') and self.get_current_preset_index_callback:
+                                    current_index = self.get_current_preset_index_callback()
+                                    # print(f"[DEBUG-WL-PRESETS] ImageViewer context menu: current preset index = {current_index}")
+                                
+                                for idx, (wc, ww, is_rescaled, name) in enumerate(presets):
+                                    preset_name = name if name else "Default"
+                                    action_text = f"{preset_name} (W={ww:.1f}, C={wc:.1f})"
+                                    action = preset_menu.addAction(action_text)
+                                    action.setCheckable(True)
+                                    if idx == current_index:
+                                        action.setChecked(True)
+                                    action.triggered.connect(lambda checked, i=idx: self.window_level_preset_selected.emit(i))
+                                
+                                # Invert Image action (moved here, no separator before)
+                                invert_action = context_menu.addAction("Invert Image (I)")
+                                invert_action.setCheckable(True)
+                                invert_action.setChecked(self.image_inverted)
+                                invert_action.triggered.connect(self.invert_image)
+                                
+                                context_menu.addSeparator()
+                        # else:
+                        #     print(f"[DEBUG-WL-PRESETS] ImageViewer context menu: No presets to show (presets={presets}, len={len(presets) if presets else 0})")
+                        # else:
+                        #     print(f"[DEBUG-WL-PRESETS] ImageViewer context menu: Callback missing or not set (hasattr={hasattr(self, 'get_window_level_presets_callback')}, callback={getattr(self, 'get_window_level_presets_callback', None)})")
+                        
+                        # Quick Window/Level (Q) - type center, tab to width, Enter or OK to apply
+                        quick_wl_action = context_menu.addAction("Quick Window/Level (Q)")
+                        quick_wl_action.triggered.connect(self.quick_window_level_requested.emit)
+                        
+                        # Cine playback actions (only if enabled)
+                        if self.cine_controls_enabled:
+                            cine_play_action = context_menu.addAction("▶ Play Cine")
+                            cine_play_action.triggered.connect(self.cine_play_requested.emit)
+                            
+                            cine_pause_action = context_menu.addAction("⏸ Pause Cine")
+                            cine_pause_action.triggered.connect(self.cine_pause_requested.emit)
+                            
+                            cine_stop_action = context_menu.addAction("⏹ Stop Cine")
+                            cine_stop_action.triggered.connect(self.cine_stop_requested.emit)
+                            
+                            # Loop Cine action
+                            cine_loop_action = context_menu.addAction("Loop Cine")
+                            cine_loop_action.setCheckable(True)
+                            # Get current loop state if callback is available
+                            if self.get_cine_loop_state_callback is not None:
+                                loop_enabled = self.get_cine_loop_state_callback()
+                                cine_loop_action.setChecked(loop_enabled)
+                            cine_loop_action.triggered.connect(
+                                lambda checked: self.cine_loop_toggled.emit(checked)
+                            )
+                            
+                            context_menu.addSeparator()
+                        
+                        # Left Mouse Button actions (moved to first level, grouped with separators)
+                        left_mouse_actions = {
+                            "Select (S)": "select",
+                            "Zoom (Z)": "zoom",
+                            "Pan (P)": "pan",
+                            "Magnifier (G)": "magnifier",
+                            "Ellipse ROI (E)": "roi_ellipse",
+                            "Rectangle ROI (R)": "roi_rectangle",
+                            "Crosshair ROI (H)": "crosshair",
+                            "Measure (M)": "measure",
+                            "Arrow Annotation (A)": "arrow_annotation",
+                            "Text Annotation (T)": "text_annotation",
+                            "Window/Level ROI (W)": "auto_window_level"
+                        }
+                        # MPR mode restricts interaction types. Crosshair ROI stays off;
+                        # text/arrow annotations are allowed (see MPR annotations plan).
+                        _mpr_disabled_modes = (
+                            {"crosshair"} if self._mpr_mode_override else set()
+                        )
+                        for action_text, mode in left_mouse_actions.items():
+                            action = context_menu.addAction(action_text)
+                            action.setCheckable(True)
+                            if mode in _mpr_disabled_modes:
+                                action.setEnabled(False)
+                                action.setToolTip(
+                                    "This interaction type is not available on MPR views."
+                                )
+                            else:
+                                if self.mouse_mode == mode:
+                                    action.setChecked(True)
+                                action.triggered.connect(
+                                    lambda checked, m=mode: self.context_menu_mouse_mode_changed.emit(m)
+                                )
+                        
+                        context_menu.addSeparator()
+                        
+                        # Delete all ROIs action
+                        delete_all_action = context_menu.addAction("Delete all ROIs (D)")
+                        if self.delete_all_rois_callback:
+                            delete_all_action.triggered.connect(self.delete_all_rois_callback)
+                        
+                        # Clear Measurements action
+                        clear_measurements_action = context_menu.addAction("Clear Measurements (C)")
+                        clear_measurements_action.triggered.connect(self.clear_measurements_requested.emit)
+                        
+                        context_menu.addSeparator()
+                        
+                        # Histogram action
+                        import sys
+                        shortcut_text = "Cmd+Shift+H" if sys.platform == "darwin" else "Ctrl+Shift+H"
+                        histogram_action = context_menu.addAction(f"Histogram ({shortcut_text})")
+                        histogram_action.triggered.connect(self.histogram_requested.emit)
+                        
+                        context_menu.addSeparator()
+                        
+                        # Scroll Wheel Mode submenu
+                        scroll_wheel_menu = context_menu.addMenu("Scroll Wheel Mode")
+                        slice_action = scroll_wheel_menu.addAction("Slice")
+                        slice_action.setCheckable(True)
+                        if self.scroll_wheel_mode == "slice":
+                            slice_action.setChecked(True)
+                        slice_action.triggered.connect(
+                            lambda: self.context_menu_scroll_wheel_mode_changed.emit("slice")
+                        )
+                        
+                        zoom_action = scroll_wheel_menu.addAction("Zoom")
+                        zoom_action.setCheckable(True)
+                        if self.scroll_wheel_mode == "zoom":
+                            zoom_action.setChecked(True)
+                        zoom_action.triggered.connect(
+                            lambda: self.context_menu_scroll_wheel_mode_changed.emit("zoom")
+                        )
+                        
+                        context_menu.addSeparator()
+                        
+                        # Combine Slices submenu
+                        combine_menu = context_menu.addMenu("Combine...")
+                        
+                        # Enable/disable toggle
+                        enable_action = combine_menu.addAction("Enable Combine Slices")
+                        enable_action.setCheckable(True)
+                        if self.get_projection_enabled_callback:
+                            enable_action.setChecked(self.get_projection_enabled_callback())
+                        enable_action.triggered.connect(
+                            lambda checked: self.projection_enabled_changed.emit(checked)
+                        )
+                        
+                        combine_menu.addSeparator()
+                        
+                        # Projection type submenu
+                        projection_type_menu = combine_menu.addMenu("Projection Type")
+                        from PySide6.QtGui import QActionGroup
+                        projection_type_group = QActionGroup(projection_type_menu)
+                        projection_type_group.setExclusive(True)
+                        
+                        aip_action = projection_type_menu.addAction("Average (AIP)")
+                        aip_action.setCheckable(True)
+                        projection_type_group.addAction(aip_action)
+                        if self.get_projection_type_callback:
+                            aip_action.setChecked(self.get_projection_type_callback() == "aip")
+                        aip_action.triggered.connect(
+                            lambda: self.projection_type_changed.emit("aip")
+                        )
+                        
+                        mip_action = projection_type_menu.addAction("Maximum (MIP)")
+                        mip_action.setCheckable(True)
+                        projection_type_group.addAction(mip_action)
+                        if self.get_projection_type_callback:
+                            mip_action.setChecked(self.get_projection_type_callback() == "mip")
+                        mip_action.triggered.connect(
+                            lambda: self.projection_type_changed.emit("mip")
+                        )
+                        
+                        minip_action = projection_type_menu.addAction("Minimum (MinIP)")
+                        minip_action.setCheckable(True)
+                        projection_type_group.addAction(minip_action)
+                        if self.get_projection_type_callback:
+                            minip_action.setChecked(self.get_projection_type_callback() == "minip")
+                        minip_action.triggered.connect(
+                            lambda: self.projection_type_changed.emit("minip")
+                        )
+                        
+                        # Slice count submenu
+                        slice_count_menu = combine_menu.addMenu("Slice Count")
+                        slice_count_group = QActionGroup(slice_count_menu)
+                        slice_count_group.setExclusive(True)
+                        
+                        for count in [2, 3, 4, 6, 8]:
+                            count_action = slice_count_menu.addAction(str(count))
+                            count_action.setCheckable(True)
+                            slice_count_group.addAction(count_action)
+                            if self.get_projection_slice_count_callback:
+                                count_action.setChecked(self.get_projection_slice_count_callback() == count)
+                            count_action.triggered.connect(
+                                lambda checked, c=count: self.projection_slice_count_changed.emit(c) if checked else None
+                            )
+                        
+                        context_menu.addSeparator()
+                        
+                        # Use Raw Pixel Values action
+                        use_raw_action = context_menu.addAction("Use Raw Pixel Values")
+                        use_raw_action.setCheckable(True)
+                        use_raw_action.setChecked(not self.use_rescaled_values)  # Checked when using raw values
+                        use_raw_action.triggered.connect(
+                            lambda: self.context_menu_rescale_toggle_changed.emit(False)
+                        )
+                        
+                        # Use Rescaled Values action
+                        use_rescaled_action = context_menu.addAction("Use Rescaled Values")
+                        use_rescaled_action.setCheckable(True)
+                        use_rescaled_action.setChecked(self.use_rescaled_values)  # Checked when using rescaled values
+                        use_rescaled_action.triggered.connect(
+                            lambda: self.context_menu_rescale_toggle_changed.emit(True)
+                        )
+                        
+                        context_menu.addSeparator()
+                        
+                        # About this File action
+                        about_this_file_action = context_menu.addAction("About this File...")
+                        about_this_file_action.triggered.connect(self.about_this_file_requested.emit)
+                        
+                        # Show file action (always show, but enable only if callback is available and returns a valid path)
+                        show_file_action = context_menu.addAction("Show File in File Explorer")
+                        show_file_enabled = False
+                        if self.get_file_path_callback:
+                            try:
+                                file_path = self.get_file_path_callback()
+                                if file_path:
+                                    show_file_enabled = True
+                                    show_file_action.triggered.connect(
+                                        lambda: self._on_show_file_requested()
+                                    )
+                            except Exception:
+                                pass
+                        show_file_action.setEnabled(show_file_enabled)
+                        
+                        context_menu.exec(event.globalPosition().toPoint())
+            
+            # Reset right mouse drag tracking
+            self.right_mouse_drag_start_pos = None
+            self.right_mouse_drag_start_center = None
+            self.right_mouse_drag_start_width = None
+            self.right_mouse_context_menu_shown = False
+        
+        super().mouseReleaseEvent(event)
+    
+    def _on_show_file_requested(self) -> None:
+        """
+        Handle "Show file" request from context menu.
+        
+        Opens file explorer and selects the currently displayed slice file.
+        """
+        from utils.file_explorer import reveal_file_in_explorer
+        
+        if self.get_file_path_callback:
+            file_path = self.get_file_path_callback()
+            if file_path and os.path.exists(file_path):
+                reveal_file_in_explorer(file_path)
+    
+    def viewportEvent(self, event: QEvent) -> bool:
+        """
+        Override viewportEvent to catch mouse move events even when ScrollHandDrag is active.
+        This ensures pixel info updates work consistently in all modes, including pan mode.
+        
+        Args:
+            event: Viewport event
+            
+        Returns:
+            True if event was handled, False otherwise
+        """
+        # Handle mouse move events to update pixel info even when ScrollHandDrag is active
+        if event.type() == QEvent.Type.MouseMove and isinstance(event, QMouseEvent):
+            # Update pixel info for all mouse move events, regardless of drag mode
+            self._update_pixel_info(event)
+        
+        # Let Qt handle the event normally (for ScrollHandDrag, etc.)
+        return super().viewportEvent(event)
+    
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        """
+        Handle key press events for arrow key navigation.
+        
+        Args:
+            event: Key event
+        """
+        # Check if any text annotation is being edited - if so, don't process arrow keys for navigation
+        from tools.text_annotation_tool import is_any_text_annotation_editing
+        if is_any_text_annotation_editing(self.scene):
+            # Let the text editor handle arrow keys for cursor movement
+            super().keyPressEvent(event)
+            return
+        
+        if event.key() == Qt.Key.Key_Up:
+            # Up arrow: next slice
+            # region agent log: up arrow slice navigation (H3 - key vs pan)
+            if DEBUG_AGENT_LOG:
+                try:
+                    import json as _json  # Local alias to avoid conflicts
+                    from time import time as _time
+                    up_log = {
+                        "sessionId": "088dbc",
+                        "runId": "pre-fix",
+                        "hypothesisId": "H3",
+                        "location": "image_viewer.keyPressEvent:Key_Up",
+                        "message": "Key_Up slice navigation",
+                        "data": {
+                            "zoom": float(self.current_zoom),
+                            "h_scroll": int(self.horizontalScrollBar().value())
+                            if self.horizontalScrollBar() is not None
+                            else 0,
+                            "v_scroll": int(self.verticalScrollBar().value())
+                            if self.verticalScrollBar() is not None
+                            else 0,
+                        },
+                        "timestamp": int(_time() * 1000),
+                    }
+                    with open("debug-088dbc.log", "a", encoding="utf-8") as f:
+                        f.write(_json.dumps(up_log) + "\n")
+                except Exception:
+                    pass
+            # endregion agent log
+
+            self.arrow_key_pressed.emit(1)
+            event.accept()
+        elif event.key() == Qt.Key.Key_Down:
+            # Down arrow: previous slice
+            # region agent log: down arrow slice navigation (H3 - key vs pan)
+            if DEBUG_AGENT_LOG:
+                try:
+                    import json as _json  # Local alias to avoid conflicts
+                    from time import time as _time
+                    down_log = {
+                        "sessionId": "088dbc",
+                        "runId": "pre-fix",
+                        "hypothesisId": "H3",
+                        "location": "image_viewer.keyPressEvent:Key_Down",
+                        "message": "Key_Down slice navigation",
+                        "data": {
+                            "zoom": float(self.current_zoom),
+                            "h_scroll": int(self.horizontalScrollBar().value())
+                            if self.horizontalScrollBar() is not None
+                            else 0,
+                            "v_scroll": int(self.verticalScrollBar().value())
+                            if self.verticalScrollBar() is not None
+                            else 0,
+                        },
+                        "timestamp": int(_time() * 1000),
+                    }
+                    with open("debug-088dbc.log", "a", encoding="utf-8") as f:
+                        f.write(_json.dumps(down_log) + "\n")
+                except Exception:
+                    pass
+            # endregion agent log
+
+            self.arrow_key_pressed.emit(-1)
+            event.accept()
+        elif event.key() == Qt.Key.Key_Left:
+            # Left arrow: previous series
+            if DEBUG_NAV:
+                timestamp = time.time()
+                focused_widget = QApplication.focusWidget()
+                focus_info = f"focused={focused_widget.objectName() if focused_widget else 'None'}"
+                print(f"[DEBUG-NAV] [{timestamp:.6f}] ImageViewer.keyPressEvent: LEFT arrow, {focus_info}")
+            focused_widget = QApplication.focusWidget()
+            # Only handle if series navigator doesn't have focus
+            if focused_widget:
+                # Check if focused widget is the series navigator or one of its children
+                widget = focused_widget
+                while widget:
+                    if widget.objectName() == "series_navigator" or widget.objectName() == "series_navigator_scroll_area" or widget.objectName() == "series_navigator_container":
+                        # Series navigator has focus, let it handle the event
+                        if DEBUG_NAV:
+                            timestamp = time.time()
+                            print(f"[DEBUG-NAV] [{timestamp:.6f}] ImageViewer: Series navigator has focus, skipping emit")
+                        return
+                    widget = widget.parent()
+            if DEBUG_NAV:
+                timestamp = time.time()
+                print(f"[DEBUG-NAV] [{timestamp:.6f}] ImageViewer: Emitting series_navigation_requested(-1)")
+            self.series_navigation_requested.emit(-1)
+            event.accept()
+        elif event.key() == Qt.Key.Key_Right:
+            # Right arrow: next series
+            if DEBUG_NAV:
+                timestamp = time.time()
+                focused_widget = QApplication.focusWidget()
+                focus_info = f"focused={focused_widget.objectName() if focused_widget else 'None'}"
+                print(f"[DEBUG-NAV] [{timestamp:.6f}] ImageViewer.keyPressEvent: RIGHT arrow, {focus_info}")
+            focused_widget = QApplication.focusWidget()
+            # Only handle if series navigator doesn't have focus
+            if focused_widget:
+                # Check if focused widget is the series navigator or one of its children
+                widget = focused_widget
+                while widget:
+                    if widget.objectName() == "series_navigator" or widget.objectName() == "series_navigator_scroll_area" or widget.objectName() == "series_navigator_container":
+                        # Series navigator has focus, let it handle the event
+                        if DEBUG_NAV:
+                            timestamp = time.time()
+                            print(f"[DEBUG-NAV] [{timestamp:.6f}] ImageViewer: Series navigator has focus, skipping emit")
+                        return
+                    widget = widget.parent()
+            if DEBUG_NAV:
+                timestamp = time.time()
+                print(f"[DEBUG-NAV] [{timestamp:.6f}] ImageViewer: Emitting series_navigation_requested(1)")
+            self.series_navigation_requested.emit(1)
+            event.accept()
+        else:
+            super().keyPressEvent(event)
+    
+    def set_window_level_for_drag(
+        self,
+        center: float,
+        width: float,
+        center_range: Tuple[float, float],
+        width_range: Tuple[float, float],
+    ) -> None:
+        """
+        Set window/level values for right mouse drag adjustment.
+        Also updates sensitivity based on ranges.
+        
+        Args:
+            center: Current window center value
+            width: Current window width value
+            center_range: (min, max) range for window center
+            width_range: (min, max) range for window width
+        """
+        self.right_mouse_drag_start_center = center
+        self.right_mouse_drag_start_width = width
+        
+        # Calculate sensitivity based on ranges
+        # Sensitivity: pixels per unit
+        # Use a reasonable default: 1 pixel = 1% of range
+        center_range_size = center_range[1] - center_range[0]
+        width_range_size = width_range[1] - width_range[0]
+        
+        if center_range_size > 0:
+            # 100 pixels of movement = 10% of range
+            self.window_center_sensitivity = center_range_size / 1000.0
+        else:
+            self.window_center_sensitivity = 1.0
+        
+        if width_range_size > 0:
+            # 100 pixels of movement = 10% of range
+            self.window_width_sensitivity = width_range_size / 1000.0
+        else:
+            self.window_width_sensitivity = 1.0
+    
+    def _check_transform_changed(self) -> None:
+        """
+        Check if transform has changed and emit signal if so.
+        
+        Uses QTimer to delay signal emission slightly to ensure transform is fully applied.
+        Also restarts the smooth-idle timer so we use fast transform during zoom/pan.
+        """
+        current_transform = self.transform()
+        if current_transform != self.last_transform:
+            self.last_transform = current_transform
+            self._restart_smooth_idle_timer()
+            # Use QTimer to delay signal emission slightly, ensuring transform is fully applied
+            QTimer.singleShot(10, lambda: self.transform_changed.emit())
+    
+    def _on_scrollbar_changed(self) -> None:
+        """
+        Handle scrollbar value changes (panning).
+        
+        When panning via scrollbars, the view's transform doesn't change,
+        but the viewport-to-scene mapping does change. We need to update
+        overlay positions to keep them anchored to viewport edges.
+        
+        Updates overlay positions immediately for smooth panning, using
+        a debounced timer only to ensure final position is correct when
+        panning stops.
+        """
+        # Check if scrollbar values actually changed
+        current_h = self.horizontalScrollBar().value()
+        current_v = self.verticalScrollBar().value()
+        
+        if current_h != self.last_horizontal_scroll or current_v != self.last_vertical_scroll:
+            self.last_horizontal_scroll = current_h
+            self.last_vertical_scroll = current_v
+
+            self._restart_smooth_idle_timer()
+
+            # Emit transform_changed immediately for smooth updates during panning
+            # This ensures overlay positions update in sync with viewport movement
+            self.transform_changed.emit()
+            
+            # Also set up a debounced timer for a final update when panning stops
+            # This ensures overlay positions are correct even if rapid panning
+            # causes some updates to be missed
+            if self._pan_update_timer is not None and self._pan_update_timer.isActive():
+                self._pan_update_timer.stop()
+            
+            if self._pan_update_timer is None:
+                self._pan_update_timer = QTimer()
+                self._pan_update_timer.setSingleShot(True)
+                self._pan_update_timer.timeout.connect(lambda: self.transform_changed.emit())
+            
+            # Start timer with short delay - this will fire if panning stops
+            # and ensures final position is correct
+            self._pan_update_timer.start(10)
+    
+    def get_viewport_center_scene(self) -> Optional[QPointF]:
+        """
+        Get the current viewport center point in scene coordinates.
+        
+        Returns:
+            QPointF representing the viewport center in scene coordinates,
+            or None if viewport is not available
+        """
+        if self.viewport() is None:
+            return None
+        
+        # Calculate viewport center in viewport coordinates
+        viewport_center_viewport = QPointF(
+            self.viewport().width() / 2.0,
+            self.viewport().height() / 2.0
+        )
+        
+        # Convert to scene coordinates
+        scene_center = self.mapToScene(viewport_center_viewport.toPoint())
+        return scene_center
+    
+    def set_pixel_info_callbacks(
+        self,
+        get_dataset: Callable[[], Any],
+        get_slice_index: Callable[[], int],
+        get_use_rescaled: Callable[[], bool]
+    ) -> None:
+        """
+        Set callbacks to get current dataset, slice index, and rescale setting for pixel value display.
+        
+        Args:
+            get_dataset: Callback to get current DICOM dataset
+            get_slice_index: Callback to get current slice index
+            get_use_rescaled: Callback to get whether to use rescaled values
+        """
+        self.get_current_dataset_callback = get_dataset
+        self.get_current_slice_index_callback = get_slice_index
+        self.get_use_rescaled_values_callback = get_use_rescaled
+    
+    def _update_pixel_info(self, event: QMouseEvent) -> None:
+        """
+        Update pixel information based on cursor position.
+        
+        Args:
+            event: Mouse event
+        """
+        if self.image_item is None:
+            self.pixel_info_changed.emit("", 0, 0, 0)
+            return
+        
+        # Convert viewport coordinates to scene coordinates
+        scene_pos = self.mapToScene(event.position().toPoint())
+        
+        # Get image item bounding rect
+        image_rect = self.image_item.boundingRect()
+        
+        # Check if cursor is over the image
+        if not image_rect.contains(scene_pos):
+            self.pixel_info_changed.emit("", 0, 0, 0)
+            return
+        
+        # Convert scene coordinates to image pixel coordinates
+        # Image item is positioned at (0, 0) in scene, so scene_pos is relative to image
+        x = int(scene_pos.x())
+        y = int(scene_pos.y())
+        
+        # Clamp to image bounds
+        x = max(0, min(x, int(image_rect.width()) - 1))
+        y = max(0, min(y, int(image_rect.height()) - 1))
+        
+        # Get z coordinate (slice index)
+        z = 0
+        if self.get_current_slice_index_callback:
+            z = self.get_current_slice_index_callback()
+        
+        # Get pixel value from dataset
+        pixel_value_str = ""
+        if self.get_current_dataset_callback:
+            dataset = self.get_current_dataset_callback()
+            if dataset is not None:
+                use_rescaled = False
+                if self.get_use_rescaled_values_callback:
+                    use_rescaled = self.get_use_rescaled_values_callback()
+                
+                pixel_value_str = self._get_pixel_value_at_coords(dataset, x, y, z, use_rescaled)
+        
+        # Emit signal with pixel info
+        self.pixel_info_changed.emit(pixel_value_str, x, y, z)
+    
+    def _extract_image_region(self, center_x: float, center_y: float, size: int, zoom_factor: float) -> Optional[QPixmap]:
+        """
+        Extract a region from the displayed image for magnifier.
+        
+        Args:
+            center_x: Scene X coordinate of center point
+            center_y: Scene Y coordinate of center point
+            size: Size of region to extract (in scene coordinates before zoom)
+            zoom_factor: Magnification factor to apply
+            
+        Returns:
+            QPixmap of the extracted and magnified region, or None if extraction fails
+        """
+        if self.image_item is None:
+            return None
+        
+        # Get the pixmap from the image item
+        source_pixmap = self.image_item.pixmap()
+        if source_pixmap.isNull():
+            return None
+        
+        # Calculate region bounds in pixmap coordinates
+        # The image item is positioned at (0, 0) in scene coordinates
+        # So scene coordinates directly map to pixmap coordinates
+        half_size = size / 2.0
+        x1 = max(0, int(center_x - half_size))
+        y1 = max(0, int(center_y - half_size))
+        x2 = min(source_pixmap.width(), int(center_x + half_size))
+        y2 = min(source_pixmap.height(), int(center_y + half_size))
+        
+        # Check if region is valid
+        if x2 <= x1 or y2 <= y1:
+            return None
+        
+        # Extract region from pixmap
+        extracted_width = x2 - x1
+        extracted_height = y2 - y1
+        region = source_pixmap.copy(x1, y1, extracted_width, extracted_height)
+        
+        if DEBUG_MAGNIFIER:
+            print(f"[DEBUG-MAGNIFIER] _extract_image_region: center=({center_x:.1f}, {center_y:.1f}), size={size:.3f}, zoom_factor={zoom_factor:.3f}")
+            print(f"[DEBUG-MAGNIFIER] _extract_image_region: extracted_region=({x1}, {y1}) to ({x2}, {y2}), dimensions=({extracted_width}x{extracted_height})")
+        
+        # Apply zoom factor; use same smooth/fast setting as main view
+        if zoom_factor != 1.0:
+            scaled_width = int(extracted_width * zoom_factor)
+            scaled_height = int(extracted_height * zoom_factor)
+            transform_mode = (
+                Qt.TransformationMode.SmoothTransformation
+                if self._smooth_when_zoomed
+                else Qt.TransformationMode.FastTransformation
+            )
+            if DEBUG_MAGNIFIER:
+                print(f"[DEBUG-MAGNIFIER] _extract_image_region: scaling to ({scaled_width}x{scaled_height})")
+            region = region.scaled(
+                scaled_width,
+                scaled_height,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                transform_mode
+            )
+            if DEBUG_MAGNIFIER:
+                print(f"[DEBUG-MAGNIFIER] _extract_image_region: final_pixmap_size=({region.width()}x{region.height()})")
+        else:
+            if DEBUG_MAGNIFIER:
+                print(f"[DEBUG-MAGNIFIER] _extract_image_region: no scaling, final_pixmap_size=({region.width()}x{region.height()})")
+        
+        return region
+
+    def _render_scene_region(self, center_x: float, center_y: float, size: float, zoom_factor: float) -> Optional[QPixmap]:
+        """
+        Render a region of the graphics scene (image + annotations) for the magnifier.
+        Uses QGraphicsScene.render() so measurements, ROIs, and other scene items are visible.
+
+        Args:
+            center_x: Scene X coordinate of center point
+            center_y: Scene Y coordinate of center point
+            size: Size of region to extract (in scene coordinates before zoom)
+            zoom_factor: Magnification factor to apply
+
+        Returns:
+            QPixmap of the rendered region, or None if rendering fails
+        """
+        if self.scene is None:
+            return None
+        half_size = size / 2.0
+        source_rect = QRectF(center_x - half_size, center_y - half_size, size, size)
+        # Clamp to image bounds when available so we don't render empty scene area
+        if self.image_item is not None:
+            image_rect = self.image_item.boundingRect()
+            source_rect = source_rect.intersected(image_rect)
+        else:
+            source_rect = source_rect.intersected(self.scene.sceneRect())
+        if source_rect.isEmpty() or source_rect.width() <= 0 or source_rect.height() <= 0:
+            return None
+        out_w = max(1, int(source_rect.width() * zoom_factor))
+        out_h = max(1, int(source_rect.height() * zoom_factor))
+        image = QImage(out_w, out_h, QImage.Format.Format_ARGB32_Premultiplied)
+        image.fill(QColor(0, 0, 0))
+        painter = QPainter(image)
+        try:
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, self._smooth_when_zoomed)
+            target_rect = QRectF(0, 0, out_w, out_h)
+            self.scene.render(painter, target_rect, source_rect)
+        finally:
+            painter.end()
+        return QPixmap.fromImage(image)
+
+    def show_handle_drag_magnifier(self, scene_pos: QPointF) -> None:
+        """
+        Show the handle-drag magnifier centered on the given scene position.
+        Used when the user Shift+drags a measurement handle for precise endpoint placement.
+        Widget is positioned with an offset so it does not cover the handle.
+        """
+        if self.handle_drag_magnifier_active:
+            if DEBUG_MAGNIFIER:
+                print(
+                    "[DEBUG-MAGNIFIER] ImageViewer.show_handle_drag_magnifier: "
+                    "already active; delegating to update_handle_drag_magnifier()"
+                )
+            self.update_handle_drag_magnifier(scene_pos)
+            return
+        if self.handle_drag_magnifier_widget is None:
+            from gui.magnifier_widget import MagnifierWidget
+            self.handle_drag_magnifier_widget = MagnifierWidget()
+        self.handle_drag_magnifier_active = True
+        current_zoom = self.transform().m11()
+        magnifier_zoom = 2.0 * current_zoom
+        adjusted_region_size = (
+            float(self._handle_drag_magnifier_size) / (2.0 * current_zoom)
+            if current_zoom > 0
+            else float(self._handle_drag_magnifier_size) / 2.0
+        )
+        if DEBUG_MAGNIFIER:
+            print(
+                "[DEBUG-MAGNIFIER] ImageViewer.show_handle_drag_magnifier: "
+                f"scene_pos=({scene_pos.x():.1f},{scene_pos.y():.1f}), "
+                f"current_zoom={current_zoom:.3f}, "
+                f"adjusted_region_size={adjusted_region_size:.3f}, "
+                f"magnifier_zoom={magnifier_zoom:.3f}"
+            )
+        magnified_pixmap = self._render_scene_region(
+            scene_pos.x(), scene_pos.y(), adjusted_region_size, magnifier_zoom
+        )
+        if magnified_pixmap is not None and self.handle_drag_magnifier_widget is not None:
+            self.handle_drag_magnifier_widget.update_magnified_region(magnified_pixmap)
+            # Use the actual cursor position in global screen coordinates – identical to how
+            # the main Magnifier tool positions its widget, and avoids any silent exceptions
+            # from mapFromScene/mapToGlobal on QGraphicsView during a drag event.
+            from PySide6.QtGui import QCursor
+            global_pos = QCursor.pos()
+            if DEBUG_MAGNIFIER:
+                print(
+                    "[DEBUG-MAGNIFIER] ImageViewer.show_handle_drag_magnifier: "
+                    f"cursor_global_pos=({global_pos.x()},{global_pos.y()})"
+                )
+            self.handle_drag_magnifier_widget.show_at_position(global_pos)
+
+    def update_handle_drag_magnifier(self, scene_pos: QPointF) -> None:
+        """Update handle-drag magnifier content and position (called on handle move)."""
+        if not self.handle_drag_magnifier_active or self.handle_drag_magnifier_widget is None:
+            return
+        current_zoom = self.transform().m11()
+        magnifier_zoom = 2.0 * current_zoom
+        adjusted_region_size = (
+            float(self._handle_drag_magnifier_size) / (2.0 * current_zoom)
+            if current_zoom > 0
+            else float(self._handle_drag_magnifier_size) / 2.0
+        )
+        if DEBUG_MAGNIFIER:
+            print(
+                "[DEBUG-MAGNIFIER] ImageViewer.update_handle_drag_magnifier: "
+                f"scene_pos=({scene_pos.x():.1f},{scene_pos.y():.1f}), "
+                f"current_zoom={current_zoom:.3f}, "
+                f"adjusted_region_size={adjusted_region_size:.3f}, "
+                f"magnifier_zoom={magnifier_zoom:.3f}"
+            )
+        magnified_pixmap = self._render_scene_region(
+            scene_pos.x(), scene_pos.y(), adjusted_region_size, magnifier_zoom
+        )
+        if magnified_pixmap is not None:
+            self.handle_drag_magnifier_widget.update_magnified_region(magnified_pixmap)
+            from PySide6.QtGui import QCursor
+            global_pos = QCursor.pos()
+            if DEBUG_MAGNIFIER:
+                print(
+                    "[DEBUG-MAGNIFIER] ImageViewer.update_handle_drag_magnifier: "
+                    f"cursor_global_pos=({global_pos.x()},{global_pos.y()})"
+                )
+            self.handle_drag_magnifier_widget.show_at_position(global_pos)
+
+    def hide_handle_drag_magnifier(self) -> None:
+        """Hide the handle-drag magnifier (called when handle drag ends)."""
+        self.handle_drag_magnifier_active = False
+        if self.handle_drag_magnifier_widget is not None:
+            if DEBUG_MAGNIFIER:
+                print("[DEBUG-MAGNIFIER] ImageViewer.hide_handle_drag_magnifier: hiding widget")
+            self.handle_drag_magnifier_widget.hide()
+
+    def _get_pixel_value_at_coords(
+        self,
+        dataset,
+        x: int,
+        y: int,
+        z: int,
+        use_rescaled: bool
+    ) -> str:
+        """
+        Get pixel value at specified coordinates.
+        
+        Args:
+            dataset: DICOM dataset
+            x: X coordinate (column)
+            y: Y coordinate (row)
+            z: Z coordinate (slice index)
+            use_rescaled: Whether to use rescaled values
+            
+        Returns:
+            Formatted string with pixel value(s)
+        """
+        try:
+            from pydicom.dataset import Dataset
+            from core.dicom_processor import DICOMProcessor
+            
+            # Get pixel array
+            pixel_array = DICOMProcessor.get_pixel_array(dataset)
+            if pixel_array is None:
+                return ""
+            
+            # Determine if this is a color image by checking SamplesPerPixel
+            samples_per_pixel = 1
+            if hasattr(dataset, 'SamplesPerPixel'):
+                spp_value = dataset.SamplesPerPixel
+                if isinstance(spp_value, (list, tuple)):
+                    samples_per_pixel = int(spp_value[0])
+                else:
+                    samples_per_pixel = int(spp_value)
+            
+            is_color = samples_per_pixel > 1
+            
+            # Handle different array shapes
+            array_shape = pixel_array.shape
+            
+            if len(array_shape) == 4:
+                # Multi-frame color: shape is (frames, rows, columns, channels)
+                if z < 0 or z >= array_shape[0]:
+                    return ""
+                frame_array = pixel_array[z]
+            elif len(array_shape) == 3:
+                # Could be:
+                # - Single-frame color: (height, width, channels) where channels = 3
+                # - Multi-frame grayscale: (frames, height, width) where frames > 1
+                if is_color and array_shape[2] == samples_per_pixel:
+                    # Single-frame color: (height, width, channels)
+                    frame_array = pixel_array
+                elif not is_color and array_shape[0] > 1:
+                    # Multi-frame grayscale: (frames, height, width)
+                    if z < 0 or z >= array_shape[0]:
+                        return ""
+                    frame_array = pixel_array[z]
+                else:
+                    # Single-frame grayscale or ambiguous - check last dimension
+                    if array_shape[2] == 3:
+                        # Likely single-frame color
+                        frame_array = pixel_array
+                    else:
+                        # Single-frame grayscale (shouldn't happen with 3D, but handle it)
+                        frame_array = pixel_array
+            else:
+                # Single-frame grayscale: shape is (height, width)
+                frame_array = pixel_array
+            
+            # Check bounds and extract pixel value
+            if len(frame_array.shape) == 2:
+                # Grayscale
+                if y < 0 or y >= frame_array.shape[0] or x < 0 or x >= frame_array.shape[1]:
+                    return ""
+                pixel_value = float(frame_array[y, x])
+                
+                # Apply rescale if needed
+                if use_rescaled:
+                    slope = getattr(dataset, 'RescaleSlope', 1.0)
+                    intercept = getattr(dataset, 'RescaleIntercept', 0.0)
+                    if isinstance(slope, (list, tuple)):
+                        slope = float(slope[0])
+                    else:
+                        slope = float(slope)
+                    if isinstance(intercept, (list, tuple)):
+                        intercept = float(intercept[0])
+                    else:
+                        intercept = float(intercept)
+                    pixel_value = pixel_value * slope + intercept
+                
+                # Format pixel value
+                if pixel_value == int(pixel_value):
+                    return str(int(pixel_value))
+                else:
+                    return f"{pixel_value:.1f}"
+                    
+            elif len(frame_array.shape) == 3:
+                # Color (RGB)
+                if y < 0 or y >= frame_array.shape[0] or x < 0 or x >= frame_array.shape[1]:
+                    return ""
+                if frame_array.shape[2] < 3:
+                    return ""
+                
+                r = int(frame_array[y, x, 0])
+                g = int(frame_array[y, x, 1])
+                b = int(frame_array[y, x, 2])
+                
+                # Apply rescale if needed (to all channels)
+                if use_rescaled:
+                    slope = getattr(dataset, 'RescaleSlope', 1.0)
+                    intercept = getattr(dataset, 'RescaleIntercept', 0.0)
+                    if isinstance(slope, (list, tuple)):
+                        slope = float(slope[0])
+                    else:
+                        slope = float(slope)
+                    if isinstance(intercept, (list, tuple)):
+                        intercept = float(intercept[0])
+                    else:
+                        intercept = float(intercept)
+                    
+                    r = int(r * slope + intercept)
+                    g = int(g * slope + intercept)
+                    b = int(b * slope + intercept)
+                
+                return f"R={r}, G={g}, B={b}"
+            else:
+                return ""
+            
+        except Exception as e:
+            # Silently fail - don't spam console with errors
+            return ""
+    
+    def resizeEvent(self, event) -> None:
+        """
+        Handle resize events.
+        
+        Args:
+            event: Resize event
+        """
+        super().resizeEvent(event)
+        # Emit transform_changed signal to update overlay positions
+        # Viewport size change affects overlay positioning
+        QTimer.singleShot(10, lambda: self.transform_changed.emit())
+        # Optionally auto-fit on resize
+        # self.fit_to_view()
+    
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        """
+        Handle drag enter event - accept files and folders.
+        
+        Args:
+            event: QDragEnterEvent
+        """
+        if event.mimeData().hasUrls():
+            # Check if any of the URLs are files or directories
+            urls = event.mimeData().urls()
+            for url in urls:
+                path = url.toLocalFile()
+                if path and os.path.exists(path):
+                    # Accept if at least one valid file/folder exists
+                    event.acceptProposedAction()
+                    return
+        
+        event.ignore()
+    
+    def dragMoveEvent(self, event: QDragMoveEvent) -> None:
+        """
+        Handle drag move event - accept files and folders.
+        
+        Args:
+            event: QDragMoveEvent
+        """
+        if event.mimeData().hasUrls():
+            # Check if any of the URLs are files or directories
+            urls = event.mimeData().urls()
+            for url in urls:
+                path = url.toLocalFile()
+                if path and os.path.exists(path):
+                    # Accept if at least one valid file/folder exists
+                    event.acceptProposedAction()
+                    return
+        
+        event.ignore()
+    
+    def dropEvent(self, event: QDropEvent) -> None:
+        """
+        Handle drop event - emit signal with dropped file/folder paths.
+        
+        Args:
+            event: QDropEvent
+        """
+        if not event.mimeData().hasUrls():
+            event.ignore()
+            return
+        
+        urls = event.mimeData().urls()
+        if not urls:
+            event.ignore()
+            return
+        
+        # Extract file paths
+        paths = []
+        
+        for url in urls:
+            path = url.toLocalFile()
+            if not path:
+                continue
+            
+            if os.path.isfile(path) or os.path.isdir(path):
+                paths.append(path)
+        
+        # Emit signal with paths if any valid paths found
+        if paths:
+            self.files_dropped.emit(paths)
+        
+        event.acceptProposedAction()
+

@@ -9,12 +9,12 @@ Inputs:
     - pydicom.Dataset objects
     
 Outputs:
-    - Excel, CSV, or UTF-8 text (tab-separated) files with exported tags
+    - Excel or CSV files with exported tags
     
 Requirements:
     - PySide6 for dialog components
     - openpyxl for Excel export
-    - csv module (standard library) for CSV and text (TSV) export
+    - csv module (standard library) for CSV export
     - DICOMParser for tag extraction
 """
 
@@ -22,8 +22,8 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                                 QTreeWidget, QTreeWidgetItem, QLineEdit,
                                 QPushButton, QCheckBox, QGroupBox, QSplitter,
                                 QFileDialog, QMessageBox, QComboBox)
-from PySide6.QtCore import Qt
-from typing import Any, Dict, List, Optional, Tuple, cast
+from PySide6.QtCore import Qt, Signal
+from typing import Any, Dict, List, Optional, Tuple
 import pydicom
 from pydicom.dataset import Dataset
 from pathlib import Path
@@ -32,56 +32,7 @@ import os
 
 from core.dicom_parser import DICOMParser
 from core.tag_export_analysis_service import analyze_tag_variations
-from core.tag_export_catalog import (
-    synthetic_tag_export_tree_entry,
-    union_tags_across_datasets,
-)
-from core.tag_export_writer import (
-    generate_default_filename,
-    write_csv_files,
-    write_excel_file,
-    write_txt_files,
-)
-from utils.dicom_utils import canonical_dicom_tag_string
-
-
-def _tag_export_preset_match_keys(preset_tags: List[str]) -> set[str]:
-    """
-    Build a set of strings that should match tree UserRole tag keys when loading
-    a preset (exact + canonical pydicom str(Tag) forms).
-    """
-    keys: set[str] = set()
-    for t in preset_tags:
-        if not isinstance(t, str):
-            continue
-        keys.add(t)
-        canonical = canonical_dicom_tag_string(t)
-        if canonical:
-            keys.add(canonical)
-    return keys
-
-
-def _merged_dict_with_preset_tags(
-    base: Optional[Dict[str, Any]],
-    preset_tags: List[str],
-) -> Tuple[Dict[str, Any], bool]:
-    """
-    Return a shallow copy of *base* (or {}) with synthetic rows for any preset
-    tag not already present. The second value is True when the dict changed.
-    """
-    merged: Dict[str, Any] = dict(base or {})
-    changed = False
-    for raw in preset_tags:
-        if not isinstance(raw, str):
-            continue
-        entry = synthetic_tag_export_tree_entry(raw)
-        if entry is None:
-            continue
-        key, meta = entry
-        if key not in merged:
-            merged[key] = meta
-            changed = True
-    return merged, changed
+from core.tag_export_writer import generate_default_filename, write_excel_file, write_csv_files
 
 
 class TagExportDialog(QDialog):
@@ -92,17 +43,11 @@ class TagExportDialog(QDialog):
     - Multi-series selection grouped by study
     - Hierarchical tag selection (by group)
     - Search/filter tags
-    - Export to Excel (one tab per study), CSV (comma-separated), or text (tab-separated, one file per study when multiple studies)
+    - Export to Excel (one tab per study, one row per tag) or CSV (one file per study)
     - Tag selection presets (save/load/delete)
     """
     
-    def __init__(
-        self,
-        studies: Dict[str, Dict[str, List[Dataset]]],
-        config_manager=None,
-        parent=None,
-        tag_export_union_host: Optional[Any] = None,
-    ):
+    def __init__(self, studies: Dict[str, Dict[str, List[Dataset]]], config_manager=None, parent=None):
         """
         Initialize the tag export dialog.
         
@@ -110,8 +55,6 @@ class TagExportDialog(QDialog):
             studies: Dictionary of studies {study_uid: {series_uid: [datasets]}}
             config_manager: Optional ConfigManager instance for preset storage
             parent: Parent widget
-            tag_export_union_host: Optional DICOMViewerApp (or compatible) with
-                get_tag_export_union_snapshot() and tag_export_union_ready signal.
         """
         super().__init__(parent)
         
@@ -121,33 +64,19 @@ class TagExportDialog(QDialog):
         
         self.studies = studies
         self.config_manager = config_manager
-        self._tag_union_host = tag_export_union_host
-        self._tag_union_merged_full: Optional[Dict[str, Any]] = None
         self.selected_series: Dict[str, Dict[str, List[int]]] = {}  # {study_uid: {series_uid: [instance_indices]}}
         self.selected_tags: List[str] = []  # List of selected tag strings
 
         self.series_tree = QTreeWidget(self)
         self.tags_tree = QTreeWidget(self)
         self.tag_search = QLineEdit(self)
-        self.tag_union_status_label = QLabel(self)
-        self.tag_union_status_label.setObjectName("tagExportUnionStatus")
         self.private_tags_checkbox = QCheckBox("Include Private Tags", self)
         self.private_tags_checkbox.setChecked(True)
-        self.include_missing_rows_checkbox = QCheckBox(
-            "Include empty rows for missing selected tags",
-            self,
-        )
-        self.include_missing_rows_checkbox.setChecked(True)
         self.preset_combo: Optional[QComboBox] = None
 
         self._create_ui()
         self._populate_series()
-        if self._tag_union_host is not None:
-            self._tag_union_host.tag_export_union_ready.connect(
-                self._on_tag_export_union_ready,
-            )
-        self.finished.connect(self._on_dialog_finished)
-        self._initial_tag_tree_build()
+        self._populate_tags()
         self._load_presets_list()
     
     def _create_ui(self) -> None:
@@ -217,8 +146,6 @@ class TagExportDialog(QDialog):
         group = QGroupBox("Select Tags to Export")
         layout = QVBoxLayout()
         
-        layout.addWidget(self.tag_union_status_label)
-
         # Preset management section
         if self.config_manager:
             preset_layout = QHBoxLayout()
@@ -274,10 +201,10 @@ class TagExportDialog(QDialog):
         button_layout.addStretch()
         
         # Show private tags checkbox
+        self.private_tags_checkbox = QCheckBox("Include Private Tags")
         self.private_tags_checkbox.setChecked(True)
-        self.private_tags_checkbox.toggled.connect(self._on_private_tags_toggled)
+        self.private_tags_checkbox.toggled.connect(self._populate_tags)
         button_layout.addWidget(self.private_tags_checkbox)
-        button_layout.addWidget(self.include_missing_rows_checkbox)
         
         layout.addLayout(button_layout)
         
@@ -354,114 +281,43 @@ class TagExportDialog(QDialog):
         
         self.series_tree.blockSignals(False)
     
-    def _all_loaded_datasets(self) -> List[Dataset]:
-        """Flatten every instance dataset in the dialog's studies map (stable order)."""
-        out: List[Dataset] = []
-        for _study_uid, series_dict in self.studies.items():
-            for _series_uid, datasets in series_dict.items():
-                out.extend(datasets)
-        return out
-
-    def _on_dialog_finished(self) -> None:
-        if self._tag_union_host is None:
-            return
-        try:
-            self._tag_union_host.tag_export_union_ready.disconnect(
-                self._on_tag_export_union_ready
-            )
-        except TypeError:
-            pass
-
-    def _on_tag_export_union_ready(self, gen: int, merged: object) -> None:
-        if self._tag_union_host is None:
-            return
-        snap_gen, _ = self._tag_union_host.get_tag_export_union_snapshot()
-        if gen != snap_gen:
-            return
-        self._tag_union_merged_full = cast(Dict[str, Any], merged) if merged else {}
-        self._apply_merged_tags_to_tree()
-
-    def _initial_tag_tree_build(self) -> None:
-        if not self.studies:
-            self._tag_union_merged_full = {}
-            self._apply_merged_tags_to_tree()
-            return
-        if self._tag_union_host is not None:
-            _gen, merged = self._tag_union_host.get_tag_export_union_snapshot()
-            if merged is not None:
-                self._tag_union_merged_full = merged
-                self._apply_merged_tags_to_tree()
-                self.tag_union_status_label.setText("")
-            else:
-                self.tag_union_status_label.setText("Updating tag list…")
-                self.tags_tree.setEnabled(False)
-        else:
-            self._populate_tags_sync()
-
-    def _on_private_tags_toggled(self, _checked: bool) -> None:
-        if self._tag_union_merged_full is not None:
-            self._apply_merged_tags_to_tree()
-        elif self._tag_union_host is None:
-            self._populate_tags_sync()
-
-    def _populate_tags_sync(self) -> None:
-        """Synchronous union (tests or when no app scheduler)."""
+    def _populate_tags(self) -> None:
+        """Populate the tags tree with DICOM tags from a representative dataset."""
         self.tags_tree.clear()
         self.tags_tree.blockSignals(True)
-        self.tag_union_status_label.setText("")
-
+        
+        # Get a representative dataset (first series, first image)
         if not self.studies:
             self.tags_tree.blockSignals(False)
             return
-
-        datasets = self._all_loaded_datasets()
-        tags = union_tags_across_datasets(
-            datasets,
-            include_private=self.private_tags_checkbox.isChecked(),
-            supplement_standard_tags=True,
-        )
-        self._tag_union_merged_full = tags
-        self._build_tag_tree_from_items(tags)
-        self.tags_tree.blockSignals(False)
-
-    def _apply_merged_tags_to_tree(self) -> None:
-        """Filter private rows from precomputed union (include_private=True merge)."""
-        merged = self._tag_union_merged_full
-        self.tags_tree.clear()
-        self.tags_tree.blockSignals(True)
-        if not merged:
-            self.tags_tree.blockSignals(False)
-            self.tags_tree.setEnabled(True)
-            self.tag_union_status_label.setText("")
-            return
-        include_private = self.private_tags_checkbox.isChecked()
-        filtered: Dict[str, Any] = {}
-        for tag_str, tag_data in merged.items():
-            if not include_private and tag_data.get("is_private"):
-                continue
-            filtered[tag_str] = tag_data
-        self._build_tag_tree_from_items(filtered)
-        self.tags_tree.blockSignals(False)
-        self.tags_tree.setEnabled(True)
-        self.tag_union_status_label.setText("")
-
-    def _build_tag_tree_from_items(self, tags: Dict[str, Any]) -> None:
+        
+        first_study_uid = list(self.studies.keys())[0]
+        first_series_uid = list(self.studies[first_study_uid].keys())[0]
+        first_dataset = self.studies[first_study_uid][first_series_uid][0]
+        
+        parser = DICOMParser(first_dataset)
+        tags = parser.get_all_tags(include_private=self.private_tags_checkbox.isChecked())
+        
+        # Sort tags by tag number
         sorted_tags = sorted(tags.items(), key=lambda x: x[0])
+        
+        # Group by tag group (first 4 hex digits)
         groups: Dict[str, List[Tuple[str, Dict[str, Any]]]] = {}
         for tag_str, tag_data in sorted_tags:
-            group = tag_str[:6]
+            group = tag_str[:6]  # e.g., "(0008," for group 0008
             if group not in groups:
                 groups[group] = []
             groups[group].append((tag_str, tag_data))
-
+        
+        # Create tree items
         for group, tag_list in sorted(groups.items()):
             group_item = QTreeWidgetItem(self.tags_tree)
-            group_item.setText(0, f"Group {group[1:5]}")
+            group_item.setText(0, f"Group {group[1:5]}")  # Remove parentheses
             group_item.setText(1, f"{len(tag_list)} tags")
             group_item.setFlags(group_item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             group_item.setCheckState(0, Qt.CheckState.Unchecked)
             group_item.setExpanded(False)
-
+            
             for tag_str, tag_data in tag_list:
                 tag_item = QTreeWidgetItem(group_item)
                 tag_item.setText(0, tag_data.get("tag", tag_str))
@@ -469,6 +325,8 @@ class TagExportDialog(QDialog):
                 tag_item.setData(0, Qt.ItemDataRole.UserRole, tag_str)
                 tag_item.setFlags(tag_item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
                 tag_item.setCheckState(0, Qt.CheckState.Unchecked)
+        
+        self.tags_tree.blockSignals(False)
     
     def _toggle_all_series(self, checked: bool) -> None:
         """Toggle all series and instance selection."""
@@ -683,7 +541,7 @@ class TagExportDialog(QDialog):
                     self.selected_tags.append(tag_str)
     
     def _export_to_excel(self) -> None:
-        """Export selected tags to Excel, CSV, or UTF-8 text (tab-separated)."""
+        """Export selected tags to Excel or CSV file."""
         # Update selected tags and series to ensure they're current
         self._update_selected_tags()
         self._update_selected_series()
@@ -728,24 +586,19 @@ class TagExportDialog(QDialog):
             self,
             "Save DICOM Tag Export",
             default_filename,
-            "Excel Files (*.xlsx);;CSV Files (*.csv);;Text Files (*.txt);;All Files (*)"
+            "Excel Files (*.xlsx);;CSV Files (*.csv);;All Files (*)"
         )
         
         if not file_path:
             return
         
         # Determine format and ensure correct extension
-        plower = file_path.lower()
-        is_csv = selected_filter.startswith("CSV") or plower.endswith('.csv')
-        is_txt = selected_filter.startswith("Text") or plower.endswith('.txt')
+        is_csv = selected_filter.startswith("CSV") or file_path.endswith('.csv')
         if is_csv:
-            if not file_path.lower().endswith('.csv'):
+            if not file_path.endswith('.csv'):
                 file_path += '.csv'
-        elif is_txt:
-            if not file_path.lower().endswith('.txt'):
-                file_path += '.txt'
         else:
-            if not file_path.lower().endswith('.xlsx'):
+            if not file_path.endswith('.xlsx'):
                 file_path += '.xlsx'
         
         # Save export location
@@ -759,23 +612,7 @@ class TagExportDialog(QDialog):
                 exported_files = write_csv_files(
                     file_path, variation_analysis, self.studies,
                     self.selected_series, self.selected_tags,
-                    self.private_tags_checkbox.isChecked(),
-                    include_missing_selected_tags=self.include_missing_rows_checkbox.isChecked(),
-                )
-                if len(exported_files) > 1:
-                    file_list = "\n".join(str(f) for f in exported_files)
-                    QMessageBox.information(self, "Export Complete",
-                                          f"Tags exported successfully to {len(exported_files)} files:\n{file_list}")
-                else:
-                    QMessageBox.information(self, "Export Complete",
-                                          f"Tags exported successfully to:\n{exported_files[0]}")
-            elif is_txt:
-                exported_files = write_txt_files(
-                    file_path, variation_analysis, self.studies,
-                    self.selected_series, self.selected_tags,
-                    self.private_tags_checkbox.isChecked(),
-                    include_missing_selected_tags=self.include_missing_rows_checkbox.isChecked(),
-                )
+                    self.private_tags_checkbox.isChecked())
                 if len(exported_files) > 1:
                     file_list = "\n".join(str(f) for f in exported_files)
                     QMessageBox.information(self, "Export Complete",
@@ -787,9 +624,7 @@ class TagExportDialog(QDialog):
                 write_excel_file(
                     file_path, variation_analysis, self.studies,
                     self.selected_series, self.selected_tags,
-                    self.private_tags_checkbox.isChecked(),
-                    include_missing_selected_tags=self.include_missing_rows_checkbox.isChecked(),
-                )
+                    self.private_tags_checkbox.isChecked())
                 QMessageBox.information(self, "Export Complete",
                                   f"Tags exported successfully to:\n{file_path}")
             self.accept()
@@ -859,10 +694,7 @@ class TagExportDialog(QDialog):
                     varying_item.setText(1, "Per-instance export")
                     
                     parser = DICOMParser(first_ds)
-                    all_tags = parser.get_all_tags(
-                        include_private=self.private_tags_checkbox.isChecked(),
-                        supplement_standard_tags=True,
-                    )
+                    all_tags = parser.get_all_tags(include_private=self.private_tags_checkbox.isChecked())
                     
                     for tag_str in sorted(varying_tags):
                         tag_item = QTreeWidgetItem(varying_item)
@@ -880,10 +712,7 @@ class TagExportDialog(QDialog):
                     constant_item.setText(1, "Per-series export")
                     
                     parser = DICOMParser(first_ds)
-                    all_tags = parser.get_all_tags(
-                        include_private=self.private_tags_checkbox.isChecked(),
-                        supplement_standard_tags=True,
-                    )
+                    all_tags = parser.get_all_tags(include_private=self.private_tags_checkbox.isChecked())
                     
                     for tag_str in sorted(constant_tags):
                         tag_item = QTreeWidgetItem(constant_item)
@@ -992,34 +821,27 @@ class TagExportDialog(QDialog):
             return
         
         preset_tags = presets[preset_name]
-        merged, preset_added = _merged_dict_with_preset_tags(
-            self._tag_union_merged_full, preset_tags
-        )
-        if preset_added:
-            self._tag_union_merged_full = merged
-            self._apply_merged_tags_to_tree()
-        match_keys = _tag_export_preset_match_keys(preset_tags)
-
-        # Apply preset to tag tree (tree is fresh if we rebuilt above; otherwise uncheck all first)
+        
+        # Apply preset to tag tree
         self.tags_tree.blockSignals(True)
         root = self.tags_tree.invisibleRootItem()
-
-        if not preset_added:
-            for i in range(root.childCount()):
-                group_item = root.child(i)
-                group_item.setCheckState(0, Qt.CheckState.Unchecked)
-                for j in range(group_item.childCount()):
-                    tag_item = group_item.child(j)
-                    tag_item.setCheckState(0, Qt.CheckState.Unchecked)
-
-        # Check tags that are in the preset
+        
+        # First, uncheck all tags
+        for i in range(root.childCount()):
+            group_item = root.child(i)
+            group_item.setCheckState(0, Qt.CheckState.Unchecked)
+            for j in range(group_item.childCount()):
+                tag_item = group_item.child(j)
+                tag_item.setCheckState(0, Qt.CheckState.Unchecked)
+        
+        # Then check tags that are in the preset
         for i in range(root.childCount()):
             group_item = root.child(i)
             group_has_checked = False
             for j in range(group_item.childCount()):
                 tag_item = group_item.child(j)
                 tag_str = tag_item.data(0, Qt.ItemDataRole.UserRole)
-                if tag_str in match_keys:
+                if tag_str in preset_tags:
                     tag_item.setCheckState(0, Qt.CheckState.Checked)
                     group_has_checked = True
             
@@ -1037,7 +859,6 @@ class TagExportDialog(QDialog):
                     group_item.setCheckState(0, Qt.CheckState.PartiallyChecked)
         
         self.tags_tree.blockSignals(False)
-        self._filter_tags(self.tag_search.text())
         self._update_selected_tags()
         
         QMessageBox.information(self, "Preset Loaded",

@@ -21,12 +21,10 @@ Requirements:
     - numpy for calculations
 """
 
-import re
 from typing import Optional, Tuple, List
 import numpy as np
 import pydicom
 from pydicom.dataset import Dataset
-from pydicom.tag import Tag
 
 from utils.debug_flags import DEBUG_PATIENT_COORDS
 
@@ -447,43 +445,6 @@ def get_composite_series_key(dataset: Dataset) -> str:
     
     # Fall back to just SeriesInstanceUID if SeriesNumber is missing or empty
     return series_uid
-
-
-def canonical_dicom_tag_string(tag_str: str) -> Optional[str]:
-    """
-    Normalize a tag string to pydicom's textual Tag form for equality checks.
-
-    :meth:`DICOMParser.get_all_tags` and the tag export dialog store keys as
-    ``str(elem.tag)``, e.g. ``(0010, 0010)`` (space after the comma). Presets
-    saved under older tooling, imported JSON, or hand-edited config may use
-    ``(0010,0010)``, ``(0010, 0010 )``, or eight-digit hex such as ``00100010``.
-    Those strings would not match tree ``UserRole`` data when loading presets
-    unless normalized.
-
-    Args:
-        tag_str: Raw tag string from config or external files.
-
-    Returns:
-        Canonical ``str(Tag(...))`` when *tag_str* parses as group + element;
-        ``None`` if it does not look like a standard tag (caller may still
-        compare using the original string).
-    """
-    if not tag_str or not isinstance(tag_str, str):
-        return None
-    s = tag_str.strip()
-    m = re.fullmatch(r"\(\s*([0-9a-fA-F]{4})\s*,\s*([0-9a-fA-F]{4})\s*\)", s)
-    if m:
-        group = int(m.group(1), 16)
-        element = int(m.group(2), 16)
-        return str(Tag((group, element)))
-    compact = re.sub(r"\s+", "", s)
-    m8 = re.fullmatch(r"([0-9a-fA-F]{8})", compact)
-    if m8:
-        hex8 = m8.group(1)
-        group = int(hex8[0:4], 16)
-        element = int(hex8[4:8], 16)
-        return str(Tag((group, element)))
-    return None
 
 
 def is_patient_tag(tag_str: str) -> bool:

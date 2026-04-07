@@ -2,7 +2,8 @@
 Unit tests for DICOM utility functions (utils.dicom_utils).
 
 Tests pure functions: format_distance, pixels_to_mm, mm_to_pixels,
-is_patient_tag, get_patient_tag_keywords. Does not require DICOM files.
+canonical_dicom_tag_string, is_patient_tag, get_patient_tag_keywords.
+Does not require DICOM files.
 Runnable with pytest or unittest.
 """
 
@@ -16,6 +17,7 @@ from utils.dicom_utils import (
     format_distance,
     pixels_to_mm,
     mm_to_pixels,
+    canonical_dicom_tag_string,
     is_patient_tag,
     get_patient_tag_keywords,
 )
@@ -67,6 +69,34 @@ class TestMmToPixels(unittest.TestCase):
 
     def test_invalid_dimension_returns_none(self):
         self.assertIsNone(mm_to_pixels(5.0, (0.5, 0.5), dimension=2))
+
+
+class TestCanonicalDicomTagString(unittest.TestCase):
+    """Tests for canonical_dicom_tag_string (preset / import compatibility)."""
+
+    def test_pydicom_style_with_space(self):
+        self.assertEqual(
+            canonical_dicom_tag_string("(0010, 0010)"), "(0010, 0010)"
+        )
+
+    def test_no_space_after_comma_matches_tree_keys(self):
+        """Editors and older strings often omit the space pydicom uses in str(Tag)."""
+        self.assertEqual(
+            canonical_dicom_tag_string("(0010,0010)"), "(0010, 0010)"
+        )
+
+    def test_concatenated_hex(self):
+        self.assertEqual(canonical_dicom_tag_string("00100010"), "(0010, 0010)")
+
+    def test_whitespace_stripped(self):
+        self.assertEqual(
+            canonical_dicom_tag_string("  (0008,  0005 ) "), "(0008, 0005)"
+        )
+
+    def test_non_tag_returns_none(self):
+        self.assertIsNone(canonical_dicom_tag_string("PatientName"))
+        self.assertIsNone(canonical_dicom_tag_string(""))
+        self.assertIsNone(canonical_dicom_tag_string(None))
 
 
 class TestIsPatientTag(unittest.TestCase):

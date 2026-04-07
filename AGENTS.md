@@ -56,8 +56,11 @@ src/
 │   ├── export_manager.py              # Export orchestration (paths, progress, slice/selection export)
 │   ├── export_rendering.py            # Pillow projection, photometric handling, overlay/ROI rasterization for export
 │   ├── slice_display_lut.py           # Window/level raw vs rescaled alignment helpers (used by SliceDisplayManager)
-│   └── slice_display_pixels.py        # Intensity projection → PIL pipeline (used by SliceDisplayManager)
-├── gui/                           # All Qt widgets, dialogs, layout; e.g. overlay_items_factory, series_navigator_view (thumbnails), series_navigator_model (labels/instance entries), main_window_*_builder (menus/toolbar)
+│   ├── slice_display_pixels.py        # Intensity projection → PIL pipeline (used by SliceDisplayManager)
+│   ├── dicom_parser.py                # Dataset metadata: get_all_tags (iterall + optional export catalog merge)
+│   ├── tag_export_catalog.py          # Curated standard tags + union_tags_across_datasets for Export DICOM Tags picker; synthetic_tag_export_tree_entry for preset-only rows missing from the file union
+│   └── tag_export_writer.py           # Tag export file writers: Excel, CSV, UTF-8 tab-separated text (shared row builder)
+├── gui/                           # All Qt widgets, dialogs, layout; e.g. overlay_items_factory, series_navigator_view (thumbnails), series_navigator_model (labels/instance entries), main_window_*_builder (menus/toolbar); **`dialogs/tag_export_union_worker.py`** — background tag-union for Export DICOM Tags ( **`DICOMViewerApp._schedule_tag_export_union_rebuild`** )
 ├── tools/                         # Interactive tools (ROI, measurement, annotation, crosshair)
 └── utils/                         # Utilities (config, undo/redo, DICOM helpers, etc.)
     ├── config_manager.py          # Thin facade: inherits all config mixins; owns __init__, _load_config, save_config, get, set

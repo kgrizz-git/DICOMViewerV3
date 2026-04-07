@@ -23,7 +23,6 @@ from pydicom.dataset import Dataset
 from pydicom.tag import Tag
 import numpy as np
 
-from core.tag_export_catalog import supplement_export_tags_dict
 from utils.dicom_utils import is_patient_tag
 
 
@@ -58,76 +57,58 @@ class DICOMParser:
         self.dataset = dataset
         self._tag_cache.clear()
     
-    def get_all_tags(
-        self,
-        include_private: bool = True,
-        privacy_mode: bool = False,
-        supplement_standard_tags: bool = False,
-    ) -> Dict[str, Any]:
+    def get_all_tags(self, include_private: bool = True, privacy_mode: bool = False) -> Dict[str, Any]:
         """
         Get all tags from the dataset with caching.
-
-        Walks the full DICOM hierarchy with :meth:`~pydicom.dataset.Dataset.iterall`
-        so elements inside sequences (e.g. functional groups) are included, not only
-        top-level attributes.
-
-        Duplicate tag numbers (same group/element from multiple sequence items): the
-        **first** occurrence in iterall order is kept. Multiframe objects where the same
-        tag differs per frame cannot be fully represented in this flat map; typical
-        per-slice instance workflows are unaffected.
-
+        
         Args:
             include_private: If True, include private tags
             privacy_mode: If True, replace patient-related tag values with "PRIVACY MODE" for display
-            supplement_standard_tags: If True, merge standard catalog entries that are
-                missing from the dataset (empty value) for tag-export UI discoverability
-
+            
         Returns:
-            Dictionary mapping canonical tag strings (``str(Tag)``) to metadata dicts
+            Dictionary mapping tag strings to values
         """
         if self.dataset is None:
             return {}
-
-        cache_key = (
-            f"{id(self.dataset)}_{include_private}_{privacy_mode}_{supplement_standard_tags}"
-        )
+        
+        # Check cache first (include privacy_mode in cache key)
+        cache_key = f"{id(self.dataset)}_{include_private}_{privacy_mode}"
         if cache_key in self._tag_cache:
             return self._tag_cache[cache_key]
-
-        tags: Dict[str, Any] = {}
-
-        for elem in self.dataset.iterall():
+        
+        tags = {}
+        
+        for elem in self.dataset:
             tag = elem.tag
-            if tag.group == 0xFFFE:
-                continue
-            if elem.VR == "SQ":
-                continue
+            tag_str = str(tag)
+            
+            # Skip private tags if not requested
             if not include_private and tag.is_private:
                 continue
-
-            tag_str = str(tag)
-            if tag_str in tags:
-                continue
-
+            
+            # Get tag value
             try:
                 value = elem.value
+                # Convert to string if it's a complex type
                 if isinstance(value, (list, tuple)):
                     value = [str(v) for v in value]
                 elif not isinstance(value, (str, int, float)):
                     value = str(value)
-
+                
+                # Apply privacy mode masking for patient tags (display only)
                 if privacy_mode and is_patient_tag(tag_str):
                     value = "PRIVACY MODE"
-
+                
                 tags[tag_str] = {
                     "tag": tag_str,
-                    "keyword": elem.keyword if hasattr(elem, "keyword") else "",
-                    "VR": elem.VR if hasattr(elem, "VR") else "",
+                    "keyword": elem.keyword if hasattr(elem, 'keyword') else "",
+                    "VR": elem.VR if hasattr(elem, 'VR') else "",
                     "value": value,
                     "is_private": tag.is_private,
-                    "name": elem.name if hasattr(elem, "name") else tag_str,
+                    "name": elem.name if hasattr(elem, 'name') else tag_str,
                 }
             except Exception as e:
+                # If we can't read the value, store error
                 tags[tag_str] = {
                     "tag": tag_str,
                     "keyword": "",
@@ -136,10 +117,8 @@ class DICOMParser:
                     "is_private": tag.is_private,
                     "name": tag_str,
                 }
-
-        if supplement_standard_tags:
-            supplement_export_tags_dict(tags)
-
+        
+        # Cache the result
         self._tag_cache[cache_key] = tags
         return tags
     

@@ -53,7 +53,7 @@ from PySide6.QtWidgets import (
     QTextEdit,
     QVBoxLayout,
 )
-from PySide6.QtCore import Qt, QPointF, QObject, QTimer, QRectF, QSize
+from PySide6.QtCore import Qt, QPointF, QObject, QTimer, QRectF, QSize, Signal
 from PySide6.QtGui import QKeyEvent
 from typing import Any, Optional, Dict, List, Tuple, cast, Set
 import pydicom
@@ -158,6 +158,9 @@ class DICOMViewerApp(QObject):
     
     Coordinates all components and handles application logic.
     """
+
+    #: Emitted when background tag-export union finishes (generation, merged dict).
+    tag_export_union_ready = Signal(int, object)
 
     app: QApplication
 
@@ -480,6 +483,10 @@ class DICOMViewerApp(QObject):
         self.current_series_uid = ""
         self.current_study_uid = ""
         self.current_dataset: Optional[Dataset] = None
+
+        self._tag_export_union_generation = 0
+        self._tag_export_union_merged: Optional[Dict[str, Any]] = None
+        self._tag_export_union_worker: Optional[Any] = None
 
         # Initialize handler objects (depends on all manager references above)
         self._initialize_handlers()
@@ -959,7 +966,8 @@ class DICOMViewerApp(QObject):
             get_histogram_callbacks_for_subwindow=self.get_histogram_callbacks_for_subwindow,
             get_focused_subwindow_index=self.get_focused_subwindow_index,
             undo_redo_manager=self.undo_redo_manager,
-            ui_refresh_callback=self._refresh_tag_ui
+            ui_refresh_callback=self._refresh_tag_ui,
+            tag_export_union_host=self,
         )
         # Set annotation options callback
         self.dialog_coordinator.annotation_options_applied_callback = self._on_annotation_options_applied
@@ -1064,6 +1072,55 @@ class DICOMViewerApp(QObject):
             return
         if roi is not None and self.image_viewer is not None:
             self.roi_manager.delete_roi(cast(ROIItem, roi), self.image_viewer.scene)
+
+    def _flatten_studies_for_tag_export_union(self, studies: StudiesNestedDict) -> List[Dataset]:
+        """Stable study → series → instance order for tag-export union."""
+        out: List[Dataset] = []
+        for _, series_dict in studies.items():
+            for _, datasets in series_dict.items():
+                out.extend(datasets)
+        return out
+
+    def get_tag_export_union_snapshot(self) -> Tuple[int, Optional[Dict[str, Any]]]:
+        """Current load generation and merged tag map, if background union has finished."""
+        return (self._tag_export_union_generation, self._tag_export_union_merged)
+
+    def _schedule_tag_export_union_rebuild(self) -> None:
+        """Rebuild in-memory tag union off the GUI thread (no disk cache)."""
+        from gui.dialogs.tag_export_union_worker import TagExportUnionWorker
+
+        prev = self._tag_export_union_worker
+        if prev is not None and prev.isRunning():
+            prev.requestInterruption()
+        self._tag_export_union_generation += 1
+        gen = self._tag_export_union_generation
+        self._tag_export_union_merged = None
+        if not self.current_studies:
+            self.tag_export_union_ready.emit(gen, {})
+            return
+        datasets = self._flatten_studies_for_tag_export_union(self.current_studies)
+        worker = TagExportUnionWorker(
+            gen,
+            datasets,
+            include_private=True,
+            supplement_standard_tags=True,
+        )
+        worker.finished_ok.connect(self._on_tag_export_union_worker_finished)
+        worker.failed.connect(self._on_tag_export_union_worker_failed)
+        self._tag_export_union_worker = worker
+        worker.start()
+
+    def _on_tag_export_union_worker_finished(self, gen: int, merged: object) -> None:
+        if gen != self._tag_export_union_generation:
+            return
+        self._tag_export_union_merged = cast(Dict[str, Any], merged)
+        self.tag_export_union_ready.emit(gen, self._tag_export_union_merged)
+
+    def _on_tag_export_union_worker_failed(self, gen: int, _message: str) -> None:
+        if gen != self._tag_export_union_generation:
+            return
+        self._tag_export_union_merged = None
+        self.tag_export_union_ready.emit(gen, {})
 
     def _clear_data(self) -> None:
         """Clear all ROIs, measurements, and related data for all subwindows."""
@@ -1183,6 +1240,8 @@ class DICOMViewerApp(QObject):
         self.current_study_uid = ""
         self.current_series_uid = ""
         self.current_slice_index = 0
+
+        self._schedule_tag_export_union_rebuild()
         
         # Dissolve slice sync groups (no linked groups when no files loaded)
         self.config_manager.set_slice_sync_groups([])
@@ -1384,6 +1443,8 @@ class DICOMViewerApp(QObject):
         # 4. Sync current_studies
         self.current_studies = self.dicom_organizer.studies
 
+        self._schedule_tag_export_union_rebuild()
+
         # 5. Clear each affected subwindow
         for idx in affected_indices:
             self._clear_subwindow(idx)
@@ -1437,6 +1498,8 @@ class DICOMViewerApp(QObject):
 
         # 4. Sync current_studies
         self.current_studies = self.dicom_organizer.studies
+
+        self._schedule_tag_export_union_rebuild()
 
         # 5. Clear all affected subwindows
         for idx in affected_indices:

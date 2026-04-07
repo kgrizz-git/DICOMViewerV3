@@ -164,6 +164,7 @@ class FileSeriesLoadingCoordinator:
         first_slice_info = app.file_operations_handler.load_first_slice(studies)
         if first_slice_info:
             app.current_studies = studies
+            app._schedule_tag_export_union_rebuild()
             app.current_study_uid = first_slice_info['study_uid']
             app.current_series_uid = first_slice_info['series_uid']
             app.current_slice_index = first_slice_info['slice_index']
@@ -532,12 +533,15 @@ class FileSeriesLoadingCoordinator:
         app._slice_sync_coordinator.invalidate_cache()
         QTimer.singleShot(100, app._slice_location_line_coordinator.refresh_all)
 
+        app._schedule_tag_export_union_rebuild()
+
     def open_files(self) -> None:
         """Handle open files request. Delegates to file_operations_handler and updates app state."""
         datasets, studies = self.app.file_operations_handler.open_files()
         if datasets is not None and studies is not None:
             self.app.current_datasets = datasets
             self.app.current_studies = studies
+            self.app._schedule_tag_export_union_rebuild()
 
     def open_folder(self) -> None:
         """Handle open folder request. Delegates to file_operations_handler and updates app state."""
@@ -545,6 +549,7 @@ class FileSeriesLoadingCoordinator:
         if datasets is not None and studies is not None:
             self.app.current_datasets = datasets
             self.app.current_studies = studies
+            self.app._schedule_tag_export_union_rebuild()
 
     def open_recent_file(self, file_path: str) -> None:
         """
@@ -557,6 +562,7 @@ class FileSeriesLoadingCoordinator:
         if datasets is not None and studies is not None:
             self.app.current_datasets = datasets
             self.app.current_studies = studies
+            self.app._schedule_tag_export_union_rebuild()
 
     def open_files_from_paths(self, paths: List[str]) -> None:
         """
@@ -569,6 +575,7 @@ class FileSeriesLoadingCoordinator:
         if datasets is not None and studies is not None:
             self.app.current_datasets = datasets
             self.app.current_studies = studies
+            self.app._schedule_tag_export_union_rebuild()
 
     def build_flat_series_list(
         self, studies: Dict[str, Dict[str, List[Dataset]]]

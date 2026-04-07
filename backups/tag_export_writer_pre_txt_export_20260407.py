@@ -1,15 +1,13 @@
 """
 DICOM Tag Export Writer
 
-Provides filename generation and file writing (Excel, CSV, UTF-8 text) for DICOM tag
-exports. CSV uses comma-separated fields; text exports use the same columns as tab-
-separated values (``.txt``) for easy viewing and paste into spreadsheets.
+Provides filename generation and file writing (Excel, CSV) for DICOM tag exports.
 This module is pure logic with no Qt dependency.
 """
 
 import csv
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Dict, List
 
 from pydicom.dataset import Dataset
 
@@ -183,96 +181,6 @@ def write_excel_file(
     wb.save(file_path)
 
 
-def _write_tag_export_sheet_rows(
-    writer: Any,
-    study_uid: str,
-    series_dict: Dict[str, List[int]],
-    studies: Dict[str, Dict[str, List[Dataset]]],
-    variation_analysis: Dict[str, Dict[str, List[str]]],
-    selected_tags: List[str],
-    include_private: bool,
-    include_missing_selected_tags: bool,
-) -> None:
-    """Write one study's tag rows using *writer* (``csv.writer`` with any dialect)."""
-    writer.writerow(['Instance', 'Tag Number', 'Name', 'Value'])
-
-    for series_uid, instance_indices in series_dict.items():
-        datasets = studies[study_uid][series_uid]
-        if not datasets:
-            continue
-
-        first_ds = datasets[0]
-
-        series_num = getattr(first_ds, 'SeriesNumber', '')
-        series_desc = getattr(first_ds, 'SeriesDescription', 'Unknown')
-        writer.writerow([f"Series {series_num}: {series_desc}", '', '', ''])
-
-        analysis = variation_analysis.get(
-            series_uid, {'varying_tags': [], 'constant_tags': selected_tags}
-        )
-        varying_tags = analysis['varying_tags']
-        constant_tags = analysis['constant_tags']
-
-        if constant_tags and instance_indices:
-            first_instance_idx = instance_indices[0]
-            if first_instance_idx < len(datasets):
-                dataset = datasets[first_instance_idx]
-                parser = DICOMParser(dataset)
-                all_tags = parser.get_all_tags(include_private=include_private)
-
-                for tag_str in constant_tags:
-                    if tag_str in all_tags:
-                        tag_data = all_tags[tag_str]
-                        tag_num = tag_data.get('tag', tag_str)
-                        tag_name = tag_data.get('name', '')
-
-                        value = tag_data.get('value', '')
-                        if isinstance(value, list):
-                            value_str = ', '.join(str(v) for v in value)
-                        else:
-                            value_str = str(value)
-
-                        writer.writerow(['All', tag_num, tag_name, value_str])
-                    elif include_missing_selected_tags:
-                        tag_num, tag_name = missing_tag_export_display_fields(tag_str)
-                        writer.writerow(['All', tag_num or tag_str, tag_name, ''])
-
-        if varying_tags:
-            for instance_idx in instance_indices:
-                if instance_idx >= len(datasets):
-                    continue
-
-                dataset = datasets[instance_idx]
-                parser = DICOMParser(dataset)
-                all_tags = parser.get_all_tags(include_private=include_private)
-
-                instance_num = getattr(dataset, 'InstanceNumber', None)
-                instance_id = (
-                    f"Instance {instance_num}"
-                    if instance_num is not None
-                    else f"Instance {instance_idx + 1}"
-                )
-
-                for tag_str in varying_tags:
-                    if tag_str in all_tags:
-                        tag_data = all_tags[tag_str]
-                        tag_num = tag_data.get('tag', tag_str)
-                        tag_name = tag_data.get('name', '')
-
-                        value = tag_data.get('value', '')
-                        if isinstance(value, list):
-                            value_str = ', '.join(str(v) for v in value)
-                        else:
-                            value_str = str(value)
-
-                        writer.writerow([instance_id, tag_num, tag_name, value_str])
-                    elif include_missing_selected_tags:
-                        tag_num, tag_name = missing_tag_export_display_fields(tag_str)
-                        writer.writerow([instance_id, tag_num or tag_str, tag_name, ''])
-
-        writer.writerow([])
-
-
 def write_csv_files(
     base_file_path: str,
     variation_analysis: Dict[str, Dict[str, List[str]]],
@@ -293,6 +201,7 @@ def write_csv_files(
     base_dir = base_path.parent
     exported_files: List[Path] = []
 
+    # Create one CSV file per study
     for study_uid, series_dict in selected_series.items():
         first_series_uid = list(series_dict.keys())[0]
         first_instance_idx = series_dict[first_series_uid][0]
@@ -309,70 +218,91 @@ def write_csv_files(
 
         with open(csv_path, 'w', newline='', encoding='utf-8') as csvfile:
             writer = csv.writer(csvfile)
-            _write_tag_export_sheet_rows(
-                writer,
-                study_uid,
-                series_dict,
-                studies,
-                variation_analysis,
-                selected_tags,
-                include_private,
-                include_missing_selected_tags,
-            )
+
+            # Write header
+            writer.writerow(['Instance', 'Tag Number', 'Name', 'Value'])
+
+            # Export each selected series
+            for series_uid, instance_indices in series_dict.items():
+                datasets = studies[study_uid][series_uid]
+                if not datasets:
+                    continue
+
+                first_ds = datasets[0]
+
+                # Write series header
+                series_num = getattr(first_ds, 'SeriesNumber', '')
+                series_desc = getattr(first_ds, 'SeriesDescription', 'Unknown')
+                writer.writerow([f"Series {series_num}: {series_desc}", '', '', ''])
+
+                analysis = variation_analysis.get(
+                    series_uid, {'varying_tags': [], 'constant_tags': selected_tags}
+                )
+                varying_tags = analysis['varying_tags']
+                constant_tags = analysis['constant_tags']
+
+                # Export constant tags (once per series, using first instance)
+                if constant_tags and instance_indices:
+                    first_instance_idx = instance_indices[0]
+                    if first_instance_idx < len(datasets):
+                        dataset = datasets[first_instance_idx]
+                        parser = DICOMParser(dataset)
+                        all_tags = parser.get_all_tags(include_private=include_private)
+
+                        for tag_str in constant_tags:
+                            if tag_str in all_tags:
+                                tag_data = all_tags[tag_str]
+                                tag_num = tag_data.get('tag', tag_str)
+                                tag_name = tag_data.get('name', '')
+
+                                value = tag_data.get('value', '')
+                                if isinstance(value, list):
+                                    value_str = ', '.join(str(v) for v in value)
+                                else:
+                                    value_str = str(value)
+
+                                writer.writerow(['All', tag_num, tag_name, value_str])
+                            elif include_missing_selected_tags:
+                                tag_num, tag_name = missing_tag_export_display_fields(tag_str)
+                                writer.writerow(['All', tag_num or tag_str, tag_name, ''])
+
+                # Export varying tags (per instance)
+                if varying_tags:
+                    for instance_idx in instance_indices:
+                        if instance_idx >= len(datasets):
+                            continue
+
+                        dataset = datasets[instance_idx]
+                        parser = DICOMParser(dataset)
+                        all_tags = parser.get_all_tags(include_private=include_private)
+
+                        instance_num = getattr(dataset, 'InstanceNumber', None)
+                        instance_id = (
+                            f"Instance {instance_num}"
+                            if instance_num is not None
+                            else f"Instance {instance_idx + 1}"
+                        )
+
+                        for tag_str in varying_tags:
+                            if tag_str in all_tags:
+                                tag_data = all_tags[tag_str]
+                                tag_num = tag_data.get('tag', tag_str)
+                                tag_name = tag_data.get('name', '')
+
+                                value = tag_data.get('value', '')
+                                if isinstance(value, list):
+                                    value_str = ', '.join(str(v) for v in value)
+                                else:
+                                    value_str = str(value)
+
+                                writer.writerow([instance_id, tag_num, tag_name, value_str])
+                            elif include_missing_selected_tags:
+                                tag_num, tag_name = missing_tag_export_display_fields(tag_str)
+                                writer.writerow([instance_id, tag_num or tag_str, tag_name, ''])
+
+                # Add blank row between series
+                writer.writerow([])
 
         exported_files.append(csv_path)
-
-    return exported_files
-
-
-def write_txt_files(
-    base_file_path: str,
-    variation_analysis: Dict[str, Dict[str, List[str]]],
-    studies: Dict[str, Dict[str, List[Dataset]]],
-    selected_series: Dict[str, Dict[str, List[int]]],
-    selected_tags: List[str],
-    include_private: bool,
-    include_missing_selected_tags: bool = True,
-) -> List[Path]:
-    """
-    Write selected tags to UTF-8 text files (one per study), tab-separated columns,
-    same row layout as :func:`write_csv_files`.
-
-    Returns:
-        List of created file paths (``.txt``).
-    """
-    base_path = Path(base_file_path)
-    base_name = base_path.stem
-    base_dir = base_path.parent
-    exported_files: List[Path] = []
-
-    for study_uid, series_dict in selected_series.items():
-        first_series_uid = list(series_dict.keys())[0]
-        first_instance_idx = series_dict[first_series_uid][0]
-        first_dataset = studies[study_uid][first_series_uid][first_instance_idx]
-        study_desc = getattr(first_dataset, 'StudyDescription', 'Study')
-        safe_study_desc = study_desc.replace('/', '-').replace('\\', '-').replace(':', '-')[:50]
-
-        if len(selected_series) > 1:
-            txt_filename = f"{base_name}_{safe_study_desc}.txt"
-        else:
-            txt_filename = f"{base_name}.txt"
-
-        txt_path = base_dir / txt_filename
-
-        with open(txt_path, 'w', newline='', encoding='utf-8') as txtfile:
-            writer = csv.writer(txtfile, delimiter='\t')
-            _write_tag_export_sheet_rows(
-                writer,
-                study_uid,
-                series_dict,
-                studies,
-                variation_analysis,
-                selected_tags,
-                include_private,
-                include_missing_selected_tags,
-            )
-
-        exported_files.append(txt_path)
 
     return exported_files
