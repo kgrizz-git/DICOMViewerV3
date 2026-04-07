@@ -36,6 +36,7 @@ sys.path.insert(0, str(src_dir))
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
+    QFileDialog,
     QMessageBox,
     QProgressDialog,
     QStyleFactory,
@@ -102,7 +103,6 @@ from core.customization_handlers import CustomizationHandlers
 from core.privacy_controller import PrivacyController
 from core.projection_app_facade import ProjectionAppFacade
 from core.qa_app_facade import QAAppFacade
-from core.export_app_facade import ExportAppFacade
 from gui.roi_coordinator import ROICoordinator
 from gui.measurement_coordinator import MeasurementCoordinator
 from gui.crosshair_coordinator import CrosshairCoordinator
@@ -475,7 +475,6 @@ class DICOMViewerApp(QObject):
         # Feature façades (logic only; signal targets remain on DICOMViewerApp)
         self._projection_app_facade = ProjectionAppFacade(self)
         self._qa_app_facade = QAAppFacade(self)
-        self._export_app_facade = ExportAppFacade(self)
 
         # Wire Qt signals to slots
         self._connect_signals()
@@ -2342,15 +2341,16 @@ class DICOMViewerApp(QObject):
 
     def _open_export_roi_statistics(self) -> None:
         """Handle Export ROI Statistics request (from menu or image viewer context menu)."""
-        self._export_app_facade.open_export_roi_statistics()
-
+        self.dialog_coordinator.open_export_roi_statistics(self.subwindow_managers)
+    
     def _open_export(self) -> None:
         """Handle Export dialog request. Resolution options are in the dialog."""
-        self._export_app_facade.open_export()
+        dialog_action_handlers.open_export(self)
 
     def _open_export_screenshots(self) -> None:
         """Handle Export Screenshots dialog request. One file per selected subwindow."""
-        self._export_app_facade.open_export_screenshots()
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        self.dialog_coordinator.open_export_screenshots(subwindows)
 
     def _resolve_focused_series_ordered_paths(
         self,
@@ -2361,7 +2361,28 @@ class DICOMViewerApp(QObject):
         Returns:
             Tuple of (study_uid, series_uid, modality, ordered_file_paths, datasets).
         """
-        return self._export_app_facade.resolve_focused_series_ordered_paths()
+        focused_idx = self.focused_subwindow_index
+        study_uid = self._get_subwindow_study_uid(focused_idx)
+        series_uid = self._get_subwindow_series_uid(focused_idx)
+        datasets = self.subwindow_data.get(focused_idx, {}).get("current_datasets", [])
+        if not isinstance(datasets, list):
+            datasets = []
+
+        ordered_paths: list[str] = []
+        modality = ""
+        for slice_index, dataset in enumerate(datasets):
+            if not modality:
+                modality = str(getattr(dataset, "Modality", "") or "")
+            path = self._file_series_coordinator.get_file_path_for_dataset(
+                dataset,
+                study_uid,
+                series_uid,
+                slice_index,
+            )
+            if path:
+                ordered_paths.append(path)
+
+        return study_uid, series_uid, modality, ordered_paths, datasets
 
     def _prompt_save_path(
         self,
@@ -2370,7 +2391,20 @@ class DICOMViewerApp(QObject):
         filter_text: str,
     ) -> str:
         """Open a Save dialog that appears on top initially and return selected path."""
-        return self._export_app_facade.prompt_save_path(title, default_name, filter_text)
+        dialog = QFileDialog(self.main_window)
+        dialog.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
+        dialog.setFileMode(QFileDialog.FileMode.AnyFile)
+        dialog.setNameFilter(filter_text)
+        dialog.selectFile(default_name)
+        dialog.setWindowTitle(title)
+        dialog.setWindowFlags(dialog.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+        dialog.activateWindow()
+        dialog.raise_()
+        if dialog.exec():
+            selected = dialog.selectedFiles()
+            if selected:
+                return selected[0]
+        return ""
 
     def _qa_build_preflight_warnings(
         self,

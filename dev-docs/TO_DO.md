@@ -37,6 +37,7 @@ This file tracks active and near-term tasks.
 - [ ] **[P0]** "Close All" did not clear thumbnails in layout map
 - [ ] **[P0]** Fusion seems to add two sets of scale markers? Or for some reason markers look too dense. Goes away when focusing on window, reappaears when unfocused. Appears (and disappears) on windows without fusion enabled as well (maybe only ones showing same series as fusion base or overlay). Actually this happened when first loading a US study with no pixel size data (and no markers displayed), then loading an MR study with pixel size data (and markers displayed on the US images subwindows while the MR image window was focused). Also happened with a CT study and MR study - took screenshots.
 - [ ] **[P1]** Fusion not working for T2 dual-echo as base series (QAMR) - no T1 overlay appears. It did after switching to T2 as overlay (still on T2) and then back to T1.
+- [ ] **[P1]** Not really a bug in my code but: try to dig more into how to make pylinac more robust, eg, why it fails on "adult abdomenm airscan" dataset
 
 ## Performance / Packaging
 
@@ -113,6 +114,7 @@ This file tracks active and near-term tasks.
 - [ ] **[P2]** In overlay  config, allow something like "simple view" and "detailed view", where additional tags can be shown, and spacebar cycles through simple, detailed, and hidden views.
 - [ ] **[P2]** When projection is enabled, allow to show projection pixel values on histogram.
 - [ ] **[P2]** Enable adding multiple images distributions to histogram for comparison (probably via button histogram). Use different colors for each distribution.
+- [ ] **[P2]** Add toggle/preference to have up/down keys and scroll wheel up/down navigate by slice # or image position patient (eg, if increasing slice # has decreasing image position patient along the orientation vector, allow choosing whether up moves up in slice number (and lower on patient), or up in image position patient (and lower on slice number)).
 
 ## Documentation
 

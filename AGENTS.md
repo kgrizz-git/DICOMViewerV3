@@ -55,6 +55,9 @@ src/
 │   ├── privacy_controller.py          # Privacy-mode propagation and overlay refresh (called from main on privacy toggle)
 │   ├── export_manager.py              # Export orchestration (paths, progress, slice/selection export)
 │   ├── export_rendering.py            # Pillow projection, photometric handling, overlay/ROI rasterization for export
+│   ├── projection_app_facade.py       # Intensity projection / MPR combine UI handlers; DICOMViewerApp delegates slots here (Phase 4a)
+│   ├── qa_app_facade.py               # ACR CT/MRI pylinac QA flows, workers, compare dialog, QA JSON export; DICOMViewerApp delegates (Phase 4b)
+│   ├── export_app_facade.py           # Focused-series paths, save-as prompt, export/ROI-stats/screenshot entrypoints; DICOMViewerApp delegates (Phase 4c)
 │   ├── slice_display_lut.py           # Window/level raw vs rescaled alignment helpers (used by SliceDisplayManager)
 │   ├── slice_display_pixels.py        # Intensity projection → PIL pipeline (used by SliceDisplayManager)
 │   ├── dicom_parser.py                # Dataset metadata: get_all_tags (iterall + optional export catalog merge)
