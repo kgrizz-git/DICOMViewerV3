@@ -57,7 +57,8 @@ DEBUG_PROJECTION: bool = False
 
 # Enables fusion/overlay offset, scaling/translation in create_fusion_image, overlay W/L
 # and pixel-range tracing when loading an overlay series.
-# Affects: fusion_controls_widget.py, fusion_handler.py, fusion_coordinator.py,
+# Affects: fusion_controls_widget.py, fusion_handler.py, fusion_handler_io.py,
+#          fusion_coordinator.py,
 # fusion_processor.py.
 DEBUG_OFFSET: bool = False
 

@@ -27,8 +27,6 @@ Requirements:
     numpy
     PySide6 (for QThread, Signal)
     pydicom
-
-Output grid math and standard LPS planes: ``core.mpr_geometry`` (Phase 5C).
 """
 
 from __future__ import annotations
@@ -50,11 +48,6 @@ try:
 except ImportError:
     pass
 
-from core.mpr_geometry import (
-    compute_mpr_output_grid,
-    stack_positions_along_normal,
-    standard_slice_planes_lps,
-)
 from core.mpr_volume import MprVolume, MprVolumeError
 from core.slice_geometry import SlicePlane, SliceStack
 from utils.debug_flags import DEBUG_MPR
@@ -243,28 +236,12 @@ class MprBuilderWorker(QThread):
 
         # Determine output grid from the volume's bounding box projected onto
         # the output plane's coordinate system.
-        sitk_img = self._volume.sitk_image
-        grid = compute_mpr_output_grid(
-            np.array(sitk_img.GetOrigin()),
-            np.array(sitk_img.GetDirection()).reshape(3, 3),
-            sitk_img.GetSize(),
-            sitk_img.GetSpacing(),
-            self._output_plane.row_cosine,
-            self._output_plane.col_cosine,
-            self._output_plane.normal,
-            self._output_spacing,
-            self._output_thickness,
-        )
-        out_origin = grid.origin
-        out_size = (grid.rows_px, grid.cols_px)
-        n_slices = grid.n_slices
+        (
+            out_origin,
+            out_size,
+            n_slices,
+        ) = self._compute_output_grid()
 
-        _mpr_log(
-            "Projected source bounding box: "
-            f"row_axis=({grid.row_axis_min:.4f},{grid.row_axis_max:.4f}) "
-            f"col_axis=({grid.col_axis_min:.4f},{grid.col_axis_max:.4f}) "
-            f"normal=({grid.normal_min:.4f},{grid.normal_max:.4f})"
-        )
         _mpr_log(
             "Output grid: "
             f"origin={tuple(round(v, 4) for v in out_origin)} "
@@ -346,7 +323,9 @@ class MprBuilderWorker(QThread):
 
         # Build output SliceStack from the MPR planes.
         out_normal_arr = out_normal
-        positions = stack_positions_along_normal(mpr_planes, out_normal_arr)
+        positions = [
+            float(np.dot(p.origin, out_normal_arr)) for p in mpr_planes
+        ]
         out_stack = SliceStack(
             planes=mpr_planes,
             original_indices=list(range(len(mpr_planes))),
@@ -380,6 +359,87 @@ class MprBuilderWorker(QThread):
             combine_mode="none",
             slab_thickness_mm=0.0,
         )
+
+    def _compute_output_grid(
+        self,
+    ) -> Tuple[np.ndarray, Tuple[int, int], int]:
+        """
+        Compute the output origin, 2-D size (rows_px, cols_px), and slice count.
+
+        Projects the 8 corners of the source bounding box onto the output
+        coordinate frame (row_cosine / col_cosine / normal) and uses the
+        extents to determine the output grid.
+
+        Returns:
+            (out_origin, (rows_px, cols_px), n_slices)
+        """
+        vol = self._volume
+        sitk_img = vol.sitk_image
+
+        # Source bounding box in patient coordinates.
+        # The 8 corners of the volume in patient space.
+        size = sitk_img.GetSize()        # (x_size, y_size, z_size) in pixels
+        spacing = sitk_img.GetSpacing()  # (x_sp, y_sp, z_sp) in mm
+        origin = np.array(sitk_img.GetOrigin())
+        direction = np.array(sitk_img.GetDirection()).reshape(3, 3)
+
+        # Physical extent vectors along each axis.
+        x_vec = direction[:, 0] * spacing[0] * size[0]
+        y_vec = direction[:, 1] * spacing[1] * size[1]
+        z_vec = direction[:, 2] * spacing[2] * size[2]
+
+        corners = []
+        for ix in (0, 1):
+            for iy in (0, 1):
+                for iz in (0, 1):
+                    c = origin + ix * x_vec + iy * y_vec + iz * z_vec
+                    corners.append(c)
+        corners = np.array(corners)  # shape: (8, 3)
+
+        # Project corners onto output frame.
+        out_row = self._output_plane.row_cosine
+        out_col = self._output_plane.col_cosine
+        out_n = self._output_plane.normal
+
+        # row_cosine is the physical direction of increasing image x/column.
+        # col_cosine is the physical direction of increasing image y/row.
+        proj_col_axis = corners @ out_row   # image x / columns
+        proj_row_axis = corners @ out_col   # image y / rows
+        proj_n = corners @ out_n
+
+        col_min, col_max = float(proj_col_axis.min()), float(proj_col_axis.max())
+        row_min, row_max = float(proj_row_axis.min()), float(proj_row_axis.max())
+        n_min, n_max = float(proj_n.min()), float(proj_n.max())
+
+        sp = max(self._output_spacing, 1e-6)
+        th = max(self._output_thickness, 1e-6)
+
+        rows_px = max(1, int(np.ceil((row_max - row_min) / sp)))
+        cols_px = max(1, int(np.ceil((col_max - col_min) / sp)))
+        n_slices = max(1, int(np.ceil((n_max - n_min) / th)))
+
+        # Cap to a reasonable maximum to avoid memory exhaustion.
+        max_dim = 2048
+        max_slices = 1024
+        rows_px = min(rows_px, max_dim)
+        cols_px = min(cols_px, max_dim)
+        n_slices = min(n_slices, max_slices)
+
+        # Output origin: corner of the bounding rectangle in patient space.
+        out_origin = (
+            out_row * col_min
+            + out_col * row_min
+            + out_n * n_min
+        )
+
+        _mpr_log(
+            "Projected source bounding box: "
+            f"row_axis=({row_min:.4f},{row_max:.4f}) "
+            f"col_axis=({col_min:.4f},{col_max:.4f}) "
+            f"normal=({n_min:.4f},{n_max:.4f})"
+        )
+
+        return out_origin, (rows_px, cols_px), n_slices
 
     def _make_reference_image(
         self,
@@ -541,4 +601,28 @@ class MprBuilder:
         Returns:
             {"axial": SlicePlane, "coronal": SlicePlane, "sagittal": SlicePlane}
         """
-        return standard_slice_planes_lps()
+        # Axial:    normal = S (Superior, +Z in LPS)
+        axial = SlicePlane(
+            origin=np.array([0.0, 0.0, 0.0]),
+            row_cosine=np.array([1.0, 0.0, 0.0]),   # L → R
+            col_cosine=np.array([0.0, 1.0, 0.0]),   # P → A
+            row_spacing=1.0,
+            col_spacing=1.0,
+        )
+        # Coronal:  normal = A (Anterior, +Y in LPS)
+        coronal = SlicePlane(
+            origin=np.array([0.0, 0.0, 0.0]),
+            row_cosine=np.array([1.0, 0.0, 0.0]),   # L → R
+            col_cosine=np.array([0.0, 0.0, -1.0]),  # S → I (display convention)
+            row_spacing=1.0,
+            col_spacing=1.0,
+        )
+        # Sagittal: normal = L (Left, +X in LPS)
+        sagittal = SlicePlane(
+            origin=np.array([0.0, 0.0, 0.0]),
+            row_cosine=np.array([0.0, 1.0, 0.0]),   # P → A
+            col_cosine=np.array([0.0, 0.0, -1.0]),  # S → I (display convention)
+            row_spacing=1.0,
+            col_spacing=1.0,
+        )
+        return {"axial": axial, "coronal": coronal, "sagittal": sagittal}

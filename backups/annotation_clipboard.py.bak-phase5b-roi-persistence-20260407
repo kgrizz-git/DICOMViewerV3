@@ -10,14 +10,12 @@ Outputs:
     - Serialized annotation data for pasting
     
 Requirements:
-    - PySide6 for some annotation item types (measurements, text, arrows, etc.)
+    - PySide6 for Qt types (QPointF, QRectF)
     - Standard library for JSON serialization
-    - tools.roi_persistence for ROI clipboard dicts (Phase 5B)
 """
 
 from typing import Optional, Dict, List, Any, Tuple
-
-from tools.roi_persistence import serialize_rois_for_clipboard
+from PySide6.QtCore import QPointF, QRectF
 
 
 class AnnotationClipboard:
@@ -66,7 +64,7 @@ class AnnotationClipboard:
         data = {
             'type': 'dicom_viewer_annotations',
             'version': '1.0',
-            'rois': serialize_rois_for_clipboard(rois),
+            'rois': self._serialize_rois(rois),
             'measurements': self._serialize_measurements(measurements),
             'crosshairs': self._serialize_crosshairs(crosshairs),
             'text_annotations': self._serialize_text_annotations(text_annotations or []),
@@ -77,6 +75,53 @@ class AnnotationClipboard:
         self.source_slice_key = (source_study_uid, source_series_uid, source_instance_identifier)
         
         return data
+    
+    def _serialize_rois(self, rois: List[Any]) -> List[Dict[str, Any]]:
+        """
+        Serialize ROI items.
+        
+        Args:
+            rois: List of ROIItem objects
+            
+        Returns:
+            List of dictionaries containing ROI properties
+        """
+        from PySide6.QtGui import QColor
+        
+        serialized = []
+        for roi in rois:
+            rect = roi.item.rect()
+            pos = roi.item.pos()
+            
+            # Extract pen properties from the graphics item's pen
+            pen = roi.item.pen()
+            pen_width = int(pen.widthF()) if pen.widthF() > 0 else int(pen.width())
+            pen_color_obj = pen.color()
+            pen_color = (pen_color_obj.red(), pen_color_obj.green(), pen_color_obj.blue())
+            
+            roi_data = {
+                'shape_type': roi.shape_type,
+                'rect': {
+                    'x': rect.x(),
+                    'y': rect.y(),
+                    'width': rect.width(),
+                    'height': rect.height()
+                },
+                'position': {
+                    'x': pos.x(),
+                    'y': pos.y()
+                },
+                'pen_width': pen_width,
+                'pen_color': pen_color,
+            }
+            
+            # Include visible statistics if available
+            if hasattr(roi, 'visible_statistics'):
+                roi_data['visible_statistics'] = list(roi.visible_statistics)
+            
+            serialized.append(roi_data)
+        
+        return serialized
     
     def _serialize_measurements(self, measurements: List[Any]) -> List[Dict[str, Any]]:
         """

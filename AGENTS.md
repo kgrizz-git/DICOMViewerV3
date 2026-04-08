@@ -55,6 +55,8 @@ src/
 │   ├── privacy_controller.py          # Privacy-mode propagation and overlay refresh (called from main on privacy toggle)
 │   ├── export_manager.py              # Export orchestration (paths, progress, slice/selection export)
 │   ├── export_rendering.py            # Pillow projection, photometric handling, overlay/ROI rasterization for export
+│   ├── fusion_handler_io.py           # Pure DICOM spatial reads + NumPy fusion helpers (no Qt); used by fusion_handler (Phase 5A)
+│   ├── mpr_geometry.py                # Pure MPR output-grid math, standard LPS planes, stack positions; used by mpr_builder (Phase 5C)
 │   ├── projection_app_facade.py       # Intensity projection / MPR combine UI handlers; DICOMViewerApp delegates slots here (Phase 4a)
 │   ├── qa_app_facade.py               # ACR CT/MRI pylinac QA flows, workers, compare dialog, QA JSON export; DICOMViewerApp delegates (Phase 4b)
 │   ├── export_app_facade.py           # Focused-series paths, save-as prompt, export/ROI-stats/screenshot entrypoints; DICOMViewerApp delegates (Phase 4c)
@@ -65,6 +67,7 @@ src/
 │   └── tag_export_writer.py           # Tag export file writers: Excel, CSV, UTF-8 tab-separated text (shared row builder)
 ├── gui/                           # All Qt widgets, dialogs, layout; e.g. overlay_items_factory, series_navigator_view (thumbnails), series_navigator_model (labels/instance entries), main_window_*_builder (menus/toolbar); **`dialogs/tag_export_union_worker.py`** — background tag-union for Export DICOM Tags ( **`DICOMViewerApp._schedule_tag_export_union_rebuild`** )
 ├── tools/                         # Interactive tools (ROI, measurement, annotation, crosshair)
+│   └── roi_persistence.py         # Clipboard-oriented ROI dict serialization (Phase 5B; copy/paste schema)
 └── utils/                         # Utilities (config, undo/redo, DICOM helpers, etc.)
     ├── config_manager.py          # Thin facade: inherits all config mixins; owns __init__, _load_config, save_config, get, set
     ├── doc_urls.py                # GitHub base URL for in-app user-docs links (Help → Documentation, Quick Start); edit USER_DOCS_GITHUB_PREFIX for forks

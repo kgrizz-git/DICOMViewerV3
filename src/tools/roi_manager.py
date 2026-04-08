@@ -16,6 +16,9 @@ Outputs:
 Requirements:
     - PySide6 for graphics items
     - numpy for statistics calculations
+
+Clipboard-oriented JSON dicts for copy/paste are built in ``tools.roi_persistence``
+(Phase 5B); ``utils.annotation_clipboard`` imports that module.
 """
 
 import math
