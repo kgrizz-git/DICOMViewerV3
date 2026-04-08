@@ -158,33 +158,41 @@ Notes:
 A subtree embeds shared files in each consuming repo so normal clone workflows still work.
 
 ```bash
-git remote add notes-and-ideas https://github.com/YOUR_ORG/Notes_and_Ideas.git
+git remote add notes-and-ideas https://github.com/kgrizz-git/Notes_and_Ideas.git
 git fetch notes-and-ideas
 
-# Example: embed shared agent/skill assets into .claude/
-git subtree add --prefix=.claude \
-  notes-and-ideas main --squash
+# Example: embed whole main branch into .subtree/ or wherever
+git subtree add --prefix=.subtree notes-and-ideas main --squash
 ```
+
+The trailing `\` is a shell line-continuation character. It means "this command continues on the next line." If you paste only one line, paste them separately, or accidentally include trailing spaces after the `\`, the shell can throw an error. For copy/paste docs, a single-line version is safer.
+
+Without `--prefix`, `git subtree add` has no destination subdirectory to merge into, so it would try to merge the other repo's root tree directly into the root of the repo you are currently in. That does **not** create or target a folder named after the remote or repo such as `Notes_and_Ideas/`; it overlays the imported files into the current repo root, which is usually not what you want unless both trees were designed for that.
+
+`fatal: working tree has modifications. Cannot add.` means Git sees local changes in the repo where you are running `git subtree add`, and subtree refuses to proceed on top of a dirty working tree. Usually you should either commit those changes first, stash them temporarily, or run the subtree command in a clean branch or worktree. You do **not** have to commit permanently if you do not want to; `git stash push -u` is often enough.
 
 Update later:
 
 ```bash
 git fetch notes-and-ideas
-git subtree pull --prefix=.claude \
-  notes-and-ideas main --squash
+git subtree pull --prefix=.subtree notes-and-ideas main --squash
 ```
 
 **Command breakdown:**
 
 | Part | Meaning |
 |------|---------|
-| `git remote add notes-and-ideas <url>` | Registers the source repo as a named remote (one-time setup) |
+| `git remote add notes-and-ideas <url>` | Registers the source repo as an additional named remote (one-time setup); it does not replace or overwrite `origin` |
 | `git fetch notes-and-ideas` | Downloads all commits and branches from that remote |
-| `--prefix=.claude` | Destination folder in your repo; all files from the remote root land here |
+| `--prefix=.subtree` | Destination folder in your repo; all files from the remote root land here |
 | `notes-and-ideas main` | Remote name and branch to pull from |
 | `--squash` | Collapses the entire source repo history into one commit, keeping your log clean |
 
-> **Scope note:** `git subtree add` copies the *entire* remote repo into the prefix folder — so `--prefix=.claude` puts everything from Notes_and_Ideas (ideas, info, templates, etc.) into `.claude/`, not just agents and skills. For a more targeted sync of only agents and skills, use the [Practical sync script](#practical-sync-script-for-project-repos) with `rsync`.
+> **Scope note:** `git subtree add` copies the *entire* remote repo into the prefix folder — so `--prefix=.subtree` puts everything from Notes_and_Ideas (ideas, info, templates, etc.) into `.subtree/`, not just agents and skills. For a more targeted sync of only agents and skills, use the [Practical sync script](#practical-sync-script-for-project-repos) with `rsync`.
+
+> **Remote note:** `notes-and-ideas` here is just a local remote alias, similar to `origin` or `upstream`. Git allows multiple remotes in one repo. `git remote add notes-and-ideas ...` will only fail if a remote with that exact name already exists; it will not confuse Git and it will not overwrite your existing `origin` remote.
+
+> **Cleanup note:** Keep the `notes-and-ideas` remote if you want to run future `git subtree pull` updates. Remove it only if this was a one-time import and you do not want the extra remote alias hanging around: `git remote remove notes-and-ideas`. If `git subtree add` failed before creating a commit, there is usually no subtree-specific cleanup needed beyond getting back to a clean working tree with `git status`, then either commit or stash your local changes.
 
 Use subtree when you want low friction for collaborators.
 
@@ -235,13 +243,11 @@ git remote add ext-skillpack https://github.com/OWNER/REPO.git
 git fetch ext-skillpack
 
 # Import only into a namespaced folder under .claude
-git subtree add --prefix=.claude/skills/external-owner-repo \
-  ext-skillpack main --squash
+git subtree add --prefix=.claude/skills/external-owner-repo ext-skillpack main --squash
 
 # Pull updates later (intentional cadence)
 git fetch ext-skillpack
-git subtree pull --prefix=.claude/skills/external-owner-repo \
-  ext-skillpack main --squash
+git subtree pull --prefix=.claude/skills/external-owner-repo ext-skillpack main --squash
 ```
 
 If you want stronger supply-chain control, fork first and subtree from your fork instead of directly from a third-party default branch.

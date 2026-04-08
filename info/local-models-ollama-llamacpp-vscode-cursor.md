@@ -8,6 +8,7 @@ This is a practical guide for running modern open models locally and connecting 
 
 Focus areas:
 - Ollama and llama.cpp runtime options
+- MLX, LM Studio, and vLLM in practical local workflows
 - VS Code and Cursor integration patterns
 - What is realistic on consumer Apple Silicon, Apple desktop class systems, and RTX 4090 systems
 - Current model families to watch: Qwen3.5 / Qwen3-Coder-Next, Gemma4, plus a few others
@@ -54,6 +55,59 @@ Example server launch:
 llama-server -m /path/to/model.gguf --port 8080
 # OpenAI-compatible chat endpoint: http://localhost:8080/v1/chat/completions
 ```
+
+### MLX (Apple Silicon)
+
+MLX is Apple's array framework for machine learning on Apple Silicon, and is increasingly practical for light local fine-tuning experiments.
+
+What matters in practice:
+- MLX uses unified memory, which can make experimentation simpler on Mac than traditional split VRAM/system-RAM setups
+- The MLX ecosystem includes MLX-LM utilities for loading Hub models, conversion, quantization, generation, and LoRA-style fine-tuning workflows
+- Hugging Face has first-class MLX support and an active MLX model ecosystem
+
+Good use cases on Mac:
+- Light LoRA fine-tuning experiments
+- Small to mid-sized model adaptation and eval loops
+- Fast local prototyping when you want to stay fully on-device
+
+**If you are playing around and learning — not building production or frontier-grade models — MLX is completely fine.** You can download a model from Hugging Face, run generation, and try a LoRA adapter in an afternoon without touching CUDA, Docker, or a cloud VM. The throughput limits only matter when your goal shifts to training on large datasets repeatedly, or serving many users simultaneously; for personal exploration and skill-building, they are not a bottleneck.
+
+Limits to keep in mind:
+- Mac MLX training remains best for experimentation, not heavy multi-GPU training throughput
+- For larger training runs, Nvidia CUDA stacks are still the default choice
+
+Quick commands:
+
+```bash
+pip install mlx-lm
+python -m mlx_lm.generate --model mistralai/Mistral-7B-Instruct-v0.2 --prompt "hello"
+```
+
+### LM Studio
+
+LM Studio is a strong GUI-first local runtime manager for Mac, Windows, and Linux.
+
+Key points:
+- Runs llama.cpp GGUF models across platforms
+- On Apple Silicon, also supports MLX runtimes
+- Can expose OpenAI-compatible local endpoints
+- Supports MCP server usage with local models
+
+Practical fit:
+- Great for quick model comparison, local chat, and endpoint-based integration without manually managing many CLI options
+
+### vLLM
+
+vLLM is a high-throughput inference and serving engine that is strongest on Linux server-style setups.
+
+Key points:
+- Optimized for high serving throughput and continuous batching
+- Provides an OpenAI-compatible API server
+- Strong fit for Nvidia and larger multi-user workloads
+
+Practical fit:
+- Use vLLM when you care about serving performance and scalable local or self-hosted API endpoints
+- For single-user Mac laptop workflows, Ollama, llama.cpp, LM Studio, or MLX are often simpler
 
 ### Unsloth Studio
 
@@ -137,6 +191,7 @@ This wires Ollama models into the VS Code model picker (Copilot Chat with local 
 Also common in VS Code:
 - Cline: set API provider to Ollama
 - Roo Code: set API provider to Ollama and base URL `http://localhost:11434`
+- OpenAI-compatible providers can also point to `llama-server`, LM Studio local API, or vLLM endpoints
 
 ## Cursor
 
@@ -184,6 +239,7 @@ Good fits:
 
 Possible with care:
 - 20B to 30B-class quants at lower context and tuned settings
+- Light LoRA-style MLX experiments on smaller models (best experience typically starts around higher-memory configurations)
 
 Usually not ideal:
 - 70B+ dense models at useful speed on lower-memory laptops
@@ -195,9 +251,11 @@ If you have 128 GB to 192 GB unified memory, you can realistically test much lar
 - Qwen3-Coder-Next GGUF at Q4/Q5 class (memory still heavy, speed varies)
 - Gemma4 26B A4B / 31B variants with more headroom
 - Larger long-context experiments that would fail on laptops
+- More comfortable MLX experimentation for local fine-tuning loops than lower-memory laptops
 
 Important:
 - You still need to tune context length and batch size aggressively for stability and throughput.
+- For serious training throughput, Nvidia remains stronger; for light Mac-native experimentation, MLX is now a valid path.
 
 ## RTX 4090 systems (24 GB VRAM)
 
@@ -247,6 +305,21 @@ Why this is the default recommendation for most technical users:
 Main limitation:
 - 32 GB VRAM is still a hard ceiling for many larger models, so this is more flexible for training than it is spacious for giant-model inference
 
+Concrete sample parts list (RTX 5090 build, target about $4300 to $5000):
+- GPU: GeForce RTX 5090 32 GB
+- CPU: AMD Ryzen 9 9950X (or similar high-core mainstream desktop CPU)
+- Motherboard: X870 class ATX board with strong VRM and 2.5GbE+
+- RAM: 96 GB DDR5 (2x48 GB, 6000 MT/s class)
+- Storage: 4 TB NVMe Gen4/Gen5 SSD
+- PSU: 1200 W ATX 3.1, 80+ Gold or better
+- Cooling: 360 mm AIO or equivalent high-end air cooling
+- Case: airflow-focused mid/full tower with room for large triple-slot GPUs
+
+Why this exact shape works:
+- Enough system RAM for data pipelines and local experimentation
+- Enough PSU and thermals for stable sustained GPU workloads
+- Keeps the budget focused on GPU + memory instead of vanity parts
+
 ## Best compromise if you want to spend less
 
 - RTX 4090 system
@@ -262,6 +335,21 @@ What you give up versus 5090:
 - Less VRAM headroom
 - Less memory bandwidth
 - Less future margin for newer local training and inference workloads
+
+Concrete sample parts list (RTX 4090 build, target about $3000 to $3900):
+- GPU: GeForce RTX 4090 24 GB
+- CPU: AMD Ryzen 9 9900X or Ryzen 9 9950X
+- Motherboard: B650E or X670E class ATX board
+- RAM: 64 GB to 96 GB DDR5 (2x32 or 2x48 GB)
+- Storage: 2 TB to 4 TB NVMe SSD
+- PSU: 1000 W ATX 3.0/3.1, 80+ Gold or better
+- Cooling: quality 240/360 mm AIO or top-tier air cooler
+- Case: high-airflow chassis with strong front intake
+
+Why this exact shape works:
+- Lower entry cost while still supporting meaningful fine-tuning experiments
+- Better dev-tooling compatibility than Mac for training stacks
+- Leaves room in budget for a second SSD, more RAM, or better cooling/acoustics
 
 ## Bottom line
 
@@ -343,6 +431,36 @@ Typical flow:
 6. Export to GGUF or safetensors.
 7. Run the exported model in llama.cpp or Ollama for normal use in VS Code or Cursor.
 
+## Recipe D: quick MLX experiment loop on Mac
+
+```bash
+pip install mlx-lm
+
+# Run a base model
+python -m mlx_lm.generate --model mistralai/Mistral-7B-Instruct-v0.2 --prompt "Write a Python function for topological sort."
+
+# Convert and quantize a Hub model into MLX format
+python -m mlx_lm.convert --hf-path mistralai/Mistral-7B-v0.1 -q
+```
+
+Use this for light adaptation and evaluation workflows. If your experiments start hitting throughput walls, that is usually the handoff point to Nvidia.
+
+## Recipe E: high-throughput OpenAI-compatible local endpoint with vLLM
+
+vLLM quickstart is Linux-first, and best on Nvidia for local serving throughput.
+
+```bash
+uv venv --python 3.12 --seed
+source .venv/bin/activate
+uv pip install vllm --torch-backend=auto
+
+# Start local OpenAI-compatible server
+vllm serve Qwen/Qwen2.5-1.5B-Instruct
+```
+
+Default endpoint:
+- `http://localhost:8000/v1/chat/completions`
+
 ## Benchmarking before committing to a model
 
 Before adopting any model for real work:
@@ -357,7 +475,10 @@ This guide was built from current upstream docs/pages including:
 - Ollama docs and integrations pages
 - Ollama model library/search pages
 - llama.cpp README/build/quantize documentation
+- MLX repository and Hugging Face MLX docs
+- LM Studio docs
 - Unsloth Studio docs
+- vLLM docs
 - Hugging Face model cards for current Qwen and Gemma4 releases
 - NVIDIA RTX 4090 specs page
 - NVIDIA RTX 5090 specs page

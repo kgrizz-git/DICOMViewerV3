@@ -2,9 +2,9 @@
 name: plans-folder-authoring
 description: >-
   Writes implementation plans under a plans subfolder using markdown checklists, phased
-  breakdowns, and explicit open questions—no product code. Use when planning
-  features, comparing specs to codebase, or producing [ ] task lists for
-  orchestrator and coder.
+  breakdowns, explicit open questions, task DAG and verification gates—no product code.
+  Use when planning features, comparing specs to codebase, or producing [ ] task lists
+  for orchestrator and coder.
 ---
 
 # Plans folder authoring
@@ -23,6 +23,17 @@ Use this shape (adapt headings as needed):
 
 ## Goal and success criteria
 ## Context and links (specs, issues, paths)
+## Task graph and gates
+### Ordering
+- After A → B (sequential)
+- C ∥ D (parallel — disjoint paths / no shared lockfiles)
+
+### Verification gates
+- Gate 1: reviewer approves before merge
+- Gate 2: tester green on suite X before ship
+### File / area ownership (optional)
+- `path/or/tree` → coder | ux | …
+
 ## Phases
 ### Phase 1 — ...
 - [ ] Task (owner: coder | ux | …)
@@ -35,10 +46,15 @@ Use this shape (adapt headings as needed):
 ## Completion notes (filled by reviewer/coder later)
 ```
 
+## Task graph and gates
+
+- For large or parallel work, add **Task graph and gates**: which tasks are **sequential** (outputs feed inputs), which may run **in parallel** (disjoint files, no shared dependency manifests), and **verification gates** (e.g. “reviewer before coder continues to Phase 2”, “tester after Phase 1”).
+- Optionally list **file or directory ownership** so the orchestrator can assign branches/worktrees without overlap.
+
 ## Checklists
 
 - Use `- [ ]` / `- [x]` consistently.
-- Each task should be **one clear outcome**, assignable to a single role.
+- Each task should be **one clear outcome**, assignable to a single role. Use stable task ids in parentheses if helpful for handoffs, e.g. `- [ ] (T3) Implement parser (owner: coder)`.
 - For large work, use **multi-phase** plans with checkpoints between phases.
 
 ## Modularity
@@ -46,6 +62,12 @@ Use this shape (adapt headings as needed):
 - Flag plans that would create **very large files or functions**; propose splits, modules, and boundaries up front.
 - Prefer **small, composable** units and explicit interfaces.
 
+## Coordination with orchestration
+
+- If the repo uses **`plans/orchestration-state.md`**, the planner may append a **Handoff** entry there (or rely on chat HANDOFF) stating **plan ready** and linking the plan path(s).
+- **Git / cloud:** the planner may include a recommended **branch** or **isolation** note in the plan body; branch creation remains **orchestrator-approved** unless the user says otherwise.
+
 ## Handoff
 
 - When the plan is ready for implementation, state explicitly: **ready for orchestrator to assign coder** (and ux if UI work).
+- End with the standard **HANDOFF → orchestrator** block (see skill `team-orchestration-delegation`).

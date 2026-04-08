@@ -20,6 +20,13 @@ This page tracks helpful standalone tools and websites that are not part of loca
   - Vultr: https://www.vultr.com/
   - DigitalOcean: https://www.digitalocean.com/
 
+## Notebooks and Data Science Environments
+
+- Google Colab: Free cloud-hosted Jupyter notebooks with GPU/TPU access; easy sharing via Google Drive.
+  - https://colab.research.google.com/
+- Kaggle: Data science platform with free GPU notebooks, public datasets, and ML competitions.
+  - https://www.kaggle.com/
+
 ## Testing and QA
 
 - Playwright: End-to-end browser testing framework by Microsoft; supports Chromium, Firefox, and WebKit.

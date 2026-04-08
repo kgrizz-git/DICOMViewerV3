@@ -42,7 +42,7 @@ venv.bak/
 
 # Playwright
 /test-results/
-/playwright-report/
 /blob-report/
-/playwright/.cache/
-/playwright/.auth/
+
+# Agent-local planning files
+.agent_files/

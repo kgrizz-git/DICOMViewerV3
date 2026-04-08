@@ -1,9 +1,6 @@
 ---
 name: security-scanning-secops
-description: >-
-  Runs and interprets security tooling—semgrep, grype, GitHub Actions hygiene,
-  trufflehog, gitleaks—and records timestamped assessments. Use for secops
-  subagent work, dependency vulnerability review, or secret scanning.
+description: "Guides security scanning (semgrep, grype, secret checks) and records actionable assessment results."
 ---
 
 # Security scanning (secops)
@@ -28,3 +25,11 @@ Run only what is **installed or available** in the environment; if a tool is mis
 ## Venv
 
 - Apply **`python-venv-dependencies`** when scans invoke Python-based CLIs.
+
+## Long scans and cloud
+
+- Full-repo or heavy scans may warrant a **Cloud: REQUEST** in your HANDOFF (objective, branch/commit, commands, acceptance, no secrets). **Orchestrator** approves and may record a **Cloud Task Packet** in `plans/orchestration-state.md`.
+
+## Handoff
+
+- End with the structured **HANDOFF → orchestrator** block (see skill `team-orchestration-delegation`).

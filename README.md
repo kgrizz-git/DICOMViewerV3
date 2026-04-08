@@ -15,7 +15,7 @@ This repository serves as a centralized location for:
 
 For **Cursor** multi-agent workflows, see [AGENTS.md](AGENTS.md) and `.cursor/agents/` / `.cursor/skills/`. Plans, logs, and security assessments use:
 
-- `plans/` — implementation plans (markdown)
+- `plans/` — implementation plans (markdown) and **`orchestration-state.md`** (orchestrator-owned run state for multi-agent handoffs)
 - `logs/` — documentation review logs and `test-ledger.md`
 - `assessments/` — timestamped security assessments
 

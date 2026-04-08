@@ -1,6 +1,6 @@
 # Update and Setup Prompt
 
-Run all update prompts in sequence, then offer the user an interactive install/setup menu for everything referenced in the repo.
+Run all update prompts in sequence, then optionally offer a context-aware setup menu based on what is actually present in the repo.
 
 ---
 
@@ -53,96 +53,116 @@ If the structure looks clean, note that briefly and move on.
 
 ## Phase 2: Install and Setup Menu
 
-After all update prompts complete, load [repo-setup-manifest.md](repo-setup-manifest.md) and present the user with the following grouped menu. For each group, describe what will happen, then ask for confirmation before running anything.
+After all update prompts complete, load [.agent_files/repo-setup-manifest.md](.agent_files/repo-setup-manifest.md) and use it as a planning aid.
+
+Before proposing any setup/install action:
+- Scan the repo to verify what toolchains and workflows are actually present.
+- Cross-check the manifest against current files and references.
+- Confirm assumptions with the user before running anything.
+
+Important defaults:
+- Do not assume every repo needs package installs, browser binaries, sync scripts, subtree operations, or external clones.
+- In many repos, only Phase 1 update prompts are needed; treat setup steps as optional unless evidence suggests they are useful.
 
 > Always show the exact commands you plan to run **before** running them and wait for the user to confirm.
 
 ---
 
-### Group A — npm Packages
+### Group A — Package Manager Dependencies (Only if detected)
 
-**What:** Install `@playwright/test` and `@types/node` from `package.json`.
+**What:** Offer dependency installation only when a package manager manifest is present (for example: `package.json`, `requirements.txt`, `pyproject.toml`, `Pipfile`, `poetry.lock`, `Cargo.toml`, `go.mod`, etc.).
 
-**Ask:** "Would you like to run `npm install` to install the repo's npm devDependencies?"
+**Ask (example):** "I found <manifest>. Would you like me to install dependencies now?"
 
-**Command:**
-```bash
-npm install
-```
+**Command rule:** Propose commands appropriate to the detected ecosystem (for example, `npm install`, `pnpm install`, `pip install -r requirements.txt`, `poetry install`), and explain why each command is relevant.
 
 ---
 
-### Group B — Playwright Browser Binaries
+### Group B — Test/Runtime Tooling Assets (Only if detected)
 
-**What:** Download browser binaries required to run the Playwright test suite in `tests/`.
+**What:** Offer installation/setup of secondary tooling assets only if required by detected tools (for example Playwright browsers, language toolchains, local runtimes, codegen prerequisites).
 
-**Ask:** "Would you like to install Playwright browser binaries? (Required to run tests)"
+**Ask (example):** "I found <tool> configuration. Would you like to install the required runtime assets now?"
 
-**Options to offer:**
-1. All browsers: `npx playwright install`
-2. Chromium only: `npx playwright install chromium`
-3. Skip
+**Options rule:** Offer a minimal option, a full option, and skip whenever practical.
 
 ---
 
-### Group C — Shell Scripts in `tools/`
+### Group C — Repo Scripts and Automation (Only if useful)
 
-For each script listed in `repo-setup-manifest.md` Section 3, describe its purpose and ask the user if they want to run it.
+For each script listed in `.agent_files/repo-setup-manifest.md` (and any scripts discovered in the repo), explain:
+1. What it does
+2. Why it may help in this repo
+3. Risks/side effects (network calls, file writes, git operations)
 
-**`tools/sync-external-skills-subtree.sh`**  
-Pulls an external GitHub skills repo into `.claude/skills/external-<owner>-<repo>` via git subtree.
+Then ask whether the user wants to run it.
 
-**Ask:** "Would you like to pull any external skills repos using the subtree sync script?"
-
-If yes, prompt for:
-- Which repos to pull (offer the vetted list from Manifest Section 6: K-Dense-AI/claude-scientific-skills, anthropics/skills)
-- Or a custom OWNER/REPO to specify
-
-Show the exact command and wait for confirmation before running.
+Do not assume scripts should be run by default.
 
 ---
 
-### Group D — Agent & Skill Sync
+### Group D — Cross-Repo / IDE Sync (Only if requested)
 
-**What:** Sync the `agents_and_skills/` folder to IDE-specific directories (global and/or per-repo).
+If the repo contains portable agent/skill/prompt content, offer sync actions only if the user asks for them.
 
-**Ask:** "Would you like to sync agents and skills from this repo to other locations?"
+Possible sync targets may include global user directories or another repo. Always ask for target paths explicitly and confirm overwrite/delete behavior for `rsync --delete` style commands.
 
-Offer the following sub-options (the user may choose one, multiple, or none):
-
-1. **Global (machine-wide)** — sync to `~/.cursor/` and `~/.claude/` so all your projects use these agents and skills  
-   *(uses rsync — Manifest Section 4a)*
-
-2. **Another repo** — sync into a target repo's `.claude/` and `.cursor/` directories  
-   *(prompt user for the absolute path to the target repo — Manifest Section 4b)*
-
-3. **VS Code user prompts** — copy any prompts to `~/Library/Application Support/Code/User/prompts/` (macOS)  
-   *(Manifest Section 4c)*
-
-Show all commands and wait for confirmation before running any rsync.
+Show all planned commands and wait for confirmation before running any sync.
 
 ---
 
-### Group E — Git Subtree Operations
+### Group E — Git/Subtree Operations (Only if requested)
 
-**What:** Pull this entire Notes_and_Ideas repo as a subtree into another repo, or update an existing subtree.
+Offer git remote/subtree operations only when the user explicitly wants to link repos that way.
 
-**Ask:** "Would you like to set up or update a git subtree link to this repo in another project?"
-
-If yes:
-- Ask: Add new subtree (one-time setup) or update an existing one?
-- Prompt for target repo path
-- Show the commands from Manifest Section 5c and wait for confirmation
+Do not run git topology changes by default.
 
 ---
 
-### Group F — (Optional) External Repos
+### Group F — External Repositories (Optional)
 
-**What:** Clone or otherwise pull in external repos referenced in `info/agents-skills-tools-collection.md` (beyond the subtree script above).
+Offer clone/pull/explore actions for external repos only when they are relevant to the user's stated goal.
 
-**Ask:** "Are there any external repos you'd like to clone or explore? (e.g., K-Dense-AI/claude-scientific-skills, anthropics/skills)"
+If proposing external repos from references, explain the purpose of each and ask before any network operation.
 
-Only proceed if the user explicitly confirms. Do not clone anything silently.
+---
+
+### Group G — Relevance Cleanup (Audit First, Remove Only with Approval)
+
+Evaluate whether currently installed packages/tools appear unrelated to the repo's present purpose.
+
+Audit signals may include:
+- Dependencies not referenced by source, scripts, tests, docs, or CI config
+- Tooling installed for workflows no longer present
+- Duplicate/overlapping tools where one is clearly unused
+
+For each candidate, present:
+1. Why it appears potentially unnecessary
+2. What could break if removed
+3. Exact uninstall/remove command(s)
+
+Then ask the user if they want to remove it. Do not remove anything without explicit confirmation.
+
+---
+
+### Decision Heuristics (Required)
+
+Before proposing Group A-G actions, classify each as:
+- `likely helpful now`
+- `optional / later`
+- `not recommended for this repo right now`
+
+Base this on concrete repo evidence plus user goals, not on template assumptions.
+
+---
+
+### Manifest Hygiene
+
+Maintain `.agent_files/repo-setup-manifest.md` as an agent-side planning file.
+
+At the top of that file, keep a short project-context summary (purpose, major tech/tooling, common tasks). On every run, verify it is still accurate by scanning the repo and confirming with the user.
+
+If stale, update the manifest before proposing setup actions.
 
 ---
 
@@ -158,6 +178,9 @@ Phase 1 complete:
 
 Phase 2 installs performed:
   [list each action taken, or "none" if user skipped all]
+
+Phase 2 removals performed:
+  [list each removal action taken, or "none"]
 ```
 
-If the user declined all install options, note that `repo-setup-manifest.md` is available for reference if they want to run anything later.
+If the user declined all setup options, note that `.agent_files/repo-setup-manifest.md` is available for future runs.

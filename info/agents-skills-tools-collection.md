@@ -10,6 +10,23 @@ This file is a curated collection of:
 
 This is intentionally a starter set and will grow over time.
 
+## Table of Contents
+
+- [Purpose](#purpose)
+- [Official Docs by Platform](#official-docs-by-platform)
+- [Agent Interaction Tools (Cross-IDE)](#agent-interaction-tools-cross-ide)
+- [Cool Agent/Skill Definitions (External)](#cool-agentskill-definitions-external)
+- [Interest-Mapped Scientific Spotlight (With Source + Trust/Safety)](#interest-mapped-scientific-spotlight-with-source--trustsafety)
+- [Scientific Output Formats Spotlight (PPTX, Excel, PDF, LaTeX)](#scientific-output-formats-spotlight-pptx-excel-pdf-latex)
+- [UI/GUI Interactivity and Design Tooling (Vetted)](#uigui-interactivity-and-design-tooling-vetted)
+- [Playwright Deep Dive (docs + microsoft/playwright)](#playwright-deep-dive-docs--microsoftplaywright)
+- [Chrome DevTools Deep Dive (ChromeDevTools/chrome-devtools-mcp)](#chrome-devtools-deep-dive-chromedevtoolschrome-devtools-mcp)
+- [Figma MCP Server Setup (figma/mcp-server-guide)](#figma-mcp-server-setup-figmamcp-server-guide)
+- [Google Stitch + design.md notes (confirmed sources)](#google-stitch--designmd-notes-confirmed-sources)
+- [Safety and Trust Checklist for New Skill/Tool Imports](#safety-and-trust-checklist-for-new-skilltool-imports)
+- [Local Agents and Skills in This Repository](#local-agents-and-skills-in-this-repository)
+- [Backlog: What to Add Next](#backlog-what-to-add-next)
+
 ---
 
 ## Official Docs by Platform
@@ -115,6 +132,36 @@ Notes:
 - Do not enumerate all skills yet
 - Use this section to track candidate skills for targeted import/adaptation
 
+### Anthropic official/verified skills only (policy)
+
+Primary source:
+- Official Anthropic skills repo: https://github.com/anthropics/skills
+
+Verification rule for this repository:
+- Treat a skill as verified only if it comes directly from `anthropics/skills` and includes a valid skill definition file in that repo layout.
+- Do not import community forks of Anthropic skills unless explicitly approved and separately vetted.
+
+Anthropic official starter picks (practical baseline):
+
+| Skill | Why include first | Source |
+|---|---|---|
+| docx | Document editing and tracked-change workflows | https://github.com/anthropics/skills |
+| pdf | PDF extraction/conversion workflows | https://github.com/anthropics/skills |
+| pptx | Slide authoring and transformation tasks | https://github.com/anthropics/skills |
+| xlsx | Spreadsheet operations and data handoff | https://github.com/anthropics/skills |
+| mcp-builder | Build and maintain MCP tool interfaces | https://github.com/anthropics/skills |
+| webapp-testing | Browser validation and regression checks | https://github.com/anthropics/skills |
+| skill-creator | Authoring and standardizing new skills | https://github.com/anthropics/skills |
+| claude-api | Integration patterns for Claude API workflows | https://github.com/anthropics/skills |
+
+Optional Anthropic official additions:
+- frontend-design
+- canvas-design
+- theme-factory
+
+Adoption note:
+- Start with the 8 baseline skills above, then add optional skills only when there is an immediate project need.
+
 ### Vetted candidate imports (high-reputation / safer defaults)
 
 Screening criteria used in this file:
@@ -200,6 +247,27 @@ Safety notes for audio/music domain:
 
 ---
 
+## Scientific Output Formats Spotlight (PPTX, Excel, PDF, LaTeX)
+
+This section tracks practical output-format skills for slide decks, spreadsheets, portable documents, and publication-ready LaTeX workflows.
+
+| Output format | Skill to spotlight | Source | Why include / safety note |
+|---|---|---|---|
+| PowerPoint authoring and editing | pptx | https://github.com/K-Dense-AI/claude-scientific-skills | Good for fast deck generation and revision; verify slide citations and chart provenance before presenting. |
+| Poster-style PowerPoint workflows | pptx-posters | https://github.com/K-Dense-AI/claude-scientific-skills | Useful when teams require PPTX posters over LaTeX; keep dimensions, print DPI, and accessibility checks explicit. |
+| Excel workbook generation and transformation | xlsx | https://github.com/K-Dense-AI/claude-scientific-skills | Strong for tabular export and formulas; protect source data integrity and lock derived-sheet assumptions. |
+| PDF report assembly and conversion | pdf | https://github.com/K-Dense-AI/claude-scientific-skills | Reliable for dissemination-ready documents; ensure references and embedded figures remain traceable to sources. |
+| LaTeX poster publishing | latex-posters | https://github.com/K-Dense-AI/claude-scientific-skills | Best fit for publication-grade scientific posters with template control and reproducible builds. |
+| Scientific slide narrative and visual structure | scientific-slides | https://github.com/K-Dense-AI/claude-scientific-skills | Helps turn manuscript content into coherent presentation flow; keep claim strength aligned with evidence level. |
+
+Suggested usage pattern:
+1. Draft narrative with `scientific-slides`.
+2. Export to `pptx` or `latex-posters` depending on venue requirements.
+3. Generate data tables in `xlsx` and freeze final figure/table inputs.
+4. Package dissemination copies as `pdf` for review and archival.
+
+---
+
 ## UI/GUI Interactivity and Design Tooling (Vetted)
 
 ### VS Code extensions (higher-trust picks)
@@ -226,7 +294,6 @@ Safety notes for audio/music domain:
 
 ## Playwright Deep Dive (docs + microsoft/playwright)
 
-Status:
 - Confirmed from official docs and repo README: Playwright supports four primary usage paths: Playwright Test, Playwright Library, Playwright MCP, and Playwright CLI.
 - Cross-browser model is still one API for Chromium, Firefox, and WebKit, with strong first-party tooling for VS Code and trace-based debugging.
 
@@ -244,11 +311,6 @@ When to choose each Playwright mode:
 | Mode | Install/start | Best for |
 |---|---|---|
 | Playwright Test | `npm init playwright@latest` | End-to-end test suites with retries, projects, reporters, and CI integration |
-| Playwright Library | `npm i playwright` | Browser automation scripts (screenshots, PDF, scripted flows) without the test runner |
-| Playwright MCP | `npx @playwright/mcp@latest` | Agent-driven browser control via MCP and accessibility-tree interactions |
-| Playwright CLI | `npm i -g @playwright/cli@latest` | Command-based browser automation optimized for coding-agent workflows |
-
-Install scope (important):
 - `npm init playwright@latest` is project/repo-scoped. Run it in each repository where you want Playwright Test setup (`package.json`, config, test folders, CI workflow scaffolding).
 - Browser binaries are machine-cached and often reused across repos, so repeated setup usually does not re-download everything.
 - Global installs are mainly for machine-level agent tooling (for example `@playwright/cli` global install). They do not replace repo-level Playwright Test dependency/version pinning.
@@ -567,6 +629,47 @@ Quickstart checklist (compact):
 
 ## Local Agents and Skills in This Repository
 
+### Pre-Installation Safety Gate (MANDATORY BEFORE ADDING ANY SKILL)
+
+Before installing **any skill** from **any source** (including K-Dense scientific skills), perform these checks:
+
+**Step 1: Source Verification**
+- [ ] Confirm the skill repo is from an **official or high-reputation open-source organization** (Anthropic, K-Dense, major university lab, established OSS project).
+- [ ] Check repo stars/forks/maintenance status on GitHub (active commits in past 6 months preferred).
+- [ ] Review author(s) and check for prior open-source contributions.
+
+**Step 2: License and Provenance**
+- [ ] Confirm skill has explicit LICENSE file (Apache-2.0, MIT, GPL/AGPL, BSD preferred).
+- [ ] Verify per-skill metadata states source repo and original author (look for `source`, `author` fields in SKILL.md or skill.yaml).
+- [ ] Check for "forks" or "community versions" of official skills—prefer original upstream, not variants unless explicitly vetted.
+
+**Step 3: Capability and Credential Scoping**
+- [ ] Read SKILL.md description: what tools/APIs does this skill actually call?
+- [ ] **Check if skill requests API keys or credentials** (e.g., "requires OPENROUTER_KEY", "requires AWS_ACCESS_KEY_ID").
+  - If yes: verify that keys are passed **only via environment variables or secure config**, not hardcoded or logged.
+  - If yes: ensure scope is minimal (read-only, specific API endpoint, not full account access).
+- [ ] For any skills that touch **system operations** (file I/O, package install, shell commands): verify they use safe patterns (no `eval()`, no `bash -c "$(curl ...)"`, no `subprocess.Popen(shell=True)`).
+
+**Step 4: Input Validation and Injection Risk**
+- [ ] Skim SKILL.md examples and resource files for hardcoded sensitive data (API keys, URLs, credentials).
+- [ ] If skill takes user input (e.g., search term, filename), check resources/examples to ensure inputs are sanitized in actual invocations.
+
+**Step 5: Output Safety and Data Handling**
+- [ ] For scientific/medical skills (e.g., pydicom, imaging-data-commons): confirm output is **anonymized or explicitly warns about PHI** if dealing with health data.
+- [ ] For web/crawling skills (e.g., literature-review, paper-lookup): verify data attribution and compliance with Terms of Service of data sources.
+
+**Step 6: Dependency Safety (if skill has package requirements)**
+- [ ] Check skill's declared dependencies (look for requirements.txt, pyproject.toml, etc.).
+- [ ] Do NOT install if dependency list includes:
+  - Unmaintained packages (last release > 2 years old).
+  - Known CVE packages (use [Snyk.io](https://snyk.io) or GitHub security advisories).
+  - Packages with unusual permissions (e.g., requests a system shell or full filesystem access).
+
+**Decision**
+- ✅ **SAFE to install** if all 6 steps pass.
+- ❌ **DO NOT install** if any step reveals concerns. If uncertain about a skill, ask a peer or escalate before installing.
+- ⚠️ **INSTALL with caution and human-in-the-loop** for any skill touching sensitive domains (medical, financial, authentication, system admin).
+
 ### Local guide/mirror
 - [agents_and_skills/README.md](agents_and_skills/README.md)
 
@@ -582,6 +685,22 @@ Quickstart checklist (compact):
 - [agents_and_skills/agents/docwriter.md](agents_and_skills/agents/docwriter.md)
 
 ### Skills in this repo
+Installed now: 53 skills (portable copy in `agents_and_skills/skills`, mirrored runtime copy in `.cursor/skills`).
+
+Quick use notes:
+- Start with **Core team orchestration skills** for this repo's role-based workflow.
+- Add **Anthropic official skills** when you need file-format, API, or design workflows.
+- Use **Scientific and domain skills** for research/data-heavy tasks.
+
+Quick jump:
+- [Core team orchestration skills (11)](#core-team-orchestration-skills-11)
+- [Anthropic official skills installed (11)](#anthropic-official-skills-installed-11)
+- [Scientific and domain skills installed (31)](#scientific-and-domain-skills-installed-31)
+
+#### Core team orchestration skills (11)
+<details>
+<summary>Show list</summary>
+
 - [agents_and_skills/skills/team-orchestration-delegation/SKILL.md](agents_and_skills/skills/team-orchestration-delegation/SKILL.md)
 - [agents_and_skills/skills/plans-folder-authoring/SKILL.md](agents_and_skills/skills/plans-folder-authoring/SKILL.md)
 - [agents_and_skills/skills/coder-implementation-standards/SKILL.md](agents_and_skills/skills/coder-implementation-standards/SKILL.md)
@@ -591,37 +710,72 @@ Quickstart checklist (compact):
 - [agents_and_skills/skills/ux-evaluation-web/SKILL.md](agents_and_skills/skills/ux-evaluation-web/SKILL.md)
 - [agents_and_skills/skills/documentation-review-write-handoff/SKILL.md](agents_and_skills/skills/documentation-review-write-handoff/SKILL.md)
 - [agents_and_skills/skills/python-venv-dependencies/SKILL.md](agents_and_skills/skills/python-venv-dependencies/SKILL.md)
+- [agents_and_skills/skills/radiation-transport-simulation/SKILL.md](agents_and_skills/skills/radiation-transport-simulation/SKILL.md)
+- [agents_and_skills/skills/hep-montecarlo-workflows/SKILL.md](agents_and_skills/skills/hep-montecarlo-workflows/SKILL.md)
 
----
+</details>
 
-## Tool availability and failure reporting convention
+#### Anthropic official skills installed (11)
+<details>
+<summary>Show list</summary>
 
-This convention applies to all subagents in this team and should be enforced at the agent and skill level.
+- [agents_and_skills/skills/claude-api/SKILL.md](agents_and_skills/skills/claude-api/SKILL.md)
+- [agents_and_skills/skills/docx/SKILL.md](agents_and_skills/skills/docx/SKILL.md)
+- [agents_and_skills/skills/mcp-builder/SKILL.md](agents_and_skills/skills/mcp-builder/SKILL.md)
+- [agents_and_skills/skills/pdf/SKILL.md](agents_and_skills/skills/pdf/SKILL.md)
+- [agents_and_skills/skills/pptx/SKILL.md](agents_and_skills/skills/pptx/SKILL.md)
+- [agents_and_skills/skills/skill-creator/SKILL.md](agents_and_skills/skills/skill-creator/SKILL.md)
+- [agents_and_skills/skills/webapp-testing/SKILL.md](agents_and_skills/skills/webapp-testing/SKILL.md)
+- [agents_and_skills/skills/xlsx/SKILL.md](agents_and_skills/skills/xlsx/SKILL.md)
+- [agents_and_skills/skills/frontend-design/SKILL.md](agents_and_skills/skills/frontend-design/SKILL.md)
+- [agents_and_skills/skills/canvas-design/SKILL.md](agents_and_skills/skills/canvas-design/SKILL.md)
+- [agents_and_skills/skills/theme-factory/SKILL.md](agents_and_skills/skills/theme-factory/SKILL.md)
 
-**Subagent rule** (applies to: coder, planner, tester, ux, reviewer, secops, docreviewer, docwriter):
-If any required tool—package, MCP server, skill, API endpoint, command, or program—is not available or fails at invocation, report the following before continuing:
-1. The exact tool name (for example: `semgrep`, `npx playwright test`, the Stitch MCP server, the Figma MCP server, a specific skill file)
-2. The error or unavailability reason (not installed, auth failure, server unreachable, missing skill file, etc.)
-3. The impact on the current task (which step is blocked, degraded, or must be skipped)
-4. A suggested remediation if obvious (install command, auth step, workaround)
+</details>
 
-Do not silently substitute a different tool or skip the step without reporting.
+#### Scientific and domain skills installed (31)
+<details>
+<summary>Show list</summary>
 
-**Orchestrator rule:**
-When any subagent reports a tool as unavailable or failed, relay the complete report to the **user** immediately—tool name, failure reason, affected task, and suggested fix if known. Do not absorb tool failures silently or attempt to route around them without surfacing the issue.
+- [agents_and_skills/skills/citation-management/SKILL.md](agents_and_skills/skills/citation-management/SKILL.md)
+- [agents_and_skills/skills/consciousness-council/SKILL.md](agents_and_skills/skills/consciousness-council/SKILL.md)
+- [agents_and_skills/skills/exploratory-data-analysis/SKILL.md](agents_and_skills/skills/exploratory-data-analysis/SKILL.md)
+- [agents_and_skills/skills/get-available-resources/SKILL.md](agents_and_skills/skills/get-available-resources/SKILL.md)
+- [agents_and_skills/skills/histolab/SKILL.md](agents_and_skills/skills/histolab/SKILL.md)
+- [agents_and_skills/skills/imaging-data-commons/SKILL.md](agents_and_skills/skills/imaging-data-commons/SKILL.md)
+- [agents_and_skills/skills/latex-posters/SKILL.md](agents_and_skills/skills/latex-posters/SKILL.md)
+- [agents_and_skills/skills/literature-review/SKILL.md](agents_and_skills/skills/literature-review/SKILL.md)
+- [agents_and_skills/skills/markdown-mermaid-writing/SKILL.md](agents_and_skills/skills/markdown-mermaid-writing/SKILL.md)
+- [agents_and_skills/skills/modal/SKILL.md](agents_and_skills/skills/modal/SKILL.md)
+- [agents_and_skills/skills/neurokit2/SKILL.md](agents_and_skills/skills/neurokit2/SKILL.md)
+- [agents_and_skills/skills/neuropixels-analysis/SKILL.md](agents_and_skills/skills/neuropixels-analysis/SKILL.md)
+- [agents_and_skills/skills/optimize-for-gpu/SKILL.md](agents_and_skills/skills/optimize-for-gpu/SKILL.md)
+- [agents_and_skills/skills/paper-lookup/SKILL.md](agents_and_skills/skills/paper-lookup/SKILL.md)
+- [agents_and_skills/skills/pathml/SKILL.md](agents_and_skills/skills/pathml/SKILL.md)
+- [agents_and_skills/skills/pptx-posters/SKILL.md](agents_and_skills/skills/pptx-posters/SKILL.md)
+- [agents_and_skills/skills/pydicom/SKILL.md](agents_and_skills/skills/pydicom/SKILL.md)
+- [agents_and_skills/skills/pytorch-lightning/SKILL.md](agents_and_skills/skills/pytorch-lightning/SKILL.md)
+- [agents_and_skills/skills/research-lookup/SKILL.md](agents_and_skills/skills/research-lookup/SKILL.md)
+- [agents_and_skills/skills/scanpy/SKILL.md](agents_and_skills/skills/scanpy/SKILL.md)
+- [agents_and_skills/skills/scholar-evaluation/SKILL.md](agents_and_skills/skills/scholar-evaluation/SKILL.md)
+- [agents_and_skills/skills/scientific-brainstorming/SKILL.md](agents_and_skills/skills/scientific-brainstorming/SKILL.md)
+- [agents_and_skills/skills/scientific-critical-thinking/SKILL.md](agents_and_skills/skills/scientific-critical-thinking/SKILL.md)
+- [agents_and_skills/skills/scientific-slides/SKILL.md](agents_and_skills/skills/scientific-slides/SKILL.md)
+- [agents_and_skills/skills/scientific-visualization/SKILL.md](agents_and_skills/skills/scientific-visualization/SKILL.md)
+- [agents_and_skills/skills/scientific-writing/SKILL.md](agents_and_skills/skills/scientific-writing/SKILL.md)
+- [agents_and_skills/skills/scikit-learn/SKILL.md](agents_and_skills/skills/scikit-learn/SKILL.md)
+- [agents_and_skills/skills/scvelo/SKILL.md](agents_and_skills/skills/scvelo/SKILL.md)
+- [agents_and_skills/skills/statistical-analysis/SKILL.md](agents_and_skills/skills/statistical-analysis/SKILL.md)
+- [agents_and_skills/skills/sympy/SKILL.md](agents_and_skills/skills/sympy/SKILL.md)
+- [agents_and_skills/skills/venue-templates/SKILL.md](agents_and_skills/skills/venue-templates/SKILL.md)
 
-Examples of reports that should be surfaced to the user:
-- "Playwright is not installed in this repo (`npx playwright test` fails with 'Command not found'). UX flow capture is blocked. Suggested fix: `npm init playwright@latest`."
-- "The Figma MCP server returned 403 (authentication expired). Design context extraction is unavailable. Suggested fix: reconnect via IDE MCP settings."
-- "The `stitch-design` skill is not present locally. Stitch-based UX generation is unavailable. Pull from `google-labs-code/stitch-skills` if needed."
-- "The `semgrep` command is not found. Security scanning is blocked. Suggested fix: `pip install semgrep` or `brew install semgrep`."
+</details>
 
 ---
 
 ## Backlog: What to Add Next
 
 - A short compatibility matrix focused only on agent definitions and skill directory formats
-- A curated "Top 10 importable skills" list with one-line rationale each
 - A section mapping equivalent concepts across tools:
   - Skill vs steering vs rules vs prompt file
   - Agent vs subagent vs mode

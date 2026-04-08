@@ -51,12 +51,12 @@ These files mirror **`.cursor/`** in this repository. Names match **slash** invo
 
 | File | Purpose |
 |------|---------|
-| `orchestrator.md` | Plans delegation, parallel vs sequential work, branches/worktrees, local vs cloud; **only** updates `VERSION` / `CHANGELOG.md` for release hygiene—not product code. |
-| `planner.md` | Writes **`plans/*.md`** only—phased `[ ]` checklists, questions for user, defers UI to `ux`. |
-| `coder.md` | Implements plans; modular code, lints, tests when planned; updates plan checkboxes. |
-| `ux.md` | UX/UI assessment; Playwright and screenshots; modern accessible patterns. |
-| `reviewer.md` | Spec vs implementation; lints; updates plan checklists when verified. |
-| `secops.md` | Security scans; timestamped reports under **`assessments/`**. |
+| `orchestrator.md` | Reads **`plans/orchestration-state.md`** first; delegates work; approves git branch/worktree proposals and **cloud task packets**; iteration guards; **only** updates `VERSION` / `CHANGELOG.md` for release hygiene—not product code. |
+| `planner.md` | Writes **`plans/*.md`** only—phased `[ ]` checklists, **task graph and gates**, questions for user, defers UI to `ux`. |
+| `coder.md` | Implements plans; modular code, lints, tests when planned; updates plan checkboxes; may propose branch or cloud batch via HANDOFF. |
+| `ux.md` | UX/UI assessment; Playwright and screenshots; modern accessible patterns; structured HANDOFF. |
+| `reviewer.md` | Spec vs implementation; lints; merge recommendation; updates plan checklists when verified. |
+| `secops.md` | Security scans; timestamped reports under **`assessments/`**; may request cloud for heavy scans. |
 | `tester.md` | Runs tests; maintains **`logs/test-ledger.md`**; does not edit app/tests to “fix” failures. |
 | `docreviewer.md` | Writes **`logs/docs_log-*.md`**; does not edit product source. |
 | `docwriter.md` | Edits documentation; suggests docreviewer after. |
@@ -65,15 +65,17 @@ These files mirror **`.cursor/`** in this repository. Names match **slash** invo
 
 | Skill folder | Used for |
 |--------------|----------|
-| `team-orchestration-delegation` | Orchestrator playbook: roster, parallelism, git, semver/changelog. |
-| `plans-folder-authoring` | Plan templates and checklist conventions under `plans/`. |
-| `coder-implementation-standards` | Implementation quality, handoff, plan checkbox updates. |
-| `reviewer-spec-alignment` | Review steps and plan sync. |
-| `security-scanning-secops` | semgrep, grype, secrets scanning, workflow review, assessment file format. |
-| `test-ledger-runner` | Tester ledger format and no-edit policy on failures. |
+| `team-orchestration-delegation` | **`plans/orchestration-state.md`**, HANDOFF schema, git propose/approve, cloud packets, autonomy stops, iteration guards; roster, parallelism, semver/changelog. |
+| `plans-folder-authoring` | Plan templates, task graph, gates, checklist conventions under `plans/`. |
+| `coder-implementation-standards` | Implementation quality, git/cloud proposals, structured handoff, plan checkbox updates. |
+| `reviewer-spec-alignment` | Review steps, merge recommendation, plan sync. |
+| `security-scanning-secops` | semgrep, grype, secrets scanning, workflow review, assessment file format, cloud handoff. |
+| `test-ledger-runner` | Tester ledger under **`logs/test-ledger.md`**; no-edit policy on failures; cloud requests. |
 | `documentation-review-write-handoff` | Docreviewer vs docwriter vs coder routing. |
 | `ux-evaluation-web` | Playwright-first UX evaluation. |
 | `python-venv-dependencies` | Venv detection and `python -m` usage before tooling. |
+| `radiation-transport-simulation` | Monte Carlo and deterministic radiation transport workflows (EM/particle transport), including setup, validation, and uncertainty reporting. |
+| `hep-montecarlo-workflows` | High-energy-physics event generation workflows for Pythia, MadGraph, and diagram-guided validation with reproducibility and uncertainty tracking. |
 
 ---
 

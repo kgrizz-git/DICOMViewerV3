@@ -1,7 +1,7 @@
 ---
 name: test-ledger-runner
 description: >-
-  Runs test suites, tracks results in tests/test-ledger.md, and verifies tests
+  Runs test suites, tracks results in logs/test-ledger.md, and verifies tests
   promised in plans exist—without editing product code or tests. Use for tester
   subagent or when reporting pytest/jest/npm test outcomes.
 ---
@@ -30,7 +30,7 @@ description: >-
 - Preferred labels: `stitch-setup`, `stitch-skill-missing`, `stitch-mcp`, `stitch-export`, `stitch-flow-regression`.
 - Include the source context in Notes when available (for example: skill used, DESIGN.md revision, or generated flow identifier).
 
-## Ledger file: `tests/test-ledger.md`
+## Ledger file: `logs/test-ledger.md`
 
 Append or update rows (keep **newest entries at top**):
 
@@ -46,6 +46,11 @@ If Playwright is involved, include project-local setup status and relevant runti
 
 - If a plan promises tests, verify they **exist** and **match** the described behavior; note gaps without implementing them.
 
+## Long / heavy suites and cloud
+
+- If a suite is too heavy for the current session (duration, resource limits), add **Cloud: REQUEST:** in your HANDOFF with objective, branch/commit, commands, acceptance, timeout hint—**orchestrator** decides and may fill a **Cloud Task Packet** in `plans/orchestration-state.md`.
+
 ## Reporting
 
 - Summarize: pass/fail counts, first failure with file:line, suspected category (logic, env, data), and recommended assignee (usually **coder**).
+- End with the structured **HANDOFF → orchestrator** block (see skill `team-orchestration-delegation`).
