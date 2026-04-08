@@ -15,16 +15,15 @@ Outputs:
 Requirements:
     - PySide6 for GUI components
     - DICOMParser for tag extraction
-
-Tree delegate and tag filter/group helpers: ``gui.metadata_table_model`` (Phase 5D).
 """
 
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                                 QTreeWidget, QTreeWidgetItem, QLineEdit,
                                 QPushButton, QCheckBox, QSplitter, QDialog,
-                                QMenu, QMessageBox)
+                                QStyledItemDelegate, QStyleOptionViewItem, QMenu,
+                                QMessageBox)
 from PySide6.QtCore import Qt, Signal, QTimer, QPoint
-from PySide6.QtGui import QFont, QAction, QColor
+from PySide6.QtGui import QFont, QPainter, QAction, QColor
 from typing import Optional, Dict, Any, List, Callable, Tuple
 import pydicom
 from pydicom.dataset import Dataset
@@ -33,15 +32,65 @@ from core.dicom_parser import DICOMParser
 from core.dicom_editor import DICOMEditor
 from core.tag_edit_history import TagEditHistoryManager
 from gui.dialogs.tag_edit_dialog import TagEditDialog
-from gui.metadata_table_model import (
-    MetadataItemDelegate,
-    filter_metadata_tags_by_search,
-    format_metadata_value_for_tree,
-    group_metadata_tags_sorted,
-)
 from utils.config_manager import ConfigManager
 from utils.dicom_utils import is_patient_tag
 from utils.undo_redo import UndoRedoManager, TagEditCommand
+
+
+class MetadataItemDelegate(QStyledItemDelegate):
+    """
+    Custom delegate for metadata panel tree widget.
+    
+    This delegate handles indentation rendering:
+    - Group items: Keep their indentation (20px from tree widget)
+    - Tag items: Remove indentation from first column only to make tags fully left-aligned
+    - Other columns (Name, VR, Value): Render normally without adjustment
+    """
+    
+    def paint(self, painter: QPainter, option: QStyleOptionViewItem, index) -> None:
+        """
+        Paint the item with column-specific adjustments.
+        
+        Only adjusts the first column (Tag) for tag items to remove indentation.
+        Other columns render normally to maintain proper alignment.
+        
+        Args:
+            painter: QPainter instance
+            option: Style option for the item
+            index: Model index of the item
+        """
+        # Get the tree widget from the option
+        tree_widget = option.widget
+        if tree_widget is None or not isinstance(tree_widget, QTreeWidget):
+            super().paint(painter, option, index)
+            return
+        
+        # Get the item from the tree widget using the index
+        item = tree_widget.itemFromIndex(index)
+        if item is None:
+            super().paint(painter, option, index)
+            return
+        
+        # Check if this is a tag item (has a parent that is a group item) and we're painting column 0
+        parent = item.parent()
+        is_tag_item = (parent is not None and parent.text(0).startswith("Group "))
+        is_first_column = (index.column() == 0)
+        
+        if is_tag_item and is_first_column:
+            # This is the Tag column of a tag item - remove indentation
+            base_indent = tree_widget.indentation()
+            # Create a modified option with adjusted rect for first column only
+            adjusted_option = QStyleOptionViewItem(option)
+            current_left = adjusted_option.rect.left()
+            if current_left >= base_indent:
+                # Shift the rect left by the indentation amount
+                adjusted_option.rect.setLeft(current_left - base_indent)
+                # Adjust width to maintain the same right edge
+                adjusted_option.rect.setWidth(adjusted_option.rect.width() + base_indent)
+            super().paint(painter, adjusted_option, index)
+        else:
+            # For group items or other columns - render normally
+            super().paint(painter, option, index)
 
 
 class MetadataPanel(QWidget):
@@ -361,10 +410,33 @@ class MetadataPanel(QWidget):
         
         if tags is None:
             return
-
+        
+        # Filter by search text if provided
         if search_text:
-            tags = filter_metadata_tags_by_search(tags, search_text)
-
+            search_lower = search_text.lower()
+            filtered_tags = {}
+            for tag_str, tag_data in tags.items():
+                # Search in tag number, name, VR, and value
+                tag_match = tag_str.lower() if tag_str else ""
+                name_match = tag_data.get("name", "").lower() if tag_data.get("name") else ""
+                vr_match = tag_data.get("VR", "").lower() if tag_data.get("VR") else ""
+                
+                # Format value for searching
+                value = tag_data.get("value", "")
+                if isinstance(value, list):
+                    value_str = ", ".join(str(v) for v in value)
+                else:
+                    value_str = str(value)
+                value_match = value_str.lower()
+                
+                # Check if search text matches any field
+                if (search_lower in tag_match or 
+                    search_lower in name_match or 
+                    search_lower in vr_match or 
+                    search_lower in value_match):
+                    filtered_tags[tag_str] = tag_data
+            tags = filtered_tags
+        
         # Update cached search text
         self._cached_search_text = search_text
         
@@ -372,9 +444,18 @@ class MetadataPanel(QWidget):
         self.tree_widget.setUpdatesEnabled(False)
         try:
             self.tree_widget.clear()
-
-            grouped = group_metadata_tags_sorted(tags)
-
+            
+            # Sort tags by tag number
+            sorted_tags = sorted(tags.items(), key=lambda x: x[0])
+            
+            # Group by tag group (first 4 hex digits)
+            groups: Dict[str, List[Tuple[str, Dict[str, Any]]]] = {}
+            for tag_str, tag_data in sorted_tags:
+                group = tag_str[:5]  # e.g., "(0008," for group 0008
+                if group not in groups:
+                    groups[group] = []
+                groups[group].append((tag_str, tag_data))
+            
             # Create tree items
             # Group headings will be top-level children of invisible root (indented)
             # Tags will be children of group items (enabling collapse) but rendered fully left-aligned via delegate
@@ -384,7 +465,7 @@ class MetadataPanel(QWidget):
             bold_font = QFont()
             bold_font.setBold(True)
             
-            for group, tag_list in grouped:
+            for group, tag_list in sorted(groups.items()):
                 # Group header as child of root (will be indented by tree widget indentation)
                 group_item = QTreeWidgetItem(root_item)
                 group_item.setText(0, f"Group {group}")
@@ -415,7 +496,17 @@ class MetadataPanel(QWidget):
                     # Set left alignment for tag column
                     tag_item.setTextAlignment(0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
                     
-                    value_str = format_metadata_value_for_tree(tag_data.get("value", ""))
+                    # Format value
+                    value = tag_data.get("value", "")
+                    if isinstance(value, list):
+                        value_str = ", ".join(str(v) for v in value)
+                    else:
+                        value_str = str(value)
+                    
+                    # Truncate long values
+                    if len(value_str) > 50:
+                        value_str = value_str[:47] + "..."
+                    
                     tag_item.setText(3, value_str)
                     
                     # Set background color for edited tags
