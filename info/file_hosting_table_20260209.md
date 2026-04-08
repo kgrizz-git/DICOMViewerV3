@@ -1,0 +1,25 @@
+# File Hosting Options Summary Table
+
+| Option | Cost | Ease of Use | Landing Page / Links | Custom Domain | Volume | Other Comments |
+|--------|------|-------------|---------------------|---------------|--------|----------------|
+| GitHub Releases | Free (public repositories) | High | Yes / Yes | No | Unlimited bandwidth, reasonable storage limits | Excellent for developer communities, automatic versioning. Pros: Integrated version control, strong community features. Cons: Free tier limited to public repositories. |
+| GitLab Releases | Free (public projects) | High | Yes / Yes | No | Unlimited bandwidth, storage limits apply | Strong DevOps integration. Pros: Free private projects, robust CI/CD. Cons: Smaller community than GitHub. |
+| SourceForge | Free | Medium | Yes / Yes | No | High bandwidth, generous storage | Established platform, good discoverability. Pros: Long history, dedicated to open source. Cons: Outdated interface, declining activity. |
+| Google Drive | Free (15GB), paid tiers available | Very High | No / Yes | No | 15GB free, scalable with paid plans | Not designed for software distribution, bandwidth limits. Pros: Familiar interface, easy collaboration. Cons: Not suitable for permanent or large-scale distribution. |
+| Dropbox | Free (2GB), paid tiers available | Very High | No / Yes | No | 2GB free, scalable | Bandwidth limits on free tier. Pros: Team collaboration tools, reliable. Cons: Limited free storage, not optimized for software releases. |
+| WeTransfer | Free (2GB, 7 days), paid options | Very High | No / Yes | No | 2GB free, up to 200GB paid | Links expire, not for permanent hosting. Pros: No account required, supports large files. Cons: Temporary only, no permanent links. |
+| Netlify | Free tier, $19/month for pro | High | Yes / Yes | Yes | 100GB bandwidth free, unlimited paid | CDN included, automatic HTTPS. Pros: Excellent for static sites, built-in forms. Cons: Limited to static content, free tier has bandwidth cap. |
+| Vercel | Free tier, $20/month for pro | High | Yes / Yes | Yes | 100GB bandwidth free, unlimited paid | Excellent performance analytics. Pros: Great for Next.js, fast deployments. Cons: Can be expensive for high traffic. |
+| DigitalOcean Spaces | $5/month for 250GB | Medium | No / Yes | Yes | Scalable storage and bandwidth | CDN available for additional cost. Pros: Affordable, S3-compatible. Cons: Requires some AWS knowledge. |
+| Backblaze B2 | $0.005/GB/month storage, $0.01/GB download | Medium | No / Yes | Yes | Highly scalable | Very affordable for high volumes. Pros: Extremely cheap for large files. Cons: Slower for small files. |
+| AWS S3 | ~$23/month for 1TB storage + bandwidth | Medium | No / Yes | Yes | Virtually unlimited | Complex pricing, requires configuration. Pros: Highly scalable, reliable. Cons: Steep learning curve, variable costs. |
+| Bunny.net | $0.01/GB | High | No / Yes | Yes | Scalable | Fast CDN, competitive pricing. Pros: Low cost per GB, global distribution. Cons: Newer platform, less established. |
+| Supabase Storage | Free (500MB), paid tiers | High | No / Yes | Yes | Scalable, generous free tier | Real-time features, PostgreSQL integration. Pros: Integrated with Supabase ecosystem. Cons: Limited free tier for large projects. |
+| Railway | $5/month for static files | High | Yes / Yes | Yes | Scalable, 512MB free | Built-in CI/CD, easy scaling. Pros: Git-based deployments, affordable. Cons: Focused on static sites. |
+| Render | Free tier, $7/month for pro | High | Yes / Yes | Yes | 100GB bandwidth free, scalable | Automatic SSL, global CDN. Pros: Generous free tier, easy setup. Cons: Limited to static/web apps. |
+| AWS CloudFront + S3 | Variable, typically $100+/month for enterprise | Low | Yes / Yes | Yes | Enterprise scale | Excellent performance, complex setup. Pros: Global CDN, highly reliable. Cons: Complex setup, high costs for enterprise. |
+| Cloudflare Workers + R2 | Variable, competitive pricing | Medium | Yes / Yes | Yes | Enterprise scale | No egress fees, excellent performance. Pros: Edge computing, competitive pricing. Cons: Tied to Cloudflare ecosystem. |
+| Azure Blob Storage | Variable, enterprise pricing tiers | Medium | Yes / Yes | Yes | Enterprise scale | Strong enterprise features. Pros: Integrated with Microsoft tools. Cons: Azure learning curve. |
+| Google Cloud Storage | Variable, enterprise pricing | Medium | Yes / Yes | Yes | Enterprise scale | Excellent network performance. Pros: Great networking, AI integrations. Cons: Pricing can be opaque. |
+| Fastly | Enterprise pricing ($500+/month) | Low | Yes / Yes | Yes | Enterprise scale | Advanced caching and security features. Pros: High-performance caching, security. Cons: High cost, steep learning curve. |
+| DIY Server | VPS ~$5/month (e.g., DigitalOcean Droplet) | Low | Yes / Yes | Yes | Depends on VPS plan (e.g., 1TB SSD, unlimited bandwidth) | Use Nginx/Apache for hosting, Certbot for HTTPS. Pros: Unlimited customization, data sovereignty. Cons: Maintenance overhead, security responsibilities. |

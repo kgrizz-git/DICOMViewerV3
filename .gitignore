@@ -1,0 +1,48 @@
+# Operating System Files
+.DS_Store
+Thumbs.db
+
+# Editor Files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary Files
+*.tmp
+*.temp
+*.log
+
+# Backup Files
+*.bak
+*.backup
+
+# Node.js (if you add any JS tools)
+node_modules/
+npm-debug.log*
+
+# Python (if you add any Python scripts)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Notes-specific ignores
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Playwright
+/test-results/
+/blob-report/
+
+# Agent-local planning files
+.agent_files/
