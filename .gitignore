@@ -213,6 +213,9 @@ __marimo__/
 config.ini
 settings.json
 
+# Local subtree / linked notes (not part of application source)
+.subtree/
+
 # DICOM data (if sensitive)
 # Uncomment if you don't want to track sample DICOM files
 # data/*.dcm

@@ -4,6 +4,9 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 
 ## [Unreleased]
 
+### Changed
+- **Repository hygiene**: `.subtree/` (including `ideas/`, `list-ideas.md`, and merged reference content) is **removed from Git history** and **ignored** going forward—keep that tree local or manage it via your own remote/subtree workflow without committing it to this repo.
+
 ### Added
 - **Tag export — text (``.txt``)**: **Export DICOM Tags** save dialog includes **Text Files (*.txt)**. Output is UTF-8 **tab-separated** with the same columns as CSV (Instance, Tag Number, Name, Value); multiple studies still produce one file per study, matching CSV naming. Implemented in **`write_txt_files`** (`core/tag_export_writer.py`) sharing row logic with **`write_csv_files`** via **`_write_tag_export_sheet_rows`**.
 
