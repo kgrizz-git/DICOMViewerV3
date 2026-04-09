@@ -55,72 +55,32 @@ git add -f DICOMViewerV3.spec
 
 See the "Version Control Considerations" section below for more details.
 
-### Spec File Contents
+### Spec file layout (authoritative source: `DICOMViewerV3.spec`)
 
-The included spec file contains:
+Do not copy stale excerpts into docs—the real file at the repo root is the source of truth. At a high level it defines:
+
+- **`IS_DARWIN` / `USE_UPX`:** On macOS, **`upx=False`** on `EXE` and `COLLECT` (`USE_UPX = not IS_DARWIN`) so Mach-O layouts stay compatible with **codesign** and **notarization**; Windows/Linux keep UPX when the tool is installed.
+- **`Analysis`:** `main.py` via absolute paths, `pathex` including `src/`, `datas` for `resources/`, a long explicit **`hiddenimports`** list (GUI/core/utils, pydicom, codecs, **`matplotlib.backends.backend_qtagg`**, PySide6, etc.), and **`excludes`** for `*.tests` (including **`pylinac.tests`** / common stack test packages when present), **`PIL.ImageTk` / `PIL._tkinter_finder`** (Tk unused; **`PIL.Image`** stays for I/O), plus shared lists in **`scripts/pyinstaller_exclude_lists.py`** (matplotlib backend/writer trims including non-`qtagg` Qt/cairo paths; **darwin-only** `PySide6` submodule trims such as WebEngine, Multimedia, **QtPdf**, **QtVirtualKeyboard**, 3D/Quick). **`tests/test_pyinstaller_exclude_audit.py`** fails CI if `src/` or `tests/` imports any excluded matplotlib backend, trimmed PySide6 module, or excluded PIL Tk helper (AST scan; does not inspect third-party wheels).
+- **Distribution shape:** `EXE` with **`exclude_binaries=True`**, then **`COLLECT`**, then **`BUNDLE`** for **`DICOMViewerV3.app`** on macOS.
+
+Truncated excerpt (structure only—see the spec for the full lists):
 
 ```python
-# -*- mode: python ; coding: utf-8 -*-
-
-block_cipher = None
+IS_DARWIN = sys.platform == "darwin"
+USE_UPX = not IS_DARWIN
 
 a = Analysis(
-    ['src/main.py'],
-    pathex=[],
-    binaries=[],
-    datas=[
-        ('resources', 'resources'),  # Include resources directory
-    ],
-    hiddenimports=[
-        'pydicom',
-        'pydicom.encoders',
-        'pydicom.decoders',
-        'numpy',
-        'PIL',
-        'PIL._tkinter_finder',
-        'matplotlib',
-        'openpyxl',
-        'pylibjpeg',
-        'pyjpegls',
-        'pylibjpeg.libjpeg',
-        'PySide6.QtCore',
-        'PySide6.QtGui',
-        'PySide6.QtWidgets',
-    ],
-    hookspath=[],
-    hooksconfig={},
-    runtime_hooks=[],
-    excludes=[],
-    win_no_prefer_redirects=False,
-    win_private_assemblies=False,
-    cipher=block_cipher,
-    noarchive=False,
+    [main_py_abs],
+    pathex=[src_dir_abs],
+    datas=[("resources", "resources")],
+    hiddenimports=[...],  # gui/core/pydicom/PIL (no Tk helpers)/matplotlib qtagg/pylibjpeg/PySide6/...
+    excludes=[...],      # *.tests; PIL Tk helpers; non-Qt matplotlib backends; + darwin-only PySide6 trims
+    ...
 )
 
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
-
-exe = EXE(
-    pyz,
-    a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    [],
-    name='DICOMViewerV3',
-    debug=False,
-    bootloader_ignore_signals=False,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
-    console=False,  # Set to True for debugging, False for windowed app
-    disable_windowed_traceback=False,
-    argv_emulation=False,
-    target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None,
-    icon=None,  # Add path to .ico/.icns file if you have one
-)
+exe = EXE(..., exclude_binaries=True, upx=USE_UPX, console=False, ...)
+coll = COLLECT(exe, a.binaries, ..., upx=USE_UPX, ...)
+app = BUNDLE(coll, name="DICOMViewerV3.app", ...)
 ```
 
 ### Spec File Options Explained
@@ -128,12 +88,21 @@ exe = EXE(
 - **`datas`**: Includes non-Python files (like images, data files) that need to be bundled
 - **`hiddenimports`**: Explicitly includes modules that PyInstaller might not automatically detect
 - **`console=False`**: Creates a windowed application (no console window). Set to `True` for debugging
-- **`upx=True`**: Enables UPX compression to reduce executable size (requires UPX to be installed)
+- **`upx`**: In `DICOMViewerV3.spec`, **`EXE` and `COLLECT` use `upx=USE_UPX`** where **`USE_UPX = not IS_DARWIN`**: UPX runs on Windows/Linux when the tool is installed; on **macOS UPX is off** because packed Mach-O often breaks or complicates **codesign**, **stapling**, and **notarization** (see **`dev-docs/info/CODE_SIGNING_AND_NOTARIZATION.md`**).
 - **`icon`**: Path to an icon file (`.ico` for Windows, `.icns` for macOS)
 
 ## Step 3: Build Executables
 
 **Note:** Make sure you've installed the build requirements (Step 1) and that the `DICOMViewerV3.spec` file exists in the project root before proceeding.
+
+**CI vs local checks:** The **Build Executables** workflow runs a **full** `pyinstaller DICOMViewerV3.spec --clean --noconfirm` on **Windows, macOS, and Ubuntu** on every run. Locally you can sanity-check the toolchain without a full freeze:
+
+```bash
+pyinstaller --version
+python -m pytest tests/test_pyinstaller_exclude_audit.py -v
+```
+
+A full local `pyinstaller DICOMViewerV3.spec --clean --noconfirm` remains the definitive check that the spec and hooks resolve on your machine.
 
 ### For macOS
 
@@ -143,6 +112,31 @@ exe = EXE(
    pyinstaller DICOMViewerV3.spec
    ```
 3. The executable will be created at `dist/DICOMViewerV3.app`
+
+#### Measuring macOS bundle size
+
+After a local or CI build, measure the `.app` and drill into the bundle layout (same pattern as the **Build Executables** workflow **Log distribution sizes** step on **macos-latest**).
+
+**One-shot script (macOS/Linux/WSL with `bash`):** from the repo root, after a successful `pyinstaller DICOMViewerV3.spec`:
+
+```bash
+bash scripts/report-macos-bundle-size.sh
+# Optional: bash scripts/report-macos-bundle-size.sh path/to/DICOMViewerV3.app
+```
+
+**Copy-paste commands:**
+
+```bash
+du -sh dist/DICOMViewerV3.app
+du -sh dist/DICOMViewerV3.app/Contents/* | sort -h
+du -sh dist/DICOMViewerV3.app/Contents/MacOS/* 2>/dev/null | sort -h
+du -sh dist/DICOMViewerV3.app/Contents/Frameworks/* 2>/dev/null | sort -h
+# Largest children first (quick regression hints; CI logs the same idea for Frameworks/Resources)
+du -sh dist/DICOMViewerV3.app/Contents/Frameworks/* 2>/dev/null | sort -hr | head -10
+du -sh dist/DICOMViewerV3.app/Contents/Resources/* 2>/dev/null | sort -hr | head -10
+```
+
+Use these to spot regressions (Qt frameworks, `Resources`, etc.) without uploading extra artifacts.
 
 #### Creating a DMG (Optional)
 
@@ -165,7 +159,7 @@ To create a distributable DMG file for macOS:
    ```bash
    pyinstaller DICOMViewerV3.spec
    ```
-3. The executable will be created at `dist/DICOMViewerV3.exe`
+3. On Windows, PyInstaller outputs a **folder** `dist/DICOMViewerV3/` containing `DICOMViewerV3.exe` and dependencies (see **Verify executable** in `.github/workflows/build.yml`).
 
 #### Adding an Icon (Optional)
 
@@ -271,7 +265,9 @@ Consider creating distribution packages:
 
 ## Step 5: One-File vs One-Folder Distribution
 
-The spec file above creates a **one-folder** distribution (executable + supporting files in a folder). For a **single-file executable**, modify the spec file:
+The project’s **`DICOMViewerV3.spec`** already uses a **one-folder** layout: `EXE` with **`exclude_binaries=True`**, then **`COLLECT`**, then **`BUNDLE`** on macOS. Distribute the whole `dist/DICOMViewerV3/` directory (or the `.app` on macOS).
+
+For a **single-file** executable you would change the spec (different `EXE` / no `COLLECT` pattern than this repo ships). The structural idea for a one-folder build matches:
 
 ```python
 exe = EXE(
@@ -283,7 +279,7 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=True,  # DICOMViewerV3.spec uses upx=USE_UPX (UPX off on macOS)
     console=False,
 )
 
@@ -293,7 +289,7 @@ coll = COLLECT(
     a.zipfiles,
     a.datas,
     strip=False,
-    upx=True,
+    upx=True,  # DICOMViewerV3.spec uses upx=USE_UPX
     upx_exclude=[],
     name='DICOMViewerV3',
 )
@@ -381,8 +377,9 @@ A GitHub Actions workflow file is already included in the project at `.github/wo
 
 1. **Trigger automatically** when you push a version tag (e.g., `v1.0.0`)
 2. **Build on all platforms** simultaneously (Windows, macOS, Linux)
-3. **Upload artifacts** that are available for 90 days (see **`dev-docs/info/GITHUB_ACTIONS_STORAGE_AND_BILLING.md`** for how artifact size and **retention** count toward GitHub’s **GB-hour** storage allowance on small plans)
-4. **Create releases** with executables attached when you push tags
+3. **Upload artifacts** that are available for 90 days (see **`dev-docs/info/GITHUB_ACTIONS_STORAGE_AND_BILLING.md`** for how artifact size and **retention** count toward GitHub’s **GB-hour** storage allowance on small plans). Artifacts include **`dist/`** outputs (and the Linux **AppImage** when built); they **do not** include PyInstaller’s intermediate **`build/`** folder by default, to reduce **GB-hour** storage. For debugging analysis failures, run the workflow manually and enable **Upload PyInstaller build folder** (optional boolean input); that uploads `build/` as a separate artifact with shorter retention.
+4. **Log bundle sizes** after each build (`du -sh` on `dist/` outputs; on macOS, drill-down under `.app/Contents/` plus **top 10 largest** entries under `Frameworks/` and `Resources/` via `sort -hr | head -10`) so regressions show up in the Actions log without uploading extra bytes.
+5. **Create releases** with executables attached when you push tags
 
 ### How to Use
 
@@ -884,6 +881,7 @@ The following build-related files and directories should be in `.gitignore`:
 - **Startup time**: One-file executables may have slower startup times as they extract to a temporary directory
 - **Spec file**: The `DICOMViewerV3.spec` file should be committed to version control for reproducible builds
 - **GitHub Actions**: A workflow file (`.github/workflows/build.yml`) is included for automated cross-platform builds
+- **macOS signing / notarization**: The spec sets **`upx=USE_UPX`** with **`USE_UPX = not IS_DARWIN`** (UPX off on macOS) for release builds that go through Apple’s notary tool; re-enable UPX on macOS only after you have verified signing and notarization end-to-end.
 
 ## Bundled vs online documentation (executables)
 

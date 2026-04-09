@@ -197,28 +197,11 @@ jobs:
           elif [ "${{ matrix.os }}" = "macos-latest" ]; then
             du -sh dist/DICOMViewerV3.app 2>/dev/null || true
             du -sh dist/DICOMViewerV3* 2>/dev/null || true
-            echo "=== macOS .app bundle drill-down (best-effort; paths may vary) ==="
-            if [ -d "dist/DICOMViewerV3.app/Contents" ]; then
-              du -sh dist/DICOMViewerV3.app/Contents/* 2>/dev/null | sort -h || true
-            fi
-            if [ -d "dist/DICOMViewerV3.app/Contents/MacOS" ]; then
-              du -sh dist/DICOMViewerV3.app/Contents/MacOS/* 2>/dev/null | sort -h || true
-            fi
-            if [ -d "dist/DICOMViewerV3.app/Contents/Frameworks" ]; then
-              du -sh dist/DICOMViewerV3.app/Contents/Frameworks/* 2>/dev/null | sort -h || true
-              echo "=== macOS: top 10 largest under Frameworks/ (descending) ==="
-              du -sh dist/DICOMViewerV3.app/Contents/Frameworks/* 2>/dev/null | sort -hr | head -10 || true
-            fi
-            if [ -d "dist/DICOMViewerV3.app/Contents/Resources" ]; then
-              echo "=== macOS: top 10 largest under Resources/ (descending) ==="
-              du -sh dist/DICOMViewerV3.app/Contents/Resources/* 2>/dev/null | sort -hr | head -10 || true
-            fi
           else
             du -sh dist/DICOMViewerV3 2>/dev/null || true
             du -sh dist/DICOMViewerV3/DICOMViewerV3 2>/dev/null || true
           fi
 
-      # Default artifacts: dist/ + AppImage only (not PyInstaller build/ — saves GB-hours; see AGENTS.md).
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
         with:

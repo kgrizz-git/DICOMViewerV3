@@ -9,7 +9,7 @@
 #
 # The executable will be created in the dist/ directory.
 #
-# For detailed build instructions, see dev-docs/info/BUILDING_EXECUTABLES.md
+# For detailed build instructions, see docs/BUILDING_EXECUTABLES.md
 
 import os
 import sys
@@ -26,12 +26,6 @@ USE_UPX = not IS_DARWIN
 # Use SPECPATH (PyInstaller provides this) or fall back to current working directory
 spec_root = Path(SPECPATH if 'SPECPATH' in dir() else os.getcwd())
 sys.path.insert(0, str(spec_root))
-sys.path.insert(0, str(spec_root / "scripts"))
-from pyinstaller_exclude_lists import (
-    MACOS_PYSIDE6_MODULE_EXCLUDES,
-    MATPLOTLIB_BACKEND_AND_WRITER_EXCLUDES,
-    PIL_TK_RELATED_EXCLUDES,
-)
 from src.version import __version__ as _app_version
 
 # Construct absolute path to main.py
@@ -139,9 +133,9 @@ a = Analysis(
         # Image processing
         'numpy',
         'PIL',
-        # Tk/PIL.ImageTk not used (Qt UI + matplotlib qtagg only); PIL.Image stays for I/O;
-        # PIL.ImageTk / PIL._tkinter_finder are in excludes (see pyinstaller_exclude_lists).
+        'PIL._tkinter_finder',
         'PIL.Image',
+        'PIL.ImageTk',
         # Plotting
         'matplotlib',
         # Histogram uses Qt6 canvas (see src/tools/histogram_widget.py); align with runtime, not qt5agg.
@@ -166,8 +160,6 @@ a = Analysis(
     hooksconfig={},
     runtime_hooks=[],
     excludes=(
-        # Matplotlib + macOS PySide6 exclude names live in scripts/pyinstaller_exclude_lists.py
-        # (single source; audited by tests/test_pyinstaller_exclude_audit.py).
         [
             # Test packages (never needed at runtime; verified not imported from src/).
             'matplotlib.tests',
@@ -177,16 +169,53 @@ a = Analysis(
             'scipy.tests',
             'skimage.tests',
             'openpyxl.tests',
-            # pylinac / imaging stack (direct or transitive); tests never needed frozen
-            'pylinac.tests',
-            'imageio.tests',
-            'pandas.tests',
+            # Unused matplotlib GUI backends — app uses backend_qtagg only (grep src/).
+            'matplotlib.backends.backend_tkagg',
+            'matplotlib.backends.backend_wxagg',
+            'matplotlib.backends.backend_gtk3agg',
+            'matplotlib.backends.backend_gtk4agg',
+            'matplotlib.backends.backend_webagg',
+            'matplotlib.backends.backend_webagg_core',
+            'matplotlib.backends.backend_nbagg',
+            'matplotlib.backends.backend_qt5agg',
+            'matplotlib.backends.backend_qt4agg',
+            # No savefig to vector/raster file writers in app code paths; qtagg + Agg remain.
+            'matplotlib.backends.backend_pdf',
+            'matplotlib.backends.backend_svg',
+            'matplotlib.backends.backend_ps',
+            'matplotlib.backends.backend_pgf',
+            'matplotlib.backends.backend_cairo',
         ]
-        + list(PIL_TK_RELATED_EXCLUDES)
-        + list(MATPLOTLIB_BACKEND_AND_WRITER_EXCLUDES)
-        # Darwin-only PySide6 trims: full tuple in scripts/pyinstaller_exclude_lists.py (grep src/tests
-        # before adding modules; third-party wheels may still pull Qt — smoke the .app after upgrades).
-        + (list(MACOS_PYSIDE6_MODULE_EXCLUDES) if IS_DARWIN else [])
+        + (
+            [
+                # macOS only: large Qt subsystems not imported anywhere in src/ (grep PySide6 / Qt*).
+                'PySide6.QtWebEngineCore',
+                'PySide6.QtWebEngineWidgets',
+                'PySide6.QtWebEngineQuick',
+                'PySide6.QtMultimedia',
+                'PySide6.QtMultimediaWidgets',
+                'PySide6.QtBluetooth',
+                'PySide6.QtNfc',
+                'PySide6.QtPositioning',
+                'PySide6.QtLocation',
+                'PySide6.QtSql',
+                'PySide6.QtSerialPort',
+                'PySide6.QtSerialBus',
+                'PySide6.QtCharts',
+                'PySide6.QtDataVisualization',
+                'PySide6.Qt3DCore',
+                'PySide6.Qt3DRender',
+                'PySide6.Qt3DInput',
+                'PySide6.Qt3DLogic',
+                'PySide6.Qt3DAnimation',
+                'PySide6.Qt3DExtras',
+                'PySide6.QtQuick',
+                'PySide6.QtQml',
+                'PySide6.QtQuickWidgets',
+            ]
+            if IS_DARWIN
+            else []
+        )
     ),
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
