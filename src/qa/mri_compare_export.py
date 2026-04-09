@@ -45,6 +45,7 @@ def build_mri_compare_json_document(
 
     runs_data: List[Dict[str, Any]] = []
     for cfg, result in zip(batch.run_configs, batch.run_results):
+        prof = result.pylinac_analysis_profile or {}
         runs_data.append(
             {
                 "run_label": cfg.label,
@@ -59,6 +60,7 @@ def build_mri_compare_json_document(
                     "pylinac_version": result.pylinac_version or "",
                     "analysis_type": result.analysis_type,
                     "status": "success" if result.success else "failed",
+                    "vanilla_pylinac": bool(prof.get("vanilla_pylinac", False)),
                 },
                 "series": {
                     "study_uid": result.study_uid,

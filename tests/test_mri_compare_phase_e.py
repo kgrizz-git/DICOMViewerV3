@@ -130,9 +130,24 @@ def test_single_run_qa_json_schema_1_1_key_set() -> None:
         "artifacts",
         "raw_pylinac",
     }
+    expected_run_keys = {
+        "timestamp_utc",
+        "app_version",
+        "pylinac_version",
+        "analysis_type",
+        "status",
+        "vanilla_pylinac",
+    }
     sample = {
         "schema_version": "1.1",
-        "run": {},
+        "run": {
+            "timestamp_utc": "",
+            "app_version": "",
+            "pylinac_version": "",
+            "analysis_type": "",
+            "status": "",
+            "vanilla_pylinac": False,
+        },
         "series": {},
         "inputs": {},
         "pylinac_analysis_profile": {},
@@ -144,6 +159,7 @@ def test_single_run_qa_json_schema_1_1_key_set() -> None:
     }
     assert set(sample.keys()) == expected_top
     assert sample["schema_version"] == "1.1"
+    assert set(sample["run"].keys()) == expected_run_keys
 
 
 def test_build_mri_pdf_notes_contains_interpretation_keywords() -> None:
@@ -172,7 +188,10 @@ def test_build_mri_compare_json_document_schema_and_runs_length() -> None:
                 modality="MR",
                 num_images=11,
                 metrics={"low_contrast_score": 10},
-                pylinac_analysis_profile={"vanilla_equivalent": False},
+                pylinac_analysis_profile={
+                    "vanilla_equivalent": False,
+                    "vanilla_pylinac": True,
+                },
             ),
             QAResult(
                 success=False,
@@ -195,3 +214,5 @@ def test_build_mri_compare_json_document_schema_and_runs_length() -> None:
     assert len(doc["runs"]) == 2
     assert doc["runs"][0]["run_label"] == "A"
     assert doc["runs"][0]["pylinac_analysis_profile"]["vanilla_equivalent"] is False
+    assert doc["runs"][0]["run"]["vanilla_pylinac"] is True
+    assert doc["runs"][1]["run"]["vanilla_pylinac"] is False

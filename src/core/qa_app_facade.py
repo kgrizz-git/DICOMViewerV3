@@ -108,6 +108,12 @@ class QAAppFacade:
             error_text = "\nErrors:\n- " + "\n- ".join(result.errors[:5])
         pdf_text = f"\nPDF: {result.pdf_report_path}" if result.pdf_report_path else "\nPDF: not generated"
         profile = result.pylinac_analysis_profile or {}
+        vanilla_note = ""
+        if profile:
+            vanilla_note = (
+                "\nVanilla pylinac (stock classes): "
+                + ("yes" if profile.get("vanilla_pylinac") else "no")
+            )
         nonvanilla = ""
         if not profile.get("vanilla_equivalent", True):
             nonvanilla = (
@@ -119,6 +125,7 @@ class QAAppFacade:
             f"Series UID: {result.series_uid or '(folder run)'}\n"
             f"Input images: {result.num_images}\n"
             f"Pylinac: {result.pylinac_version or 'unknown'}"
+            f"{vanilla_note}"
             f"{pdf_text}"
             f"{nonvanilla}"
             f"{warning_text}"
@@ -132,6 +139,34 @@ class QAAppFacade:
         box.activateWindow()
         box.raise_()
         box.exec()
+
+    def offer_open_single_run_pdf(self, result: QAResult) -> None:
+        """
+        After a successful single CT/MRI pylinac run, ask whether to open the PDF.
+
+        Compare mode exposes **Open PDF** on the results window; single-run
+        flow uses this modal prompt so behavior is consistent when a PDF path
+        was chosen before analysis.
+        """
+        if not result.success:
+            return
+        path = (result.pdf_report_path or "").strip()
+        if not path:
+            return
+        app = self._app
+        box = QMessageBox(app.main_window)
+        box.setWindowTitle("Open PDF report")
+        box.setText("Open the pylinac PDF report now?")
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setStandardButtons(
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        box.setDefaultButton(QMessageBox.StandardButton.Yes)
+        box.setWindowFlags(box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+        box.activateWindow()
+        box.raise_()
+        if box.exec() == int(QMessageBox.StandardButton.Yes):
+            self.open_path_in_system_viewer(path)
 
     def export_qa_json(
         self,
@@ -151,6 +186,9 @@ class QAAppFacade:
         if not json_path:
             return
 
+        profile = result.pylinac_analysis_profile or {}
+        vanilla_run = bool(profile.get("vanilla_pylinac", False))
+
         payload: Dict[str, Any] = {
             "schema_version": "1.1",
             "run": {
@@ -159,6 +197,7 @@ class QAAppFacade:
                 "pylinac_version": result.pylinac_version or "",
                 "analysis_type": result.analysis_type,
                 "status": "success" if result.success else "failed",
+                "vanilla_pylinac": vanilla_run,
             },
             "series": {
                 "study_uid": result.study_uid,
@@ -289,6 +328,7 @@ class QAAppFacade:
                 return
             progress.close()
             self.show_qa_result_dialog(result_dialog_title, result)
+            self.offer_open_single_run_pdf(result)
             self.export_qa_json(result, json_default_stem, json_inputs)
             if (
                 allow_extent_retry
