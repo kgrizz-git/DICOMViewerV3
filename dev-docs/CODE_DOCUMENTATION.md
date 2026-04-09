@@ -25,7 +25,8 @@ This file lists documentation that explains how the application works or serves 
 | [MULTI_FRAME_DICOM_RESEARCH.md](MULTI_FRAME_DICOM_RESEARCH.md) | Multi-frame DICOM handling and research. |
 | [MULTI_FRAME_FIX_SUMMARY.md](MULTI_FRAME_FIX_SUMMARY.md) | Summary of multi-frame fixes. |
 | [PYLINAC_INTEGRATION_OVERVIEW.md](PYLINAC_INTEGRATION_OVERVIEW.md) | Pylinac integration overview. |
-| [BUILDING_EXECUTABLES.md](BUILDING_EXECUTABLES.md) | Building executables (e.g. PyInstaller). |
+| [BUILDING_EXECUTABLES.md](info/BUILDING_EXECUTABLES.md) | Building executables (e.g. PyInstaller). |
+| [PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md](info/PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md) | PyInstaller bundle size estimates, per-OS measurement, baseline table. |
 | [APPIMAGE_CREATION_GUIDE.md](APPIMAGE_CREATION_GUIDE.md) | Creating AppImage builds. |
 | [CODE_SIGNING_AND_NOTARIZATION.md](CODE_SIGNING_AND_NOTARIZATION.md) | Code signing and notarization. |
 | [GITHUB_RELEASES_AND_VERSIONING.md](GITHUB_RELEASES_AND_VERSIONING.md) | GitHub releases and versioning. |
