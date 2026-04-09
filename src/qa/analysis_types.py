@@ -71,13 +71,24 @@ def build_pylinac_analysis_profile(
     Canonical record of how this run differed from stock pylinac defaults.
 
     Populated for every run (success or failure). ``engine`` is the concrete
-    class name used (e.g. ``ACRMRILarge`` or ``ACRMRILargeRelaxedExtent``).
+    class name used (e.g. ``ACRMRILargeForViewer``).
+
+    ``relaxed_image_extent`` is True for viewer integration classes, which
+    widen ``_is_within_image_extent`` vs stock pylinac (edge slices allowed).
+    ``vanilla_pylinac`` mirrors ``QARequest.vanilla_pylinac`` (stock classes).
+    ``vanilla_equivalent`` is only True when the run matches stock pylinac
+    class + analyze defaults (typically false for bundled ACR workflows).
     """
     tol = float(getattr(request, "scan_extent_tolerance_mm", 0.0) or 0.0)
-    vanilla = tol <= 0.0 and "RelaxedExtent" not in engine
+    req_vanilla = bool(getattr(request, "vanilla_pylinac", False))
+    relaxed_image = "ForViewer" in engine and not req_vanilla
+    scan_only_vanilla = tol <= 0.0 and "RelaxedExtent" not in engine
+    vanilla = scan_only_vanilla and not relaxed_image
     profile: Dict[str, Any] = {
         "engine": engine,
         "vanilla_equivalent": vanilla,
+        "vanilla_pylinac": req_vanilla,
+        "relaxed_image_extent": relaxed_image,
         "scan_extent_tolerance_mm": tol,
         "attempt": int(getattr(request, "qa_attempt", 1) or 1),
         "parent_attempt_outcome": getattr(request, "parent_attempt_outcome", None),
@@ -113,7 +124,7 @@ def build_pylinac_analysis_profile(
         profile["low_contrast_method"] = lc_method
         profile["low_contrast_visibility_threshold"] = lc_threshold
         profile["low_contrast_visibility_sanity_multiplier"] = lc_sanity
-        profile["vanilla_equivalent"] = (
+        profile["vanilla_equivalent"] = bool(
             vanilla
             and lc_method == DEFAULT_ACR_MRI_LOW_CONTRAST_METHOD
             and lc_threshold == DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_THRESHOLD
@@ -141,8 +152,12 @@ class QARequest:
     # Current pylinac ACRMRILarge may not expose this flag on analyze().
     check_uid: bool = True
     preflight_warnings: List[str] = field(default_factory=list)
-    # Relaxed CatPhanBase scan-extent check (mm). 0 = stock pylinac behavior.
+    # Relaxed CatPhanBase scan-extent check (mm). 0 = delegate to stock
+    # _ensure_physical_scan_extent on ACRCTForViewer / ACRMRILargeForViewer.
+    # Ignored when vanilla_pylinac is True (stock classes have no viewer tolerance hook).
     scan_extent_tolerance_mm: float = 0.0
+    # Use stock ACRCT / ACRMRILarge (strict interior-only origin slice rule in pylinac).
+    vanilla_pylinac: bool = False
     # ACR MRI Large: passed to pylinac analyze(low_contrast_method=...).
     low_contrast_method: str = DEFAULT_ACR_MRI_LOW_CONTRAST_METHOD
     # ACR MRI Large: passed to pylinac analyze(low_contrast_visibility_threshold=...).

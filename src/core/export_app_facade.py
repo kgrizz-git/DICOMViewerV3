@@ -23,6 +23,7 @@ Requirements:
 
 from __future__ import annotations
 
+import os
 from typing import Any, List, Tuple
 
 from PySide6.QtCore import Qt
@@ -78,14 +79,37 @@ class ExportAppFacade:
         title: str,
         default_name: str,
         filter_text: str,
+        *,
+        remember_pylinac_output_dir: bool = False,
     ) -> str:
-        """Open a Save dialog that appears on top initially and return selected path."""
+        """
+        Open a Save dialog that appears on top initially and return selected path.
+
+        When ``remember_pylinac_output_dir`` is True, the dialog starts in the
+        last pylinac QA output directory (falling back to last export path or
+        cwd), and the chosen file's directory is saved for the next session.
+        """
         app = self._app
         dialog = QFileDialog(app.main_window)
         dialog.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
         dialog.setFileMode(QFileDialog.FileMode.AnyFile)
         dialog.setNameFilter(filter_text)
-        dialog.selectFile(default_name)
+        selection = default_name
+        if remember_pylinac_output_dir:
+            cm = app.config_manager
+            start = cm.get_last_pylinac_output_path() or ""
+            if not start or not os.path.exists(start):
+                start = cm.get_last_export_path() or ""
+            if not start or not os.path.exists(start):
+                start = os.getcwd()
+            if os.path.isfile(start):
+                start = os.path.dirname(start)
+            elif not os.path.isdir(start):
+                start = os.getcwd()
+            base = os.path.basename(default_name) or default_name
+            selection = os.path.join(start, base)
+            dialog.setDirectory(start)
+        dialog.selectFile(selection)
         dialog.setWindowTitle(title)
         dialog.setWindowFlags(dialog.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
         dialog.activateWindow()
@@ -93,7 +117,12 @@ class ExportAppFacade:
         if dialog.exec():
             selected = dialog.selectedFiles()
             if selected:
-                return selected[0]
+                path = selected[0]
+                if remember_pylinac_output_dir:
+                    parent = os.path.dirname(os.path.abspath(path))
+                    if parent:
+                        app.config_manager.set_last_pylinac_output_path(parent)
+                return path
         return ""
 
     def open_export_roi_statistics(self) -> None:

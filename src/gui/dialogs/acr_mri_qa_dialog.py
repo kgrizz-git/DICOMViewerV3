@@ -11,8 +11,8 @@ Compare mode:
     visibility threshold and sanity multiplier, centred on pylinac defaults.
     The multiplier combos use the set defined in
     ``LC_COMPARE_MULTIPLIERS`` (0.75 × … 1.25 ×).
-    When compare mode is enabled, ``get_options()`` returns an
-    ``Optional[MRICompareRequest]`` as its last element.
+    When compare mode is enabled, ``get_options()`` includes an
+    ``Optional[MRICompareRequest]`` before the final ``vanilla_pylinac`` bool.
 
 Does not import pylinac directly.
 
@@ -20,7 +20,7 @@ Returns (from get_options / prompt_acr_mri_options):
     (echo_number, check_uid, origin_slice, scan_extent_tolerance_mm,
      low_contrast_method, low_contrast_visibility_threshold,
      low_contrast_visibility_sanity_multiplier,
-     compare_request_or_none)
+     compare_request_or_none, vanilla_pylinac)
 """
 
 from __future__ import annotations
@@ -189,7 +189,7 @@ class AcrMrIQaOptionsDialog(QDialog):
         (echo_number, check_uid, origin_slice, scan_extent_tolerance_mm,
          low_contrast_method, low_contrast_visibility_threshold,
          low_contrast_visibility_sanity_multiplier,
-         compare_request_or_none)
+         compare_request_or_none, vanilla_pylinac)
         where compare_request_or_none is an MRICompareRequest when compare mode
         is enabled, else None.
     """
@@ -205,6 +205,7 @@ class AcrMrIQaOptionsDialog(QDialog):
         low_contrast_visibility_sanity_multiplier: float = (
             DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_SANITY_MULTIPLIER
         ),
+        vanilla_pylinac_default: bool = False,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("ACR MRI (pylinac) — Options")
@@ -227,6 +228,11 @@ class AcrMrIQaOptionsDialog(QDialog):
         )
         intro.setWordWrap(True)
         left_col.addWidget(intro)
+
+        self._vanilla = QCheckBox("Vanilla pylinac (stock ACRMRILarge)")
+        self._vanilla.setChecked(bool(vanilla_pylinac_default))
+        self._vanilla.toggled.connect(self._on_vanilla_pylinac_toggled)
+        left_col.addWidget(self._vanilla)
 
         # --- Advanced group ---
         advanced = QGroupBox("Advanced")
@@ -259,7 +265,7 @@ class AcrMrIQaOptionsDialog(QDialog):
         left_col.addWidget(advanced)
 
         # --- Scan extent group ---
-        geom = QGroupBox("Scan extent (optional)")
+        self._geom = QGroupBox("Scan extent (optional, viewer integration only)")
         gform = QFormLayout()
         self._extent_tol = QCheckBox(
             "Allow small scan-extent tolerance (DICOM z rounding)"
@@ -274,9 +280,11 @@ class AcrMrIQaOptionsDialog(QDialog):
         self._extent_tol.toggled.connect(self._tol_spin.setEnabled)
         gform.addRow(self._extent_tol)
         gform.addRow("Tolerance (mm):", self._tol_spin)
-        geom.setLayout(gform)
-        left_col.addWidget(geom)
+        self._geom.setLayout(gform)
+        left_col.addWidget(self._geom)
         left_col.addStretch()
+
+        self._on_vanilla_pylinac_toggled(self._vanilla.isChecked())
 
         # ----------------------------------------------------------------
         # Right column: Low-contrast (single run) + Compare mode
@@ -394,6 +402,11 @@ class AcrMrIQaOptionsDialog(QDialog):
     def _on_use_lowest_toggled(self, checked: bool) -> None:
         self._echo_spin.setEnabled(not checked)
 
+    def _on_vanilla_pylinac_toggled(self, checked: bool) -> None:
+        self._geom.setEnabled(not checked)
+        if checked:
+            self._extent_tol.setChecked(False)
+
     def _on_compare_toggled(self, checked: bool) -> None:
         for row in self._compare_rows:
             row.setVisible(checked)
@@ -426,7 +439,17 @@ class AcrMrIQaOptionsDialog(QDialog):
 
     def get_options(
         self,
-    ) -> Tuple[Optional[int], bool, Optional[int], float, str, float, float, Optional[MRICompareRequest]]:
+    ) -> Tuple[
+        Optional[int],
+        bool,
+        Optional[int],
+        float,
+        str,
+        float,
+        float,
+        Optional[MRICompareRequest],
+        bool,
+    ]:
         """
         Return collected options.
 
@@ -434,9 +457,7 @@ class AcrMrIQaOptionsDialog(QDialog):
             (echo_number, check_uid, origin_slice, scan_extent_tolerance_mm,
              low_contrast_method, low_contrast_visibility_threshold,
              low_contrast_visibility_sanity_multiplier,
-             compare_request_or_none)
-            compare_request_or_none is an MRICompareRequest when compare mode
-            is enabled and at least one row is checked, else None.
+             compare_request_or_none, vanilla_pylinac)
         """
         if self._use_lowest_echo.isChecked():
             echo: Optional[int] = None
@@ -445,8 +466,9 @@ class AcrMrIQaOptionsDialog(QDialog):
         check_uid = bool(self._check_uid.isChecked())
         origin = int(self._origin_spin.value())
         origin_out: Optional[int] = None if origin < 0 else origin
+        vanilla = bool(self._vanilla.isChecked())
         scan_tol = 0.0
-        if self._extent_tol.isChecked():
+        if not vanilla and self._extent_tol.isChecked():
             scan_tol = float(self._tol_spin.value())
         method = str(
             self._lc_method_combo.currentData() or DEFAULT_ACR_MRI_LOW_CONTRAST_METHOD
@@ -473,6 +495,7 @@ class AcrMrIQaOptionsDialog(QDialog):
             lc_vis,
             lc_sanity,
             compare_request,
+            vanilla,
         )
 
 
@@ -486,8 +509,19 @@ def prompt_acr_mri_options(
     low_contrast_visibility_sanity_multiplier: float = (
         DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_SANITY_MULTIPLIER
     ),
+    vanilla_pylinac_default: bool = False,
 ) -> Optional[
-    Tuple[Optional[int], bool, Optional[int], float, str, float, float, Optional[MRICompareRequest]]
+    Tuple[
+        Optional[int],
+        bool,
+        Optional[int],
+        float,
+        str,
+        float,
+        float,
+        Optional[MRICompareRequest],
+        bool,
+    ]
 ]:
     """
     Show modal ACR MRI options dialog.
@@ -497,13 +531,11 @@ def prompt_acr_mri_options(
         low_contrast_method: Pre-selected contrast method.
         low_contrast_visibility_threshold: Pre-filled threshold value.
         low_contrast_visibility_sanity_multiplier: Pre-filled sanity multiplier.
+        vanilla_pylinac_default: Initial state of Vanilla pylinac checkbox.
 
     Returns:
-        (echo_number, check_uid, origin_slice, scan_extent_tolerance_mm,
-         low_contrast_method, low_contrast_visibility_threshold,
-         low_contrast_visibility_sanity_multiplier,
-         compare_request_or_none)
-        or None if the user cancelled.
+        Tuple ending with compare_request_or_none and vanilla_pylinac, or None
+        if the user cancelled.
     """
     dlg = AcrMrIQaOptionsDialog(
         parent,
@@ -512,6 +544,7 @@ def prompt_acr_mri_options(
         low_contrast_visibility_sanity_multiplier=(
             low_contrast_visibility_sanity_multiplier
         ),
+        vanilla_pylinac_default=vanilla_pylinac_default,
     )
     dlg.activateWindow()
     dlg.raise_()

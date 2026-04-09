@@ -12,8 +12,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Any
+
+# Match the GUI runner: use viewer subclass (relaxed image index bounds).
+_SRC_ROOT = Path(__file__).resolve().parents[1] / "src"
+if str(_SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(_SRC_ROOT))
 
 
 def _jsonable(value: Any) -> Any:
@@ -39,17 +45,18 @@ def main() -> int:
         return 2
 
     try:
-        from pylinac import ACRCT  # type: ignore[import-not-found]
         import pylinac  # type: ignore[import-not-found]
+
+        from qa.pylinac_extent_subclasses import ACRCTForViewer  # type: ignore[import-not-found]
     except Exception as exc:
-        print(f"Failed to import pylinac: {exc}")
+        print(f"Failed to import pylinac / viewer subclass: {exc}")
         return 3
 
-    print(f"Running ACRCT on: {folder}")
+    print(f"Running ACRCTForViewer on: {folder}")
     print(f"pylinac version: {getattr(pylinac, '__version__', 'unknown')}")
 
     try:
-        analyzer = ACRCT.from_folder(str(folder))
+        analyzer = ACRCTForViewer.from_folder(str(folder))
         analyzer.analyze()
         results_data = analyzer.results_data()
         payload = _jsonable(results_data if isinstance(results_data, dict) else {"results_data": results_data})

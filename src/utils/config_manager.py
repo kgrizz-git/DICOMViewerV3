@@ -75,7 +75,7 @@ class ConfigManager(
         - Provide generic ``get`` / ``set`` accessors for ad-hoc keys.
 
         Feature-domain mixins (in ``src/utils/config/``):
-        PathsConfigMixin        – last path, export path, recent files
+        PathsConfigMixin        – last path, export path, pylinac QA output dir, recent files
         DisplayConfigMixin      – theme, smoothing, privacy view, scroll mode
         OverlayConfigMixin      – overlay mode, visibility, font, tags
         LayoutConfigMixin       – multi-window layout, view slot order
@@ -113,6 +113,7 @@ class ConfigManager(
             # Paths
             "last_path": "",
             "last_export_path": "",
+            "last_pylinac_output_path": "",
             "recent_files": [],
             # Display
             "theme": "dark",
@@ -169,6 +170,7 @@ class ConfigManager(
             "acr_mri_low_contrast_method": "Weber",
             "acr_mri_low_contrast_visibility_threshold": 0.001,
             "acr_mri_low_contrast_visibility_sanity_multiplier": 3.0,
+            "acr_qa_vanilla_pylinac": False,
             # Slice sync
             "slice_sync_enabled": False,
             "slice_sync_groups": [],

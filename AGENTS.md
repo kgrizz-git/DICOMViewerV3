@@ -38,7 +38,7 @@ Optional for contributors: `pip install -r requirements-dev.txt` adds local Pyth
 - See `.cursor/rules` and user rules.  Before major refactors only, backup files before changing. Do not proceed with edits until the backup is verified (e.g. file exists and has content) or the user has been asked.
 - **Long-running commands (agents / automation):** When type-checking large trees (`pyright` on all of `src/`), running the full test suite, or similar heavy work, use a **conservative timeout on the order of 10 minutes** (e.g. 600000 ms where the tool measures wait time) so runs are not cut off on slower machines. Shorter limits remain fine for single-file checks or quick smoke steps.
 - Project layout: `src/` (application), `tests/` (tests; run instructions in **`tests/README.md`**), `user-docs/` (user guide hub **`USER_GUIDE.md`**), `dev-docs/` (plans, assessments).
-- **Pylinac (ACR QA)**: `requirements.txt` pins an exact **`pylinac`** version; that pin is the only upstream release **verified** with the viewer’s ACR CT / MRI integration. When bumping the pin, re-verify and update `dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md` (**Verified pylinac package version**).
+- **Pylinac (ACR QA)**: `requirements.txt` pins an exact **`pylinac`** version; that pin is the only upstream release **verified** with the viewer’s ACR CT / MRI integration. When bumping the pin, re-verify and update `dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md` (**Verified pylinac package version**). Default Stage‑1 runs use **`src/qa/pylinac_extent_subclasses.py`** (**`ACRCTForViewer`** / **`ACRMRILargeForViewer`**) so origin indices may be **0 … N−1** (stock pylinac is stricter); JSON **`pylinac_analysis_profile`** records **`relaxed_image_extent`**. Users may enable **Vanilla pylinac** in the ACR CT/MRI options dialogs (persisted in **`qa_pylinac_config`**) to run stock **`ACRCT`** / **`ACRMRILarge`** instead.
 - **Versioning**: Application version is defined in a single place, `src/version.py` (`__version__`). Use semantic versioning; release steps are in `dev-docs/RELEASING.md`, with full rules in `dev-docs/info/SEMANTIC_VERSIONING_GUIDE.md`.
 
 ## Source module structure (`src/`)
@@ -66,16 +66,18 @@ src/
 │   ├── tag_export_catalog.py          # Curated standard tags + union_tags_across_datasets for Export DICOM Tags picker; synthetic_tag_export_tree_entry for preset-only rows missing from the file union
 │   └── tag_export_writer.py           # Tag export file writers: Excel, CSV, UTF-8 tab-separated text (shared row builder)
 ├── gui/                           # All Qt widgets, dialogs, layout; e.g. overlay_items_factory, series_navigator_view (thumbnails), series_navigator_model (labels/instance entries), main_window_*_builder (menus/toolbar); **`dialogs/tag_export_union_worker.py`** — background tag-union for Export DICOM Tags ( **`DICOMViewerApp._schedule_tag_export_union_rebuild`** )
-│   └── metadata_table_model.py    # Metadata panel tree delegate + tag filter/group/value helpers (Phase 5D; `metadata_panel.py` wires UI)
+│   ├── metadata_table_model.py    # Metadata panel tree delegate + tag filter/group/value helpers (Phase 5D; `metadata_panel.py` wires UI)
+│   └── dialogs/mri_compare_result_dialog.py  # ACR MRI compare-results table + JSON/PDF actions; `qa_app_facade` wires callbacks (Phase 5E)
 ├── tools/                         # Interactive tools (ROI, measurement, annotation, crosshair)
 │   └── roi_persistence.py         # Clipboard-oriented ROI dict serialization (Phase 5B; copy/paste schema)
 └── utils/                         # Utilities (config, undo/redo, DICOM helpers, etc.)
+    ├── undo_redo_tag_commands.py  # `TagEditCommand` for DICOM tag edits; imported at end of `undo_redo.py` for re-export (Phase 5E)
     ├── config_manager.py          # Thin facade: inherits all config mixins; owns __init__, _load_config, save_config, get, set
     ├── doc_urls.py                # GitHub base URL for in-app user-docs links (Help → Documentation, Quick Start); edit USER_DOCS_GITHUB_PREFIX for forks
     ├── debug_flags.py             # Central on/off switches for diagnostic prints (e.g. DEBUG_LAYOUT, DEBUG_LOADING, DEBUG_NAV, DEBUG_YBR)
     └── config/                    # Feature-domain config mixin package
         ├── __init__.py
-        ├── paths_config.py        # last_path, last_export_path, recent_files, normalize_path
+        ├── paths_config.py        # last_path, last_export_path, last_pylinac_output_path, recent_files, normalize_path
         ├── display_config.py      # theme, smooth_image_when_zoomed, privacy_view, scroll_wheel_mode
         ├── overlay_config.py      # overlay mode/visibility/font/tags, get_all_modalities
         ├── layout_config.py       # multi_window_layout, view_slot_order

@@ -25,14 +25,26 @@ from dataclasses import replace
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from PySide6.QtCore import Qt, QTimer, QUrl
-from PySide6.QtGui import QDesktopServices
-from PySide6.QtWidgets import QInputDialog, QMessageBox, QProgressDialog
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QDialog,
+    QHBoxLayout,
+    QHeaderView,
+    QInputDialog,
+    QLabel,
+    QMessageBox,
+    QProgressDialog,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QTextEdit,
+    QVBoxLayout,
+)
 from pydicom.dataset import Dataset
 
 from gui.dialogs.acr_ct_qa_dialog import prompt_acr_ct_options
 from gui.dialogs.acr_mri_qa_dialog import prompt_acr_mri_options
-from gui.dialogs.mri_compare_result_dialog import create_mri_compare_result_dialog
 from qa.analysis_types import (
     MRIBatchResult,
     MRICompareRequest,
@@ -146,7 +158,6 @@ class QAAppFacade:
             "Save QA Results JSON",
             f"{default_stem}-{timestamp}.json",
             "JSON Files (*.json)",
-            remember_pylinac_output_dir=True,
         )
         if not json_path:
             return
@@ -232,13 +243,11 @@ class QAAppFacade:
         new_req = replace(
             request,
             scan_extent_tolerance_mm=tol,
-            vanilla_pylinac=False,
             qa_attempt=request.qa_attempt + 1,
             parent_attempt_outcome="failed_strict_extent",
         )
         merged: Dict[str, Any] = dict(json_inputs or {})
         merged["scan_extent_tolerance_mm"] = tol
-        merged["vanilla_pylinac"] = False
         merged["qa_attempt"] = new_req.qa_attempt
         merged["parent_attempt_outcome"] = new_req.parent_attempt_outcome
         self.start_qa_worker(
@@ -295,7 +304,6 @@ class QAAppFacade:
                 and not result.success
                 and is_physical_scan_extent_failure(result.errors)
                 and float(request.scan_extent_tolerance_mm or 0) <= 0.0
-                and not bool(getattr(request, "vanilla_pylinac", False))
                 and request.qa_attempt < 2
             ):
                 self.offer_extent_retry(
@@ -365,20 +373,14 @@ class QAAppFacade:
         if not self.user_confirms_preflight(preflight):
             return
 
-        vanilla_def = app.config_manager.get_acr_qa_vanilla_pylinac()
-        ct_opts = prompt_acr_ct_options(
-            app.main_window, vanilla_pylinac_default=vanilla_def
-        )
-        if ct_opts is None:
+        ct_scan_tol = prompt_acr_ct_options(app.main_window)
+        if ct_scan_tol is None:
             return
-        ct_scan_tol, ct_origin_slice, ct_vanilla = ct_opts
-        app.config_manager.set_acr_qa_vanilla_pylinac(ct_vanilla)
 
         pdf_path = app._prompt_save_path(
             "Optional PDF Report Output",
             f"acr-ct-report-{datetime.now().strftime('%Y%m%d-%H%M%S')}.pdf",
             "PDF Files (*.pdf)",
-            remember_pylinac_output_dir=True,
         )
         if not pdf_path:
             pdf_path = None
@@ -388,19 +390,16 @@ class QAAppFacade:
             analysis_type="acr_ct",
             dicom_paths=ordered_paths,
             folder_path=folder_path,
-            origin_slice=ct_origin_slice,
             output_pdf_path=pdf_path,
             study_uid=study_uid,
             series_uid=series_uid,
             modality=modality_eff,
             preflight_warnings=preflight,
             scan_extent_tolerance_mm=float(ct_scan_tol),
-            vanilla_pylinac=ct_vanilla,
         )
         json_inputs: Dict[str, Any] = {
-            "origin_slice_override": ct_origin_slice,
+            "origin_slice_override": request.origin_slice,
             "scan_extent_tolerance_mm": float(ct_scan_tol),
-            "vanilla_pylinac": ct_vanilla,
             "qa_attempt": request.qa_attempt,
             "options": {},
             "preflight_warnings": preflight,
@@ -469,13 +468,11 @@ class QAAppFacade:
         lc_sanity_default = (
             app.config_manager.get_acr_mri_low_contrast_visibility_sanity_multiplier()
         )
-        vanilla_def = app.config_manager.get_acr_qa_vanilla_pylinac()
         mri_opts = prompt_acr_mri_options(
             app.main_window,
             low_contrast_method=lc_method_default,
             low_contrast_visibility_threshold=lc_vis_default,
             low_contrast_visibility_sanity_multiplier=lc_sanity_default,
-            vanilla_pylinac_default=vanilla_def,
         )
         if mri_opts is None:
             return
@@ -488,9 +485,7 @@ class QAAppFacade:
             lc_vis,
             lc_sanity,
             compare_request,
-            mri_vanilla,
         ) = mri_opts
-        app.config_manager.set_acr_qa_vanilla_pylinac(mri_vanilla)
         app.config_manager.set_acr_mri_low_contrast_method(lc_method)
         app.config_manager.set_acr_mri_low_contrast_visibility_threshold(lc_vis)
         app.config_manager.set_acr_mri_low_contrast_visibility_sanity_multiplier(
@@ -507,7 +502,6 @@ class QAAppFacade:
             "Optional PDF Report Output",
             f"acr-mri-report-{datetime.now().strftime('%Y%m%d-%H%M%S')}.pdf",
             "PDF Files (*.pdf)",
-            remember_pylinac_output_dir=True,
         )
         if not pdf_path:
             pdf_path = None
@@ -527,7 +521,6 @@ class QAAppFacade:
             check_uid=check_uid,
             preflight_warnings=preflight,
             scan_extent_tolerance_mm=float(mri_scan_tol),
-            vanilla_pylinac=mri_vanilla,
             low_contrast_method=lc_method,
             low_contrast_visibility_threshold=float(lc_vis),
             low_contrast_visibility_sanity_multiplier=float(lc_sanity),
@@ -535,7 +528,6 @@ class QAAppFacade:
         json_inputs = {
             "origin_slice_override": origin_slice,
             "scan_extent_tolerance_mm": float(mri_scan_tol),
-            "vanilla_pylinac": mri_vanilla,
             "low_contrast_method": lc_method,
             "low_contrast_visibility_threshold": float(lc_vis),
             "low_contrast_visibility_sanity_multiplier": float(lc_sanity),
@@ -630,42 +622,20 @@ class QAAppFacade:
         self._app._mri_compare_result_dialog = None
 
     def open_path_in_system_viewer(self, path: str) -> None:
-        """
-        Open a file path with the OS default application (PDF viewer, etc.).
-
-        Uses ``QDesktopServices.openUrl`` on the next event-loop tick (via
-        ``QTimer.singleShot``) so the UI stays responsive; falls back to
-        ``os.startfile`` / ``xdg-open`` if Qt cannot launch the handler.
-        """
+        """Open a file path with the OS default application (PDF viewer, etc.)."""
         app = self._app
-        resolved = os.path.normpath(os.path.abspath(path))
-        if not os.path.isfile(resolved):
+        try:
+            os.startfile(path)  # type: ignore[attr-defined]
+        except AttributeError:
+            import subprocess
+
+            subprocess.Popen(["xdg-open", path])  # noqa: S603
+        except Exception as exc:
             QMessageBox.warning(
                 app.main_window,
                 "Open file",
-                f"File not found:\n{resolved}",
+                f"Could not open file:\n{exc}",
             )
-            return
-
-        def deferred_open() -> None:
-            """Run after the event loop idles — avoids Qt/UI re-entrancy freezes with ShellExecute."""
-            if QDesktopServices.openUrl(QUrl.fromLocalFile(resolved)):
-                return
-            try:
-                try:
-                    os.startfile(resolved)  # type: ignore[attr-defined]
-                except AttributeError:
-                    import subprocess
-
-                    subprocess.Popen(["xdg-open", resolved])  # noqa: S603
-            except Exception as exc:
-                QMessageBox.warning(
-                    app.main_window,
-                    "Open file",
-                    f"Could not open file:\n{exc}",
-                )
-
-        QTimer.singleShot(0, deferred_open)
 
     def show_mri_compare_result_dialog(
         self,
@@ -687,23 +657,132 @@ class QAAppFacade:
             json_inputs: Top-level inputs dict for optional JSON export.
         """
         app = self._app
-        if not batch.run_configs:
+        configs = batch.run_configs
+        results = batch.run_results
+        n = len(configs)
+        if n == 0:
             return
 
         if app._mri_compare_result_dialog is not None:
             app._mri_compare_result_dialog.close()
             app._mri_compare_result_dialog = None
 
-        dialog = create_mri_compare_result_dialog(
-            app.main_window,
-            batch,
-            on_save_json_clicked=lambda: self.export_mri_compare_json(
-                batch, json_inputs
-            ),
-            on_open_pdf=self.open_path_in_system_viewer,
-            on_destroyed=self.note_mri_compare_dialog_closed,
-        )
+        dialog = QDialog(app.main_window)
         app._mri_compare_result_dialog = dialog
+        dialog.setWindowTitle("ACR MRI Phantom Analysis — Compare Results")
+        dialog.setModal(False)
+        dialog.setWindowFlags(
+            dialog.windowFlags() | Qt.WindowType.WindowStaysOnTopHint
+        )
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        dialog.destroyed.connect(self.note_mri_compare_dialog_closed)
+
+        outer = QVBoxLayout(dialog)
+        outer.addWidget(
+            QLabel("Comparison table — one column per run (see plan section 1.6).")
+        )
+
+        row_labels = [
+            "Status",
+            "Low contrast score",
+            "Vanilla equivalent",
+            "Contrast method",
+            "Visibility threshold",
+            "Sanity multiplier",
+            "Warnings (summary)",
+        ]
+        n_rows = len(row_labels)
+        table = QTableWidget(n_rows, n)
+        table.setHorizontalHeaderLabels([c.label for c in configs])
+        table.setVerticalHeaderLabels(row_labels)
+        table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Stretch
+        )
+        table.verticalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.ResizeToContents
+        )
+
+        for col, (cfg, r) in enumerate(zip(configs, results)):
+            prof = r.pylinac_analysis_profile or {}
+            vanilla = "Yes" if prof.get("vanilla_equivalent", True) else "No"
+            lc_score = (
+                str(r.metrics.get("low_contrast_score", "N/A"))
+                if r.success
+                else "N/A"
+            )
+            if r.warnings:
+                wsum = "; ".join(r.warnings[:3])
+                if len(r.warnings) > 3:
+                    wsum += " …"
+            else:
+                wsum = "—"
+
+            column_values = [
+                "OK" if r.success else "FAILED",
+                lc_score,
+                vanilla,
+                cfg.low_contrast_method,
+                f"{cfg.low_contrast_visibility_threshold:.6f}",
+                f"{cfg.low_contrast_visibility_sanity_multiplier:.3f}",
+                wsum,
+            ]
+            for row, text in enumerate(column_values):
+                table.setItem(row, col, QTableWidgetItem(text))
+
+        outer.addWidget(table)
+
+        combined_pdf: Optional[str] = None
+        if results and results[0].pdf_report_path:
+            combined_pdf = results[0].pdf_report_path
+
+        detail_lines: List[str] = []
+        if combined_pdf:
+            detail_lines.append(f"Combined PDF: {combined_pdf}")
+        else:
+            detail_lines.append("Combined PDF: not generated")
+        detail_lines.append("")
+        for cfg, r in zip(configs, results):
+            if r.warnings:
+                detail_lines.append(f"{cfg.label} — warnings:")
+                for w in r.warnings:
+                    detail_lines.append(f"  • {w}")
+            if r.errors:
+                detail_lines.append(f"{cfg.label} — errors:")
+                for e in r.errors:
+                    detail_lines.append(f"  • {e}")
+
+        details = QTextEdit()
+        details.setReadOnly(True)
+        details.setPlainText("\n".join(detail_lines))
+        details.setMinimumHeight(120)
+        outer.addWidget(QLabel("Warnings and errors (full)"))
+        outer.addWidget(details)
+
+        btn_row = QHBoxLayout()
+        save_json_btn = QPushButton("Save comparison JSON…")
+        save_json_btn.clicked.connect(
+            lambda: self.export_mri_compare_json(batch, json_inputs)
+        )
+        btn_row.addWidget(save_json_btn)
+        if combined_pdf:
+            open_pdf_btn = QPushButton("Open PDF")
+            open_pdf_btn.clicked.connect(
+                lambda p=combined_pdf: self.open_path_in_system_viewer(p)
+            )
+            btn_row.addWidget(open_pdf_btn)
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dialog.close)
+        btn_row.addWidget(close_btn)
+        btn_row.addStretch()
+        outer.addLayout(btn_row)
+
+        if not all(r.success for r in results):
+            dialog.setWindowTitle(
+                dialog.windowTitle() + " (one or more runs failed)"
+            )
+
+        dialog.resize(min(920, 240 + n * 130), 540)
         dialog.activateWindow()
         dialog.raise_()
         dialog.show()
@@ -729,7 +808,6 @@ class QAAppFacade:
             "Save QA Compare Results JSON",
             f"qa-acr-mri-compare-{timestamp}.json",
             "JSON Files (*.json)",
-            remember_pylinac_output_dir=True,
         )
         if not json_path:
             return

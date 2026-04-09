@@ -104,3 +104,7 @@ DEBUG_SERIES: bool = False
 # Affects: core.dicom_color (convert_ybr_to_rgb diagnostic prints).
 DEBUG_YBR: bool = False
 
+# Enables pre-analyze print diagnostics for ACR CT pylinac runs (stack length, z span, valid slice index window).
+# Affects: qa.pylinac_runner (run_acr_ct_analysis).
+DEBUG_PYLINAC_QA: bool = False
+

@@ -157,3 +157,15 @@ class QaPylinacConfigMixin:
         )
         self._config()["acr_mri_low_contrast_visibility_sanity_multiplier"] = v
         self._save_config()
+
+    def get_acr_qa_vanilla_pylinac(self) -> bool:
+        """
+        Whether ACR CT/MRI options dialogs default to stock ``ACRCT`` /
+        ``ACRMRILarge`` (stricter slice-index rules) vs viewer integration classes.
+        """
+        return bool(self._config().get("acr_qa_vanilla_pylinac", False))
+
+    def set_acr_qa_vanilla_pylinac(self, value: bool) -> None:
+        """Persist vanilla-pylinac default for the next ACR QA options dialog."""
+        self._config()["acr_qa_vanilla_pylinac"] = bool(value)
+        self._save_config()

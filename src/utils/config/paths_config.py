@@ -2,7 +2,8 @@
 Paths Config Mixin
 
 Manages file and folder path settings: last opened path, last export path,
-and the recent-files list (add, retrieve, remove, normalize).
+last pylinac/QA report output directory, and the recent-files list (add,
+retrieve, remove, normalize).
 
 Mixin contract:
     Expects `self.config` (dict) and `self.save_config()` to be provided by
@@ -14,7 +15,7 @@ from typing import Any, Callable, List, Optional, cast
 
 
 class PathsConfigMixin:
-    """Config mixin: last-opened path, last-export path, and recent files."""
+    """Config mixin: last-opened path, export path, pylinac QA output dir, recent files."""
 
     def _config(self) -> dict[str, Any]:
         return cast(dict[str, Any], getattr(self, "config"))
@@ -59,6 +60,29 @@ class PathsConfigMixin:
             path: Path to save
         """
         self._config()["last_export_path"] = path
+        self._save_config()
+
+    def get_last_pylinac_output_path(self) -> str:
+        """
+        Get the last directory used for pylinac QA PDF/JSON save dialogs.
+
+        Returns:
+            Directory path string, empty if not set
+        """
+        return self._config().get("last_pylinac_output_path", "")
+
+    def set_last_pylinac_output_path(self, path: str) -> None:
+        """
+        Persist the directory chosen for a pylinac QA save (PDF or JSON).
+
+        Args:
+            path: Directory to save (file paths are normalized to dirname)
+        """
+        if not path:
+            return
+        if os.path.isfile(path):
+            path = os.path.dirname(path)
+        self._config()["last_pylinac_output_path"] = path
         self._save_config()
 
     @staticmethod

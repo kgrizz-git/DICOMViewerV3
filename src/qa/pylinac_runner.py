@@ -20,7 +20,7 @@ Requirements:
     pypdf>=4.0.0 (optional, graceful fallback when missing)
     reportlab (transitively installed by pylinac)
     qa.analysis_types.QARequest / QAResult / LcRunConfig / MRIBatchResult
-    qa.pylinac_extent_subclasses (ACRCTRelaxedExtent, ACRMRILargeRelaxedExtent)
+    qa.pylinac_extent_subclasses (ACRCTForViewer, ACRMRILargeForViewer; RelaxedExtent aliases)
 """
 
 from __future__ import annotations
@@ -45,6 +45,13 @@ from utils.config.qa_pylinac_config import (
     DEFAULT_ACR_MRI_LOW_CONTRAST_METHOD,
     DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_SANITY_MULTIPLIER,
     DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_THRESHOLD,
+)
+from utils.debug_flags import DEBUG_PYLINAC_QA
+
+# Stock pylinac CatPhanBase message; viewer mixin uses a different out-of-range wording.
+_PYLINAC_IMAGE_INDEX_FAILURE_MARKERS = (
+    "beyond the image extent",
+    "out of range for the loaded stack",
 )
 
 # ---------------------------------------------------------------------------
@@ -506,16 +513,21 @@ def _build_mri_analyzer(
     request: QARequest,
     *,
     cls: Any,
+    extent_tol_mm: Optional[float] = None,
 ) -> Any:
     """
     Construct an ACRMRILarge (or subclass) analyzer from a QARequest.
 
-    Handles both dicom_paths and folder_path source modes and applies the
-    scan-extent tolerance attribute when requested.  Does NOT call analyze().
+    Handles both dicom_paths and folder_path source modes. When
+    ``extent_tol_mm`` is not None, sets ``_scan_extent_tolerance_mm`` on the
+    instance (viewer subclasses only; omit for stock ``ACRMRILarge``).
+
+    Does NOT call analyze().
 
     Args:
-        request: Input payload carrying paths, check_uid, and tolerance.
-        cls: The ACRMRILarge class or a RelaxedExtent subclass to instantiate.
+        request: Input payload carrying paths and check_uid.
+        cls: ``ACRMRILarge`` or ``ACRMRILargeForViewer``.
+        extent_tol_mm: Optional scan-extent tolerance in mm for viewer class.
 
     Returns:
         An unanalyzed analyzer instance.
@@ -523,15 +535,14 @@ def _build_mri_analyzer(
     Raises:
         ValueError: If neither dicom_paths nor folder_path are provided.
     """
-    tol = float(request.scan_extent_tolerance_mm or 0.0)
     if request.dicom_paths:
         analyzer = cls(request.dicom_paths, check_uid=request.check_uid)
     elif request.folder_path:
         analyzer = cls.from_folder(request.folder_path, check_uid=request.check_uid)
     else:
         raise ValueError("No DICOM paths or folder were provided.")
-    if tol > 0:
-        analyzer._scan_extent_tolerance_mm = tol
+    if extent_tol_mm is not None:
+        analyzer._scan_extent_tolerance_mm = float(extent_tol_mm)
     return analyzer
 
 
@@ -614,6 +625,57 @@ def _build_mri_extra_warnings(analyzer: Any) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
+def _acr_ct_stack_diagnostic_lines(analyzer: Any) -> List[str]:
+    """
+    Best-effort context when slice indexing fails during ACR CT analysis.
+
+    DICOM Viewer uses ``ACRCTForViewer``, which allows origin indices
+    ``0 .. num_images-1``. If this still fails, the index is out of range for
+    the loaded stack or another stage failed after localization.
+    """
+    lines: List[str] = []
+    try:
+        stack = getattr(analyzer, "dicom_stack", None)
+        n = len(stack) if stack is not None else 0
+    except Exception:
+        n = 0
+    lines.append(f"Images in stack (pylinac): {n}")
+    if n <= 0:
+        lines.append("Stack reports zero images — check DICOM paths or folder contents.")
+    else:
+        lines.append(
+            "This app allows origin_slice indices 0 … N-1 (N = num_images). "
+            "Stock pylinac alone allows only strictly interior indices "
+            "(see JSON pylinac_analysis_profile.relaxed_image_extent)."
+        )
+    try:
+        stack = getattr(analyzer, "dicom_stack", None)
+        sp = getattr(stack, "slice_spacing", None) if stack is not None else None
+        if sp is not None:
+            lines.append(f"dicom_stack.slice_spacing (mm): {sp}")
+    except Exception:
+        pass
+    try:
+        from pylinac.core.image import z_position  # type: ignore[import-not-found]
+
+        stack = getattr(analyzer, "dicom_stack", None)
+        metas = getattr(stack, "metadatas", None) if stack is not None else None
+        if metas:
+            zs = [float(z_position(m)) for m in metas]
+            lines.append(
+                f"ImagePositionPatient Z (mm) min/max: {min(zs):.3f} … {max(zs):.3f} "
+                f"(span {max(zs) - min(zs):.3f})"
+            )
+    except Exception:
+        pass
+    lines.append(
+        "Typical causes: wrong/empty series, non-axial order, partial phantom, or "
+        "bad HU localization. Override with analyze(origin_slice=...) from the CT "
+        "options dialog if needed."
+    )
+    return lines
+
+
 def run_acr_ct_analysis(request: QARequest) -> QAResult:
     """
     Run ACR CT analysis through pylinac with normalized output.
@@ -628,17 +690,21 @@ def run_acr_ct_analysis(request: QARequest) -> QAResult:
         from pylinac import ACRCT  # type: ignore[import-not-found]
         import pylinac  # type: ignore[import-not-found]
 
-        from qa.pylinac_extent_subclasses import ACRCTRelaxedExtent
+        from qa.pylinac_extent_subclasses import ACRCTForViewer
     except Exception:
         return _missing_pylinac_result(request)
 
     py_ver = getattr(pylinac, "__version__", None)
     tol = float(request.scan_extent_tolerance_mm or 0.0)
-    engine = "ACRCTRelaxedExtent" if tol > 0 else "ACRCT"
+    vanilla = bool(getattr(request, "vanilla_pylinac", False))
+    eff_tol = 0.0 if vanilla else tol
+    warn_ignore_tol = vanilla and tol > 0.0
+    cls = ACRCT if vanilla else ACRCTForViewer
+    engine = "ACRCT" if vanilla else "ACRCTForViewer"
     profile = build_pylinac_analysis_profile(request, engine=engine)
 
+    analyzer: Any = None
     try:
-        cls = ACRCTRelaxedExtent if tol > 0 else ACRCT
         if request.dicom_paths:
             analyzer = cls(request.dicom_paths, check_uid=request.check_uid)
         elif request.folder_path:
@@ -655,8 +721,12 @@ def run_acr_ct_analysis(request: QARequest) -> QAResult:
                 pylinac_analysis_profile=profile,
             )
 
-        if tol > 0:
-            analyzer._scan_extent_tolerance_mm = tol
+        if not vanilla:
+            analyzer._scan_extent_tolerance_mm = eff_tol
+
+        if DEBUG_PYLINAC_QA and analyzer is not None:
+            for ln in _acr_ct_stack_diagnostic_lines(analyzer):
+                print(f"[DEBUG-PYLINAC-QA] {ln}")
 
         analyze_kwargs: Dict[str, Any] = {}
         if request.origin_slice is not None:
@@ -685,17 +755,26 @@ def run_acr_ct_analysis(request: QARequest) -> QAResult:
         metrics: Dict[str, Any] = {
             "input_count": len(request.dicom_paths),
             "origin_slice_override": request.origin_slice,
-            "scan_extent_tolerance_mm": tol,
+            "scan_extent_tolerance_mm": eff_tol,
+            "vanilla_pylinac": vanilla,
         }
+        if warn_ignore_tol:
+            metrics["scan_extent_tolerance_requested_mm"] = tol
         for key in ("num_images", "phantom_roll", "catphan_model", "origin_slice"):
             if key in raw:
                 metrics[key] = raw[key]
+
+        ct_warnings: List[str] = []
+        if warn_ignore_tol:
+            ct_warnings.append(
+                "Scan extent tolerance is ignored in vanilla pylinac mode (stock ACRCT)."
+            )
 
         return QAResult(
             success=True,
             analysis_type=request.analysis_type,
             metrics=metrics,
-            warnings=[],
+            warnings=ct_warnings,
             errors=[],
             raw_pylinac=raw,
             pdf_report_path=pdf_report_path,
@@ -707,14 +786,27 @@ def run_acr_ct_analysis(request: QARequest) -> QAResult:
             pylinac_analysis_profile=profile,
         )
     except Exception as exc:
+        err_text = f"ACR CT analysis failed: {exc}"
+        msg = str(exc)
+        if analyzer is not None and any(
+            m in msg.lower() for m in _PYLINAC_IMAGE_INDEX_FAILURE_MARKERS
+        ):
+            extra = "\n".join(_acr_ct_stack_diagnostic_lines(analyzer))
+            err_text = f"{err_text}\n\n{extra}"
+        n_fail = len(request.dicom_paths)
+        if analyzer is not None:
+            try:
+                n_fail = len(analyzer.dicom_stack)
+            except Exception:
+                pass
         return QAResult(
             success=False,
             analysis_type=request.analysis_type,
-            errors=[f"ACR CT analysis failed: {exc}"],
+            errors=[err_text],
             study_uid=request.study_uid,
             series_uid=request.series_uid,
             modality=request.modality,
-            num_images=len(request.dicom_paths),
+            num_images=n_fail,
             pylinac_version=py_ver,
             pylinac_analysis_profile=profile,
         )
@@ -742,13 +834,17 @@ def run_acr_mri_large_analysis(request: QARequest) -> QAResult:
         from pylinac import ACRMRILarge  # type: ignore[import-not-found]
         import pylinac  # type: ignore[import-not-found]
 
-        from qa.pylinac_extent_subclasses import ACRMRILargeRelaxedExtent
+        from qa.pylinac_extent_subclasses import ACRMRILargeForViewer
     except Exception:
         return _missing_pylinac_result(request)
 
     py_ver = getattr(pylinac, "__version__", None)
     tol = float(request.scan_extent_tolerance_mm or 0.0)
-    engine = "ACRMRILargeRelaxedExtent" if tol > 0 else "ACRMRILarge"
+    vanilla = bool(getattr(request, "vanilla_pylinac", False))
+    eff_tol = 0.0 if vanilla else tol
+    warn_ignore_tol = vanilla and tol > 0.0
+    mri_cls = ACRMRILarge if vanilla else ACRMRILargeForViewer
+    engine = "ACRMRILarge" if vanilla else "ACRMRILargeForViewer"
     profile = build_pylinac_analysis_profile(request, engine=engine)
 
     lc_method = str(
@@ -773,9 +869,12 @@ def run_acr_mri_large_analysis(request: QARequest) -> QAResult:
     )
 
     try:
-        cls = ACRMRILargeRelaxedExtent if tol > 0 else ACRMRILarge
         try:
-            analyzer = _build_mri_analyzer(request, cls=cls)
+            analyzer = _build_mri_analyzer(
+                request,
+                cls=mri_cls,
+                extent_tol_mm=None if vanilla else eff_tol,
+            )
         except ValueError as ve:
             return QAResult(
                 success=False,
@@ -791,7 +890,12 @@ def run_acr_mri_large_analysis(request: QARequest) -> QAResult:
         analyze_kwargs = _build_mri_analyze_kwargs(
             analyzer, request, lc_method=lc_method, lc_vis=lc_vis, lc_sanity=lc_sanity
         )
-        extra_warnings = _build_mri_extra_warnings(analyzer)
+        extra_warnings = list(_build_mri_extra_warnings(analyzer))
+        if warn_ignore_tol:
+            extra_warnings.append(
+                "Scan extent tolerance is ignored in vanilla pylinac mode "
+                "(stock ACRMRILarge)."
+            )
 
         analyzer.analyze(**analyze_kwargs)
 
@@ -818,11 +922,14 @@ def run_acr_mri_large_analysis(request: QARequest) -> QAResult:
             "echo_number": request.echo_number,
             "check_uid": request.check_uid,
             "origin_slice_override": request.origin_slice,
-            "scan_extent_tolerance_mm": tol,
+            "scan_extent_tolerance_mm": eff_tol,
+            "vanilla_pylinac": vanilla,
             "low_contrast_method": lc_method,
             "low_contrast_visibility_threshold": lc_vis,
             "low_contrast_visibility_sanity_multiplier": lc_sanity,
         }
+        if warn_ignore_tol:
+            metrics["scan_extent_tolerance_requested_mm"] = tol
         for key in (
             "num_images",
             "phantom_roll",
@@ -941,7 +1048,7 @@ def run_acr_mri_large_batch(
         from pylinac import ACRMRILarge  # type: ignore[import-not-found]
         import pylinac  # type: ignore[import-not-found]
 
-        from qa.pylinac_extent_subclasses import ACRMRILargeRelaxedExtent
+        from qa.pylinac_extent_subclasses import ACRMRILargeForViewer
     except Exception:
         # pylinac missing — return a failed result for every config
         failed = _missing_pylinac_result(base_request)
@@ -952,7 +1059,10 @@ def run_acr_mri_large_batch(
 
     py_ver = getattr(pylinac, "__version__", None)
     tol = float(base_request.scan_extent_tolerance_mm or 0.0)
-    mri_cls = ACRMRILargeRelaxedExtent if tol > 0 else ACRMRILarge
+    vanilla = bool(getattr(base_request, "vanilla_pylinac", False))
+    eff_tol = 0.0 if vanilla else tol
+    warn_ignore_tol = vanilla and tol > 0.0
+    mri_cls = ACRMRILarge if vanilla else ACRMRILargeForViewer
 
     # Allocate a temp directory for per-run PDFs (used only when PDF output is requested)
     tmp_dir: Optional[Path] = None
@@ -974,11 +1084,15 @@ def run_acr_mri_large_batch(
             low_contrast_visibility_sanity_multiplier=cfg.low_contrast_visibility_sanity_multiplier,
             output_pdf_path=None,  # temp PDFs written directly, not via QARequest
         )
-        engine = "ACRMRILargeRelaxedExtent" if tol > 0 else "ACRMRILarge"
+        engine = "ACRMRILarge" if vanilla else "ACRMRILargeForViewer"
         profile = build_pylinac_analysis_profile(per_run_request, engine=engine)
 
         try:
-            analyzer = _build_mri_analyzer(per_run_request, cls=mri_cls)
+            analyzer = _build_mri_analyzer(
+                per_run_request,
+                cls=mri_cls,
+                extent_tol_mm=None if vanilla else eff_tol,
+            )
         except ValueError as ve:
             run_results.append(
                 QAResult(
@@ -1002,7 +1116,12 @@ def run_acr_mri_large_batch(
             lc_vis=cfg.low_contrast_visibility_threshold,
             lc_sanity=cfg.low_contrast_visibility_sanity_multiplier,
         )
-        extra_warnings = _build_mri_extra_warnings(analyzer)
+        extra_warnings = list(_build_mri_extra_warnings(analyzer))
+        if warn_ignore_tol:
+            extra_warnings.append(
+                "Scan extent tolerance is ignored in vanilla pylinac mode "
+                "(stock ACRMRILarge)."
+            )
 
         try:
             analyzer.analyze(**analyze_kwargs)
@@ -1028,12 +1147,15 @@ def run_acr_mri_large_batch(
                 "echo_number": per_run_request.echo_number,
                 "check_uid": per_run_request.check_uid,
                 "origin_slice_override": per_run_request.origin_slice,
-                "scan_extent_tolerance_mm": tol,
+                "scan_extent_tolerance_mm": eff_tol,
+                "vanilla_pylinac": vanilla,
                 "low_contrast_method": cfg.low_contrast_method,
                 "low_contrast_visibility_threshold": cfg.low_contrast_visibility_threshold,
                 "low_contrast_visibility_sanity_multiplier": cfg.low_contrast_visibility_sanity_multiplier,
                 "run_label": cfg.label,
             }
+            if warn_ignore_tol:
+                metrics["scan_extent_tolerance_requested_mm"] = tol
             for key in (
                 "num_images",
                 "phantom_roll",

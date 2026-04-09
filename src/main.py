@@ -2368,9 +2368,16 @@ class DICOMViewerApp(QObject):
         title: str,
         default_name: str,
         filter_text: str,
+        *,
+        remember_pylinac_output_dir: bool = False,
     ) -> str:
         """Open a Save dialog that appears on top initially and return selected path."""
-        return self._export_app_facade.prompt_save_path(title, default_name, filter_text)
+        return self._export_app_facade.prompt_save_path(
+            title,
+            default_name,
+            filter_text,
+            remember_pylinac_output_dir=remember_pylinac_output_dir,
+        )
 
     def _qa_build_preflight_warnings(
         self,
