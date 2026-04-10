@@ -50,8 +50,8 @@
 
 ### Stage 1 exit criteria
 
-- [ ] A physicist or developer can run **ACR CT** analysis on a real series from the viewer without crashes; JSON documents the run.
-- [ ] Optional MRI path works on **ACR Large** sample with default parameters.
+- [x] A physicist or developer can run **ACR CT** analysis on a real series from the viewer without crashes; JSON documents the run.
+- [x] Optional MRI path works on **ACR Large** sample with default parameters.
 - [ ] Missing pylinac shows a clear install hint, not a traceback.
 - [ ] Changelog / version note if dependencies or user-visible behavior changes.
 
