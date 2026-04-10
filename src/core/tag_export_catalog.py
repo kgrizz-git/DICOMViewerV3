@@ -13,8 +13,9 @@ Inputs:
     - Tag dict from :meth:`DICOMParser.get_all_tags`
 Outputs:
     - In-place merge of synthetic entries (empty value, standard name/VR)
-    - :func:`union_tags_across_datasets` — merged tag map for export UI
     - :func:`synthetic_tag_export_tree_entry` — one row for a tag string (e.g. from a preset) absent from the union
+
+See :mod:`core.tag_export_union` for :func:`~core.tag_export_union.union_tags_across_datasets`.
 Requirements:
     - pydicom (:class:`~pydicom.tag.Tag` keywords, datadict)
 """
@@ -24,9 +25,8 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-from pydicom.dataset import Dataset
 from pydicom.datadict import dictionary_description, dictionary_keyword, dictionary_VR
-from pydicom.tag import Tag
+from pydicom.tag import BaseTag, Tag
 
 
 # Curated keywords across common modalities; SQ tags resolved at load time are skipped.
@@ -209,10 +209,10 @@ _CATALOG_EXTRA_TAGS: List[Tuple[int, int]] = [
     (0x0008, 0x0060),  # Modality (redundant with keyword; ensures presence)
 ]
 
-_RESOLVED_CATALOG: Optional[List[Tuple[str, str, str, str]]] = None
+_resolved_catalog: Optional[List[Tuple[str, str, str, str]]] = None
 
 
-def _invalid_tag_sentinel(t: Tag) -> bool:
+def _invalid_tag_sentinel(t: BaseTag) -> bool:
     return t == Tag(0xFFFF, 0xFFFF)
 
 
@@ -223,14 +223,14 @@ def _resolve_catalog() -> List[Tuple[str, str, str, str]]:
     Returns:
         Deduplicated catalog rows; SQ and private tags omitted.
     """
-    global _RESOLVED_CATALOG
-    if _RESOLVED_CATALOG is not None:
-        return _RESOLVED_CATALOG
+    global _resolved_catalog
+    if _resolved_catalog is not None:
+        return _resolved_catalog
 
     out: List[Tuple[str, str, str, str]] = []
     seen: set[str] = set()
 
-    def add_tag(tag: Tag, keyword: str) -> None:
+    def add_tag(tag: BaseTag, keyword: str) -> None:
         if tag.is_private or _invalid_tag_sentinel(tag):
             return
         vr = dictionary_VR(tag) or ""
@@ -254,8 +254,8 @@ def _resolve_catalog() -> List[Tuple[str, str, str, str]]:
         tag = Tag((group, element))
         add_tag(tag, dictionary_description(tag) or f"({group:04X},{element:04X})")
 
-    _RESOLVED_CATALOG = out
-    return _RESOLVED_CATALOG
+    _resolved_catalog = out
+    return _resolved_catalog
 
 
 def supplement_export_tags_dict(tags: Dict[str, Any]) -> None:
@@ -274,47 +274,6 @@ def supplement_export_tags_dict(tags: Dict[str, Any]) -> None:
                 "is_private": False,
                 "name": name,
             }
-
-
-def union_tags_across_datasets(
-    datasets: List[Dataset],
-    *,
-    include_private: bool,
-    supplement_standard_tags: bool = False,
-) -> Dict[str, Any]:
-    """
-    Build the union of tag keys across many datasets (nested elements included).
-
-    For each canonical ``str(Tag)``, the **first** occurrence in *datasets* order
-    supplies display metadata (name, sample value in the tree). Later instances
-    can still contribute **new** keys not present on earlier slices.
-
-    Args:
-        datasets: All instances from loaded studies/series (any order; typically
-            study → series → instance).
-        include_private: Passed to :meth:`~core.dicom_parser.DICOMParser.get_all_tags`.
-        supplement_standard_tags: If True, apply :func:`supplement_export_tags_dict`
-            after the union.
-
-    Returns:
-        Merged tag dict suitable for the export dialog tree.
-    """
-    # Local import avoids import cycle (dicom_parser imports this module).
-    from core.dicom_parser import DICOMParser
-
-    merged: Dict[str, Any] = {}
-    for ds in datasets:
-        parser = DICOMParser(ds)
-        part = parser.get_all_tags(
-            include_private=include_private,
-            supplement_standard_tags=False,
-        )
-        for tag_str, tag_data in part.items():
-            if tag_str not in merged:
-                merged[tag_str] = tag_data
-    if supplement_standard_tags:
-        supplement_export_tags_dict(merged)
-    return merged
 
 
 def missing_tag_export_display_fields(tag_str: str) -> Tuple[str, str]:
@@ -345,7 +304,7 @@ def missing_tag_export_display_fields(tag_str: str) -> Tuple[str, str]:
         return raw, raw
 
 
-def _tag_from_identifier_string(s: str) -> Optional[Tag]:
+def _tag_from_identifier_string(s: str) -> Optional[BaseTag]:
     """
     Build a pydicom Tag from ``(gggg, eeee)``, 8-digit hex, or a keyword string.
 
@@ -376,7 +335,7 @@ def synthetic_tag_export_tree_entry(
     appears in a preset (or similar) but is missing from the union of loaded files.
 
     Returns ``(canonical_key, tag_data)`` compatible with
-    :func:`union_tags_across_datasets` / :func:`supplement_export_tags_dict`, or
+    :func:`~core.tag_export_union.union_tags_across_datasets` / :func:`supplement_export_tags_dict`, or
     ``None`` if *raw_tag_str* cannot be interpreted as a DICOM tag identifier.
     """
     disp, name = missing_tag_export_display_fields(raw_tag_str)

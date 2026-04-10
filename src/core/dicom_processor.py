@@ -31,8 +31,8 @@ from pydicom.dataset import Dataset
 
 # Try to import pydicom's convert_color_space (available in pydicom 3.0+)
 try:
-    # pydicom moved convert_color_space to pydicom.pixels.processing
-    from pydicom.pixels.processing import convert_color_space
+    # pydicom 3.x: convert_color_space lives in pydicom.pixels.processing (absent in 2.x).
+    from pydicom.pixels.processing import convert_color_space  # pyright: ignore[reportMissingImports]
 
     pydicom_convert_available = True
 except ImportError:

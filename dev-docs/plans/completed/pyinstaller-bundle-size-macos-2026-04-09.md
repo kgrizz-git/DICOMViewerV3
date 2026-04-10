@@ -5,7 +5,7 @@
 ## Goal and success criteria (met for shipped scope)
 
 - **Measure** the macOS `dist/DICOMViewerV3.app` bundle in CI via **`du`** (drill-down under `Contents/`, `MacOS/`, `Frameworks/`).
-- Apply **safe** PyInstaller `excludes` (matplotlib non-Qt backends + file writers; **darwin-only** large PySide6 trims) without breaking histogram (**`backend_qtagg`**), DICOM codecs, or Qt UI.
+- Apply **safe** PyInstaller `excludes` (matplotlib non-Qt backends + file writers; **darwin + `PYINSTALLER_MACOS_SLIM`** large PySide6 trims — **default off**) without breaking histogram (**`backend_qtagg`**), DICOM codecs, or Qt UI.
 - **UPX off on macOS** for codesign/notarization compatibility.
 - CI uploads **`dist/`** + AppImage only — **no** PyInstaller **`build/`** artifacts (saves GB-hours; debug locally).
 
@@ -21,7 +21,11 @@
 
 **Reality:** PyInstaller only bundles what analysis pulls. If nothing in the graph imports WebEngine (etc.), removing excludes might add **~0 MB**. If analysis **would** ship those Qt subsystems, **not** excluding them often adds **on the order of ~200–500 MB** to the `.app` (disk, uncompressed), with **Qt WebEngine** usually the dominant chunk (**~150–350 MB** typical order of magnitude). Smaller modules (Multimedia, 3D, Charts, QML, Pdf, Sql, serial, …) add **tens of MB** each in rough terms.
 
-**Definitive check:** Same commit, two macOS builds: with vs without the darwin list; compare **`du -sh dist/DICOMViewerV3.app`**. See **`dev-docs/info/PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md`** for a breakdown table and maintainer baseline template.
+**Definitive check:** Same commit, two macOS builds: **`PYINSTALLER_MACOS_SLIM`** unset vs **`=1`**; compare **`du -sh dist/DICOMViewerV3.app`**. See **`dev-docs/info/PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md`** for a breakdown table and maintainer baseline template.
+
+## Update (post-plan): `PYINSTALLER_MACOS_SLIM` + CI
+
+- **`DICOMViewerV3.spec`:** macOS PySide6 submodule list applies only when **`PYINSTALLER_MACOS_SLIM`** is truthy; CI matrix macOS job keeps slim **off**; optional **`workflow_dispatch`** job produces **`DICOMViewerV3-macOS-slim`**.
 
 ## Maintainer decisions (recorded)
 
@@ -33,7 +37,7 @@
 
 | Path | Notes |
 |------|--------|
-| [`DICOMViewerV3.spec`](../../../DICOMViewerV3.spec) | `IS_DARWIN` / `USE_UPX`; excludes from `pyinstaller_exclude_lists`; `hiddenimports` include **`matplotlib.backends.backend_qtagg`**. |
+| [`DICOMViewerV3.spec`](../../../DICOMViewerV3.spec) | `IS_DARWIN` / `USE_UPX`; **`PYINSTALLER_MACOS_SLIM`** gates macOS PySide6 excludes; `hiddenimports` include **`matplotlib.backends.backend_qtagg`**. |
 | [`scripts/pyinstaller_exclude_lists.py`](../../../scripts/pyinstaller_exclude_lists.py) | Shared exclude lists. |
 | [`tests/test_pyinstaller_exclude_audit.py`](../../../tests/test_pyinstaller_exclude_audit.py) | Import audit tests. |
 | [`dev-docs/info/PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md`](../info/PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md) | Size estimates, per-OS measurement, baseline table. |

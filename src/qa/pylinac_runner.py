@@ -538,7 +538,7 @@ def _build_mri_analyzer(
     if request.dicom_paths:
         analyzer = cls(request.dicom_paths, check_uid=request.check_uid)
     elif request.folder_path:
-        analyzer = cls.from_folder(request.folder_path, check_uid=request.check_uid)
+        analyzer = cls(request.folder_path, check_uid=request.check_uid)
     else:
         raise ValueError("No DICOM paths or folder were provided.")
     if extent_tol_mm is not None:
@@ -708,7 +708,8 @@ def run_acr_ct_analysis(request: QARequest) -> QAResult:
         if request.dicom_paths:
             analyzer = cls(request.dicom_paths, check_uid=request.check_uid)
         elif request.folder_path:
-            analyzer = cls.from_folder(request.folder_path, check_uid=request.check_uid)
+            # CatPhanBase / ACRCT load from a folder via __init__, not from_folder.
+            analyzer = cls(request.folder_path, check_uid=request.check_uid)
         else:
             return QAResult(
                 success=False,

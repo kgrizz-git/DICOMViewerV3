@@ -18,7 +18,10 @@ viewer classes for compatibility with older imports.
 
 from __future__ import annotations
 
+from typing import cast
+
 from pylinac import ACRCT, ACRMRILarge
+from pylinac.ct import CatPhanBase
 
 from qa.analysis_types import physical_scan_extent_passes_relaxed
 
@@ -33,8 +36,9 @@ class _RelaxedImageExtentMixin:
     """
 
     def _is_within_image_extent(self, image_num: int) -> bool:
+        catphan = cast(CatPhanBase, cast(object, self))
         n = int(image_num)
-        n_img = int(self.num_images)
+        n_img = int(catphan.num_images)
         if 0 <= n < n_img:
             return True
         raise ValueError(
@@ -54,17 +58,18 @@ class _RelaxedPhysicalScanExtentMixin:
     _scan_extent_tolerance_mm: float = 0.0
 
     def _ensure_physical_scan_extent(self) -> bool:
-        eps = float(getattr(self, "_scan_extent_tolerance_mm", 0.0) or 0.0)
+        catphan = cast(CatPhanBase, cast(object, self))
+        eps = float(getattr(catphan, "_scan_extent_tolerance_mm", 0.0) or 0.0)
         if eps <= 0:
-            return super()._ensure_physical_scan_extent()
+            return CatPhanBase._ensure_physical_scan_extent(catphan)
 
         from pylinac.core.image import z_position
 
-        z_positions = [z_position(m) for m in self.dicom_stack.metadatas]
+        z_positions = [z_position(m) for m in catphan.dicom_stack.metadatas]
         min_scan_extent_slice = round(min(z_positions), 1)
         max_scan_extent_slice = round(max(z_positions), 1)
-        min_config_extent_slice = round(min(self._module_offsets()), 1)
-        max_config_extent_slice = round(max(self._module_offsets()), 1)
+        min_config_extent_slice = round(min(catphan._module_offsets()), 1)
+        max_config_extent_slice = round(max(catphan._module_offsets()), 1)
         return physical_scan_extent_passes_relaxed(
             min_scan_extent_slice,
             max_scan_extent_slice,

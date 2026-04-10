@@ -16,7 +16,7 @@ from pydicom.dataset import Dataset
 from pydicom.sequence import Sequence
 
 from core.dicom_parser import DICOMParser
-from core.tag_export_catalog import union_tags_across_datasets
+from core.tag_export_union import union_tags_across_datasets
 
 
 class TestDICOMParser(unittest.TestCase):

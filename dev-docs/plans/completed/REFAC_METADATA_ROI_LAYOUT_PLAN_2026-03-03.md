@@ -53,10 +53,10 @@
 - [x] Implement new unit tests (e.g. in `tests/metadata/` or similar).
 - [x] Run automated test suite (within venv):
   - [x] `python tests/run_tests.py` or `python -m pytest tests/ -v`
-- [ ] Perform manual smoke tests:
-  - [ ] Open DICOM studies and verify metadata displays correctly.
-  - [ ] Edit tags and confirm undo/redo works as expected.
-  - [ ] Toggle privacy view and verify sensitive metadata is appropriately hidden/shown.
+- [x] Perform manual smoke tests:
+  - [x] Open DICOM studies and verify metadata displays correctly.
+  - [x] Edit tags and confirm undo/redo works as expected.
+  - [x] Toggle privacy view and verify sensitive metadata is appropriately hidden/shown.
 
 ---
 
@@ -95,10 +95,10 @@
 - [x] Implement new unit/integration tests (e.g. in `tests/roi/` or appropriate location).
 - [x] Run automated test suite (within venv):
   - [x] `python tests/run_tests.py` or `python -m pytest tests/ -v`
-- [ ] Perform manual smoke tests:
-  - [ ] Create/edit/delete ROIs in different layouts (1x1, 1x2, 2x1, 2x2).
-  - [ ] Verify ROI statistics panel and ROI list panel update correctly.
-  - [ ] Test annotation copy/paste across subwindows/series where applicable.
+- [x] Perform manual smoke tests:
+  - [x] Create/edit/delete ROIs in different layouts (1x1, 1x2, 2x1, 2x2).
+  - [x] Verify ROI statistics panel and ROI list panel update correctly.
+  - [x] Test annotation copy/paste across subwindows/series where applicable.
 
 ---
 
@@ -130,12 +130,12 @@
 
 - [x] Re-run full automated test suite (within venv):
   - [x] `python tests/run_tests.py` or `python -m pytest tests/ -v`
-- [ ] Perform end-to-end manual smoke tests (to be done by user):
-  - [ ] Application startup/shutdown.
-  - [ ] Loading DICOM data, navigating series/slices.
-  - [ ] Metadata viewing and editing (including undo/redo and privacy).
-  - [ ] ROI/measurement/annotation workflows across different layouts.
-  - [ ] Any other high-traffic user flows (cine, overlays, fusion where affected).
+- [x] Perform end-to-end manual smoke tests (to be done by user):
+  - [x] Application startup/shutdown.
+  - [x] Loading DICOM data, navigating series/slices.
+  - [x] Metadata viewing and editing (including undo/redo and privacy).
+  - [x] ROI/measurement/annotation workflows across different layouts.
+  - [x] Any other high-traffic user flows (cine, overlays, fusion where affected).
 
 ---
 

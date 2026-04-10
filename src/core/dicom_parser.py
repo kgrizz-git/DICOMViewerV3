@@ -23,7 +23,6 @@ from pydicom.dataset import Dataset
 from pydicom.tag import Tag
 import numpy as np
 
-from core.tag_export_catalog import supplement_export_tags_dict
 from utils.dicom_utils import is_patient_tag
 
 
@@ -138,6 +137,10 @@ class DICOMParser:
                 }
 
         if supplement_standard_tags:
+            # Deferred import keeps module load free of tag_export_catalog (union
+            # lives in tag_export_union.py; catalog has no dicom_parser import).
+            from core.tag_export_catalog import supplement_export_tags_dict
+
             supplement_export_tags_dict(tags)
 
         self._tag_cache[cache_key] = tags

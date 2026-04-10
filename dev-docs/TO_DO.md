@@ -1,7 +1,7 @@
 # To-Do Checklist
 
-**Last updated:** 2026-03-27  
-**Changes:** Linked Stage 1 plan for pylinac + automated QA (`plans/PYLINAC_AND_AUTOMATED_QA_STAGE1_PLAN.md`).
+**Last updated:** 2026-04-09  
+**Changes:** P0 macOS PyInstaller A/B size + build-time exclude strategy under Performance / Packaging.
 
 ---
 
@@ -40,11 +40,11 @@ This file tracks active and near-term tasks.
 
 ## Performance / Packaging
 
+- [ ] **[P0]** **macOS PyInstaller — A/B `du` and safety:** On macOS, from the **same git ref**, build twice: (1) **current** spec with **`MACOS_PYSIDE6_MODULE_EXCLUDES`** applied, (2) a branch or env-gated spec that **does not** apply those darwin-only excludes. Compare **`du -sh dist/DICOMViewerV3.app`** (and top `Frameworks/` contributors); record numbers in **`dev-docs/info/PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md`**. **Smoke both** `.app` builds (launch, open DICOM, histogram, export/QA paths). *Why:* PyInstaller usually **does not** ship modules that never appear in the import graph, so excludes may save **little** until hooks/deps pull extra Qt; but **`excludes` can still cause `ImportError`** if any code path (including a **third-party** lazy import) touches a trimmed module — so **prefer default = include everything PyInstaller collects** and treat aggressive macOS trims as a **build-time opt-in** (e.g. env var or spec flag) only after A/B numbers justify it and smoke passes on the slim build.
 - [ ] **[P1]** Try to make code faster (startup, file loading, fusion, and general responsiveness) ([details](FUTURE_WORK_DETAIL_NOTES.md#performance-initial-load-file-loading-fusion-and-general-responsiveness))
     - [P2] Particularly w/ large dataset (large files or many files) - would loading compressed initially save time? If we make a database, keep compressed cache?
 - [ ] **[P0]** See if executables can be made smaller (especially on macOS) ([details](FUTURE_WORK_DETAIL_NOTES.md#executable-size-especially-on-macos))
 - [ ] **[P1]** Check fusion responsiveness on Parallels with 3D fusion
-
 
 ## Maintenance
 

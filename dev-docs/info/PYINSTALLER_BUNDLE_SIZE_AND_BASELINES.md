@@ -2,9 +2,23 @@
 
 This note supports reproducible **size tracking** for **Windows**, **macOS**, and **Linux** outputs from `DICOMViewerV3.spec`, and explains how rough **“what if we did not exclude X?”** estimates work.
 
-## What is excluded only on macOS?
+## Single flag: `PYINSTALLER_MACOS_SLIM` (where it is set)
 
-In **`scripts/pyinstaller_exclude_lists.py`**, **`MACOS_PYSIDE6_MODULE_EXCLUDES`** is applied **only when** `sys.platform == "darwin"` (see **`DICOMViewerV3.spec`**). **Matplotlib** and **PIL/Tk-related** excludes apply on **all** platforms.
+**One environment variable** turns macOS **PySide6 submodule excludes** on or off. It is defined and read in **`DICOMViewerV3.spec`** (not in GitHub’s UI by name — CI passes it into the process environment).
+
+| Where | How slim is controlled |
+|-------|-------------------------|
+| **Local macOS shell** | Export or prefix: `PYINSTALLER_MACOS_SLIM=1 pyinstaller DICOMViewerV3.spec --clean --noconfirm`. Omit or use `0` / `false` for **off** (default). |
+| **GitHub Actions — main matrix** | **`.github/workflows/build.yml`** sets **`PYINSTALLER_MACOS_SLIM`** to **`false`** (string) on the **macOS** matrix row and empty on Windows/Linux → **slim off** for **tag pushes** and default manual runs. |
+| **GitHub Actions — optional second job** | Manual **Run workflow** only: checkbox **Also run a second macOS build with PYINSTALLER_MACOS_SLIM=1** → job **`macOS slim (PYINSTALLER_MACOS_SLIM=1)`** runs with **`PYINSTALLER_MACOS_SLIM=true`** → artifact **`DICOMViewerV3-macOS-slim`**. **Unchecked** → that job is **skipped** (no extra macOS slim build). |
+
+**Disabling slim on GitHub:** Do **not** check the optional checkbox; tag-triggered builds never use slim. There is no separate “disable” beyond leaving slim **off** (default).
+
+**Matplotlib** and **PIL/Tk-related** excludes in **`scripts/pyinstaller_exclude_lists.py`** still apply on **all** platforms regardless of **`PYINSTALLER_MACOS_SLIM`**.
+
+## When are large PySide6 modules excluded on macOS?
+
+**`MACOS_PYSIDE6_MODULE_EXCLUDES`** is applied only when **`sys.platform == "darwin"`** and **`PYINSTALLER_MACOS_SLIM`** is truthy (`1`, `true`, `yes`, `on`). Otherwise those names are **not** added to **`Analysis.excludes`**.
 
 ## Order-of-magnitude: macOS PySide6 trims (`MACOS_PYSIDE6_MODULE_EXCLUDES`)
 
@@ -24,7 +38,7 @@ Very rough **upper-bound** intuition if those Qt subsystems **did** get bundled 
 
 **Combined ballpark** if everything in **`MACOS_PYSIDE6_MODULE_EXCLUDES`** were actually present in the `.app`: often **~200–500 MB** extra vs a lean QtWidgets-focused bundle — **high variance** by PySide6 version, PyInstaller version, and whether WebEngine is pulled in at all.
 
-**Authoritative method:** On a Mac, build twice from the same commit: once with the darwin list **empty** (scratch branch) and once as shipped; compare `du -sh dist/DICOMViewerV3.app`. CI **`du`** logs (see **Build Executables** workflow) give **actual** shipped sizes, not hypothetical “with excludes removed.”
+**Authoritative method:** On a Mac, build twice from the same commit: **`PYINSTALLER_MACOS_SLIM`** unset vs **`PYINSTALLER_MACOS_SLIM=1`**; compare **`du -sh dist/DICOMViewerV3.app`**. In CI, run **Build Executables** manually with the **macOS slim** checkbox enabled and compare **`du`** in the **`DICOMViewerV3-macOS`** vs **`DICOMViewerV3-macOS-slim`** job logs.
 
 ## Matplotlib / PIL excludes (all OSes)
 
@@ -71,10 +85,11 @@ ls -lh DICOMViewerV3-*-x86_64.AppImage
 The **Build Executables** workflow (`.github/workflows/build.yml`) runs **`Log distribution sizes`** with **`du -sh`** on:
 
 - **Windows:** `dist/DICOMViewerV3` and `DICOMViewerV3.exe`
-- **macOS:** `dist/DICOMViewerV3.app` plus drill-downs under `Contents/`, `MacOS/`, `Frameworks/`, and top-N under `Frameworks/` / `Resources/`
+- **macOS (default matrix job, slim off):** `dist/DICOMViewerV3.app` plus drill-downs under `Contents/`, `MacOS/`, `Frameworks/`, and top-N under `Frameworks/` / `Resources/`
+- **macOS slim (optional job):** same paths; log section labeled **`macOS SLIM (PYINSTALLER_MACOS_SLIM=1)`**
 - **Linux:** `dist/DICOMViewerV3` folder and main binary
 
-Open the job log for each matrix leg to record numbers into the table below.
+Open the job log for each matrix leg (and the slim job if you ran it) to record numbers into the table below.
 
 ## Baseline size table (maintainer-maintained)
 

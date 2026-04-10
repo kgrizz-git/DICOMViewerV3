@@ -60,7 +60,7 @@ See the "Version Control Considerations" section below for more details.
 Do not copy stale excerpts into docs—the real file at the repo root is the source of truth. At a high level it defines:
 
 - **`IS_DARWIN` / `USE_UPX`:** On macOS, **`upx=False`** on `EXE` and `COLLECT` (`USE_UPX = not IS_DARWIN`) so Mach-O layouts stay compatible with **codesign** and **notarization**; Windows/Linux keep UPX when the tool is installed.
-- **`Analysis`:** `main.py` via absolute paths, `pathex` including `src/`, `datas` for `resources/`, a long explicit **`hiddenimports`** list (GUI/core/utils, pydicom, codecs, **`matplotlib.backends.backend_qtagg`**, PySide6, etc.), and **`excludes`** for `*.tests` (including **`pylinac.tests`** / common stack test packages when present), **`PIL.ImageTk` / `PIL._tkinter_finder`** (Tk unused; **`PIL.Image`** stays for I/O), plus shared lists in **`scripts/pyinstaller_exclude_lists.py`** (matplotlib backend/writer trims including non-`qtagg` Qt/cairo paths; **darwin-only** `PySide6` submodule trims such as WebEngine, Multimedia, **QtPdf**, **QtVirtualKeyboard**, 3D/Quick). **`tests/test_pyinstaller_exclude_audit.py`** fails CI if `src/` or `tests/` imports any excluded matplotlib backend, trimmed PySide6 module, or excluded PIL Tk helper (AST scan; does not inspect third-party wheels). Size baselines / per-OS **`du`**: **`dev-docs/info/PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md`**.
+- **`Analysis`:** `main.py` via absolute paths, `pathex` including `src/`, `datas` for `resources/`, a long explicit **`hiddenimports`** list (GUI/core/utils, pydicom, codecs, **`matplotlib.backends.backend_qtagg`**, PySide6, etc.), and **`excludes`** for `*.tests` (including **`pylinac.tests`** / common stack test packages when present), **`PIL.ImageTk` / `PIL._tkinter_finder`** (Tk unused; **`PIL.Image`** stays for I/O), plus shared lists in **`scripts/pyinstaller_exclude_lists.py`** (matplotlib backend/writer trims including non-`qtagg` Qt/cairo paths). **Large macOS-only PySide6 submodule trims** (WebEngine, Multimedia, **QtPdf**, 3D/Quick, etc.) apply **only** when **`PYINSTALLER_MACOS_SLIM`** is truthy — see below (default **off** for compatibility). **`tests/test_pyinstaller_exclude_audit.py`** fails CI if `src/` or `tests/` imports any excluded matplotlib backend, trimmed PySide6 module, or excluded PIL Tk helper (AST scan; does not inspect third-party wheels). Size baselines / per-OS **`du`**: **`dev-docs/info/PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md`**.
 - **Distribution shape:** `EXE` with **`exclude_binaries=True`**, then **`COLLECT`**, then **`BUNDLE`** for **`DICOMViewerV3.app`** on macOS.
 
 Truncated excerpt (structure only—see the spec for the full lists):
@@ -74,7 +74,7 @@ a = Analysis(
     pathex=[src_dir_abs],
     datas=[("resources", "resources")],
     hiddenimports=[...],  # gui/core/pydicom/PIL (no Tk helpers)/matplotlib qtagg/pylibjpeg/PySide6/...
-    excludes=[...],      # *.tests; PIL Tk helpers; non-Qt matplotlib backends; + darwin-only PySide6 trims
+    excludes=[...],      # *.tests; PIL Tk; matplotlib backends; + darwin PySide6 trims only if PYINSTALLER_MACOS_SLIM
     ...
 )
 
@@ -90,6 +90,32 @@ app = BUNDLE(coll, name="DICOMViewerV3.app", ...)
 - **`console=False`**: Creates a windowed application (no console window). Set to `True` for debugging
 - **`upx`**: In `DICOMViewerV3.spec`, **`EXE` and `COLLECT` use `upx=USE_UPX`** where **`USE_UPX = not IS_DARWIN`**: UPX runs on Windows/Linux when the tool is installed; on **macOS UPX is off** because packed Mach-O often breaks or complicates **codesign**, **stapling**, and **notarization** (see **`dev-docs/info/CODE_SIGNING_AND_NOTARIZATION.md`**).
 - **`icon`**: Path to an icon file (`.ico` for Windows, `.icns` for macOS)
+
+### macOS slim bundle — `PYINSTALLER_MACOS_SLIM` (single flag)
+
+One **environment variable** controls whether **`MACOS_PYSIDE6_MODULE_EXCLUDES`** (large unused Qt submodules) are applied in **`DICOMViewerV3.spec`**. It is read **only on macOS**; Windows/Linux ignore it.
+
+| Value | Behavior |
+|-------|----------|
+| **Unset**, empty, `0`, `false`, `no`, `off` (any case) | **Default.** Do **not** apply macOS PySide6 submodule excludes — **larger** `.app`, **fewest** surprise `ImportError`s from lazy imports in dependencies. |
+| **`1`**, `true`, `yes`, `on` (any case) | **Slim:** apply **`MACOS_PYSIDE6_MODULE_EXCLUDES`** — smaller `.app`; **smoke-test** before distributing. |
+
+**Local examples (macOS, project root, venv active):**
+
+```bash
+# default (full compatibility — same as CI tag / default matrix macOS job)
+pyinstaller DICOMViewerV3.spec --clean --noconfirm
+
+# slim A/B comparison
+PYINSTALLER_MACOS_SLIM=1 pyinstaller DICOMViewerV3.spec --clean --noconfirm
+```
+
+**GitHub Actions — Build Executables** (`.github/workflows/build.yml`):
+
+- **Tag push** and the **default** matrix **macOS** job set **`PYINSTALLER_MACOS_SLIM`** to empty / `false` → **not** slim (release `.app` is the full bundle).
+- **Manual `workflow_dispatch`:** leave **`build_macos_slim`** unchecked → **no** second macOS job (slim stays **off**). Check **`Also run a second macOS build with PYINSTALLER_MACOS_SLIM=1`** → runs an extra job **`macOS slim (PYINSTALLER_MACOS_SLIM=1)`** and uploads artifact **`DICOMViewerV3-macOS-slim`** for **`du`** comparison — **not** attached to **Releases** by that job (releases still use the main matrix outputs only).
+
+More detail and a baseline table: **`dev-docs/info/PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md`**.
 
 ## Step 3: Build Executables
 
@@ -408,7 +434,8 @@ A GitHub Actions workflow file is already included in the project at `.github/wo
 2. Click on the "Actions" tab
 3. Select "Build Executables" workflow
 4. Click "Run workflow" button
-5. Select the branch and click "Run workflow"
+5. Select the branch. **Optional:** check **Also run a second macOS build with PYINSTALLER_MACOS_SLIM=1** to produce artifact **`DICOMViewerV3-macOS-slim`** (for **`du`** A/B vs **`DICOMViewerV3-macOS`**). Leave it **unchecked** to keep slim builds **off** (default). Click **Run workflow**.
+6. See **`PYINSTALLER_MACOS_SLIM`** in the spec section above for the single env flag used by PyInstaller locally and by CI.
 6. Wait for builds to complete
 7. Download artifacts from the completed workflow run
 

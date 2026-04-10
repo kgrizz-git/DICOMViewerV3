@@ -32,10 +32,8 @@ import os
 
 from core.dicom_parser import DICOMParser
 from core.tag_export_analysis_service import analyze_tag_variations
-from core.tag_export_catalog import (
-    synthetic_tag_export_tree_entry,
-    union_tags_across_datasets,
-)
+from core.tag_export_catalog import synthetic_tag_export_tree_entry
+from core.tag_export_union import union_tags_across_datasets
 from core.tag_export_writer import (
     generate_default_filename,
     write_csv_files,

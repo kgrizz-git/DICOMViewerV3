@@ -36,9 +36,9 @@ MATPLOTLIB_BACKEND_AND_WRITER_EXCLUDES: tuple[str, ...] = (
     "matplotlib.backends.backend_cairo",
 )
 
-# macOS-only: large PySide6 wheels not referenced in application source.
-# If you add a feature that needs one of these, remove it from this tuple and
-# from the spec’s darwin branch (they are the same list).
+# macOS-only (when DICOMViewerV3.spec sets PYINSTALLER_MACOS_SLIM): large PySide6 wheels not
+# referenced in application source. Default builds omit these excludes for compatibility.
+# If you add a feature that needs one of these, remove it from this tuple or turn slim off.
 MACOS_PYSIDE6_MODULE_EXCLUDES: tuple[str, ...] = (
     "PySide6.QtWebEngineCore",
     "PySide6.QtWebEngineWidgets",
