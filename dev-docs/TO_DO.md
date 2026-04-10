@@ -56,6 +56,7 @@ This file tracks active and near-term tasks.
 
 ## UX / Workflow
 
+- [ ] **[P1]** Add option to have one large window on left and two smaller on right (above and below), or one large window on top and smaller on bottom (left and right), and maybe vice versa for each case. Make "2" key switch between 1x2 and 2x1, while "3" switches between different 3-window layouts just described.
 - [ ] **[P2]** Make window map thumbnail in navigator interactive (click square to focus and reveal) ([plan](plans/UX_IMPROVEMENTS_BATCH1_PLAN.md#1-window-map-thumbnail-interactive))
 - [ ] **[P2]** Make toolbar contents and ordering customizable ([plan](plans/UX_IMPROVEMENTS_BATCH1_PLAN.md#2-toolbar-customization))
 - [ ] **[P2]** Improve discoverability/documentation of existing window/level drag interaction ([plan](plans/UX_IMPROVEMENTS_BATCH1_PLAN.md#3-alternative-windowlevel-interaction))
