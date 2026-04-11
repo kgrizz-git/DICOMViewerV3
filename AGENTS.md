@@ -61,6 +61,7 @@ src/
 │   ├── qa_app_facade.py               # ACR CT/MRI pylinac QA flows, workers, compare dialog, QA JSON export; DICOMViewerApp delegates (Phase 4b)
 │   ├── export_app_facade.py           # Focused-series paths, save-as prompt, export/ROI-stats/screenshot entrypoints; DICOMViewerApp delegates (Phase 4c)
 │   ├── subwindow_image_viewer_sync.py # Propagate privacy, slice sync, smoothing, scale/direction markers to all pane ImageViewers (used by main.py)
+│   ├── subwindow_manager_factory.py # build_managers_for_subwindow(app, idx, subwindow) — per-pane ROI/measurement/overlay/slice/fusion graph (used by main.py)
 │   ├── slice_display_lut.py           # Window/level raw vs rescaled alignment helpers (used by SliceDisplayManager)
 │   ├── slice_display_pixels.py        # Intensity projection → PIL pipeline (used by SliceDisplayManager)
 │   ├── direction_labels.py            # Patient LPS direction strings from ImageOrientationPatient (viewer edge labels; tests in tests/test_direction_labels.py)

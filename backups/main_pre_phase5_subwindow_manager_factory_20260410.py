@@ -77,12 +77,13 @@ from core.dicom_processor import DICOMProcessor
 from core.tag_edit_history import TagEditHistoryManager
 from utils.config_manager import ConfigManager
 from utils.dicom_utils import get_composite_series_key
-from tools.roi_manager import ROIItem
+from tools.roi_manager import ROIManager, ROIItem
+from tools.measurement_tool import MeasurementTool
 from tools.measurement_items import MeasurementItem
-from tools.crosshair_manager import CrosshairItem
+from tools.crosshair_manager import CrosshairManager, CrosshairItem
 from tools.annotation_manager import AnnotationManager
-from tools.text_annotation_tool import TextAnnotationItem
-from tools.arrow_annotation_tool import ArrowAnnotationItem
+from tools.text_annotation_tool import TextAnnotationItem, TextAnnotationTool
+from tools.arrow_annotation_tool import ArrowAnnotationItem, ArrowAnnotationTool
 from tools.histogram_widget import HistogramWidget
 from gui.overlay_manager import OverlayManager
 from utils.annotation_clipboard import AnnotationClipboard
@@ -92,7 +93,9 @@ from metadata.metadata_controller import MetadataController
 from roi.roi_measurement_controller import ROIMeasurementController
 
 # Import handler classes
+from core.view_state_manager import ViewStateManager
 from core.file_operations_handler import FileOperationsHandler
+from core.slice_display_manager import SliceDisplayManager
 from core.annotation_paste_handler import AnnotationPasteHandler
 from core.file_series_loading_coordinator import FileSeriesLoadingCoordinator
 from core.subwindow_lifecycle_controller import SubwindowLifecycleController
@@ -110,16 +113,23 @@ from core.subwindow_image_viewer_sync import (
     set_scale_markers_color_all,
     set_smooth_when_zoomed_all,
 )
-from core.subwindow_manager_factory import build_managers_for_subwindow
+from gui.roi_coordinator import ROICoordinator
+from gui.measurement_coordinator import MeasurementCoordinator
+from gui.crosshair_coordinator import CrosshairCoordinator
+from gui.overlay_coordinator import OverlayCoordinator
 from gui.dialog_coordinator import DialogCoordinator
 from gui.mouse_mode_handler import MouseModeHandler
 from gui.keyboard_event_handler import KeyboardEventHandler
+from gui.text_annotation_coordinator import TextAnnotationCoordinator
+from gui.arrow_annotation_coordinator import ArrowAnnotationCoordinator
 from gui.dialogs.tag_export_union_worker import TagExportUnionWorker
 from gui.dialogs.disclaimer_dialog import DisclaimerDialog
 
 # Import fusion components
+from core.fusion_handler import FusionHandler
 from core.fusion_processor import FusionProcessor
 from gui.fusion_controls_widget import FusionControlsWidget
+from gui.fusion_coordinator import FusionCoordinator
 from core.app_signal_wiring import wire_all_signals
 from qa.analysis_types import (
     MRIBatchResult,
@@ -488,9 +498,175 @@ class DICOMViewerApp(QObject):
     def _build_managers_for_subwindow(self, idx: int, subwindow: SubWindowContainer) -> Dict[str, Any]:
         """
         Build the full set of per-subwindow managers for the given subwindow.
-        Delegates to ``core.subwindow_manager_factory.build_managers_for_subwindow``.
+        Single place for manager creation; used by _initialize_subwindow_managers
+        and _create_managers_for_subwindow to avoid duplication.
+        Returns the managers dict (caller stores it and initializes subwindow_data).
         """
-        return build_managers_for_subwindow(self, idx, subwindow)
+        image_viewer = subwindow.image_viewer
+        scroll_mode = self.config_manager.get_scroll_wheel_mode()
+        image_viewer.set_scroll_wheel_mode(scroll_mode)
+
+        managers: Dict[str, Any] = {}
+        managers['roi_manager'] = ROIManager(config_manager=self.config_manager)
+        managers['measurement_tool'] = MeasurementTool(config_manager=self.config_manager)
+        managers['text_annotation_tool'] = TextAnnotationTool(config_manager=self.config_manager)
+        managers['arrow_annotation_tool'] = ArrowAnnotationTool(config_manager=self.config_manager)
+        managers['crosshair_manager'] = CrosshairManager(config_manager=self.config_manager)
+        managers['crosshair_manager'].set_privacy_mode(self.privacy_view_enabled)
+        font_size = self.config_manager.get_overlay_font_size()
+        font_color = self.config_manager.get_overlay_font_color()
+        font_family = self.config_manager.get_overlay_font_family()
+        font_variant = self.config_manager.get_overlay_font_variant()
+        managers['overlay_manager'] = OverlayManager(
+            font_size=font_size,
+            font_color=font_color,
+            font_family=font_family,
+            font_variant=font_variant,
+            config_manager=self.config_manager
+        )
+        managers['overlay_manager'].set_privacy_mode(self.privacy_view_enabled)
+        managers['view_state_manager'] = ViewStateManager(
+            self.dicom_processor,
+            image_viewer,
+            self.window_level_controls,
+            self.main_window,
+            managers['overlay_manager'],
+            overlay_coordinator=None,
+            roi_coordinator=None,
+            display_rois_for_slice=None
+        )
+        managers['slice_display_manager'] = SliceDisplayManager(
+            self.dicom_processor,
+            image_viewer,
+            self.metadata_panel,
+            self.slice_navigator,
+            self.window_level_controls,
+            managers['roi_manager'],
+            managers['measurement_tool'],
+            overlay_manager=managers['overlay_manager'],
+            view_state_manager=managers['view_state_manager'],
+            text_annotation_tool=managers.get('text_annotation_tool'),
+            arrow_annotation_tool=managers.get('arrow_annotation_tool'),
+            update_tag_viewer_callback=self._update_tag_viewer,
+            display_rois_callback=None,
+            display_measurements_callback=None,
+            roi_list_panel=self.roi_list_panel,
+            roi_statistics_panel=self.roi_statistics_panel,
+            update_roi_statistics_overlays_callback=None,
+            annotation_manager=self.annotation_manager,
+            dicom_organizer=self.dicom_organizer
+        )
+        managers['crosshair_coordinator'] = CrosshairCoordinator(
+            managers['crosshair_manager'],
+            image_viewer,
+            get_current_dataset=lambda i=idx: self._get_subwindow_dataset(i),
+            get_current_slice_index=lambda i=idx: self._get_subwindow_slice_index(i),
+            undo_redo_manager=self.undo_redo_manager,
+            update_undo_redo_state_callback=self._update_undo_redo_state,
+            get_use_rescaled_values=lambda i=idx: (managers['view_state_manager'].use_rescaled_values if managers['view_state_manager'] else False)
+        )
+        managers['roi_coordinator'] = ROICoordinator(
+            managers['roi_manager'],
+            self.roi_list_panel,
+            self.roi_statistics_panel,
+            image_viewer,
+            self.dicom_processor,
+            self.window_level_controls,
+            self.main_window,
+            get_current_dataset=lambda i=idx: self._get_subwindow_dataset(i),
+            get_current_slice_index=lambda i=idx: self._get_subwindow_slice_index(i),
+            get_rescale_params=lambda i=idx: self._get_subwindow_rescale_params(i),
+            set_mouse_mode_callback=self._set_mouse_mode_via_handler,
+            get_projection_enabled=lambda i=idx: (
+                m.projection_enabled if (m := self._get_subwindow_slice_display_manager(i)) else False
+            ),
+            get_projection_type=lambda i=idx: (
+                m.projection_type if (m := self._get_subwindow_slice_display_manager(i)) else "aip"
+            ),
+            get_projection_slice_count=lambda i=idx: (
+                m.projection_slice_count if (m := self._get_subwindow_slice_display_manager(i)) else 4
+            ),
+            get_current_studies=lambda: self.current_studies,
+            get_mpr_pixel_array=lambda i=idx: self._get_subwindow_mpr_pixel_array(i),
+            get_mpr_output_pixel_spacing=lambda i=idx: self._get_subwindow_mpr_output_pixel_spacing(i),
+            undo_redo_manager=self.undo_redo_manager,
+            update_undo_redo_state_callback=self._update_undo_redo_state,
+            crosshair_coordinator=managers['crosshair_coordinator']
+        )
+        managers['measurement_coordinator'] = MeasurementCoordinator(
+            managers['measurement_tool'],
+            image_viewer,
+            get_current_dataset=lambda i=idx: self._get_subwindow_dataset(i),
+            get_current_slice_index=lambda i=idx: self._get_subwindow_slice_index(i),
+            undo_redo_manager=self.undo_redo_manager,
+            update_undo_redo_state_callback=self._update_undo_redo_state
+        )
+        managers['text_annotation_coordinator'] = TextAnnotationCoordinator(
+            managers['text_annotation_tool'],
+            image_viewer,
+            get_current_dataset=lambda i=idx: self._get_subwindow_dataset(i),
+            get_current_slice_index=lambda i=idx: self._get_subwindow_slice_index(i),
+            undo_redo_manager=self.undo_redo_manager,
+            update_undo_redo_state_callback=self._update_undo_redo_state
+        )
+        managers['arrow_annotation_coordinator'] = ArrowAnnotationCoordinator(
+            managers['arrow_annotation_tool'],
+            image_viewer,
+            get_current_dataset=lambda i=idx: self._get_subwindow_dataset(i),
+            get_current_slice_index=lambda i=idx: self._get_subwindow_slice_index(i),
+            undo_redo_manager=self.undo_redo_manager,
+            update_undo_redo_state_callback=self._update_undo_redo_state
+        )
+        managers['overlay_coordinator'] = OverlayCoordinator(
+            managers['overlay_manager'],
+            image_viewer,
+            get_current_dataset=lambda i=idx: self._get_subwindow_dataset(i),
+            get_current_studies=lambda: self.current_studies,
+            get_current_study_uid=lambda i=idx: self._get_subwindow_study_uid(i),
+            get_current_series_uid=lambda i=idx: self._get_subwindow_series_uid(i),
+            get_current_slice_index=lambda i=idx: self._get_subwindow_slice_index(i),
+            get_multiframe_overlay_context=lambda dataset=None, study_uid=None, series_uid=None, i=idx: (
+                self.subwindow_managers[i]['slice_display_manager'].get_multiframe_overlay_context(
+                    dataset=dataset,
+                    study_uid=study_uid,
+                    series_uid=series_uid,
+                ) if i in self.subwindow_managers and self.subwindow_managers[i].get('slice_display_manager') else None
+            ),
+            hide_measurement_labels=managers['measurement_coordinator'].hide_measurement_labels,
+            hide_measurement_graphics=managers['measurement_coordinator'].hide_measurement_graphics,
+            hide_roi_graphics=managers['roi_coordinator'].hide_roi_graphics if hasattr(managers['roi_coordinator'], 'hide_roi_graphics') else None,
+            hide_roi_statistics_overlays=managers['roi_coordinator'].hide_roi_statistics_overlays
+        )
+        managers['fusion_handler'] = FusionHandler()
+        managers['fusion_coordinator'] = FusionCoordinator(
+            managers['fusion_handler'],
+            self.fusion_processor,
+            self.fusion_controls_widget,
+            get_current_studies=lambda: self.current_studies,
+            get_current_study_uid=lambda: self.current_study_uid,
+            get_current_series_uid=lambda: self.current_series_uid,
+            get_current_slice_index=lambda: self.current_slice_index,
+            request_display_update=lambda i=idx: self._redisplay_subwindow_slice(i, preserve_view=True),
+            check_notification_shown=lambda uid: self.has_shown_fusion_notification(uid),
+            mark_notification_shown=lambda uid: self.mark_fusion_notification_shown(uid)
+        )
+        managers['slice_display_manager'].fusion_coordinator = managers['fusion_coordinator']
+        managers['view_state_manager'].overlay_coordinator = managers['overlay_coordinator'].handle_overlay_config_applied
+        managers['view_state_manager'].roi_coordinator = lambda dataset: managers['roi_coordinator'].update_roi_statistics(
+            managers['roi_manager'].get_selected_roi()
+        ) if managers['roi_manager'].get_selected_roi() else None
+        managers['view_state_manager'].display_rois_for_slice = lambda preserve_view=False: self._display_rois_for_subwindow(idx, preserve_view)
+        managers['view_state_manager'].set_redisplay_slice_callback(lambda preserve_view=False: self._redisplay_subwindow_slice(idx, preserve_view))
+        managers['view_state_manager'].set_series_navigator(self.series_navigator)
+        managers['slice_display_manager'].update_roi_statistics_overlays_callback = managers['roi_coordinator'].update_roi_statistics_overlays
+        def on_inversion_state_changed(inverted: bool, i=idx) -> None:
+            if managers['view_state_manager'].current_series_identifier:
+                managers['view_state_manager'].set_series_inversion_state(
+                    managers['view_state_manager'].current_series_identifier,
+                    inverted
+                )
+        image_viewer.inversion_state_changed_callback = on_inversion_state_changed
+        return managers
 
     def _initialize_subwindow_managers(self) -> None:
         """Initialize managers for each subwindow."""

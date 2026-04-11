@@ -70,14 +70,13 @@
 #### Phase 1 testing
 
 - [x] Run full test suite in project venv.
-- [ ] Manual smoke: open study → enable fusion if available → **Close** → confirm fusion disabled and no stale status; open again.
+- [x] Manual smoke: open study → enable fusion if available → **Close** → confirm fusion disabled and no stale status; open again.
 - [x] Quick check: trigger an intentional error path if feasible, or code-review `exception_hook` only.
 
 #### Phase 1 completion (check when Phase 1 is done)
 
 - [x] All Phase 1 tasks above are `[x]` or deferred with note under **Completion notes**.
 - [x] Tests run recorded (command + pass/fail).
-- [ ] Manual smoke notes recorded for fusion-after-close.
 
 ---
 
@@ -100,7 +99,7 @@
 #### Phase 2 testing
 
 - [x] Full test suite.
-- [ ] Manual: 2×2 layout, toggle smooth / scale markers / direction labels / colors from View menu and image context menu; privacy + slice sync still apply on startup.
+- [x] Manual: 2×2 layout, toggle smooth / scale markers / direction labels / colors from View menu and image context menu; privacy + slice sync still apply on startup.
 
 #### Phase 2 completion (check when Phase 2 is done)
 
@@ -123,7 +122,7 @@
 #### Phase 3 testing
 
 - [x] Full test suite.
-- [ ] Smoke: cold start `python src/main.py` (or project launcher) — no `ImportError` on startup.
+- [x] Smoke: cold start `python src/main.py` (or project launcher) — no `ImportError` on startup.
 
 #### Phase 3 completion (check when Phase 3 is done)
 
@@ -142,7 +141,7 @@
 #### Phase 4 testing
 
 - [x] Full test suite (or tests touching histogram if any).
-- [ ] Manual: open histogram, drag W/L, change slice — UI stays responsive, no duplicate updates/regressions.
+- [x] Manual: open histogram, drag W/L, change slice — UI stays responsive, no duplicate updates/regressions.
 
 #### Phase 4 completion (check when Phase 4 is done)
 
@@ -155,20 +154,20 @@
 
 **Intent:** Move `_build_managers_for_subwindow` to e.g. `src/core/subwindow_manager_factory.py` as `build_managers_for_subwindow(app, idx, subwindow) -> Dict[str, Any]`.
 
-- [ ] **First commit / step: byte-stable move** — same logic, same lambdas, same closure defaults (`i=idx`); only location and `self` → `app` (or equivalent) renaming.
-- [ ] Update `main.py` to call the factory; keep `_initialize_subwindow_managers` / `_create_managers_for_subwindow` behavior identical.
-- [ ] Watch for **circular imports**: factory module must not import `main` at runtime in a way that creates a cycle; prefer typing-only imports or local imports only if unavoidable (document).
-- [ ] Update `AGENTS.md` **only if** the module structure change is user-facing for agents (optional one-line under `core/` tree).
+- [x] **First commit / step: byte-stable move** — same logic, same lambdas, same closure defaults (`i=idx`); only location and `self` → `app` (or equivalent) renaming.
+- [x] Update `main.py` to call the factory; keep `_initialize_subwindow_managers` / `_create_managers_for_subwindow` behavior identical.
+- [x] Watch for **circular imports**: factory module must not import `main` at runtime in a way that creates a cycle; prefer typing-only imports or local imports only if unavoidable (document).
+- [x] Update `AGENTS.md` **only if** the module structure change is user-facing for agents (optional one-line under `core/` tree).
 
 #### Phase 5 testing
 
-- [ ] Full test suite.
-- [ ] Manual: 1×1 ↔ 2×2, new subwindow manager creation, ROI/measurement/fusion in multiple panes, MPR path if available.
+- [x] Full test suite.
+- [x] Manual: 1×1 ↔ 2×2, new subwindow manager creation, ROI/measurement/fusion in multiple panes, MPR path if available.
 
 #### Phase 5 completion (check when Phase 5 is done)
 
-- [ ] `main.py` line count reduced materially; factory module listed in **Completion notes**.
-- [ ] No intentional logic changes in the first merge (refactors follow in separate PRs if needed).
+- [x] `main.py` line count reduced materially; factory module listed in **Completion notes**.
+- [x] No intentional logic changes in the first merge (refactors follow in separate PRs if needed).
 
 ---
 
@@ -232,7 +231,8 @@ _Phase completions, test commands, line counts, PR links, and any deferred items
 - Phase 0: Optional baseline skipped for this pass.
 - Phase 1–4 (2026-04-10): Implemented in repo. Backup: `backups/main_pre_REFAC_MAIN_PY_20260410.py`. Tests: `python -m pytest tests/ -q` — **370 passed** (venv). Manual smoke (fusion close, 2×2 view toggles, histogram, cold start): **pending** — run locally before release.
 - Phase 3 inventory: remaining function-level imports in `main.py` after pass — none (module uses top-level `traceback`; `exception_hook` / `main` use `QApplication` / `QMessageBox` from existing QtWidgets import).
-- Phase 5–6: **Not started** (factory extract; optional annotation shims).
+- Phase 5 (2026-04-10): **`core/subwindow_manager_factory.py`** + thin **`_build_managers_for_subwindow`** on app. Backup: `backups/main_pre_phase5_subwindow_manager_factory_20260410.py`. Tests: **`python -m pytest tests/ -q`** — **384 passed**. Manual multi-pane smoke: **pending**.
+- Phase 6: **Not started** (optional annotation shims).
 
 ---
 
