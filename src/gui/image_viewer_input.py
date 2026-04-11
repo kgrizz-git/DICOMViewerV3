@@ -20,7 +20,7 @@ import os
 import time
 from typing import Optional
 
-from utils.debug_flags import DEBUG_NAV, DEBUG_MAGNIFIER, DEBUG_AGENT_LOG
+from utils.debug_flags import DEBUG_NAV, DEBUG_MAGNIFIER
 
 
 class ImageViewerInputMixin:
@@ -80,36 +80,6 @@ class ImageViewerInputMixin:
                 self.zoom_out()
         else:
             # Slice navigation mode - emit signal for slice navigator
-            # region agent log: wheel slice navigation (H2 - wheel slice vs pan)
-            if DEBUG_AGENT_LOG:
-                try:
-                    import json as _json  # Local alias to avoid conflicts
-                    from time import time as _time
-                    wheel_log = {
-                        "sessionId": "088dbc",
-                        "runId": "pre-fix",
-                        "hypothesisId": "H2",
-                        "location": "image_viewer.wheelEvent",
-                        "message": "wheelEvent slice navigation",
-                        "data": {
-                            "angle_delta_y": int(event.angleDelta().y()),
-                            "scroll_wheel_mode": str(self.scroll_wheel_mode),
-                            "zoom": float(self.current_zoom),
-                            "h_scroll": int(self.horizontalScrollBar().value())
-                            if self.horizontalScrollBar() is not None
-                            else 0,
-                            "v_scroll": int(self.verticalScrollBar().value())
-                            if self.verticalScrollBar() is not None
-                            else 0,
-                        },
-                        "timestamp": int(_time() * 1000),
-                    }
-                    with open("debug-088dbc.log", "a", encoding="utf-8") as f:
-                        f.write(_json.dumps(wheel_log) + "\n")
-                except Exception:
-                    pass
-            # endregion agent log
-
             self.wheel_event_for_slice.emit(event.angleDelta().y())
         
         event.accept()
@@ -886,66 +856,10 @@ class ImageViewerInputMixin:
         
         if event.key() == Qt.Key.Key_Up:
             # Up arrow: next slice
-            # region agent log: up arrow slice navigation (H3 - key vs pan)
-            if DEBUG_AGENT_LOG:
-                try:
-                    import json as _json  # Local alias to avoid conflicts
-                    from time import time as _time
-                    up_log = {
-                        "sessionId": "088dbc",
-                        "runId": "pre-fix",
-                        "hypothesisId": "H3",
-                        "location": "image_viewer.keyPressEvent:Key_Up",
-                        "message": "Key_Up slice navigation",
-                        "data": {
-                            "zoom": float(self.current_zoom),
-                            "h_scroll": int(self.horizontalScrollBar().value())
-                            if self.horizontalScrollBar() is not None
-                            else 0,
-                            "v_scroll": int(self.verticalScrollBar().value())
-                            if self.verticalScrollBar() is not None
-                            else 0,
-                        },
-                        "timestamp": int(_time() * 1000),
-                    }
-                    with open("debug-088dbc.log", "a", encoding="utf-8") as f:
-                        f.write(_json.dumps(up_log) + "\n")
-                except Exception:
-                    pass
-            # endregion agent log
-
             self.arrow_key_pressed.emit(1)
             event.accept()
         elif event.key() == Qt.Key.Key_Down:
             # Down arrow: previous slice
-            # region agent log: down arrow slice navigation (H3 - key vs pan)
-            if DEBUG_AGENT_LOG:
-                try:
-                    import json as _json  # Local alias to avoid conflicts
-                    from time import time as _time
-                    down_log = {
-                        "sessionId": "088dbc",
-                        "runId": "pre-fix",
-                        "hypothesisId": "H3",
-                        "location": "image_viewer.keyPressEvent:Key_Down",
-                        "message": "Key_Down slice navigation",
-                        "data": {
-                            "zoom": float(self.current_zoom),
-                            "h_scroll": int(self.horizontalScrollBar().value())
-                            if self.horizontalScrollBar() is not None
-                            else 0,
-                            "v_scroll": int(self.verticalScrollBar().value())
-                            if self.verticalScrollBar() is not None
-                            else 0,
-                        },
-                        "timestamp": int(_time() * 1000),
-                    }
-                    with open("debug-088dbc.log", "a", encoding="utf-8") as f:
-                        f.write(_json.dumps(down_log) + "\n")
-                except Exception:
-                    pass
-            # endregion agent log
-
             self.arrow_key_pressed.emit(-1)
             event.accept()
         elif event.key() == Qt.Key.Key_Left:

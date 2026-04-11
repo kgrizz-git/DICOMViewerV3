@@ -544,33 +544,29 @@ class ROIManager:
         """
         # Deselect previous ROI
         if self.selected_roi is not None:
-            # print(f"[DEBUG-DESELECT] select_roi: Deselecting ROI {id(self.selected_roi)}")
-            # print(f"[DEBUG-DESELECT]   ROI item: {id(self.selected_roi.item) if self.selected_roi.item else None}")
-            # print(f"[DEBUG-DESELECT]   ROI item isSelected before: {self.selected_roi.item.isSelected() if self.selected_roi.item else None}")
-            # Ensure the ROI item is properly deselected even if it's in a different scene
-            if self.selected_roi.item is not None:
-                self.selected_roi.item.setSelected(False)
-                # print(f"[DEBUG-DESELECT]   ROI item isSelected after setSelected(False): {self.selected_roi.item.isSelected()}")
-                # Also clear selection in the item's scene if it exists
-                roi_scene = self.selected_roi.item.scene()
-                if roi_scene is not None:
-                    # print(f"[DEBUG-DESELECT]   Clearing selection in ROI's scene {id(roi_scene)}")
-                    selected_before = [item for item in roi_scene.selectedItems()]
-                    # print(f"[DEBUG-DESELECT]   Selected items in ROI's scene before clear: {len(selected_before)}")
-                    roi_scene.clearSelection()
-                    selected_after = [item for item in roi_scene.selectedItems()]
-                    # print(f"[DEBUG-DESELECT]   Selected items in ROI's scene after clear: {len(selected_after)}")
-        
+            prev = self.selected_roi
+            prev_item = prev.item if prev is not None else None
+            if prev_item is not None and isValid(prev_item):
+                try:
+                    prev_item.setSelected(False)
+                    roi_scene = prev_item.scene()
+                    if roi_scene is not None:
+                        roi_scene.clearSelection()
+                except RuntimeError:
+                    pass
+
         # Select new ROI
         # print(f"[DEBUG-OVERLAY] select_roi: roi_manager={id(self)}, selecting ROI {id(roi) if roi else None}")
         self.selected_roi = roi
-        if roi is not None:
-            roi.item.setSelected(True)
-            roi_scene = roi.item.scene() if roi.item else None
-            # print(f"[DEBUG-OVERLAY]   Selected ROI's item is in scene: {id(roi_scene) if roi_scene else None}")
-        else:
-            # print(f"[DEBUG-DESELECT] select_roi: No ROI selected (deselected)")
+        if roi is None:
             pass
+        elif roi.item is None or not isValid(roi.item):
+            self.selected_roi = None
+        else:
+            try:
+                roi.item.setSelected(True)
+            except RuntimeError:
+                self.selected_roi = None
     
     def get_selected_roi(self) -> Optional[ROIItem]:
         """
@@ -579,6 +575,10 @@ class ROIManager:
         Returns:
             Selected ROI item or None
         """
+        if self.selected_roi is not None:
+            it = self.selected_roi.item
+            if it is None or not isValid(it):
+                self.selected_roi = None
         return self.selected_roi
     
     def find_roi_by_item(self, item) -> Optional[ROIItem]:
@@ -619,10 +619,12 @@ class ROIManager:
                 self.remove_statistics_overlay(roi, scene)
                 roi.statistics_overlay_visible = False
                 roi.statistics = None
-                # Only remove if item actually belongs to this scene
-                if roi.item.scene() == scene:
-                    # print(f"[DEBUG-ROI] Removing ROI item from scene")
-                    scene.removeItem(roi.item)
+                if roi.item and isValid(roi.item):
+                    try:
+                        if scene and roi.item.scene() == scene:
+                            scene.removeItem(roi.item)
+                    except RuntimeError:
+                        pass
                 
                 # Deselect if this was the selected ROI
                 if self.selected_roi == roi:
@@ -662,6 +664,8 @@ class ROIManager:
         """
         key = (study_uid, series_uid, instance_identifier)
         if key in self.rois:
+            if self.selected_roi is not None and self.selected_roi in self.rois[key]:
+                self.selected_roi = None
             for roi in self.rois[key]:
                 # Remove statistics overlay if present
                 self.remove_statistics_overlay(roi, scene)
@@ -697,7 +701,11 @@ class ROIManager:
                 roi.statistics_overlay_visible = False
                 roi.statistics = None
         self.rois.clear()
-    
+        self.selected_roi = None
+        self.current_roi_item = None
+        self.drawing = False
+        self.drawing_start_pos = None
+
     def update_all_roi_styles(self, config_manager: ConfigManager | None) -> None:
         """
         Update styles (pen color, thickness, font size, font color) for all existing ROIs.

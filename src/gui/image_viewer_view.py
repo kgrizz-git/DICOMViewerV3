@@ -13,7 +13,7 @@ from PySide6.QtGui import QPixmap, QImage, QPainter, QColor, QTransform, QPen
 from PIL import Image
 from core.direction_labels import compute_direction_labels_from_iop
 from utils.bundled_fonts import make_qfont
-from utils.debug_flags import DEBUG_MAGNIFIER, DEBUG_AGENT_LOG
+from utils.debug_flags import DEBUG_MAGNIFIER
 import numpy as np
 import os
 from typing import Optional, Callable, Any, List, Tuple, Dict, Union, TYPE_CHECKING
@@ -474,47 +474,10 @@ class ImageViewerViewMixin:
             # mapToScene() + centerOn() across many slices (H5 drift bug).
             saved_h_scroll = self.horizontalScrollBar().value()
             saved_v_scroll = self.verticalScrollBar().value()
-            # Also compute scene center for logging only (not used for positioning)
-            viewport_center_viewport = QPointF(self.viewport().width() / 2.0, self.viewport().height() / 2.0)
-            saved_scene_center = self.mapToScene(viewport_center_viewport.toPoint())
-
-            # region agent log: set_image preserve_view before scene change (H5-fix)
-            if DEBUG_AGENT_LOG:
-                try:
-                    import json as _json  # Local alias
-                    from time import time as _time
-                    _vp_w_before = int(self.viewport().width())
-                    _vsb_vis_before = bool(
-                        self.verticalScrollBar() is not None
-                        and self.verticalScrollBar().maximum() > self.verticalScrollBar().minimum()
-                    )
-                    before_preserve_log = {
-                        "sessionId": "088dbc",
-                        "runId": "post-H5-fix",
-                        "hypothesisId": "H5",
-                        "location": "image_viewer.set_image:before_preserve_view",
-                        "message": "set_image preserve_view BEFORE scene change",
-                        "data": {
-                            "saved_zoom": float(saved_zoom),
-                            "saved_h_scroll": saved_h_scroll,
-                            "saved_v_scroll": saved_v_scroll,
-                            "saved_scene_center_x": float(saved_scene_center.x()),
-                            "saved_scene_center_y": float(saved_scene_center.y()),
-                            "viewport_width": _vp_w_before,
-                            "v_scrollbar_active": _vsb_vis_before,
-                        },
-                        "timestamp": int(_time() * 1000),
-                    }
-                    with open("debug-088dbc.log", "a", encoding="utf-8") as _f:
-                        _f.write(_json.dumps(before_preserve_log) + "\n")
-                except Exception:
-                    pass
-            # endregion agent log
         else:
             saved_zoom = None
             saved_h_scroll = None
             saved_v_scroll = None
-            saved_scene_center = None
         
         # Convert PIL Image to QPixmap
         # print(f"[VIEWER] Converting PIL Image to QImage...")
@@ -666,50 +629,6 @@ class ImageViewerViewMixin:
             self.last_transform = self.transform()
             self.zoom_changed.emit(self.current_zoom)
 
-            # region agent log: set_image preserve_view after restore (H5-fix)
-            if DEBUG_AGENT_LOG:
-                try:
-                    import json as _json  # Local alias
-                    from time import time as _time
-                    _sc_x = float(saved_scene_center.x()) if saved_scene_center is not None else None
-                    _sc_y = float(saved_scene_center.y()) if saved_scene_center is not None else None
-                    _vp_w_after = int(self.viewport().width())
-                    _vsb_vis_after = bool(
-                        self.verticalScrollBar() is not None
-                        and self.verticalScrollBar().maximum() > self.verticalScrollBar().minimum()
-                    )
-                    after_preserve_log = {
-                        "sessionId": "088dbc",
-                        "runId": "post-H5-fix",
-                        "hypothesisId": "H5",
-                        "location": "image_viewer.set_image:after_preserve_view",
-                        "message": "set_image preserve_view AFTER restore",
-                        "data": {
-                            "saved_zoom": float(saved_zoom),
-                            "saved_h_scroll": saved_h_scroll,
-                            "saved_v_scroll": saved_v_scroll,
-                            "h_scroll": int(self.horizontalScrollBar().value())
-                            if self.horizontalScrollBar() is not None
-                            else 0,
-                            "v_scroll": int(self.verticalScrollBar().value())
-                            if self.verticalScrollBar() is not None
-                            else 0,
-                            "h_scroll_matches": int(self.horizontalScrollBar().value()) == saved_h_scroll,
-                            "v_scroll_matches": int(self.verticalScrollBar().value()) == saved_v_scroll,
-                            "scene_center_x_for_log": _sc_x,
-                            "scene_center_y_for_log": _sc_y,
-                            "viewport_width": _vp_w_after,
-                            "v_scrollbar_active": _vsb_vis_after,
-                            "expanded_rect_x": float(expanded_rect.x()),
-                            "expanded_rect_width": float(expanded_rect.width()),
-                        },
-                        "timestamp": int(_time() * 1000),
-                    }
-                    with open("debug-088dbc.log", "a", encoding="utf-8") as _f:
-                        _f.write(_json.dumps(after_preserve_log) + "\n")
-                except Exception:
-                    pass
-            # endregion agent log
         else:
             # Reset zoom and fit to view
             # Don't center here - centering should only happen when initializing new series or resetting view

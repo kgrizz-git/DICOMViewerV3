@@ -70,7 +70,8 @@ def infer_rescale_type(
 ) -> Optional[str]:
     """
     Infer rescale type when RescaleType tag is missing.
-    For CT images, infers "HU" when rescale parameters match CT pattern.
+    For CT images with both slope and intercept, returns "HU" (linear
+    attenuation / Hounsfield storage convention).
 
     Args:
         dataset: pydicom Dataset
@@ -84,12 +85,12 @@ def infer_rescale_type(
     if rescale_type:
         return rescale_type
 
-    modality = getattr(dataset, 'Modality', None)
-    if modality and str(modality).upper() == 'CT':
+    modality = getattr(dataset, "Modality", None)
+    if modality and str(modality).upper() == "CT":
         if rescale_slope is not None and rescale_intercept is not None:
-            slope_match = abs(rescale_slope - 1.0) < 0.001
-            intercept_match = abs(rescale_intercept - (-1024.0)) < 0.1
-            if slope_match and intercept_match:
-                return "HU"
+            # CT storage values are almost always mapped to linear attenuation
+            # (HU) via RescaleSlope / RescaleIntercept; many vendors omit
+            # RescaleType or use intercepts other than -1024.
+            return "HU"
 
     return None

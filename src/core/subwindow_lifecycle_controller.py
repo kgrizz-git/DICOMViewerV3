@@ -59,10 +59,49 @@ class SubwindowLifecycleController:
         self._viewport_resized_timer: Optional[QTimer] = None
 
     def get_subwindow_dataset(self, idx: int) -> Optional[Dataset]:
-        """Get current dataset for a subwindow."""
-        if idx in self.app.subwindow_data:
-            return self.app.subwindow_data[idx].get('current_dataset')
-        return None
+        """
+        Get the DICOM dataset that matches what this subwindow is showing.
+
+        For **non-MPR** views, prefer ``current_studies[study][series][slice_index]``
+        when available — the same list ``_on_slice_changed`` / ``display_slice`` use
+        — so direction labels and scale markers cannot diverge from a stale or
+        reordered ``subwindow_data['current_datasets']`` (e.g. after MPR elsewhere).
+        Otherwise use ``current_datasets[slice_index]``, then ``current_dataset``.
+        MPR views keep the synthetic overlay dataset.
+        """
+        if idx not in self.app.subwindow_data:
+            return None
+        data = self.app.subwindow_data[idx]
+        is_mpr = bool(data.get("is_mpr"))
+        si_raw = data.get("current_slice_index", 0)
+        try:
+            si = int(si_raw)
+        except (TypeError, ValueError):
+            si = 0
+        ds_list = data.get("current_datasets")
+        out: Optional[Dataset] = None
+        if is_mpr:
+            out = data.get("current_dataset")
+        else:
+            study_uid = str(data.get("current_study_uid", "") or "")
+            series_uid = str(data.get("current_series_uid", "") or "")
+            studies = getattr(self.app, "current_studies", None)
+            if (
+                studies
+                and study_uid
+                and series_uid
+                and study_uid in studies
+                and isinstance(studies[study_uid], dict)
+                and series_uid in studies[study_uid]
+            ):
+                canon = studies[study_uid][series_uid]
+                if isinstance(canon, list) and canon and 0 <= si < len(canon):
+                    out = canon[si]
+            if out is None and isinstance(ds_list, list) and ds_list and 0 <= si < len(ds_list):
+                out = ds_list[si]
+            if out is None:
+                out = data.get("current_dataset")
+        return out
 
     def get_subwindow_datasets(self, idx: int):
         """Get current dataset list for a subwindow's series, if available."""
@@ -220,7 +259,10 @@ class SubwindowLifecycleController:
             self.wire_pixel_info_callbacks_for_subwindow(app.image_viewer, focused_idx)
         if focused_idx in app.subwindow_data:
             data = app.subwindow_data[focused_idx]
-            app.current_dataset = data.get('current_dataset')
+            canon = self.get_subwindow_dataset(focused_idx)
+            app.current_dataset = (
+                canon if canon is not None else data.get("current_dataset")
+            )
             app.current_slice_index = data.get('current_slice_index', 0)
             app.current_series_uid = data.get('current_series_uid', '')
             app.current_study_uid = data.get('current_study_uid', '')
@@ -387,7 +429,12 @@ class SubwindowLifecycleController:
         if idx not in app.subwindow_data:
             return
         data = app.subwindow_data[idx]
-        dataset = data.get('current_dataset')
+        # Match get_subwindow_dataset / direction labels: prefer slice list + index
+        # so the pixmap is not driven by a stale current_dataset while HUD uses
+        # current_datasets[current_slice_index].
+        dataset = self.get_subwindow_dataset(idx)
+        if dataset is None:
+            dataset = data.get("current_dataset")
         study_uid = data.get('current_study_uid', '')
         series_uid = data.get('current_series_uid', '')
         slice_index = data.get('current_slice_index', 0)
@@ -400,6 +447,9 @@ class SubwindowLifecycleController:
                 slice_index,
                 preserve_view_override=preserve_view
             )
+            # Keep stored pointer aligned with the slice list + index so other
+            # readers of current_dataset match the pixmap and direction labels.
+            data["current_dataset"] = dataset
             app.dialog_coordinator.update_histogram_for_subwindow(idx)
 
     def ensure_all_subwindows_have_managers(self) -> None:

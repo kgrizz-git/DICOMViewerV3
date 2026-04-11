@@ -1,6 +1,6 @@
 ---
 name: documentation-review-write-handoff
-description: >Reviews or updates documentation with timestamped logs, clear handoffs between docwriter and coder, and optional Sphinx/ReadTheDocs structure notes. Use for docreviewer or docwriter subagents or doc audits.
+description: "Defines doc review/write workflow with timestamped logs and clear handoff between docwriter and coder."
 ---
 
 # Documentation review, writing, and handoff
@@ -21,3 +21,7 @@ description: >Reviews or updates documentation with timestamped logs, clear hand
 ## Quality bar
 
 - Precise terminology, consistent headings, working **relative links**, and explicit audience (user vs operator vs developer).
+
+## Handoff to orchestrator
+
+- **docreviewer** and **docwriter** each end with the structured **HANDOFF → orchestrator** block (see skill `team-orchestration-delegation`). Optionally append a short entry under **Handoff log** in `plans/orchestration-state.md` (append-only).

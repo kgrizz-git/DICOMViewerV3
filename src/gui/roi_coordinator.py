@@ -358,13 +358,19 @@ class ROICoordinator:
                         
                         # Get rescale parameters
                         rescale_slope, rescale_intercept, rescale_type, use_rescaled = self.get_rescale_params()
-                        
-                        # Calculate statistics with rescale parameters if using rescaled values
+
+                        if self._is_mpr_view():
+                            awl_slope, awl_intercept = None, None
+                        else:
+                            awl_slope = rescale_slope if use_rescaled else None
+                            awl_intercept = rescale_intercept if use_rescaled else None
+
                         stats = self.roi_manager.calculate_statistics(
-                            roi, pixel_array,
-                            rescale_slope=rescale_slope if use_rescaled else None,
-                            rescale_intercept=rescale_intercept if use_rescaled else None,
-                            pixel_spacing=pixel_spacing
+                            roi,
+                            pixel_array,
+                            rescale_slope=awl_slope,
+                            rescale_intercept=awl_intercept,
+                            pixel_spacing=pixel_spacing,
                         )
                         min_v = stats.get("min")
                         max_v = stats.get("max")
@@ -747,14 +753,21 @@ class ROICoordinator:
                 rescale_slope, rescale_intercept, rescale_type, use_rescaled = self.get_rescale_params()
                 # print(f"[DEBUG-ROI-STATS] update_roi_statistics: rescale params: slope={rescale_slope}, intercept={rescale_intercept}, "
                 #       f"type={rescale_type}, use_rescaled={use_rescaled}")
-                
-                # Pass rescale parameters if using rescaled values
-                # Note: For projections, rescale is not applied in helper, so we pass params here
+
+                # MPR: ``get_mpr_pixel_array`` already returns display-space values
+                # (raw or rescaled per that subwindow's toggle). Never apply rescale again.
+                if self._is_mpr_view():
+                    stats_slope, stats_intercept = None, None
+                else:
+                    stats_slope = rescale_slope if use_rescaled else None
+                    stats_intercept = rescale_intercept if use_rescaled else None
+
                 stats = self.roi_manager.calculate_statistics(
-                    roi, pixel_array, 
-                    rescale_slope=rescale_slope if use_rescaled else None,
-                    rescale_intercept=rescale_intercept if use_rescaled else None,
-                    pixel_spacing=pixel_spacing
+                    roi,
+                    pixel_array,
+                    rescale_slope=stats_slope,
+                    rescale_intercept=stats_intercept,
+                    pixel_spacing=pixel_spacing,
                 )
                 
                 # print(f"[DEBUG-ROI-STATS] update_roi_statistics: Calculated stats: mean={stats.get('mean', 0):.2f}, "
@@ -872,7 +885,13 @@ class ROICoordinator:
             pixel_spacing = get_pixel_spacing(current_dataset)
         rescale_slope, rescale_intercept, rescale_type, use_rescaled = self.get_rescale_params()
         display_rescale_type = rescale_type if use_rescaled else None
-        
+
+        if self._is_mpr_view():
+            stats_slope, stats_intercept = None, None
+        else:
+            stats_slope = rescale_slope if use_rescaled else None
+            stats_intercept = rescale_intercept if use_rescaled else None
+
         # Remove all statistics overlays from scene before creating new ones
         # This ensures orphaned overlays from previous slices are removed
         # print(f"[DEBUG-OVERLAY] Removing all overlays from scene {id(self.image_viewer.scene)}")
@@ -890,11 +909,11 @@ class ROICoordinator:
             stats = self.roi_manager.calculate_statistics(
                 roi,
                 pixel_array,
-                rescale_slope=rescale_slope if use_rescaled else None,
-                rescale_intercept=rescale_intercept if use_rescaled else None,
-                pixel_spacing=pixel_spacing
+                rescale_slope=stats_slope,
+                rescale_intercept=stats_intercept,
+                pixel_spacing=pixel_spacing,
             )
-            
+
             if stats and roi.statistics_overlay_visible:
                 # print(f"[DEBUG-OVERLAY] Creating overlay for ROI {id(roi)} in scene {id(self.image_viewer.scene)}")
                 self.roi_manager.create_statistics_overlay(

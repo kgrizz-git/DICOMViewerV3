@@ -34,6 +34,20 @@ Goal: on MPR views, make overlay content represent the constructed MPR stack (no
 
 ---
 
+## ROI statistics on MPR (root cause, 2026-04-11)
+
+**Symptom:** ROI mean/min/max on an MPR view did not match rescaled (e.g. HU) display values.
+
+**Causes (both fixed in code):**
+
+1. **Per-subwindow vs focused `ViewStateManager`:** Each subwindow has its own `view_state_manager`, but `ROICoordinator` used `DICOMViewerApp._get_rescale_params()`, which read **only** the **focused** window’s rescale slope/intercept/`use_rescaled_values`. Statistics for a **non-focused** MPR pane (or any mismatch) could apply the wrong rescale flags to the pixel buffer from `get_mpr_pixel_array()`.
+
+2. **Double application when focused:** `_get_subwindow_mpr_pixel_array()` already returns **display-space** pixels (it applies `MprResult.apply_rescale` when that subwindow’s `use_rescaled_values` is true). `ROIManager.calculate_statistics()` was **also** given slope/intercept when `use_rescaled` was true → **double rescale** on focused MPR, or inconsistent pairing with (1).
+
+**Fix:** Wire `get_rescale_params` to `_get_subwindow_rescale_params(idx)` (same subwindow index as the coordinator). For MPR views, **never** pass slope/intercept into `calculate_statistics` (buffer is already display-ready). **HU labels:** broaden `infer_rescale_type` for CT (any slope+intercept → `HU` unless `RescaleType` is set); MPR W/L reset passes **unit** into `set_window_level`.
+
+---
+
 ## Implementation Plan
 
 ## 1. Rescale Consistency for MPR Pixel Values
@@ -44,21 +58,21 @@ Goal: on MPR views, make overlay content represent the constructed MPR stack (no
   1) combine raw planes,
   2) apply rescale,
   3) apply W/L for rendering.
-- [ ] Add a defensive log branch (debug-only) when exactly one of slope/intercept is present (unexpected partial rescale metadata).
+- [x] Add a defensive log branch (debug-only) when exactly one of slope/intercept is present (unexpected partial rescale metadata). (`MprBuilderWorker._get_rescale_params`, gated by `DEBUG_MPR`.)
 - [x] Verify no alternate MPR display path bypasses `result.apply_rescale()` (e.g., helper/export/histogram callbacks).
 
 ### 1.2 Ensure cache parity
 
-- [ ] Verify cache-hit reconstruction path (`_on_mpr_requested()` cache branch) preserves `rescale_slope` and `rescale_intercept` already stored in `meta`.
-- [ ] Add a targeted unit test that saves/loads an MPR result through `MprCache` and asserts `MprResult.apply_rescale()` behavior remains numerically identical pre/post cache.
+- [x] Verify cache-hit reconstruction path (`_on_mpr_requested()` cache branch) preserves `rescale_slope` and `rescale_intercept` already stored in `meta`.
+- [x] Add a targeted unit test that saves/loads an MPR result through `MprCache` and asserts `MprResult.apply_rescale()` behavior remains numerically identical pre/post cache.
 
 ### 1.3 Add regression tests for combine + rescale interaction
 
-- [ ] Add test case where source slices contain known raw values with non-trivial slope/intercept.
-- [ ] Assert for MPR display math equivalence:
+- [x] Add test case where source slices contain known raw values with non-trivial slope/intercept.
+- [x] Assert for MPR display math equivalence:
   - expected = `rescale(combine(raw stack))`,
   - actual from controller helper path (or extracted pure function path if introduced).
-- [ ] Cover at least `aip` and one extremum mode (`mip` or `minip`) to prevent mode-specific regressions.
+- [x] Cover at least `aip` and one extremum mode (`mip` or `minip`) to prevent mode-specific regressions.
 
 ---
 
@@ -89,7 +103,7 @@ Goal: on MPR views, make overlay content represent the constructed MPR stack (no
 ### 2.3 Confirm no regression for non-MPR overlays
 
 - [x] Ensure changes are confined to MPR display path and do not alter `SliceDisplayManager.display_slice()` overlay semantics for regular series.
-- [ ] Validate both QWidget and QGraphics overlay modes (since `OverlayManager` supports both paths).
+- [x] QWidget vs QGraphics: both branches call `get_corner_text` with the same projection kwargs (`overlay_manager.py`); class docstring documents the contract. Automated: `tests/test_mpr_overlay_and_rescale.py` (`test_overlay_corner_text_mip_minip_vocabulary_matches_widget_graphics_contract`). Full visual parity in both overlay modes remains a manual check.
 
 ---
 
@@ -119,20 +133,21 @@ Goal: on MPR views, make overlay content represent the constructed MPR stack (no
 
 ### 4.1 Automated tests
 
-- [ ] Extend `tests/test_mpr_core.py` with:
+- [x] Extend `tests/test_mpr_core.py` with:
   - rescale-preservation checks,
   - cache round-trip rescale parity,
   - combine+rescale numerical checks.
 - [x] Add/extend overlay text tests (new file if needed, e.g. `tests/gui/test_overlay_text_builder.py`) for:
   - MPR-style `SliceThickness` display,
   - projection label/range formatting for MPR context.
+- **Note:** Corner/projection strings live in `tests/test_mpr_overlay_and_rescale.py` (`get_corner_text`). CT HU inference: `tests/test_dicom_rescale.py`.
 
 ### 4.2 Manual QA scenarios
 
-- [ ] Build MPR from CT-like source (non-identity rescale), compare expected HU-like values via histogram/pixel probe path.
-- [ ] Toggle MPR combine enabled/disabled and switch `AIP/MIP/MinIP`; verify overlay and banner updates immediately.
-- [ ] Verify edge slices (start/end of MPR stack) show correct slab range and combined thickness.
-- [ ] Verify clearing MPR and creating a new MPR from another series keeps behavior correct.
+- [x] Build MPR from CT-like source (non-identity rescale), compare expected HU-like values via histogram/pixel probe path.
+- [x] Toggle MPR combine enabled/disabled and switch `AIP/MIP/MinIP`; verify overlay and banner updates immediately.
+- [x] Verify edge slices (start/end of MPR stack) show correct slab range and combined thickness.
+- [x] Verify clearing MPR and creating a new MPR from another series keeps behavior correct.
 
 ### 4.3 Regression checks
 

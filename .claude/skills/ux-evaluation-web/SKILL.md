@@ -1,6 +1,6 @@
 ---
 name: ux-evaluation-web
-description: >Evaluates web and application UX/UI against intent using tools like Playwright (screenshots, flows) where possible, modern typography/layout/color guidance, and accessible patterns. Use for ux subagent tasks, front-end review, or visual regression assessment.
+description: "Provides UX/UI evaluation standards using flows, screenshots, accessibility checks, and modern design guidance."
 ---
 
 # UX evaluation
@@ -70,6 +70,7 @@ description: >Evaluates web and application UX/UI against intent using tools lik
 ## Output
 
 - Return to orchestrator: prioritized issues, quick wins vs structural changes, and **non-binding** recommendations for stacks (only where project allows choice).
+- End with the structured **HANDOFF → orchestrator** block (see skill `team-orchestration-delegation`).
 
 ## Environment
 

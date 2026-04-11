@@ -23,9 +23,7 @@ Requirements:
     - ViewStateManager for view state coordination
 """
 
-from typing import Optional, Callable, Dict
-import json
-import time
+from typing import Any, Optional, Callable, Dict
 import numpy as np
 from PIL import Image
 from pydicom.dataset import Dataset
@@ -45,7 +43,53 @@ from gui.overlay_manager import OverlayManager
 from gui.roi_list_panel import ROIListPanel
 from gui.roi_statistics_panel import ROIStatisticsPanel
 from utils.dicom_utils import get_pixel_spacing, get_slice_thickness, get_composite_series_key
-from utils.debug_flags import DEBUG_WL, DEBUG_SERIES, DEBUG_AGENT_LOG, DEBUG_MEASUREMENT_SERIES
+from utils.debug_flags import DEBUG_WL, DEBUG_SERIES, DEBUG_MEASUREMENT_SERIES
+
+
+def _overlay_metadata_dataset_for_slice(
+    dataset: Dataset,
+    current_studies: Dict[str, Any],
+    current_study_uid: str,
+    current_series_uid: str,
+    current_slice_index: int,
+) -> Dataset:
+    """
+    Dataset used for corner overlay tags (InstanceNumber, SliceLocation, …).
+
+    Some call paths pass a stale *dataset* (e.g. privacy refresh using
+    ``slice_display_manager.current_dataset``) while *current_slice_index* was
+    updated from ``subwindow_data``, so InstanceNumber can match another slice
+    (e.g. MPR index) while the pixmap is correct. When the study list has a
+    slice at *current_slice_index* whose SOPInstanceUID differs from *dataset*,
+    use that canonical row for overlay text only (pixel buffer still uses *dataset*).
+
+    MPR views do not use this path for the main reformatted image (they use
+    ``MprController`` + synthetic overlay datasets). When *dataset* already
+    matches the list row (same SOP), *dataset* is returned unchanged.
+    """
+    if (
+        not current_studies
+        or not current_study_uid
+        or not current_series_uid
+        or current_study_uid not in current_studies
+        or current_series_uid not in current_studies[current_study_uid]
+    ):
+        return dataset
+    slist = current_studies[current_study_uid][current_series_uid]
+    if not isinstance(slist, list) or not slist:
+        return dataset
+    if not (0 <= current_slice_index < len(slist)):
+        return dataset
+    cand = slist[current_slice_index]
+    if cand is dataset:
+        return dataset
+    ds_sop = getattr(dataset, "SOPInstanceUID", None)
+    cd_sop = getattr(cand, "SOPInstanceUID", None)
+    if ds_sop is None or cd_sop is None:
+        return dataset
+    if ds_sop != cd_sop:
+        return cand
+    return dataset
 
 
 class SliceDisplayManager:
@@ -297,6 +341,17 @@ class SliceDisplayManager:
                            Default is True for backward compatibility.
         """
         try:
+            # Some paths pass a stale *dataset* (SOP differs from the study list at
+            # *current_slice_index*). Align to the canonical row so pixmap, W/L, overlays,
+            # and direction-label callbacks stay consistent.
+            dataset = _overlay_metadata_dataset_for_slice(
+                dataset,
+                current_studies,
+                current_study_uid,
+                current_series_uid,
+                current_slice_index,
+            )
+
             # Update current context
             self.current_studies = current_studies
             self.current_study_uid = current_study_uid
@@ -812,7 +867,6 @@ class SliceDisplayManager:
             # print(f"[DISPLAY] Apply inversion: {apply_inversion}")
 
             self.image_viewer.set_image(image, preserve_view=preserve_view, apply_inversion=apply_inversion)
-            # endregion agent log
 
             # print(f"[DISPLAY] Image set in viewer successfully")
             
@@ -837,35 +891,6 @@ class SliceDisplayManager:
                             'initial_fit_zoom': stored_zoom  # Store for export font scaling
                         })
 
-                # region agent log: after fit_to_view (H1 - new series centering)
-                if DEBUG_AGENT_LOG:
-                    try:
-                        post_fit_log = {
-                            "sessionId": "088dbc",
-                            "runId": "pre-fix",
-                            "hypothesisId": "H1",
-                            "location": "slice_display_manager.display_slice:after_fit_to_view",
-                            "message": "After fit_to_view",
-                            "data": {
-                                "current_slice_index": int(current_slice_index),
-                                "is_new_study_series": bool(is_new_study_series),
-                                "force_fit_to_view": bool(force_fit_to_view),
-                                "zoom": float(getattr(self.image_viewer, "current_zoom", 0.0)),
-                                "h_scroll": int(self.image_viewer.horizontalScrollBar().value())
-                                if self.image_viewer.horizontalScrollBar() is not None
-                                else 0,
-                                "v_scroll": int(self.image_viewer.verticalScrollBar().value())
-                                if self.image_viewer.verticalScrollBar() is not None
-                                else 0,
-                            },
-                            "timestamp": int(time.time() * 1000),
-                        }
-                        with open("debug-088dbc.log", "a", encoding="utf-8") as f:
-                            f.write(json.dumps(post_fit_log) + "\n")
-                    except Exception:
-                        pass
-                # endregion agent log
-            
             # Update metadata panel (only for focused subwindow)
             if update_metadata:
                 self.metadata_panel.set_dataset(dataset)
@@ -1047,7 +1072,7 @@ class SliceDisplayManager:
                     series_uid=current_series_uid,
                 ),
             )
-            
+
             # Extract pixel spacing and set on measurement tool
             pixel_spacing = get_pixel_spacing(dataset)
             self.measurement_tool.set_pixel_spacing(pixel_spacing)
@@ -1370,34 +1395,6 @@ class SliceDisplayManager:
         if 0 <= slice_index < len(datasets):
             self.current_slice_index = slice_index
             dataset = datasets[slice_index]
-
-            # region agent log: handle_slice_changed entry (H2 - scroll vs pan interaction)
-            if DEBUG_AGENT_LOG:
-                try:
-                    slice_log = {
-                        "sessionId": "088dbc",
-                        "runId": "pre-fix",
-                        "hypothesisId": "H2",
-                        "location": "slice_display_manager.handle_slice_changed",
-                        "message": "handle_slice_changed",
-                        "data": {
-                            "requested_slice_index": int(slice_index),
-                            "current_slice_index": int(self.current_slice_index),
-                            "zoom": float(getattr(self.image_viewer, "current_zoom", 0.0)),
-                            "h_scroll": int(self.image_viewer.horizontalScrollBar().value())
-                            if self.image_viewer.horizontalScrollBar() is not None
-                            else 0,
-                            "v_scroll": int(self.image_viewer.verticalScrollBar().value())
-                            if self.image_viewer.verticalScrollBar() is not None
-                            else 0,
-                        },
-                        "timestamp": int(time.time() * 1000),
-                    }
-                    with open("debug-088dbc.log", "a", encoding="utf-8") as f:
-                        f.write(json.dumps(slice_log) + "\n")
-                except Exception:
-                    pass
-            # endregion agent log
 
             # print(f"[SLICE] Dataset SOPInstanceUID: {getattr(dataset, 'SOPInstanceUID', 'N/A')}")
             # print(f"[SLICE] Dataset InstanceNumber: {getattr(dataset, 'InstanceNumber', 'N/A')}")

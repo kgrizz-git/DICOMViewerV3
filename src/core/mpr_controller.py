@@ -31,6 +31,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+import copy
+
 import numpy as np
 from PIL import Image
 from PySide6.QtCore import QObject
@@ -399,6 +401,15 @@ class MprController(QObject):
                 self._app.series_navigator.set_subwindow_assignments(assignments)
         except Exception:
             # Dot indicators are non-critical; ignore failures here.
+            pass
+
+        # Slice location lines on *other* panes still reference the former MPR source
+        # index until the coordinator recomputes segments (otherwise stale lines remain).
+        try:
+            line_coord = getattr(self._app, "_slice_location_line_coordinator", None)
+            if line_coord is not None:
+                line_coord.refresh_all()
+        except Exception:
             pass
 
     def display_mpr_slice(self, idx: int, slice_index: int) -> None:
@@ -972,7 +983,11 @@ class MprController(QObject):
         Returns:
             Dataset-like object suitable for ``DICOMParser``.
         """
-        source_ds = result.source_volume.source_datasets[0].copy()
+        # pydicom Dataset.copy() is ``copy.copy`` (shallow): mutating tags on the
+        # copy still updates the original dataset in ``current_studies``, which
+        # corrupts native-series overlays (InstanceNumber / IOP). Deep-copy the
+        # first source slice so MPR-only metadata edits stay isolated.
+        source_ds = copy.deepcopy(result.source_volume.source_datasets[0])
         source_ds.InstanceNumber = int(slice_index + 1)
         try:
             source_ds.SliceThickness = float(result.output_thickness_mm)
@@ -1085,40 +1100,49 @@ class MprController(QObject):
         This ensures that when a new MPR is created, we use the window/level
         from the new source series, not stale values from a previous series.
 
+        Per-pane rescale / HU alignment: ``ViewStateManager`` and the target
+        ``ImageViewer`` rescale toggle are **always** updated for *idx* so MPR
+        created in an unfocused pane still applies slope/intercept before the
+        first ``display_mpr_slice``. Global toolbar W/L spinboxes and the main
+        window rescale toggle are updated only when *idx* is the focused pane.
+
         Args:
             idx: Subwindow index
             source_dataset: Source DICOM dataset for the MPR
         """
-        # Only update controls if this is the focused window
-        if idx != getattr(self._app, "focused_subwindow_index", -1):
-            return
-
+        focused = getattr(self._app, "focused_subwindow_index", -1)
         wl_controls = getattr(self._app, "window_level_controls", None)
-        if wl_controls is None:
-            return
 
         try:
             from core.dicom_window_level import get_window_level_presets_from_dataset, get_window_level_from_dataset
             from core.dicom_rescale import get_rescale_parameters
+            from core.dicom_processor import DICOMProcessor
 
             # Get rescale parameters
             rescale_slope, rescale_intercept, rescale_type = get_rescale_parameters(source_dataset)
+            if rescale_type is None and rescale_slope is not None and rescale_intercept is not None:
+                rescale_type = DICOMProcessor.infer_rescale_type(
+                    source_dataset, rescale_slope, rescale_intercept, None
+                )
 
-            # Update view_state_manager with rescale parameters so it knows the values are rescaled
+            # Always sync this pane's view state + viewer rescale toggle (MPR bypasses SliceDisplayManager).
             managers = self._app.subwindow_managers.get(idx, {})
             view_state_manager = managers.get("view_state_manager")
             if view_state_manager is not None:
                 view_state_manager.set_rescale_parameters(rescale_slope, rescale_intercept, rescale_type)
-                # Default MPR to rescaled values when slope/intercept exist.
                 use_rescaled_default = (
                     rescale_slope is not None and rescale_intercept is not None
                 )
                 view_state_manager.use_rescaled_values = use_rescaled_default
-                if hasattr(self._app, "main_window"):
+                if idx == focused and hasattr(self._app, "main_window"):
                     self._app.main_window.set_rescale_toggle_state(use_rescaled_default)
                 image_viewer = self._get_image_viewer(idx)
                 if image_viewer is not None:
                     image_viewer.set_rescale_toggle_state(use_rescaled_default)
+
+            # Toolbar W/L only for the focused pane (shared global controls).
+            if idx != focused or wl_controls is None:
+                return
 
             # Try to get presets first
             presets = get_window_level_presets_from_dataset(
@@ -1135,7 +1159,10 @@ class MprController(QObject):
                 )
 
             if wc is not None and ww is not None and ww > 0:
-                wl_controls.set_window_level(wc, ww, block_signals=False)
+                unit = None
+                if rescale_slope is not None and rescale_intercept is not None:
+                    unit = rescale_type
+                wl_controls.set_window_level(wc, ww, block_signals=False, unit=unit)
                 _mpr_log(f"Reset W/L for MPR: center={wc:.1f} width={ww:.1f} rescaled={is_rescaled}")
         except Exception as exc:
             print(f"[MprController] Failed to reset W/L for MPR in window {idx}: {exc}")

@@ -469,6 +469,12 @@ class MprBuilderWorker(QThread):
             intercept = float(ds.RescaleIntercept) if hasattr(ds, "RescaleIntercept") else None
         except (TypeError, ValueError):
             slope, intercept = None, None
+        if DEBUG_MPR and (slope is None) != (intercept is None):
+            _mpr_log(
+                "Unexpected partial rescale metadata on source dataset "
+                f"(RescaleSlope={slope!r}, RescaleIntercept={intercept!r}); "
+                "apply_rescale will be skipped unless both are present."
+            )
         return slope, intercept
 
 

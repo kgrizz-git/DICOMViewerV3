@@ -575,7 +575,7 @@ class DICOMViewerApp(QObject):
             self.main_window,
             get_current_dataset=lambda i=idx: self._get_subwindow_dataset(i),
             get_current_slice_index=lambda i=idx: self._get_subwindow_slice_index(i),
-            get_rescale_params=self._get_rescale_params,
+            get_rescale_params=lambda i=idx: self._get_subwindow_rescale_params(i),
             set_mouse_mode_callback=self._set_mouse_mode_via_handler,
             get_projection_enabled=lambda i=idx: (
                 m.projection_enabled if (m := self._get_subwindow_slice_display_manager(i)) else False
@@ -1496,12 +1496,30 @@ class DICOMViewerApp(QObject):
         self._file_series_coordinator.handle_load_first_slice(studies)
 
     def _get_rescale_params(self) -> tuple[Optional[float], Optional[float], Optional[str], bool]:
-        """Get rescale parameters for ROI operations."""
+        """Get rescale parameters for ROI operations (focused subwindow's view state)."""
         return (
             self.view_state_manager.rescale_slope,
             self.view_state_manager.rescale_intercept,
             self.view_state_manager.rescale_type,
             self.view_state_manager.use_rescaled_values
+        )
+
+    def _get_subwindow_rescale_params(
+        self, idx: int
+    ) -> tuple[Optional[float], Optional[float], Optional[str], bool]:
+        """
+        Rescale parameters for the given subwindow (ROI / statistics must match
+        that pane's ``ViewStateManager``, not the legacy focused-window alias).
+        """
+        managers = self.subwindow_managers.get(idx, {})
+        vsm = managers.get("view_state_manager")
+        if vsm is None:
+            return None, None, None, True
+        return (
+            getattr(vsm, "rescale_slope", None),
+            getattr(vsm, "rescale_intercept", None),
+            getattr(vsm, "rescale_type", None),
+            bool(getattr(vsm, "use_rescaled_values", True)),
         )
     
     def _set_mouse_mode_via_handler(self, mode: str) -> None:
@@ -2867,12 +2885,14 @@ class DICOMViewerApp(QObject):
                 # Get the dataset for this subwindow
                 if idx in self.subwindow_data:
                     data = self.subwindow_data[idx]
-                    dataset = data.get('current_dataset')
+                    dataset = self._get_subwindow_dataset(idx)
+                    if dataset is None:
+                        dataset = data.get("current_dataset")
                     if dataset is not None and slice_display_manager is not None:
                         # Redisplay the slice to apply the reset
                         slice_display_manager.display_slice(
                             dataset,
-                            data.get('current_studies', {}),
+                            self.current_studies,
                             data.get('current_study_uid', ''),
                             data.get('current_series_uid', ''),
                             data.get('current_slice_index', 0),
@@ -3122,8 +3142,10 @@ class DICOMViewerApp(QObject):
             if not series_datasets or slice_index < 0 or slice_index >= len(series_datasets):
                 return
             
-            # Update subwindow data
+            # Update subwindow data (keep current_datasets identical to the study
+            # list used for display so HUD/metadata cannot use a divergent list).
             data['current_slice_index'] = slice_index
+            data['current_datasets'] = series_datasets
             data['current_dataset'] = series_datasets[slice_index]
             
             # Keep app-level legacy references in sync with focused subwindow's current slice

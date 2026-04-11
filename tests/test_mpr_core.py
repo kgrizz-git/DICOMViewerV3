@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from pydicom.dataset import Dataset, FileMetaDataset
 from pydicom.uid import ExplicitVRLittleEndian, generate_uid
 
-from core.mpr_builder import MprBuilder
+from core.mpr_builder import MprBuilder, MprResult
 from core.mpr_cache import MprCache, make_result_key
 from core.mpr_volume import MprVolume, MprVolumeError
 
@@ -202,7 +202,24 @@ class TestMprBuilderAndCache(unittest.TestCase):
             self.assertEqual(len(slices), result.n_slices)
             self.assertEqual(len(slice_stack.planes), result.n_slices)
             self.assertEqual(meta["interpolation"], "nearest")
+            self.assertEqual(meta.get("rescale_slope"), result.rescale_slope)
+            self.assertEqual(meta.get("rescale_intercept"), result.rescale_intercept)
             np.testing.assert_allclose(slices[0], result.slices[0])
+            loaded_result = MprResult(
+                slices=slices,
+                slice_stack=slice_stack,
+                output_spacing_mm=tuple(meta["output_spacing_mm"]),
+                output_thickness_mm=float(meta["output_thickness_mm"]),
+                source_volume=volume,
+                interpolation=meta["interpolation"],
+                rescale_slope=meta.get("rescale_slope"),
+                rescale_intercept=meta.get("rescale_intercept"),
+            )
+            raw = np.array([[100.0, 200.0]], dtype=np.float32)
+            np.testing.assert_allclose(
+                loaded_result.apply_rescale(raw),
+                result.apply_rescale(raw),
+            )
 
 
 if __name__ == "__main__":

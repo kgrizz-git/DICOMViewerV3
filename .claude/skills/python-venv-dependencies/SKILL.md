@@ -1,10 +1,6 @@
 ---
 name: python-venv-dependencies
-description: >-
-  Detects and uses Python virtual environments (venv), respects requirements
-  files, and runs commands with the correct interpreter. Use when the project
-  uses Python, before pip install or pytest, or when orchestrator/coder/tester
-  secops need environment-aware commands.
+description: "Ensures Python commands run in the correct virtual environment with dependency-aware setup."
 ---
 
 # Python venv and dependencies

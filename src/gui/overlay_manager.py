@@ -306,6 +306,12 @@ class OverlayManager:
     - Multiple display modes (minimal, detailed, hidden)
     - Text positioning and styling
     - Customizable font size and color
+
+    QWidget vs QGraphics corner text: ``create_overlay_items`` uses either
+    ``_create_widget_overlays`` or the QGraphicsItem branch. Both must pass the
+    same ``projection_*`` and ``multiframe_context`` arguments into
+    ``get_corner_text`` so MPR combine / multiframe strings stay identical
+    (see the two ``get_corner_text(...)`` call sites in this file).
     """
     
     def __init__(self, font_size: int = 6, font_color: tuple[int, int, int] = (255, 255, 0),
