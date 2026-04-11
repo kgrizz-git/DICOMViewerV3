@@ -94,43 +94,6 @@ class SubwindowLifecycleController:
             return self.app.subwindow_data[idx].get('current_series_uid', '')
         return ''
 
-    def wire_pixel_info_callbacks_for_subwindow(self, image_viewer: Any, idx: int) -> None:
-        """
-        Bind dataset/slice/rescale callbacks for pixel readout and direction labels.
-
-        Each pane must use **this viewer's** subwindow row in ``subwindow_data``,
-        not ``app.current_dataset`` / ``app.current_slice_index`` (focused pane).
-
-        The subwindow index is read from ``image_viewer.subwindow_index`` whenever
-        the callback runs so it stays aligned with ``set_subwindow_index`` (layout
-        reconnect and swap). *idx* is only a fallback before the first
-        ``connect_subwindow_signals`` pass.
-        """
-        app = self.app
-
-        def resolve_subwindow_index() -> int:
-            si = getattr(image_viewer, "subwindow_index", None)
-            if si is not None:
-                return int(si)
-            return int(idx)
-
-        def get_dataset() -> Optional[Dataset]:
-            return app._get_subwindow_dataset(resolve_subwindow_index())
-
-        def get_slice_index() -> int:
-            return app._get_subwindow_slice_index(resolve_subwindow_index())
-
-        def get_use_rescaled() -> bool:
-            i = resolve_subwindow_index()
-            vsm = app.subwindow_managers.get(i, {}).get("view_state_manager")
-            return bool(getattr(vsm, "use_rescaled_values", False)) if vsm else False
-
-        image_viewer.set_pixel_info_callbacks(
-            get_dataset=get_dataset,
-            get_slice_index=get_slice_index,
-            get_use_rescaled=get_use_rescaled,
-        )
-
     def get_focused_subwindow_index(self) -> int:
         """Return the currently focused subwindow index (0-3). Used for histogram and other per-view features."""
         return self.app.focused_subwindow_index
@@ -217,7 +180,11 @@ class SubwindowLifecycleController:
                     pass
         if app.image_viewer:
             app.image_viewer.pixel_info_changed.connect(app._on_pixel_info_changed)
-            self.wire_pixel_info_callbacks_for_subwindow(app.image_viewer, focused_idx)
+            app.image_viewer.set_pixel_info_callbacks(
+                get_dataset=lambda: app.current_dataset,
+                get_slice_index=lambda: app.current_slice_index,
+                get_use_rescaled=lambda: app.view_state_manager.use_rescaled_values if app.view_state_manager else False
+            )
         if focused_idx in app.subwindow_data:
             data = app.subwindow_data[focused_idx]
             app.current_dataset = data.get('current_dataset')
@@ -556,7 +523,6 @@ class SubwindowLifecycleController:
                     lambda: app.config_manager.get_slice_location_lines_visible()
                 )
                 image_viewer.set_subwindow_index(idx)
-                self.wire_pixel_info_callbacks_for_subwindow(image_viewer, idx)
                 layout = app.multi_window_layout
                 image_viewer.get_slot_to_view_callback = lambda l=layout: l.get_slot_to_view()
                 subwindow.assign_series_requested.connect(app._on_assign_series_requested)
@@ -825,7 +791,11 @@ class SubwindowLifecycleController:
         app.image_viewer.scene.selectionChanged.connect(app.roi_coordinator.handle_scene_selection_changed)
         app.image_viewer.wheel_event_for_slice.connect(lambda delta: app.slice_navigator.handle_wheel_event(delta))
         app.image_viewer.pixel_info_changed.connect(app._on_pixel_info_changed)
-        self.wire_pixel_info_callbacks_for_subwindow(app.image_viewer, focused_idx)
+        app.image_viewer.set_pixel_info_callbacks(
+            get_dataset=lambda: app.current_dataset,
+            get_slice_index=lambda: app.current_slice_index,
+            get_use_rescaled=lambda: app.view_state_manager.use_rescaled_values if app.view_state_manager else False
+        )
 
         def get_available_series() -> list[Any]:
             if not app.current_studies:

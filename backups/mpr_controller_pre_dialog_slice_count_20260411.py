@@ -119,38 +119,17 @@ def seed_mpr_combine_state(
     """
     Initialise ``mpr_combine_*`` keys on *data* from *request* (dialog)
     or defaults. Used when MPR is activated so runtime slab matches dialog.
-
-    Prefer ``combine_slice_count`` on the request (same allowed values as the
-    right-pane Combine Slices widget). Older requests may only provide
-    ``slab_thickness_mm``; that is converted to a plane count using
-    *output_thickness_mm*.
     """
     if request is not None:
         cm = (getattr(request, "combine_mode", None) or "none").lower()
-        if cm in ("mip", "minip", "aip"):
+        slab_mm = float(getattr(request, "slab_thickness_mm", 0.0) or 0.0)
+        if cm in ("mip", "minip", "aip") and slab_mm > 0:
             data["mpr_combine_enabled"] = True
             data["mpr_combine_mode"] = cm
-            n_raw = getattr(request, "combine_slice_count", None)
-            if n_raw is not None:
-                data["mpr_combine_slice_count"] = normalize_mpr_combine_slice_count(
-                    int(n_raw)
-                )
-            else:
-                slab_mm = float(getattr(request, "slab_thickness_mm", 0.0) or 0.0)
-                if slab_mm > 0:
-                    n = max(
-                        1,
-                        int(
-                            round(
-                                slab_mm / max(float(output_thickness_mm), 1e-6)
-                            )
-                        ),
-                    )
-                    data["mpr_combine_slice_count"] = normalize_mpr_combine_slice_count(
-                        n
-                    )
-                else:
-                    data["mpr_combine_slice_count"] = 4
+            n = max(
+                1, int(round(slab_mm / max(float(output_thickness_mm), 1e-6)))
+            )
+            data["mpr_combine_slice_count"] = normalize_mpr_combine_slice_count(n)
             return
     data["mpr_combine_enabled"] = False
     data["mpr_combine_mode"] = "aip"
@@ -401,18 +380,25 @@ class MprController(QObject):
             # Dot indicators are non-critical; ignore failures here.
             pass
 
-    def display_mpr_slice(self, idx: int, slice_index: int) -> None:
+    def display_mpr_slice(
+        self,
+        idx: int,
+        slice_index: int,
+        *,
+        refit_window_level_for_combine: bool = False,
+    ) -> None:
         """
         Display a single MPR slice in subwindow *idx*.
 
         Called when the slice navigator advances within an MPR view.
 
-        Window/level follows the global controls (same policy as normal 2D slices
-        when changing Combine Slices mode or slice count: W/L stays fixed).
-
         Args:
             idx:         Subwindow index.
             slice_index: Zero-based index into the MprResult.slices list.
+            refit_window_level_for_combine: When True, set W/L from the displayed array
+                (2nd–98th percentile) before rendering. Use when slab combine mode,
+                thickness, or on/off changes so MIP vs MinIP (etc.) are visible under
+                a fixed prior window.
         """
         data = self._app.subwindow_data.get(idx, {})
         if not data.get("is_mpr"):
@@ -457,6 +443,13 @@ class MprController(QObject):
             array = result.apply_rescale(raw_array)
         else:
             array = raw_array.astype(np.float32)
+
+        if refit_window_level_for_combine and wl_controls is not None:
+            try:
+                auto_wc, auto_ww = self._get_window_level(None, array)
+                wl_controls.set_window_level(auto_wc, auto_ww, block_signals=False)
+            except Exception:
+                pass
 
         # Determine window/level from controls (or fall back to data min/max).
         wc, ww = self._get_window_level(wl_controls, array)
@@ -958,10 +951,6 @@ class MprController(QObject):
         slice-specific DICOM fields that are meaningless for a resampled stack
         are replaced or removed:
         - ``InstanceNumber`` becomes the MPR stack index (1-based).
-        - ``ImageOrientationPatient`` matches the **displayed** MPR plane (row/column
-          cosines from ``slice_stack.planes[slice_index]``) so direction labels and
-          geometry match the reformatted view.
-        - ``PixelSpacing`` matches ``result.output_spacing_mm`` for scale markers.
         - ``SliceLocation`` is removed.
         - ``ImagePositionPatient`` is removed.
 
@@ -982,32 +971,6 @@ class MprController(QObject):
             source_ds.SpacingBetweenSlices = float(result.output_thickness_mm)
         except Exception:
             pass
-
-        planes = getattr(result.slice_stack, "planes", None) or []
-        si = int(slice_index)
-        if planes and 0 <= si < len(planes):
-            plane = planes[si]
-            rc = np.asarray(plane.row_cosine, dtype=float).reshape(-1)
-            cc = np.asarray(plane.col_cosine, dtype=float).reshape(-1)
-            if rc.size == 3 and cc.size == 3:
-                try:
-                    source_ds.ImageOrientationPatient = [
-                        float(rc[0]),
-                        float(rc[1]),
-                        float(rc[2]),
-                        float(cc[0]),
-                        float(cc[1]),
-                        float(cc[2]),
-                    ]
-                except Exception:
-                    pass
-
-        try:
-            rs, cs = result.output_spacing_mm[0], result.output_spacing_mm[1]
-            source_ds.PixelSpacing = [float(rs), float(cs)]
-        except Exception:
-            pass
-
         for attr in ("SliceLocation", "ImagePositionPatient"):
             if hasattr(source_ds, attr):
                 try:

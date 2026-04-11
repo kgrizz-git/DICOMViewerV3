@@ -20,8 +20,6 @@ Requirements:
     - PySide6 for GUI components
     - PIL/Pillow for image handling
     - DICOMProcessor for image conversion
-    - Thumbnail W/L uses the same preset / series-range / rescale rules as slice display
-      (see `_resolve_thumbnail_window_level` and `core.slice_display_lut`).
 """
 
 from PySide6.QtWidgets import (
@@ -39,7 +37,6 @@ from core.dicom_processor import DICOMProcessor
 from core.dicom_organizer import MultiFrameSeriesInfo
 from PIL import Image
 import time
-import numpy as np
 
 from utils.debug_flags import DEBUG_NAV
 from gui.series_navigator_view import StudyDivider, StudyLabel, SeriesThumbnail
@@ -47,7 +44,6 @@ from gui.series_navigator_model import (
     build_instance_entries_for_navigator,
     study_label_from_dataset,
 )
-from core.slice_display_lut import apply_window_level_rescale_conversion
 
 
 class SeriesNavigator(QWidget):
@@ -349,11 +345,8 @@ class SeriesNavigator(QWidget):
                 if cache_key in self.thumbnail_cache:
                     thumbnail_image = self.thumbnail_cache[cache_key]
                 else:
-                    # Generate thumbnail (WL aligned with slice display: presets / series range / rescale)
-                    thumbnail_image = self._generate_thumbnail(
-                        first_dataset,
-                        study_series[series_uid],
-                    )
+                    # Generate thumbnail
+                    thumbnail_image = self._generate_thumbnail(first_dataset)
                     if thumbnail_image:
                         self.thumbnail_cache[cache_key] = thumbnail_image
                 
@@ -400,10 +393,7 @@ class SeriesNavigator(QWidget):
                         if cache_key in self.instance_thumbnail_cache:
                             instance_thumbnail_image = self.instance_thumbnail_cache[cache_key]
                         else:
-                            instance_thumbnail_image = self._generate_thumbnail(
-                                instance_dataset,
-                                study_series[series_uid],
-                            )
+                            instance_thumbnail_image = self._generate_thumbnail(instance_dataset)
                             if instance_thumbnail_image:
                                 self.instance_thumbnail_cache[cache_key] = instance_thumbnail_image
 
@@ -493,122 +483,13 @@ class SeriesNavigator(QWidget):
             selected_start = start_index
         return f"{study_uid}:{series_uid}:{selected_start}"
 
-    def _resolve_thumbnail_window_level(
-        self,
-        dataset: Dataset,
-        series_datasets: Optional[List[Dataset]],
-    ) -> Tuple[Optional[float], Optional[float], bool]:
+    def _generate_thumbnail(self, dataset: Dataset) -> Optional[Image.Image]:
         """
-        Match SliceDisplayManager new-series defaults: presets, tag WC/WW with rescale
-        alignment, then series-wide or single-slice auto range. Returns (wc, ww, apply_rescale).
-        """
-        dp = self.dicom_processor
-        rescale_slope, rescale_intercept, _ = dp.get_rescale_parameters(dataset)
-        use_rescaled = rescale_slope is not None and rescale_intercept is not None
-
-        series_pixel_min: Optional[float] = None
-        series_pixel_max: Optional[float] = None
-        if series_datasets:
-            try:
-                series_pixel_min, series_pixel_max = dp.get_series_pixel_value_range(
-                    series_datasets, apply_rescale=use_rescaled
-                )
-            except Exception:
-                series_pixel_min, series_pixel_max = None, None
-
-        window_center: Optional[float] = None
-        window_width: Optional[float] = None
-
-        presets = dp.get_window_level_presets_from_dataset(
-            dataset,
-            rescale_slope=rescale_slope,
-            rescale_intercept=rescale_intercept,
-        )
-        if presets:
-            wc, ww, is_rescaled, _ = presets[0]
-            wc, ww = apply_window_level_rescale_conversion(
-                wc,
-                ww,
-                is_rescaled=is_rescaled,
-                use_rescaled_values=use_rescaled,
-                rescale_slope=rescale_slope,
-                rescale_intercept=rescale_intercept,
-                dicom_processor=dp,
-            )
-            window_center, window_width = wc, ww
-        else:
-            wc, ww, is_rescaled = dp.get_window_level_from_dataset(
-                dataset,
-                rescale_slope=rescale_slope,
-                rescale_intercept=rescale_intercept,
-            )
-            if wc is not None and ww is not None:
-                wc, ww = apply_window_level_rescale_conversion(
-                    wc,
-                    ww,
-                    is_rescaled=is_rescaled,
-                    use_rescaled_values=use_rescaled,
-                    rescale_slope=rescale_slope,
-                    rescale_intercept=rescale_intercept,
-                    dicom_processor=dp,
-                )
-                window_center, window_width = wc, ww
-            elif (
-                series_pixel_min is not None
-                and series_pixel_max is not None
-                and series_datasets
-            ):
-                midpoint = (series_pixel_min + series_pixel_max) / 2.0
-                median = dp.get_series_pixel_median(
-                    series_datasets, apply_rescale=use_rescaled
-                )
-                if median is None:
-                    window_center = midpoint
-                else:
-                    window_center = max(median, midpoint)
-                window_width = series_pixel_max - series_pixel_min
-                if window_width <= 0:
-                    window_width = 1.0
-            else:
-                try:
-                    pixel_min, pixel_max = dp.get_pixel_value_range(
-                        dataset, apply_rescale=use_rescaled
-                    )
-                    if pixel_min is not None and pixel_max is not None:
-                        pixel_array = dp.get_pixel_array(dataset)
-                        if pixel_array is not None:
-                            arr = pixel_array.astype(np.float32)
-                            if use_rescaled and rescale_slope is not None and rescale_intercept is not None:
-                                arr = arr * float(rescale_slope) + float(rescale_intercept)
-                            midpoint = (pixel_min + pixel_max) / 2.0
-                            non_zero = arr[arr != 0]
-                            if len(non_zero) > 0:
-                                window_center = max(float(np.median(non_zero)), midpoint)
-                            else:
-                                window_center = midpoint
-                            window_width = pixel_max - pixel_min
-                            if window_width <= 0:
-                                window_width = 1.0
-                except Exception:
-                    pass
-
-        return window_center, window_width, use_rescaled
-
-    def _generate_thumbnail(
-        self,
-        dataset: Dataset,
-        series_datasets: Optional[List[Dataset]] = None,
-    ) -> Optional[Image.Image]:
-        """
-        Generate thumbnail image from a dataset (typically first slice of a series).
-
-        Window/level and rescale match SliceDisplayManager so thumbnails are not black
-        when tag-only WC/WW disagree with series statistics or HU rescale is used.
-
+        Generate thumbnail image from first slice of series.
+        
         Args:
-            dataset: DICOM dataset to render (same slice the bar represents).
-            series_datasets: Full series list for series-wide auto W/L; optional.
-
+            dataset: DICOM dataset (first slice of series)
+            
         Returns:
             PIL Image thumbnail (resized) or None if generation fails
         """
@@ -634,39 +515,27 @@ class SeriesNavigator(QWidget):
                         _ = dataset.pixel_array
                     except Exception as e:
                         error_msg = str(e)
-                        if ("pylibjpeg" in error_msg.lower() or
+                        if ("pylibjpeg" in error_msg.lower() or 
                             "missing required dependencies" in error_msg.lower() or
                             "unable to convert" in error_msg.lower()):
                             # This is a compressed file that can't be decoded
                             # Return a special marker image that will show compression error
                             return self._create_compression_error_thumbnail()
-
-            wc, ww, use_rescaled = self._resolve_thumbnail_window_level(
-                dataset, series_datasets
-            )
-            if wc is not None and ww is not None:
-                image = self.dicom_processor.dataset_to_image(
-                    dataset,
-                    window_center=wc,
-                    window_width=ww,
-                    apply_rescale=use_rescaled,
-                )
-            else:
-                image = self.dicom_processor.dataset_to_image(
-                    dataset, apply_rescale=use_rescaled
-                )
+            
+            # Convert dataset to image
+            image = self.dicom_processor.dataset_to_image(dataset, apply_rescale=False)
             if image is None:
                 return None
-
+            
             # Resize to thumbnail size (maintain aspect ratio)
             thumbnail_size = 57  # Target size for thumbnail (85% of 67px to fit smaller navigator height)
             image.thumbnail((thumbnail_size, thumbnail_size), Image.Resampling.LANCZOS)
-
+            
             return image
         except Exception as e:
             error_msg = str(e)
             # Check if this is a compression error
-            if ("pylibjpeg" in error_msg.lower() or
+            if ("pylibjpeg" in error_msg.lower() or 
                 "missing required dependencies" in error_msg.lower() or
                 "unable to convert" in error_msg.lower()):
                 return self._create_compression_error_thumbnail()

@@ -98,31 +98,21 @@ class SubwindowLifecycleController:
         """
         Bind dataset/slice/rescale callbacks for pixel readout and direction labels.
 
-        Each pane must use **this viewer's** subwindow row in ``subwindow_data``,
-        not ``app.current_dataset`` / ``app.current_slice_index`` (focused pane).
-
-        The subwindow index is read from ``image_viewer.subwindow_index`` whenever
-        the callback runs so it stays aligned with ``set_subwindow_index`` (layout
-        reconnect and swap). *idx* is only a fallback before the first
-        ``connect_subwindow_signals`` pass.
+        Each pane must use *idx* (this subwindow), not ``app.current_dataset`` /
+        ``app.current_slice_index``, which track the **focused** pane only.
+        Otherwise unfocused viewers show the focused pane's IOP (e.g. MPR labels
+        on the underlying series view).
         """
         app = self.app
 
-        def resolve_subwindow_index() -> int:
-            si = getattr(image_viewer, "subwindow_index", None)
-            if si is not None:
-                return int(si)
-            return int(idx)
-
         def get_dataset() -> Optional[Dataset]:
-            return app._get_subwindow_dataset(resolve_subwindow_index())
+            return app._get_subwindow_dataset(idx)
 
         def get_slice_index() -> int:
-            return app._get_subwindow_slice_index(resolve_subwindow_index())
+            return app._get_subwindow_slice_index(idx)
 
         def get_use_rescaled() -> bool:
-            i = resolve_subwindow_index()
-            vsm = app.subwindow_managers.get(i, {}).get("view_state_manager")
+            vsm = app.subwindow_managers.get(idx, {}).get("view_state_manager")
             return bool(getattr(vsm, "use_rescaled_values", False)) if vsm else False
 
         image_viewer.set_pixel_info_callbacks(
@@ -556,7 +546,6 @@ class SubwindowLifecycleController:
                     lambda: app.config_manager.get_slice_location_lines_visible()
                 )
                 image_viewer.set_subwindow_index(idx)
-                self.wire_pixel_info_callbacks_for_subwindow(image_viewer, idx)
                 layout = app.multi_window_layout
                 image_viewer.get_slot_to_view_callback = lambda l=layout: l.get_slot_to_view()
                 subwindow.assign_series_requested.connect(app._on_assign_series_requested)

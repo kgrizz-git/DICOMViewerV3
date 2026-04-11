@@ -37,6 +37,7 @@ This file tracks active and near-term tasks.
 - [ ] **[P0]** "Close All" did not clear thumbnails in layout map
 - [ ] **[P0]** Fusion seems to add two sets of scale markers? Or for some reason markers look too dense. Goes away when focusing on window, reappaears when unfocused. Appears (and disappears) on windows without fusion enabled as well (maybe only ones showing same series as fusion base or overlay). Actually this happened when first loading a US study with no pixel size data (and no markers displayed), then loading an MR study with pixel size data (and markers displayed on the US images subwindows while the MR image window was focused). Also happened with a CT study and MR study - took screenshots.
 - [ ] **[P1]** Fusion not working for T2 dual-echo as base series (QAMR) - no T1 overlay appears. It did after switching to T2 as overlay (still on T2) and then back to T1.
+- [ ] **[P1]** Spacebar did not clear overlay on MPRs.
 
 ## Performance / Packaging
 
@@ -56,6 +57,7 @@ This file tracks active and near-term tasks.
 
 ## UX / Workflow
 
+- [ ] **[P1]** No way to clear images/series from a given subwindow? Should be able to right-click and select "Clear Subwindow" or something (check whether in-app we call them windows or subwindows).
 - [ ] **[P1]** Add option to have one large window on left and two smaller on right (above and below), or one large window on top and smaller on bottom (left and right), and maybe vice versa for each case. Make "2" key switch between 1x2 and 2x1, while "3" switches between different 3-window layouts just described.
 - [ ] **[P2]** Make window map thumbnail in navigator interactive (click square to focus and reveal) ([plan](plans/UX_IMPROVEMENTS_BATCH1_PLAN.md#1-window-map-thumbnail-interactive))
 - [ ] **[P2]** Make toolbar contents and ordering customizable ([plan](plans/UX_IMPROVEMENTS_BATCH1_PLAN.md#2-toolbar-customization))
@@ -86,7 +88,8 @@ This file tracks active and near-term tasks.
 - [ ] **[P2]** Add ability to use toolbar icons 
 - [ ] **[P0]** Menu item "Show Lines" should say "Show Slice Location Lines"
 - [ ] **[P2]** Show a small colored icon on each subwindow title bar in a "sync group"to indicate which group it belongs to (group color), so the user can see at a glance which windows are linked.
-- [ ] **[P2]** Add **"Create MPR view…"** to the **Tools** or **View** menu?
+- [ ] **[P1]** Add **"Create MPR view…"** to the **Tools** or **View** menu?
+- [ ] **[P1]** Add ability to customize slice position display line thickness
 
 
 ## Features (Near-Term)

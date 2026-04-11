@@ -26,7 +26,6 @@ import time
 import inspect
 import warnings
 import json
-import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -41,9 +40,9 @@ from PySide6.QtWidgets import (
     QProgressDialog,
     QStyleFactory,
 )
-from PySide6.QtCore import Qt, QPoint, QPointF, QObject, QTimer, QRectF, QSize, Signal
-from PySide6.QtGui import QCursor, QKeyEvent
-from typing import Any, Callable, Optional, Dict, List, Tuple, cast, Set
+from PySide6.QtCore import Qt, QPointF, QObject, QTimer, QRectF, QSize, Signal
+from PySide6.QtGui import QKeyEvent
+from typing import Any, Optional, Dict, List, Tuple, cast, Set
 import pydicom
 from pydicom.dataset import Dataset
 
@@ -82,12 +81,11 @@ from tools.measurement_tool import MeasurementTool
 from tools.measurement_items import MeasurementItem
 from tools.crosshair_manager import CrosshairManager, CrosshairItem
 from tools.annotation_manager import AnnotationManager
-from tools.text_annotation_tool import TextAnnotationItem, TextAnnotationTool
-from tools.arrow_annotation_tool import ArrowAnnotationItem, ArrowAnnotationTool
+from tools.text_annotation_tool import TextAnnotationItem
+from tools.arrow_annotation_tool import ArrowAnnotationItem
 from tools.histogram_widget import HistogramWidget
 from gui.overlay_manager import OverlayManager
 from utils.annotation_clipboard import AnnotationClipboard
-from utils.bundled_fonts import register_fonts_with_qt
 
 from metadata.metadata_controller import MetadataController
 from roi.roi_measurement_controller import ROIMeasurementController
@@ -99,20 +97,12 @@ from core.slice_display_manager import SliceDisplayManager
 from core.annotation_paste_handler import AnnotationPasteHandler
 from core.file_series_loading_coordinator import FileSeriesLoadingCoordinator
 from core.subwindow_lifecycle_controller import SubwindowLifecycleController
-from core.mpr_controller import MprController, apply_mpr_stack_combine
+from core.mpr_controller import apply_mpr_stack_combine
 from core.customization_handlers import CustomizationHandlers
 from core.privacy_controller import PrivacyController
 from core.projection_app_facade import ProjectionAppFacade
 from core.qa_app_facade import QAAppFacade
 from core.export_app_facade import ExportAppFacade
-from core.subwindow_image_viewer_sync import (
-    apply_initial_image_viewer_display_state,
-    set_direction_labels_all,
-    set_direction_labels_color_all,
-    set_scale_markers_all,
-    set_scale_markers_color_all,
-    set_smooth_when_zoomed_all,
-)
 from gui.roi_coordinator import ROICoordinator
 from gui.measurement_coordinator import MeasurementCoordinator
 from gui.crosshair_coordinator import CrosshairCoordinator
@@ -120,10 +110,6 @@ from gui.overlay_coordinator import OverlayCoordinator
 from gui.dialog_coordinator import DialogCoordinator
 from gui.mouse_mode_handler import MouseModeHandler
 from gui.keyboard_event_handler import KeyboardEventHandler
-from gui.text_annotation_coordinator import TextAnnotationCoordinator
-from gui.arrow_annotation_coordinator import ArrowAnnotationCoordinator
-from gui.dialogs.tag_export_union_worker import TagExportUnionWorker
-from gui.dialogs.disclaimer_dialog import DisclaimerDialog
 
 # Import fusion components
 from core.fusion_handler import FusionHandler
@@ -257,6 +243,7 @@ class DICOMViewerApp(QObject):
         self.app.setStyle(QStyleFactory.create("Fusion"))
 
         # Register bundled TrueType fonts with Qt so they can be used by name
+        from utils.bundled_fonts import register_fonts_with_qt
         register_fonts_with_qt()
 
         # DICOM data managers
@@ -390,12 +377,51 @@ class DICOMViewerApp(QObject):
         self._slice_location_line_coordinator = SliceLocationLineCoordinator(self)
 
         # MPR controller: manages MPR views across all subwindows.
+        from core.mpr_controller import MprController
         self._mpr_controller = MprController(self)
 
         self._annotation_paste_handler = AnnotationPasteHandler(self)
 
-        # Propagate initial privacy, slice sync, smoothing, and scale/direction UI to all viewers
-        apply_initial_image_viewer_display_state(self)
+        # Propagate initial privacy and smoothing settings to all image viewers
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        for subwindow in subwindows:
+            if subwindow and subwindow.image_viewer:
+                subwindow.image_viewer.set_privacy_view_state(self.privacy_view_enabled)
+        for subwindow in subwindows:
+            if subwindow and subwindow.image_viewer:
+                subwindow.image_viewer.set_slice_sync_enabled_state(
+                    self.config_manager.get_slice_sync_enabled()
+                )
+        for subwindow in subwindows:
+            if subwindow and subwindow.image_viewer:
+                subwindow.image_viewer.set_smooth_when_zoomed_state(
+                    self.config_manager.get_smooth_image_when_zoomed()
+                )
+        for subwindow in subwindows:
+            if subwindow and subwindow.image_viewer:
+                subwindow.image_viewer.set_scale_markers_state(
+                    self.config_manager.get_show_scale_markers()
+                )
+        for subwindow in subwindows:
+            if subwindow and subwindow.image_viewer:
+                subwindow.image_viewer.set_direction_labels_state(
+                    self.config_manager.get_show_direction_labels()
+                )
+        for subwindow in subwindows:
+            if subwindow and subwindow.image_viewer:
+                subwindow.image_viewer.set_scale_markers_color_state(
+                    self.config_manager.get_scale_markers_color()
+                )
+                subwindow.image_viewer.set_direction_labels_color_state(
+                    self.config_manager.get_direction_labels_color()
+                )
+                subwindow.image_viewer.set_direction_label_size_state(
+                    self.config_manager.get_direction_label_size()
+                )
+                subwindow.image_viewer.set_scale_markers_tick_intervals_state(
+                    self.config_manager.get_scale_markers_major_tick_interval_mm(),
+                    self.config_manager.get_scale_markers_minor_tick_interval_mm(),
+                )
 
         # Resolve which subwindow currently has focus and set up its manager references.
         # Must happen before _initialize_handlers() which consumes these references.
@@ -509,7 +535,9 @@ class DICOMViewerApp(QObject):
         managers: Dict[str, Any] = {}
         managers['roi_manager'] = ROIManager(config_manager=self.config_manager)
         managers['measurement_tool'] = MeasurementTool(config_manager=self.config_manager)
+        from tools.text_annotation_tool import TextAnnotationTool
         managers['text_annotation_tool'] = TextAnnotationTool(config_manager=self.config_manager)
+        from tools.arrow_annotation_tool import ArrowAnnotationTool
         managers['arrow_annotation_tool'] = ArrowAnnotationTool(config_manager=self.config_manager)
         managers['crosshair_manager'] = CrosshairManager(config_manager=self.config_manager)
         managers['crosshair_manager'].set_privacy_mode(self.privacy_view_enabled)
@@ -601,6 +629,7 @@ class DICOMViewerApp(QObject):
             undo_redo_manager=self.undo_redo_manager,
             update_undo_redo_state_callback=self._update_undo_redo_state
         )
+        from gui.text_annotation_coordinator import TextAnnotationCoordinator
         managers['text_annotation_coordinator'] = TextAnnotationCoordinator(
             managers['text_annotation_tool'],
             image_viewer,
@@ -609,6 +638,7 @@ class DICOMViewerApp(QObject):
             undo_redo_manager=self.undo_redo_manager,
             update_undo_redo_state_callback=self._update_undo_redo_state
         )
+        from gui.arrow_annotation_coordinator import ArrowAnnotationCoordinator
         managers['arrow_annotation_coordinator'] = ArrowAnnotationCoordinator(
             managers['arrow_annotation_tool'],
             image_viewer,
@@ -679,7 +709,6 @@ class DICOMViewerApp(QObject):
         for idx, subwindow in enumerate(subwindows):
             if subwindow is None:
                 continue
-            subwindow.image_viewer.set_subwindow_index(idx)
             managers = self._build_managers_for_subwindow(idx, subwindow)
             self.subwindow_managers[idx] = managers
             self.subwindow_data[idx] = {
@@ -697,7 +726,6 @@ class DICOMViewerApp(QObject):
             return
         managers = self._build_managers_for_subwindow(idx, subwindow)
         image_viewer = subwindow.image_viewer
-        image_viewer.set_subwindow_index(idx)
         image_viewer.set_slice_sync_enabled_state(self.config_manager.get_slice_sync_enabled())
         image_viewer.set_smooth_when_zoomed_state(self.config_manager.get_smooth_image_when_zoomed())
         image_viewer.set_scale_markers_state(self.config_manager.get_show_scale_markers())
@@ -1031,6 +1059,8 @@ class DICOMViewerApp(QObject):
 
     def _schedule_tag_export_union_rebuild(self) -> None:
         """Rebuild in-memory tag union off the GUI thread (no disk cache)."""
+        from gui.dialogs.tag_export_union_worker import TagExportUnionWorker
+
         prev = self._tag_export_union_worker
         if prev is not None and prev.isRunning():
             prev.requestInterruption()
@@ -1125,6 +1155,7 @@ class DICOMViewerApp(QObject):
             overlay_manager = managers.get('overlay_manager')
             if overlay_manager:
                 # Get the scene from the corresponding subwindow to properly clear overlays
+                subwindows = self.multi_window_layout.get_all_subwindows()
                 if idx < len(subwindows) and subwindows[idx] and subwindows[idx].image_viewer:
                     scene = subwindows[idx].image_viewer.scene
                     overlay_manager.clear_overlay_items(scene)
@@ -1154,6 +1185,9 @@ class DICOMViewerApp(QObject):
         self.intensity_projection_controls_widget.set_enabled(False)
         self.intensity_projection_controls_widget.set_projection_type("aip")
         self.intensity_projection_controls_widget.set_slice_count(4)
+        
+        # Reset fusion for all subwindows (disable fusion, clear status, clear caches)
+        self._reset_fusion_for_all_subwindows()
         
         # Clear all subwindow data structures
         self.subwindow_data.clear()
@@ -1800,6 +1834,8 @@ class DICOMViewerApp(QObject):
 
     def _on_window_slot_map_popup_requested(self) -> None:
         """Show or hide a small popup with the window-slot map near the cursor (toggle)."""
+        from PySide6.QtCore import QPoint
+        from PySide6.QtGui import QCursor
         base_widget = getattr(self.main_window, "window_slot_map_widget", None)
         if base_widget is None:
             return
@@ -1976,11 +2012,13 @@ class DICOMViewerApp(QObject):
             # Store initial view state if this is the first image
             if self.view_state_manager.initial_zoom is None:
                 # Wait a bit for view to settle, then store initial state
+                from PySide6.QtCore import QTimer
                 QTimer.singleShot(100, self.view_state_manager.store_initial_view_state)
         except MemoryError as e:
             error_msg = f"Memory error displaying slice: {str(e)}"
             self.main_window.update_status(error_msg)
             # Show error dialog for memory errors
+            from gui.dialogs.file_dialog import FileDialog
             file_dialog = FileDialog()
             file_dialog.show_error(
                 self.main_window,
@@ -1994,6 +2032,7 @@ class DICOMViewerApp(QObject):
                 error_msg = f"{error_type}: {error_msg}"
             self.main_window.update_status(error_msg)
             # Log to console for debugging
+            import traceback
             print(f"Error displaying slice: {error_msg}")
             traceback.print_exc()
     
@@ -2203,7 +2242,10 @@ class DICOMViewerApp(QObject):
             enabled: True if smooth when zoomed is enabled, False otherwise
         """
         self.config_manager.set_smooth_image_when_zoomed(enabled)
-        set_smooth_when_zoomed_all(self, enabled)
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        for subwindow in subwindows:
+            if subwindow and subwindow.image_viewer:
+                subwindow.image_viewer.set_smooth_when_zoomed_state(enabled)
         self.main_window.set_smooth_when_zoomed_checked(enabled)
 
     def _on_scale_markers_toggled(self, enabled: bool) -> None:
@@ -2214,7 +2256,10 @@ class DICOMViewerApp(QObject):
             enabled: True to show scale markers, False to hide
         """
         self.config_manager.set_show_scale_markers(enabled)
-        set_scale_markers_all(self, enabled)
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        for subwindow in subwindows:
+            if subwindow and subwindow.image_viewer:
+                subwindow.image_viewer.set_scale_markers_state(enabled)
         self.main_window.set_scale_markers_checked(enabled)
 
     def _on_direction_labels_toggled(self, enabled: bool) -> None:
@@ -2225,18 +2270,27 @@ class DICOMViewerApp(QObject):
             enabled: True to show direction labels, False to hide
         """
         self.config_manager.set_show_direction_labels(enabled)
-        set_direction_labels_all(self, enabled)
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        for subwindow in subwindows:
+            if subwindow and subwindow.image_viewer:
+                subwindow.image_viewer.set_direction_labels_state(enabled)
         self.main_window.set_direction_labels_checked(enabled)
 
     def _on_scale_markers_color_changed(self, r: int, g: int, b: int) -> None:
         """Handle scale markers color change from the View menu."""
         self.config_manager.set_scale_markers_color(r, g, b)
-        set_scale_markers_color_all(self, (r, g, b))
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        for subwindow in subwindows:
+            if subwindow and subwindow.image_viewer:
+                subwindow.image_viewer.set_scale_markers_color_state((r, g, b))
 
     def _on_direction_labels_color_changed(self, r: int, g: int, b: int) -> None:
         """Handle direction labels color change from the View menu."""
         self.config_manager.set_direction_labels_color(r, g, b)
-        set_direction_labels_color_all(self, (r, g, b))
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        for subwindow in subwindows:
+            if subwindow and subwindow.image_viewer:
+                subwindow.image_viewer.set_direction_labels_color_state((r, g, b))
 
     def _on_show_instances_separately_toggled(self, enabled: bool) -> None:
         """Handle the View → Show Instances Separately toggle."""
@@ -2800,32 +2854,17 @@ class DICOMViewerApp(QObject):
         if hasattr(self, 'dialog_coordinator'):
             self.dialog_coordinator.update_histogram_for_subwindow(self.focused_subwindow_index)
     
-    def _restart_single_shot_timer(
-        self,
-        attr_name: str,
-        interval_ms: int,
-        on_timeout: Callable[..., None],
-    ) -> None:
-        """Create (once), stop, and restart a single-shot QTimer with the given interval and slot."""
-        timer = getattr(self, attr_name, None)
-        if timer is None:
-            timer = QTimer(self)
-            timer.setSingleShot(True)
-            timer.setInterval(interval_ms)
-            timer.timeout.connect(on_timeout)
-            setattr(self, attr_name, timer)
-        timer.stop()
-        timer.start()
-
     def _schedule_histogram_wl_only(self) -> None:
         """Schedule a light W/L-only histogram update (no pixel refetch) so W/L sliders stay responsive."""
         if not hasattr(self, "dialog_coordinator"):
             return
-        self._restart_single_shot_timer(
-            "_histogram_wl_update_timer",
-            100,
-            self._do_update_histogram_wl_only,
-        )
+        if not hasattr(self, "_histogram_wl_update_timer") or self._histogram_wl_update_timer is None:
+            self._histogram_wl_update_timer = QTimer(self)
+            self._histogram_wl_update_timer.setSingleShot(True)
+            self._histogram_wl_update_timer.setInterval(100)
+            self._histogram_wl_update_timer.timeout.connect(self._do_update_histogram_wl_only)
+        self._histogram_wl_update_timer.stop()
+        self._histogram_wl_update_timer.start()
 
     def _do_update_histogram_wl_only(self) -> None:
         """Update only the W/L overlay in the histogram (called after W/L throttle delay)."""
@@ -2838,11 +2877,13 @@ class DICOMViewerApp(QObject):
         """Schedule a throttled full histogram update (pixel refetch) for slice/series changes."""
         if not hasattr(self, "dialog_coordinator"):
             return
-        self._restart_single_shot_timer(
-            "_histogram_update_timer",
-            300,
-            self._do_update_histogram_for_focused_subwindow,
-        )
+        if not hasattr(self, "_histogram_update_timer") or self._histogram_update_timer is None:
+            self._histogram_update_timer = QTimer(self)
+            self._histogram_update_timer.setSingleShot(True)
+            self._histogram_update_timer.setInterval(300)
+            self._histogram_update_timer.timeout.connect(self._do_update_histogram_for_focused_subwindow)
+        self._histogram_update_timer.stop()
+        self._histogram_update_timer.start()
 
     def _do_update_histogram_for_focused_subwindow(self) -> None:
         """Update the histogram dialog for the currently focused subwindow (called after throttle delay)."""
@@ -2962,9 +3003,12 @@ class DICOMViewerApp(QObject):
         Args:
             preset_index: Index of the selected preset
         """
+        # print(f"[DEBUG-WL-PRESETS] Main: Preset selected: index={preset_index}")
         if self.view_state_manager and self.view_state_manager.window_level_presets:
+            # print(f"[DEBUG-WL-PRESETS] Main: Found {len(self.view_state_manager.window_level_presets)} preset(s) in view_state_manager")
             if 0 <= preset_index < len(self.view_state_manager.window_level_presets):
                 wc, ww, is_rescaled, preset_name = self.view_state_manager.window_level_presets[preset_index]
+                # print(f"[DEBUG-WL-PRESETS] Main: Selected preset {preset_index}: center={wc}, width={ww}, is_rescaled={is_rescaled}, name={preset_name}")
                 
                 # Get current rescale state
                 use_rescaled_values = self.view_state_manager.use_rescaled_values
@@ -2974,17 +3018,22 @@ class DICOMViewerApp(QObject):
                 # Convert if needed based on current rescale state
                 if is_rescaled and not use_rescaled_values:
                     if (rescale_slope is not None and rescale_intercept is not None and rescale_slope != 0.0):
+                        orig_wc, orig_ww = wc, ww
                         wc, ww = self.dicom_processor.convert_window_level_rescaled_to_raw(
                             wc, ww, rescale_slope, rescale_intercept
                         )
+                        # print(f"[DEBUG-WL-PRESETS] Main: Converted rescaled->raw: ({orig_wc}, {orig_ww}) -> ({wc}, {ww})")
                 elif not is_rescaled and use_rescaled_values:
                     if (rescale_slope is not None and rescale_intercept is not None):
+                        orig_wc, orig_ww = wc, ww
                         wc, ww = self.dicom_processor.convert_window_level_raw_to_rescaled(
                             wc, ww, rescale_slope, rescale_intercept
                         )
+                        # print(f"[DEBUG-WL-PRESETS] Main: Converted raw->rescaled: ({orig_wc}, {orig_ww}) -> ({wc}, {ww})")
                 
                 # Update preset index
                 self.view_state_manager.current_preset_index = preset_index
+                # print(f"[DEBUG-WL-PRESETS] Main: Updated current_preset_index to {preset_index}")
                 
                 # Set window/level
                 self.window_level_controls.set_window_level(wc, ww, block_signals=False)
@@ -3392,6 +3441,8 @@ class DICOMViewerApp(QObject):
         Return a small pixmap of the current image displayed in the given view (0–3),
         for use in the window-slot map thumbnail. Returns None if the view has no image.
         """
+        from PySide6.QtGui import QPixmap
+        from PySide6.QtCore import Qt
         subwindows = self.multi_window_layout.get_all_subwindows()
         if view_index < 0 or view_index >= len(subwindows):
             return None
@@ -3604,6 +3655,9 @@ class DICOMViewerApp(QObject):
         Returns:
             True if event was handled, False otherwise
         """
+        from PySide6.QtGui import QKeyEvent
+        from PySide6.QtCore import Qt
+        from PySide6.QtWidgets import QApplication
         if isinstance(event, QKeyEvent):
             # Don't intercept standard shortcuts - let menu system handle them
             if event.key() == Qt.Key.Key_Z:
@@ -3661,6 +3715,7 @@ class DICOMViewerApp(QObject):
                 return True
             
             # Check if current widget is an image viewer
+            from gui.image_viewer import ImageViewer
             if isinstance(current, ImageViewer):
                 return True
             
@@ -3684,6 +3739,7 @@ class DICOMViewerApp(QObject):
             Exit code
         """
         # Show disclaimer dialog before showing main window
+        from gui.dialogs.disclaimer_dialog import DisclaimerDialog
         if not DisclaimerDialog.show_disclaimer(self.config_manager, self.main_window, force_show=False):
             # User cancelled, exit application
             return 0
@@ -3697,6 +3753,7 @@ class DICOMViewerApp(QObject):
         
         # Set keyboard focus after window is shown
         # Use QTimer to ensure window is fully visible before setting focus
+        from PySide6.QtCore import QTimer
         QTimer.singleShot(100, self._set_initial_keyboard_focus)
         
         return self.app.exec()
@@ -3709,18 +3766,20 @@ class DICOMViewerApp(QObject):
 
 def exception_hook(exctype, value, tb):
     """Global exception handler to catch unhandled exceptions."""
+    import traceback
     error_msg = ''.join(traceback.format_exception(exctype, value, tb))
     print(f"Unhandled exception:\n{error_msg}")
     
     # Try to show error dialog if QApplication exists
     try:
+        from PySide6.QtWidgets import QApplication, QMessageBox
         if QApplication.instance():
             QMessageBox.critical(
                 None, 
                 "Fatal Error", 
                 f"An unexpected error occurred:\n\n{exctype.__name__}: {value}\n\nThe application may be unstable."
             )
-    except Exception:
+    except:
         pass  # If Qt is not available, just print
 
 
@@ -3734,6 +3793,7 @@ def main():
         return app.run()
     except Exception as e:
         print(f"Fatal error: {e}")
+        import traceback
         traceback.print_exc()
         return 1
 

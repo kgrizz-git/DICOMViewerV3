@@ -11,7 +11,6 @@ from PySide6.QtWidgets import QGraphicsView, QGraphicsPixmapItem, QApplication
 from PySide6.QtCore import Qt, QRectF, QRect, QPointF, QPoint, QTimer
 from PySide6.QtGui import QPixmap, QImage, QPainter, QColor, QTransform, QPen
 from PIL import Image
-from core.direction_labels import compute_direction_labels_from_iop
 from utils.bundled_fonts import make_qfont
 from utils.debug_flags import DEBUG_MAGNIFIER, DEBUG_AGENT_LOG
 import numpy as np
@@ -328,7 +327,41 @@ class ImageViewerViewMixin:
     def _compute_direction_labels(self, dataset: Any) -> Optional[Dict[str, str]]:
         """Compute top/bottom/left/right patient orientation labels from ImageOrientationPatient."""
         iop = getattr(dataset, "ImageOrientationPatient", None)
-        return compute_direction_labels_from_iop(iop)
+        if iop is None or len(iop) < 6:
+            return None
+
+        try:
+            row_cos = np.array([float(iop[0]), float(iop[1]), float(iop[2])], dtype=np.float64)
+            col_cos = np.array([float(iop[3]), float(iop[4]), float(iop[5])], dtype=np.float64)
+        except (TypeError, ValueError):
+            return None
+
+        left_dir = self._axis_label_from_vector(-row_cos)
+        right_dir = self._axis_label_from_vector(row_cos)
+        top_dir = self._axis_label_from_vector(-col_cos)
+        bottom_dir = self._axis_label_from_vector(col_cos)
+
+        return {
+            "left": left_dir,
+            "right": right_dir,
+            "top": top_dir,
+            "bottom": bottom_dir,
+        }
+
+    def _axis_label_from_vector(self, vec: np.ndarray) -> str:
+        """Map a DICOM LPS direction vector to nearest cardinal patient label."""
+        if vec is None or vec.size != 3:
+            return ""
+        if np.linalg.norm(vec) < 1e-6:
+            return ""
+
+        axes = [
+            (abs(vec[0]), "L" if vec[0] >= 0 else "R"),
+            (abs(vec[1]), "P" if vec[1] >= 0 else "A"),
+            (abs(vec[2]), "S" if vec[2] >= 0 else "I"),
+        ]
+        axes.sort(key=lambda item: item[0], reverse=True)
+        return axes[0][1]
 
     def _apply_inversion(self, image: Image.Image) -> Image.Image:
         """

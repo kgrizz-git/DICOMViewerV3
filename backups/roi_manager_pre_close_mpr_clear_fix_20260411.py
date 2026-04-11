@@ -26,7 +26,6 @@ import math
 from PySide6.QtWidgets import (QGraphicsEllipseItem, QGraphicsRectItem, QGraphicsItem,
                                QGraphicsTextItem, QGraphicsSceneMouseEvent, QGraphicsScene)
 from PySide6.QtCore import Qt, QRectF, QPointF
-from shiboken6 import isValid
 from PySide6.QtGui import QPen, QColor, QTransform, QPainterPath, QPainterPathStroker
 from typing import List, Optional, Tuple, Dict, Set, Callable
 import numpy as np
@@ -665,13 +664,9 @@ class ROIManager:
             for roi in self.rois[key]:
                 # Remove statistics overlay if present
                 self.remove_statistics_overlay(roi, scene)
-                # Remove item from scene if it exists (guard: scene.clear() may have deleted the C++ item)
-                if roi.item and isValid(roi.item) and scene:
-                    try:
-                        if roi.item.scene() == scene:
-                            scene.removeItem(roi.item)
-                    except RuntimeError:
-                        pass
+                # Remove item from scene if it exists
+                if roi.item and scene:
+                    scene.removeItem(roi.item)
                 roi.statistics_overlay_visible = False
                 roi.statistics = None
             del self.rois[key]
@@ -687,13 +682,9 @@ class ROIManager:
             for roi in roi_list:
                 # Remove statistics overlay if present
                 self.remove_statistics_overlay(roi, scene)
-                # Only remove if item still exists and belongs to this scene (e.g. clear_mpr may have scene.clear()'d first)
-                if roi.item and isValid(roi.item):
-                    try:
-                        if scene and roi.item.scene() == scene:
-                            scene.removeItem(roi.item)
-                    except RuntimeError:
-                        pass
+                # Only remove if item actually belongs to this scene
+                if roi.item.scene() == scene:
+                    scene.removeItem(roi.item)
                 roi.statistics_overlay_visible = False
                 roi.statistics = None
         self.rois.clear()

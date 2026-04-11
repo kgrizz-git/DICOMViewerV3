@@ -13,8 +13,7 @@ Inputs:
 
 Outputs:
     - MprRequest emitted via the ``mpr_requested`` signal on OK, containing
-      all parameters needed by MprBuilder (including optional combine-slices
-      projection and plane count aligned with the right-pane widget).
+      all parameters needed by MprBuilder.
 
 Requirements:
     - PySide6
@@ -46,7 +45,6 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from core.mpr_controller import normalize_mpr_combine_slice_count
 from core.mpr_volume import MprVolume
 from core.slice_geometry import SlicePlane
 
@@ -69,10 +67,7 @@ class MprRequest:
         output_thickness_mm: Inter-slice spacing (mm).
         interpolation:       "linear" | "nearest" | "cubic".
         combine_mode:        Slab combine mode: "none" | "mip" | "minip" | "aip".
-        slab_thickness_mm:   ``combine_slice_count * output_thickness_mm`` when
-                             combining; kept for logs/cache compatibility.
-        combine_slice_count: Planes in the slab (2, 3, 4, 6, or 8), same as the
-                             right-pane Combine Slices control.
+        slab_thickness_mm:   Slab thickness in mm used by combine modes.
         orientation_label:   Human-readable label ("Axial", "Coronal", etc.)
     """
     series_key: str
@@ -84,7 +79,6 @@ class MprRequest:
     combine_mode: str
     slab_thickness_mm: float
     orientation_label: str
-    combine_slice_count: int = 4
 
 
 # ---------------------------------------------------------------------------
@@ -232,47 +226,34 @@ class MprDialog(QDialog):
         params_layout.addRow("Slice Thickness:", self._thickness_spin)
         params_layout.addRow("Interpolation:", self._interp_combo)
 
-        # --- Combine slices (same model as the right-pane "Combine Slices" widget) ---
-        combine_group = QGroupBox("Combine Slices")
-        combine_group.setToolTip(
-            "Optional slab of neighboring MPR planes at the current index, "
-            "using the same slice counts (2–8) as the right pane."
-        )
+        # --- Slab combine ---
+        # These options modify the final displayed output slice by combining a
+        # small slab of neighboring MPR planes at the current slice index.
+        combine_group = QGroupBox("Slab Combine (for MIP/MinIP/AIP)")
         combine_layout = QFormLayout(combine_group)
 
         self._combine_mode_combo = QComboBox()
         for label, val in (
             ("None (single slice)", "none"),
-            ("Average (AIP)", "aip"),
-            ("Maximum (MIP)", "mip"),
-            ("Minimum (MinIP)", "minip"),
+            ("MIP (max intensity)", "mip"),
+            ("MinIP (min intensity)", "minip"),
+            ("AIP (average intensity)", "aip"),
         ):
             self._combine_mode_combo.addItem(label, val)
-        self._combine_mode_combo.currentIndexChanged.connect(
-            self._on_combine_mode_changed
+
+        self._slab_thickness_spin = QDoubleSpinBox()
+        self._slab_thickness_spin.setRange(0.1, 200.0)
+        self._slab_thickness_spin.setDecimals(2)
+        self._slab_thickness_spin.setSuffix(" mm")
+        self._slab_thickness_spin.setToolTip(
+            "Slab thickness in mm used by MIP/MinIP/AIP. "
+            "The MPR builder combines neighboring output planes around the current slice."
         )
 
-        self._combine_slice_widget = QWidget()
-        _slice_row = QHBoxLayout(self._combine_slice_widget)
-        _slice_row.setContentsMargins(0, 0, 0, 0)
-        self._combine_slice_combo = QComboBox()
-        for n in (2, 3, 4, 6, 8):
-            self._combine_slice_combo.addItem(str(n), n)
-        self._combine_slice_combo.setToolTip(
-            "Number of consecutive output planes to combine (matches right pane)."
-        )
-        self._combine_slice_combo.currentIndexChanged.connect(
-            self._update_combine_thickness_hint
-        )
-        self._combine_thickness_label = QLabel("")
-        self._combine_thickness_label.setStyleSheet("color: gray; font-size: 10px;")
-        _slice_row.addWidget(self._combine_slice_combo)
-        _slice_row.addWidget(self._combine_thickness_label)
-        _slice_row.addStretch(1)
+        combine_layout.addRow("Mode:", self._combine_mode_combo)
+        combine_layout.addRow("Slab Thickness:", self._slab_thickness_spin)
 
-        combine_layout.addRow("Projection:", self._combine_mode_combo)
-        combine_layout.addRow("Slices:", self._combine_slice_widget)
-
+        # Keep this section visible; the combo mode itself disables effectiveness.
         params_layout.addRow(combine_group)
 
         # Estimated output size (read-only).
@@ -282,7 +263,6 @@ class MprDialog(QDialog):
 
         self._spacing_spin.valueChanged.connect(self._update_estimate)
         self._thickness_spin.valueChanged.connect(self._update_estimate)
-        self._thickness_spin.valueChanged.connect(self._update_combine_thickness_hint)
 
         root.addWidget(params_group)
 
@@ -341,11 +321,9 @@ class MprDialog(QDialog):
         self._spacing_spin.setValue(round(default_sp, 2))
         self._thickness_spin.setValue(round(default_th, 2))
 
-        idx4 = self._combine_slice_combo.findData(4)
-        if idx4 >= 0:
-            self._combine_slice_combo.setCurrentIndex(idx4)
-        self._on_combine_mode_changed(self._combine_mode_combo.currentIndex())
-        self._update_combine_thickness_hint()
+        # Default slab thickness: match the default output slice thickness
+        # so "None vs. combine" produces a sane starting behavior.
+        self._slab_thickness_spin.setValue(round(default_th, 2))
         self._update_estimate()
 
     def _update_estimate(self) -> None:
@@ -410,28 +388,6 @@ class MprDialog(QDialog):
         """Show / hide custom normal widget."""
         self._custom_widget.setVisible(self._radio_custom.isChecked())
 
-    def _on_combine_mode_changed(self, _index: int) -> None:
-        """Show slice-count row only when a combine projection is selected."""
-        mode = self._combine_mode_combo.currentData() or "none"
-        self._combine_slice_widget.setVisible(mode != "none")
-
-    def _update_combine_thickness_hint(self, _index: int = -1) -> None:
-        """Show approximate slab extent in mm: n_planes * output slice spacing."""
-        mode = self._combine_mode_combo.currentData() or "none"
-        if mode == "none":
-            self._combine_thickness_label.setText("")
-            return
-        n = self._combine_slice_combo.currentData()
-        if n is None:
-            try:
-                n = int(self._combine_slice_combo.currentText())
-            except (TypeError, ValueError):
-                n = 4
-        n = int(n)
-        th = float(self._thickness_spin.value())
-        mm = float(n) * th
-        self._combine_thickness_label.setText(f"(≈ {mm:.2f} mm along normal)")
-
     def _on_ok(self) -> None:
         """Validate inputs and emit mpr_requested."""
         key = self._current_series_key()
@@ -463,18 +419,7 @@ class MprDialog(QDialog):
         th = self._thickness_spin.value()
         interp = self._interp_combo.currentData() or "linear"
         combine_mode = self._combine_mode_combo.currentData() or "none"
-        if combine_mode == "none":
-            combine_n = 4
-            slab_thickness = 0.0
-        else:
-            n_raw = self._combine_slice_combo.currentData()
-            if n_raw is None:
-                try:
-                    n_raw = int(self._combine_slice_combo.currentText())
-                except (TypeError, ValueError):
-                    n_raw = 4
-            combine_n = normalize_mpr_combine_slice_count(int(n_raw))
-            slab_thickness = float(combine_n) * float(th)
+        slab_thickness = float(self._slab_thickness_spin.value())
 
         req = MprRequest(
             series_key=key,
@@ -486,7 +431,6 @@ class MprDialog(QDialog):
             combine_mode=combine_mode,
             slab_thickness_mm=slab_thickness,
             orientation_label=label,
-            combine_slice_count=combine_n,
         )
         # Close the dialog first so the orientation-choice or error dialogs
         # opened by the handler are visible on top and the user is not stuck.

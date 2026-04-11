@@ -958,10 +958,6 @@ class MprController(QObject):
         slice-specific DICOM fields that are meaningless for a resampled stack
         are replaced or removed:
         - ``InstanceNumber`` becomes the MPR stack index (1-based).
-        - ``ImageOrientationPatient`` matches the **displayed** MPR plane (row/column
-          cosines from ``slice_stack.planes[slice_index]``) so direction labels and
-          geometry match the reformatted view.
-        - ``PixelSpacing`` matches ``result.output_spacing_mm`` for scale markers.
         - ``SliceLocation`` is removed.
         - ``ImagePositionPatient`` is removed.
 
@@ -982,32 +978,6 @@ class MprController(QObject):
             source_ds.SpacingBetweenSlices = float(result.output_thickness_mm)
         except Exception:
             pass
-
-        planes = getattr(result.slice_stack, "planes", None) or []
-        si = int(slice_index)
-        if planes and 0 <= si < len(planes):
-            plane = planes[si]
-            rc = np.asarray(plane.row_cosine, dtype=float).reshape(-1)
-            cc = np.asarray(plane.col_cosine, dtype=float).reshape(-1)
-            if rc.size == 3 and cc.size == 3:
-                try:
-                    source_ds.ImageOrientationPatient = [
-                        float(rc[0]),
-                        float(rc[1]),
-                        float(rc[2]),
-                        float(cc[0]),
-                        float(cc[1]),
-                        float(cc[2]),
-                    ]
-                except Exception:
-                    pass
-
-        try:
-            rs, cs = result.output_spacing_mm[0], result.output_spacing_mm[1]
-            source_ds.PixelSpacing = [float(rs), float(cs)]
-        except Exception:
-            pass
-
         for attr in ("SliceLocation", "ImagePositionPatient"):
             if hasattr(source_ds, attr):
                 try:

@@ -196,7 +196,9 @@ class ProjectionAppFacade:
                 mp_data["mpr_combine_mode"] = w.get_projection_type()
                 mp_data["mpr_combine_slice_count"] = w.get_slice_count()
                 app._mpr_controller.display_mpr_slice(
-                    focused_idx, mp_data.get("mpr_slice_index", 0)
+                    focused_idx,
+                    mp_data.get("mpr_slice_index", 0),
+                    refit_window_level_for_combine=True,
                 )
             selected_roi = app.roi_manager.get_selected_roi()
             if selected_roi is not None and DEBUG_PROJECTION:
@@ -235,8 +237,11 @@ class ProjectionAppFacade:
             mp_data = app.subwindow_data.get(focused_idx)
             if mp_data is not None:
                 mp_data["mpr_combine_mode"] = projection_type
+                combine_on = bool(mp_data.get("mpr_combine_enabled"))
                 app._mpr_controller.display_mpr_slice(
-                    focused_idx, mp_data.get("mpr_slice_index", 0)
+                    focused_idx,
+                    mp_data.get("mpr_slice_index", 0),
+                    refit_window_level_for_combine=combine_on,
                 )
             return
         if app.current_dataset is not None and app.slice_display_manager.projection_enabled:
@@ -262,8 +267,11 @@ class ProjectionAppFacade:
             mp_data = app.subwindow_data.get(focused_idx)
             if mp_data is not None:
                 mp_data["mpr_combine_slice_count"] = count
+                combine_on = bool(mp_data.get("mpr_combine_enabled"))
                 app._mpr_controller.display_mpr_slice(
-                    focused_idx, mp_data.get("mpr_slice_index", 0)
+                    focused_idx,
+                    mp_data.get("mpr_slice_index", 0),
+                    refit_window_level_for_combine=combine_on,
                 )
             return
         if app.current_dataset is not None and app.slice_display_manager.projection_enabled:

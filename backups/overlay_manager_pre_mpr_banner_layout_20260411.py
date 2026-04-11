@@ -33,14 +33,6 @@ from gui.overlay_text_builder import get_corner_text, get_modality, get_overlay_
 from gui.overlay_items_factory import create_graphics_overlay_text_item
 from utils.debug_flags import DEBUG_WIDGET_PAN
 
-# MPR top-centre banner: keep below "Show Direction Labels" top edge text (~16px + font).
-_MPR_BANNER_EXTRA_TOP_PX = 30
-# Slightly above overlay corner text so the banner stays readable but unobtrusive.
-_MPR_BANNER_FONT_MIN_PT = 9
-_MPR_BANNER_FONT_OFFSET_PT = 1
-# Semi-transparent panel so edge direction labels remain visible if overlap occurs.
-_MPR_BANNER_BG_STYLE = "rgba(0, 0, 0, 88)"
-
 
 class ViewportOverlayWidget(QWidget):
     """
@@ -108,15 +100,11 @@ class ViewportOverlayWidget(QWidget):
 
         # MPR banner label (top-centre, shown only in MPR mode).
         self.mpr_banner_label = QLabel("", self)
-        mpr_font = make_qfont(
-            font_family,
-            font_variant,
-            max(font_size + _MPR_BANNER_FONT_OFFSET_PT, _MPR_BANNER_FONT_MIN_PT),
-        )
+        mpr_font = make_qfont(font_family, font_variant, max(font_size + 4, 12))
         self.mpr_banner_label.setFont(mpr_font)
         self.mpr_banner_label.setStyleSheet(
-            f"color: rgb(255, 220, 50); background: {_MPR_BANNER_BG_STYLE};"
-            " padding: 1px 6px; border-radius: 3px;"
+            "color: rgb(255, 220, 50); background: rgba(0,0,0,140);"
+            " padding: 2px 10px 2px 10px; border-radius: 3px;"
         )
         self.mpr_banner_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         self.mpr_banner_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -138,12 +126,11 @@ class ViewportOverlayWidget(QWidget):
             self.mpr_banner_label.hide()
 
     def _position_mpr_banner(self) -> None:
-        """Centre the MPR banner horizontally, below top edge direction labels."""
+        """Centre the MPR banner horizontally near the top of the viewport."""
         w = self.width()
         label_w = self.mpr_banner_label.width()
         x = max(0, (w - label_w) // 2)
-        y = self.margin + _MPR_BANNER_EXTRA_TOP_PX
-        self.mpr_banner_label.move(x, y)
+        self.mpr_banner_label.move(x, self.margin)
 
     def resizeEvent(self, event) -> None:
         """
@@ -233,11 +220,7 @@ class ViewportOverlayWidget(QWidget):
         font = make_qfont(self.font_family, self.font_variant, font_size)
         for label in self.corner_labels.values():
             label.setFont(font)
-        mpr_font = make_qfont(
-            self.font_family,
-            self.font_variant,
-            max(font_size + _MPR_BANNER_FONT_OFFSET_PT, _MPR_BANNER_FONT_MIN_PT),
-        )
+        mpr_font = make_qfont(self.font_family, self.font_variant, max(font_size + 4, 12))
         self.mpr_banner_label.setFont(mpr_font)
 
     def set_font_family(self, family: str) -> None:
@@ -251,11 +234,7 @@ class ViewportOverlayWidget(QWidget):
         font = make_qfont(family, self.font_variant, self.font_size)
         for label in self.corner_labels.values():
             label.setFont(font)
-        mpr_font = make_qfont(
-            family,
-            self.font_variant,
-            max(self.font_size + _MPR_BANNER_FONT_OFFSET_PT, _MPR_BANNER_FONT_MIN_PT),
-        )
+        mpr_font = make_qfont(family, self.font_variant, max(self.font_size + 4, 12))
         self.mpr_banner_label.setFont(mpr_font)
 
     def set_font_variant(self, variant: str) -> None:
@@ -269,11 +248,7 @@ class ViewportOverlayWidget(QWidget):
         font = make_qfont(self.font_family, variant, self.font_size)
         for label in self.corner_labels.values():
             label.setFont(font)
-        mpr_font = make_qfont(
-            self.font_family,
-            variant,
-            max(self.font_size + _MPR_BANNER_FONT_OFFSET_PT, _MPR_BANNER_FONT_MIN_PT),
-        )
+        mpr_font = make_qfont(self.font_family, variant, max(self.font_size + 4, 12))
         self.mpr_banner_label.setFont(mpr_font)
 
     def set_font_color(self, font_color: tuple[int, int, int]) -> None:

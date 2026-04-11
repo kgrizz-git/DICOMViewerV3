@@ -182,43 +182,40 @@ class ProjectionAppFacade:
                                 f"Callback={callback_state}, Manager={app.slice_display_manager.projection_enabled}"
                             )
 
-        # MPR combine refresh must run even when app.current_dataset is None (MPR uses subwindow_data).
-        focused_idx = app.focused_subwindow_index
-        if (
-            hasattr(app, "_mpr_controller")
-            and app._mpr_controller.is_mpr(focused_idx)
-            and not app._resetting_projection_state
-        ):
-            mp_data = app.subwindow_data.get(focused_idx)
-            if mp_data is not None:
-                w = app.intensity_projection_controls_widget
-                mp_data["mpr_combine_enabled"] = w.get_enabled()
-                mp_data["mpr_combine_mode"] = w.get_projection_type()
-                mp_data["mpr_combine_slice_count"] = w.get_slice_count()
-                app._mpr_controller.display_mpr_slice(
-                    focused_idx, mp_data.get("mpr_slice_index", 0)
-                )
-            selected_roi = app.roi_manager.get_selected_roi()
-            if selected_roi is not None and DEBUG_PROJECTION:
+            focused_idx = app.focused_subwindow_index
+            if (
+                hasattr(app, "_mpr_controller")
+                and app._mpr_controller.is_mpr(focused_idx)
+                and not app._resetting_projection_state
+            ):
+                mp_data = app.subwindow_data.get(focused_idx)
+                if mp_data is not None:
+                    w = app.intensity_projection_controls_widget
+                    mp_data["mpr_combine_enabled"] = w.get_enabled()
+                    mp_data["mpr_combine_mode"] = w.get_projection_type()
+                    mp_data["mpr_combine_slice_count"] = w.get_slice_count()
+                    app._mpr_controller.display_mpr_slice(focused_idx, mp_data.get("mpr_slice_index", 0))
+                selected_roi = app.roi_manager.get_selected_roi()
+                if selected_roi is not None:
+                    if DEBUG_PROJECTION:
+                        print(
+                            "[DEBUG-PROJECTION] _on_projection_enabled_changed: "
+                            "Selected ROI after MPR combine refresh"
+                        )
+            else:
+                app._display_slice(app.current_dataset)
+
+                selected_roi = app.roi_manager.get_selected_roi()
+                if selected_roi is not None:
+                    if DEBUG_PROJECTION:
+                        print(
+                            f"[DEBUG-PROJECTION] _on_projection_enabled_changed: Selected ROI exists, statistics should be updated by _display_rois_for_slice"
+                        )
+        else:
+            if DEBUG_PROJECTION:
                 print(
-                    "[DEBUG-PROJECTION] _on_projection_enabled_changed: "
-                    "Selected ROI after MPR combine refresh"
+                    "[DEBUG-PROJECTION] _on_projection_enabled_changed: current_dataset is None, cannot redisplay"
                 )
-            return
-
-        if app.current_dataset is not None:
-            app._display_slice(app.current_dataset)
-
-            selected_roi = app.roi_manager.get_selected_roi()
-            if selected_roi is not None:
-                if DEBUG_PROJECTION:
-                    print(
-                        f"[DEBUG-PROJECTION] _on_projection_enabled_changed: Selected ROI exists, statistics should be updated by _display_rois_for_slice"
-                    )
-        elif DEBUG_PROJECTION:
-            print(
-                "[DEBUG-PROJECTION] _on_projection_enabled_changed: current_dataset is None, cannot redisplay"
-            )
 
     def on_projection_type_changed(self, projection_type: str) -> None:
         """
@@ -235,9 +232,8 @@ class ProjectionAppFacade:
             mp_data = app.subwindow_data.get(focused_idx)
             if mp_data is not None:
                 mp_data["mpr_combine_mode"] = projection_type
-                app._mpr_controller.display_mpr_slice(
-                    focused_idx, mp_data.get("mpr_slice_index", 0)
-                )
+                if mp_data.get("mpr_combine_enabled"):
+                    app._mpr_controller.display_mpr_slice(focused_idx, mp_data.get("mpr_slice_index", 0))
             return
         if app.current_dataset is not None and app.slice_display_manager.projection_enabled:
             app._display_slice(app.current_dataset)
@@ -262,9 +258,8 @@ class ProjectionAppFacade:
             mp_data = app.subwindow_data.get(focused_idx)
             if mp_data is not None:
                 mp_data["mpr_combine_slice_count"] = count
-                app._mpr_controller.display_mpr_slice(
-                    focused_idx, mp_data.get("mpr_slice_index", 0)
-                )
+                if mp_data.get("mpr_combine_enabled"):
+                    app._mpr_controller.display_mpr_slice(focused_idx, mp_data.get("mpr_slice_index", 0))
             return
         if app.current_dataset is not None and app.slice_display_manager.projection_enabled:
             if DEBUG_PROJECTION:
