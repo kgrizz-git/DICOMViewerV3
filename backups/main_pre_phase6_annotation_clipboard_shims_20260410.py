@@ -78,6 +78,7 @@ from core.tag_edit_history import TagEditHistoryManager
 from utils.config_manager import ConfigManager
 from utils.dicom_utils import get_composite_series_key
 from tools.roi_manager import ROIItem
+from tools.measurement_items import MeasurementItem
 from tools.annotation_manager import AnnotationManager
 from tools.histogram_widget import HistogramWidget
 from gui.overlay_manager import OverlayManager
@@ -3254,6 +3255,187 @@ class DICOMViewerApp(QObject):
             Qt.TransformationMode.SmoothTransformation,
         )
 
+    def _get_selected_rois(self, subwindow: SubWindowContainer) -> List[ROIItem]:
+        """
+        Get selected ROI items from the scene.
+        
+        Args:
+            subwindow: SubWindowContainer to get ROIs from
+            
+        Returns:
+            List of selected ROIItem objects
+        """
+        return self._annotation_paste_handler.get_selected_rois(subwindow)
+    
+    def _get_selected_measurements(self, subwindow: SubWindowContainer) -> List[MeasurementItem]:
+        """
+        Get selected measurement items from the scene.
+        
+        Args:
+            subwindow: SubWindowContainer to get measurements from
+            
+        Returns:
+            List of selected MeasurementItem objects
+        """
+        return self._annotation_paste_handler.get_selected_measurements(subwindow)
+    
+    def _get_selected_crosshairs(self, subwindow: SubWindowContainer) -> List[CrosshairItem]:
+        """
+        Get selected crosshair items from the scene.
+        
+        Args:
+            subwindow: SubWindowContainer to get crosshairs from
+            
+        Returns:
+            List of selected CrosshairItem objects
+        """
+        return self._annotation_paste_handler.get_selected_crosshairs(subwindow)
+    
+    def _get_selected_text_annotations(self, subwindow: SubWindowContainer) -> List[TextAnnotationItem]:
+        """
+        Get selected text annotation items from the scene.
+        
+        Args:
+            subwindow: SubWindowContainer to get text annotations from
+            
+        Returns:
+            List of selected TextAnnotationItem objects
+        """
+        return self._annotation_paste_handler.get_selected_text_annotations(subwindow)
+    
+    def _get_selected_arrow_annotations(self, subwindow: SubWindowContainer) -> List[ArrowAnnotationItem]:
+        """
+        Get selected arrow annotation items from the scene.
+        
+        Args:
+            subwindow: SubWindowContainer to get arrow annotations from
+            
+        Returns:
+            List of selected ArrowAnnotationItem objects
+        """
+        return self._annotation_paste_handler.get_selected_arrow_annotations(subwindow)
+    
+    def _copy_annotations(self) -> None:
+        """
+        Copy selected annotations (ROIs, measurements, crosshairs, text annotations, arrow annotations) to clipboard.
+        
+        Only copies selected annotations. If nothing is selected, shows a status message.
+        """
+        self._annotation_paste_handler.copy_annotations()
+    
+    def _paste_annotations(self) -> None:
+        """
+        Paste annotations from clipboard to current slice.
+        
+        Applies smart offset: 10px offset if pasting to same slice, otherwise no offset.
+        """
+        self._annotation_paste_handler.paste_annotations()
+    
+    def _paste_roi(
+        self,
+        subwindow: SubWindowContainer,
+        managers: Dict[str, Any],
+        roi_data: Dict[str, Any],
+        offset: QPointF,
+    ):
+        """
+        Recreate an ROI from clipboard data.
+        
+        Args:
+            subwindow: SubWindowContainer to paste into
+            managers: Dictionary of managers for this subwindow
+            roi_data: Serialized ROI data
+            offset: QPointF offset to apply
+            
+        Returns:
+            Created ROIItem or None
+        """
+        return self._annotation_paste_handler.paste_roi(subwindow, managers, roi_data, offset)
+    
+    def _paste_measurement(
+        self,
+        subwindow: SubWindowContainer,
+        managers: Dict[str, Any],
+        meas_data: Dict[str, Any],
+        offset: QPointF,
+    ):
+        """
+        Recreate a measurement from clipboard data.
+        
+        Args:
+            subwindow: SubWindowContainer to paste into
+            managers: Dictionary of managers for this subwindow
+            meas_data: Serialized measurement data
+            offset: QPointF offset to apply
+            
+        Returns:
+            Created MeasurementItem or None
+        """
+        return self._annotation_paste_handler.paste_measurement(subwindow, managers, meas_data, offset)
+    
+    def _paste_crosshair(
+        self,
+        subwindow: SubWindowContainer,
+        managers: Dict[str, Any],
+        cross_data: Dict[str, Any],
+        offset: QPointF,
+    ):
+        """
+        Recreate a crosshair from clipboard data.
+        
+        Args:
+            subwindow: SubWindowContainer to paste into
+            managers: Dictionary of managers for this subwindow
+            cross_data: Serialized crosshair data
+            offset: QPointF offset to apply
+            
+        Returns:
+            Created CrosshairItem or None
+        """
+        return self._annotation_paste_handler.paste_crosshair(subwindow, managers, cross_data, offset)
+    
+    def _paste_text_annotation(
+        self,
+        subwindow: SubWindowContainer,
+        managers: Dict[str, Any],
+        text_data: Dict[str, Any],
+        offset: QPointF,
+    ):
+        """
+        Recreate a text annotation from clipboard data.
+        
+        Args:
+            subwindow: SubWindowContainer to paste into
+            managers: Dictionary of managers for this subwindow
+            text_data: Serialized text annotation data
+            offset: QPointF offset to apply
+            
+        Returns:
+            Created TextAnnotationItem or None
+        """
+        return self._annotation_paste_handler.paste_text_annotation(subwindow, managers, text_data, offset)
+    
+    def _paste_arrow_annotation(
+        self,
+        subwindow: SubWindowContainer,
+        managers: Dict[str, Any],
+        arrow_data: Dict[str, Any],
+        offset: QPointF,
+    ):
+        """
+        Recreate an arrow annotation from clipboard data.
+        
+        Args:
+            subwindow: SubWindowContainer to paste into
+            managers: Dictionary of managers for this subwindow
+            arrow_data: Serialized arrow annotation data
+            offset: QPointF offset to apply
+            
+        Returns:
+            Created ArrowAnnotationItem or None
+        """
+        return self._annotation_paste_handler.paste_arrow_annotation(subwindow, managers, arrow_data, offset)
+    
     def eventFilter(self, obj, event) -> bool:
         """
         Event filter for handling key events.

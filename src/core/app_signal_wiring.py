@@ -9,8 +9,9 @@ Application signal wiring for DICOM Viewer V3.
 
 This module connects all Qt signals for DICOMViewerApp. It receives the app instance
 and wires layout, file, dialog, undo/redo, cine, view, customization, subwindow,
-and focused-subwindow signals. Handlers remain methods on DICOMViewerApp; only
-the connection code lives here.
+and focused-subwindow signals. Most handlers are methods on DICOMViewerApp; copy/paste
+annotations connect to ``AnnotationPasteHandler`` methods on the app. Only the
+connection code lives here.
 
 Call order matters: layout and file signals are wired before dialogs so that
 subwindow and focus state is ready when dialogs are first triggered. Per-subwindow
@@ -92,8 +93,12 @@ def _wire_undo_redo_and_annotation_signals(app: DICOMViewerApp) -> None:
     """Wire undo/redo (tag edits and annotations) and annotation copy/paste signals."""
     app.main_window.undo_tag_edit_requested.connect(app._on_undo_requested)
     app.main_window.redo_tag_edit_requested.connect(app._on_redo_requested)
-    app.main_window.copy_annotation_requested.connect(app._copy_annotations)
-    app.main_window.paste_annotation_requested.connect(app._paste_annotations)
+    app.main_window.copy_annotation_requested.connect(
+        app._annotation_paste_handler.copy_annotations
+    )
+    app.main_window.paste_annotation_requested.connect(
+        app._annotation_paste_handler.paste_annotations
+    )
     app.metadata_panel.tag_edited.connect(app._on_tag_edited)
 
 

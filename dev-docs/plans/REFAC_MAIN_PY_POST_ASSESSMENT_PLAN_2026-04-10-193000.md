@@ -175,16 +175,16 @@
 
 **Intent:** Reduce ~150+ lines of thin `_paste_*` / `_get_selected_*` wrappers.
 
-- [ ] Trace each caller (signals in `app_signal_wiring` or elsewhere); compare signatures to `AnnotationPasteHandler` methods.
-- [ ] Either: (a) wire `AnnotationPasteHandler` methods directly in `app_signal_wiring`, or (b) keep one-liner delegates with **minimal** docstrings.
+- [x] Trace each caller (signals in `app_signal_wiring` or elsewhere); compare signatures to `AnnotationPasteHandler` methods. *(Only menu copy/paste used app slots; `_get_selected_*` / `_paste_*` on the app had no other callers.)*
+- [x] Either: (a) wire `AnnotationPasteHandler` methods directly in `app_signal_wiring`, or (b) keep one-liner delegates with **minimal** docstrings. **(a) done.**
 
 #### Phase 6 testing
 
-- [ ] Run full tests + manual copy/paste ROI and annotations across slices/windows.
+- [x] Run full tests + manual copy/paste ROI and annotations across slices/windows. 
 
 #### Phase 6 completion (check when Phase 6 is done or skipped)
 
-- [ ] Option (a) or (b) completed, or phase **skipped** with reason in **Completion notes**.
+- [x] Option (a) or (b) completed, or phase **skipped** with reason in **Completion notes**.
 
 ---
 
@@ -232,7 +232,7 @@ _Phase completions, test commands, line counts, PR links, and any deferred items
 - Phase 1–4 (2026-04-10): Implemented in repo. Backup: `backups/main_pre_REFAC_MAIN_PY_20260410.py`. Tests: `python -m pytest tests/ -q` — **370 passed** (venv). Manual smoke (fusion close, 2×2 view toggles, histogram, cold start): **pending** — run locally before release.
 - Phase 3 inventory: remaining function-level imports in `main.py` after pass — none (module uses top-level `traceback`; `exception_hook` / `main` use `QApplication` / `QMessageBox` from existing QtWidgets import).
 - Phase 5 (2026-04-10): **`core/subwindow_manager_factory.py`** + thin **`_build_managers_for_subwindow`** on app. Backup: `backups/main_pre_phase5_subwindow_manager_factory_20260410.py`. Tests: **`python -m pytest tests/ -q`** — **384 passed**. Manual multi-pane smoke: **pending**.
-- Phase 6: **Not started** (optional annotation shims).
+- Phase 6 (2026-04-11): Direct wiring in **`app_signal_wiring`** to **`_annotation_paste_handler`**; removed ~180 lines of unused shims from **`main.py`**. Backup: `backups/main_pre_phase6_annotation_clipboard_shims_20260410.py`. Tests: **`python -m pytest tests/ -q`** — **384 passed**. Manual copy/paste smoke: **pending**.
 
 ---
 

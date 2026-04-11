@@ -132,7 +132,7 @@ All Qt signal connections for `DICOMViewerApp` are wired in a single call to `_c
 | `_connect_subwindow_signals()` | Per-subwindow signals (files dropped, etc.) |
 | `_connect_focused_subwindow_signals()` | Focused-subwindow state change signals |
 
-**Rule**: signal connections live only in the `_connect_signals` family. No `connect()` calls should be scattered across other `_init_*` helpers. The call order within `_connect_signals` is intentional: layout and file signals are wired before dialog signals so that subwindow/focus state is ready when dialogs are first triggered.
+**Rule**: signal connections live only in the `_connect_signals` family (implemented in `core/app_signal_wiring.py` via `wire_all_signals`). No `connect()` calls should be scattered across other `_init_*` helpers. The call order within `_connect_signals` is intentional: layout and file signals are wired before dialog signals so that subwindow/focus state is ready when dialogs are first triggered. **Exception:** annotation **Copy** / **Paste** menu signals connect to `AnnotationPasteHandler.copy_annotations` / `paste_annotations` on the app (same wiring module, not slots on `DICOMViewerApp`).
 
 ## GitHub Actions (CI)
 
