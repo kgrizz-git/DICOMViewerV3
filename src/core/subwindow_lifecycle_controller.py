@@ -401,7 +401,7 @@ class SubwindowLifecycleController:
         if app.current_dataset is None:
             return
         app.metadata_panel.set_dataset(app.current_dataset)
-        app._update_cine_player_context()
+        app.cine_app_facade.update_cine_player_context()
 
     # --- Phase 3.4: display/redisplay, connect/disconnect, layout, series assignment ---
 
@@ -924,7 +924,7 @@ class SubwindowLifecycleController:
         app.image_viewer.get_projection_type_callback = lambda: app.slice_display_manager.projection_type
         app.image_viewer.get_projection_slice_count_callback = lambda: app.slice_display_manager.projection_slice_count
         app.slice_navigator.slice_changed.connect(app._on_slice_changed)
-        app.slice_navigator.slice_changed.connect(app._on_manual_slice_navigation)
+        app.slice_navigator.slice_changed.connect(app.cine_app_facade.on_manual_slice_navigation)
         app.main_window.mouse_mode_changed.connect(app.mouse_mode_handler.handle_mouse_mode_changed)
         app.main_window.scroll_wheel_mode_changed.connect(app._on_scroll_wheel_mode_changed)
         app.image_viewer.context_menu_mouse_mode_changed.connect(app.mouse_mode_handler.handle_context_menu_mouse_mode_changed)

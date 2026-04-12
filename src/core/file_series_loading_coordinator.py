@@ -30,7 +30,7 @@ Callback interface (what the app must provide):
     view_state_manager, slice_display_manager, roi_coordinator; and methods
     _reset_fusion_for_all_subwindows, _ensure_all_subwindows_have_managers,
     _disconnect_focused_subwindow_signals, _connect_focused_subwindow_signals,
-    _update_cine_player_context, _update_undo_redo_state; and attributes
+    cine_app_facade (``update_cine_player_context``), _update_undo_redo_state; and attributes
     current_dataset, current_studies, current_study_uid, current_series_uid,
     current_slice_index, current_datasets, focused_subwindow_index.
 """
@@ -299,7 +299,7 @@ class FileSeriesLoadingCoordinator:
             app._connect_focused_subwindow_signals()
 
             app.metadata_panel.clear_filter()
-            app._update_cine_player_context()
+            app.cine_app_facade.update_cine_player_context()
 
             if app.tag_edit_history:
                 app.tag_edit_history.clear_history(app.current_dataset)
@@ -480,7 +480,7 @@ class FileSeriesLoadingCoordinator:
                     app._connect_focused_subwindow_signals()
 
                     app.metadata_panel.clear_filter()
-                    app._update_cine_player_context()
+                    app.cine_app_facade.update_cine_player_context()
 
                     if view_state_manager:
                         QTimer.singleShot(100, view_state_manager.store_initial_view_state)
@@ -691,7 +691,7 @@ class FileSeriesLoadingCoordinator:
             app._update_series_navigator_highlighting()
             app._update_right_panel_for_focused_subwindow()
             # Ensure cine player context and frame slider are updated when series changes
-            app._update_cine_player_context()
+            app.cine_app_facade.update_cine_player_context()
 
             # Update crosshairs for the newly selected series/slice in the focused subwindow
             if 'crosshair_coordinator' in managers and managers['crosshair_coordinator']:
@@ -960,7 +960,7 @@ class FileSeriesLoadingCoordinator:
                         app.series_navigator.set_subwindow_assignments(
                             app._get_subwindow_assignments()
                         )
-                app._update_cine_player_context()
+                app.cine_app_facade.update_cine_player_context()
                 return
 
             if DEBUG_NAV:
@@ -1087,7 +1087,7 @@ class FileSeriesLoadingCoordinator:
                         app._get_subwindow_assignments()
                     )
             app._update_right_panel_for_focused_subwindow()
-            app._update_cine_player_context()
+            app.cine_app_facade.update_cine_player_context()
         finally:
             if DEBUG_NAV:
                 timestamp = time.time()

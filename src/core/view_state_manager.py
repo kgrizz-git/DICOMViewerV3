@@ -164,7 +164,34 @@ class ViewStateManager:
         else:
             # print(f"[DEBUG-WL]   WARNING: redisplay_slice_callback is None!")
             pass
-    
+
+    def apply_window_level_from_context_menu_preset(
+        self, center: float, width: float, preset_index: int
+    ) -> None:
+        """
+        Apply window/level after the user picks a context-menu preset.
+
+        Does not run ``handle_window_changed``: that path compares presets using
+        ``match_center`` / ``match_width`` that may still reflect the *previous*
+        W/L when ``window_changed`` fires immediately after a preset change, which
+        incorrectly re-matched the old preset and reset ``current_preset_index``
+        (context-menu checkmark one step behind).
+
+        Inputs:
+            - center, width: values already aligned with ``use_rescaled_values``
+            - preset_index: index into ``window_level_presets``
+
+        Outputs:
+            - Updates ``current_window_center``, ``current_window_width``,
+              ``current_preset_index``, ``window_level_user_modified``, then
+              redisplays the current slice with ``preserve_view=True``.
+        """
+        self.current_preset_index = preset_index
+        self.window_level_user_modified = False
+        self.current_window_center = center
+        self.current_window_width = width
+        self._redisplay_current_slice(preserve_view=True)
+
     def get_initial_fit_zoom(self) -> float:
         """
         Get the initial fit-to-view zoom factor for the current series.

@@ -42,7 +42,7 @@ from PySide6.QtWidgets import (
     QStyleFactory,
 )
 from PySide6.QtCore import Qt, QPoint, QPointF, QObject, QTimer, QRectF, QSize, Signal
-from PySide6.QtGui import QCursor
+from PySide6.QtGui import QCursor, QKeyEvent
 from typing import Any, Callable, Optional, Dict, List, Tuple, cast, Set
 import pydicom
 from pydicom.dataset import Dataset
@@ -107,9 +107,6 @@ from core.subwindow_image_viewer_sync import (
     set_smooth_when_zoomed_all,
 )
 from core.subwindow_manager_factory import build_managers_for_subwindow
-from core.cine_app_facade import CineAppFacade
-from core.main_app_key_event_filter import dispatch_app_key_event, is_widget_allowed_for_layout_shortcuts
-from core.window_level_preset_handler import apply_window_level_preset
 from gui.dialog_coordinator import DialogCoordinator
 from gui.mouse_mode_handler import MouseModeHandler
 from gui.keyboard_event_handler import KeyboardEventHandler
@@ -157,7 +154,6 @@ class DICOMViewerApp(QObject):
     _customization_handlers: CustomizationHandlers
     mouse_mode_handler: MouseModeHandler
     cine_player: CinePlayer
-    cine_app_facade: CineAppFacade
     keyboard_event_handler: KeyboardEventHandler
 
     # Lazily created UI / background workers (Optional avoids Pyright
@@ -211,7 +207,6 @@ class DICOMViewerApp(QObject):
         self._customization_handlers = cast(CustomizationHandlers, cast(object, None))
         self.mouse_mode_handler = cast(MouseModeHandler, cast(object, None))
         self.cine_player = cast(CinePlayer, cast(object, None))
-        self.cine_app_facade = cast(CineAppFacade, cast(object, None))
         self.keyboard_event_handler = cast(KeyboardEventHandler, cast(object, None))
 
         # Step 1 – Core application and data managers
@@ -795,8 +790,6 @@ class DICOMViewerApp(QObject):
         # Update UI to match defaults
         self.cine_controls_widget.set_speed(default_speed)
         self.cine_controls_widget.set_loop(default_loop)
-
-        self.cine_app_facade = CineAppFacade(self)
         
         # Initialize KeyboardEventHandler
         # Ensure all required managers exist before initializing
@@ -831,9 +824,7 @@ class DICOMViewerApp(QObject):
             delete_text_annotation_callback=None,  # Will be set when coordinators are available
             delete_arrow_annotation_callback=None,  # Will be set when coordinators are available
             change_layout_callback=self.main_window.set_layout_mode,
-            is_focus_ok_for_reset_view=lambda: is_widget_allowed_for_layout_shortcuts(
-                self, QApplication.focusWidget()
-            ),
+            is_focus_ok_for_reset_view=lambda: self._is_widget_allowed_for_layout_shortcuts(QApplication.focusWidget()),
             open_quick_window_level_callback=self._open_quick_window_level,
         )
 
@@ -1165,7 +1156,7 @@ class DICOMViewerApp(QObject):
 
         self.metadata_panel.set_dataset(None)
 
-        self.cine_app_facade.update_cine_player_context()
+        self._update_cine_player_context()
 
         self._disconnect_focused_subwindow_signals()
         self._connect_focused_subwindow_signals()
@@ -2805,8 +2796,47 @@ class DICOMViewerApp(QObject):
         self.view_state_manager.handle_window_level_drag(center_delta, width_delta)
     
     def _on_window_level_preset_selected(self, preset_index: int) -> None:
-        """Handle window/level preset selection from context menu (logic in ``window_level_preset_handler``)."""
-        apply_window_level_preset(self, preset_index)
+        """
+        Handle window/level preset selection from context menu.
+        
+        Args:
+            preset_index: Index of the selected preset
+        """
+        if self.view_state_manager and self.view_state_manager.window_level_presets:
+            if 0 <= preset_index < len(self.view_state_manager.window_level_presets):
+                wc, ww, is_rescaled, preset_name = self.view_state_manager.window_level_presets[preset_index]
+                
+                # Get current rescale state
+                use_rescaled_values = self.view_state_manager.use_rescaled_values
+                rescale_slope = self.view_state_manager.rescale_slope
+                rescale_intercept = self.view_state_manager.rescale_intercept
+                
+                # Convert if needed based on current rescale state
+                if is_rescaled and not use_rescaled_values:
+                    if (rescale_slope is not None and rescale_intercept is not None and rescale_slope != 0.0):
+                        wc, ww = self.dicom_processor.convert_window_level_rescaled_to_raw(
+                            wc, ww, rescale_slope, rescale_intercept
+                        )
+                elif not is_rescaled and use_rescaled_values:
+                    if (rescale_slope is not None and rescale_intercept is not None):
+                        wc, ww = self.dicom_processor.convert_window_level_raw_to_rescaled(
+                            wc, ww, rescale_slope, rescale_intercept
+                        )
+                
+                # Update preset index
+                self.view_state_manager.current_preset_index = preset_index
+                
+                # Set window/level
+                self.window_level_controls.set_window_level(wc, ww, block_signals=False)
+                
+                # Update status bar widget
+                if self.image_viewer is not None:
+                    current_zoom = self.image_viewer.current_zoom
+                    preset_display_name = preset_name if preset_name else "Default"
+                    self.main_window.update_zoom_preset_status(current_zoom, preset_display_name)
+                
+                # Reset user-modified flag since we're using a preset
+                self.view_state_manager.window_level_user_modified = False
     
     def _update_zoom_preset_status_bar(self) -> None:
         """
@@ -2977,6 +3007,188 @@ class DICOMViewerApp(QObject):
         self._slice_sync_coordinator.on_slice_changed(self.focused_subwindow_index)
         self._slice_location_line_coordinator.refresh_all()
 
+    def _on_manual_slice_navigation(self, slice_index: int) -> None:
+        """
+        Handle manual slice navigation (pause cine if playing).
+        
+        Args:
+            slice_index: New slice index
+        """
+        # Pause cine playback if user manually navigates during playback
+        # Check if this navigation is from cine player using the flag
+        if self.cine_player.is_playback_active() and not self.cine_player.is_cine_advancing():
+            # This is manual navigation, pause playback
+            self.cine_player.pause_playback()
+    
+    def _update_cine_player_context(self) -> None:
+        """Update cine player context and enable/disable controls based on series capability."""
+        # Update cine player series context
+        self.cine_player.set_series_context(
+            self.current_studies,
+            self.current_study_uid,
+            self.current_series_uid
+        )
+        
+        # Pass datasets to cine player for slice-aware navigation
+        if (self.current_studies and self.current_study_uid and self.current_series_uid and
+            self.current_study_uid in self.current_studies and
+            self.current_series_uid in self.current_studies[self.current_study_uid]):
+            datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
+            self.cine_player.set_datasets(datasets)
+            # Clear loop bounds in widget when series changes
+            self.cine_controls_widget.set_loop_bounds(None, None)
+        
+        # Check if current series is cine-capable
+        is_cine_capable = self.cine_player.is_cine_capable(
+            self.current_studies,
+            self.current_study_uid,
+            self.current_series_uid
+        )
+        
+        # Enable/disable cine controls
+        self.cine_controls_widget.set_controls_enabled(is_cine_capable)
+        # Also enable/disable cine controls in context menu
+        if self.image_viewer is not None:
+            self.image_viewer.set_cine_controls_enabled(is_cine_capable)
+        
+        # Update frame slider with current frame and total frames
+        if is_cine_capable:
+            total_slices = self.slice_navigator.total_slices
+            # Use slice navigator's notion of current slice for robustness
+            current_slice = self.slice_navigator.get_current_slice()
+            self.cine_controls_widget.update_frame_position(current_slice, total_slices)
+        else:
+            # Reset slider when not cine-capable
+            self.cine_controls_widget.update_frame_position(0, 0)
+        
+        # If not cine-capable, stop any active playback
+        if not is_cine_capable and self.cine_player.is_playback_active():
+            self.cine_player.stop_playback()
+    
+    def _on_cine_frame_advance(self, frame_index: int) -> None:
+        """
+        Handle frame advancement request from cine player.
+        
+        Args:
+            frame_index: Frame index to advance to
+        """
+        # Use slice navigator's advance_to_frame with loop support
+        loop_enabled = self.cine_player.loop_enabled
+        self.slice_navigator.advance_to_frame(frame_index, loop=loop_enabled)
+        # Flag will be reset in _on_slice_changed() after processing completes
+    
+    def _on_cine_playback_state_changed(self, is_playing: bool) -> None:
+        """
+        Handle cine playback state change.
+        
+        Args:
+            is_playing: True if playing, False if paused/stopped
+        """
+        self.cine_controls_widget.update_playback_state(is_playing)
+        # Update FPS display
+        fps = self.cine_player.get_effective_frame_rate()
+        self.cine_controls_widget.update_fps_display(fps)
+    
+    def _on_cine_play(self) -> None:
+        """Handle cine play request."""
+        if self.current_dataset is not None:
+            # Try to extract frame rate from current dataset
+            frame_rate = self.cine_player.get_frame_rate_from_dicom(self.current_dataset)
+            self.cine_player.start_playback(frame_rate=frame_rate, dataset=self.current_dataset)
+            # Update FPS display
+            fps = self.cine_player.get_effective_frame_rate()
+            self.cine_controls_widget.update_fps_display(fps)
+    
+    def _on_cine_pause(self) -> None:
+        """Handle cine pause request."""
+        self.cine_player.pause_playback()
+    
+    def _on_cine_stop(self) -> None:
+        """Handle cine stop request."""
+        self.cine_player.stop_playback()
+    
+    def _on_cine_speed_changed(self, speed_multiplier: float) -> None:
+        """
+        Handle cine speed change.
+        
+        Args:
+            speed_multiplier: Speed multiplier
+        """
+        self.cine_player.set_speed(speed_multiplier)
+        # Update FPS display
+        fps = self.cine_player.get_effective_frame_rate()
+        self.cine_controls_widget.update_fps_display(fps)
+    
+    def _on_cine_loop_toggled(self, enabled: bool) -> None:
+        """
+        Handle cine loop toggle.
+        
+        Args:
+            enabled: True to enable looping, False to disable
+        """
+        self.cine_player.set_loop(enabled)
+        # Update UI to reflect loop state
+        self.cine_controls_widget.set_loop(enabled)
+        # Save loop state to config so it persists between sessions
+        self.config_manager.set_cine_default_loop(enabled)
+    
+    def _get_cine_loop_state(self) -> bool:
+        """
+        Get current cine loop state for context menu.
+        
+        Returns:
+            True if loop is enabled, False otherwise
+        """
+        return self.cine_player.loop_enabled
+    
+    def _on_cine_loop_start_set(self, frame_index: int) -> None:
+        """
+        Handle loop start frame set from cine controls.
+        
+        Args:
+            frame_index: Frame index to set as loop start
+        """
+        # Get current loop end (if any)
+        loop_end = self.cine_player.loop_end_frame
+        self.cine_player.set_loop_bounds(frame_index, loop_end)
+        # Update widget to reflect bounds
+        self.cine_controls_widget.set_loop_bounds(frame_index, loop_end)
+    
+    def _on_cine_loop_end_set(self, frame_index: int) -> None:
+        """
+        Handle loop end frame set from cine controls.
+        
+        Args:
+            frame_index: Frame index to set as loop end
+        """
+        # Get current loop start (if any)
+        loop_start = self.cine_player.loop_start_frame
+        self.cine_player.set_loop_bounds(loop_start, frame_index)
+        # Update widget to reflect bounds
+        self.cine_controls_widget.set_loop_bounds(loop_start, frame_index)
+    
+    def _on_cine_loop_bounds_cleared(self) -> None:
+        """Handle loop bounds cleared from cine controls."""
+        self.cine_player.clear_loop_bounds()
+        # Update widget to reflect cleared bounds
+        self.cine_controls_widget.set_loop_bounds(None, None)
+    
+    def _on_frame_slider_changed(self, frame_index: int) -> None:
+        """
+        Handle frame slider value change (user manually dragged slider).
+        
+        Args:
+            frame_index: Frame index to navigate to (0-based)
+        """
+        # Pause playback if currently playing (user is manually navigating)
+        if self.cine_player.is_playback_active():
+            self.cine_player.pause_playback()
+        
+        # Navigate to the selected frame
+        total_slices = self.slice_navigator.total_slices
+        if 0 <= frame_index < total_slices:
+            self.slice_navigator.set_current_slice(frame_index)
+    
     def _hide_measurement_labels(self, hide: bool) -> None:
         """
         Hide or show measurement labels.
@@ -3043,11 +3255,87 @@ class DICOMViewerApp(QObject):
         )
 
     def eventFilter(self, obj, event) -> bool:
-        """Filter key events: layout shortcut focus gating and ``KeyboardEventHandler`` (see ``main_app_key_event_filter``)."""
-        dispatched = dispatch_app_key_event(self, event)
-        if dispatched is not None:
-            return dispatched
+        """
+        Event filter for handling key events.
+        
+        Args:
+            obj: Object that received the event
+            event: Event
+            
+        Returns:
+            True if event was handled, False otherwise
+        """
+        if isinstance(event, QKeyEvent):
+            # Don't intercept standard shortcuts - let menu system handle them
+            if event.key() == Qt.Key.Key_Z:
+                if event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier):
+                    # Cmd+Z or Ctrl+Z - let menu handle it
+                    return False
+            
+            # For layout shortcuts (1, 2, 3, 4), check if focused widget is allowed
+            if event.key() in (Qt.Key.Key_1, Qt.Key.Key_2, Qt.Key.Key_3, Qt.Key.Key_4):
+                # Check if focused widget is navigator, left panel, right panel, or image viewer (or their children)
+                focused_widget = QApplication.focusWidget()
+                if focused_widget is not None:
+                    if not self._is_widget_allowed_for_layout_shortcuts(focused_widget):
+                        # Focused widget is not allowed, don't process layout shortcuts
+                        return False
+            
+            return self.keyboard_event_handler.handle_key_event(event)
         return super().eventFilter(obj, event)
+    
+    def _is_widget_allowed_for_layout_shortcuts(self, widget) -> bool:
+        """
+        Check if a widget is allowed to trigger layout shortcuts.
+        
+        Allowed widgets:
+        - Series navigator or its children
+        - Left panel or its children
+        - Right panel or its children
+        - Image viewer or its children
+        
+        Args:
+            widget: Widget to check
+            
+        Returns:
+            True if widget is allowed, False otherwise
+        """
+        if widget is None:
+            return False
+        
+        # Traverse up the parent chain to find allowed widgets
+        current = widget
+        max_depth = 10  # Safety limit
+        depth = 0
+        
+        while current is not None and depth < max_depth:
+            # Check if current widget is the series navigator
+            if current == self.series_navigator:
+                return True
+            
+            # Check if current widget is the left panel
+            if hasattr(self.main_window, 'left_panel') and current == self.main_window.left_panel:
+                return True
+            
+            # Check if current widget is the right panel
+            if hasattr(self.main_window, 'right_panel') and current == self.main_window.right_panel:
+                return True
+            
+            # Check if current widget is an image viewer
+            if isinstance(current, ImageViewer):
+                return True
+            
+            # Check if current widget is a child of left/right panel by checking object name
+            if hasattr(current, 'objectName'):
+                obj_name = current.objectName()
+                if obj_name == "left_panel" or obj_name == "right_panel":
+                    return True
+            
+            # Move up the parent chain
+            current = current.parentWidget()
+            depth += 1
+        
+        return False
     
     def run(self) -> int:
         """

@@ -29,9 +29,9 @@
 | Histogram timer duplication | **Yes — Phase 4** | Small consolidation; keep intervals and slots identical |
 | **A** — Extract subwindow manager factory | **Yes — Phase 5** | Large line reduction; **byte-stable** move only in first commit |
 | **E** — Annotation paste shims / wiring | **Yes — Phase 6 (optional)** | Good line reduction; verify every signal signature |
-| **D** — W/L preset body → `ViewStateManager` / handler | **Deferred — backlog** | Medium risk; needs focused tests |
-| **F** — Cine façade | **Deferred — backlog** | Lower payoff vs. effort for this cycle |
-| **G** — `eventFilter` extraction | **Deferred — backlog** | Easy to break shortcuts; separate hardening pass |
+| **D** — W/L preset body → handler module | **Yes — Phase 7** | Logic in `window_level_preset_handler`; slot stays on app |
+| **F** — Cine façade | **Yes — Phase 8** | `CineAppFacade` + `app_signal_wiring` targets facade methods |
+| **G** — `eventFilter` extraction | **Yes — Phase 9** | `main_app_key_event_filter.py`; thin `eventFilter` on app |
 
 ---
 
@@ -188,13 +188,66 @@
 
 ---
 
-## Backlog (not in active phases)
+### Phase 7 — Window/level preset handler (**D**)
 
-Track separately; do **not** block the above phases.
+**Intent:** Move preset application (raw/rescaled alignment, controls, status bar, flags) out of `main.py` without changing behavior.
 
-- [ ] **D** — Move `_on_window_level_preset_selected` logic to `ViewStateManager` or `WindowLevelPresetHandler` + add/extend automated tests for rescale/raw toggles.
-- [ ] **F** — `CineAppFacade` (group cine slots for readability).
-- [ ] **G** — Move `eventFilter` / `_is_widget_allowed_for_layout_shortcuts` to a dedicated helper with keyboard shortcut regression checklist.
+- [x] Add `core/window_level_preset_handler.py` with `apply_window_level_preset(app, preset_index)`.
+- [x] Keep `DICOMViewerApp._on_window_level_preset_selected` as a one-line delegate (signal target unchanged).
+- [x] Add unit tests for rescale/raw conversion paths (`tests/test_window_level_preset_handler.py`).
+
+#### Phase 7 testing
+
+- [x] Full test suite (includes new tests).
+- [x] Manual: open series → context-menu W/L presets with **Use rescaled values** on/off; status bar preset name updates.
+
+#### Phase 7 completion
+
+- [x] Handler module + tests; `main.py` preset block removed.
+
+---
+
+### Phase 8 — Cine façade (**F**)
+
+**Intent:** Group cine-related slots and context updates in `CineAppFacade`; wire signals to the facade from `app_signal_wiring`.
+
+- [x] Add `core/cine_app_facade.py`; construct `app.cine_app_facade` in `_initialize_handlers` after `CinePlayer` defaults.
+- [x] Update `app_signal_wiring._wire_cine_signals` to connect to `app.cine_app_facade.*`.
+- [x] Replace `app._update_cine_player_context()` / manual slice navigation connections in `file_series_loading_coordinator` and `subwindow_lifecycle_controller` with `app.cine_app_facade.*`.
+
+#### Phase 8 testing
+
+- [x] Full test suite.
+- [x] Manual: play/pause/stop, speed, loop, frame slider, loop bounds; cine disables when series is not multi-frame. **(Cine does not disable when series is not multi-frame, but it didn't do that before, either.)**
+
+#### Phase 8 completion
+
+- [x] Cine methods removed from `main.py` class body (except orchestration that still references `cine_player` elsewhere).
+
+---
+
+### Phase 9 — Main key-event filter (**G**)
+
+**Intent:** Move layout-shortcut focus checks and key dispatch out of `main.py`.
+
+- [x] Add `core/main_app_key_event_filter.py`: `is_widget_allowed_for_layout_shortcuts`, `dispatch_app_key_event`.
+- [x] `KeyboardEventHandler` `is_focus_ok_for_reset_view` lambda calls the shared focus helper.
+- [x] `DICOMViewerApp.eventFilter` delegates to `dispatch_app_key_event`; module docstring lists manual regression bullets.
+
+#### Phase 9 testing
+
+- [x] Full test suite.
+- [x] Manual: keys **1–4** change layout with focus in image view / navigator / side panels; **Ctrl+Z** undo still reaches the menu; digits in a dialog line edit do not change layout.
+
+#### Phase 9 completion
+
+- [x] `_is_widget_allowed_for_layout_shortcuts` removed from `main.py`.
+
+---
+
+## Backlog (optional follow-ups)
+
+_No items from assessment D/F/G remain here; add new ideas only as needed._
 
 ---
 
@@ -233,6 +286,7 @@ _Phase completions, test commands, line counts, PR links, and any deferred items
 - Phase 3 inventory: remaining function-level imports in `main.py` after pass — none (module uses top-level `traceback`; `exception_hook` / `main` use `QApplication` / `QMessageBox` from existing QtWidgets import).
 - Phase 5 (2026-04-10): **`core/subwindow_manager_factory.py`** + thin **`_build_managers_for_subwindow`** on app. Backup: `backups/main_pre_phase5_subwindow_manager_factory_20260410.py`. Tests: **`python -m pytest tests/ -q`** — **384 passed**. Manual multi-pane smoke: **pending**.
 - Phase 6 (2026-04-11): Direct wiring in **`app_signal_wiring`** to **`_annotation_paste_handler`**; removed ~180 lines of unused shims from **`main.py`**. Backup: `backups/main_pre_phase6_annotation_clipboard_shims_20260410.py`. Tests: **`python -m pytest tests/ -q`** — **384 passed**. Manual copy/paste smoke: **pending**.
+- Phases 7–9 (2026-04-11): **`core/window_level_preset_handler.py`**, **`core/cine_app_facade.py`** (includes **`__weakref__`** in **`__slots__`** for Qt signal connections), **`core/main_app_key_event_filter.py`**; **`app_signal_wiring`** cine connections target the facade; **`file_series_loading_coordinator`** / **`subwindow_lifecycle_controller`** call **`cine_app_facade.update_cine_player_context`** / **`on_manual_slice_navigation`**. Backup: **`backups/main_pre_phases_7_8_9_wl_cine_keyfilter_20260411.py`**. Tests: **`python -m pytest tests/ -q`** — **389 passed** (venv). Manual smokes for Phases 7–9: **pending**.
 
 ---
 

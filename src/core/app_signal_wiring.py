@@ -104,17 +104,18 @@ def _wire_undo_redo_and_annotation_signals(app: DICOMViewerApp) -> None:
 
 def _wire_cine_signals(app: DICOMViewerApp) -> None:
     """Wire cine controls widget and cine player signals."""
-    app.cine_controls_widget.play_requested.connect(app._on_cine_play)
-    app.cine_controls_widget.pause_requested.connect(app._on_cine_pause)
-    app.cine_controls_widget.stop_requested.connect(app._on_cine_stop)
-    app.cine_controls_widget.speed_changed.connect(app._on_cine_speed_changed)
-    app.cine_controls_widget.loop_toggled.connect(app._on_cine_loop_toggled)
-    app.cine_controls_widget.frame_position_changed.connect(app._on_frame_slider_changed)
-    app.cine_controls_widget.loop_start_set.connect(app._on_cine_loop_start_set)
-    app.cine_controls_widget.loop_end_set.connect(app._on_cine_loop_end_set)
-    app.cine_controls_widget.loop_bounds_cleared.connect(app._on_cine_loop_bounds_cleared)
-    app.cine_player.frame_advance_requested.connect(app._on_cine_frame_advance)
-    app.cine_player.playback_state_changed.connect(app._on_cine_playback_state_changed)
+    cine = app.cine_app_facade
+    app.cine_controls_widget.play_requested.connect(cine.on_cine_play)
+    app.cine_controls_widget.pause_requested.connect(cine.on_cine_pause)
+    app.cine_controls_widget.stop_requested.connect(cine.on_cine_stop)
+    app.cine_controls_widget.speed_changed.connect(cine.on_cine_speed_changed)
+    app.cine_controls_widget.loop_toggled.connect(cine.on_cine_loop_toggled)
+    app.cine_controls_widget.frame_position_changed.connect(cine.on_frame_slider_changed)
+    app.cine_controls_widget.loop_start_set.connect(cine.on_cine_loop_start_set)
+    app.cine_controls_widget.loop_end_set.connect(cine.on_cine_loop_end_set)
+    app.cine_controls_widget.loop_bounds_cleared.connect(cine.on_cine_loop_bounds_cleared)
+    app.cine_player.frame_advance_requested.connect(cine.on_cine_frame_advance)
+    app.cine_player.playback_state_changed.connect(cine.on_cine_playback_state_changed)
 
 
 def _wire_view_signals(app: DICOMViewerApp) -> None:

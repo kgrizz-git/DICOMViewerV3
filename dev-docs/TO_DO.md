@@ -91,7 +91,9 @@ This file tracks active and near-term tasks.
 - [ ] **[P2]** Show a small colored icon on each subwindow title bar in a "sync group"to indicate which group it belongs to (group color), so the user can see at a glance which windows are linked.
 - [ ] **[P1]** Add **"Create MPR view…"** to the **Tools** or **View** menu?
 - [ ] **[P1]** Add ability to customize slice position display line thickness
-
+- [ ] **[P1]** Differentiate between frames, instances, and slices in the cine player
+- [ ] **[P2]** Add option to show # frames or slices in a series in navigator? 
+- [ ] **[P2]** Where is it getting frame rate from?
 
 ## Features (Near-Term)
 
