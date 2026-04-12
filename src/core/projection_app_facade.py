@@ -198,6 +198,7 @@ class ProjectionAppFacade:
                 app._mpr_controller.display_mpr_slice(
                     focused_idx, mp_data.get("mpr_slice_index", 0)
                 )
+                app._slice_location_line_coordinator.refresh_all()
             selected_roi = app.roi_manager.get_selected_roi()
             if selected_roi is not None and DEBUG_PROJECTION:
                 print(
@@ -208,6 +209,7 @@ class ProjectionAppFacade:
 
         if app.current_dataset is not None:
             app._display_slice(app.current_dataset)
+            app._slice_location_line_coordinator.refresh_all()
 
             selected_roi = app.roi_manager.get_selected_roi()
             if selected_roi is not None:
@@ -238,9 +240,11 @@ class ProjectionAppFacade:
                 app._mpr_controller.display_mpr_slice(
                     focused_idx, mp_data.get("mpr_slice_index", 0)
                 )
+                app._slice_location_line_coordinator.refresh_all()
             return
         if app.current_dataset is not None and app.slice_display_manager.projection_enabled:
             app._display_slice(app.current_dataset)
+            app._slice_location_line_coordinator.refresh_all()
 
     def on_projection_slice_count_changed(self, count: int) -> None:
         """
@@ -265,8 +269,10 @@ class ProjectionAppFacade:
                 app._mpr_controller.display_mpr_slice(
                     focused_idx, mp_data.get("mpr_slice_index", 0)
                 )
+                app._slice_location_line_coordinator.refresh_all()
             return
         if app.current_dataset is not None and app.slice_display_manager.projection_enabled:
             if DEBUG_PROJECTION:
                 print("[DEBUG-PROJECTION] _on_projection_slice_count_changed: Redisplaying slice")
             app._display_slice(app.current_dataset)
+            app._slice_location_line_coordinator.refresh_all()

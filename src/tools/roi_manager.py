@@ -33,6 +33,7 @@ import numpy as np
 
 from utils.bundled_fonts import make_qfont
 from utils.config_manager import ConfigManager
+from gui.view_transform_helpers import graphics_view_uniform_zoom
 
 # Statistics payloads use int for pixel counts and None for optional area in mm².
 RoiStatisticsMap = dict[str, float | int | None]
@@ -214,11 +215,8 @@ class DraggableStatisticsOverlay(QGraphicsTextItem):
                     overlay_pos = self.pos()
                     
                     # Convert scene coordinates to viewport pixels
-                    view_scale = view.transform().m11()
-                    if view_scale > 0:
-                        scene_to_viewport_scale = view_scale
-                    else:
-                        scene_to_viewport_scale = 1.0
+                    view_scale = graphics_view_uniform_zoom(view)
+                    scene_to_viewport_scale = view_scale
                     
                     # Calculate offset from ROI bounds in viewport pixels
                     offset_x = (overlay_pos.x() - bounds.right()) * scene_to_viewport_scale
@@ -970,12 +968,8 @@ class ROIManager:
         # Get view for coordinate conversion (needed for ItemIgnoresTransformations)
         view = scene.views()[0] if scene.views() else None
         if view is not None:
-            # Convert viewport pixels to scene coordinates
-            view_scale = view.transform().m11()
-            if view_scale > 0:
-                viewport_to_scene_scale = 1.0 / view_scale
-            else:
-                viewport_to_scene_scale = 1.0
+            view_scale = graphics_view_uniform_zoom(view)
+            viewport_to_scene_scale = 1.0 / view_scale
             
             # Position at top-right corner of ROI bounds
             x_pos = bounds.right() + (offset_x * viewport_to_scene_scale)
@@ -1051,11 +1045,8 @@ class ROIManager:
         roi.statistics_overlay_item.set_updating_position(True)
 
         if view is not None:
-            view_scale = view.transform().m11()
-            if view_scale > 0:
-                viewport_to_scene_scale = 1.0 / view_scale
-            else:
-                viewport_to_scene_scale = 1.0
+            view_scale = graphics_view_uniform_zoom(view)
+            viewport_to_scene_scale = 1.0 / view_scale
             
             x_pos = bounds.right() + (offset_x * viewport_to_scene_scale)
             y_pos = bounds.top() + (offset_y * viewport_to_scene_scale)

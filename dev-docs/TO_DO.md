@@ -30,14 +30,13 @@ This file tracks active and near-term tasks.
 
 ## Bugs / Correctness
 
-- [ ] **[P0]** Sometimes when scrolling slices, the image seems to drift up or left. The scrollbars move, too. See [details](Image_Drift.md). *SEEMS TO BE RESOLVED*
-- [ ] **[P1]**  After making an MPR in a window, clearing it, then making a new MPR in that window using a different series, the default (embedded) window/level from the first base series was applied instead of from the second.
-- [ ] **[P1]** Should we block showing DICOM tags when an MPR window is selected (show just "MPR")? Or add some kind of warning that it is the underlying series data somehow?
-- [ ] **[P0]** After creating MPRs, clearing, closing all files, and loading new files, creating new MPR does not load/display ([details](FUTURE_WORK_DETAIL_NOTES.md#multi-planar-reconstructions-mprs-and-oblique-reconstructions)) *NOTE: seems fixed*
-- [ ] **[P0]** "Close All" did not clear thumbnails in layout map
-- [ ] **[P0]** Fusion seems to add two sets of scale markers? Or for some reason markers look too dense. Goes away when focusing on window, reappaears when unfocused. Appears (and disappears) on windows without fusion enabled as well (maybe only ones showing same series as fusion base or overlay). Actually this happened when first loading a US study with no pixel size data (and no markers displayed), then loading an MR study with pixel size data (and markers displayed on the US images subwindows while the MR image window was focused). Also happened with a CT study and MR study - took screenshots.
-- [ ] **[P1]** Fusion not working for T2 dual-echo as base series (QAMR) - no T1 overlay appears. It did after switching to T2 as overlay (still on T2) and then back to T1.
+- [x] **[P0]** Sometimes when scrolling slices, the image seems to drift up or left. The scrollbars move, too. See [details](Image_Drift.md). *SEEMS TO BE RESOLVED*
+- [x] **[P0]** After creating MPRs, clearing, closing all files, and loading new files, creating new MPR does not load/display ([details](FUTURE_WORK_DETAIL_NOTES.md#multi-planar-reconstructions-mprs-and-oblique-reconstructions)) *NOTE: seems fixed*
+- [x] **[P0]** "Close All" did not immediately clear all thumbnails in layout map - actually dragging and dropping a thumbnail into window did not make thumbnail appear in layout map either; had to click a diferent window first. *(Done: Added immediate window-slot map refresh after series assignment/drag-drop, focus/layout changes, and Close All so thumbnails and focus outlines update without requiring another click.)*
+- [x] **[P0]** Fusion seems to add two sets of scale markers? Or for some reason markers look too dense. Goes away when focusing on window, reappaears when unfocused. Appears (and disappears) on windows without fusion enabled as well (maybe only ones showing same series as fusion base or overlay). Actually this happened when first loading a US study with no pixel size data (and no markers displayed), then loading an MR study with pixel size data (and markers displayed on the US images subwindows while the MR image window was focused). Also happened with a CT study and MR study - took screenshots. *Seems fixed.*
+- [x] **[P1]** Fusion not working for T2 dual-echo as base series (QAMR) - no T1 overlay appears. It did after switching to T2 as overlay (still on T2) and then back to T1. *Seems fixed.*
 - [ ] **[P1]** Spacebar did not clear overlay on MPRs.
+- [x] **[P0]** seems like creating MPR inherits window/level from last loaded series or currently focused series, not always the underlying native series. *(Done: MPR now resolves window/level from the target pane's stored source-series defaults before falling back to shared toolbar controls, so new MPRs no longer inherit stale values from another series/window.)*
 
 ## Performance / Packaging
 
@@ -57,44 +56,46 @@ This file tracks active and near-term tasks.
 
 ## UX / Workflow
 
-- [ ] **[P1]** make slice display lines able to show middle of slice (or slab when combining) or begin and end of slice (or slab when combining)
+- [x] **[P1]** make slice display lines able to show middle of slice (or slab when combining) or begin and end of slice (or slab when combining) *(Done: Added slice position line mode config (middle/begin-end) with UI in overlay config dialog and updated rendering logic.)*
 - [x] **[P1]** Should be able to right-click and select "Clear Subwindow" or something (check whether in-app we call them windows or subwindows) to clear current images/series from a given subwindow. *(Done: **Clear This Window** in image context menu; in-app user strings use “Window”.)*
-- [ ] **[P1]** Add thumbnail for an MPR view in the navigator. Make it clickable and draggable like other thumbnails. Indicate it is an MPR in some way (like a little floating MPR tag similar to what is shown in the viewer but smaller).
+- [x] **[P1]** Add thumbnail for an MPR view in the navigator. Make it clickable and draggable like other thumbnails. Indicate it is an MPR in some way (like a little floating MPR tag similar to what is shown in the viewer but smaller). *(Done: Added `MprThumbnailWidget` in `src/gui/mpr_thumbnail_widget.py` with MPR badge overlay and subwindow dot indicator. `SeriesNavigator` has a persistent MPR section with `set_mpr_thumbnail`/`clear_mpr_thumbnail`. `MprController` emits `mpr_activated`/`mpr_cleared` signals. Clicking focuses the MPR subwindow; dragging to a subwindow emits `application/x-dv3-mpr-assign` MIME handled by `SubWindowContainer.mpr_focus_requested`.)*
+    - [ ] **[P1]** Cannot click or drag to assign to new window. Also cannot clear window without deleting MPR.
 - [ ] **[P1]** Add option to have one large window on left and two smaller on right (above and below), or one large window on top and smaller on bottom (left and right), and maybe vice versa for each case. Make "2" key switch between 1x2 and 2x1, while "3" switches between different 3-window layouts just described.
 - [ ] **[P2]** Make window map thumbnail in navigator interactive (click square to focus and reveal) ([plan](plans/UX_IMPROVEMENTS_BATCH1_PLAN.md#1-window-map-thumbnail-interactive))
 - [ ] **[P2]** Make toolbar contents and ordering customizable ([plan](plans/UX_IMPROVEMENTS_BATCH1_PLAN.md#2-toolbar-customization))
 - [ ] **[P2]** Improve discoverability/documentation of existing window/level drag interaction ([plan](plans/UX_IMPROVEMENTS_BATCH1_PLAN.md#3-alternative-windowlevel-interaction))
 - [ ] **[P1]** Set min/max window width/level using min/max pixel value possible (raw or rescaled) based on bit depth ([plan](plans/UX_IMPROVEMENTS_BATCH1_PLAN.md#4-minmax-windowlevel-from-bit-depth))
-- [ ] **[P1]** Add overlay configuration to image right-click context menu ([plan](plans/UX_IMPROVEMENTS_BATCH1_PLAN.md#5-overlay-configuration-in-right-click-context-menu))
+- [x] **[P1]** Add overlay configuration to image right-click context menu ([plan](plans/UX_IMPROVEMENTS_BATCH1_PLAN.md#5-overlay-configuration-in-right-click-context-menu)) *(Done: Added "Overlay Configuration" submenu with Overlay Settings… and Configure Overlay Tags… entries to image right-click context menu.)*
 - [ ] **[P2]** Make default line thicknesses and annotation font sizes smaller (for ROIs, text annotation, measurements) - say line thickness 3 and font size 12 ([plan](plans/UX_IMPROVEMENTS_BATCH1_PLAN.md#6-reduce-default-line-thicknesses-and-font-sizes))
 - [ ] **[P2]** Follow-up for multi-frame instance navigation: audit ROI / measurement / annotation / cine / projection code paths that use `current_slice_index` as slice identity before attempting bounded per-instance scrolling ([plan](plans/MULTI_FRAME_INSTANCE_NAVIGATION_PLAN.md#phase-4-show-instances-separately-toggle-and-config))
 - [ ] **[P2]** Make right pane minimum width before collapsing 250 instead of 200
 - [ ] **[P2]** Consider more sophisticated smoothing (PIL/NumPy) vs Qt-only scaling
 - [ ] **[P2]** Add ability to edit a drawn ellipse or rectangle ROI ([plan](plans/VIEWER_UX_FEATURES_PLAN.md#1-roi-editing-resize-handles))
 - [ ] **[P2]** Make window/level settings remembered when switching series and then switching back ([plan](plans/VIEWER_UX_FEATURES_PLAN.md#2-windowlevel-remembered-per-series))
-- [ ] **[P2]** Allow flipping and rotating image ([plan](plans/VIEWER_UX_FEATURES_PLAN.md#5-flip-and-rotate-image))
-- [ ] **[P1]** Slice / frame slider bars in subwindows - ideally only appears when you mouse over near some edge of the window (right?) ([plan](plans/VIEWER_UX_FEATURES_PLAN.md#6-subwindow-slice--frame-slider-bars))
+- [x] **[P2]** Allow flipping and rotating image ([plan](plans/VIEWER_UX_FEATURES_PLAN.md#5-flip-and-rotate-image)) *(Done: Added flip horizontal, flip vertical, rotate CW/CCW 90°, rotate 180°, and reset orientation via View → Orientation and image context menu. Transforms are non-destructive; orientation persists per series when switching series (ViewStateManager). ItemIgnoresTransformations overlays use uniform zoom, not `m11()`, under rotation/flip.)*
+- [x] **[P1]** Add slice / frame slider bars in subwindows - ideally only appears when you mouse over near some edge of the window (right?) ([plan](plans/VIEWER_UX_FEATURES_PLAN.md#6-subwindow-slice--frame-slider-bars)) *(Done: Added `EdgeRevealSliderOverlay` — a right-edge hover-reveal translucent vertical slider in each ImageViewer viewport; fades in/out, supports scrubbing, toggleable via View → Show In-View Slice/Frame Slider, persisted in config.)*
 - [ ] **[P1]** Hovering on a study label in the navigator should show a popup tooltip with the study description, date, and patient name (but should respect privacy mode). Hovering on a thumbnail should show a tooltip with that same info, plus series description ([plan](plans/NAVIGATOR_AND_FILE_LOADING_FEEDBACK_PLAN.md#1-navigator-tooltips-privacy-aware))
 - [ ] **[P2]** The toast that pops up when already loaded files are skipped and not added during loading should appear in the center of the screen and have a slightly more opaque background ([plan](plans/NAVIGATOR_AND_FILE_LOADING_FEEDBACK_PLAN.md#2-duplicate-skip-toast-center--more-opaque))
 - [ ] **[P1]** Make the large-file warning (and any related file handling checks) trigger for >50 MB instead of 25 MB ([plan](plans/NAVIGATOR_AND_FILE_LOADING_FEEDBACK_PLAN.md#3-large-file-warning-threshold-50-mb)) - *NOTE: maybe hold off on this for now - 50 might be too high?*
 - [ ] **[P2]** Allow further subdivision of subwindows into up to 4 "tiles"? ([plan](plans/WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md#1-subwindow-further-subdivision-up-to-4-tiles))
 - [ ] **[P1]** Make a "View Fullscreen" menu item and shortcut - make app full-screen, hide left/right/bottom panes, toolbar ([plan](plans/WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md#2-view-fullscreen-command-and-shortcut))
-- [ ] **[P2]** Give options for slice position lines on windows to show middle of slice or begin and end ([plan](plans/WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md#3-slice-position-line-display-options-middle-vs-beginend))
-- [ ] **[P2]** When show instances separately is enabled, allow left/right keys to switch between instances ([plan](plans/WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md#4-leftright-keys-for-instance-switching-show-instances-separately))
+- [x] **[P2]** Give options for slice position lines on windows to show middle of slice or begin and end ([plan](plans/WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md#3-slice-position-line-display-options-middle-vs-beginend)) *(Done: See line 60 above — same feature implemented.)*
+- [ ] **[P2]** When show instances separately is enabled, allow left/right keys to switch between instances ([plan](plans/WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md#4-leftright-keys-for-instance-switching-show-instances-separately)) **(already done?)**
 - [ ] **[P2]** When exporting PNG or JPG, allow anonymization and make using embedded window/level the default option ([plan](plans/EXPORT_PRIVACY_AND_WL_DEFAULT_PLAN.md#goal))
 - [ ] **[P2]** Make default pixel size and slice thickness more reasonable and make editing them easier (default to 1.0 mm, 1.0 mm?)
 - [ ] **[P2]** Make a Settings menu for grouping lots of options?
 - [ ] **[P2]** Consider a dedicated **Pylinac Configuration...** menu/dialog if more persisted QA customization options are added (likely), so pylinac/site defaults do not keep expanding the per-analysis Tools dialogs.
 - [ ] **[P2]** Allow dragging window dividers to make unequal divisions
-- [ ] **[P2]** Enable right-click on a Recent menu item to open context menu to remove it from the recent list
+- [x] **[P2]** Enable right-click on a Recent menu item to open context menu to remove it from the recent list or move it up or down in the list *(Done: Added Move Up, Move Down, and Remove to Recent Files right-click context menu.)*
 - [ ] **[P2]** Add ability to use toolbar icons 
-- [ ] **[P0]** Menu item "Show Lines" should say "Show Slice Location Lines"
+- [x] **[P0]** Menu item "Show Lines" should say "Show Slice Location Lines" *(Done: Renamed "Show Lines" menu to "Show Slice Location Lines" in menu builder, context menu, and docstrings.)*
 - [ ] **[P2]** Show a small colored icon on each subwindow title bar in a "sync group"to indicate which group it belongs to (group color), so the user can see at a glance which windows are linked.
 - [ ] **[P1]** Add **"Create MPR view…"** to the **Tools** or **View** menu?
 - [ ] **[P1]** Add ability to customize slice position display line thickness
 - [ ] **[P1]** Differentiate between frames, instances, and slices in the cine player
 - [ ] **[P2]** Add option to show # frames or slices in a series in navigator? 
 - [ ] **[P2]** Where is it getting frame rate from?
+- [ ] **[P1]** Should we block showing DICOM tags when an MPR window is selected (show just "MPR")? Or add some kind of warning that it is the underlying series data somehow?
 
 ## Features (Near-Term)
 

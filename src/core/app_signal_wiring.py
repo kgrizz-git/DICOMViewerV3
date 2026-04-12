@@ -87,6 +87,8 @@ def _wire_dialog_signals(app: DICOMViewerApp) -> None:
     # Series navigator close actions
     app.series_navigator.close_series_requested.connect(app._close_series)
     app.series_navigator.close_study_requested.connect(app._close_study)
+    # MPR thumbnail clicks — focus the relevant subwindow.
+    app.series_navigator.mpr_thumbnail_clicked.connect(app._on_mpr_thumbnail_clicked)
 
 
 def _wire_undo_redo_and_annotation_signals(app: DICOMViewerApp) -> None:
@@ -124,6 +126,7 @@ def _wire_view_signals(app: DICOMViewerApp) -> None:
     app.main_window.smooth_when_zoomed_toggled.connect(app._on_smooth_when_zoomed_toggled)
     app.main_window.scale_markers_toggled.connect(app._on_scale_markers_toggled)
     app.main_window.direction_labels_toggled.connect(app._on_direction_labels_toggled)
+    app.main_window.slice_slider_toggled.connect(app._on_slice_slider_toggled)
     app.main_window.scale_markers_color_changed.connect(app._on_scale_markers_color_changed)
     app.main_window.direction_labels_color_changed.connect(app._on_direction_labels_color_changed)
     app.main_window.show_instances_separately_toggled.connect(app._on_show_instances_separately_toggled)
@@ -137,6 +140,16 @@ def _wire_view_signals(app: DICOMViewerApp) -> None:
     app.main_window.slice_location_lines_focused_only_toggled.connect(
         app._on_slice_location_lines_focused_only_toggled
     )
+    app.main_window.slice_location_lines_mode_toggled.connect(
+        app._on_slice_location_lines_mode_toggled
+    )
+    # Orientation (flip / rotate) — View menu signals → focused-viewer handlers
+    app.main_window.orientation_flip_h_requested.connect(app._on_orientation_flip_h)
+    app.main_window.orientation_flip_v_requested.connect(app._on_orientation_flip_v)
+    app.main_window.orientation_rotate_cw_requested.connect(app._on_orientation_rotate_cw)
+    app.main_window.orientation_rotate_ccw_requested.connect(app._on_orientation_rotate_ccw)
+    app.main_window.orientation_rotate_180_requested.connect(app._on_orientation_rotate_180)
+    app.main_window.orientation_reset_requested.connect(app._on_orientation_reset)
 
 
 def _wire_customization_signals(app: DICOMViewerApp) -> None:
@@ -150,6 +163,9 @@ def _wire_customization_signals(app: DICOMViewerApp) -> None:
 def _wire_subwindow_signals(app: DICOMViewerApp) -> None:
     """Connect signals that apply to all subwindows. Delegates to subwindow lifecycle controller."""
     app._subwindow_lifecycle_controller.connect_subwindow_signals()
+    # MPR controller → navigator thumbnail.
+    app._mpr_controller.mpr_activated.connect(app._update_mpr_navigator_thumbnail)
+    app._mpr_controller.mpr_cleared.connect(app._clear_mpr_navigator_thumbnail)
 
 
 def _wire_focused_subwindow_signals(app: DICOMViewerApp) -> None:

@@ -243,9 +243,33 @@ def show_image_background_context_menu_on_right_release(viewer: Any, event: Any)
             reset_all_action = context_menu.addAction("Reset All Views (A)")
             reset_all_action.triggered.connect(viewer.reset_all_views_requested.emit)
 
+        # Orientation submenu
+        orientation_menu = context_menu.addMenu("Orientation")
+        flip_h_action = orientation_menu.addAction("Flip Horizontal (Alt+H)")
+        flip_h_action.triggered.connect(viewer.flip_h)
+        flip_v_action = orientation_menu.addAction("Flip Vertical (Alt+V)")
+        flip_v_action.triggered.connect(viewer.flip_v)
+        orientation_menu.addSeparator()
+        rotate_cw_action = orientation_menu.addAction("Rotate 90° CW (Alt+R)")
+        rotate_cw_action.triggered.connect(viewer.rotate_cw)
+        rotate_ccw_action = orientation_menu.addAction("Rotate 90° CCW (Shift+Alt+R)")
+        rotate_ccw_action.triggered.connect(viewer.rotate_ccw)
+        rotate_180_action = orientation_menu.addAction("Rotate 180°")
+        rotate_180_action.triggered.connect(viewer.rotate_180)
+        orientation_menu.addSeparator()
+        reset_orientation_action = orientation_menu.addAction("Reset Orientation (Shift+Alt+O)")
+        reset_orientation_action.triggered.connect(viewer.reset_orientation)
+
         # Toggle Overlay action
         toggle_overlay_action = context_menu.addAction("Toggle Overlay (Spacebar)")
         toggle_overlay_action.triggered.connect(viewer.toggle_overlay_requested.emit)
+
+        # Overlay Configuration submenu
+        overlay_menu = context_menu.addMenu("Overlay Configuration")
+        overlay_settings_action = overlay_menu.addAction("Overlay Settings\u2026")
+        overlay_settings_action.triggered.connect(viewer.overlay_settings_requested.emit)
+        overlay_config_action = overlay_menu.addAction("Configure Overlay Tags\u2026")
+        overlay_config_action.triggered.connect(viewer.overlay_config_requested.emit)
 
         # Privacy View action
         privacy_view_action = context_menu.addAction("Privacy View (Cmd+P)")
@@ -287,7 +311,7 @@ def show_image_background_context_menu_on_right_release(viewer: Any, event: Any)
         )
 
         # Show Lines submenu (slice location lines across views)
-        show_lines_menu = context_menu.addMenu("Show Lines")
+        show_lines_menu = context_menu.addMenu("Show Slice Location Lines")
         enable_lines_action = show_lines_menu.addAction("Enable/Disable")
         enable_lines_action.setCheckable(True)
         cb_vis = viewer.get_slice_location_lines_visible_callback
@@ -308,6 +332,14 @@ def show_image_background_context_menu_on_right_release(viewer: Any, event: Any)
         focused_only_action.setChecked(cb_fo() if cb_fo is not None else False)
         focused_only_action.triggered.connect(
             lambda checked: viewer.slice_location_lines_focused_only_toggled.emit(checked)
+        )
+        show_lines_menu.addSeparator()
+        slab_bounds_action = show_lines_menu.addAction("Show Slab Boundaries (Begin/End) Instead of Centre")
+        slab_bounds_action.setCheckable(True)
+        cb_mode = viewer.get_slice_location_lines_mode_callback
+        slab_bounds_action.setChecked((cb_mode() if cb_mode is not None else "middle") == "begin_end")
+        slab_bounds_action.triggered.connect(
+            lambda checked: viewer.slice_location_lines_mode_toggled.emit("begin_end" if checked else "middle")
         )
 
         # Show/Hide Left Pane and Right Pane

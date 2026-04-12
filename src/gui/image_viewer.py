@@ -17,6 +17,7 @@ from typing import Optional, Callable, Any, List, Tuple, TYPE_CHECKING
 
 from gui.image_viewer_input import ImageViewerInputMixin
 from gui.image_viewer_view import ImageViewerViewMixin
+from gui.edge_reveal_slider_overlay import EdgeRevealSliderOverlay
 
 if TYPE_CHECKING:
     from tools.roi_manager import ROIItem
@@ -89,9 +90,12 @@ class ImageViewer(ImageViewerInputMixin, ImageViewerViewMixin, QGraphicsView):
     slice_location_lines_toggled = Signal(bool)  # Emitted when slice location lines toggled from context menu (True = show)
     slice_location_lines_same_group_only_toggled = Signal(bool)  # Emitted when same-group-only toggled (True = only same group)
     slice_location_lines_focused_only_toggled = Signal(bool)  # Emitted when focused-only toggled (True = only focused window)
+    slice_location_lines_mode_toggled = Signal(str)  # Emitted when line mode toggled from context menu ("middle" or "begin_end")
     left_pane_toggle_requested = Signal()  # Emitted when Show/Hide Left Pane is requested from context menu
     right_pane_toggle_requested = Signal()  # Emitted when Show/Hide Right Pane is requested from context menu
     annotation_options_requested = Signal()  # Emitted when annotation options dialog is requested
+    overlay_settings_requested = Signal()  # Emitted when Overlay Settings dialog is requested from context menu
+    overlay_config_requested = Signal()  # Emitted when Configure Overlay Tags dialog is requested from context menu
     crosshair_clicked = Signal(QPointF, str, int, int, int)  # Emitted when crosshair tool is clicked (pos, pixel_value_str, x, y, z)
     about_this_file_requested = Signal()  # Emitted when About this File is requested from context menu
     assign_series_requested = Signal(str)  # Emitted when series assignment is requested (series_uid)
@@ -157,6 +161,15 @@ class ImageViewer(ImageViewerInputMixin, ImageViewerViewMixin, QGraphicsView):
         
         # Callback to notify when inversion state changes (for persistence per series)
         self.inversion_state_changed_callback: Optional[Callable[[bool], None]] = None
+
+        # Orientation state (flip and rotation) — non-destructive display transforms
+        self._flip_h: bool = False  # Horizontal flip (mirror left-right)
+        self._flip_v: bool = False  # Vertical flip (mirror top-bottom)
+        self._rotation_deg: int = 0  # Rotation in degrees: 0, 90, 180, 270
+
+        # Callback to notify when orientation changes (for persistence per series)
+        # Called with (flip_h: bool, flip_v: bool, rotation_deg: int)
+        self.orientation_changed_callback: Optional[Callable[[bool, bool, int], None]] = None
         
         # Callbacks to get current dataset and slice index for pixel value display
         self.get_current_dataset_callback: Optional[Callable[[], Any]] = None
@@ -216,10 +229,11 @@ class ImageViewer(ImageViewerInputMixin, ImageViewerViewMixin, QGraphicsView):
         self.get_clear_this_window_enabled_callback: Optional[Callable[[], bool]] = None
         self.get_available_series_callback: Optional[Callable[[], List[Tuple[str, str]]]] = None
 
-        # Slice-location line visibility (optional; filled by app for context menu sync)
+        # Slice-location line visibility and mode (optional; filled by app for context menu sync)
         self.get_slice_location_lines_visible_callback: Optional[Callable[[], bool]] = None
         self.get_slice_location_lines_same_group_only_callback: Optional[Callable[[], bool]] = None
         self.get_slice_location_lines_focused_only_callback: Optional[Callable[[], bool]] = None
+        self.get_slice_location_lines_mode_callback: Optional[Callable[[], str]] = None
         
         # Rescale toggle state (for context menu)
         self.use_rescaled_values = False
@@ -313,4 +327,172 @@ class ImageViewer(ImageViewerInputMixin, ImageViewerViewMixin, QGraphicsView):
 
         # Apply initial smoothing mode (view hint only when no image yet)
         self._apply_smoothing_mode()
+
+        # ------------------------------------------------------------------ #
+        # Edge-reveal slice/frame slider overlay
+        # ------------------------------------------------------------------ #
+        # Must be a child of the *viewport* so its geometry is viewport-local.
+        self._slider_overlay = EdgeRevealSliderOverlay(self.viewport())
+        self._slider_overlay.slider_value_changed.connect(
+            self._on_slider_overlay_value_changed
+        )
+        # Global on/off toggle (driven by View menu).  True by default.
+        self._slice_slider_enabled: bool = True
+        # Called with 0-based slice index when the user drags the overlay slider.
+        # Wired by subwindow_lifecycle_controller after each focus change.
+        self.slider_navigate_callback: Optional[Callable[[int], None]] = None
+
+    # -------------------------------------------------------------------------
+    # Orientation (flip / rotate) public API
+    # -------------------------------------------------------------------------
+
+    def get_flip_h(self) -> bool:
+        """Return the current horizontal flip state."""
+        return self._flip_h
+
+    def get_flip_v(self) -> bool:
+        """Return the current vertical flip state."""
+        return self._flip_v
+
+    def get_rotation_deg(self) -> int:
+        """Return the current rotation in degrees (0, 90, 180, or 270)."""
+        return self._rotation_deg
+
+    def set_flip_h(self, v: bool) -> None:
+        """Set horizontal flip state and refresh the view transform."""
+        self._flip_h = v
+        self._apply_view_transform()
+        self._notify_orientation_changed()
+
+    def set_flip_v(self, v: bool) -> None:
+        """Set vertical flip state and refresh the view transform."""
+        self._flip_v = v
+        self._apply_view_transform()
+        self._notify_orientation_changed()
+
+    def set_rotation(self, deg: int) -> None:
+        """
+        Set rotation in degrees, normalised modulo 360 then snapped to the nearest
+        multiple of 90° (0, 90, 180, or 270), and refresh the view transform.
+        """
+        r = (int(deg) % 360 + 360) % 360
+        self._rotation_deg = ((r + 45) // 90 % 4) * 90
+        self._apply_view_transform()
+        self._notify_orientation_changed()
+
+    def reset_orientation(self) -> None:
+        """Reset flip and rotation to defaults and refresh the view transform."""
+        self._flip_h = False
+        self._flip_v = False
+        self._rotation_deg = 0
+        self._apply_view_transform()
+        self._notify_orientation_changed()
+
+    def flip_h(self) -> None:
+        """Toggle horizontal flip."""
+        self.set_flip_h(not self._flip_h)
+
+    def flip_v(self) -> None:
+        """Toggle vertical flip."""
+        self.set_flip_v(not self._flip_v)
+
+    def rotate_cw(self) -> None:
+        """Rotate 90 degrees clockwise."""
+        self.set_rotation((self._rotation_deg + 90) % 360)
+
+    def rotate_ccw(self) -> None:
+        """Rotate 90 degrees counter-clockwise."""
+        self.set_rotation((self._rotation_deg - 90) % 360)
+
+    def rotate_180(self) -> None:
+        """Rotate 180 degrees."""
+        self.set_rotation((self._rotation_deg + 180) % 360)
+
+    def _notify_orientation_changed(self) -> None:
+        """Call the orientation-changed callback if registered."""
+        if self.orientation_changed_callback is not None:
+            self.orientation_changed_callback(self._flip_h, self._flip_v, self._rotation_deg)
+
+    # ------------------------------------------------------------------ #
+    # Edge-reveal slice/frame slider — public API
+    # ------------------------------------------------------------------ #
+
+    def set_slice_slider_enabled(self, enabled: bool) -> None:
+        """
+        Enable or disable the edge-reveal slice/frame slider globally.
+
+        When disabled the overlay is hidden immediately and will not appear
+        on hover until re-enabled.
+
+        Args:
+            enabled: True to allow the slider to reveal on hover; False to
+                     always hide it.
+        """
+        self._slice_slider_enabled = enabled
+        if not enabled:
+            self._slider_overlay.setVisible(False)
+
+    def set_navigation_slider_state(
+        self,
+        *,
+        enabled: bool,
+        minimum: int = 1,
+        maximum: int = 1,
+        value: int = 1,
+        mode_label: str = "Slice",
+        reveal: bool = False,
+    ) -> None:
+        """
+        Update the overlay slider range and current position.
+
+        Does **not** reveal the overlay — it only appears when the user
+        hovers near the right edge.  Hides the overlay immediately when the
+        series has only one slice/frame (``maximum <= minimum``).
+
+        Args:
+            enabled:    Whether this subwindow's content has navigable slices.
+            minimum:    Lowest 1-based position (normally 1).
+            maximum:    Highest 1-based position (== total slices/frames).
+            value:      Current 1-based position.
+            mode_label: "Slice" or "Frame" label prefix.
+            reveal:     If True, briefly reveal the overlay after updating it.
+        """
+        if not self._slice_slider_enabled or not enabled or maximum <= minimum:
+            self._slider_overlay.setVisible(False)
+            return
+        self._slider_overlay.set_range_and_value(minimum, maximum, value, mode_label)
+        self._reposition_slider_overlay()
+        if reveal:
+            self._slider_overlay.reveal()
+
+    def _on_slider_overlay_value_changed(self, value: int) -> None:
+        """
+        Handle the user dragging the edge-reveal slider.
+
+        Converts the 1-based slider value to a 0-based slice index and calls
+        the registered ``slider_navigate_callback`` (if any).
+
+        Args:
+            value: 1-based slice/frame position chosen by the user.
+        """
+        if self.slider_navigate_callback is not None:
+            self.slider_navigate_callback(value - 1)
+
+    def _reposition_slider_overlay(self) -> None:
+        """
+        Re-geometry the slider overlay to sit along the right edge of the
+        viewport.  Called from resizeEvent and after layout changes.
+        """
+        vp = self.viewport()
+        if vp is None:
+            return
+        overlay_width = 52
+        vp_h = vp.height()
+        if vp_h < 80:
+            # Too narrow to be useful; keep hidden
+            self._slider_overlay.setVisible(False)
+            return
+        self._slider_overlay.setGeometry(
+            vp.width() - overlay_width, 0, overlay_width, vp_h
+        )
 

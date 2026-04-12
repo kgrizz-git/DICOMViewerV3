@@ -115,6 +115,25 @@ class SliceSyncCoordinator:
             return None
         return stack.planes[sorted_pos]
 
+    def get_slice_thickness(self, idx: int) -> Optional[float]:
+        """
+        Return the nominal slice thickness in mm for subwindow ``idx``.
+
+        Used by the slice location line feature when "begin_end" mode is
+        active to compute ±(thickness/2) boundary offsets for each source
+        plane.  Returns None if geometry is unavailable.
+
+        Args:
+            idx: Subwindow index (0–3).
+
+        Returns:
+            Slice thickness in mm (> 0), or None.
+        """
+        stack = self._get_stack(idx)
+        if stack is None:
+            return None
+        return stack.slice_thickness
+
     def invalidate_cache(self, study_uid: str = "", series_uid: str = "") -> None:
         """
         Remove one or all entries from the geometry cache.

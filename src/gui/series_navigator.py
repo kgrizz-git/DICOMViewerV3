@@ -47,6 +47,7 @@ from gui.series_navigator_model import (
     build_instance_entries_for_navigator,
     study_label_from_dataset,
 )
+from gui.mpr_thumbnail_widget import MprThumbnailWidget
 from core.slice_display_lut import apply_window_level_rescale_conversion
 
 
@@ -66,6 +67,7 @@ class SeriesNavigator(QWidget):
     about_this_file_requested = Signal(str, str)  # Emitted with (study_uid, series_uid) when "About This File" is requested
     close_series_requested = Signal(str, str)  # (study_uid, series_key) — forwarded from thumbnail
     close_study_requested = Signal(str)         # (study_uid) — forwarded from thumbnail
+    mpr_thumbnail_clicked = Signal(int)         # Emitted with subwindow_index when an MPR thumbnail is clicked
 
     def __init__(self, dicom_processor: DICOMProcessor, parent=None):
         """
@@ -98,11 +100,83 @@ class SeriesNavigator(QWidget):
 
         # Current subwindow slot → (study_uid, series_key) assignments for dot indicators
         self._subwindow_assignments: Dict[int, tuple[Any, ...]] = {}
-        
+
+        # Active MPR thumbnail render state keyed by subwindow index.
+        # Widgets are rebuilt with the navigator so MPR entries can live inside
+        # the correct study section, immediately after the source series.
+        self._mpr_thumbnail_specs: Dict[int, Dict[str, Any]] = {}
+        self._mpr_thumbnails: Dict[int, MprThumbnailWidget] = {}
+
         # Enable keyboard focus so we can receive key events
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         
         self._create_ui()
+
+    # ------------------------------------------------------------------
+    # MPR thumbnail data + widgets
+    # ------------------------------------------------------------------
+
+    def _create_mpr_thumbnail_widget(
+        self,
+        subwindow_index: int,
+        parent: QWidget,
+    ) -> MprThumbnailWidget:
+        """
+        Create a navigator widget for one active MPR entry.
+
+        The widget is ephemeral and tied to the current navigator layout build.
+        Persistent MPR state lives in ``_mpr_thumbnail_specs`` instead.
+        """
+        widget = MprThumbnailWidget(subwindow_index, parent=parent)
+        widget.clicked.connect(self.mpr_thumbnail_clicked.emit)
+        self._mpr_thumbnails[subwindow_index] = widget
+        return widget
+
+    def set_mpr_thumbnail(
+        self,
+        subwindow_index: int,
+        pixel_array: Optional[np.ndarray],
+        study_uid: str,
+        source_series_uid: str,
+        window_center: Optional[float] = None,
+        window_width: Optional[float] = None,
+    ) -> None:
+        """
+        Show or update an MPR thumbnail for *subwindow_index*.
+
+        Passing ``pixel_array=None`` is equivalent to calling
+        ``clear_mpr_thumbnail(subwindow_index)``.
+
+        Args:
+            subwindow_index: Zero-based subwindow slot (0–3).
+            pixel_array:     2-D float MPR slice array, or None to remove.
+            study_uid:       Study the source series belongs to.
+            source_series_uid: Series key the MPR was built from.
+            window_center:   W/L centre for rendering (optional).
+            window_width:    W/L width for rendering (optional, must be > 0).
+        """
+        if pixel_array is None:
+            self.clear_mpr_thumbnail(subwindow_index)
+            return
+
+        self._mpr_thumbnail_specs[subwindow_index] = {
+            "study_uid": study_uid,
+            "source_series_uid": source_series_uid,
+            "pixel_array": pixel_array.copy(),
+            "window_center": window_center,
+            "window_width": window_width,
+        }
+        self._rebuild_from_cached_studies()
+
+    def clear_mpr_thumbnail(self, subwindow_index: int) -> None:
+        """
+        Remove the MPR thumbnail for *subwindow_index* from the navigator.
+
+        Args:
+            subwindow_index: Zero-based subwindow slot.
+        """
+        self._mpr_thumbnail_specs.pop(subwindow_index, None)
+        self._rebuild_from_cached_studies()
 
     def set_multiframe_info_map(self, info_map: Dict[Tuple[str, str], MultiFrameSeriesInfo]) -> None:
         """Set per-series multiframe metadata used when painting thumbnails."""
@@ -229,19 +303,20 @@ class SeriesNavigator(QWidget):
         self.current_series_uid = current_series_uid
         self._last_studies = studies
         
-        # Clear existing widgets from main layout
-        # Get all widgets from main layout and remove them
+        # Clear existing widgets from main layout (keep stretch at the end).
         while self.main_layout.count() > 1:  # Keep the stretch at the end
             layout_item = self.main_layout.takeAt(0)
             if layout_item is None:
                 break
             w = layout_item.widget()
-            if w is not None:
-                w.deleteLater()
+            if w is None:
+                continue
+            w.deleteLater()
         
         # Clear tracking lists
         self.thumbnails.clear()
         self.instance_thumbnails.clear()
+        self._mpr_thumbnails.clear()
         self.study_labels.clear()
         self.study_dividers.clear()
         self._instance_start_indices.clear()
@@ -290,7 +365,8 @@ class SeriesNavigator(QWidget):
             # Sort by series number
             series_list.sort(key=lambda x: x[0])
             
-            # Calculate width for this study section based on visible thumbnail groups.
+            # Calculate width for this study section based on visible thumbnail groups,
+            # including any MPR thumbnails inserted after their source series.
             thumbnail_width = 68
             thumbnail_spacing = 5
             instance_thumbnail_width = 48
@@ -310,6 +386,14 @@ class SeriesNavigator(QWidget):
                 if section_width > 0:
                     section_width += thumbnail_spacing
                 section_width += group_width
+                mpr_count = sum(
+                    1
+                    for spec in self._mpr_thumbnail_specs.values()
+                    if spec.get("study_uid") == study_uid
+                    and spec.get("source_series_uid") == series_uid
+                )
+                if mpr_count > 0:
+                    section_width += mpr_count * (thumbnail_spacing + thumbnail_width)
             if section_width <= 0:
                 section_width = thumbnail_width
             
@@ -427,6 +511,23 @@ class SeriesNavigator(QWidget):
                         series_group_layout.addWidget(instance_thumbnail)
 
                 thumbnails_layout.addWidget(series_group_widget)
+
+                for mpr_idx, mpr_spec in self._mpr_thumbnail_specs.items():
+                    if (
+                        mpr_spec.get("study_uid") != study_uid
+                        or mpr_spec.get("source_series_uid") != series_uid
+                    ):
+                        continue
+                    mpr_widget = self._create_mpr_thumbnail_widget(
+                        mpr_idx,
+                        thumbnails_container,
+                    )
+                    mpr_widget.update_preview(
+                        mpr_spec.get("pixel_array"),
+                        mpr_spec.get("window_center"),
+                        mpr_spec.get("window_width"),
+                    )
+                    thumbnails_layout.addWidget(mpr_widget)
             
             # Add thumbnails container to section
             section_layout.addWidget(thumbnails_container)
@@ -437,7 +538,7 @@ class SeriesNavigator(QWidget):
             first_study = False
 
         self.set_current_position(current_series_uid, current_study_uid, self.current_slice_index)
-    
+
     def set_subwindow_assignments(self, assignments: Dict[int, tuple[Any, ...]]) -> None:
         """
         Update which subwindow slots are currently displaying which series, then
@@ -803,20 +904,24 @@ class SeriesNavigator(QWidget):
     
     def clear(self) -> None:
         """Clear all thumbnails, labels, dividers, and study sections."""
-        # Clear all widgets from main layout (except stretch)
+        # Clear all widgets from main layout (except stretch and MPR section).
         while self.main_layout.count() > 1:  # Keep the stretch at the end
             layout_item = self.main_layout.takeAt(0)
             if layout_item is None:
                 break
             w = layout_item.widget()
-            if w is not None:
-                w.deleteLater()
-        
+            if w is None:
+                continue
+            if w is self._mpr_section_container:
+                w.setParent(None)
+                continue
+            w.deleteLater()
+
         # Clear tracking lists
         self.thumbnails.clear()
         self.study_labels.clear()
         self.study_dividers.clear()
-        
+
         # Clear cache
         self.thumbnail_cache.clear()
     

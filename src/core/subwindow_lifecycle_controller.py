@@ -525,6 +525,12 @@ class SubwindowLifecycleController:
                     except (TypeError, RuntimeError):
                         pass
                     try:
+                        image_viewer.slice_location_lines_mode_toggled.disconnect(
+                            app._on_slice_location_lines_mode_toggled
+                        )
+                    except (TypeError, RuntimeError):
+                        pass
+                    try:
                         image_viewer.left_pane_toggle_requested.disconnect(app.main_window._toggle_left_pane)
                     except (TypeError, RuntimeError):
                         pass
@@ -620,6 +626,12 @@ class SubwindowLifecycleController:
                 image_viewer.slice_location_lines_focused_only_toggled.connect(
                     app._on_slice_location_lines_focused_only_toggled
                 )
+                image_viewer.slice_location_lines_mode_toggled.connect(
+                    app._on_slice_location_lines_mode_toggled
+                )
+                image_viewer.get_slice_location_lines_mode_callback = (
+                    lambda: app.config_manager.get_slice_location_line_mode()
+                )
                 image_viewer.left_pane_toggle_requested.connect(app.main_window._toggle_left_pane)
                 image_viewer.right_pane_toggle_requested.connect(app.main_window._toggle_right_pane)
                 image_viewer.about_this_file_requested.connect(app._open_about_this_file)
@@ -636,6 +648,7 @@ class SubwindowLifecycleController:
                 image_viewer.get_slot_to_view_callback = lambda l=layout: l.get_slot_to_view()
                 subwindow.assign_series_requested.connect(app._on_assign_series_requested)
                 image_viewer.assign_series_requested.connect(app._on_assign_series_from_context_menu)
+                subwindow.mpr_focus_requested.connect(app._on_mpr_focus_requested)
                 subwindow.expand_to_1x1_requested.connect(app._on_expand_to_1x1_requested)
                 image_viewer.swap_view_requested.connect(app._on_swap_view_requested)
                 image_viewer.window_slot_map_popup_requested.connect(app._on_window_slot_map_popup_requested)
@@ -713,6 +726,11 @@ class SubwindowLifecycleController:
             warnings.filterwarnings('ignore', category=RuntimeWarning, message='.*Failed to disconnect.*')
             try:
                 app.image_viewer.annotation_options_requested.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+            try:
+                app.image_viewer.overlay_settings_requested.disconnect()
+                app.image_viewer.overlay_config_requested.disconnect()
             except (TypeError, RuntimeError):
                 pass
             try:
@@ -820,6 +838,12 @@ class SubwindowLifecycleController:
                 app.slice_navigator.slice_changed.disconnect()
             except (TypeError, RuntimeError, AttributeError):
                 pass
+            # Clear the edge-reveal slider navigate callback from the outgoing viewer
+            try:
+                if hasattr(app, "image_viewer") and app.image_viewer is not None:
+                    app.image_viewer.slider_navigate_callback = None
+            except Exception:
+                pass
             try:
                 app.window_level_controls.window_changed.disconnect()
             except (TypeError, RuntimeError, AttributeError):
@@ -871,6 +895,8 @@ class SubwindowLifecycleController:
                 lambda preserve_view=False: self.redisplay_subwindow_slice(focused_idx, preserve_view)
             )
         app.image_viewer.annotation_options_requested.connect(app._open_annotation_options)
+        app.image_viewer.overlay_settings_requested.connect(app._open_overlay_settings)
+        app.image_viewer.overlay_config_requested.connect(app._open_overlay_config)
         app.image_viewer.roi_drawing_started.connect(app.roi_coordinator.handle_roi_drawing_started)
         app.image_viewer.roi_drawing_updated.connect(app.roi_coordinator.handle_roi_drawing_updated)
         app.image_viewer.roi_drawing_finished.connect(app.roi_coordinator.handle_roi_drawing_finished)
@@ -968,6 +994,9 @@ class SubwindowLifecycleController:
         app.image_viewer.get_projection_slice_count_callback = lambda: app.slice_display_manager.projection_slice_count
         app.slice_navigator.slice_changed.connect(app._on_slice_changed)
         app.slice_navigator.slice_changed.connect(app.cine_app_facade.on_manual_slice_navigation)
+        # Wire the edge-reveal slider overlay so dragging it navigates slices.
+        if app.image_viewer is not None:
+            app.image_viewer.slider_navigate_callback = app.slice_navigator.set_current_slice
         app.main_window.mouse_mode_changed.connect(app.mouse_mode_handler.handle_mouse_mode_changed)
         app.main_window.scroll_wheel_mode_changed.connect(app._on_scroll_wheel_mode_changed)
         app.image_viewer.context_menu_mouse_mode_changed.connect(app.mouse_mode_handler.handle_context_menu_mouse_mode_changed)
@@ -1103,6 +1132,48 @@ class SubwindowLifecycleController:
         self.update_right_panel_for_focused_subwindow()
         app._update_series_navigator_highlighting()
         app._update_about_this_file_dialog()
+        # Push current slice state to the newly focused viewer's edge-reveal slider
+        self._sync_slider_state_for_focused_viewer(focused_idx)
+
+    def _sync_slider_state_for_focused_viewer(self, focused_idx: int) -> None:
+        """
+        Push the current slice position and total count to the focused viewer's
+        edge-reveal slider overlay.  Called whenever focus switches so the
+        slider accurately reflects the new subwindow's content.
+
+        Args:
+            focused_idx: The index of the newly focused subwindow (may be -1).
+        """
+        app = self.app
+        if focused_idx < 0 or app.image_viewer is None:
+            return
+        data = app.subwindow_data.get(focused_idx, {})
+        series_uid = data.get("current_series_uid", "")
+        study_uid = data.get("current_study_uid", "")
+        if not series_uid or not study_uid:
+            app.image_viewer.set_navigation_slider_state(
+                enabled=False, minimum=1, maximum=1, value=1
+            )
+            return
+        datasets = (
+            getattr(app, "current_studies", {})
+            .get(study_uid, {})
+            .get(series_uid, [])
+        )
+        total = len(datasets)
+        current_idx = int(data.get("current_slice_index", 0))
+        if total > 1:
+            app.image_viewer.set_navigation_slider_state(
+                enabled=True,
+                minimum=1,
+                maximum=total,
+                value=current_idx + 1,
+                mode_label="Slice",
+            )
+        else:
+            app.image_viewer.set_navigation_slider_state(
+                enabled=False, minimum=1, maximum=1, value=1
+            )
 
     def _trigger_viewport_resized(self) -> None:
         """Run viewport_resized for all visible subwindows (so unfocused panes resize when layout changes, e.g. 2x2→1x2) and sync cursor. Used by the coalesced 100ms timer."""

@@ -34,6 +34,8 @@ from PySide6.QtGui import QPen, QColor, QBrush, QPainter, QPainterPath, QPainter
 from typing import Optional, Tuple, Callable
 import math
 
+from gui.view_transform_helpers import graphics_view_uniform_zoom
+
 # Callback types for handle-drag magnifier (scene_pos, shift_held for start; scene_pos for move)
 HandleDragStartCallback = Callable[[QPointF, bool], None]
 HandleDragMoveCallback = Callable[[QPointF], None]
@@ -97,11 +99,7 @@ class DraggableMeasurementText(QGraphicsTextItem):
                 # Get view for coordinate conversion
                 view = self.scene().views()[0] if self.scene() and self.scene().views() else None
                 if view is not None:
-                    view_scale = view.transform().m11()
-                    if view_scale > 0:
-                        scene_to_viewport_scale = view_scale
-                    else:
-                        scene_to_viewport_scale = 1.0
+                    scene_to_viewport_scale = graphics_view_uniform_zoom(view)
                 else:
                     scene_to_viewport_scale = 1.0
 
@@ -651,8 +649,7 @@ class MeasurementItem(QGraphicsItemGroup):
         )
         view = self.scene().views()[0] if self.scene() and self.scene().views() else None
         if view is not None:
-            view_scale = view.transform().m11()
-            viewport_to_scene_scale = 1.0 / view_scale if view_scale > 0 else 1.0
+            viewport_to_scene_scale = 1.0 / graphics_view_uniform_zoom(view)
         else:
             viewport_to_scene_scale = 1.0
         self.text_offset = QPointF(
@@ -684,8 +681,7 @@ class MeasurementItem(QGraphicsItemGroup):
             return
         view = self.scene().views()[0] if self.scene() and self.scene().views() else None
         if view is not None:
-            view_scale = view.transform().m11()
-            viewport_to_scene_scale = 1.0 / view_scale if view_scale > 0 else 1.0
+            viewport_to_scene_scale = 1.0 / graphics_view_uniform_zoom(view)
         else:
             viewport_to_scene_scale = 1.0
         self.text_offset = QPointF(
@@ -735,7 +731,9 @@ class MeasurementItem(QGraphicsItemGroup):
                     (self.start_point.y() + self.end_point.y()) / 2.0
                 )
                 view = self.scene().views()[0] if self.scene() and self.scene().views() else None
-                viewport_to_scene_scale = (1.0 / view.transform().m11()) if view and view.transform().m11() > 0 else 1.0
+                viewport_to_scene_scale = (
+                    1.0 / graphics_view_uniform_zoom(view)
+                ) if view is not None else 1.0
                 self.text_offset = QPointF(
                     self.text_offset_viewport.x() * viewport_to_scene_scale,
                     self.text_offset_viewport.y() * viewport_to_scene_scale
@@ -820,7 +818,9 @@ class MeasurementItem(QGraphicsItemGroup):
                         (self.start_point.y() + self.end_point.y()) / 2.0
                     )
                     view = self.scene().views()[0] if self.scene() and self.scene().views() else None
-                    viewport_to_scene_scale = (1.0 / view.transform().m11()) if view and view.transform().m11() > 0 else 1.0
+                    viewport_to_scene_scale = (
+                        1.0 / graphics_view_uniform_zoom(view)
+                    ) if view is not None else 1.0
                     self.text_offset = QPointF(
                         self.text_offset_viewport.x() * viewport_to_scene_scale,
                         self.text_offset_viewport.y() * viewport_to_scene_scale

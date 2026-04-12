@@ -11,7 +11,7 @@ from PySide6.QtWidgets import QGraphicsView, QGraphicsPixmapItem, QApplication
 from PySide6.QtCore import Qt, QRectF, QRect, QPointF, QPoint, QTimer
 from PySide6.QtGui import QPixmap, QImage, QPainter, QColor, QTransform, QPen
 from PIL import Image
-from core.direction_labels import compute_direction_labels_from_iop
+from core.direction_labels import compute_direction_labels_from_iop, apply_orientation_to_labels
 from utils.bundled_fonts import make_qfont
 from utils.debug_flags import DEBUG_MAGNIFIER
 import numpy as np
@@ -137,6 +137,35 @@ class ImageViewerViewMixin:
         self._scale_markers_minor_tick_interval_mm = max(1, int(minor_interval_mm))
         self.viewport().update()
 
+    def _apply_view_transform(self) -> None:
+        """
+        Compose flip + rotation + zoom into a single QTransform and apply it to the view.
+
+        This is the single authoritative place that calls ``setTransform()``.
+        All zoom, flip, and rotation setters funnel through here so the matrix
+        is always consistent.  Callers that need to preserve the viewport
+        center (e.g. zoom_in/zoom_out) must save ``mapToScene(viewport center)``
+        before calling this method and call ``centerOn()`` afterwards.
+
+        ``self.current_zoom`` is the authoritative scalar zoom factor and is
+        always kept up-to-date by zoom methods *before* this call.
+        """
+        t = QTransform()
+        # Apply rotation first (around the scene origin, which is the image top-left)
+        if self._rotation_deg != 0:  # type: ignore[attr-defined]
+            t.rotate(float(self._rotation_deg))  # type: ignore[attr-defined]
+        # Apply flip via scale with negative factors
+        sx = -1.0 if self._flip_h else 1.0  # type: ignore[attr-defined]
+        sy = -1.0 if self._flip_v else 1.0  # type: ignore[attr-defined]
+        if sx != 1.0 or sy != 1.0:
+            t.scale(sx, sy)
+        # Apply zoom
+        t.scale(self.current_zoom, self.current_zoom)
+        self.setTransform(t)
+        self.last_transform = self.transform()
+        self._restart_smooth_idle_timer()
+        self.zoom_changed.emit(self.current_zoom)
+
     def drawForeground(self, painter: QPainter, rect: Union[QRectF, QRect]) -> None:
         """
         Draw viewer-only overlays (scale markers and direction labels) on top of scene items.
@@ -176,7 +205,7 @@ class ImageViewerViewMixin:
         if visible_rect.isEmpty():
             return
 
-        zoom = max(0.0001, self.transform().m11())
+        zoom = max(0.0001, self.current_zoom)
         viewport_rect = self.viewport().rect()
         major_tick_len_px = 14.0
         minor_tick_len_px = 8.0
@@ -326,9 +355,24 @@ class ImageViewerViewMixin:
         return (row_mm, col_mm)
 
     def _compute_direction_labels(self, dataset: Any) -> Optional[Dict[str, str]]:
-        """Compute top/bottom/left/right patient orientation labels from ImageOrientationPatient."""
+        """
+        Compute top/bottom/left/right patient orientation labels from ImageOrientationPatient,
+        then remap them to account for any active flip or rotation display transform so the
+        labels always reflect the patient direction actually visible at each screen edge.
+        """
         iop = getattr(dataset, "ImageOrientationPatient", None)
-        return compute_direction_labels_from_iop(iop)
+        labels = compute_direction_labels_from_iop(iop)
+        if labels is None:
+            return None
+
+        flip_h: bool = getattr(self, "_flip_h", False)
+        flip_v: bool = getattr(self, "_flip_v", False)
+        rotation_deg: int = getattr(self, "_rotation_deg", 0)
+
+        if flip_h or flip_v or rotation_deg:
+            labels = apply_orientation_to_labels(labels, flip_h, flip_v, rotation_deg)
+
+        return labels
 
     def _apply_inversion(self, image: Image.Image) -> Image.Image:
         """
@@ -607,12 +651,11 @@ class ImageViewerViewMixin:
         # Centering is now handled by fit_to_view() when appropriate
         # Don't center here as fit_to_view() will be called and may override it
         if preserve_view and saved_zoom is not None:
-            # Restore zoom.
-            # Use setTransform() directly instead of resetTransform()+scale() to avoid
-            # the spurious intermediate state where AnchorViewCenter fires at zoom=1.0
-            # before the intended zoom is applied (H4).
-            self.setTransform(QTransform.fromScale(saved_zoom, saved_zoom))
+            # Restore zoom while preserving current flip/rotation orientation.
+            # _apply_view_transform() composes the full transform; scroll positions
+            # are restored below to avoid pan drift (H5).
             self.current_zoom = saved_zoom
+            self._apply_view_transform()
 
             # Restore pan by setting scrollbar integers directly.
             # Using centerOn(saved_scene_center) introduces a float->int quantization
@@ -638,135 +681,97 @@ class ImageViewerViewMixin:
     
     def fit_to_view(self, center_image: bool = False) -> None:
         """
-        Fit the image to the current view size.
-        
+        Fit the image to the current view size, preserving the current orientation
+        (flip / rotation).
+
+        Computes the zoom factor directly from viewport and image dimensions so that
+        the result is correct when rotation is active (``fitInView`` would override the
+        orientation transform and read back an incorrect m11 value).
+
         Args:
             center_image: If True, center the image in the viewport (for initialization/reset).
                          If False, preserve current view position.
         """
         if self.image_item is None:
             return
-        
-        # Get scene rect
+
         scene_rect = self.image_item.boundingRect()
         if scene_rect.isEmpty():
             return
 
-        viewport = self.viewport()
-        if viewport:
-            viewport_size = f"{viewport.width()}x{viewport.height()}"
-        else:
-            viewport_size = "None"
-        
-        # Fit in view
-        # print(f"[DEBUG-FIT] fit_to_view: Calling fitInView")
-        self.fitInView(scene_rect, Qt.AspectRatioMode.KeepAspectRatio)
-        
-        # Update zoom level
-        transform = self.transform()
-        self.current_zoom = transform.m11()
-        self.last_transform = transform
-        # print(f"[DEBUG-FIT] fit_to_view: After fitInView, zoom = {self.current_zoom:.6f}")
-        self.zoom_changed.emit(self.current_zoom)
-        
-        # If image is smaller than viewport and center_image is True, manually center it
-        # fitInView() may not center properly with AnchorViewCenter when image is smaller
-        if center_image:
-            viewport_width = self.viewport().width()
-            viewport_height = self.viewport().height()
-            scaled_width = scene_rect.width() * self.current_zoom
-            scaled_height = scene_rect.height() * self.current_zoom
-            if scaled_width < viewport_width or scaled_height < viewport_height:
-                # Image is smaller than viewport - center it
-                image_center = scene_rect.center()
-                # print(f"[DEBUG-FIT] fit_to_view: Centering on {image_center}")
-                self.centerOn(image_center)
+        vp = self.viewport()
+        if vp is None:
+            return
+        viewport_w = float(vp.width())
+        viewport_h = float(vp.height())
+        if viewport_w <= 0 or viewport_h <= 0:
+            return
 
+        img_w = scene_rect.width()
+        img_h = scene_rect.height()
+        if img_w <= 0 or img_h <= 0:
+            return
+
+        # When the image is rotated 90° or 270°, the effective on-screen
+        # width/height are swapped compared to the scene dimensions.
+        if self._rotation_deg in (90, 270):  # type: ignore[attr-defined]
+            fit_zoom = min(viewport_w / img_h, viewport_h / img_w)
+        else:
+            fit_zoom = min(viewport_w / img_w, viewport_h / img_h)
+
+        self.current_zoom = max(1e-6, fit_zoom)
+        self._apply_view_transform()
+
+        # Always center on the image for fit_to_view
+        self.centerOn(scene_rect.center())
+        self.last_transform = self.transform()
+        self.zoom_changed.emit(self.current_zoom)
         self._restart_smooth_idle_timer()
 
     def zoom_in(self) -> None:
-        """Zoom in on the image, centered on viewport center."""
+        """Zoom in on the image, centered on the current viewport center."""
         if self.image_item is None:
             return
-        
-        # AnchorViewCenter is set in __init__ and should remain constant
-        # When AnchorViewCenter is set, scale() automatically centers zooming on viewport center
-        # No manual translation is needed
-        
-        # Calculate new zoom level
-        new_zoom = self.current_zoom * self.zoom_factor
-        
-        # Clamp to max zoom
-        if new_zoom > self.max_zoom:
-            new_zoom = self.max_zoom
-        
-        # Calculate scale factor needed to reach target zoom
-        current_scale = self.transform().m11()
-        scale_factor = new_zoom / current_scale
-        
-        # Apply zoom - AnchorViewCenter ensures it's centered on viewport center
-        self.scale(scale_factor, scale_factor)
+        new_zoom = min(self.current_zoom * self.zoom_factor, self.max_zoom)
+        # Preserve the scene point currently at the viewport centre so that
+        # the zoom appears to expand around that point.
+        center_scene = self.mapToScene(self.viewport().rect().center())
         self.current_zoom = new_zoom
-        
-        self.zoom_changed.emit(self.current_zoom)
+        self._apply_view_transform()
+        self.centerOn(center_scene)
         self._check_transform_changed()
-    
+
     def zoom_out(self) -> None:
-        """Zoom out from the image, centered on viewport center."""
+        """Zoom out from the image, centered on the current viewport center."""
         if self.image_item is None:
             return
-        
-        # AnchorViewCenter is set in __init__ and should remain constant
-        # When AnchorViewCenter is set, scale() automatically centers zooming on viewport center
-        # No manual translation is needed
-        
-        # Calculate new zoom level
-        new_zoom = self.current_zoom / self.zoom_factor
-        
-        # Clamp to min zoom
-        if new_zoom < self.min_zoom:
-            new_zoom = self.min_zoom
-        
-        # Calculate scale factor needed to reach target zoom
-        current_scale = self.transform().m11()
-        scale_factor = new_zoom / current_scale
-        
-        # Apply zoom - AnchorViewCenter ensures it's centered on viewport center
-        self.scale(scale_factor, scale_factor)
+        new_zoom = max(self.current_zoom / self.zoom_factor, self.min_zoom)
+        center_scene = self.mapToScene(self.viewport().rect().center())
         self.current_zoom = new_zoom
-        
-        self.zoom_changed.emit(self.current_zoom)
+        self._apply_view_transform()
+        self.centerOn(center_scene)
         self._check_transform_changed()
-    
+
     def reset_zoom(self) -> None:
-        """Reset zoom to 1:1."""
-        self.resetTransform()
+        """Reset zoom to 1:1, preserving current flip/rotation."""
         self.current_zoom = 1.0
-        self.zoom_changed.emit(self.current_zoom)
+        self._apply_view_transform()
         self._check_transform_changed()
-    
+
     def set_zoom(self, zoom_value: float) -> None:
         """
-        Set zoom to a specific value, centered on viewport center.
-        
+        Set zoom to a specific value, centered on the current viewport center.
+
         Args:
             zoom_value: Target zoom level
         """
         if self.image_item is None:
             return
-        
-        # Clamp to valid range
         zoom_value = max(self.min_zoom, min(self.max_zoom, zoom_value))
-        
-        # Calculate scale factor needed to reach target zoom
-        current_scale = self.transform().m11()
-        scale_factor = zoom_value / current_scale
-        
-        # Apply zoom - AnchorViewCenter ensures it's centered on viewport center
-        self.scale(scale_factor, scale_factor)
+        center_scene = self.mapToScene(self.viewport().rect().center())
         self.current_zoom = zoom_value
-        
-        self.zoom_changed.emit(self.current_zoom)
+        self._apply_view_transform()
+        self.centerOn(center_scene)
         self._check_transform_changed()
     
     def set_scroll_wheel_mode(self, mode: str) -> None:
@@ -1113,7 +1118,7 @@ class ImageViewerViewMixin:
             from gui.magnifier_widget import MagnifierWidget
             self.handle_drag_magnifier_widget = MagnifierWidget()
         self.handle_drag_magnifier_active = True
-        current_zoom = self.transform().m11()
+        current_zoom = self.current_zoom
         magnifier_zoom = 2.0 * current_zoom
         adjusted_region_size = (
             float(self._handle_drag_magnifier_size) / (2.0 * current_zoom)
@@ -1149,7 +1154,7 @@ class ImageViewerViewMixin:
         """Update handle-drag magnifier content and position (called on handle move)."""
         if not self.handle_drag_magnifier_active or self.handle_drag_magnifier_widget is None:
             return
-        current_zoom = self.transform().m11()
+        current_zoom = self.current_zoom
         magnifier_zoom = 2.0 * current_zoom
         adjusted_region_size = (
             float(self._handle_drag_magnifier_size) / (2.0 * current_zoom)
@@ -1333,5 +1338,21 @@ class ImageViewerViewMixin:
         # Emit transform_changed signal to update overlay positions
         # Viewport size change affects overlay positioning
         QTimer.singleShot(10, lambda: self.transform_changed.emit())
+        # Reposition the edge-reveal slider overlay on the right edge
+        if hasattr(self, "_slider_overlay"):
+            self._reposition_slider_overlay()
         # Optionally auto-fit on resize
         # self.fit_to_view()
+
+    def scrollContentsBy(self, dx: int, dy: int) -> None:  # noqa: N802
+        """
+        Keep viewport-anchored overlays fixed while the graphics view scrolls.
+
+        QGraphicsView pans by scrolling the viewport contents, which can visually
+        shift child widgets of the viewport until they are explicitly re-anchored.
+        Reposition the edge-reveal slider immediately after every scroll step so it
+        stays pinned to the right edge during pan/drag interactions.
+        """
+        super().scrollContentsBy(dx, dy)
+        if hasattr(self, "_slider_overlay"):
+            self._reposition_slider_overlay()

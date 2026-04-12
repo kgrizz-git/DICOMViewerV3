@@ -213,6 +213,27 @@ class DisplayConfigMixin:
             self._config()["scale_markers_minor_tick_interval_mm"] = interval_mm
             self._save_config()
 
+    def get_show_slice_slider(self) -> bool:
+        """
+        Get whether the edge-reveal slice/frame slider is enabled.
+
+        Returns:
+            True if the in-view slice slider is enabled (default), False if
+            the user has turned it off via the View menu.
+        """
+        return bool(self._config().get("show_slice_slider", True))
+
+    def set_show_slice_slider(self, enabled: bool) -> None:
+        """
+        Set whether the edge-reveal slice/frame slider is enabled.
+
+        Args:
+            enabled: True to allow the slider to appear on hover, False to
+                     always hide it.
+        """
+        self._config()["show_slice_slider"] = bool(enabled)
+        self._save_config()
+
     def get_show_instances_separately(self) -> bool:
         """Get whether multi-frame instances should be shown separately in the navigator."""
         return self._config().get("show_instances_separately", False)

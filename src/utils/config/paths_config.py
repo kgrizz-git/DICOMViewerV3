@@ -174,3 +174,41 @@ class PathsConfigMixin:
             recent_files.remove(file_path)
             self._config()["recent_files"] = recent_files
             self._save_config()
+
+    def move_recent_file_up(self, file_path: str) -> None:
+        """
+        Move a recent file entry one position earlier (toward the top) in the recent files list.
+
+        Has no effect if the file is not in the list or is already at position 0.
+
+        Args:
+            file_path: Path of the recent file entry to move up
+        """
+        files = self._config().get("recent_files", [])
+        try:
+            idx = files.index(file_path)
+        except ValueError:
+            return
+        if idx > 0:
+            files[idx - 1], files[idx] = files[idx], files[idx - 1]
+            self._config()["recent_files"] = files
+            self._save_config()
+
+    def move_recent_file_down(self, file_path: str) -> None:
+        """
+        Move a recent file entry one position later (toward the bottom) in the recent files list.
+
+        Has no effect if the file is not in the list or is already at the last position.
+
+        Args:
+            file_path: Path of the recent file entry to move down
+        """
+        files = self._config().get("recent_files", [])
+        try:
+            idx = files.index(file_path)
+        except ValueError:
+            return
+        if idx < len(files) - 1:
+            files[idx], files[idx + 1] = files[idx + 1], files[idx]
+            self._config()["recent_files"] = files
+            self._save_config()

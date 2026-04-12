@@ -158,6 +158,42 @@ def build_menu_bar(main_window) -> None:
 
     view_menu.addSeparator()
 
+    # Orientation submenu (flip / rotate focused viewer — non-destructive)
+    orientation_menu = view_menu.addMenu("&Orientation")
+
+    flip_h_act = QAction("Flip &Horizontal", main_window)
+    flip_h_act.setShortcut(QKeySequence("Alt+H"))
+    flip_h_act.triggered.connect(main_window.orientation_flip_h_requested.emit)
+    orientation_menu.addAction(flip_h_act)
+
+    flip_v_act = QAction("Flip &Vertical", main_window)
+    flip_v_act.setShortcut(QKeySequence("Alt+V"))
+    flip_v_act.triggered.connect(main_window.orientation_flip_v_requested.emit)
+    orientation_menu.addAction(flip_v_act)
+
+    orientation_menu.addSeparator()
+
+    rotate_cw_act = QAction("Rotate 90° &CW", main_window)
+    rotate_cw_act.setShortcut(QKeySequence("Alt+R"))
+    rotate_cw_act.triggered.connect(main_window.orientation_rotate_cw_requested.emit)
+    orientation_menu.addAction(rotate_cw_act)
+
+    rotate_ccw_act = QAction("Rotate 90° CC&W", main_window)
+    rotate_ccw_act.setShortcut(QKeySequence("Shift+Alt+R"))
+    rotate_ccw_act.triggered.connect(main_window.orientation_rotate_ccw_requested.emit)
+    orientation_menu.addAction(rotate_ccw_act)
+
+    rotate_180_act = QAction("Rotate &180°", main_window)
+    rotate_180_act.triggered.connect(main_window.orientation_rotate_180_requested.emit)
+    orientation_menu.addAction(rotate_180_act)
+
+    orientation_menu.addSeparator()
+
+    reset_orient_act = QAction("Reset &Orientation", main_window)
+    reset_orient_act.setShortcut(QKeySequence("Shift+Alt+O"))
+    reset_orient_act.triggered.connect(main_window.orientation_reset_requested.emit)
+    orientation_menu.addAction(reset_orient_act)
+
     main_window.privacy_view_action = QAction("&Privacy View", main_window)
     main_window.privacy_view_action.setCheckable(True)
     main_window.privacy_view_action.setChecked(main_window.config_manager.get_privacy_view())
@@ -190,6 +226,14 @@ def build_menu_bar(main_window) -> None:
     direction_labels_color_action = QAction("Direction Labels Color...", main_window)
     direction_labels_color_action.triggered.connect(main_window._on_direction_labels_color_picker)
     view_menu.addAction(direction_labels_color_action)
+
+    main_window.slice_slider_action = QAction("Show In-View Slice/Frame Slider", main_window)
+    main_window.slice_slider_action.setCheckable(True)
+    main_window.slice_slider_action.setChecked(main_window.config_manager.get_show_slice_slider())
+    main_window.slice_slider_action.triggered.connect(
+        lambda checked: main_window.slice_slider_toggled.emit(checked)
+    )
+    view_menu.addAction(main_window.slice_slider_action)
 
     main_window.show_instances_separately_action = QAction("Show Instances Separately", main_window)
     main_window.show_instances_separately_action.setCheckable(True)
@@ -292,7 +336,7 @@ def build_menu_bar(main_window) -> None:
     slice_sync_menu.addAction(manage_sync_groups_action)
 
     # Show Lines submenu (slice location lines across views)
-    show_lines_menu = view_menu.addMenu("Show &Lines")
+    show_lines_menu = view_menu.addMenu("Show &Slice Location Lines")
 
     main_window.slice_location_lines_enable_action = QAction("Enable/Disable", main_window)
     main_window.slice_location_lines_enable_action.setCheckable(True)
@@ -332,6 +376,27 @@ def build_menu_bar(main_window) -> None:
         lambda checked: main_window.slice_location_lines_focused_only_toggled.emit(checked)
     )
     show_lines_menu.addAction(main_window.slice_location_lines_focused_only_action)
+
+    show_lines_menu.addSeparator()
+
+    # Line mode: "Middle" vs "Begin/End" (checkable action — unchecked = middle, checked = begin_end)
+    main_window.slice_location_lines_show_slab_bounds_action = QAction(
+        "Show Slab Boundaries (Begin/End) Instead of Centre", main_window
+    )
+    main_window.slice_location_lines_show_slab_bounds_action.setCheckable(True)
+    main_window.slice_location_lines_show_slab_bounds_action.setChecked(
+        main_window.config_manager.get_slice_location_line_mode() == "begin_end"
+    )
+    main_window.slice_location_lines_show_slab_bounds_action.setStatusTip(
+        "Draw two lines at the slab boundaries (±½ slice thickness) instead of "
+        "a single line at the centre plane"
+    )
+    main_window.slice_location_lines_show_slab_bounds_action.triggered.connect(
+        lambda checked: main_window.slice_location_lines_mode_toggled.emit(
+            "begin_end" if checked else "middle"
+        )
+    )
+    show_lines_menu.addAction(main_window.slice_location_lines_show_slab_bounds_action)
 
     # --- Tools menu ---
     tools_menu = menubar.addMenu("&Tools")

@@ -1130,3 +1130,56 @@ class ViewStateManager:
         self.series_pixel_min = None
         self.series_pixel_max = None
 
+    # ------------------------------------------------------------------
+    # Orientation persistence (flip / rotate) — per-series
+    # ------------------------------------------------------------------
+
+    def save_orientation(self, series_identifier: Optional[str] = None) -> None:
+        """
+        Persist the current flip/rotation state for a series.
+
+        Reads ``_flip_h``, ``_flip_v``, and ``_rotation_deg`` directly from the
+        associated ``ImageViewer`` and stores them under ``series_defaults`` so
+        they survive a series switch and can be restored via ``restore_orientation``.
+
+        Args:
+            series_identifier: Key for the series.  Defaults to
+                ``self.current_series_identifier`` when ``None``.
+        """
+        if series_identifier is None:
+            series_identifier = self.current_series_identifier
+        if not series_identifier:
+            return
+        if series_identifier not in self.series_defaults:
+            self.series_defaults[series_identifier] = {}
+        self.series_defaults[series_identifier].update({
+            'flip_h': self.image_viewer._flip_h,
+            'flip_v': self.image_viewer._flip_v,
+            'rotation_deg': self.image_viewer._rotation_deg,
+        })
+
+    def restore_orientation(self, series_identifier: Optional[str] = None) -> None:
+        """
+        Restore the saved flip/rotation state for a series, or reset to defaults.
+
+        If no orientation data has been saved for *series_identifier* the viewer is
+        reset to the neutral orientation (no flip, rotation 0°) without triggering
+        the orientation-changed callback (to avoid a redundant save).
+
+        Args:
+            series_identifier: Key for the series.  Defaults to
+                ``self.current_series_identifier`` when ``None``.
+        """
+        if series_identifier is None:
+            series_identifier = self.current_series_identifier
+        defaults = self.series_defaults.get(series_identifier or '', {}) if series_identifier else {}
+        flip_h = defaults.get('flip_h', False)
+        flip_v = defaults.get('flip_v', False)
+        rotation_deg = defaults.get('rotation_deg', 0)
+        # Apply without going through the public helpers so we avoid a
+        # spurious orientation_changed_callback call before the image is fully loaded.
+        self.image_viewer._flip_h = flip_h
+        self.image_viewer._flip_v = flip_v
+        self.image_viewer._rotation_deg = rotation_deg
+        self.image_viewer._apply_view_transform()
+

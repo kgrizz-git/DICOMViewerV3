@@ -240,4 +240,10 @@ def build_managers_for_subwindow(
             )
 
     image_viewer.inversion_state_changed_callback = on_inversion_state_changed
+
+    def on_orientation_changed(flip_h: bool, flip_v: bool, rotation_deg: int, i=idx) -> None:
+        """Persist orientation state whenever the user flips or rotates the image."""
+        managers["view_state_manager"].save_orientation()
+
+    image_viewer.orientation_changed_callback = on_orientation_changed
     return managers

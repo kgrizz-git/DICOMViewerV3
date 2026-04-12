@@ -104,6 +104,7 @@ from core.subwindow_image_viewer_sync import (
     set_direction_labels_color_all,
     set_scale_markers_all,
     set_scale_markers_color_all,
+    set_slice_slider_all,
     set_smooth_when_zoomed_all,
 )
 from core.subwindow_manager_factory import build_managers_for_subwindow
@@ -558,8 +559,8 @@ class DICOMViewerApp(QObject):
         """Get slice display manager for a subwindow. Delegates to subwindow lifecycle controller."""
         return self._subwindow_lifecycle_controller.get_subwindow_slice_display_manager(idx)
 
-    def _get_subwindow_mpr_pixel_array(self, idx: int):
-        """Return the currently displayed MPR pixel array for subwindow *idx* (if any)."""
+    def _get_subwindow_mpr_pixel_array(self, idx: int, slice_index: Optional[int] = None):
+        """Return an MPR pixel array for subwindow *idx* (if any)."""
         try:
             data = self.subwindow_data.get(idx, {})
             if not data.get("is_mpr"):
@@ -567,9 +568,11 @@ class DICOMViewerApp(QObject):
             result = data.get("mpr_result")
             if result is None:
                 return None
-            slice_index = data.get("mpr_slice_index", 0)
+            if slice_index is None:
+                slice_index = data.get("mpr_slice_index", 0)
             if slice_index is None:
                 return None
+            slice_index = int(slice_index)
             if slice_index < 0 or slice_index >= getattr(result, "n_slices", 0):
                 return None
             raw = apply_mpr_stack_combine(
@@ -589,6 +592,100 @@ class DICOMViewerApp(QObject):
             return raw
         except Exception:
             return None
+
+    def _get_subwindow_mpr_thumbnail_pixel_array(self, idx: int):
+        """Return a representative MPR thumbnail slice, preferring the stack midpoint."""
+        data = self.subwindow_data.get(idx, {})
+        result = data.get("mpr_result")
+        if result is None:
+            return None
+        n_slices = int(getattr(result, "n_slices", 0) or 0)
+        if n_slices <= 0:
+            return None
+        middle_index = n_slices // 2
+        return self._get_subwindow_mpr_pixel_array(idx, middle_index)
+
+    def _update_mpr_navigator_thumbnail(self, idx: int) -> None:
+        """
+        Show or refresh the MPR thumbnail in the series navigator for subwindow *idx*.
+
+        Called automatically when ``MprController.mpr_activated`` is emitted.
+        The thumbnail is built from the currently-displayed MPR slice pixel
+        array with the active W/L values so it matches what is on screen.
+
+        Args:
+            idx: Zero-based subwindow index hosting the MPR view.
+        """
+        if not hasattr(self, "series_navigator"):
+            return
+        data = self.subwindow_data.get(idx, {})
+        if not data.get("is_mpr") or data.get("mpr_result") is None:
+            self.series_navigator.clear_mpr_thumbnail(idx)
+            return
+
+        pixel_array = self._get_subwindow_mpr_thumbnail_pixel_array(idx)
+        if pixel_array is None:
+            return
+
+        wc: Optional[float] = None
+        ww: Optional[float] = None
+        wl_controls = getattr(self, "window_level_controls", None)
+        if wl_controls is not None:
+            try:
+                wc_val = float(wl_controls.window_center)
+                ww_val = float(wl_controls.window_width)
+                if ww_val > 0:
+                    wc, ww = wc_val, ww_val
+            except (AttributeError, TypeError, ValueError):
+                pass
+
+        self.series_navigator.set_mpr_thumbnail(
+            idx,
+            pixel_array,
+            str(data.get("current_study_uid", "") or ""),
+            str(data.get("current_series_uid", "") or ""),
+            wc,
+            ww,
+        )
+
+    def _clear_mpr_navigator_thumbnail(self, idx: int) -> None:
+        """
+        Remove the MPR thumbnail from the series navigator for subwindow *idx*.
+
+        Called automatically when ``MprController.mpr_cleared`` is emitted.
+
+        Args:
+            idx: Zero-based subwindow index whose MPR was cleared.
+        """
+        if hasattr(self, "series_navigator"):
+            self.series_navigator.clear_mpr_thumbnail(idx)
+
+    def _on_mpr_thumbnail_clicked(self, subwindow_index: int) -> None:
+        """
+        Focus the subwindow that hosts the MPR view when its thumbnail is clicked.
+
+        Args:
+            subwindow_index: Zero-based index of the MPR subwindow.
+        """
+        try:
+            subwindow = self.multi_window_layout.get_subwindow(subwindow_index)
+            if subwindow is not None and not subwindow.is_focused:
+                subwindow.set_focused(True)
+        except Exception as exc:
+            print(f"[DICOMViewerApp] _on_mpr_thumbnail_clicked: {exc}")
+
+    def _on_mpr_focus_requested(self, source_subwindow_index: int) -> None:
+        """
+        Focus the source MPR subwindow when an MPR thumbnail is dragged onto
+        any subwindow container.
+
+        This is the simplest useful behaviour for an MPR drag: it brings the
+        MPR subwindow into focus so the user can interact with it.
+
+        Args:
+            source_subwindow_index: Zero-based index of the subwindow hosting the MPR.
+        """
+        self._on_mpr_thumbnail_clicked(source_subwindow_index)
 
     def _sync_intensity_projection_widget_from_mpr_data(self, data: Dict[str, Any]) -> None:
         """Push ``mpr_combine_*`` from *data* to the right-pane Combine Slices widget."""
@@ -1045,6 +1142,7 @@ class DICOMViewerApp(QObject):
 
         # Reassign views A–D to default windows 1–4 (slot order [0,1,2,3])
         self.multi_window_layout.reset_slot_to_view_default()
+        self._refresh_window_slot_map_widgets()
 
     def _on_app_about_to_quit(self) -> None:
         """Reset view–slot mapping and dissolve slice sync groups when the application is exiting."""
@@ -1162,6 +1260,10 @@ class DICOMViewerApp(QObject):
             scene.clear()
             subwindow.image_viewer.image_item = None
             subwindow.image_viewer.viewport().update()
+            # Hide the edge-reveal slider overlay — no content to navigate
+            subwindow.image_viewer.set_navigation_slider_state(
+                enabled=False, minimum=1, maximum=1, value=1
+            )
 
         # Reset subwindow_data to the empty template
         self.subwindow_data[idx] = {
@@ -1171,6 +1273,7 @@ class DICOMViewerApp(QObject):
             'current_study_uid': '',
             'current_datasets': [],
         }
+        self._refresh_window_slot_map_widgets()
 
     def _reset_focused_subwindow_state_after_close(self) -> None:
         """
@@ -1541,18 +1644,7 @@ class DICOMViewerApp(QObject):
         if self.config_manager.get_slice_location_lines_focused_only():
             self._slice_location_line_coordinator.refresh_all()
         # Refresh window-slot thumbnail(s) so focus outline updates.
-        widget = getattr(self.main_window, "window_slot_map_widget", None)
-        if widget is not None:
-            try:
-                widget.refresh()
-            except Exception:
-                pass
-        popup_widget = getattr(self, "_window_slot_map_widget_popup", None)
-        if popup_widget is not None:
-            try:
-                popup_widget.refresh()
-            except Exception:
-                pass
+        self._refresh_window_slot_map_widgets()
     
     def _update_series_navigator_highlighting(self) -> None:
         """Update series navigator highlighting based on focused subwindow's series."""
@@ -1605,13 +1697,7 @@ class DICOMViewerApp(QObject):
         """Handle layout mode change from multi-window layout. Delegates to subwindow lifecycle controller."""
         self._subwindow_lifecycle_controller.on_layout_changed(layout_mode)
         QTimer.singleShot(0, self._slice_location_line_coordinator.refresh_all)
-        # Refresh window-slot thumbnail if present
-        widget = getattr(self.main_window, "window_slot_map_widget", None)
-        if widget is not None:
-            try:
-                widget.refresh()
-            except Exception:
-                pass
+        self._refresh_window_slot_map_widgets()
     
     def _on_main_window_layout_changed(self, layout_mode: str) -> None:
         """Handle layout mode change from main window menu. Delegates to subwindow lifecycle controller."""
@@ -1669,11 +1755,20 @@ class DICOMViewerApp(QObject):
             self.main_window.update_status("Slot order updated; switch to 2x2 to see positions.")
         # Navigator dots are keyed by grid slot; slot_to_view changed, so refresh assignments.
         self.series_navigator.set_subwindow_assignments(self._get_subwindow_assignments())
-        # Refresh window-slot thumbnail if present
+        self._refresh_window_slot_map_widgets()
+
+    def _refresh_window_slot_map_widgets(self) -> None:
+        """Refresh the embedded and popup window-slot map widgets, if present."""
         widget = getattr(self.main_window, "window_slot_map_widget", None)
         if widget is not None:
             try:
                 widget.refresh()
+            except Exception:
+                pass
+        popup_widget = getattr(self, "_window_slot_map_widget_popup", None)
+        if popup_widget is not None:
+            try:
+                popup_widget.refresh()
             except Exception:
                 pass
 
@@ -2036,7 +2131,7 @@ class DICOMViewerApp(QObject):
 
     def _on_slice_location_lines_toggled(self, visible: bool) -> None:
         """
-        Handle View → Show Lines → Enable/Disable toggle.
+        Handle View → Show Slice Location Lines → Enable/Disable toggle.
 
         Persists the setting and refreshes all subwindows.
 
@@ -2049,7 +2144,7 @@ class DICOMViewerApp(QObject):
 
     def _on_slice_location_lines_same_group_only_toggled(self, same_group_only: bool) -> None:
         """
-        Handle View → Show Lines → Only Show For Same Group toggle.
+        Handle View → Show Slice Location Lines → Only Show For Same Group toggle.
 
         Persists the setting and refreshes all subwindows.
 
@@ -2062,7 +2157,7 @@ class DICOMViewerApp(QObject):
 
     def _on_slice_location_lines_focused_only_toggled(self, focused_only: bool) -> None:
         """
-        Handle View → Show Lines → Show Only For Focused Window toggle.
+        Handle View → Show Slice Location Lines → Show Only For Focused Window toggle.
 
         Persists the setting and refreshes all subwindows.
 
@@ -2072,6 +2167,21 @@ class DICOMViewerApp(QObject):
         self.config_manager.set_slice_location_lines_focused_only(focused_only)
         self._slice_location_line_coordinator.refresh_all()
         self.main_window.set_slice_location_lines_focused_only_checked(focused_only)
+
+    def _on_slice_location_lines_mode_toggled(self, mode: str) -> None:
+        """
+        Handle View → Show Slice Location Lines → Show Slab Boundaries toggle.
+
+        Persists the new mode ("middle" or "begin_end") and refreshes all
+        subwindows so the change is immediately visible.
+
+        Args:
+            mode: "middle" for a single centre-plane line, or "begin_end" for
+                  two boundary lines at ±(SliceThickness/2).
+        """
+        self.config_manager.set_slice_location_line_mode(mode)
+        self._slice_location_line_coordinator.refresh_all()
+        self.main_window.set_slice_location_lines_slab_bounds_checked(mode)
 
     def _on_smooth_when_zoomed_toggled(self, enabled: bool) -> None:
         """
@@ -2084,6 +2194,40 @@ class DICOMViewerApp(QObject):
         self.config_manager.set_smooth_image_when_zoomed(enabled)
         set_smooth_when_zoomed_all(self, enabled)
         self.main_window.set_smooth_when_zoomed_checked(enabled)
+
+    # ------------------------------------------------------------------
+    # Orientation handlers (View menu → focused viewer)
+    # ------------------------------------------------------------------
+
+    def _on_orientation_flip_h(self) -> None:
+        """Toggle horizontal flip on the currently focused image viewer."""
+        if self.image_viewer is not None:
+            self.image_viewer.flip_h()
+
+    def _on_orientation_flip_v(self) -> None:
+        """Toggle vertical flip on the currently focused image viewer."""
+        if self.image_viewer is not None:
+            self.image_viewer.flip_v()
+
+    def _on_orientation_rotate_cw(self) -> None:
+        """Rotate the currently focused image viewer 90° clockwise."""
+        if self.image_viewer is not None:
+            self.image_viewer.rotate_cw()
+
+    def _on_orientation_rotate_ccw(self) -> None:
+        """Rotate the currently focused image viewer 90° counter-clockwise."""
+        if self.image_viewer is not None:
+            self.image_viewer.rotate_ccw()
+
+    def _on_orientation_rotate_180(self) -> None:
+        """Rotate the currently focused image viewer 180°."""
+        if self.image_viewer is not None:
+            self.image_viewer.rotate_180()
+
+    def _on_orientation_reset(self) -> None:
+        """Reset orientation of the currently focused image viewer to default."""
+        if self.image_viewer is not None:
+            self.image_viewer.reset_orientation()
 
     def _on_scale_markers_toggled(self, enabled: bool) -> None:
         """
@@ -2106,6 +2250,20 @@ class DICOMViewerApp(QObject):
         self.config_manager.set_show_direction_labels(enabled)
         set_direction_labels_all(self, enabled)
         self.main_window.set_direction_labels_checked(enabled)
+
+    def _on_slice_slider_toggled(self, enabled: bool) -> None:
+        """
+        Handle the in-view slice/frame slider toggle from the View menu.
+
+        Persists the setting and propagates the enabled state to every
+        ImageViewer in the layout.
+
+        Args:
+            enabled: True to allow the slider to appear on hover, False to hide it.
+        """
+        self.config_manager.set_show_slice_slider(enabled)
+        set_slice_slider_all(self, enabled)
+        self.main_window.set_slice_slider_checked(enabled)
 
     def _on_scale_markers_color_changed(self, r: int, g: int, b: int) -> None:
         """Handle scale markers color change from the View menu."""
@@ -2470,6 +2628,8 @@ class DICOMViewerApp(QObject):
                 )
 
         self._refresh_overlay_all_subwindows()
+        # Slice position line mode may have changed via the Overlay Settings dialog.
+        self._slice_location_line_coordinator.refresh_all()
     
     def _on_window_changed(self, center: float, width: float) -> None:
         """
@@ -2938,6 +3098,16 @@ class DICOMViewerApp(QObject):
             result = self.subwindow_data.get(focused_idx, {}).get("mpr_result")
             if result is not None:
                 self.cine_controls_widget.update_frame_position(slice_index, result.n_slices)
+                # Update edge-reveal slider for MPR view
+                if self.image_viewer is not None:
+                    self.image_viewer.set_navigation_slider_state(
+                        enabled=True,
+                        minimum=1,
+                        maximum=result.n_slices,
+                        value=slice_index + 1,
+                        mode_label="Slice",
+                        reveal=True,
+                    )
             self._slice_sync_coordinator.on_slice_changed(focused_idx)
             self._slice_location_line_coordinator.refresh_all()
             if was_cine_advancing:
@@ -3000,6 +3170,17 @@ class DICOMViewerApp(QObject):
             total_slices = len(series_datasets)
             if total_slices > 0:
                 self.cine_controls_widget.update_frame_position(slice_index, total_slices)
+
+            # Update edge-reveal slice/frame slider overlay on the focused viewer
+            if self.image_viewer is not None and total_slices > 0:
+                self.image_viewer.set_navigation_slider_state(
+                    enabled=True,
+                    minimum=1,
+                    maximum=total_slices,
+                    value=slice_index + 1,
+                    mode_label="Slice",
+                    reveal=True,
+                )
         
         # Reset cine advancing flag after all slice change processing is complete
         if was_cine_advancing:

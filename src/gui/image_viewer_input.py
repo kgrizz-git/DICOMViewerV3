@@ -50,11 +50,10 @@ class ImageViewerInputMixin:
         # Qt: item.scale = item.scale * (1 + event.value()); value is typically small
         new_zoom = self.current_zoom * (1.0 + value)
         new_zoom = max(self.min_zoom, min(self.max_zoom, new_zoom))
-        current_scale = self.transform().m11()
-        scale_factor = new_zoom / current_scale
-        self.scale(scale_factor, scale_factor)
+        center_scene = self.mapToScene(self.viewport().rect().center())
         self.current_zoom = new_zoom
-        self.zoom_changed.emit(self.current_zoom)
+        self._apply_view_transform()  # type: ignore[attr-defined]
+        self.centerOn(center_scene)
         self._check_transform_changed()
         self._restart_smooth_idle_timer()
 
@@ -457,8 +456,9 @@ class ImageViewerInputMixin:
                         # Hide cursor when magnifier is active
                         self.setCursor(Qt.CursorShape.BlankCursor)
                         # Extract and show magnified region
-                        # Get current zoom from view transform (most accurate)
-                        current_zoom = self.transform().m11()
+                        # Get current zoom from authoritative scalar (not from matrix m11,
+                        # which would be incorrect when rotation is active)
+                        current_zoom = self.current_zoom
                         # Magnifier zoom is 2.0x the current view zoom
                         magnifier_zoom = 2.0 * current_zoom
                         # Extract region size calculation for 2.0x zoom
@@ -592,6 +592,10 @@ class ImageViewerInputMixin:
         # Track cursor position and pixel values for status bar display
         # This should happen in all mouse modes, regardless of tool selection
         self._update_pixel_info(event)
+
+        # Update edge-reveal slice/frame slider overlay proximity
+        if getattr(self, "_slice_slider_enabled", False) and getattr(self, "_slider_overlay", None) is not None:
+            self._update_slider_visibility_from_mouse(event.position().toPoint())
         
         # Check for right mouse drag FIRST, before any mode-specific checks
         # This allows window/level adjustment to work in all modes (Select, Pan, etc.)
@@ -652,14 +656,11 @@ class ImageViewerInputMixin:
                 # Clamp zoom
                 new_zoom = max(self.min_zoom, min(self.max_zoom, new_zoom))
                 
-                # Apply zoom - AnchorViewCenter is set in __init__ and ensures zooming is centered on viewport center
-                # Calculate scale factor from current transform for consistency with zoom_in/zoom_out
-                current_scale = self.transform().m11()
-                scale_factor = new_zoom / current_scale
-                self.scale(scale_factor, scale_factor)
+                # Apply zoom via _apply_view_transform to keep flip/rotation consistent
+                center_scene = self.mapToScene(self.viewport().rect().center())
                 self.current_zoom = new_zoom
-                
-                self.zoom_changed.emit(self.current_zoom)
+                self._apply_view_transform()  # type: ignore[attr-defined]
+                self.centerOn(center_scene)
                 self._check_transform_changed()
         elif self.mouse_mode == "measure" and self.measuring and self.measurement_start_pos is not None:
             # Measurement mode - update measurement while dragging; keep cursor hidden
@@ -695,8 +696,9 @@ class ImageViewerInputMixin:
                     self.setCursor(Qt.CursorShape.BlankCursor)
                 scene_pos = self.mapToScene(event.position().toPoint())
                 # Extract and update magnified region
-                # Get current zoom from view transform (most accurate)
-                current_zoom = self.transform().m11()
+                # Get current zoom from authoritative scalar (not from matrix m11,
+                # which would be incorrect when rotation is active)
+                current_zoom = self.current_zoom
                 # Magnifier zoom is 2.0x the current view zoom
                 magnifier_zoom = 2.0 * current_zoom
                 # Extract region size calculation for 2.0x zoom
@@ -984,3 +986,53 @@ class ImageViewerInputMixin:
             self.files_dropped.emit(paths)
         
         event.acceptProposedAction()
+
+    # ------------------------------------------------------------------ #
+    # Edge-reveal slider — hover / leave helpers
+    # ------------------------------------------------------------------ #
+
+    def _update_slider_visibility_from_mouse(self, pos) -> None:
+        """
+        Show or schedule-hide the slice/frame slider overlay based on
+        how close the mouse pointer is to the right edge of the viewport.
+
+        Args:
+            pos: QPoint in viewport coordinates (from event.position().toPoint()).
+        """
+        ACTIVATION_ZONE_PX = 28
+        overlay = self._slider_overlay  # type: ignore[attr-defined]
+
+        # If slider has only one slice it is intentionally hidden
+        if overlay.maximum() <= 1:
+            return
+
+        vp_width = self.viewport().width()
+        dist_from_right = vp_width - pos.x()
+
+        # Check if pointer is currently over the overlay widget itself
+        if overlay.is_interacting():
+            overlay.keep_visible()
+            return
+
+        if overlay.isVisible() and overlay.geometry().contains(pos):
+            overlay.keep_visible()
+            return
+
+        if dist_from_right <= ACTIVATION_ZONE_PX:
+            overlay.reveal()
+        elif overlay.isVisible():
+            overlay.schedule_hide()
+
+    def leaveEvent(self, event) -> None:  # noqa: N802
+        """
+        Schedule the slice/frame slider overlay to hide when the mouse
+        leaves the viewport entirely.
+        """
+        super().leaveEvent(event)
+        overlay = getattr(self, "_slider_overlay", None)
+        if (
+            overlay is not None
+            and overlay.isVisible()
+            and not overlay.is_interacting()
+        ):
+            overlay.schedule_hide()

@@ -21,6 +21,7 @@ from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QPen, QColor, QFont, QPainter, QTransform
 from typing import Optional, Dict, List, Tuple, Callable
 from utils.config_manager import ConfigManager
+from gui.view_transform_helpers import graphics_view_uniform_zoom
 from utils.debug_flags import DEBUG_CROSSHAIR
 
 
@@ -60,8 +61,7 @@ class DraggableCrosshairText(QGraphicsTextItem):
                     text_pos = self.pos()
                     
                     # Convert scene coordinates to viewport pixels
-                    view_scale = view.transform().m11()
-                    scene_to_viewport_scale = view_scale if view_scale > 0 else 1.0
+                    scene_to_viewport_scale = graphics_view_uniform_zoom(view)
                     
                     # Calculate offset from crosshair position in viewport pixels
                     offset_x = (text_pos.x() - crosshair_pos.x()) * scene_to_viewport_scale
@@ -222,9 +222,8 @@ class CrosshairItem(QGraphicsItemGroup):
             return
         
         # Convert viewport offset to scene coordinates
-        view_scale = view.transform().m11()
-        scene_to_viewport_scale = view_scale if view_scale > 0 else 1.0
-        viewport_to_scene_scale = 1.0 / scene_to_viewport_scale if scene_to_viewport_scale > 0 else 1.0
+        scene_to_viewport_scale = graphics_view_uniform_zoom(view)
+        viewport_to_scene_scale = 1.0 / scene_to_viewport_scale
         
         offset_x_scene = self.text_offset_viewport[0] * viewport_to_scene_scale
         offset_y_scene = self.text_offset_viewport[1] * viewport_to_scene_scale

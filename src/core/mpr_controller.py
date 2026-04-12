@@ -35,7 +35,7 @@ import copy
 
 import numpy as np
 from PIL import Image
-from PySide6.QtCore import QObject
+from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QDialog, QMessageBox, QProgressDialog
 
 from core.mpr_builder import MprBuilder, MprBuilderWorker, MprResult
@@ -176,7 +176,16 @@ class MprController(QObject):
         mpr_result (MprResult):  The current MprResult.
         mpr_orientation (str):   Human-readable label ("Axial", etc.)
         mpr_slice_index (int):   Current MPR stack index (0-based).
+
+    Signals:
+        mpr_activated(int):  Emitted with the subwindow index after MPR is
+                             successfully loaded and the first slice displayed.
+        mpr_cleared(int):    Emitted with the subwindow index after MPR state
+                             has been fully removed from that subwindow.
     """
+
+    mpr_activated = Signal(int)  # subwindow index
+    mpr_cleared = Signal(int)    # subwindow index
 
     def __init__(self, app: Any) -> None:
         """
@@ -403,6 +412,15 @@ class MprController(QObject):
             # Dot indicators are non-critical; ignore failures here.
             pass
 
+        try:
+            refresh_window_slot_map = getattr(
+                self._app, "_refresh_window_slot_map_widgets", None
+            )
+            if callable(refresh_window_slot_map):
+                refresh_window_slot_map()
+        except Exception:
+            pass
+
         # Slice location lines on *other* panes still reference the former MPR source
         # index until the coordinator recomputes segments (otherwise stale lines remain).
         try:
@@ -411,6 +429,9 @@ class MprController(QObject):
                 line_coord.refresh_all()
         except Exception:
             pass
+
+        # Notify observers (e.g. series navigator thumbnail) that MPR was cleared.
+        self.mpr_cleared.emit(idx)
 
     def display_mpr_slice(self, idx: int, slice_index: int) -> None:
         """
@@ -469,8 +490,13 @@ class MprController(QObject):
         else:
             array = raw_array.astype(np.float32)
 
-        # Determine window/level from controls (or fall back to data min/max).
-        wc, ww = self._get_window_level(wl_controls, array)
+        # Determine window/level from this pane's stored MPR state first so a new
+        # MPR does not inherit stale toolbar values from another series/window.
+        wc, ww = self._get_preferred_mpr_window_level(
+            view_state_manager,
+            wl_controls,
+            array,
+        )
 
         pil_image = self._array_to_pil(array, wc, ww)
         if pil_image is None:
@@ -903,6 +929,9 @@ class MprController(QObject):
             if callable(sync):
                 sync(data)
 
+        # Notify observers (e.g. series navigator thumbnail) that MPR is active.
+        self.mpr_activated.emit(idx)
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
@@ -1140,10 +1169,6 @@ class MprController(QObject):
                 if image_viewer is not None:
                     image_viewer.set_rescale_toggle_state(use_rescaled_default)
 
-            # Toolbar W/L only for the focused pane (shared global controls).
-            if idx != focused or wl_controls is None:
-                return
-
             # Try to get presets first
             presets = get_window_level_presets_from_dataset(
                 source_dataset, rescale_slope, rescale_intercept
@@ -1159,6 +1184,13 @@ class MprController(QObject):
                 )
 
             if wc is not None and ww is not None and ww > 0:
+                if view_state_manager is not None:
+                    view_state_manager.current_window_center = wc
+                    view_state_manager.current_window_width = ww
+                    view_state_manager.window_level_user_modified = False
+                # Toolbar W/L is shared, so only sync it when this pane is focused.
+                if idx != focused or wl_controls is None:
+                    return
                 unit = None
                 if rescale_slope is not None and rescale_intercept is not None:
                     unit = rescale_type
@@ -1166,6 +1198,26 @@ class MprController(QObject):
                 _mpr_log(f"Reset W/L for MPR: center={wc:.1f} width={ww:.1f} rescaled={is_rescaled}")
         except Exception as exc:
             print(f"[MprController] Failed to reset W/L for MPR in window {idx}: {exc}")
+
+    @staticmethod
+    def _get_preferred_mpr_window_level(view_state_manager, wl_controls, array: np.ndarray):
+        """
+        Return the window/level to use for MPR display.
+
+        Preference order:
+        1. The target pane's own stored window/level in ``ViewStateManager``.
+        2. The shared toolbar controls (focused pane behavior).
+        3. Auto window/level from the current pixel data.
+        """
+        if view_state_manager is not None:
+            try:
+                wc = float(view_state_manager.current_window_center)
+                ww = float(view_state_manager.current_window_width)
+                if ww > 0:
+                    return wc, ww
+            except (AttributeError, TypeError, ValueError):
+                pass
+        return MprController._get_window_level(wl_controls, array)
 
     @staticmethod
     def _get_window_level(wl_controls, array: np.ndarray):

@@ -27,6 +27,7 @@ from typing import List, Optional, Tuple, Dict, Callable
 import math
 
 from utils.dicom_utils import format_distance, get_pixel_spacing
+from gui.view_transform_helpers import graphics_view_uniform_zoom
 from utils.debug_flags import DEBUG_MEASUREMENT_SERIES
 from tools.measurement_items import DraggableMeasurementText, MeasurementHandle, MeasurementItem
 from utils.bundled_fonts import make_qfont
@@ -284,11 +285,7 @@ class MeasurementTool:
                 # Offset is in scene coordinates, convert to viewport pixels for storage
                 view = temp_measurement_ref['measurement'].scene().views()[0] if temp_measurement_ref['measurement'].scene() and temp_measurement_ref['measurement'].scene().views() else None
                 if view is not None:
-                    view_scale = view.transform().m11()
-                    if view_scale > 0:
-                        scene_to_viewport_scale = view_scale
-                    else:
-                        scene_to_viewport_scale = 1.0
+                    scene_to_viewport_scale = graphics_view_uniform_zoom(view)
                 else:
                     scene_to_viewport_scale = 1.0
                 

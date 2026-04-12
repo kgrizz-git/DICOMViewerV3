@@ -8,6 +8,12 @@ views' slice planes on the current image. Lines zoom and pan with the image
 Line colors match the subwindow dot colors from navigator_colors (blue, green,
 orange, magenta) so each window's line is visually associated with its dot.
 
+Each segment dict produced by slice_location_line_helper contains:
+    source_idx – used for colour (0–3, wraps if ≥ 4)
+    line_id    – unique string key for the QGraphicsLineItem.
+                 Middle mode:    "middle:<source_idx>"
+                 Begin/end mode: "begin:<source_idx>" / "end:<source_idx>"
+
 Inputs:
     - Scene reference
     - Segment descriptors from slice_location_line_helper
@@ -60,6 +66,13 @@ class SliceLocationLineManager:
 
     Lines are drawn in scene coordinates (pixel coords = scene coords when
     image is at origin) so they zoom and pan with the image.
+
+    Each line item is keyed by ``line_id`` from the segment descriptor.
+    In middle mode line_id == source_idx (single line per source).
+    In begin_end mode there are two line_ids per source:
+        source_idx * 100 + 1  (begin boundary)
+        source_idx * 100 + 2  (end boundary)
+    Color for all lines from the same source is determined by source_idx.
     """
 
     def __init__(self, scene: Optional[QGraphicsScene] = None) -> None:
@@ -71,7 +84,10 @@ class SliceLocationLineManager:
                   set via set_scene or update_lines.
         """
         self._scene = scene
-        self._line_items: Dict[int, QGraphicsLineItem] = {}  # source_idx -> item
+        # Keyed by line_id rather than source_idx so that begin/end mode can
+        # maintain two distinct items per source subwindow without colliding
+        # with middle-mode keys.
+        self._line_items: Dict[str, QGraphicsLineItem] = {}
 
     def set_scene(self, scene: Optional[QGraphicsScene]) -> None:
         """Set or clear the scene. Clears existing items if scene changes."""
@@ -83,13 +99,16 @@ class SliceLocationLineManager:
         """Return True if the manager has a valid scene."""
         return self._scene is not None
 
-    def update_lines(self, segments: List[dict[str, Any]]) -> None:
+    def update_lines(self, segments: List[Dict[str, Any]]) -> None:
         """
         Update line items to match the given segments.
 
-        Removes items for sources no longer present; adds or updates items
-        for each segment. Segments are dicts with keys: source_idx, col1,
-        row1, col2, row2.
+        Removes items for line_ids no longer present; adds or updates items
+        for each segment.  Each segment dict must contain:
+            source_idx – integer 0–3 for colour selection.
+            line_id    – unique string key (defaults to "middle:<source_idx>"
+                         when absent for backward compatibility).
+            col1, row1, col2, row2 – pixel endpoint coordinates.
 
         Args:
             segments: List of segment descriptors from get_slice_location_line_segments.
@@ -97,23 +116,28 @@ class SliceLocationLineManager:
         if self._scene is None:
             return
 
-        seen_sources: set[int] = set()
+        seen_ids: set[int] = set()
         for seg in segments:
             source_idx = seg.get("source_idx", -1)
+            # line_id defaults to a mode-safe middle key for backward compatibility
+            # with any caller that omits it.
+            line_id: str = str(seg.get("line_id", f"middle:{source_idx}"))
             col1 = seg.get("col1", 0)
             row1 = seg.get("row1", 0)
             col2 = seg.get("col2", 0)
             row2 = seg.get("row2", 0)
-            seen_sources.add(source_idx)
+            seen_ids.add(line_id)
 
-            item = self._line_items.get(source_idx)
+            item = self._line_items.get(line_id)
             if item is not None and not isValid(item):
                 # Underlying C++ item was destroyed (e.g. scene cleared); drop it.
-                self._line_items.pop(source_idx, None)
+                self._line_items.pop(line_id, None)
                 item = None
 
             if item is not None:
                 item.setLine(col1, row1, col2, row2)
+                color = _color_for_source(source_idx)
+                item.setPen(QPen(QColor(*color), _LINE_WIDTH))
             else:
                 item = QGraphicsLineItem(col1, row1, col2, row2)
                 color = _color_for_source(source_idx)
@@ -123,12 +147,12 @@ class SliceLocationLineManager:
                 item.setFlag(item.GraphicsItemFlag.ItemIsSelectable, False)
                 item.setFlag(item.GraphicsItemFlag.ItemIsFocusable, False)
                 self._scene.addItem(item)
-                self._line_items[source_idx] = item
+                self._line_items[line_id] = item
 
-        # Remove items for sources no longer in segments.
-        for src in list(self._line_items.keys()):
-            if src not in seen_sources:
-                item = self._line_items.pop(src)
+        # Remove items for line_ids no longer in segments.
+        for lid in list(self._line_items.keys()):
+            if lid not in seen_ids:
+                item = self._line_items.pop(lid)
                 if not isValid(item):
                     continue
                 if self._scene and item.scene() == self._scene:
@@ -146,8 +170,8 @@ class SliceLocationLineManager:
     def set_visible(self, visible: bool) -> None:
         """Show or hide all line items without recomputing."""
         # Filter out any items whose underlying C++ objects have been destroyed.
-        for src, item in list(self._line_items.items()):
+        for lid, item in list(self._line_items.items()):
             if not isValid(item):
-                self._line_items.pop(src, None)
+                self._line_items.pop(lid, None)
                 continue
             item.setVisible(visible)

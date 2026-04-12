@@ -79,6 +79,7 @@ class OverlaySettingsDialog(QDialog):
         self._original_minor_tick_interval_mm = config_manager.get_scale_markers_minor_tick_interval_mm()
         self._original_show_scale_markers = config_manager.get_show_scale_markers()
         self._original_show_direction_labels = config_manager.get_show_direction_labels()
+        self._original_slice_location_line_mode = config_manager.get_slice_location_line_mode()
 
         if DEBUG_FONT_VARIANT:
             debug_log(
@@ -108,6 +109,7 @@ class OverlaySettingsDialog(QDialog):
         self.direction_label_size_spinbox.valueChanged.connect(self._on_live_update)
         self.major_tick_interval_spinbox.valueChanged.connect(self._on_live_update)
         self.minor_tick_interval_spinbox.valueChanged.connect(self._on_live_update)
+        self.slice_line_mode_combo.currentIndexChanged.connect(self._on_live_update)
 
     def _create_ui(self) -> None:
         """Create the UI components."""
@@ -214,6 +216,28 @@ class OverlaySettingsDialog(QDialog):
         viewer_overlay_group.setLayout(viewer_overlay_layout)
         layout.addWidget(viewer_overlay_group)
 
+        # Slice Position Lines group
+        slice_lines_group = QGroupBox("Slice Position Lines")
+        slice_lines_layout = QFormLayout()
+
+        self.slice_line_mode_combo = QComboBox()
+        self.slice_line_mode_combo.addItem("Middle of Slice", "middle")
+        self.slice_line_mode_combo.addItem("Begin and End of Slice (Slab Boundaries)", "begin_end")
+        slice_lines_layout.addRow("Slice Position Line Mode:", self.slice_line_mode_combo)
+
+        mode_help = QLabel(
+            "<small>Middle: one line at the centre plane. "
+            "Begin/End: two lines at the slab boundaries "
+            "(±½ slice thickness); falls back to Middle "
+            "when thickness data is unavailable.</small>"
+        )
+        mode_help.setWordWrap(True)
+        mode_help.setTextFormat(Qt.TextFormat.RichText)
+        slice_lines_layout.addRow(mode_help)
+
+        slice_lines_group.setLayout(slice_lines_layout)
+        layout.addWidget(slice_lines_group)
+
         layout.addStretch()
 
         # Buttons
@@ -270,6 +294,12 @@ class OverlaySettingsDialog(QDialog):
         r, g, b = self.config_manager.get_scale_markers_color()
         self._update_scale_markers_color_display(r, g, b)
         self.current_scale_markers_color = (r, g, b)
+
+        self.slice_line_mode_combo.blockSignals(True)
+        current_mode = self.config_manager.get_slice_location_line_mode()
+        mode_idx = self.slice_line_mode_combo.findData(current_mode)
+        self.slice_line_mode_combo.setCurrentIndex(mode_idx if mode_idx >= 0 else 0)
+        self.slice_line_mode_combo.blockSignals(False)
 
     def _populate_variant_combo(self, family: str, current_variant: str = "Bold") -> None:
         """Repopulate the variant combo for *family*, preserving the selection when possible."""
@@ -392,12 +422,15 @@ class OverlaySettingsDialog(QDialog):
         self.config_manager.set_direction_labels_color(r, g, b)
         r, g, b = self.current_scale_markers_color
         self.config_manager.set_scale_markers_color(r, g, b)
+        mode = self.slice_line_mode_combo.currentData()
+        if mode:
+            self.config_manager.set_slice_location_line_mode(mode)
         self.settings_changed.emit()
 
     def _apply_settings(self) -> None:
+        """Persist settings, emit settings_applied, and close the dialog."""
         self.config_manager.set_show_direction_labels(self.show_direction_labels_checkbox.isChecked())
         self.config_manager.set_show_scale_markers(self.show_scale_markers_checkbox.isChecked())
-        """Persist settings, emit settings_applied, and close the dialog."""
         self.config_manager.set_overlay_font_size(self.font_size_spinbox.value())
         self.config_manager.set_overlay_font_family(self.font_family_combo.currentText())
         self.config_manager.set_overlay_font_variant(self.font_variant_combo.currentText())
@@ -410,13 +443,16 @@ class OverlaySettingsDialog(QDialog):
         self.config_manager.set_direction_labels_color(r, g, b)
         r, g, b = self.current_scale_markers_color
         self.config_manager.set_scale_markers_color(r, g, b)
+        mode = self.slice_line_mode_combo.currentData()
+        if mode:
+            self.config_manager.set_slice_location_line_mode(mode)
         self.settings_applied.emit()
         self.accept()
 
     def reject(self) -> None:
+        """Restore original values on Cancel so the live preview is reverted."""
         self.config_manager.set_show_direction_labels(self._original_show_direction_labels)
         self.config_manager.set_show_scale_markers(self._original_show_scale_markers)
-        """Restore original values on Cancel so the live preview is reverted."""
         self.config_manager.set_overlay_font_size(self._original_font_size)
         self.config_manager.set_overlay_font_family(self._original_font_family)
         self.config_manager.set_overlay_font_variant(self._original_font_variant)
@@ -429,5 +465,6 @@ class OverlaySettingsDialog(QDialog):
         self.config_manager.set_direction_label_size(self._original_direction_label_size)
         self.config_manager.set_scale_markers_major_tick_interval_mm(self._original_major_tick_interval_mm)
         self.config_manager.set_scale_markers_minor_tick_interval_mm(self._original_minor_tick_interval_mm)
+        self.config_manager.set_slice_location_line_mode(self._original_slice_location_line_mode)
         self.settings_changed.emit()
         super().reject()

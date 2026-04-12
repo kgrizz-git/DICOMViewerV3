@@ -839,6 +839,8 @@ class SliceDisplayManager:
                     series_inverted = self.view_state_manager.get_series_inversion_state(series_identifier)
                     # Pass inversion state for new slice
                     apply_inversion = series_inverted
+                # Restore per-series flip/rotation orientation (or reset to default)
+                self.view_state_manager.restore_orientation(series_identifier)
             # When preserve_view=True (scrolling), apply_inversion stays None
             # This allows set_image() to detect it's a new slice and store new original_image
             

@@ -27,6 +27,7 @@ from typing import Optional
 
 from gui.image_viewer import ImageViewer
 from gui.style_constants import FOCUS_BORDER_COLOR
+from gui.mpr_thumbnail_widget import MPR_ASSIGN_MIME
 
 
 def _parse_series_drop_mime(text: str) -> tuple[str, int, str]:
@@ -78,6 +79,8 @@ class SubWindowContainer(QFrame):
     assign_series_requested = Signal(str, int, str)
     context_menu_requested = Signal()  # Emitted when context menu is requested
     expand_to_1x1_requested = Signal()  # Emitted when user double-clicks on image/background to expand this pane to 1x1
+    # Emitted when an MPR thumbnail is dragged onto this container; payload is the *source* subwindow index.
+    mpr_focus_requested = Signal(int)
     
     def __init__(self, image_viewer: ImageViewer, parent=None):
         """
@@ -308,53 +311,71 @@ class SubWindowContainer(QFrame):
     
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         """
-        Handle drag enter event - accept series UID drops.
+        Handle drag enter event - accept series UID drops and MPR thumbnail drops.
         
         Args:
             event: Drag enter event
         """
-        if event.mimeData().hasText():
-            text = event.mimeData().text()
+        mime = event.mimeData()
+        if mime.hasFormat(MPR_ASSIGN_MIME):
+            event.acceptProposedAction()
+            return
+        if mime.hasText():
+            text = mime.text()
             if text.startswith("series_uid:") or text.startswith("dv3_assign\t"):
                 event.acceptProposedAction()
                 return
-        
         event.ignore()
-    
+
     def dragMoveEvent(self, event: QDragMoveEvent) -> None:
         """
-        Handle drag move event - accept series UID drops.
+        Handle drag move event - accept series UID drops and MPR thumbnail drops.
         
         Args:
             event: Drag move event
         """
-        if event.mimeData().hasText():
-            text = event.mimeData().text()
+        mime = event.mimeData()
+        if mime.hasFormat(MPR_ASSIGN_MIME):
+            event.acceptProposedAction()
+            return
+        if mime.hasText():
+            text = mime.text()
             if text.startswith("series_uid:") or text.startswith("dv3_assign\t"):
                 event.acceptProposedAction()
                 return
-        
         event.ignore()
-    
+
     def dropEvent(self, event: QDropEvent) -> None:
         """
-        Handle drop event - assign series to this subwindow.
+        Handle drop event - assign series to this subwindow, or focus an MPR
+        subwindow when an MPR thumbnail is dropped here.
         
         Args:
             event: Drop event
         """
-        if not event.mimeData().hasText():
+        mime = event.mimeData()
+
+        # MPR thumbnail drop: focus the source MPR subwindow.
+        if mime.hasFormat(MPR_ASSIGN_MIME):
+            try:
+                source_idx = int(mime.data(MPR_ASSIGN_MIME).data().decode("ascii"))
+                self.mpr_focus_requested.emit(source_idx)
+                event.acceptProposedAction()
+            except Exception:
+                event.ignore()
+            return
+
+        if not mime.hasText():
             event.ignore()
             return
-        
-        text = event.mimeData().text()
+
+        text = mime.text()
         series_uid, slice_index, study_uid = _parse_series_drop_mime(text)
         if not series_uid:
             event.ignore()
             return
 
         self.assign_series_requested.emit(series_uid, slice_index, study_uid)
-        
         event.acceptProposedAction()
     
     def set_assigned_series(self, series_uid: Optional[str], slice_index: int = 0) -> None:

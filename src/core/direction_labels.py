@@ -110,3 +110,48 @@ def compute_direction_labels_from_iop(
         "top": label_lps_direction_vector(-col, threshold=threshold),
         "bottom": label_lps_direction_vector(col, threshold=threshold),
     }
+
+
+def apply_orientation_to_labels(
+    labels: Dict[str, str],
+    flip_h: bool,
+    flip_v: bool,
+    rotation_deg: int,
+) -> Dict[str, str]:
+    """
+    Remap direction labels to match a flip + rotation display transform.
+
+    The remapping order mirrors ``_apply_view_transform``: rotation is applied
+    first (positive angle = clockwise), then horizontal and/or vertical flip.
+
+    Args:
+        labels:       Base ``{top, bottom, left, right}`` label dict.
+        flip_h:       Horizontal flip (mirror left ↔ right).
+        flip_v:       Vertical flip (mirror top ↔ bottom).
+        rotation_deg: Rotation in degrees; only multiples of 90 are meaningful.
+                      Positive = clockwise (matching Qt convention).
+
+    Returns:
+        New label dict with keys ``top``, ``bottom``, ``left``, ``right``.
+    """
+    t, b, l, r = labels["top"], labels["bottom"], labels["left"], labels["right"]
+
+    # --- Rotation (CW positive) ---
+    rot = int(rotation_deg) % 360
+    if rot == 90:
+        # Each pixel at screen-left came from image-bottom, etc.
+        # new_top=old_left, new_right=old_top, new_bottom=old_right, new_left=old_bottom
+        t, b, l, r = l, r, b, t
+    elif rot == 180:
+        t, b, l, r = b, t, r, l
+    elif rot == 270:
+        # new_top=old_right, new_right=old_bottom, new_bottom=old_left, new_left=old_top
+        t, b, l, r = r, l, t, b
+
+    # --- Flips (applied after rotation) ---
+    if flip_h:
+        l, r = r, l
+    if flip_v:
+        t, b = b, t
+
+    return {"top": t, "bottom": b, "left": l, "right": r}

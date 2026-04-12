@@ -31,6 +31,7 @@ from utils.dicom_utils import get_patient_tag_keywords
 from utils.bundled_fonts import make_qfont
 from gui.overlay_text_builder import get_corner_text, get_modality, get_overlay_text
 from gui.overlay_items_factory import create_graphics_overlay_text_item
+from gui.view_transform_helpers import graphics_view_uniform_zoom
 from utils.debug_flags import DEBUG_WIDGET_PAN
 
 # MPR top-centre banner: keep below "Show Direction Labels" top edge text (~16px + font).
@@ -609,15 +610,9 @@ class OverlayManager:
         # This is needed for converting viewport pixel dimensions to scene coordinates
         # when using ItemIgnoresTransformations
         if view is not None:
-            # Get the scale factor from the view's transform
-            # m11() gives the horizontal scale factor
-            view_scale = view.transform().m11()
-            if view_scale > 0:
-                # Convert viewport pixels to scene coordinates
-                # If view is zoomed 2x, 1 viewport pixel = 0.5 scene units
-                viewport_to_scene_scale = 1.0 / view_scale
-            else:
-                viewport_to_scene_scale = 1.0
+            # Use uniform zoom (not m11): rotation / flip break m11 as a scalar.
+            view_scale = graphics_view_uniform_zoom(view)
+            viewport_to_scene_scale = 1.0 / view_scale
         else:
             viewport_to_scene_scale = 1.0
         
@@ -1039,12 +1034,9 @@ class OverlayManager:
         
         margin = 10  # Margin in viewport pixels
         
-        # Calculate viewport-to-scene scale factor
-        view_scale = view.transform().m11()
-        if view_scale > 0:
-            viewport_to_scene_scale = 1.0 / view_scale
-        else:
-            viewport_to_scene_scale = 1.0
+        # Uniform zoom — m11() is wrong under rotation / horizontal flip
+        view_scale = graphics_view_uniform_zoom(view)
+        viewport_to_scene_scale = 1.0 / view_scale
         
         # Convert margin from viewport pixels to scene coordinates
         margin_scene = margin * viewport_to_scene_scale

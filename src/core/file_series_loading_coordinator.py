@@ -699,6 +699,9 @@ class FileSeriesLoadingCoordinator:
 
         # Update dot indicators to reflect the new subwindow assignment
         app.series_navigator.set_subwindow_assignments(app._get_subwindow_assignments())
+        refresh_window_slot_map = getattr(app, "_refresh_window_slot_map_widgets", None)
+        if callable(refresh_window_slot_map):
+            refresh_window_slot_map()
 
         # Refresh slice location lines when series assignment changes.
         app._slice_sync_coordinator.invalidate_cache()

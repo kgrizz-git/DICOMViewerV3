@@ -6,6 +6,7 @@ Persists settings for the anatomic slice-sync feature:
   - user-defined linked groups (list of lists of subwindow indices)
   - slice location lines visibility (default: off)
   - slice location lines same-group-only (default: True when sync enabled)
+  - slice location lines display mode (default: "middle")
 
 Mixin contract:
     Expects ``self.config`` (dict) and ``self.save_config()`` from ConfigManager.
@@ -19,6 +20,8 @@ slice_sync_groups   : list of list[int]  – each inner list is one linked group
 slice_location_lines_visible : bool  – show slice location lines across views (default False)
 slice_location_lines_same_group_only : bool  – only show lines from same linked group (default False)
 slice_location_lines_focused_only : bool  – only show lines from the focused subwindow (default False)
+slice_location_line_mode : str  – display mode: "middle" (single center line, default) or
+                                  "begin_end" (two lines at slab boundary planes at ±SliceThickness/2)
 """
 
 from typing import Any, Callable, List, cast
@@ -157,3 +160,29 @@ class SliceSyncConfigMixin:
         """
         self._config()["slice_location_lines_focused_only"] = bool(focused_only)
         self._save_config()
+
+    def get_slice_location_line_mode(self) -> str:
+        """
+        Return slice position line rendering mode.
+
+        "middle"    – (default) draw a single line at the center of the slice/slab.
+        "begin_end" – draw two lines at the slab boundaries (±SliceThickness/2
+                      from the center).  Falls back to "middle" if thickness is
+                      unavailable for a given source view.
+
+        Returns:
+            "middle" or "begin_end".
+        """
+        value = self._config().get("slice_location_line_mode", "middle")
+        return value if value in ("middle", "begin_end") else "middle"
+
+    def set_slice_location_line_mode(self, mode: str) -> None:
+        """
+        Set slice position line rendering mode and persist.
+
+        Args:
+            mode: "middle" or "begin_end".  Invalid values are ignored.
+        """
+        if mode in ("middle", "begin_end"):
+            self._config()["slice_location_line_mode"] = mode
+            self._save_config()

@@ -126,12 +126,14 @@ class MainWindow(QMainWindow):
     smooth_when_zoomed_toggled = Signal(bool)  # Emitted when smooth-when-zoomed is toggled (True = enabled)
     scale_markers_toggled = Signal(bool)  # Emitted when scale markers are toggled (True = enabled)
     direction_labels_toggled = Signal(bool)  # Emitted when direction labels are toggled (True = enabled)
+    slice_slider_toggled = Signal(bool)  # Emitted when in-view slice/frame slider is toggled (True = enabled)
     show_instances_separately_toggled = Signal(bool)  # Emitted when multi-frame instance expansion is toggled
     slice_sync_toggled = Signal(bool)  # Emitted when slice sync enabled state changes (True = enabled)
     slice_sync_manage_requested = Signal()  # Emitted when "Manage Sync Groups…" is chosen
     slice_location_lines_toggled = Signal(bool)  # Emitted when slice location lines toggle (True = show)
     slice_location_lines_same_group_only_toggled = Signal(bool)  # Emitted when same-group-only toggle changes (True = only same group)
     slice_location_lines_focused_only_toggled = Signal(bool)  # Emitted when focused-only toggle changes (True = only focused window)
+    slice_location_lines_mode_toggled = Signal(str)  # Emitted when line mode changes ("middle" or "begin_end")
     about_this_file_requested = Signal()  # Emitted when About this File is requested
     histogram_requested = Signal()  # Emitted when Histogram dialog is requested
     export_roi_statistics_requested = Signal()  # Emitted when Export ROI Statistics is requested
@@ -144,6 +146,14 @@ class MainWindow(QMainWindow):
     acr_ct_phantom_requested = Signal()  # Emitted when ACR CT (pylinac) analysis is requested
     acr_mri_phantom_requested = Signal()  # Emitted when ACR MRI Large (pylinac) analysis is requested
 
+    # Orientation (flip / rotate) signals — emitted by View menu; connected to focused viewer handlers
+    orientation_flip_h_requested = Signal()       # Flip horizontally
+    orientation_flip_v_requested = Signal()       # Flip vertically
+    orientation_rotate_cw_requested = Signal()    # Rotate 90° clockwise
+    orientation_rotate_ccw_requested = Signal()   # Rotate 90° counter-clockwise
+    orientation_rotate_180_requested = Signal()   # Rotate 180°
+    orientation_reset_requested = Signal()        # Reset to default orientation
+
     # Filled by build_menu_bar in _create_menu_bar (Optional until menu is built).
     recent_menu: Optional[QMenu] = None
     light_theme_action: Optional[QAction] = None
@@ -152,6 +162,7 @@ class MainWindow(QMainWindow):
     smooth_when_zoomed_action: Optional[QAction] = None
     scale_markers_action: Optional[QAction] = None
     direction_labels_action: Optional[QAction] = None
+    slice_slider_action: Optional[QAction] = None
     show_instances_separately_action: Optional[QAction] = None
     show_left_pane_action: Optional[QAction] = None
     show_right_pane_action: Optional[QAction] = None
@@ -161,6 +172,7 @@ class MainWindow(QMainWindow):
     slice_location_lines_enable_action: Optional[QAction] = None
     slice_location_lines_same_group_only_action: Optional[QAction] = None
     slice_location_lines_focused_only_action: Optional[QAction] = None
+    slice_location_lines_show_slab_bounds_action: Optional[QAction] = None
     copy_annotation_action: Optional[QAction] = None
     paste_annotation_action: Optional[QAction] = None
     undo_tag_edit_action: Optional[QAction] = None
@@ -503,6 +515,14 @@ class MainWindow(QMainWindow):
         self.direction_labels_action.setChecked(checked)
         self.direction_labels_action.blockSignals(False)
 
+    def set_slice_slider_checked(self, checked: bool) -> None:
+        """Sync the View menu Show In-View Slice/Frame Slider action check state without emitting triggered."""
+        if self.slice_slider_action is None:
+            return
+        self.slice_slider_action.blockSignals(True)
+        self.slice_slider_action.setChecked(checked)
+        self.slice_slider_action.blockSignals(False)
+
     def _on_show_instances_separately_toggled(self, checked: bool) -> None:
         """Handle the View menu toggle for multi-frame instance expansion."""
         self.config_manager.set_show_instances_separately(checked)
@@ -523,7 +543,7 @@ class MainWindow(QMainWindow):
         self.show_instances_separately_action.setEnabled(enabled)
 
     def set_slice_location_lines_checked(self, checked: bool) -> None:
-        """Sync the View menu Show Lines → Enable/Disable action check state without emitting triggered."""
+        """Sync the View menu Show Slice Location Lines → Enable/Disable action check state without emitting triggered."""
         if self.slice_location_lines_enable_action is None:
             return
         self.slice_location_lines_enable_action.blockSignals(True)
@@ -531,7 +551,7 @@ class MainWindow(QMainWindow):
         self.slice_location_lines_enable_action.blockSignals(False)
 
     def set_slice_location_lines_same_group_only_checked(self, checked: bool) -> None:
-        """Sync the View menu Show Lines → Only Show For Same Group action check state without emitting triggered."""
+        """Sync the View menu Show Slice Location Lines → Only Show For Same Group action check state without emitting triggered."""
         if self.slice_location_lines_same_group_only_action is None:
             return
         self.slice_location_lines_same_group_only_action.blockSignals(True)
@@ -539,12 +559,24 @@ class MainWindow(QMainWindow):
         self.slice_location_lines_same_group_only_action.blockSignals(False)
 
     def set_slice_location_lines_focused_only_checked(self, checked: bool) -> None:
-        """Sync the View menu Show Lines → Show Only For Focused Window action check state without emitting triggered."""
+        """Sync the View menu Show Slice Location Lines → Show Only For Focused Window action check state without emitting triggered."""
         if self.slice_location_lines_focused_only_action is None:
             return
         self.slice_location_lines_focused_only_action.blockSignals(True)
         self.slice_location_lines_focused_only_action.setChecked(checked)
         self.slice_location_lines_focused_only_action.blockSignals(False)
+
+    def set_slice_location_lines_slab_bounds_checked(self, mode: str) -> None:
+        """Sync the View menu slab-bounds action check state without emitting triggered.
+
+        Args:
+            mode: "middle" or "begin_end".  Action is checked when mode == "begin_end".
+        """
+        if self.slice_location_lines_show_slab_bounds_action is None:
+            return
+        self.slice_location_lines_show_slab_bounds_action.blockSignals(True)
+        self.slice_location_lines_show_slab_bounds_action.setChecked(mode == "begin_end")
+        self.slice_location_lines_show_slab_bounds_action.blockSignals(False)
 
     def _update_privacy_mode_button(self) -> None:
         """Update privacy mode button text and appearance based on current state."""
@@ -1044,14 +1076,34 @@ class MainWindow(QMainWindow):
             # Only show context menu if it's a recent file action (has data)
             if action is not None and action.data():
                 file_path = action.data()
+                recent_files = self.config_manager.get_recent_files()
+                file_idx = recent_files.index(file_path) if file_path in recent_files else -1
+
                 # Create context menu
                 context_menu = QMenu(self)
+
+                move_up_action = QAction("Move Up", self)
+                move_up_action.setEnabled(file_idx > 0)
+                move_up_action.triggered.connect(
+                    lambda checked=False, fp=file_path: self._move_recent_file(fp, direction="up")
+                )
+                context_menu.addAction(move_up_action)
+
+                move_down_action = QAction("Move Down", self)
+                move_down_action.setEnabled(0 <= file_idx < len(recent_files) - 1)
+                move_down_action.triggered.connect(
+                    lambda checked=False, fp=file_path: self._move_recent_file(fp, direction="down")
+                )
+                context_menu.addAction(move_down_action)
+
+                context_menu.addSeparator()
+
                 remove_action = QAction("Remove", self)
                 remove_action.triggered.connect(
-                    lambda: self._remove_recent_file(file_path)
+                    lambda checked=False, fp=file_path: self._remove_recent_file(fp)
                 )
                 context_menu.addAction(remove_action)
-                
+
                 # Show context menu at the cursor position
                 context_menu.exec(context_event.globalPos())
                 return True
@@ -1067,7 +1119,21 @@ class MainWindow(QMainWindow):
         """
         self.config_manager.remove_recent_file(file_path)
         self._update_recent_menu()
-    
+
+    def _move_recent_file(self, file_path: str, direction: str) -> None:
+        """
+        Move a recent file one position up or down in the recent files list.
+
+        Args:
+            file_path: Path of the recent file entry to move
+            direction: "up" to move toward the top, "down" to move toward the bottom
+        """
+        if direction == "up":
+            self.config_manager.move_recent_file_up(file_path)
+        else:
+            self.config_manager.move_recent_file_down(file_path)
+        self._update_recent_menu()
+
     def update_recent_menu(self) -> None:
         """
         Public method to update recent menu (called from outside).

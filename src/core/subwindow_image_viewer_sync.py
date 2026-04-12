@@ -31,11 +31,13 @@ def apply_initial_image_viewer_display_state(app: Any) -> None:
     One pass per viewer: same property order as the former six sequential loops
     in ``DICOMViewerApp._post_init_subwindows_and_handlers`` (privacy, slice sync,
     smooth zoom, scale markers, direction labels, then colors/sizes/ticks).
+    Also applies the slice-slider enabled state from config.
     """
     sync_enabled = app.config_manager.get_slice_sync_enabled()
     smooth = app.config_manager.get_smooth_image_when_zoomed()
     show_scale = app.config_manager.get_show_scale_markers()
     show_direction = app.config_manager.get_show_direction_labels()
+    show_slice_slider = app.config_manager.get_show_slice_slider()
     sm_color = app.config_manager.get_scale_markers_color()
     dir_color = app.config_manager.get_direction_labels_color()
     dir_size = app.config_manager.get_direction_label_size()
@@ -48,6 +50,7 @@ def apply_initial_image_viewer_display_state(app: Any) -> None:
         viewer.set_smooth_when_zoomed_state(smooth)
         viewer.set_scale_markers_state(show_scale)
         viewer.set_direction_labels_state(show_direction)
+        viewer.set_slice_slider_enabled(show_slice_slider)
         viewer.set_scale_markers_color_state(sm_color)
         viewer.set_direction_labels_color_state(dir_color)
         viewer.set_direction_label_size_state(dir_size)
@@ -77,3 +80,9 @@ def set_scale_markers_color_all(app: Any, rgb: Tuple[int, int, int]) -> None:
 def set_direction_labels_color_all(app: Any, rgb: Tuple[int, int, int]) -> None:
     for viewer in _iter_image_viewers(app):
         viewer.set_direction_labels_color_state(rgb)
+
+
+def set_slice_slider_all(app: Any, enabled: bool) -> None:
+    """Propagate the slice/frame slider enabled state to every subwindow ImageViewer."""
+    for viewer in _iter_image_viewers(app):
+        viewer.set_slice_slider_enabled(enabled)
