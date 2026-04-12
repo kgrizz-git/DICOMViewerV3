@@ -14,6 +14,7 @@ description: "Guides security scanning (semgrep, grype, secret checks) and recor
 | CI/CD misuse, dangerous patterns | Review `.github/workflows/` | Pin actions, least privilege, no plaintext secrets. |
 | Repo secrets | `trufflehog`, `gitleaks` | Run read-only; redact findings in summaries. |
 | Dependency advisories | `pip audit`, `npm audit`, OSV, vendor advisories | Cross-check with trusted upstream docs. |
+| Agent / MCP vulnerabilities | `uvx snyk-agent-scan@latest` | Use `--skills` flag to scan agent skills as well. |
 
 Run only what is **installed or available** in the environment; if a tool is missing, say so and suggest install or CI addition—do not fabricate scan output.
 

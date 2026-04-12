@@ -67,17 +67,6 @@ Instead, for each security/safety scan:
 6. **Analyze code flow** - Trace execution paths to understand how data flows and where vulnerabilities might exist
 7. **Consider attack scenarios** - Think like an attacker: what could go wrong?
 
-### Local CLI Tooling During Scan
-
-Run local CLI security tools as part of every scan and record their output or summarized findings in the timestamped scan copy.
-
-- **Semgrep**: `./venv/Scripts/semgrep.exe --config=p/security-audit --config=p/owasp-top-ten src`
-- **Detect-secrets**: `./venv/Scripts/detect-secrets.exe scan src`
-- **TruffleHog v3**: `./tools/security/trufflehog/trufflehog.exe filesystem . --no-update --json`
-- **Project helper**: `./venv/Scripts/python.exe scripts/run_security_scan.py --all`
-
-If one of these tools is missing, document that gap in the scan results and either install it before finishing the scan or note why the scan is partial.
-
 ---
 
 ## Severity Ratings
@@ -268,7 +257,6 @@ Use these severity ratings when documenting findings:
 - [ ] **Test**: Review log output for sensitive information
 - [ ] **Verify**: Logging doesn't create denial-of-service vulnerability (log flooding)
 - [ ] **Check**: Logs are rotated and have size limits
-- [ ] **Run**: Local scan helper `./venv/Scripts/python.exe scripts/run_security_scan.py --all` and record Semgrep, Detect-secrets, and TruffleHog results in the timestamped scan file
 
 ---
 
@@ -448,7 +436,248 @@ jobs:
 
 ---
 
-#### 11.3 GitHub Dependabot
+#### 11.3 Secret Detection Tools
+
+**GitLeaks**
+
+[GitLeaks](https://github.com/gitleaks/gitleaks) is a fast, lightweight secret scanner designed to prevent hardcoded secrets from being committed to repositories. It's particularly effective as a pre-commit hook.
+
+**Running GitLeaks locally:**
+```bash
+# Install (if not already installed)
+brew install gitleaks
+# or: go install github.com/gitleaks/gitleaks/v8/cmd/gitleaks@latest
+
+# Scan current repository
+gitleaks detect
+
+# Scan with verbose output
+gitleaks detect -v
+
+# Scan specific directory
+gitleaks detect --source=/path/to/repo
+
+# Generate SARIF for GitHub Security tab
+gitleaks detect --format=sarif --report-path=gitleaks-results.sarif
+```
+
+**Pre-commit hook setup:**
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.16.0
+    hooks:
+      - id: gitleaks
+```
+
+**Checklist:**
+- [ ] **Run**: `gitleaks detect` and review all findings
+- [ ] **Verify**: No secrets are present in current codebase
+- [ ] **Check**: GitLeaks is configured as pre-commit hook
+- [ ] **Test**: Attempt to commit a test secret and verify it's blocked
+- [ ] **Consider**: Adding custom regex patterns for proprietary secret formats
+
+---
+
+**TruffleHog**
+
+[TruffleHog](https://github.com/trufflesecurity/trufflehog) is a comprehensive secret scanner with high-entropy detection and an extensive pattern library. It's particularly good at finding secrets that don't match known patterns.
+
+**Running TruffleHog locally:**
+```bash
+# Install (if not already installed)
+pip install trufflehog
+# or: go install github.com/trufflesecurity/trufflehog/v3/cmd/trufflehog@latest
+
+# Scan current repository (including full history)
+trufflehog filesystem .
+
+# Scan only uncommitted changes
+trufflehog git .
+
+# Scan with specific rulesets
+trufflehog filesystem . --rules=/path/to/custom/rules
+
+# Output as JSON
+trufflehog filesystem . --json
+```
+
+**Checklist:**
+- [ ] **Run**: `trufflehog filesystem .` and review all findings
+- [ ] **Verify**: Git history scan doesn't reveal old secrets
+- [ ] **Check**: False positive rate is manageable
+- [ ] **Consider**: Using TruffleHog for comprehensive scans, GitLeaks for pre-commit
+- [ ] **Test**: Verify custom detection rules work for proprietary secrets
+---
+
+#### 11.4 Infrastructure as Code Security
+
+**Checkov**
+
+[Checkov](https://github.com/bridgecrewio/checkov) prevents cloud misconfigurations by scanning Terraform, Kubernetes, CloudFormation, and other infrastructure-as-code files.
+
+**Running Checkov locally:**
+```bash
+# Install (if not already installed)
+pip install checkov
+
+# Scan Terraform files
+checkov -d .
+
+# Scan Kubernetes manifests
+checkov -d . --framework kubernetes
+
+# Scan Docker files
+checkov -d . --framework dockerfile
+
+# Skip specific checks
+checkov -d . --skip-check CKV_AWS_1,CKV_AWS_2
+
+# Output as JSON/SARIF
+checkov -d . --output json
+checkov -d . --output sarif
+```
+
+**Pre-commit hook setup:**
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/bridgecrewio/checkov
+    rev: '3.0.0'
+    hooks:
+      - id: checkov
+```
+
+**Checklist:**
+- [ ] **Run**: `checkov -d .` and review all failed checks
+- [ ] **Verify**: No CRITICAL or HIGH severity IaC misconfigurations
+- [ ] **Check**: All cloud resources follow security best practices
+- [ ] **Test**: Infrastructure changes pass Checkov scans before deployment
+- [ ] **Consider**: Adding custom policies for organization-specific requirements
+
+---
+
+**Trivy**
+
+[Trivy](https://github.com/aquasecurity/trivy) is a comprehensive scanner that finds vulnerabilities in dependencies, containers, and infrastructure configurations.
+
+**Running Trivy locally:**
+```bash
+# Install (if not already installed)
+brew install trivy
+# or: apt-get install trivy
+
+# Scan file system for vulnerabilities
+trivy fs .
+
+# Scan container image
+trivy image nginx:latest
+
+# Scan repository for IaC issues
+trivy config .
+
+# Scan with severity filter
+trivy fs . --severity HIGH,CRITICAL
+
+# Output as JSON/SARIF
+trivy fs . --format json -o trivy-results.json
+```
+
+**Checklist:**
+- [ ] **Run**: `trivy fs .` and review all findings
+- [ ] **Run**: `trivy config .` for IaC security issues
+- [ ] **Verify**: No CRITICAL vulnerabilities in dependencies
+- [ ] **Check**: Container images are scanned before deployment
+- [ ] **Consider**: Using Trivy as unified scanner (deps + containers + IaC)
+---
+
+#### 11.5 Python Type Checking
+
+**Pyright / BasedPyright**
+
+[Pyright](https://github.com/microsoft/pyright) is a fast Python type checker with excellent IDE integration. [BasedPyright](https://github.com/detachhead/basedpyright) is a community fork with additional features.
+
+**Running locally:**
+```bash
+# Install Pyright
+npm install -g pyright
+# or: pip install basedpyright
+
+# Run type checking
+pyright .
+basedpyright .
+
+# Run in strict mode
+pyright --strict .
+basedpyright --strict .
+
+# Generate JSON report
+pyright --outputjson > pyright-results.json
+```
+
+**VS Code setup:**
+```json
+// settings.json
+{
+  "python.defaultInterpreterPath": "./venv/bin/python",
+  "pyright.configPath": "./pyproject.toml",
+  "basedpyright.configPath": "./pyproject.toml"
+}
+```
+
+**Checklist:**
+- [ ] **Run**: `pyright .` and fix all type errors
+- [ ] **Verify**: Strict type checking is enabled for new code
+- [ ] **Check**: Type hints are added to security-sensitive functions
+- [ ] **Test**: Type errors are caught in CI/CD pipeline
+- [ ] **Consider**: Using BasedPyright for additional features
+
+---
+
+**Mypy**
+
+[Mypy](https://github.com/python/mypy) is the original Python type checker and reference implementation of PEP 484.
+
+**Running locally:**
+```bash
+# Install (if not already installed)
+pip install mypy
+
+# Run type checking
+mypy .
+
+# Run in strict mode
+mypy --strict .
+
+# Check specific file
+mypy security_module.py
+
+# Generate JSON report
+mypy --json-report mypy-report .
+```
+
+**Pre-commit hook setup:**
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.3.0
+    hooks:
+      - id: mypy
+        additional_dependencies: [types-all]
+```
+
+**Checklist:**
+- [ ] **Run**: `mypy .` and review all type errors
+- [ ] **Verify**: Security functions have proper type annotations
+- [ ] **Check**: Mypy configuration is optimized for the project
+- [ ] **Test**: Type checking runs in CI/CD pipeline
+- [ ] **Consider**: Using Pyright for better performance, Mypy for strict compliance
+
+---
+
+#### 11.6 GitHub Dependabot
 
 [Dependabot](https://docs.github.com/en/code-security/dependabot) is GitHub's built-in dependency management service. It monitors dependencies for known vulnerabilities (Dependabot **security alerts**) and optionally opens automated PRs to keep dependencies up to date (Dependabot **version updates**).
 
@@ -500,7 +729,7 @@ updates:
 
 ---
 
-#### 11.4 GitHub Advanced Security (Free on Public Repositories)
+#### 11.7 GitHub Advanced Security (Free on Public Repositories)
 
 [GitHub Advanced Security (GHAS)](https://docs.github.com/en/get-started/learning-about-github/about-github-advanced-security) provides a suite of security features built directly into GitHub. All features are **free for public repositories**; private repositories require a paid GHAS license.
 
@@ -557,6 +786,26 @@ jobs:
 - [ ] **Check**: No suppressed/dismissed alerts without a documented justification
 - [ ] **Verify**: SARIF results from Semgrep or Grype are uploaded to the Security tab for a unified view
 - [ ] **Consider**: Enabling the security policy (`SECURITY.md`) for responsible disclosure guidance
+
+---
+
+#### 11.8 Agent and MCP Security (Snyk Agent Scan)
+
+[Snyk Agent Scan](https://github.com/snyk/agent-scan) is a security CLI tool designed to audit AI agents, Model Context Protocol (MCP) servers, and agent skills for vulnerabilities such as prompt injection, tool poisoning, and malicious code.
+
+**Running locally:**
+```bash
+# Run standard scan for discovered MCPs
+uvx snyk-agent-scan@latest
+
+# Run scan specifically checking agent skills as well
+uvx snyk-agent-scan@latest --skills
+```
+
+**Checklist:**
+- [ ] **Run**: `uvx snyk-agent-scan@latest --skills` and review all findings
+- [ ] **Verify**: No prompt injection or tool poisoning risks found
+- [ ] **Check**: Inspect new MCP tools and skills before enabling them
 
 ---
 
