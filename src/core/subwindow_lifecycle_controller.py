@@ -55,6 +55,9 @@ class SubwindowLifecycleController:
         self._histogram_slots: Dict[int, Any] = {}  # id(image_viewer) -> callable
         self._mpr_open_slots: Dict[int, Any] = {}   # id(image_viewer) -> callable
         self._mpr_clear_slots: Dict[int, Any] = {}  # id(image_viewer) -> callable
+        self._clear_window_slots: Dict[int, Any] = {}  # id(image_viewer) -> callable
+        self._cine_toggle_slots: Dict[int, Any] = {}  # id(image_viewer) -> callable
+        self._cine_stop_slots: Dict[int, Any] = {}  # id(image_viewer) -> callable
         # Single restartable timer for 100ms viewport-resized callback; coalesces rapid layout changes.
         self._viewport_resized_timer: Optional[QTimer] = None
 
@@ -573,6 +576,28 @@ class SubwindowLifecycleController:
                         image_viewer.window_slot_map_popup_requested.disconnect(app._on_window_slot_map_popup_requested)
                     except (TypeError, RuntimeError):
                         pass
+                    if vid in self._clear_window_slots:
+                        try:
+                            image_viewer.clear_window_content_requested.disconnect(
+                                self._clear_window_slots[vid]
+                            )
+                        except (TypeError, RuntimeError):
+                            pass
+                        del self._clear_window_slots[vid]
+                    if vid in self._cine_toggle_slots:
+                        try:
+                            image_viewer.cine_play_pause_toggle_requested.disconnect(
+                                self._cine_toggle_slots[vid]
+                            )
+                        except (TypeError, RuntimeError):
+                            pass
+                        del self._cine_toggle_slots[vid]
+                    if vid in self._cine_stop_slots:
+                        try:
+                            image_viewer.cine_stop_requested.disconnect(self._cine_stop_slots[vid])
+                        except (TypeError, RuntimeError):
+                            pass
+                        del self._cine_stop_slots[vid]
 
                 image_viewer.files_dropped.connect(app._open_files_from_paths)
                 image_viewer.layout_change_requested.connect(app._on_layout_change_requested)
@@ -614,6 +639,24 @@ class SubwindowLifecycleController:
                 subwindow.expand_to_1x1_requested.connect(app._on_expand_to_1x1_requested)
                 image_viewer.swap_view_requested.connect(app._on_swap_view_requested)
                 image_viewer.window_slot_map_popup_requested.connect(app._on_window_slot_map_popup_requested)
+
+                clear_window_slot = lambda i=idx: app._on_clear_subwindow_content_requested(i)
+                image_viewer.clear_window_content_requested.connect(clear_window_slot)
+                self._clear_window_slots[vid] = clear_window_slot
+                image_viewer.get_clear_this_window_enabled_callback = lambda i=idx: (
+                    app.subwindow_data.get(i, {}).get("current_dataset") is not None
+                    or bool(app.subwindow_data.get(i, {}).get("is_mpr"))
+                )
+                image_viewer.get_cine_loop_state_callback = (
+                    lambda: app.cine_app_facade.get_cine_loop_state()
+                )
+                image_viewer.get_cine_is_playing_callback = lambda: app.cine_player.is_playing
+                cine_toggle_slot = lambda: app.cine_app_facade.on_cine_play_pause_toggle()
+                cine_stop_slot = lambda: app.cine_app_facade.on_cine_stop()
+                image_viewer.cine_play_pause_toggle_requested.connect(cine_toggle_slot)
+                image_viewer.cine_stop_requested.connect(cine_stop_slot)
+                self._cine_toggle_slots[vid] = cine_toggle_slot
+                self._cine_stop_slots[vid] = cine_stop_slot
 
                 # MPR view actions.
                 if hasattr(app, "_mpr_controller"):

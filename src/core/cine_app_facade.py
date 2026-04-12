@@ -101,6 +101,14 @@ class CineAppFacade:
     def on_cine_pause(self) -> None:
         self._app.cine_player.pause_playback()
 
+    def on_cine_play_pause_toggle(self) -> None:
+        """Context menu / single-button toggle: pause if playing, else play."""
+        app = self._app
+        if app.cine_player.is_playing:
+            self.on_cine_pause()
+        else:
+            self.on_cine_play()
+
     def on_cine_stop(self) -> None:
         self._app.cine_player.stop_playback()
 

@@ -58,8 +58,9 @@ class ImageViewer(ImageViewerInputMixin, ImageViewerViewMixin, QGraphicsView):
     series_navigation_requested = Signal(int)  # Emitted when series navigation is requested (-1 for left/previous, 1 for right/next)
     toggle_series_navigator_requested = Signal()  # Emitted when series navigator toggle is requested
     window_level_preset_selected = Signal(int)  # Emitted when preset is selected (preset_index)
-    cine_play_requested = Signal()  # Emitted when cine play is requested from context menu
-    cine_pause_requested = Signal()  # Emitted when cine pause is requested from context menu
+    cine_play_requested = Signal()  # Legacy; context menu uses cine_play_pause_toggle_requested
+    cine_pause_requested = Signal()  # Legacy; context menu uses cine_play_pause_toggle_requested
+    cine_play_pause_toggle_requested = Signal()  # Single play/pause action for context menu
     cine_stop_requested = Signal()  # Emitted when cine stop is requested from context menu
     cine_loop_toggled = Signal(bool)  # Emitted when cine loop is toggled from context menu (True = enabled)
     histogram_requested = Signal()  # Emitted when histogram dialog is requested from context menu
@@ -104,6 +105,7 @@ class ImageViewer(ImageViewerInputMixin, ImageViewerViewMixin, QGraphicsView):
     window_slot_map_popup_requested = Signal()  # Emitted when user requests window-slot map popup from Swap menu
     create_mpr_view_requested = Signal()  # Emitted when "Create MPR view…" is chosen from context menu
     clear_mpr_view_requested = Signal()  # Emitted when "Clear MPR view" is chosen from context menu
+    clear_window_content_requested = Signal()  # Clear this pane only; subwindow_index identifies target
 
     @property
     def scene(self) -> QGraphicsScene:  # pyright: ignore[reportIncompatibleMethodOverride]
@@ -208,6 +210,10 @@ class ImageViewer(ImageViewerInputMixin, ImageViewerViewMixin, QGraphicsView):
         
         # Callback to get cine loop state (set from main.py)
         self.get_cine_loop_state_callback: Optional[Callable[[], bool]] = None
+        # Whether cine is currently playing (for context menu play/pause label)
+        self.get_cine_is_playing_callback: Optional[Callable[[], bool]] = None
+        # Whether this pane has content that Clear This Window can remove
+        self.get_clear_this_window_enabled_callback: Optional[Callable[[], bool]] = None
         self.get_available_series_callback: Optional[Callable[[], List[Tuple[str, str]]]] = None
 
         # Slice-location line visibility (optional; filled by app for context menu sync)

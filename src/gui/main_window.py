@@ -667,7 +667,7 @@ class MainWindow(QMainWindow):
     <li>Reset view to fit viewport</li>
     <li>Intensity projections: Combine slices (AIP, MIP, MinIP)</li>
     <li>Image inversion (I key)</li>
-    <li>Cine Playback: Automatic frame-by-frame playback for multi-frame DICOM series with play/pause/stop controls, adjustable speed, and loop option</li>
+    <li>Cine Playback: Automatic frame-by-frame playback for multi-frame DICOM series with a play/pause toggle, stop, adjustable speed, and loop option</li>
     <li>Image Fusion: Overlay functional imaging (PET/SPECT) on anatomical imaging (CT/MR) with automatic spatial alignment, adjustable opacity/threshold/colormap, and 2D/3D resampling modes</li>
     </ul>
     <h4>Analysis Tools:</h4>

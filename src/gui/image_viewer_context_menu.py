@@ -391,6 +391,18 @@ def show_image_background_context_menu_on_right_release(viewer: Any, event: Any)
 
         # Note: Checkmarks will be updated by main.py based on current layout
 
+        clear_cb = getattr(viewer, "get_clear_this_window_enabled_callback", None)
+        if clear_cb is not None:
+            clear_window_action = context_menu.addAction("Clear This Window")
+            clear_window_action.setToolTip(
+                "Remove the series from this pane only; studies and series stay in the navigator."
+            )
+            try:
+                clear_window_action.setEnabled(bool(clear_cb()))
+            except Exception:
+                clear_window_action.setEnabled(False)
+            clear_window_action.triggered.connect(viewer.clear_window_content_requested.emit)
+
         # MPR view actions (Create or Clear, depending on current mode).
         context_menu.addSeparator()
         _is_mpr = False
@@ -456,11 +468,17 @@ def show_image_background_context_menu_on_right_release(viewer: Any, event: Any)
 
         # Cine playback actions (only if enabled)
         if viewer.cine_controls_enabled:
-            cine_play_action = context_menu.addAction("▶ Play Cine")
-            cine_play_action.triggered.connect(viewer.cine_play_requested.emit)
-
-            cine_pause_action = context_menu.addAction("⏸ Pause Cine")
-            cine_pause_action.triggered.connect(viewer.cine_pause_requested.emit)
+            playing = False
+            gcp = getattr(viewer, "get_cine_is_playing_callback", None)
+            if gcp is not None:
+                try:
+                    playing = bool(gcp())
+                except Exception:
+                    playing = False
+            pp_label = "⏸ Pause Cine" if playing else "▶ Play Cine"
+            cine_pp_action = context_menu.addAction(pp_label)
+            cine_pp_action.setToolTip("Play or pause cine playback (same as the left pane control)")
+            cine_pp_action.triggered.connect(viewer.cine_play_pause_toggle_requested.emit)
 
             cine_stop_action = context_menu.addAction("⏹ Stop Cine")
             cine_stop_action.triggered.connect(viewer.cine_stop_requested.emit)

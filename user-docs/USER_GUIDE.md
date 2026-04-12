@@ -10,6 +10,11 @@ This hub links topic guides for the application. **In the running app**, use **H
 | [USER_GUIDE_QA_PYLINAC.md](USER_GUIDE_QA_PYLINAC.md) | ACR CT / ACR MRI phantom analysis (pylinac), JSON/PDF, compare mode |
 | [IMAGE_FUSION_TECHNICAL_DOCUMENTATION.md](IMAGE_FUSION_TECHNICAL_DOCUMENTATION.md) | Image fusion (PET/SPECT on CT/MR): options, accuracy, algorithms |
 
+## General viewing (2D)
+
+- **Cine:** In the left pane **Cine Playback** group, use the **Play / Pause** toggle, **Stop**, and **Loop** (plus speed and frame slider). On multi-frame series, the image **right-click** menu offers the same play/pause toggle, stop, and loop when cine is available.
+- **Clear This Window:** **Right-click** the image background (not on an ROI) → **Clear This Window** removes the series from **that pane only**; loaded studies and series remain in the navigator.
+
 ## Source and versioning
 
 These files live in the repository under `user-docs/` and match the **main** branch on [GitHub](https://github.com/kgrizz-git/DICOMViewerV3). For release-specific behavior, check [CHANGELOG.md](../CHANGELOG.md).

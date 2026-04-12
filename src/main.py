@@ -1089,6 +1089,30 @@ class DICOMViewerApp(QObject):
             )
         return assignments
 
+    def _reset_fusion_handler_for_subwindow(self, idx: int) -> None:
+        """
+        Disable fusion and clear caches for one subwindow's FusionHandler only.
+
+        Does not change the shared fusion controls widget (that remains for
+        ``_reset_fusion_for_all_subwindows`` on full close/open).
+
+        Args:
+            idx: Zero-based subwindow index (0–3).
+        """
+        if idx not in self.subwindow_managers:
+            return
+        managers = self.subwindow_managers[idx]
+        fusion_handler = managers.get("fusion_handler")
+        if not fusion_handler:
+            return
+        fusion_handler.fusion_enabled = False
+        fusion_handler._slice_location_cache.clear()
+        fusion_handler._resampling_decision_cache = None
+        fusion_handler._resampling_decision_cache_key = None
+        fusion_handler.clear_alignment_cache()
+        if hasattr(fusion_handler, "image_resampler") and fusion_handler.image_resampler:
+            fusion_handler.image_resampler.clear_cache()
+
     def _clear_subwindow(self, idx: int) -> None:
         """
         Clear scene, overlays, ROIs, measurements, and annotations for a single
@@ -1100,6 +1124,8 @@ class DICOMViewerApp(QObject):
         Args:
             idx: Zero-based subwindow index (0–3).
         """
+        self._reset_fusion_handler_for_subwindow(idx)
+
         subwindow = self.multi_window_layout.get_subwindow(idx)
         if subwindow and subwindow.image_viewer:
             scene = subwindow.image_viewer.scene
@@ -1173,6 +1199,25 @@ class DICOMViewerApp(QObject):
         # Update shared ROI panels (focused subwindow now empty)
         self.roi_list_panel.update_roi_list('', '', 0)
         self.roi_statistics_panel.clear_statistics()
+
+    def _on_clear_subwindow_content_requested(self, idx: int) -> None:
+        """
+        Clear one image pane from the context menu; loaded studies/series are unchanged.
+
+        Args:
+            idx: Subwindow index (0–3) for the viewer that requested the action.
+        """
+        data = self.subwindow_data.get(idx, {})
+        if data.get("current_dataset") is None and not data.get("is_mpr"):
+            return
+        if idx == self.focused_subwindow_index and getattr(self, "cine_player", None):
+            self.cine_player.stop_playback()
+        if hasattr(self, "_mpr_controller") and data.get("is_mpr"):
+            self._mpr_controller.clear_mpr(idx)
+        self._clear_subwindow(idx)
+        if idx == self.focused_subwindow_index:
+            self._reset_focused_subwindow_state_after_close()
+        self.series_navigator.set_subwindow_assignments(self._get_subwindow_assignments())
 
     def _close_series(self, study_uid: str, series_key: str) -> None:
         """
@@ -1291,26 +1336,13 @@ class DICOMViewerApp(QObject):
     def _reset_fusion_for_all_subwindows(self) -> None:
         """
         Disable fusion and clear status for all subwindows.
-        
+
         This is called when files are closed or when new files are opened
         to ensure fusion is disabled and status messages are cleared.
         """
-        # Disable fusion in all handlers and clear caches
         for idx in self.subwindow_managers:
-            managers = self.subwindow_managers[idx]
-            fusion_handler = managers.get('fusion_handler')
-            if fusion_handler:
-                # Disable fusion in handler (prevents re-enabling on file load)
-                fusion_handler.fusion_enabled = False
-                # Clear all fusion caches
-                fusion_handler._slice_location_cache.clear()
-                fusion_handler._resampling_decision_cache = None
-                fusion_handler._resampling_decision_cache_key = None
-                fusion_handler.clear_alignment_cache()  # Clears all alignment cache entries
-                # Clear 3D resampling volume cache (this is the big one!)
-                if hasattr(fusion_handler, 'image_resampler') and fusion_handler.image_resampler:
-                    fusion_handler.image_resampler.clear_cache()  # Clears all cached volumes
-        
+            self._reset_fusion_handler_for_subwindow(idx)
+
         # Disable fusion in UI widget and clear status messages
         self.fusion_controls_widget.set_fusion_enabled(False)
         self.fusion_controls_widget.clear_status()

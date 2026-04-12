@@ -58,7 +58,8 @@ This file tracks active and near-term tasks.
 ## UX / Workflow
 
 - [ ] **[P1]** make slice display lines able to show middle of slice (or slab when combining) or begin and end of slice (or slab when combining)
-- [ ] **[P1]** No way to clear images/series from a given subwindow? Should be able to right-click and select "Clear Subwindow" or something (check whether in-app we call them windows or subwindows).
+- [x] **[P1]** Should be able to right-click and select "Clear Subwindow" or something (check whether in-app we call them windows or subwindows) to clear current images/series from a given subwindow. *(Done: **Clear This Window** in image context menu; in-app user strings use “Window”.)*
+- [ ] **[P1]** Add thumbnail for an MPR view in the navigator. Make it clickable and draggable like other thumbnails. Indicate it is an MPR in some way (like a little floating MPR tag similar to what is shown in the viewer but smaller).
 - [ ] **[P1]** Add option to have one large window on left and two smaller on right (above and below), or one large window on top and smaller on bottom (left and right), and maybe vice versa for each case. Make "2" key switch between 1x2 and 2x1, while "3" switches between different 3-window layouts just described.
 - [ ] **[P2]** Make window map thumbnail in navigator interactive (click square to focus and reveal) ([plan](plans/UX_IMPROVEMENTS_BATCH1_PLAN.md#1-window-map-thumbnail-interactive))
 - [ ] **[P2]** Make toolbar contents and ordering customizable ([plan](plans/UX_IMPROVEMENTS_BATCH1_PLAN.md#2-toolbar-customization))
