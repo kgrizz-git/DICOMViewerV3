@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from core.mpr_controller import MprController, apply_mpr_stack_combine
 from core.dicom_parser import DICOMParser
+from gui.overlay_manager import OverlayManager
 from gui.overlay_text_builder import get_corner_text
 
 
@@ -82,6 +83,21 @@ class TestMprOverlayHelpers(unittest.TestCase):
                 projection_type=mode,
             )
             self.assertIn(upper, text)
+
+    def test_overlay_text_visibility_helper_matches_spacebar_cycle(self):
+        overlay_manager = OverlayManager(use_widget_overlays=False)
+
+        self.assertTrue(overlay_manager.should_show_text_overlays())
+
+        overlay_manager.set_visibility_state(1)
+        self.assertFalse(overlay_manager.should_show_text_overlays())
+
+        overlay_manager.set_visibility_state(2)
+        self.assertFalse(overlay_manager.should_show_text_overlays())
+
+        overlay_manager.set_visibility_state(0)
+        overlay_manager.set_mode("hidden")
+        self.assertFalse(overlay_manager.should_show_text_overlays())
 
     def test_combine_then_rescale_matches_expected_math(self):
         stack = [

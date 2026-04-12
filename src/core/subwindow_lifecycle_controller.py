@@ -969,6 +969,18 @@ class SubwindowLifecycleController:
             lambda: app.view_state_manager.current_preset_index if app.view_state_manager else 0
         )
         if app.keyboard_event_handler:
+            app.keyboard_event_handler.roi_manager = app.roi_manager
+            app.keyboard_event_handler.measurement_tool = app.measurement_tool
+            app.keyboard_event_handler.overlay_manager = app.overlay_manager
+            app.keyboard_event_handler.clear_measurements_callback = (
+                app.measurement_coordinator.handle_clear_measurements
+            )
+            app.keyboard_event_handler.toggle_overlay_callback = (
+                app.overlay_coordinator.handle_toggle_overlay
+            )
+            app.keyboard_event_handler.delete_measurement_callback = (
+                app.measurement_coordinator.handle_measurement_delete_requested
+            )
             app.keyboard_event_handler.delete_all_rois_callback = app.roi_coordinator.delete_all_rois_current_slice
             app.keyboard_event_handler.invert_image_callback = app.image_viewer.invert_image
             if hasattr(app, 'text_annotation_coordinator') and app.text_annotation_coordinator:

@@ -394,6 +394,15 @@ class OverlayManager:
         """
         if mode in ["minimal", "detailed", "hidden"]:
             self.mode = mode
+
+    def should_show_text_overlays(self) -> bool:
+        """
+        Return True when metadata-style text overlays should be visible.
+
+        This covers both the regular corner text and the MPR banner so every
+        overlay entry point respects the same Spacebar visibility cycle.
+        """
+        return self.mode != "hidden" and self.visibility_state == 0
     
     def toggle_overlay_visibility(self) -> int:
         """
@@ -553,10 +562,7 @@ class OverlayManager:
         
         # Hide overlays based on visibility state
         # State 1 and 2 hide corner text overlays
-        if self.visibility_state in [1, 2]:
-            return []
-        
-        if self.mode == "hidden":
+        if not self.should_show_text_overlays():
             return []
         
         # Get modality and corner tags
@@ -787,12 +793,7 @@ class OverlayManager:
             Empty list (for compatibility with QGraphicsItem approach)
         """
         # Hide overlays based on visibility state
-        if self.visibility_state in [1, 2]:
-            if self.viewport_overlay_widget:
-                self.viewport_overlay_widget.clear_all()
-            return []
-        
-        if self.mode == "hidden":
+        if not self.should_show_text_overlays():
             if self.viewport_overlay_widget:
                 self.viewport_overlay_widget.clear_all()
             return []

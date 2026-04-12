@@ -35,7 +35,7 @@ This file tracks active and near-term tasks.
 - [x] **[P0]** "Close All" did not immediately clear all thumbnails in layout map - actually dragging and dropping a thumbnail into window did not make thumbnail appear in layout map either; had to click a diferent window first. *(Done: Added immediate window-slot map refresh after series assignment/drag-drop, focus/layout changes, and Close All so thumbnails and focus outlines update without requiring another click.)*
 - [x] **[P0]** Fusion seems to add two sets of scale markers? Or for some reason markers look too dense. Goes away when focusing on window, reappaears when unfocused. Appears (and disappears) on windows without fusion enabled as well (maybe only ones showing same series as fusion base or overlay). Actually this happened when first loading a US study with no pixel size data (and no markers displayed), then loading an MR study with pixel size data (and markers displayed on the US images subwindows while the MR image window was focused). Also happened with a CT study and MR study - took screenshots. *Seems fixed.*
 - [x] **[P1]** Fusion not working for T2 dual-echo as base series (QAMR) - no T1 overlay appears. It did after switching to T2 as overlay (still on T2) and then back to T1. *Seems fixed.*
-- [ ] **[P1]** Spacebar did not clear overlay on MPRs.
+- [x] **[P1]** Spacebar did not clear overlay on MPRs - actually only cleared on window 1.
 - [x] **[P0]** seems like creating MPR inherits window/level from last loaded series or currently focused series, not always the underlying native series. *(Done: MPR now resolves window/level from the target pane's stored source-series defaults before falling back to shared toolbar controls, so new MPRs no longer inherit stale values from another series/window.)*
 
 ## Performance / Packaging
@@ -96,6 +96,7 @@ This file tracks active and near-term tasks.
 - [ ] **[P2]** Add option to show # frames or slices in a series in navigator? 
 - [ ] **[P2]** Where is it getting frame rate from?
 - [ ] **[P1]** Should we block showing DICOM tags when an MPR window is selected (show just "MPR")? Or add some kind of warning that it is the underlying series data somehow?
+- [ ] **[P1]** Make spacebar cycle overlay visibility state on all windows?
 
 ## Features (Near-Term)
 

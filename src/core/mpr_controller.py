@@ -592,7 +592,10 @@ class MprController(QObject):
                     projection_type=combine_mode if combine_enabled else None,
                 )
                 if hasattr(overlay_manager, "set_mpr_banner"):
-                    overlay_manager.set_mpr_banner(self._build_mpr_banner_text(data))
+                    if getattr(overlay_manager, "should_show_text_overlays", lambda: True)():
+                        overlay_manager.set_mpr_banner(self._build_mpr_banner_text(data))
+                    else:
+                        overlay_manager.set_mpr_banner(None)
             except Exception as exc:
                 print(f"[MprController] Failed to refresh MPR overlay in window {idx}: {exc}")
 
@@ -912,7 +915,10 @@ class MprController(QObject):
         # Show MPR banner via OverlayManager.
         overlay_manager = managers.get("overlay_manager")
         if overlay_manager is not None and hasattr(overlay_manager, "set_mpr_banner"):
-            overlay_manager.set_mpr_banner(self._build_mpr_banner_text(data))
+            if getattr(overlay_manager, "should_show_text_overlays", lambda: True)():
+                overlay_manager.set_mpr_banner(self._build_mpr_banner_text(data))
+            else:
+                overlay_manager.set_mpr_banner(None)
 
         # Focus the subwindow so the user sees the result immediately.
         try:
