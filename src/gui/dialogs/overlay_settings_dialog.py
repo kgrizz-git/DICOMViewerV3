@@ -80,6 +80,9 @@ class OverlaySettingsDialog(QDialog):
         self._original_show_scale_markers = config_manager.get_show_scale_markers()
         self._original_show_direction_labels = config_manager.get_show_direction_labels()
         self._original_slice_location_line_mode = config_manager.get_slice_location_line_mode()
+        self._original_slice_location_line_width_px = (
+            config_manager.get_slice_location_line_width_px()
+        )
 
         if DEBUG_FONT_VARIANT:
             debug_log(
@@ -110,6 +113,7 @@ class OverlaySettingsDialog(QDialog):
         self.major_tick_interval_spinbox.valueChanged.connect(self._on_live_update)
         self.minor_tick_interval_spinbox.valueChanged.connect(self._on_live_update)
         self.slice_line_mode_combo.currentIndexChanged.connect(self._on_live_update)
+        self.slice_line_width_spinbox.valueChanged.connect(self._on_live_update)
 
     def _create_ui(self) -> None:
         """Create the UI components."""
@@ -225,6 +229,15 @@ class OverlaySettingsDialog(QDialog):
         self.slice_line_mode_combo.addItem("Begin and End of Slice (Slab Boundaries)", "begin_end")
         slice_lines_layout.addRow("Slice Position Line Mode:", self.slice_line_mode_combo)
 
+        self.slice_line_width_spinbox = QSpinBox()
+        self.slice_line_width_spinbox.setRange(1, 8)
+        self.slice_line_width_spinbox.setValue(1)
+        self.slice_line_width_spinbox.setToolTip(
+            "Stroke width in pixels for lines showing where other windows' "
+            "slice planes intersect this view (not DICOM slice thickness)."
+        )
+        slice_lines_layout.addRow("Slice Position Line Width (px):", self.slice_line_width_spinbox)
+
         mode_help = QLabel(
             "<small>Middle: one line at the centre plane. "
             "Begin/End: two lines at the slab boundaries "
@@ -300,6 +313,12 @@ class OverlaySettingsDialog(QDialog):
         mode_idx = self.slice_line_mode_combo.findData(current_mode)
         self.slice_line_mode_combo.setCurrentIndex(mode_idx if mode_idx >= 0 else 0)
         self.slice_line_mode_combo.blockSignals(False)
+
+        self.slice_line_width_spinbox.blockSignals(True)
+        self.slice_line_width_spinbox.setValue(
+            self.config_manager.get_slice_location_line_width_px()
+        )
+        self.slice_line_width_spinbox.blockSignals(False)
 
     def _populate_variant_combo(self, family: str, current_variant: str = "Bold") -> None:
         """Repopulate the variant combo for *family*, preserving the selection when possible."""
@@ -425,6 +444,9 @@ class OverlaySettingsDialog(QDialog):
         mode = self.slice_line_mode_combo.currentData()
         if mode:
             self.config_manager.set_slice_location_line_mode(mode)
+        self.config_manager.set_slice_location_line_width_px(
+            self.slice_line_width_spinbox.value()
+        )
         self.settings_changed.emit()
 
     def _apply_settings(self) -> None:
@@ -446,6 +468,9 @@ class OverlaySettingsDialog(QDialog):
         mode = self.slice_line_mode_combo.currentData()
         if mode:
             self.config_manager.set_slice_location_line_mode(mode)
+        self.config_manager.set_slice_location_line_width_px(
+            self.slice_line_width_spinbox.value()
+        )
         self.settings_applied.emit()
         self.accept()
 
@@ -466,5 +491,8 @@ class OverlaySettingsDialog(QDialog):
         self.config_manager.set_scale_markers_major_tick_interval_mm(self._original_major_tick_interval_mm)
         self.config_manager.set_scale_markers_minor_tick_interval_mm(self._original_minor_tick_interval_mm)
         self.config_manager.set_slice_location_line_mode(self._original_slice_location_line_mode)
+        self.config_manager.set_slice_location_line_width_px(
+            self._original_slice_location_line_width_px
+        )
         self.settings_changed.emit()
         super().reject()

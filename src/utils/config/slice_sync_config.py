@@ -22,6 +22,7 @@ slice_location_lines_same_group_only : bool  – only show lines from same linke
 slice_location_lines_focused_only : bool  – only show lines from the focused subwindow (default False)
 slice_location_line_mode : str  – display mode: "middle" (single center line, default) or
                                   "begin_end" (two lines at slab boundary planes at ±SliceThickness/2)
+slice_location_line_width_px : int  – pen width in pixels for slice position lines (1–8, default 1)
 """
 
 from typing import Any, Callable, List, cast
@@ -186,3 +187,21 @@ class SliceSyncConfigMixin:
         if mode in ("middle", "begin_end"):
             self._config()["slice_location_line_mode"] = mode
             self._save_config()
+
+    def get_slice_location_line_width_px(self) -> int:
+        """
+        Return stroke width (pixels) for slice position / intersection lines.
+
+        Clamped to 1–8 for sensible on-screen drawing.
+        """
+        try:
+            w = int(self._config().get("slice_location_line_width_px", 1))
+        except (TypeError, ValueError):
+            w = 1
+        return max(1, min(8, w))
+
+    def set_slice_location_line_width_px(self, width_px: int) -> None:
+        """Persist slice position line width (pixels), clamped to 1–8."""
+        w = max(1, min(8, int(width_px)))
+        self._config()["slice_location_line_width_px"] = w
+        self._save_config()

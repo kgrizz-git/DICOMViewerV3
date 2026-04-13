@@ -84,11 +84,17 @@ def _wire_dialog_signals(app: DICOMViewerApp) -> None:
     app.main_window.export_requested.connect(app._open_export)
     app.main_window.export_screenshots_requested.connect(app._open_export_screenshots)
     app.main_window.about_this_file_requested.connect(app._open_about_this_file)
+    app.main_window.create_mpr_view_requested.connect(
+        lambda: app._mpr_controller.open_mpr_dialog(app.get_focused_subwindow_index())
+    )
     # Series navigator close actions
     app.series_navigator.close_series_requested.connect(app._close_series)
     app.series_navigator.close_study_requested.connect(app._close_study)
     # MPR thumbnail clicks — focus the relevant subwindow.
     app.series_navigator.mpr_thumbnail_clicked.connect(app._on_mpr_thumbnail_clicked)
+    app.series_navigator.mpr_thumbnail_clear_requested.connect(
+        app._on_mpr_clear_from_navigator_thumbnail
+    )
 
 
 def _wire_undo_redo_and_annotation_signals(app: DICOMViewerApp) -> None:
@@ -166,6 +172,7 @@ def _wire_subwindow_signals(app: DICOMViewerApp) -> None:
     # MPR controller → navigator thumbnail.
     app._mpr_controller.mpr_activated.connect(app._update_mpr_navigator_thumbnail)
     app._mpr_controller.mpr_cleared.connect(app._clear_mpr_navigator_thumbnail)
+    app._mpr_controller.mpr_detached.connect(app._on_mpr_detached)
 
 
 def _wire_focused_subwindow_signals(app: DICOMViewerApp) -> None:

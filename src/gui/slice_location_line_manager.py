@@ -50,7 +50,7 @@ _SOURCE_COLORS: list[tuple[int, int, int]] = [
     _hex_to_rgb(SUBWINDOW_DOT_COLORS.get(i, "#2196F3"))
     for i in range(4)
 ]
-_LINE_WIDTH = 1
+_DEFAULT_LINE_WIDTH = 1
 _Z_VALUE = 100
 
 
@@ -88,6 +88,11 @@ class SliceLocationLineManager:
         # maintain two distinct items per source subwindow without colliding
         # with middle-mode keys.
         self._line_items: Dict[str, QGraphicsLineItem] = {}
+        self._line_width_px: int = _DEFAULT_LINE_WIDTH
+
+    def set_line_width_px(self, width_px: int) -> None:
+        """Set stroke width for slice position lines (1–8 pixels)."""
+        self._line_width_px = max(1, min(8, int(width_px)))
 
     def set_scene(self, scene: Optional[QGraphicsScene]) -> None:
         """Set or clear the scene. Clears existing items if scene changes."""
@@ -99,7 +104,11 @@ class SliceLocationLineManager:
         """Return True if the manager has a valid scene."""
         return self._scene is not None
 
-    def update_lines(self, segments: List[Dict[str, Any]]) -> None:
+    def update_lines(
+        self,
+        segments: List[Dict[str, Any]],
+        line_width_px: Optional[int] = None,
+    ) -> None:
         """
         Update line items to match the given segments.
 
@@ -112,11 +121,16 @@ class SliceLocationLineManager:
 
         Args:
             segments: List of segment descriptors from get_slice_location_line_segments.
+            line_width_px: Optional pen width override (pixels); defaults to last set width.
         """
         if self._scene is None:
             return
 
-        seen_ids: set[int] = set()
+        lw = self._line_width_px if line_width_px is None else max(1, min(8, int(line_width_px)))
+        if line_width_px is not None:
+            self._line_width_px = lw
+
+        seen_ids: set[str] = set()
         for seg in segments:
             source_idx = seg.get("source_idx", -1)
             # line_id defaults to a mode-safe middle key for backward compatibility
@@ -137,11 +151,11 @@ class SliceLocationLineManager:
             if item is not None:
                 item.setLine(col1, row1, col2, row2)
                 color = _color_for_source(source_idx)
-                item.setPen(QPen(QColor(*color), _LINE_WIDTH))
+                item.setPen(QPen(QColor(*color), lw))
             else:
                 item = QGraphicsLineItem(col1, row1, col2, row2)
                 color = _color_for_source(source_idx)
-                pen = QPen(QColor(*color), _LINE_WIDTH)
+                pen = QPen(QColor(*color), lw)
                 item.setPen(pen)
                 item.setZValue(_Z_VALUE)
                 item.setFlag(item.GraphicsItemFlag.ItemIsSelectable, False)

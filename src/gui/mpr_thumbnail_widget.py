@@ -38,7 +38,7 @@ from PySide6.QtGui import (
     QPainter,
     QPixmap,
 )
-from PySide6.QtWidgets import QWidget
+from PySide6.QtWidgets import QMenu, QWidget
 
 from gui.navigator_colors import SUBWINDOW_DOT_COLORS
 
@@ -65,6 +65,7 @@ class MprThumbnailWidget(QWidget):
 
     clicked = Signal(int)       # subwindow_index
     drag_started = Signal(int)  # subwindow_index
+    clear_mpr_requested = Signal(int)  # subwindow_index (-1 = detached)
 
     THUMBNAIL_SIZE: int = _THUMBNAIL_SIZE
 
@@ -77,12 +78,27 @@ class MprThumbnailWidget(QWidget):
         super().__init__(parent)
         self._subwindow_index: int = subwindow_index
         self._preview_pixmap: Optional[QPixmap] = None
-        self._dot_color: str = SUBWINDOW_DOT_COLORS.get(subwindow_index, "#2196F3")
+        self._dot_color: str = (
+            "#9E9E9E"
+            if subwindow_index < 0
+            else SUBWINDOW_DOT_COLORS.get(subwindow_index, "#2196F3")
+        )
         self._drag_start_pos: Optional[QPoint] = None
 
         self.setFixedSize(self.THUMBNAIL_SIZE, self.THUMBNAIL_SIZE)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setToolTip(f"MPR View — Window {subwindow_index + 1}\nClick to focus  |  Drag to assign")
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.customContextMenuRequested.connect(self._show_context_menu)
+        if subwindow_index < 0:
+            self.setToolTip(
+                "MPR — not assigned to a window\n"
+                "Drag onto an image pane to assign  |  Right-click: Clear MPR"
+            )
+        else:
+            self.setToolTip(
+                f"MPR View — Window {subwindow_index + 1}\n"
+                "Click to focus  |  Drag to move to another window  |  Right-click: Clear MPR"
+            )
 
     # ------------------------------------------------------------------
     # Public API
@@ -216,6 +232,18 @@ class MprThumbnailWidget(QWidget):
         painter.setBrush(QColor(self._dot_color))
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawEllipse(dot_x, dot_y, DOT_DIAMETER, DOT_DIAMETER)
+
+    # ------------------------------------------------------------------
+    # Context menu
+    # ------------------------------------------------------------------
+
+    def _show_context_menu(self, pos) -> None:
+        menu = QMenu(self)
+        clear_act = menu.addAction("Clear MPR")
+        clear_act.triggered.connect(
+            lambda: self.clear_mpr_requested.emit(self._subwindow_index)
+        )
+        menu.exec(self.mapToGlobal(pos))
 
     # ------------------------------------------------------------------
     # Mouse events

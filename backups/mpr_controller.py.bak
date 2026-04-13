@@ -186,9 +186,6 @@ class MprController(QObject):
 
     mpr_activated = Signal(int)  # subwindow index
     mpr_cleared = Signal(int)    # subwindow index
-    # Emitted when MPR is detached from a pane (Clear Window). Session stays
-    # alive; navigator stores it under key -1, laid out after the source series.
-    mpr_detached = Signal(int)  # former subwindow index
 
     def __init__(self, app: Any) -> None:
         """
@@ -200,8 +197,6 @@ class MprController(QObject):
         self._app = app
         self._workers: Dict[int, MprBuilderWorker] = {}  # idx → active worker
         self._cache: Optional[MprCache] = None
-        # MPR session detached from all panes (Clear Window); reassigned via drag-drop.
-        self._detached_mpr_payload: Optional[Dict[str, Any]] = None
         self._init_cache()
 
     # ------------------------------------------------------------------
@@ -284,19 +279,22 @@ class MprController(QObject):
         )
         dlg.exec()
 
-    def _cancel_mpr_worker(self, idx: int) -> None:
-        """Cancel and remove any in-progress MPR build for *idx*."""
+    def clear_mpr(self, idx: int) -> None:
+        """
+        Clear MPR mode from subwindow *idx* and restore normal display.
+
+        Cancels any in-progress build for this subwindow.
+
+        Args:
+            idx: Subwindow index to clear.
+        """
+        # Cancel any active build.
         worker = self._workers.pop(idx, None)
         if worker is not None:
             worker.cancel()
             worker.quit()
             worker.wait(2000)
 
-    def _tear_down_mpr_at_subwindow(self, idx: int) -> None:
-        """
-        Remove MPR keys from *idx*, restore the pre-MPR 2-D state (if any), and
-        refresh dependent UI. Does not emit signals.
-        """
         data = self._app.subwindow_data.get(idx)
         if data is None:
             return
@@ -304,6 +302,7 @@ class MprController(QObject):
         previous_state = data.get("mpr_previous_state")
         image_viewer = self._get_image_viewer(idx)
 
+        # Remove MPR-specific keys.
         for key in (
             "is_mpr",
             "mpr_result",
@@ -317,8 +316,10 @@ class MprController(QObject):
         ):
             data.pop(key, None)
 
+        # Re-enable tools.
         self._set_tools_enabled(idx, enabled=True)
 
+        # Reset the overlay banner.
         managers = self._app.subwindow_managers.get(idx, {})
         overlay_manager = managers.get("overlay_manager")
         if overlay_manager is not None and hasattr(overlay_manager, "set_mpr_banner"):
@@ -360,6 +361,8 @@ class MprController(QObject):
             data["current_series_uid"] = ""
             data["current_datasets"] = []
 
+        # If there was no prior regular-series state to restore, actively clear
+        # the view so the last rendered MPR slice does not remain visible.
         if data.get("current_dataset") is None and image_viewer is not None:
             try:
                 if overlay_manager is not None:
@@ -386,6 +389,7 @@ class MprController(QObject):
                 self._app.current_series_uid = ""
                 self._app.current_datasets = []
 
+        # Reset shared slice navigator if this is the focused window.
         try:
             if (
                 hasattr(self._app, "slice_navigator")
@@ -399,11 +403,13 @@ class MprController(QObject):
         except Exception:
             pass
 
+        # Update series navigator dot indicators now that this window's content changed.
         try:
             if hasattr(self._app, "series_navigator") and hasattr(self._app, "_get_subwindow_assignments"):
                 assignments = self._app._get_subwindow_assignments()
                 self._app.series_navigator.set_subwindow_assignments(assignments)
         except Exception:
+            # Dot indicators are non-critical; ignore failures here.
             pass
 
         try:
@@ -415,6 +421,8 @@ class MprController(QObject):
         except Exception:
             pass
 
+        # Slice location lines on *other* panes still reference the former MPR source
+        # index until the coordinator recomputes segments (otherwise stale lines remain).
         try:
             line_coord = getattr(self._app, "_slice_location_line_coordinator", None)
             if line_coord is not None:
@@ -422,230 +430,8 @@ class MprController(QObject):
         except Exception:
             pass
 
-        try:
-            sync = getattr(self._app, "_sync_navigation_slider_for_subwindow", None)
-            if callable(sync):
-                sync(idx)
-        except Exception:
-            pass
-
-    def clear_mpr(self, idx: int) -> None:
-        """
-        Clear MPR mode from subwindow *idx* and restore normal display.
-
-        Cancels any in-progress build for this subwindow.
-
-        Args:
-            idx: Subwindow index to clear.
-        """
-        self._cancel_mpr_worker(idx)
-        data = self._app.subwindow_data.get(idx)
-        if data is None:
-            return
-
-        self._tear_down_mpr_at_subwindow(idx)
+        # Notify observers (e.g. series navigator thumbnail) that MPR was cleared.
         self.mpr_cleared.emit(idx)
-
-    def has_detached_mpr(self) -> bool:
-        """Return True if an MPR session exists without an assigned subwindow."""
-        return self._detached_mpr_payload is not None
-
-    def clear_detached_mpr(self) -> None:
-        """Discard a detached (unassigned) MPR session."""
-        self._detached_mpr_payload = None
-
-    def get_detached_mpr_thumbnail_pixels(self, use_rescaled: bool) -> Optional[np.ndarray]:
-        """
-        Return a 2-D array for the navigator thumbnail of the detached MPR
-        session (mid-stack slice), or None if none.
-        """
-        payload = self._detached_mpr_payload
-        if not payload:
-            return None
-        result = payload.get("mpr_result")
-        if result is None:
-            return None
-        n_slices = int(getattr(result, "n_slices", 0) or 0)
-        if n_slices <= 0:
-            return None
-        mid = n_slices // 2
-        raw = apply_mpr_stack_combine(
-            result.slices,
-            mid,
-            enabled=bool(payload.get("mpr_combine_enabled", False)),
-            mode=str(payload.get("mpr_combine_mode", "aip") or "aip"),
-            n_planes=int(payload.get("mpr_combine_slice_count", 4) or 4),
-        )
-        if use_rescaled:
-            return result.apply_rescale(raw)
-        return raw.astype(np.float32)
-
-    def _capture_mpr_payload(self, idx: int) -> Optional[Dict[str, Any]]:
-        """Snapshot live MPR fields from *idx* for relocate / detach."""
-        data = self._app.subwindow_data.get(idx, {})
-        if not data.get("is_mpr") or data.get("mpr_result") is None:
-            return None
-        return {
-            "mpr_result": data["mpr_result"],
-            "mpr_orientation": data.get("mpr_orientation", ""),
-            "mpr_slice_index": int(data.get("mpr_slice_index", 0)),
-            "mpr_combine_enabled": bool(data.get("mpr_combine_enabled", False)),
-            "mpr_combine_mode": str(data.get("mpr_combine_mode", "aip") or "aip"),
-            "mpr_combine_slice_count": int(data.get("mpr_combine_slice_count", 4) or 4),
-            "mpr_source_dataset": data.get("mpr_source_dataset"),
-            "current_study_uid": str(data.get("current_study_uid", "") or ""),
-            "current_series_uid": str(data.get("current_series_uid", "") or ""),
-            "current_datasets": list(data.get("current_datasets") or []),
-        }
-
-    def relocate_mpr_subwindow(self, from_idx: int, to_idx: int) -> None:
-        """
-        Move an active MPR from *from_idx* to *to_idx*.
-
-        If the destination already shows MPR, it is cleared first. If *from_idx*
-        equals *to_idx*, only focuses that subwindow.
-        """
-        if from_idx == to_idx:
-            try:
-                sub = self._app.multi_window_layout.get_subwindow(to_idx)
-                if sub is not None:
-                    sub.set_focused(True)
-            except Exception:
-                pass
-            return
-        if not self.is_mpr(from_idx):
-            return
-
-        payload = self._capture_mpr_payload(from_idx)
-        if payload is None:
-            return
-
-        try:
-            sub = self._app.multi_window_layout.get_subwindow(to_idx)
-            if sub is not None:
-                sub.set_focused(True)
-        except Exception:
-            pass
-
-        if self.is_mpr(to_idx):
-            self.clear_mpr(to_idx)
-
-        self._cancel_mpr_worker(from_idx)
-        self._tear_down_mpr_at_subwindow(from_idx)
-        self.mpr_cleared.emit(from_idx)
-
-        self._install_mpr_payload_at_subwindow(to_idx, payload)
-        self.mpr_activated.emit(to_idx)
-
-    def attach_floating_mpr(self, to_idx: int) -> None:
-        """Assign a detached MPR session to *to_idx*."""
-        payload = self._detached_mpr_payload
-        if payload is None:
-            return
-
-        try:
-            sub = self._app.multi_window_layout.get_subwindow(to_idx)
-            if sub is not None:
-                sub.set_focused(True)
-        except Exception:
-            pass
-
-        if self.is_mpr(to_idx):
-            self.clear_mpr(to_idx)
-
-        self._detached_mpr_payload = None
-        self._install_mpr_payload_at_subwindow(to_idx, payload)
-        self.mpr_activated.emit(to_idx)
-
-    def detach_mpr_from_subwindow(self, idx: int) -> None:
-        """
-        Remove MPR from *idx* while keeping the MPR volume in memory for
-        reassignment (navigator uses internal key -1; same in-study placement).
-        """
-        if not self.is_mpr(idx):
-            return
-        payload = self._capture_mpr_payload(idx)
-        if payload is None:
-            return
-
-        self._detached_mpr_payload = payload
-        self._cancel_mpr_worker(idx)
-        self._tear_down_mpr_at_subwindow(idx)
-        self.mpr_detached.emit(idx)
-
-    def _install_mpr_payload_at_subwindow(self, idx: int, payload: Dict[str, Any]) -> None:
-        """Apply a captured MPR payload to *idx* (same end state as _activate_mpr)."""
-        data = self._app.subwindow_data.get(idx)
-        if data is None:
-            return
-
-        result: Optional[MprResult] = payload.get("mpr_result")
-        if result is None:
-            return
-
-        orientation_label = str(payload.get("mpr_orientation", "MPR") or "MPR")
-
-        if "mpr_previous_state" not in data:
-            data["mpr_previous_state"] = {
-                "current_dataset": data.get("current_dataset"),
-                "current_slice_index": data.get("current_slice_index", 0),
-                "current_series_uid": data.get("current_series_uid", ""),
-                "current_study_uid": data.get("current_study_uid", ""),
-                "current_datasets": list(data.get("current_datasets", [])),
-            }
-
-        source_ds = result.source_volume.source_datasets[0]
-        data["is_mpr"] = True
-        data["mpr_result"] = result
-        data["mpr_orientation"] = orientation_label
-        data["mpr_slice_index"] = int(payload.get("mpr_slice_index", 0))
-        data["mpr_source_dataset"] = payload.get("mpr_source_dataset") or source_ds
-        data["current_study_uid"] = str(payload.get("current_study_uid", "") or "")
-        data["current_series_uid"] = str(payload.get("current_series_uid", "") or "")
-        data["current_datasets"] = list(payload.get("current_datasets") or [])
-
-        data["mpr_combine_enabled"] = bool(payload.get("mpr_combine_enabled", False))
-        data["mpr_combine_mode"] = str(payload.get("mpr_combine_mode", "aip") or "aip")
-        data["mpr_combine_slice_count"] = int(
-            payload.get("mpr_combine_slice_count", 4) or 4
-        )
-
-        try:
-            if hasattr(self._app, "slice_navigator") and idx == getattr(
-                self._app, "focused_subwindow_index", -1
-            ):
-                self._app.slice_navigator.set_total_slices(result.n_slices)
-                self._app.slice_navigator.blockSignals(True)
-                self._app.slice_navigator.current_slice_index = data["mpr_slice_index"]
-                self._app.slice_navigator.blockSignals(False)
-        except Exception:
-            pass
-
-        self._set_tools_enabled(idx, enabled=False)
-        self._reset_window_level_for_mpr(idx, source_ds)
-
-        self.display_mpr_slice(idx, data["mpr_slice_index"])
-        image_viewer = self._get_image_viewer(idx)
-        if image_viewer is not None:
-            try:
-                image_viewer.fit_to_view(center_image=True)
-            except Exception:
-                pass
-
-        managers = self._app.subwindow_managers.get(idx, {})
-        overlay_manager = managers.get("overlay_manager")
-        if overlay_manager is not None and hasattr(overlay_manager, "set_mpr_banner"):
-            if getattr(overlay_manager, "should_show_text_overlays", lambda: True)():
-                overlay_manager.set_mpr_banner(self._build_mpr_banner_text(data))
-            else:
-                overlay_manager.set_mpr_banner(None)
-
-        if idx == getattr(self._app, "focused_subwindow_index", -1):
-            sync = getattr(
-                self._app, "_sync_intensity_projection_widget_from_mpr_data", None
-            )
-            if callable(sync):
-                sync(data)
 
     def display_mpr_slice(self, idx: int, slice_index: int) -> None:
         """
@@ -822,13 +608,6 @@ class MprController(QObject):
             f"shape={array.shape} min={float(np.min(array)):.4f} "
             f"max={float(np.max(array)):.4f} mean={float(np.mean(array)):.4f}"
         )
-
-        try:
-            sync = getattr(self._app, "_sync_navigation_slider_for_subwindow", None)
-            if callable(sync):
-                sync(idx)
-        except Exception:
-            pass
 
     # ------------------------------------------------------------------
     # Internal: dialog response handler
@@ -1059,9 +838,6 @@ class MprController(QObject):
         data = self._app.subwindow_data.get(idx)
         if data is None:
             return
-
-        # A new in-pane MPR replaces any detached (unassigned) session.
-        self._detached_mpr_payload = None
 
         # Debug logging to track state
         _mpr_log(

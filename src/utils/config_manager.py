@@ -178,6 +178,7 @@ class ConfigManager(
             "slice_location_lines_visible": False,
             "slice_location_lines_same_group_only": False,
             "slice_location_lines_focused_only": False,
+            "slice_location_line_width_px": 1,
             # MPR cache
             "mpr_cache_max_mb": 500,
         }

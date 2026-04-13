@@ -411,6 +411,13 @@ def build_menu_bar(main_window) -> None:
     tag_export_action.triggered.connect(main_window.tag_export_requested.emit)
     tools_menu.addAction(tag_export_action)
 
+    create_mpr_action = QAction("Create MPR &View…", main_window)
+    create_mpr_action.setStatusTip(
+        "Build a multi-planar reconstruction in the focused image window"
+    )
+    create_mpr_action.triggered.connect(main_window.create_mpr_view_requested.emit)
+    tools_menu.addAction(create_mpr_action)
+
     about_this_file_action = QAction("About this File...", main_window)
     about_this_file_action.setMenuRole(QAction.MenuRole.NoRole)
     about_this_file_action.setShortcut(QKeySequence("Ctrl+A"))

@@ -79,9 +79,8 @@ class SubWindowContainer(QFrame):
     assign_series_requested = Signal(str, int, str)
     context_menu_requested = Signal()  # Emitted when context menu is requested
     expand_to_1x1_requested = Signal()  # Emitted when user double-clicks on image/background to expand this pane to 1x1
-    # Emitted when an MPR thumbnail is dragged onto this container:
-    # (source_subwindow_index, target_subwindow_index). Source -1 = detached MPR.
-    mpr_assign_requested = Signal(int, int)
+    # Emitted when an MPR thumbnail is dragged onto this container; payload is the *source* subwindow index.
+    mpr_focus_requested = Signal(int)
     
     def __init__(self, image_viewer: ImageViewer, parent=None):
         """
@@ -356,15 +355,11 @@ class SubWindowContainer(QFrame):
         """
         mime = event.mimeData()
 
-        # MPR thumbnail drop: relocate or attach floating MPR to this pane.
+        # MPR thumbnail drop: focus the source MPR subwindow.
         if mime.hasFormat(MPR_ASSIGN_MIME):
             try:
                 source_idx = int(mime.data(MPR_ASSIGN_MIME).data().decode("ascii"))
-                target_idx = getattr(self.image_viewer, "subwindow_index", None)
-                if target_idx is None:
-                    event.ignore()
-                    return
-                self.mpr_assign_requested.emit(source_idx, int(target_idx))
+                self.mpr_focus_requested.emit(source_idx)
                 event.acceptProposedAction()
             except Exception:
                 event.ignore()

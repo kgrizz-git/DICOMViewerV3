@@ -618,6 +618,7 @@ class DICOMViewerApp(QObject):
         """
         if not hasattr(self, "series_navigator"):
             return
+        self.series_navigator.clear_mpr_thumbnail(-1)
         data = self.subwindow_data.get(idx, {})
         if not data.get("is_mpr") or data.get("mpr_result") is None:
             self.series_navigator.clear_mpr_thumbnail(idx)
@@ -660,13 +661,66 @@ class DICOMViewerApp(QObject):
         if hasattr(self, "series_navigator"):
             self.series_navigator.clear_mpr_thumbnail(idx)
 
+    def _update_floating_mpr_navigator_thumbnail(self) -> None:
+        """
+        Show or refresh detached MPR under navigator key -1 (internal id only).
+
+        Layout matches attached MPR: same study/series keys place the thumbnail
+        immediately after the source series row.
+        """
+        if not hasattr(self, "series_navigator"):
+            return
+        if not self._mpr_controller.has_detached_mpr():
+            self.series_navigator.clear_mpr_thumbnail(-1)
+            return
+        focused = getattr(self, "focused_subwindow_index", 0)
+        vsm = self.subwindow_managers.get(focused, {}).get("view_state_manager")
+        use_rescaled = bool(getattr(vsm, "use_rescaled_values", True))
+        pixel_array = self._mpr_controller.get_detached_mpr_thumbnail_pixels(
+            use_rescaled
+        )
+        if pixel_array is None:
+            return
+        payload = getattr(self._mpr_controller, "_detached_mpr_payload", None)
+        study_uid = ""
+        series_uid = ""
+        if isinstance(payload, dict):
+            study_uid = str(payload.get("current_study_uid", "") or "")
+            series_uid = str(payload.get("current_series_uid", "") or "")
+        wc: Optional[float] = None
+        ww: Optional[float] = None
+        wl_controls = getattr(self, "window_level_controls", None)
+        if wl_controls is not None:
+            try:
+                wc_val = float(wl_controls.window_center)
+                ww_val = float(wl_controls.window_width)
+                if ww_val > 0:
+                    wc, ww = wc_val, ww_val
+            except (AttributeError, TypeError, ValueError):
+                pass
+        self.series_navigator.set_mpr_thumbnail(
+            -1,
+            pixel_array,
+            study_uid,
+            series_uid,
+            wc,
+            ww,
+        )
+
+    def _on_mpr_detached(self, former_idx: int) -> None:
+        """MPR was detached from a pane; refresh navigator thumbnails."""
+        self._clear_mpr_navigator_thumbnail(former_idx)
+        self._update_floating_mpr_navigator_thumbnail()
+
     def _on_mpr_thumbnail_clicked(self, subwindow_index: int) -> None:
         """
         Focus the subwindow that hosts the MPR view when its thumbnail is clicked.
 
         Args:
-            subwindow_index: Zero-based index of the MPR subwindow.
+            subwindow_index: Zero-based index of the MPR subwindow, or -1 if detached.
         """
+        if subwindow_index < 0:
+            return
         try:
             subwindow = self.multi_window_layout.get_subwindow(subwindow_index)
             if subwindow is not None and not subwindow.is_focused:
@@ -674,18 +728,29 @@ class DICOMViewerApp(QObject):
         except Exception as exc:
             print(f"[DICOMViewerApp] _on_mpr_thumbnail_clicked: {exc}")
 
-    def _on_mpr_focus_requested(self, source_subwindow_index: int) -> None:
+    def _on_mpr_assign_requested(
+        self, source_subwindow_index: int, target_subwindow_index: int
+    ) -> None:
         """
-        Focus the source MPR subwindow when an MPR thumbnail is dragged onto
-        any subwindow container.
-
-        This is the simplest useful behaviour for an MPR drag: it brings the
-        MPR subwindow into focus so the user can interact with it.
-
-        Args:
-            source_subwindow_index: Zero-based index of the subwindow hosting the MPR.
+        Handle MPR thumbnail drop onto a subwindow: relocate active MPR or
+        attach a detached session (source index -1).
         """
-        self._on_mpr_thumbnail_clicked(source_subwindow_index)
+        if source_subwindow_index < 0:
+            self._mpr_controller.attach_floating_mpr(target_subwindow_index)
+            return
+        self._mpr_controller.relocate_mpr_subwindow(
+            source_subwindow_index, target_subwindow_index
+        )
+
+    def _on_mpr_clear_from_navigator_thumbnail(self, subwindow_index: int) -> None:
+        """Clear MPR from the navigator context menu (attached or detached)."""
+        if subwindow_index < 0:
+            self._mpr_controller.clear_detached_mpr()
+            if hasattr(self, "series_navigator"):
+                self.series_navigator.clear_mpr_thumbnail(-1)
+            return
+        if self._mpr_controller.is_mpr(subwindow_index):
+            self._mpr_controller.clear_mpr(subwindow_index)
 
     def _sync_intensity_projection_widget_from_mpr_data(self, data: Dict[str, Any]) -> None:
         """Push ``mpr_combine_*`` from *data* to the right-pane Combine Slices widget."""
@@ -703,6 +768,65 @@ class DICOMViewerApp(QObject):
             return getattr(result, "output_spacing_mm", None)
         except Exception:
             return None
+
+    def _sync_navigation_slider_for_subwindow(self, idx: int) -> None:
+        """
+        Align one pane's edge-reveal slice slider with its current content.
+
+        Hides the overlay and resets internal range to 1/1 when the pane has no
+        navigable stack (empty, single-slice native series, or invalid UIDs).
+        For MPR, uses ``mpr_result.n_slices`` and ``mpr_slice_index``. For native
+        2-D, uses ``current_studies[study][series]`` length and ``current_slice_index``.
+        """
+        if idx < 0:
+            return
+        subwindow = self.multi_window_layout.get_subwindow(idx)
+        if subwindow is None or subwindow.image_viewer is None:
+            return
+        viewer = subwindow.image_viewer
+        data = self.subwindow_data.get(idx, {})
+
+        if hasattr(self, "_mpr_controller") and self._mpr_controller.is_mpr(idx):
+            result = data.get("mpr_result")
+            n_slices = int(getattr(result, "n_slices", 0) or 0) if result is not None else 0
+            if n_slices > 1:
+                si = int(data.get("mpr_slice_index", 0))
+                viewer.set_navigation_slider_state(
+                    enabled=True,
+                    minimum=1,
+                    maximum=n_slices,
+                    value=si + 1,
+                    mode_label="Slice",
+                )
+            else:
+                viewer.set_navigation_slider_state(
+                    enabled=False, minimum=1, maximum=1, value=1
+                )
+            return
+
+        study_uid = data.get("current_study_uid", "")
+        series_uid = data.get("current_series_uid", "")
+        if not series_uid or not study_uid:
+            viewer.set_navigation_slider_state(
+                enabled=False, minimum=1, maximum=1, value=1
+            )
+            return
+
+        datasets = self.current_studies.get(study_uid, {}).get(series_uid, [])
+        total = len(datasets)
+        current_idx = int(data.get("current_slice_index", 0))
+        if total > 1:
+            viewer.set_navigation_slider_state(
+                enabled=True,
+                minimum=1,
+                maximum=total,
+                value=current_idx + 1,
+                mode_label="Slice",
+            )
+        else:
+            viewer.set_navigation_slider_state(
+                enabled=False, minimum=1, maximum=1, value=1
+            )
 
     def _get_subwindow_study_uid(self, idx: int) -> str:
         """Get current study UID for a subwindow. Delegates to subwindow lifecycle controller."""
@@ -1260,10 +1384,6 @@ class DICOMViewerApp(QObject):
             scene.clear()
             subwindow.image_viewer.image_item = None
             subwindow.image_viewer.viewport().update()
-            # Hide the edge-reveal slider overlay — no content to navigate
-            subwindow.image_viewer.set_navigation_slider_state(
-                enabled=False, minimum=1, maximum=1, value=1
-            )
 
         # Reset subwindow_data to the empty template
         self.subwindow_data[idx] = {
@@ -1273,6 +1393,8 @@ class DICOMViewerApp(QObject):
             'current_study_uid': '',
             'current_datasets': [],
         }
+        # Hide edge-reveal slider and reset to slice 1 / single-step range
+        self._sync_navigation_slider_for_subwindow(idx)
         self._refresh_window_slot_map_widgets()
 
     def _reset_focused_subwindow_state_after_close(self) -> None:
@@ -1315,8 +1437,16 @@ class DICOMViewerApp(QObject):
             return
         if idx == self.focused_subwindow_index and getattr(self, "cine_player", None):
             self.cine_player.stop_playback()
+        # Clear Window: detach MPR (keeps session for reassignment) instead of
+        # full teardown + blanking the pane.
         if hasattr(self, "_mpr_controller") and data.get("is_mpr"):
-            self._mpr_controller.clear_mpr(idx)
+            self._mpr_controller.detach_mpr_from_subwindow(idx)
+            if idx == self.focused_subwindow_index:
+                self._update_focused_subwindow_references()
+            self.series_navigator.set_subwindow_assignments(
+                self._get_subwindow_assignments()
+            )
+            return
         self._clear_subwindow(idx)
         if idx == self.focused_subwindow_index:
             self._reset_focused_subwindow_state_after_close()

@@ -145,6 +145,7 @@ class MainWindow(QMainWindow):
     paste_annotation_requested = Signal()  # Emitted when paste annotation is requested
     acr_ct_phantom_requested = Signal()  # Emitted when ACR CT (pylinac) analysis is requested
     acr_mri_phantom_requested = Signal()  # Emitted when ACR MRI Large (pylinac) analysis is requested
+    create_mpr_view_requested = Signal()  # Tools → Create MPR view (focused subwindow)
 
     # Orientation (flip / rotate) signals — emitted by View menu; connected to focused viewer handlers
     orientation_flip_h_requested = Signal()       # Flip horizontally

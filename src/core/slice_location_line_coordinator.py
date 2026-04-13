@@ -146,8 +146,10 @@ class SliceLocationLineCoordinator:
             else:
                 segments = []
 
+        lw = self._get_line_width_px()
+        manager.set_line_width_px(lw)
         manager.set_visible(True)
-        manager.update_lines(segments)
+        manager.update_lines(segments, lw)
 
     def _clear_all_visible(self) -> None:
         """Clear all line items (visibility off)."""
@@ -182,6 +184,13 @@ class SliceLocationLineCoordinator:
         if cm is None:
             return "middle"
         return cm.get_slice_location_line_mode()
+
+    def _get_line_width_px(self) -> int:
+        """Return configured stroke width for slice position lines (pixels)."""
+        cm = getattr(self.app, "config_manager", None)
+        if cm is None:
+            return 1
+        return cm.get_slice_location_line_width_px()
 
     def _get_subwindow_container(self, idx: int) -> Optional[Any]:
         """Return the SubWindowContainer for subwindow idx."""

@@ -648,7 +648,7 @@ class SubwindowLifecycleController:
                 image_viewer.get_slot_to_view_callback = lambda l=layout: l.get_slot_to_view()
                 subwindow.assign_series_requested.connect(app._on_assign_series_requested)
                 image_viewer.assign_series_requested.connect(app._on_assign_series_from_context_menu)
-                subwindow.mpr_focus_requested.connect(app._on_mpr_focus_requested)
+                subwindow.mpr_assign_requested.connect(app._on_mpr_assign_requested)
                 subwindow.expand_to_1x1_requested.connect(app._on_expand_to_1x1_requested)
                 image_viewer.swap_view_requested.connect(app._on_swap_view_requested)
                 image_viewer.window_slot_map_popup_requested.connect(app._on_window_slot_map_popup_requested)
@@ -1157,35 +1157,11 @@ class SubwindowLifecycleController:
             focused_idx: The index of the newly focused subwindow (may be -1).
         """
         app = self.app
-        if focused_idx < 0 or app.image_viewer is None:
+        if focused_idx < 0:
             return
-        data = app.subwindow_data.get(focused_idx, {})
-        series_uid = data.get("current_series_uid", "")
-        study_uid = data.get("current_study_uid", "")
-        if not series_uid or not study_uid:
-            app.image_viewer.set_navigation_slider_state(
-                enabled=False, minimum=1, maximum=1, value=1
-            )
-            return
-        datasets = (
-            getattr(app, "current_studies", {})
-            .get(study_uid, {})
-            .get(series_uid, [])
-        )
-        total = len(datasets)
-        current_idx = int(data.get("current_slice_index", 0))
-        if total > 1:
-            app.image_viewer.set_navigation_slider_state(
-                enabled=True,
-                minimum=1,
-                maximum=total,
-                value=current_idx + 1,
-                mode_label="Slice",
-            )
-        else:
-            app.image_viewer.set_navigation_slider_state(
-                enabled=False, minimum=1, maximum=1, value=1
-            )
+        sync = getattr(app, "_sync_navigation_slider_for_subwindow", None)
+        if callable(sync):
+            sync(focused_idx)
 
     def _trigger_viewport_resized(self) -> None:
         """Run viewport_resized for all visible subwindows (so unfocused panes resize when layout changes, e.g. 2x2→1x2) and sync cursor. Used by the coalesced 100ms timer."""

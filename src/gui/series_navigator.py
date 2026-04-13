@@ -68,6 +68,7 @@ class SeriesNavigator(QWidget):
     close_series_requested = Signal(str, str)  # (study_uid, series_key) — forwarded from thumbnail
     close_study_requested = Signal(str)         # (study_uid) — forwarded from thumbnail
     mpr_thumbnail_clicked = Signal(int)         # Emitted with subwindow_index when an MPR thumbnail is clicked
+    mpr_thumbnail_clear_requested = Signal(int)  # Right-click → Clear MPR (index -1 = detached)
 
     def __init__(self, dicom_processor: DICOMProcessor, parent=None):
         """
@@ -129,6 +130,7 @@ class SeriesNavigator(QWidget):
         """
         widget = MprThumbnailWidget(subwindow_index, parent=parent)
         widget.clicked.connect(self.mpr_thumbnail_clicked.emit)
+        widget.clear_mpr_requested.connect(self.mpr_thumbnail_clear_requested.emit)
         self._mpr_thumbnails[subwindow_index] = widget
         return widget
 
@@ -148,7 +150,8 @@ class SeriesNavigator(QWidget):
         ``clear_mpr_thumbnail(subwindow_index)``.
 
         Args:
-            subwindow_index: Zero-based subwindow slot (0–3).
+            subwindow_index: Subwindow slot (0–3), or -1 for detached MPR (same
+                placement as attached: after the source series in that study).
             pixel_array:     2-D float MPR slice array, or None to remove.
             study_uid:       Study the source series belongs to.
             source_series_uid: Series key the MPR was built from.
@@ -323,7 +326,7 @@ class SeriesNavigator(QWidget):
         
         if not studies:
             return
-        
+
         # Iterate through all studies and create study sections
         first_study = True
         for study_uid, study_series in studies.items():

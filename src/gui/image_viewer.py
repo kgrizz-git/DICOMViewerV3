@@ -430,6 +430,8 @@ class ImageViewer(ImageViewerInputMixin, ImageViewerViewMixin, QGraphicsView):
         """
         self._slice_slider_enabled = enabled
         if not enabled:
+            # Reset internal range so hover logic (maximum <= 1) cannot reveal a stale bar.
+            self._slider_overlay.set_range_and_value(1, 1, 1, "Slice")
             self._slider_overlay.setVisible(False)
 
     def set_navigation_slider_state(
@@ -458,6 +460,9 @@ class ImageViewer(ImageViewerInputMixin, ImageViewerViewMixin, QGraphicsView):
             reveal:     If True, briefly reveal the overlay after updating it.
         """
         if not self._slice_slider_enabled or not enabled or maximum <= minimum:
+            # Always reset QSlider range/value so _update_slider_visibility_from_mouse
+            # does not treat an old multi-slice maximum as navigable after clear.
+            self._slider_overlay.set_range_and_value(1, 1, 1, mode_label)
             self._slider_overlay.setVisible(False)
             return
         self._slider_overlay.set_range_and_value(minimum, maximum, value, mode_label)

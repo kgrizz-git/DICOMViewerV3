@@ -48,16 +48,13 @@ This file tracks active and near-term tasks.
 
 ## UX / Workflow
 
-- [x] **[P1]** make slice display lines able to show middle of slice (or slab when combining) or begin and end of slice (or slab when combining) *(Done: Added slice position line mode config (middle/begin-end) with UI in overlay config dialog and updated rendering logic.)*
-- [x] **[P1]** Should be able to right-click and select "Clear Subwindow" or something (check whether in-app we call them windows or subwindows) to clear current images/series from a given subwindow. *(Done: **Clear This Window** in image context menu; in-app user strings use “Window”.)*
 - [x] **[P1]** Add thumbnail for an MPR view in the navigator. Make it clickable and draggable like other thumbnails. Indicate it is an MPR in some way (like a little floating MPR tag similar to what is shown in the viewer but smaller). *(Done: Added `MprThumbnailWidget` in `src/gui/mpr_thumbnail_widget.py` with MPR badge overlay and subwindow dot indicator. `SeriesNavigator` has a persistent MPR section with `set_mpr_thumbnail`/`clear_mpr_thumbnail`. `MprController` emits `mpr_activated`/`mpr_cleared` signals. Clicking focuses the MPR subwindow; dragging to a subwindow emits `application/x-dv3-mpr-assign` MIME handled by `SubWindowContainer.mpr_focus_requested`.)*
-    - [ ] **[P1]** Cannot click or drag to assign to new window. Also cannot clear window without deleting MPR.
+    - [x] **[P1]** Cannot click or drag to assign to new window. Also cannot clear window without deleting MPR. *Fixed*
 - [ ] **[P1]** Add option to have one large window on left and two smaller on right (above and below), or one large window on top and smaller on bottom (left and right), and maybe vice versa for each case. Make "2" key switch between 1x2 and 2x1, while "3" switches between different 3-window layouts just described.
 - [ ] **[P2]** Make window map thumbnail in navigator interactive (click square to focus and reveal) ([plan](plans/UX_IMPROVEMENTS_BATCH1_PLAN.md#1-window-map-thumbnail-interactive))
 - [ ] **[P2]** Make toolbar contents and ordering customizable ([plan](plans/UX_IMPROVEMENTS_BATCH1_PLAN.md#2-toolbar-customization))
 - [ ] **[P2]** Improve discoverability/documentation of existing window/level drag interaction ([plan](plans/UX_IMPROVEMENTS_BATCH1_PLAN.md#3-alternative-windowlevel-interaction))
 - [ ] **[P1]** Set min/max window width/level using min/max pixel value possible (raw or rescaled) based on bit depth ([plan](plans/UX_IMPROVEMENTS_BATCH1_PLAN.md#4-minmax-windowlevel-from-bit-depth))
-- [x] **[P1]** Add overlay configuration to image right-click context menu ([plan](plans/UX_IMPROVEMENTS_BATCH1_PLAN.md#5-overlay-configuration-in-right-click-context-menu)) *(Done: Added "Overlay Configuration" submenu with Overlay Settings… and Configure Overlay Tags… entries to image right-click context menu.)*
 - [ ] **[P2]** Make default line thicknesses and annotation font sizes smaller (for ROIs, text annotation, measurements) - say line thickness 3 and font size 12 ([plan](plans/UX_IMPROVEMENTS_BATCH1_PLAN.md#6-reduce-default-line-thicknesses-and-font-sizes))
 - [ ] **[P2]** Follow-up for multi-frame instance navigation: audit ROI / measurement / annotation / cine / projection code paths that use `current_slice_index` as slice identity before attempting bounded per-instance scrolling ([plan](plans/MULTI_FRAME_INSTANCE_NAVIGATION_PLAN.md#phase-4-show-instances-separately-toggle-and-config))
 - [ ] **[P2]** Make right pane minimum width before collapsing 250 instead of 200
@@ -75,12 +72,12 @@ This file tracks active and near-term tasks.
 - [ ] **[P2]** Make a Settings menu for grouping lots of options?
 - [ ] **[P2]** Consider a dedicated **Pylinac Configuration...** menu/dialog if more persisted QA customization options are added (likely), so pylinac/site defaults do not keep expanding the per-analysis Tools dialogs.
 - [ ] **[P2]** Allow dragging window dividers to make unequal divisions
-- [ ] **[P2]** Add ability to use toolbar icons 
+- [ ] **[P2]** Add ability to use toolbar icons instead of text
 - [ ] **[P2]** Show a small colored icon on each subwindow title bar in a "sync group"to indicate which group it belongs to (group color), so the user can see at a glance which windows are linked.
-- [ ] **[P1]** Add **"Create MPR view…"** to the **Tools** or **View** menu?
-- [ ] **[P1]** Add ability to customize slice position display line thickness
+- [x] **[P1]** Add **"Create MPR view…"** to the **Tools** or **View** menu
+- [x] **[P1]** Add ability to customize slice position display line thickness
 - [ ] **[P1]** Differentiate between frames, instances, and slices in the cine player
-- [ ] **[P2]** Add option to show # frames or slices in a series in navigator? 
+- [ ] **[P2]** Add option to show # of frames or slices in a series in navigator (on by default) - keep it small
 - [ ] **[P2]** Where is it getting frame rate from?
 - [ ] **[P1]** Should we block showing DICOM tags when an MPR window is selected (show just "MPR")? Or add some kind of warning that it is the underlying series data somehow?
 - [ ] **[P1]** Make spacebar cycle overlay visibility state on all windows?
