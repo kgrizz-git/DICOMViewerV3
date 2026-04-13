@@ -52,7 +52,7 @@ def build_menu_bar(main_window) -> None:
     open_folder_action.triggered.connect(main_window.open_folder_requested.emit)
     file_menu.addAction(open_folder_action)
 
-    open_study_index_action = QAction("Open &study index…", main_window)
+    open_study_index_action = QAction("Open &Study Index…", main_window)
     open_study_index_action.setStatusTip(
         "Browse or search the local encrypted study index (grouped by study and folder)"
     )
@@ -427,7 +427,7 @@ def build_menu_bar(main_window) -> None:
     create_mpr_action.triggered.connect(main_window.create_mpr_view_requested.emit)
     tools_menu.addAction(create_mpr_action)
 
-    study_index_action = QAction("Study &index search…", main_window)
+    study_index_action = QAction("Study &Index Search…", main_window)
     study_index_action.setStatusTip(
         "Search the local encrypted study index or index a folder of DICOM files"
     )

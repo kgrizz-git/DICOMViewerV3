@@ -35,12 +35,36 @@ from PySide6.QtWidgets import (
 from core.study_index.index_service import LocalStudyIndexService
 from core.study_index.metadata_extract import repair_str_bytes_repr_artifact
 from core.study_index.study_date_format import (
+    format_partial_mdy_digits,
     format_study_date_display_us,
     parse_study_date_filter_field,
 )
 from utils.config_manager import ConfigManager
 
 _PAGE_SIZE = 100
+
+
+class _StudyIndexMdyLineEdit(QLineEdit):
+    """
+    Date filter field: keep only digits (max 8) and insert ``/`` after MM and DD.
+    """
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self._formatting = False
+        self.textChanged.connect(self._on_text_changed)
+
+    def _on_text_changed(self, text: str) -> None:
+        if self._formatting:
+            return
+        digits = "".join(c for c in (text or "") if c.isdigit())[:8]
+        new_t = format_partial_mdy_digits(digits)
+        if new_t != (text or ""):
+            self._formatting = True
+            self.setText(new_t)
+            self.setCursorPosition(len(new_t))
+            self._formatting = False
+
 
 # Text columns that may contain legacy ``b'…'`` SQLite values from older builds.
 _COLUMNS_SANITIZE_BYTES_REPR: frozenset[str] = frozenset(
@@ -160,7 +184,7 @@ class StudyIndexSearchDialog(QDialog):
         self._save_columns_timer = QTimer(self)
         self._save_columns_timer.setSingleShot(True)
         self._save_columns_timer.timeout.connect(self._persist_column_visual_order)
-        self.setWindowTitle("Study index")
+        self.setWindowTitle("Study Index")
         self.resize(1024, 560)
         col_ids = self._config.get_study_index_browser_column_order()
         self._model = _StudyIndexGroupedModel(col_ids, parent=self)
@@ -187,8 +211,8 @@ class StudyIndexSearchDialog(QDialog):
         self._modality = QLineEdit()
         self._accession = QLineEdit()
         self._study_desc = QLineEdit()
-        self._date_from = QLineEdit()
-        self._date_to = QLineEdit()
+        self._date_from = _StudyIndexMdyLineEdit()
+        self._date_to = _StudyIndexMdyLineEdit()
         self._date_from.setPlaceholderText("MM/DD/YYYY")
         self._date_to.setPlaceholderText("MM/DD/YYYY")
         form.addRow("Patient name contains:", self._patient_name)

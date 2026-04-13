@@ -12,6 +12,32 @@ import re
 from datetime import datetime
 
 
+def format_partial_mdy_digits(digits_only: str) -> str:
+    """
+    Format up to 8 decimal digits as **MM/DD/YYYY** with slashes inserted after
+    MM and DD (partial entry while typing).
+
+    If there are exactly 8 digits and the first two cannot be a calendar month
+    (``> 12``), treat the run as **YYYYMMDD** (DICOM) and reformat to MM/DD/YYYY
+    so pasting ``20200115`` still displays readably.
+    """
+    d = re.sub(r"\D", "", digits_only or "")[:8]
+    if not d:
+        return ""
+    if len(d) == 8:
+        mm_try = int(d[:2])
+        if mm_try > 12:
+            try:
+                return datetime.strptime(d, "%Y%m%d").strftime("%m/%d/%Y")
+            except ValueError:
+                pass
+    if len(d) <= 2:
+        return d
+    if len(d) <= 4:
+        return f"{d[:2]}/{d[2:]}"
+    return f"{d[:2]}/{d[2:4]}/{d[4:]}"
+
+
 def format_study_date_display_us(yyyymmdd: str) -> str:
     """
     Format a stored DICOM study date for display (US: MM/DD/YYYY).

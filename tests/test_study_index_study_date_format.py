@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from core.study_index.study_date_format import (
+    format_partial_mdy_digits,
     format_study_date_display_us,
     parse_study_date_filter_field,
 )
@@ -26,6 +27,16 @@ def test_parse_yyyymmdd() -> None:
 def test_parse_mm_dd_yyyy() -> None:
     assert parse_study_date_filter_field("1/5/2020") == ("20200105", True)
     assert parse_study_date_filter_field("12/31/1999") == ("19991231", True)
+
+
+def test_format_partial_mdy_digits_typing() -> None:
+    assert format_partial_mdy_digits("01") == "01"
+    assert format_partial_mdy_digits("0115") == "01/15"
+    assert format_partial_mdy_digits("01152020") == "01/15/2020"
+
+
+def test_format_partial_mdy_digits_yyyymmdd_paste() -> None:
+    assert format_partial_mdy_digits("20200115") == "01/15/2020"
 
 
 def test_parse_invalid() -> None:
