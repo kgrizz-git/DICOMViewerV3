@@ -187,7 +187,6 @@ class ConfigManager(
             # Local study index (SQLCipher; see core/study_index)
             "study_index_db_path": "",
             "study_index_auto_add_on_open": True,
-            "study_index_browser_column_order": [],
         }
 
         self.config = self._load_config()

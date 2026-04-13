@@ -89,6 +89,7 @@ from roi.roi_measurement_controller import ROIMeasurementController
 
 # Import handler classes
 from core.file_operations_handler import FileOperationsHandler
+from core.study_index import LocalStudyIndexService
 from core.annotation_paste_handler import AnnotationPasteHandler
 from core.file_series_loading_coordinator import FileSeriesLoadingCoordinator
 from core.subwindow_lifecycle_controller import SubwindowLifecycleController
@@ -933,6 +934,10 @@ class DICOMViewerApp(QObject):
 
         # Initialize file/series loading coordinator (owns load-first-slice and open entry points)
         self._file_series_coordinator = FileSeriesLoadingCoordinator(self)
+        # Local encrypted study index (SQLCipher + keyring; optional auto-add on open)
+        self.study_index_service = LocalStudyIndexService(
+            self.config_manager, parent_widget=self.main_window
+        )
         # Initialize FileOperationsHandler (shared, not per-subwindow)
         self.file_operations_handler = FileOperationsHandler(
             self.dicom_loader,
@@ -942,7 +947,8 @@ class DICOMViewerApp(QObject):
             self.main_window,
             clear_data_callback=self._clear_data,
             load_first_slice_callback=self._file_series_coordinator.handle_additive_load,
-            update_status_callback=self.main_window.update_status
+            update_status_callback=self.main_window.update_status,
+            on_load_success_callback=self._on_study_index_after_load,
         )
         
         # Initialize DialogCoordinator
@@ -2182,7 +2188,27 @@ class DICOMViewerApp(QObject):
     def _open_settings(self) -> None:
         """Handle settings dialog request."""
         self.dialog_coordinator.open_settings()
-    
+
+    def _on_study_index_after_load(self, datasets, _studies, merge_result, source_dir, merge_paths) -> None:
+        """Record opened files in the local study index when enabled in settings."""
+        self.study_index_service.schedule_index_after_load(
+            datasets, merge_paths, source_dir, merge_result
+        )
+
+    def _open_study_index_search(self) -> None:
+        """Open the local study index browser (File menu and Tools menu)."""
+        from gui.dialogs.study_index_search_dialog import StudyIndexSearchDialog
+
+        dlg = StudyIndexSearchDialog(
+            self.study_index_service,
+            self.config_manager,
+            open_paths_callback=lambda paths: self.main_window.open_files_from_paths_requested.emit(
+                paths
+            ),
+            parent=self.main_window,
+        )
+        dlg.exec()
+
     def _open_overlay_settings(self) -> None:
         """Handle Overlay Settings dialog request."""
         self.dialog_coordinator.open_overlay_settings()

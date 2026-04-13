@@ -1,0 +1,58 @@
+# Prune stale GitHub Actions *dependency caches* (setup-python pip, actions/cache, etc.)
+# to cap repo cache storage growth from PR and feature-branch CI.
+#
+# Does not delete caches for the repository default branch or refs/heads/develop (or extras
+# you pass via workflow_dispatch). Uses last_accessed_at (fallback created_at) vs MIN_AGE_DAYS.
+#
+# Artifacts from upload-artifact are separate; see build.yml retention-days and
+# dev-docs/info/GITHUB_ACTIONS_STORAGE_AND_BILLING.md
+
+name: Prune Actions caches
+
+on:
+  schedule:
+    # Weekly: Monday 06:00 UTC (low traffic)
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'If true, only list caches that would be deleted'
+        type: boolean
+        default: true
+      min_age_days:
+        description: 'Only delete when last access (or creation) is older than this many days'
+        type: number
+        default: 7
+      extra_protected_refs:
+        description: 'Space-separated full refs to preserve (e.g. refs/heads/release)'
+        required: false
+        default: ''
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: actions-cache-prune
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    name: Prune stale caches
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (script only)
+        uses: actions/checkout@v6
+
+      - name: Prune stale non-protected-branch caches
+        env:
+          MIN_AGE_DAYS: ${{ github.event.inputs.min_age_days || '7' }}
+          EXTRA_PROTECTED_REFS: ${{ github.event.inputs.extra_protected_refs || '' }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            export DRY_RUN="${{ github.event.inputs.dry_run }}"
+          else
+            export DRY_RUN="false"
+          fi
+          bash .github/scripts/prune-actions-caches.sh

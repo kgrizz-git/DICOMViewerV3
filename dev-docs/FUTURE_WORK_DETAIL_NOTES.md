@@ -283,7 +283,8 @@ Suggested menu item wording: **"Show Instances Separately"** (or "Expand Multi-F
   - Add fast search facets (patient, modality, date, accession, study description).
 - **Concerns / difficulties**
   - Large libraries need careful indexing strategy to avoid startup slowdowns.
-  - Moving/copying files can create duplicate study identity unless UID handling is strict.
+  - Keep path to files as a field in the study database so that it can be used to search for files later and so there can be multiple studies with the same UID if they are in different folders.
+  - Allow an option to automatically add files to the study database when they are opened.
 
 ## Multi-Workspace / Multi-Tab Study Sessions
 

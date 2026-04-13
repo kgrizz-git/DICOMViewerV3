@@ -19,6 +19,11 @@ Inputs:
 Outputs:
     - ``(datasets, studies)`` tuple on success, or ``(None, None)`` on
       cancellation / fatal error.
+
+Optional:
+    - ``on_load_success`` — after a successful load, called with
+      ``(datasets, studies, merge_result, source_dir, merge_paths)`` for
+      features such as the local study index (errors are logged only).
 """
 
 import gc
@@ -30,7 +35,7 @@ from typing import Any, Callable, Optional
 from PySide6.QtWidgets import QApplication
 
 from core.dicom_loader import DICOMLoader
-from core.dicom_organizer import DICOMOrganizer
+from core.dicom_organizer import DICOMOrganizer, MergeResult
 from core.loading_progress_manager import LoadingProgressManager
 
 
@@ -122,6 +127,9 @@ def run_load_pipeline(
     load_first_slice_callback: Callable[..., None],
     update_status_callback: Callable[..., None],
     check_compression_errors: bool = False,
+    on_load_success: Optional[
+        Callable[[list[Any], dict[str, Any], MergeResult, str, list[str]], None]
+    ] = None,
 ) -> tuple[list[Any] | None, dict[str, Any] | None]:
     """Execute the shared DICOM load pipeline.
 
@@ -161,6 +169,11 @@ def run_load_pipeline(
     check_compression_errors:
         When *True*, detect compressed-DICOM failures in the failed-file list
         and append a ``pylibjpeg`` installation hint to the status message.
+    on_load_success:
+        If set, invoked after a successful load with
+        ``(datasets, studies, merge_result, source_dir, merge_paths)`` where
+        ``merge_paths`` is the list passed to ``merge_batch``. Errors are
+        logged and do not fail the load.
 
     Returns
     -------
@@ -358,6 +371,17 @@ def run_load_pipeline(
         update_status_callback(final_status)
         QApplication.processEvents()
         loader.reset_cancellation()
+        if on_load_success is not None:
+            try:
+                on_load_success(
+                    datasets,
+                    organizer.studies,
+                    merge_result,
+                    source_dir,
+                    merge_paths,
+                )
+            except Exception:
+                traceback.print_exc()
         return datasets, organizer.studies
 
     except (SystemExit, KeyboardInterrupt):

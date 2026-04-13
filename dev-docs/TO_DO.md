@@ -48,8 +48,6 @@ This file tracks active and near-term tasks.
 
 ## UX / Workflow
 
-- [x] **[P1]** Add thumbnail for an MPR view in the navigator. Make it clickable and draggable like other thumbnails. Indicate it is an MPR in some way (like a little floating MPR tag similar to what is shown in the viewer but smaller). *(Done: Added `MprThumbnailWidget` in `src/gui/mpr_thumbnail_widget.py` with MPR badge overlay and subwindow dot indicator. `SeriesNavigator` has a persistent MPR section with `set_mpr_thumbnail`/`clear_mpr_thumbnail`. `MprController` emits `mpr_activated`/`mpr_cleared` signals. Clicking focuses the MPR subwindow; dragging to a subwindow emits `application/x-dv3-mpr-assign` MIME handled by `SubWindowContainer.mpr_focus_requested`.)*
-    - [x] **[P1]** Cannot click or drag to assign to new window. Also cannot clear window without deleting MPR. *Fixed*
 - [ ] **[P1]** Add option to have one large window on left and two smaller on right (above and below), or one large window on top and smaller on bottom (left and right), and maybe vice versa for each case. Make "2" key switch between 1x2 and 2x1, while "3" switches between different 3-window layouts just described.
 - [ ] **[P2]** Make window map thumbnail in navigator interactive (click square to focus and reveal) ([plan](plans/UX_IMPROVEMENTS_BATCH1_PLAN.md#1-window-map-thumbnail-interactive))
 - [ ] **[P2]** Make toolbar contents and ordering customizable ([plan](plans/UX_IMPROVEMENTS_BATCH1_PLAN.md#2-toolbar-customization))
@@ -74,8 +72,6 @@ This file tracks active and near-term tasks.
 - [ ] **[P2]** Allow dragging window dividers to make unequal divisions
 - [ ] **[P2]** Add ability to use toolbar icons instead of text
 - [ ] **[P2]** Show a small colored icon on each subwindow title bar in a "sync group"to indicate which group it belongs to (group color), so the user can see at a glance which windows are linked.
-- [x] **[P1]** Add **"Create MPR view…"** to the **Tools** or **View** menu
-- [x] **[P1]** Add ability to customize slice position display line thickness
 - [ ] **[P1]** Differentiate between frames, instances, and slices in the cine player
 - [ ] **[P2]** Add option to show # of frames or slices in a series in navigator (on by default) - keep it small
 - [ ] **[P2]** Where is it getting frame rate from?
@@ -84,10 +80,10 @@ This file tracks active and near-term tasks.
 
 ## Features (Near-Term)
 
+- [ ] **[P2]** Add SQLite **FTS5** full-text search for the local study index (e.g. study/series description)—deferred past MVP; see [LOCAL_STUDY_DATABASE_AND_INDEXING_PLAN.md](plans/LOCAL_STUDY_DATABASE_AND_INDEXING_PLAN.md).
 
 - [ ] **[P1]** Add a "Deep Anonymizer" export option that strips out all tag data that could be used to indentify a scanner, institution, address, etc., as well as patient informaion. Should include institution name, address, station name, device serial number, etc.
 - [ ] **[P1]** Add a simple "DICOM metadata browser" mode that can ingest, browse, and export DICOM metadata, without any image display or processing (hopefully fast and efficient)
-- [x] **[P2]** ACR MRI compare mode: run low-contrast analysis with up to 3 parameter sets; comparison table dialog, compare JSON export (schema 1.2), and PDF notes ([plan](plans/PYLINAC_MRI_COMPARE_RUNS_AND_PDF_INTERPRETATION_PLAN.md))
 - [ ] **[P1]** Be able to associate with DICOM extension and add to Open With menus ([details](FUTURE_WORK_DETAIL_NOTES.md#file-association-and-open-with-integration))
 - [ ] **[P2]** Add basic image processing for creating new DICOMs (kernels, smoothing, edge enhancement, sharpening, custom kernels) ([details](FUTURE_WORK_DETAIL_NOTES.md#basic-image-processing-and-creating-new-dicoms))
 - [ ] **[P2]** Integrate pylinac and other automated QC analysis tools ([details](FUTURE_WORK_DETAIL_NOTES.md#integrating-pylinac-and-other-automated-qc-tools), [pylinac integration overview](info/PYLINAC_INTEGRATION_OVERVIEW.md), [additional automated QA analysis (ACR gaps + CT checks)](info/AUTOMATED_QA_ADDITIONAL_ANALYSIS.md), [Stage 1 implementation plan](plans/PYLINAC_AND_AUTOMATED_QA_STAGE1_PLAN.md))

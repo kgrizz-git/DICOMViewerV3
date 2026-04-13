@@ -36,6 +36,7 @@ Optional for contributors: `pip install -r requirements-dev.txt` adds local Pyth
 ## Other conventions
 
 - See `.cursor/rules` and user rules.  Before major refactors only, backup files before changing. Do not proceed with edits until the backup is verified (e.g. file exists and has content) or the user has been asked.
+- **Multi-agent orchestration:** Subagents (`/orchestrator`, `/planner`, `/coder`, …) are invoked via the **Task** tool. **Default `CHAIN_MODE` is `autonomous`:** the **primary agent** chains **`Task(orchestrator)`** after **each** non-orchestrator specialist until **complete** / **blocked** / **`needs_user`** / guard limits, unless **`plans/orchestration-state.md`** sets **`## Chain mode`** to **`step`** or the user asks for single-step mode—see **`.cursor/rules/orchestration-auto-chain.mdc`** and **`.claude/skills/team-orchestration-delegation/SKILL.md`**. After **`Task(orchestrator)`**, also chain **`NEXT_TASK_TOOL`** when not `none`. The orchestrator must end with **`NEXT_TASK_TOOL:`** / **`NEXT_TASK_TOOL_SECOND:`** (see **`.claude/agents/orchestrator.md`**); parallel **`SECOND`** only when the skill’s checklist passes. **Run packet:** **`dev-docs/orchestration/RUN_PACKET_TEMPLATE.md`**.
 - **Long-running commands (agents / automation):** When type-checking large trees (`pyright` on all of `src/`), running the full test suite, or similar heavy work, use a **conservative timeout on the order of 10 minutes** (e.g. 600000 ms where the tool measures wait time) so runs are not cut off on slower machines. Shorter limits remain fine for single-file checks or quick smoke steps.
 - Project layout: `src/` (application), `tests/` (tests; run instructions in **`tests/README.md`**), `user-docs/` (user guide hub **`USER_GUIDE.md`**), `dev-docs/` (plans, assessments).
 - **Pylinac (ACR QA)**: `requirements.txt` pins an exact **`pylinac`** version; that pin is the only upstream release **verified** with the viewer’s ACR CT / MRI integration. When bumping the pin, re-verify and update `dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md` (**Verified pylinac package version**). Default Stage‑1 runs use **`src/qa/pylinac_extent_subclasses.py`** (**`ACRCTForViewer`** / **`ACRMRILargeForViewer`**) so origin indices may be **0 … N−1** (stock pylinac is stricter); JSON **`pylinac_analysis_profile`** records **`relaxed_image_extent`**. Users may enable **Vanilla pylinac** in the ACR CT/MRI options dialogs (persisted in **`qa_pylinac_config`**) to run stock **`ACRCT`** / **`ACRMRILarge`** instead.
@@ -51,6 +52,7 @@ src/
 ├── roi/                           # ROI / measurement feature controllers
 │   └── roi_measurement_controller.py  # Owns ROIManager, MeasurementTool, AnnotationManager, panels
 ├── core/                          # Core processing, loading, and coordination logic
+│   ├── study_index/                 # Local encrypted study DB (SQLCipher MVP): store, service, port, study_date_format (UI DA↔US), background threads
 │   ├── loading_progress_manager.py    # Animated loading dots, QProgressDialog, cancellation (used by FileOperationsHandler)
 │   ├── privacy_controller.py          # Privacy-mode propagation and overlay refresh (called from main on privacy toggle)
 │   ├── export_manager.py              # Export orchestration (paths, progress, slice/selection export)
@@ -96,7 +98,8 @@ src/
         ├── tag_export_config.py   # tag export presets (CRUD + file I/O)
         ├── customizations_config.py  # bulk export/import of all visual settings
         ├── app_config.py          # disclaimer_accepted
-        └── qa_pylinac_config.py   # persisted pylinac QA options (e.g. MRI LC method/threshold/sanity)
+        ├── qa_pylinac_config.py   # persisted pylinac QA options (e.g. MRI LC method/threshold/sanity)
+        └── study_index_config.py  # local study index DB path, auto-add on open, browser column order
 ```
 
 ### Key controller responsibilities
@@ -140,7 +143,7 @@ All Qt signal connections for `DICOMViewerApp` are wired in a single call to `_c
 ## GitHub Actions (CI)
 
 - Workflows live under `.github/workflows/`. Use current **major tags** for first-party actions (`actions/checkout@v6`, `actions/upload-artifact@v7`, `github/codeql-action/*@v4`) so Dependabot can propose updates. Pin **third-party** actions to release tags when reproducibility matters (e.g. `trufflesecurity/trufflehog@v3.x.x` plus matching `version:` for the scanner image).
-- **Storage / billing**: Artifact and cache usage accrues in **GB-hours**; free plans include a small **artifact** allowance (see GitHub’s current billing docs). Large multi-OS **`upload-artifact`** outputs and long **`retention-days`** can exhaust quota quickly—see `dev-docs/info/GITHUB_ACTIONS_STORAGE_AND_BILLING.md`. The **Build Executables** workflow uploads **`dist/`** (and the Linux AppImage) only — **not** PyInstaller’s **`build/`** folder (debug analysis locally). **macOS PySide6 submodule excludes** are **off** by default; set **`PYINSTALLER_MACOS_SLIM=1`** locally or enable the optional **workflow_dispatch** slim job — see **`dev-docs/info/BUILDING_EXECUTABLES.md`** / **`dev-docs/info/PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md`**. **`tests/test_pyinstaller_exclude_audit.py`** guards excluded module names against **`src/`** and **`tests/`** imports.
+- **Storage / billing**: Artifact and cache usage accrues in **GB-hours**; free plans include a small **artifact** allowance (see GitHub’s current billing docs). Large multi-OS **`upload-artifact`** outputs and long **`retention-days`** can exhaust quota quickly—see `dev-docs/info/GITHUB_ACTIONS_STORAGE_AND_BILLING.md`. The **Build Executables** workflow uploads **`dist/`** (and the Linux AppImage) only — **not** PyInstaller’s **`build/`** folder (debug analysis locally). **`actions-cache-prune.yml`** (weekly + manual) deletes **stale** Actions **caches** on non-protected refs while keeping **default branch**, **`develop`**, and optional extra refs—see the same doc. **macOS PySide6 submodule excludes** are **off** by default; set **`PYINSTALLER_MACOS_SLIM=1`** locally or enable the optional **workflow_dispatch** slim job — see **`dev-docs/info/BUILDING_EXECUTABLES.md`** / **`dev-docs/info/PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md`**. **`tests/test_pyinstaller_exclude_audit.py`** guards excluded module names against **`src/`** and **`tests/`** imports.
 - `actions/upload-artifact` v6+ and related actions may require **self-hosted runners ≥ 2.327.1** (Node 24); GitHub-hosted `ubuntu-latest` satisfies this.
 - If `.github/dependabot.yml` lists `labels:`, those labels must exist on the repo (e.g. `dependencies`, `github-actions`) or Dependabot will warn on PRs.
 

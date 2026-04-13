@@ -58,6 +58,7 @@ class FileOperationsHandler:
         clear_data_callback: Callable[..., None],
         load_first_slice_callback: Callable[..., None],
         update_status_callback: Callable[..., None],
+        on_load_success_callback: Optional[Callable[..., None]] = None,
     ):
         """
         Initialize the file operations handler.
@@ -71,6 +72,8 @@ class FileOperationsHandler:
             clear_data_callback: Callback to clear existing data (ROIs, measurements, etc.)
             load_first_slice_callback: Callback to load and display first slice
             update_status_callback: Callback to update status bar
+            on_load_success_callback: Optional hook after successful load
+                ``(datasets, studies, merge_result, source_dir, merge_paths)``.
         """
         self.dicom_loader = dicom_loader
         self.dicom_organizer = dicom_organizer
@@ -80,6 +83,7 @@ class FileOperationsHandler:
         self.clear_data_callback = clear_data_callback
         self.load_first_slice_callback = load_first_slice_callback
         self.update_status_callback = update_status_callback
+        self._on_load_success_callback = on_load_success_callback
 
         # Centralised loading progress infrastructure (animated dots, progress dialog, cancellation).
         self._loading_manager = LoadingProgressManager(
@@ -179,6 +183,7 @@ class FileOperationsHandler:
             load_first_slice_callback=self.load_first_slice_callback,
             update_status_callback=self.update_status_callback,
             check_compression_errors=True,
+            on_load_success=self._on_load_success_callback,
         )
 
 
@@ -227,6 +232,7 @@ class FileOperationsHandler:
             load_first_slice_callback=self.load_first_slice_callback,
             update_status_callback=self.update_status_callback,
             check_compression_errors=False,
+            on_load_success=self._on_load_success_callback,
         )
 
 
@@ -284,6 +290,7 @@ class FileOperationsHandler:
                 load_first_slice_callback=self.load_first_slice_callback,
                 update_status_callback=self.update_status_callback,
                 check_compression_errors=True,
+                on_load_success=self._on_load_success_callback,
             )
 
         # Open as folder
@@ -319,6 +326,7 @@ class FileOperationsHandler:
             load_first_slice_callback=self.load_first_slice_callback,
             update_status_callback=self.update_status_callback,
             check_compression_errors=False,
+            on_load_success=self._on_load_success_callback,
         )
 
 
@@ -381,6 +389,7 @@ class FileOperationsHandler:
                 load_first_slice_callback=self.load_first_slice_callback,
                 update_status_callback=self.update_status_callback,
                 check_compression_errors=False,
+                on_load_success=self._on_load_success_callback,
             )
 
         if files:
@@ -420,6 +429,7 @@ class FileOperationsHandler:
                 load_first_slice_callback=self.load_first_slice_callback,
                 update_status_callback=self.update_status_callback,
                 check_compression_errors=True,
+                on_load_success=self._on_load_success_callback,
             )
 
         return None, None

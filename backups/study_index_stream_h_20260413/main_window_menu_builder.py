@@ -52,13 +52,6 @@ def build_menu_bar(main_window) -> None:
     open_folder_action.triggered.connect(main_window.open_folder_requested.emit)
     file_menu.addAction(open_folder_action)
 
-    open_study_index_action = QAction("Open &study index…", main_window)
-    open_study_index_action.setStatusTip(
-        "Browse or search the local encrypted study index (grouped by study and folder)"
-    )
-    open_study_index_action.triggered.connect(main_window.study_index_search_requested.emit)
-    file_menu.addAction(open_study_index_action)
-
     file_menu.addSeparator()
 
     main_window.recent_menu = file_menu.addMenu("&Recent")
@@ -141,12 +134,6 @@ def build_menu_bar(main_window) -> None:
     main_window.redo_tag_edit_action.setEnabled(False)
     main_window.redo_tag_edit_action.triggered.connect(main_window.redo_tag_edit_requested.emit)
     edit_menu.addAction(main_window.redo_tag_edit_action)
-
-    edit_menu.addSeparator()
-
-    settings_action = QAction("&Settings...", main_window)
-    settings_action.triggered.connect(main_window.settings_requested.emit)
-    edit_menu.addAction(settings_action)
 
     # --- View menu ---
     view_menu = menubar.addMenu("&View")
@@ -285,6 +272,10 @@ def build_menu_bar(main_window) -> None:
         lambda checked: getattr(main_window, "set_window_slot_map_visible", lambda v: None)(checked)
     )
     view_menu.addAction(main_window.show_window_slot_map_action)
+
+    settings_action = QAction("&Settings...", main_window)
+    settings_action.triggered.connect(main_window.settings_requested.emit)
+    view_menu.addAction(settings_action)
 
     overlay_config_action = QAction("Overlay &Tags Configuration...", main_window)
     overlay_config_action.setShortcut(QKeySequence("Ctrl+O"))

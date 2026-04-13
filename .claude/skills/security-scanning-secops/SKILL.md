@@ -13,7 +13,7 @@ description: "Guides security scanning (semgrep, grype, secret checks) and recor
 | Container / SBOM CVEs | `grype` | Point at image or SBOM; summarize critical/high. |
 | CI/CD misuse, dangerous patterns | Review `.github/workflows/` | Pin actions, least privilege, no plaintext secrets. |
 | Repo secrets | `trufflehog`, `gitleaks` | Run read-only; redact findings in summaries. |
-| Dependency advisories | `pip audit`, `npm audit`, OSV, vendor advisories | Cross-check with trusted upstream docs. |
+| Dependency advisories | `osv-scanner`, `pip audit`, `npm audit` | Use `osv-scanner scan -r .` for lockfiles/SBOMs. |
 | Agent / MCP vulnerabilities | `uvx snyk-agent-scan@latest` | Use `--skills` flag to scan agent skills as well. |
 
 Run only what is **installed or available** in the environment; if a tool is missing, say so and suggest install or CI addition—do not fabricate scan output.

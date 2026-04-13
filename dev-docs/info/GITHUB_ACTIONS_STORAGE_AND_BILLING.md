@@ -34,6 +34,39 @@ Always confirm in GitHub UI and the live billing docs before making quota decisi
 
 ---
 
+## Actions **cache** (dependency cache) vs **artifacts**
+
+These are billed and managed differently:
+
+- **Artifacts** (`actions/upload-artifact`): workflow output zips; controlled mainly by **`retention-days`** and what paths you upload.
+- **Actions cache** (`actions/cache`, `actions/setup-python` with `cache: pip`, etc.): keyed blobs scoped to a **ref** (branch, `refs/pull/…/merge`, tag, …). Repositories get a pooled allowance (see GitHub’s current billing page; often **10 GB** per repo on free tier) with automatic eviction when full, but **many PR/feature-branch runs** can still create a large number of entries and churn.
+
+### Long-term guardrails in this repo
+
+| Guardrail | Where |
+|-----------|--------|
+| Weekly prune of **stale** caches on **non-protected** refs | `.github/workflows/actions-cache-prune.yml` + `.github/scripts/prune-actions-caches.sh` |
+| Protected refs (never deleted by the prune job) | Repository **default branch** (e.g. `refs/heads/main`), **`refs/heads/develop`**, plus optional **`extra_protected_refs`** on manual runs |
+| Staleness rule | Delete only if **`last_accessed_at`** (fallback **`created_at`**) is older than **`min_age_days`** (default **7**) |
+| Narrower pip cache keys for Build Executables | `build.yml` — `cache-dependency-path` lists **`requirements.txt`** and **`requirements-build.txt`** so one hash covers both install steps |
+| Shorter build artifact retention | `build.yml` **`retention-days`** (see table below); release assets remain on **GitHub Releases** |
+
+Scheduled runs use **`dry_run: false`** implicitly (they always delete eligible caches). **Manual** `workflow_dispatch` defaults to **`dry_run: true`** so you can confirm the list before turning off dry run.
+
+### One-off cleanup (maintainer CLI)
+
+With [GitHub CLI](https://cli.github.com/) and a token that can manage Actions caches:
+
+```bash
+gh cache list --repo OWNER/REPO
+# Delete a specific cache id after inspecting the list:
+gh cache delete CACHE_ID --repo OWNER/REPO
+```
+
+The prune workflow is preferred for recurring cleanup because it applies the **protected ref** and **age** policy consistently.
+
+---
+
 ## `retention-days` on `upload-artifact`
 
 When a workflow uses `actions/upload-artifact` with **`retention-days`**:
@@ -48,8 +81,9 @@ When a workflow uses `actions/upload-artifact` with **`retention-days`**:
 
 | Item | Detail |
 |------|--------|
-| **Large artifacts** | `.github/workflows/build.yml` uploads **Windows / macOS / Linux** outputs (`dist/`, AppImage, and **PyInstaller `build/`**). The **`build/`** tree is often **very large** compared to `dist/` alone. |
-| **Retention** | See **`retention-days`** in `build.yml` (historically **90**). |
+| **Large artifacts** | `.github/workflows/build.yml` uploads **Windows / macOS / Linux** outputs (`dist/` + Linux **AppImage** only — not PyInstaller **`build/`**). |
+| **Retention** | See **`retention-days`** in `build.yml` (tuned for **GB-hours**; verify current value in the workflow). |
+| **Actions cache** | **Build** uses **`setup-python`** pip caching; PRs create branch-scoped caches. **`actions-cache-prune.yml`** trims stale non-protected entries weekly. |
 | **Other workflows** | `security-checks.yml`, `semgrep.yml`, `grype.yml` do not upload comparable artifact zips; they still consume **runner minutes** and may use **cache** or **SARIF** to the Security tab. |
 
 **Practical levers to reduce GB-hours:** omit unnecessary paths from artifacts (often **`build/`** if not needed for debugging), shorten **`retention-days`** if release assets are canonical, and periodically delete stale workflow artifacts.

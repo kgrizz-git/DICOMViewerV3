@@ -13,7 +13,7 @@ description: "Defines safe multi-agent orchestration: delegation, sequencing, br
 | `planner` | Plans only; writes markdown checklists; no product code | no |
 | `coder` | Implements plans; modular code; tests when instructed | no |
 | `debugger` | Localizes failing tests/errors to root cause; writes debug report; no fixes | yes |
-| `ux` | UX/UI/front-end assessment; Playwright; modern web patterns | no |
+| `ux` | UX/UI assessment: **desktop/Qt/native** workflows by default in Qt apps; **web** flows via Playwright/Chrome when the product is browser-based | no |
 | `reviewer` | Spec vs implementation; lints; plan checklist updates | no |
 | `secops` | Security scans; timestamped reports | yes (default) |
 | `tester` | Runs tests; maintains `logs/test-ledger.md`; **no code edits** | yes |
@@ -22,14 +22,40 @@ description: "Defines safe multi-agent orchestration: delegation, sequencing, br
 
 ## Canonical state: `plans/orchestration-state.md`
 
-- **Orchestrator** is the only role that should edit the sections from **Goal** through **Iteration guard** (assignments, phase, git/cloud fields, blockers, next action, cycle counter).
-- **All other subagents** append a dated subsection under **Handoff log (newest first)** only. They do not change assignments or phase unless the user explicitly overrides this convention.
+- **`## Chain mode`** (orchestrator-owned): **`autonomous`** (default) | **`step`**. **Default is `autonomous`:** use **`step`** only when the user or run packet explicitly sets **`CHAIN_MODE: step`** or edits state. If the section is missing, orchestrator and parent treat the run as **`autonomous`**. In **`autonomous`**, the **parent session** must call **`Task(orchestrator)`** again after **every** non-orchestrator specialist completes (unless HANDOFF is `needs_user` / `blocked`). In **`step`**, the parent chains only immediately after an orchestrator turn (one specialist per user-visible cycle unless the user asks to continue). See **`.cursor/rules/orchestration-auto-chain.mdc`**.
+- **Orchestrator** is the only role that should edit the sections from **Goal** through **Global orchestration guard** and **Iteration guard** (assignments, phase, git/cloud fields, blockers, next action, per-task cycle counter, chain mode, orchestration hop limits).
+- **All other subagents** **must** append a dated subsection under **Handoff log (newest first)** when **`plans/orchestration-state.md`** exists—copy the full **`HANDOFF → orchestrator:`** block into that file (same content as chat). This keeps **autonomous** chains reliable if chat context is trimmed. They do not change assignments, **Global orchestration guard**, or phase unless the user explicitly overrides this convention.
 - **Every orchestrator turn:** read `plans/orchestration-state.md` first (if it exists). If missing, create it from the template in that file or from the **State template** below.
-- **Parent session loop:** Cursor does not auto-schedule subagents. For long runs, end **Next action** with an explicit follow-up (e.g. “invoke `/coder` with …” then “invoke `/orchestrator` to merge handoffs”). Optionally add a **user rule**: for multi-step tasks, keep invoking `/orchestrator` until phase is `complete` or `blocked`.
+- **Parent session loop:** Cursor does not auto-schedule subagents by itself. **Primary agent (parent) with the `Task` tool:** default **`CHAIN_MODE: autonomous`** (see **`.cursor/rules/orchestration-auto-chain.mdc`**): after **`Task(orchestrator)`**, chain **`NEXT_TASK_TOOL`** / **`NEXT_TASK_TOOL_SECOND`** when safe; after **each** non-orchestrator specialist, **`Task(orchestrator)`** again unless **`## Chain mode`** is **`step`** or the user opted out. **`NEXT_TASK_TOOL_SECOND`** parallel dispatch only if the skill’s **orchestrator checklist** passes.
 
 ### State template (orchestrator may paste into `plans/orchestration-state.md`)
 
-Use the same section headings as the checked-in `plans/orchestration-state.md`: Goal, Phase, Streams, Assignments table, Git/worktree, Cloud, Blockers, Next action, Session checkpoint, Iteration guard, Handoff log.
+Use the same section headings as the checked-in `plans/orchestration-state.md`: Goal, Phase, **Chain mode**, **Global orchestration guard**, Streams, Assignments table, Git/worktree, Cloud, Blockers, Next action, Session checkpoint, Iteration guard, Handoff log.
+
+**Chain mode** (short section — default **`autonomous`**):
+```markdown
+## Chain mode
+
+`autonomous` | `step`
+```
+
+**Global orchestration guard** (cost and runaway protection; orchestrator increments and enforces):
+
+```markdown
+## Global orchestration guard
+
+| Field | Value |
+|-------|-------|
+| Orchestrator cycles (this run) | 0 |
+| Max orchestrator cycles | 40 |
+| Specialist completions (this run) | 0 |
+| Max specialist completions | 120 |
+
+```
+
+- **Orchestrator cycles:** increment by **1** on **every** orchestrator turn (including resume). If **Orchestrator cycles ≥ Max orchestrator cycles**, set **Phase** to **`blocked`**, explain in **Blockers** (“orchestration hop limit—raise **Max** in state or start a fresh run”), and emit **`NEXT_TASK_TOOL: none`**.
+- **Specialist completions:** optional; increment when a non-orchestrator specialist finishes a `Task` in an autonomous chain. If **≥ Max specialist completions**, same **blocked** behavior. Omit the specialist row if unused.
+- User may raise limits via **run packet** (see **`dev-docs/orchestration/RUN_PACKET_TEMPLATE.md`**) or by editing state before continuing.
 
 **Streams** (add when using parallel workstreams):
 ```markdown
@@ -58,6 +84,31 @@ Use the same section headings as the checked-in `plans/orchestration-state.md`: 
 | T3      | 0      | 5        |       |
 ```
 Orchestrator increments the relevant task row each time reviewer/tester ↔ coder loop on the *same* defect. At soft cap, reassess or escalate to user.
+
+## Specialist start-of-turn (all non-orchestrator subagents)
+
+Apply at the **beginning** of every specialist turn (before substantive work).
+
+1. **Read state first:** If **`plans/orchestration-state.md`** exists, **read it** (at minimum **Goal**, **Assignments** rows for your task, **Next action**, **Execution mode**, **Risk tier**, **Phase**, **Chain mode**, **Session checkpoint**). Do not rely on chat alone.
+2. **Context survival:** If prior user/orchestrator instructions are **missing, unclear, or trimmed**, or this is a **cold/resumed** `Task`, **proactively** re-read **`plans/orchestration-state.md`** and the **newest 8** subsections under **Handoff log (newest first)** before proceeding—even when you “already have” a short prompt from the parent.
+3. **Execution mode + Risk tier → output scale:** Read **`## Execution mode`** and **`## Risk tier`** (or equivalent bullets under Goal/Phase in your repo’s state file). Align with orchestrator **Handoff size policy** (~**≤250 tokens** in the **`HANDOFF → orchestrator:`** block for **`fast`** or **`low`** risk unless `Status` is **`blocked`** / **`needs_user`**). For **`full`** execution or **`medium`/`high`** risk, put depth in **Artifacts** (files, ledgers, reports); keep the HANDOFF bullet list tight unless escalation requires detail.
+4. **Token discipline:** Specialists enforce the above scaling themselves; orchestrator still sets mode/risk in state when absent.
+
+## Tool failure recovery (specialists)
+
+- **Substantive** operations (file read/write, patch apply, test run, package install, scanner invocation): allow **one** targeted retry if the failure looks **transient** (timeout, file lock, flaky network).
+- After **two failures** on the **same** operation **or** two consecutive failures that **block** the assigned task, set **`Status: blocked`** in **`HANDOFF → orchestrator:`** and include **tool/command name** and **reason** for **each** failure—**never** silently skip or pretend success.
+- **Exploratory** zero-result (e.g. grep no matches on a hypothesis) is not automatically a “failure”; if the assignment **requires** a finding and none is possible after reasonable alternatives, use **`blocked`** or **`needs_user`** with explanation.
+
+## `NEXT_TASK_TOOL_SECOND` — orchestrator checklist (before emitting non-`none`)
+
+Set **`NEXT_TASK_TOOL_SECOND:`** only if **all** are true; otherwise **`none`**:
+
+1. **Streams / assignments:** **`## Streams`** lists the two specialists on **distinct streams** with a **fan-in gate**, **or** **Assignments** + linked plan show **disjoint path sets** (no overlap on files, dirs, lockfiles, or shared mutable artifacts).
+2. **Ordering:** No plan or **Next action** dependency requires one specialist’s output before the other starts.
+3. **Plan graph:** Where the plan uses **`parallel-safe: yes`**, both parallel tasks are marked accordingly (or risk is low and paths are provably disjoint).
+4. **Git:** No branch/worktree collision—use **separate branches or worktrees** if both would write the working tree.
+5. **Parent rule:** The primary agent may only `Task(...)` **both** in parallel per **`.cursor/rules/orchestration-auto-chain.mdc`** when this checklist passes.
 
 ## Structured handoff (all subagents → orchestrator)
 

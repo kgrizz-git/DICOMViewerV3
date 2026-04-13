@@ -449,8 +449,7 @@ Modify the "Upload build artifacts" step to include the AppImage:
     path: |
       dist/DICOMViewerV3*
       DICOMViewerV3-x86_64.AppImage
-      build/
-    retention-days: 90
+    retention-days: 30
 ```
 
 ### Update Release Upload

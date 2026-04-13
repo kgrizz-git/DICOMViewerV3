@@ -71,6 +71,7 @@ def _wire_dialog_signals(app: DICOMViewerApp) -> None:
     app.main_window.settings_requested.connect(app._open_settings)
     app.main_window.overlay_settings_requested.connect(app._open_overlay_settings)
     app.main_window.tag_viewer_requested.connect(app._open_tag_viewer)
+    app.main_window.study_index_search_requested.connect(app._open_study_index_search)
     app.main_window.overlay_config_requested.connect(app._open_overlay_config)
     app.main_window.annotation_options_requested.connect(app._open_annotation_options)
     app.main_window.quick_start_guide_requested.connect(app._open_quick_start_guide)

@@ -5,7 +5,22 @@ description: "Provides UX/UI evaluation standards using flows, screenshots, acce
 
 # UX evaluation
 
-## Workflow
+## Desktop / native GUI (Qt, WPF, Electron shell, etc.)
+
+Use when the product is **not** primarily a web app in a browser (this repo: **PySide6 / Qt**).
+
+1. Clarify **primary user tasks** from orchestrator or plan (e.g. open study, navigate series, run QA export, toggle privacy).
+2. **Evidence without Playwright:** trace **menu paths** (`QMenu`, `QAction` text), **dialogs** (`QDialog` subclasses), **shortcuts**, **toolbar** and **context menu** entries from **code** (`grep` / semantic search). List **friction**: deep nesting, missing mnemonics, unclear defaults, modal blockers, inconsistent wording.
+3. **Heuristic checklist (Qt-oriented):**
+   - **Focus:** tab order sensible; Esc closes dialogs where expected; default button correct.
+   - **Feedback:** progress/cancel for long work; errors actionable; empty states explained.
+   - **Density & scan:** overloaded toolbars vs progressive disclosure; critical actions discoverable.
+   - **Privacy / safety:** PHI-adjacent labels and indexes respect privacy mode; confirmations for destructive actions.
+   - **Multi-window:** layout modes (1×1, 2×2) and sync behaviors understandable from UI cues.
+4. **Screenshots / screen recording:** recommend **manual** capture for critical flows when automated capture is unavailable; reference file paths if artifacts are supplied.
+5. **Do not** block on Playwright for Qt-only surfaces unless the project provides a supported GUI driver.
+
+## Web workflow
 
 1. Clarify **user goals**, primary flows, and breakpoints (mobile/tablet/desktop) from orchestrator or plan.
 2. Prefer **Playwright** (or project’s existing E2E) to drive flows, capture **screenshots**, and note friction (clarity, affordances, errors, empty states).
