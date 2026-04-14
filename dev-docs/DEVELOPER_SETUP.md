@@ -66,10 +66,13 @@ bash ./scripts/setup-hooks.sh
 After updating hook scripts under `.githooks/`, run the installer again so your
 local `.git/hooks/` copies pick up the change.
 
-The `pre-commit` hook also prunes **`backups/`** by file age when the current
-branch is **`main`** or **`WIP`** (remove files **strictly older than 3 days** by
-mtime). It then runs **`git add -u -- backups`** so tracked deletions are staged
-for the same commit. Other branches are unchanged. Failures there are non-fatal
-and do not block the commit. To preview without deleting:
-`python scripts/git-hook-prune-backups.py --days 3 --dry-run` (from repo root,
-venv activated).
+The `pre-commit` hook also prunes **`backups/`** when the current branch is
+**`main`** or **`WIP`**, removing paths whose **backup intent age** is **strictly
+older than 3 days** (local time). **Intent age** is **not** plain filesystem mtime
+(checkouts refresh mtime). **Tracked** files use the **committer time of the
+latest Git commit** that touched each path (see `scripts/git-hook-prune-backups.py`);
+**untracked** files use the newest embedded **`YYYYMMDD`** in the path and **mtime**
+(whichever is newer). **Shallow clones** may make Git-derived ages inaccurate. The
+hook then runs **`git add -u -- backups`** so tracked deletions are staged for the
+same commit. Other branches are unchanged. Failures are non-fatal. Preview:
+`python scripts/git-hook-prune-backups.py --days 3 --dry-run` (repo root, venv on).

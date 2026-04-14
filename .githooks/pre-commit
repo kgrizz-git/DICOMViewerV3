@@ -18,6 +18,7 @@ else
 fi
 
 # Prune local backups/ by branch (non-fatal: never block the commit).
+# Intent age: tracked paths use last Git commit time; untracked use YYYYMMDD + mtime.
 # After deleting stale files, stage index updates under backups/ so tracked
 # removals are included in the commit that triggered this hook.
 BRANCH="$(git branch --show-current 2>/dev/null || true)"

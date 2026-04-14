@@ -294,7 +294,7 @@ bash ./scripts/setup-hooks.sh
 Behavior:
 
 - `pre-commit`: runs full scans when committing on `main`
-- `pre-commit`: prunes `backups/` by mtime — on branches **`main`** and **`WIP`**, deletes files **strictly older than 3 days**; then **`git add -u -- backups`** stages tracked removals for the same commit (other branches: no prune). Implemented by `scripts/git-hook-prune-backups.py`; prune / staging errors are **non-fatal** (commit still proceeds).
+- `pre-commit`: prunes `backups/` by **intent age** (not checkout mtime) — on **`main`** / **`WIP`**, deletes paths **strictly older than 3 days**: **tracked** files use **latest Git commit** time per path; **untracked** files use embedded **`YYYYMMDD`** in the path and **mtime** (`max`). Then **`git add -u -- backups`** stages tracked removals (other branches: no prune). **`scripts/git-hook-prune-backups.py`**; shallow clones may skew Git ages; prune / staging errors are **non-fatal**.
 - `pre-push`: runs full scans whenever a push updates `refs/heads/main` (covers fast-forward merges pushed to `main`)
 
 ---
