@@ -5,11 +5,17 @@ This script is shared by pre-commit and pre-push hooks.
 It runs the local security scan suite only when:
 - committing directly on branch `main`
 - pushing updates to `refs/heads/main` (covers FF merge pushes)
+
+Pre-commit uses a **light** scan (`run_security_scan.py --pre-commit`: debug flags +
+detect-secrets on staged files). Pre-push uses the **full** suite (`--all`).
+Set ``DICOMVIEWER_PRECOMMIT_FULL_SECURITY_SCAN=1`` to run the full suite on
+pre-commit as well.
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -55,12 +61,21 @@ def should_scan_pre_push(stdin_data: str) -> bool:
     return False
 
 
-def run_scan(root: Path, python_bin: Path) -> int:
+def _pre_commit_wants_full_scan() -> bool:
+    val = os.environ.get("DICOMVIEWER_PRECOMMIT_FULL_SECURITY_SCAN", "").strip().lower()
+    return val in ("1", "true", "yes", "on")
+
+
+def run_scan(root: Path, python_bin: Path, *, hook_type: str) -> int:
     scan_script = root / "scripts" / "run_security_scan.py"
-    proc = subprocess.run(
-        [str(python_bin), str(scan_script), "--all", "--report"],
-        text=True,
-    )
+    if hook_type == "pre-commit" and not _pre_commit_wants_full_scan():
+        args = [str(python_bin), str(scan_script), "--pre-commit", "--report"]
+        label = "light pre-commit security scan (debug flags + detect-secrets on staged files)"
+    else:
+        args = [str(python_bin), str(scan_script), "--all", "--report"]
+        label = "full local security scan"
+    print(f"[security hook] Running {label}...")
+    proc = subprocess.run(args, text=True, cwd=str(root))
     return proc.returncode
 
 
@@ -84,8 +99,7 @@ def main() -> int:
         print("[security hook] No project Python found under .venv or venv.", file=sys.stderr)
         return 1
 
-    print("[security hook] Running full local security scan...")
-    exit_code = run_scan(root, py)
+    exit_code = run_scan(root, py, hook_type=args.hook_type)
     if exit_code != 0:
         print("[security hook] Security scan failed. Blocking git operation.", file=sys.stderr)
         return exit_code

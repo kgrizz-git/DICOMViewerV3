@@ -67,12 +67,16 @@ After updating hook scripts under `.githooks/`, run the installer again so your
 local `.git/hooks/` copies pick up the change.
 
 The `pre-commit` hook also prunes **`backups/`** when the current branch is
-**`main`** or **`WIP`**, removing paths whose **backup intent age** is **strictly
-older than 3 days** (local time). **Intent age** is **not** plain filesystem mtime
-(checkouts refresh mtime). **Tracked** files use the **committer time of the
-latest Git commit** that touched each path (see `scripts/git-hook-prune-backups.py`);
-**untracked** files use the newest embedded **`YYYYMMDD`** in the path and **mtime**
-(whichever is newer). **Shallow clones** may make Git-derived ages inaccurate. The
-hook then runs **`git add -u -- backups`** so tracked deletions are staged for the
-same commit. Other branches are unchanged. Failures are non-fatal. Preview:
-`python scripts/git-hook-prune-backups.py --days 3 --dry-run` (repo root, venv on).
+**`main`** or **`WIP`**. **Intent age** is **not** plain filesystem mtime for
+**tracked** files (checkouts refresh mtime). **Tracked:** a file is removed if
+**more than 10 commits** have occurred since the **latest commit that touched
+that path**, **or** if **more than 10 commits** landed on the branch in the last
+**3** days **and** that touch’s committer time is **strictly older than 3 days**
+(quiet branches use the commit-depth rule only). **Untracked:** newest embedded
+**`YYYYMMDD`** and **mtime** (the **older** of the two) must be **strictly older
+than 3 days**. See `scripts/git-hook-prune-backups.py` (`--days`, `--max-commits`,
+optional `--velocity-commits`). **Shallow clones** may skew Git counts and times.
+The hook then runs **`git add -u -- backups`** so tracked deletions are staged
+for the same commit. Other branches are unchanged. Failures are non-fatal.
+Preview: `python scripts/git-hook-prune-backups.py --days 3 --max-commits 10 --dry-run`
+(repo root, venv on).

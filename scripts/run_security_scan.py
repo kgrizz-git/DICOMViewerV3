@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Security Scanner - Run all security tools at once"""
+"""Security Scanner - Run security tools alone or combined.
+
+Supports a **--pre-commit** mode for fast git hooks: debug-flag check plus
+Yelp detect-secrets on **staged** files only (size-capped and batched for
+Windows command-line limits). Use **--all** for Semgrep, full-tree secrets,
+TruffleHog, and pip-audit (as used by pre-push).
+"""
 import subprocess, sys, json, argparse, re, logging
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -91,6 +97,96 @@ def check_semgrep(verbose=False):
         if stdout:
             print(stdout[:500])
         return {"status": "review"}
+
+def git_repo_root() -> Path:
+    """Absolute repository root (works regardless of current working directory)."""
+    r = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return Path(r.stdout.strip())
+
+
+def staged_paths_for_secret_scan(
+    root: Path,
+    *,
+    max_file_bytes: int = 2_000_000,
+) -> list[str]:
+    """Paths of staged files (added/copied/modified) suitable for detect-secrets."""
+    proc = subprocess.run(
+        ["git", "-C", str(root), "diff", "--cached", "--name-only", "--diff-filter=ACM"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    out: list[str] = []
+    for line in proc.stdout.splitlines():
+        rel = line.strip()
+        if not rel:
+            continue
+        path = (root / rel).resolve()
+        try:
+            if path.is_file() and path.stat().st_size <= max_file_bytes:
+                out.append(str(path))
+        except OSError:
+            continue
+    return out
+
+
+def check_detect_secrets_staged(verbose=False):
+    """Fast secret scan for git hooks: only staged files (not the whole tree)."""
+    print_header("Running Detect-Secrets (staged files only)")
+    detect_secrets_path = get_tool_path(
+        "./.venv/Scripts/detect-secrets.exe",
+        "./.venv/bin/detect-secrets",
+        "./venv/Scripts/detect-secrets.exe",
+        "./venv/bin/detect-secrets",
+    )
+    if not detect_secrets_path:
+        print_fail("detect-secrets executable not found in venv")
+        return {"status": "fail", "reason": "missing_detect_secrets"}
+
+    root = git_repo_root()
+    paths = staged_paths_for_secret_scan(root)
+    if not paths:
+        print_ok("No staged files to scan")
+        return {"status": "pass", "skipped": True}
+
+    merged: dict = {}
+    chunk_size = 40
+    parse_error = False
+    for i in range(0, len(paths), chunk_size):
+        chunk = paths[i : i + chunk_size]
+        cmd = [detect_secrets_path, "scan", *chunk]
+        returncode, stdout, stderr = run_cmd(cmd, "Detect-secrets (staged)", verbose)
+        if returncode != 0:
+            print_warn(f"detect-secrets exited {returncode} on staged batch")
+            if stderr:
+                print(stderr[:500])
+        try:
+            batch = json.loads(stdout) if stdout else {}
+            batch_results = batch.get("results", {})
+            for fp, items in batch_results.items():
+                if isinstance(items, list):
+                    merged.setdefault(fp, []).extend(items)
+                else:
+                    merged.setdefault(fp, []).append(items)
+        except json.JSONDecodeError:
+            print_warn("Could not parse detect-secrets output for a staged batch")
+            parse_error = True
+    if parse_error:
+        return {"status": "unknown"}
+
+    if not merged:
+        print_ok("No secrets detected in staged files")
+        return {"status": "pass"}
+
+    count = sum(len(v) for v in merged.values())
+    print_warn(f"Potential secrets: {count} patterns in {len(merged)} staged files")
+    return {"status": "review", "staged_files_scanned": len(paths)}
+
 
 def check_detect_secrets(verbose=False):
     print_header("Running Detect-Secrets")
@@ -233,6 +329,12 @@ def main():
     parser.add_argument("--debug-flags", action="store_true", help="Check debug flags only")
     parser.add_argument("--deps", action="store_true", help="Run dependency audit with pip-audit")
     parser.add_argument("--quick", action="store_true", help="Quick checks (Semgrep + debug)")
+    parser.add_argument(
+        "--pre-commit",
+        action="store_true",
+        dest="pre_commit",
+        help="Hook mode: debug flags + detect-secrets on staged files only (fast)",
+    )
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     parser.add_argument("--report", action="store_true", help="JSON report")
     args = parser.parse_args()
@@ -241,9 +343,27 @@ def main():
     results, failed = {}, []
     
     # Determine what to run
-    run_all = args.all or not any([args.semgrep, args.secrets, args.trufflehog, args.debug_flags, args.deps, args.quick])
-    
-    if args.quick:
+    run_detect_secrets_staged = False
+    run_all = args.all or not any(
+        [
+            args.semgrep,
+            args.secrets,
+            args.trufflehog,
+            args.debug_flags,
+            args.deps,
+            args.quick,
+            args.pre_commit,
+        ]
+    )
+
+    if args.pre_commit:
+        run_debug_flags = True
+        run_semgrep = False
+        run_detect_secrets_check = False
+        run_detect_secrets_staged = True
+        run_trufflehog_check = False
+        run_deps_check = False
+    elif args.quick:
         run_debug_flags = True
         run_semgrep = True
         run_detect_secrets_check = False
@@ -273,6 +393,12 @@ def main():
         results["detect_secrets"] = r
         if r.get("status") == "fail":
             failed.append("detect_secrets")
+
+    if run_detect_secrets_staged:
+        r = check_detect_secrets_staged(args.verbose)
+        results["detect_secrets_staged"] = r
+        if r.get("status") == "fail":
+            failed.append("detect_secrets_staged")
 
     if run_trufflehog_check:
         r = check_trufflehog(args.verbose)

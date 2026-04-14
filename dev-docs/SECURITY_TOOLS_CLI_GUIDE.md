@@ -275,6 +275,12 @@ Equivalent direct Python command:
 .\.venv\Scripts\python.exe .\scripts\run_security_scan.py --all --report
 ```
 
+Fast check matching the **pre-commit** hook (staged files only; run from repo root with a staged index):
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\run_security_scan.py --pre-commit --report
+```
+
 ### Enforce scans for `main` via Git hooks
 
 Keep `.githooks/` **tracked in git** (do not gitignore it) so everyone gets the same hook logic.
@@ -293,9 +299,9 @@ bash ./scripts/setup-hooks.sh
 
 Behavior:
 
-- `pre-commit`: runs full scans when committing on `main`
-- `pre-commit`: prunes `backups/` by **intent age** (not checkout mtime) — on **`main`** / **`WIP`**, deletes paths **strictly older than 3 days**: **tracked** files use **latest Git commit** time per path; **untracked** files use embedded **`YYYYMMDD`** in the path and **mtime** (`max`). Then **`git add -u -- backups`** stages tracked removals (other branches: no prune). **`scripts/git-hook-prune-backups.py`**; shallow clones may skew Git ages; prune / staging errors are **non-fatal**.
-- `pre-push`: runs full scans whenever a push updates `refs/heads/main` (covers fast-forward merges pushed to `main`)
+- `pre-commit` (branch **`main`**): runs a **light** security check — debug flags plus **detect-secrets** on **staged** files only (`scripts/run_security_scan.py --pre-commit`). Skips Semgrep, TruffleHog, and pip-audit for speed. To run the **full** suite on every commit instead, set environment variable **`DICOMVIEWER_PRECOMMIT_FULL_SECURITY_SCAN=1`** (e.g. in your shell profile) before committing.
+- `pre-commit`: prunes `backups/` on **`main`** / **`WIP`** — **`scripts/git-hook-prune-backups.py --days 3 --max-commits 10`**: **tracked** files are removed if **more than 10 commits** since the last commit that touched the path **or** (when **more than 10** commits landed in the last **3** days) the touch is **strictly older than 3 days**; **untracked** files use embedded **`YYYYMMDD`** and **mtime** (the **older** of the two), removed when **strictly older than 3 days**. Then **`git add -u -- backups`** stages tracked removals (other branches: no prune). Shallow clones may skew Git counts; prune / staging errors are **non-fatal**.
+- `pre-push`: runs **full** scans whenever a push updates `refs/heads/main` (covers fast-forward merges pushed to `main`) — `run_security_scan.py --all`
 
 ---
 

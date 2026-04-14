@@ -1,4 +1,4 @@
-"""Unit tests for ``scripts/git-hook-prune-backups.py`` intent-age helpers."""
+"""Unit tests for ``scripts/git-hook-prune-backups.py`` intent-age and prune rules."""
 
 from __future__ import annotations
 
@@ -45,6 +45,10 @@ def test_newest_embedded_ignores_future_dates(prune):
     assert got is None
 
 
+def _h40() -> str:
+    return "a" * 40
+
+
 def test_backup_intent_tracked_prefers_git(prune, tmp_path: Path):
     path = tmp_path / "x.bak"
     path.write_text("x", encoding="utf-8")
@@ -54,7 +58,7 @@ def test_backup_intent_tracked_prefers_git(prune, tmp_path: Path):
         path,
         rel_posix="backups/x.bak",
         tracked=True,
-        git_latest={"backups/x.bak": git_dt},
+        git_touch={"backups/x.bak": (_h40(), git_dt)},
         now=datetime(2026, 1, 1),
     )
     assert got == git_dt
@@ -69,13 +73,13 @@ def test_backup_intent_tracked_missing_git_uses_mtime(prune, tmp_path: Path):
         path,
         rel_posix="backups/y.bak",
         tracked=True,
-        git_latest={},
+        git_touch={},
         now=datetime(2026, 1, 1),
     )
     assert got == mt
 
 
-def test_backup_intent_untracked_max_embedded_and_mtime(prune, tmp_path: Path):
+def test_backup_intent_untracked_uses_older_of_embedded_and_mtime(prune, tmp_path: Path):
     path = tmp_path / "pre_20200101_stale_name.py"
     path.write_text("z", encoding="utf-8")
     mt = datetime(2026, 4, 1, 0, 0, 0)
@@ -84,7 +88,98 @@ def test_backup_intent_untracked_max_embedded_and_mtime(prune, tmp_path: Path):
         path,
         rel_posix="backups/pre_20200101_stale_name.py",
         tracked=False,
-        git_latest={},
+        git_touch={},
+        now=datetime(2026, 6, 1),
+    )
+    assert got == datetime(2020, 1, 1, 0, 0, 0)
+
+
+def test_backup_intent_untracked_uses_older_mtime_when_embedded_is_newer(prune, tmp_path: Path):
+    path = tmp_path / "recent_name_20260414.py"
+    path.write_text("z", encoding="utf-8")
+    mt = datetime(2019, 6, 1, 12, 0, 0)
+    os.utime(path, (mt.timestamp(), mt.timestamp()))
+    got = prune.backup_intent_datetime(
+        path,
+        rel_posix="backups/recent_name_20260414.py",
+        tracked=False,
+        git_touch={},
         now=datetime(2026, 6, 1),
     )
     assert got == mt
+
+
+def test_tracked_prune_low_velocity_commits_only(prune):
+    cutoff = datetime(2026, 4, 1, 0, 0, 0)
+    intent = datetime(2020, 1, 1, 0, 0, 0)
+    assert not prune.tracked_should_prune(
+        commits_since_touch=5,
+        intent=intent,
+        cutoff=cutoff,
+        commits_in_window=3,
+        max_commits=10,
+        velocity_threshold=10,
+    )
+    assert prune.tracked_should_prune(
+        commits_since_touch=11,
+        intent=intent,
+        cutoff=cutoff,
+        commits_in_window=3,
+        max_commits=10,
+        velocity_threshold=10,
+    )
+
+
+def test_tracked_prune_high_velocity_time_cutoff(prune):
+    cutoff = datetime(2026, 4, 1, 0, 0, 0)
+    old = datetime(2026, 3, 1, 0, 0, 0)
+    fresh = datetime(2026, 4, 2, 0, 0, 0)
+    assert prune.tracked_should_prune(
+        commits_since_touch=3,
+        intent=old,
+        cutoff=cutoff,
+        commits_in_window=11,
+        max_commits=10,
+        velocity_threshold=10,
+    )
+    assert not prune.tracked_should_prune(
+        commits_since_touch=3,
+        intent=fresh,
+        cutoff=cutoff,
+        commits_in_window=11,
+        max_commits=10,
+        velocity_threshold=10,
+    )
+
+
+def test_tracked_prune_no_touch_commit_falls_back_to_days(prune):
+    cutoff = datetime(2026, 4, 1, 0, 0, 0)
+    assert prune.tracked_should_prune(
+        commits_since_touch=None,
+        intent=datetime(2026, 3, 1, 0, 0, 0),
+        cutoff=cutoff,
+        commits_in_window=0,
+        max_commits=10,
+        velocity_threshold=10,
+    )
+    assert not prune.tracked_should_prune(
+        commits_since_touch=None,
+        intent=datetime(2026, 4, 2, 0, 0, 0),
+        cutoff=cutoff,
+        commits_in_window=0,
+        max_commits=10,
+        velocity_threshold=10,
+    )
+
+
+def test_tracked_prune_max_commits_zero_disables_depth_rule(prune):
+    cutoff = datetime(2026, 4, 1, 0, 0, 0)
+    intent = datetime(2020, 1, 1, 0, 0, 0)
+    assert not prune.tracked_should_prune(
+        commits_since_touch=50,
+        intent=intent,
+        cutoff=cutoff,
+        commits_in_window=3,
+        max_commits=0,
+        velocity_threshold=10,
+    )
