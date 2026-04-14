@@ -7,6 +7,9 @@ cutoff of **now minus N days** (local time), then removes **empty directories**
 inside ``backups/`` (deepest first). The repository root is discovered via
 ``git rev-parse --show-toplevel``.
 
+The hook then runs ``git add -u -- backups`` so **tracked** paths removed from
+disk are staged and recorded in the same commit (untracked files are unchanged).
+
 Inputs (CLI):
     ``--days`` — positive integer: keep files touched within this many days;
     anything strictly older is removed. If ``--days`` is less than 1, the

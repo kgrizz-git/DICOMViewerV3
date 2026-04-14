@@ -18,20 +18,15 @@ else
 fi
 
 # Prune local backups/ by branch (non-fatal: never block the commit).
-# After deleting stale files, stage index updates under backups/ so tracked
-# removals are included in the commit that triggered this hook.
 BRANCH="$(git branch --show-current 2>/dev/null || true)"
 PRUNE_DAYS=0
 case "$BRANCH" in
-  main) PRUNE_DAYS=3 ;;
-  WIP) PRUNE_DAYS=3 ;;
+  main) PRUNE_DAYS=7 ;;
+  WIP) PRUNE_DAYS=14 ;;
 esac
 if [[ "$PRUNE_DAYS" -gt 0 ]]; then
   if ! "$PY_BIN" "$REPO_ROOT/scripts/git-hook-prune-backups.py" --days "$PRUNE_DAYS"; then
     echo "[backup hook] prune script failed (continuing with security gate)." >&2
-  fi
-  if ! git -C "$REPO_ROOT" add -u -- backups; then
-    echo "[backup hook] git add -u backups/ failed (continuing with security gate)." >&2
   fi
 fi
 
