@@ -16,12 +16,16 @@ Requirements:
     - PySide6 for GUI components
     - ConfigManager for settings
 """
+# Toolbar / ``QAction`` fields use ``Optional[…] = None`` for pre-builder state; they are
+# always populated during ``MainWindow.__init__`` before interactive use.
+# pyright: reportOptionalMemberAccess=false
 
 from PySide6.QtWidgets import (QMainWindow, QMenuBar, QStatusBar,
                                 QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
                                 QMessageBox, QLabel, QSizePolicy, QColorDialog,
                                 QApplication, QDialog, QTextBrowser, QPushButton, QDialogButtonBox, QMenu,
-                                QScrollArea, QFrame, QGraphicsOpacityEffect, QToolButton)
+                                QScrollArea, QFrame, QGraphicsOpacityEffect, QToolButton, QToolBar,
+                                QComboBox)
 from PySide6.QtCore import Qt, Signal, QEvent, QBuffer, QByteArray, QIODevice, QDir, QTimer, QPropertyAnimation
 from PySide6.QtGui import QAction, QIcon, QKeySequence, QColor, QDragEnterEvent, QDropEvent, QPixmap
 from typing import Any, Dict, List, Literal, Optional, TYPE_CHECKING, cast
@@ -184,6 +188,26 @@ class MainWindow(QMainWindow):
     layout_1x2_action: Optional[QAction] = None
     layout_2x1_action: Optional[QAction] = None
     layout_2x2_action: Optional[QAction] = None
+
+    # Populated by ``build_main_toolbar`` (Optional until toolbar is built).
+    main_toolbar: Optional[QToolBar] = None
+    privacy_mode_action: Optional[QAction] = None
+    scroll_wheel_mode_combo: Optional[QComboBox] = None
+    mouse_mode_ellipse_roi_action: Optional[QAction] = None
+    mouse_mode_rectangle_roi_action: Optional[QAction] = None
+    mouse_mode_measure_action: Optional[QAction] = None
+    mouse_mode_text_annotation_action: Optional[QAction] = None
+    mouse_mode_arrow_annotation_action: Optional[QAction] = None
+    mouse_mode_crosshair_action: Optional[QAction] = None
+    mouse_mode_zoom_action: Optional[QAction] = None
+    mouse_mode_magnifier_action: Optional[QAction] = None
+    mouse_mode_pan_action: Optional[QAction] = None
+    mouse_mode_select_action: Optional[QAction] = None
+    mouse_mode_auto_window_level_action: Optional[QAction] = None
+    use_rescaled_values_action: Optional[QAction] = None
+    series_navigator_action: Optional[QAction] = None
+    prev_series_action: Optional[QAction] = None
+    next_series_action: Optional[QAction] = None
 
     # Populated when series navigator bar is assembled (may stay None until then).
     window_slot_map_widget: Optional[WindowSlotMapWidget] = None

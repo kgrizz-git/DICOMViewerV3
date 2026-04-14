@@ -5,11 +5,21 @@ Mixin used by `gui.image_viewer.ImageViewer` together with input and context-men
 
 Requirements: PySide6, PIL, numpy.
 """
+# Pyright: see ``image_viewer_input.py`` — Qt mixin composition on ``ImageViewer``.
+# pyright: reportAttributeAccessIssue=false, reportUninitializedInstanceVariable=false
 from __future__ import annotations
 
 from PySide6.QtWidgets import QGraphicsView, QGraphicsPixmapItem, QApplication
 from PySide6.QtCore import Qt, QRectF, QRect, QPointF, QPoint, QTimer
-from PySide6.QtGui import QPixmap, QImage, QPainter, QColor, QTransform, QPen
+from PySide6.QtGui import (
+    QPixmap,
+    QImage,
+    QPainter,
+    QColor,
+    QTransform,
+    QPen,
+    QMouseEvent,
+)
 from PIL import Image
 from core.direction_labels import compute_direction_labels_from_iop, apply_orientation_to_labels
 from utils.bundled_fonts import make_qfont

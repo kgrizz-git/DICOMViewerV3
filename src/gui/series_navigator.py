@@ -111,6 +111,8 @@ class SeriesNavigator(QWidget):
         # the correct study section, immediately after the source series.
         self._mpr_thumbnail_specs: Dict[int, Dict[str, Any]] = {}
         self._mpr_thumbnails: Dict[int, MprThumbnailWidget] = {}
+        # Optional container for MPR row in ``main_layout`` (``clear`` skips deleting it).
+        self._mpr_section_container: Optional[QWidget] = None
 
         # Enable keyboard focus so we can receive key events
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)

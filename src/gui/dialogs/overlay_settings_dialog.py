@@ -83,6 +83,9 @@ class OverlaySettingsDialog(QDialog):
         self._original_slice_location_line_width_px = (
             config_manager.get_slice_location_line_width_px()
         )
+        self._original_slice_sync_group_strip_height_px = (
+            config_manager.get_slice_sync_group_strip_height_px()
+        )
 
         if DEBUG_FONT_VARIANT:
             debug_log(
@@ -104,6 +107,8 @@ class OverlaySettingsDialog(QDialog):
 
         self._create_ui()
         self._load_settings()
+
+        self.slice_sync_strip_height_spinbox.valueChanged.connect(self._on_live_update)
 
         # Live preview: update overlay as font size, family, or variant is adjusted
         self.font_size_spinbox.valueChanged.connect(self._on_live_update)
@@ -239,6 +244,18 @@ class OverlaySettingsDialog(QDialog):
         )
         slice_lines_layout.addRow("Slice Position Line Width (px):", self.slice_line_width_spinbox)
 
+        self.slice_sync_strip_height_spinbox = QSpinBox()
+        self.slice_sync_strip_height_spinbox.setRange(2, 16)
+        self.slice_sync_strip_height_spinbox.setValue(5)
+        self.slice_sync_strip_height_spinbox.setToolTip(
+            "Height of the colored bar above a pane when it is in a slice-sync linked group "
+            "(anatomic sync on, group has two or more members). Independent of slice thickness."
+        )
+        slice_lines_layout.addRow(
+            "Slice sync group strip height (px):",
+            self.slice_sync_strip_height_spinbox,
+        )
+
         mode_help = QLabel(
             "<small>Middle: one line at the centre plane. "
             "Begin/End: two lines at the slab boundaries "
@@ -320,6 +337,12 @@ class OverlaySettingsDialog(QDialog):
             self.config_manager.get_slice_location_line_width_px()
         )
         self.slice_line_width_spinbox.blockSignals(False)
+
+        self.slice_sync_strip_height_spinbox.blockSignals(True)
+        self.slice_sync_strip_height_spinbox.setValue(
+            self.config_manager.get_slice_sync_group_strip_height_px()
+        )
+        self.slice_sync_strip_height_spinbox.blockSignals(False)
 
     def _populate_variant_combo(self, family: str, current_variant: str = "Bold") -> None:
         """Repopulate the variant combo for *family*, preserving the selection when possible."""
@@ -410,13 +433,13 @@ class OverlaySettingsDialog(QDialog):
             self._on_live_update()
 
     def _on_live_update(self) -> None:
-        self.config_manager.set_show_direction_labels(self.show_direction_labels_checkbox.isChecked())
-        self.config_manager.set_show_scale_markers(self.show_scale_markers_checkbox.isChecked())
         """
         Save current values to config and emit settings_changed for live preview.
 
         Called on every spinbox step, combo selection, and immediately after a colour is picked.
         """
+        self.config_manager.set_show_direction_labels(self.show_direction_labels_checkbox.isChecked())
+        self.config_manager.set_show_scale_markers(self.show_scale_markers_checkbox.isChecked())
         from utils.debug_flags import DEBUG_FONT_VARIANT
         from utils.debug_log import debug_log
         if DEBUG_FONT_VARIANT:
@@ -448,6 +471,9 @@ class OverlaySettingsDialog(QDialog):
         self.config_manager.set_slice_location_line_width_px(
             self.slice_line_width_spinbox.value()
         )
+        self.config_manager.set_slice_sync_group_strip_height_px(
+            self.slice_sync_strip_height_spinbox.value()
+        )
         self.settings_changed.emit()
 
     def _apply_settings(self) -> None:
@@ -472,6 +498,9 @@ class OverlaySettingsDialog(QDialog):
         self.config_manager.set_slice_location_line_width_px(
             self.slice_line_width_spinbox.value()
         )
+        self.config_manager.set_slice_sync_group_strip_height_px(
+            self.slice_sync_strip_height_spinbox.value()
+        )
         self.settings_applied.emit()
         self.accept()
 
@@ -494,6 +523,9 @@ class OverlaySettingsDialog(QDialog):
         self.config_manager.set_slice_location_line_mode(self._original_slice_location_line_mode)
         self.config_manager.set_slice_location_line_width_px(
             self._original_slice_location_line_width_px
+        )
+        self.config_manager.set_slice_sync_group_strip_height_px(
+            self._original_slice_sync_group_strip_height_px
         )
         self.settings_changed.emit()
         super().reject()

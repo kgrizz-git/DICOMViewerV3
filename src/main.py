@@ -173,6 +173,7 @@ class DICOMViewerApp(QObject):
     _mri_compare_result_dialog: Optional[QDialog] = None
     _histogram_wl_update_timer: Optional[QTimer] = None
     _histogram_update_timer: Optional[QTimer] = None
+    study_index_service: LocalStudyIndexService
 
     def __init__(self):
         """
@@ -217,6 +218,7 @@ class DICOMViewerApp(QObject):
         self.cine_player = cast(CinePlayer, cast(object, None))
         self.cine_app_facade = cast(CineAppFacade, cast(object, None))
         self.keyboard_event_handler = cast(KeyboardEventHandler, cast(object, None))
+        self.study_index_service = cast(LocalStudyIndexService, cast(object, None))
 
         # Step 1 – Core application and data managers
         self._init_core_managers()
@@ -566,9 +568,11 @@ class DICOMViewerApp(QObject):
         """
         sync_on = self.config_manager.get_slice_sync_enabled()
         groups = list(self.config_manager.get_slice_sync_groups()) if sync_on else []
+        strip_h = self.config_manager.get_slice_sync_group_strip_height_px()
         for sub in self.multi_window_layout.get_all_subwindows():
             if sub is None:
                 continue
+            sub.set_slice_sync_strip_height(strip_h)
             iv = sub.image_viewer
             idx = getattr(iv, "subwindow_index", None) if iv is not None else None
             if idx is None:
@@ -2742,6 +2746,7 @@ class DICOMViewerApp(QObject):
     def _on_overlay_config_applied(self) -> None:
         """Handle overlay configuration being applied."""
         self._refresh_overlay_all_subwindows()
+        self._refresh_slice_sync_group_indicators()
 
     def _refresh_overlay_all_subwindows(self) -> None:
         """Recreate corner overlays in every subwindow that has overlay coordinators (keeps multi-pane views in sync)."""
@@ -2831,7 +2836,8 @@ class DICOMViewerApp(QObject):
         self._refresh_overlay_all_subwindows()
         # Slice position line mode may have changed via the Overlay Settings dialog.
         self._slice_location_line_coordinator.refresh_all()
-    
+        self._refresh_slice_sync_group_indicators()
+
     def _on_window_changed(self, center: float, width: float) -> None:
         """
         Handle window/level change.

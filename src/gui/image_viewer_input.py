@@ -3,6 +3,9 @@ Image viewer — input routing: gestures, wheel, mouse, keys, drag/drop (Phase 3
 
 Mixin listed before `ImageViewerViewMixin` on `ImageViewer` so Qt event overrides resolve first.
 """
+# Pyright: methods run only on ``ImageViewer`` (combined Qt type); mixin bases cannot
+# express cross-mixin ``self`` without a duplicate protocol surface.
+# pyright: reportAttributeAccessIssue=false, reportUninitializedInstanceVariable=false
 from __future__ import annotations
 
 from PySide6.QtWidgets import QGraphicsView, QWidget, QApplication, QMenu

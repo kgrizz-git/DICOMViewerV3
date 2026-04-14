@@ -310,15 +310,27 @@ def _get_source_plane_thickness_mm(
     runtime slab combine using ``mpr_combine_slice_count``.
     """
     get_slice_thickness = getattr(coordinator, "get_slice_thickness", None)
+    raw_thickness: object | None = None
     if callable(get_slice_thickness):
-        base_thickness = get_slice_thickness(source_idx)
-    else:
-        base_thickness = None
-    if base_thickness is None or base_thickness <= 0:
+        raw_thickness = get_slice_thickness(source_idx)
+    if raw_thickness is None:
+        return None
+    if not isinstance(raw_thickness, (int, float)):
+        return None
+    base_thickness = float(raw_thickness)
+    if base_thickness <= 0:
         return base_thickness
 
-    data = getattr(app, "subwindow_data", {}).get(source_idx, {})
-    managers = getattr(app, "subwindow_managers", {}).get(source_idx, {})
+    subwindow_data = getattr(app, "subwindow_data", {})
+    if not isinstance(subwindow_data, dict):
+        subwindow_data = {}
+    subwindow_managers = getattr(app, "subwindow_managers", {})
+    if not isinstance(subwindow_managers, dict):
+        subwindow_managers = {}
+    data_raw = subwindow_data.get(source_idx, {})
+    managers_raw = subwindow_managers.get(source_idx, {})
+    data: Dict[str, Any] = data_raw if isinstance(data_raw, dict) else {}
+    managers: Dict[str, Any] = managers_raw if isinstance(managers_raw, dict) else {}
     slice_display_manager = managers.get("slice_display_manager")
 
     if bool(data.get("is_mpr")):

@@ -7,6 +7,7 @@ Persists settings for the anatomic slice-sync feature:
   - slice location lines visibility (default: off)
   - slice location lines same-group-only (default: True when sync enabled)
   - slice location lines display mode (default: "middle")
+  - slice sync group strip height when a pane is in a linked group (default: 5 px)
 
 Mixin contract:
     Expects ``self.config`` (dict) and ``self.save_config()`` from ConfigManager.
@@ -23,6 +24,8 @@ slice_location_lines_focused_only : bool  – only show lines from the focused s
 slice_location_line_mode : str  – display mode: "middle" (single center line, default) or
                                   "begin_end" (two lines at slab boundary planes at ±SliceThickness/2)
 slice_location_line_width_px : int  – pen width in pixels for slice position lines (1–8, default 1)
+slice_sync_group_strip_height_px : int  – height in pixels of the colored strip above a pane when
+                      it belongs to a slice-sync linked group (2–16, default 5)
 """
 
 from typing import Any, Callable, List, cast
@@ -204,4 +207,27 @@ class SliceSyncConfigMixin:
         """Persist slice position line width (viewport px, cosmetic), clamped to 1–8."""
         w = max(1, min(8, int(width_px)))
         self._config()["slice_location_line_width_px"] = w
+        self._save_config()
+
+    # ------------------------------------------------------------------
+    # Slice-sync group strip (pane chrome)
+    # ------------------------------------------------------------------
+
+    def get_slice_sync_group_strip_height_px(self) -> int:
+        """
+        Return height in viewport pixels for the slice-sync linked-group color strip.
+
+        Shown only when slice sync is on and the pane is in a multi-member group.
+        Clamped to 2–16.
+        """
+        try:
+            h = int(self._config().get("slice_sync_group_strip_height_px", 5))
+        except (TypeError, ValueError):
+            h = 5
+        return max(2, min(16, h))
+
+    def set_slice_sync_group_strip_height_px(self, height_px: int) -> None:
+        """Persist strip height (px), clamped to 2–16."""
+        h = max(2, min(16, int(height_px)))
+        self._config()["slice_sync_group_strip_height_px"] = h
         self._save_config()

@@ -44,7 +44,7 @@ Ship a **local metadata index** (background scanning, incremental refresh, path-
 
 | Field | Value |
 |-------|-------|
-| Orchestrator cycles (this run) | 5 |
+| Orchestrator cycles (this run) | 6 |
 | Max orchestrator cycles | 40 |
 | Specialist completions (this run) | 4 |
 | Max specialist completions | 120 |
@@ -132,6 +132,13 @@ Ship a **local metadata index** (background scanning, incremental refresh, path-
 | SD5–SD7 | 0 | 5 each | Escalate if grouped-query performance or column-persist regressions loop without root cause |
 
 ## Handoff log (newest first)
+
+### 2026-04-14 — primary agent (basedpyright **errors** = 0 on `src/`)
+
+- **User ask:** Run **basedpyright** on `src/`, fix **errors** (not warnings), venv `.\.venv\Scripts\Activate.ps1`, update **CHANGELOG** if warranted, **do not push**; update this Handoff if used.
+- **Verify:** `basedpyright --level error src/` → **0 errors**; `basedpyright --outputjson src/` → **summary.errorCount 0** (warnings remain ~18k). Targeted pytest: **`tests/test_undo_redo_tag_commands.py`** + **`tests/test_mpr_overlay_and_rescale.py`** — **11 passed**.
+- **Artifacts:** New **`src/utils/undo_redo_command.py`** (`Command` base — breaks `undo_redo` ↔ `undo_redo_tag_commands` cycle); **`src/core/mpr_combine_slice_count.py`** (breaks `mpr_controller` ↔ `mpr_dialog` cycle); edits across **`main_window.py`**, **`image_viewer_input.py`** / **`image_viewer_view.py`** (pyright pragmas + `QMouseEvent`), **`slice_location_line_helper.py`**, **`sqlcipher_store.py`**, **`study_index_search_dialog.py`**, **`cine_app_facade.py`**, **`series_navigator.py`** / **`series_navigator_view.py`**, **`sub_window_container.py`**, **`main.py`**, **`mouse_mode_handler.py`**, **`roi_coordinator.py`**, **`mpr_thumbnail_widget.py`**, **`undo_redo.py`**, **`mpr_controller.py`**, **`mpr_dialog.py`**, **`CHANGELOG.md`** [Unreleased].
+- **HANDOFF → parent:** **NEXT_TASK_TOOL** **`none`**. **NEXT_TASK_TOOL_SECOND** **`none`**. Optional: full **`pytest`** + **`basedpyright src/ --warnings`** if CI treats warnings as failure.
 
 ### 2026-04-13 — orchestrator (autonomous merge: **T11** done → slice queue complete)
 

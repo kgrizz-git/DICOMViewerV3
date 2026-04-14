@@ -85,6 +85,7 @@ class MprThumbnailWidget(QWidget):
             else SUBWINDOW_DOT_COLORS.get(subwindow_index, "#2196F3")
         )
         self._drag_start_pos: Optional[QPoint] = None
+        self._img_bytes_ref: Optional[bytes] = None
 
         self.setFixedSize(self.THUMBNAIL_SIZE, self.THUMBNAIL_SIZE)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -158,7 +159,7 @@ class MprThumbnailWidget(QWidget):
             fit_img = pil_img.copy()
             fit_img.thumbnail(
                 (self.THUMBNAIL_SIZE, self.THUMBNAIL_SIZE),
-                Image.LANCZOS,
+                Image.Resampling.LANCZOS,
             )
             offset_x = (self.THUMBNAIL_SIZE - fit_img.width) // 2
             offset_y = (self.THUMBNAIL_SIZE - fit_img.height) // 2

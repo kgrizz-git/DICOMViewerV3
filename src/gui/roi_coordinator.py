@@ -398,8 +398,12 @@ class ROICoordinator:
                             else:
                                 self.image_viewer.set_mouse_mode("pan")
                                 # Update toolbar button state
-                                self.main_window.mouse_mode_pan_action.setChecked(True)
-                                self.main_window.mouse_mode_auto_window_level_action.setChecked(False)
+                                pa = self.main_window.mouse_mode_pan_action
+                                aw = self.main_window.mouse_mode_auto_window_level_action
+                                if pa is not None:
+                                    pa.setChecked(True)
+                                if aw is not None:
+                                    aw.setChecked(False)
             except Exception as e:
                 print(f"Error in auto window/level: {e}")
                 import traceback
@@ -415,8 +419,12 @@ class ROICoordinator:
                     self.set_mouse_mode_callback("pan")
                 else:
                     self.image_viewer.set_mouse_mode("pan")
-                    self.main_window.mouse_mode_pan_action.setChecked(True)
-                    self.main_window.mouse_mode_auto_window_level_action.setChecked(False)
+                    pa2 = self.main_window.mouse_mode_pan_action
+                    aw2 = self.main_window.mouse_mode_auto_window_level_action
+                    if pa2 is not None:
+                        pa2.setChecked(True)
+                    if aw2 is not None:
+                        aw2.setChecked(False)
             return
         
         # Normal ROI drawing finish (not auto window/level)

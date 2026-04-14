@@ -122,12 +122,14 @@ class MouseModeHandler:
         Args:
             mode: "slice" or "zoom"
         """
-        # Update toolbar combo box
-        if mode == "slice":
-            self.main_window.scroll_wheel_mode_combo.setCurrentText("Slice")
-        else:  # zoom
-            self.main_window.scroll_wheel_mode_combo.setCurrentText("Zoom")
-        
+        # Update toolbar combo box (may be absent before toolbar is built).
+        combo = self.main_window.scroll_wheel_mode_combo
+        if combo is not None:
+            if mode == "slice":
+                combo.setCurrentText("Slice")
+            else:  # zoom
+                combo.setCurrentText("Zoom")
+
         # Emit the main_window signal to trigger normal flow
         self.main_window.scroll_wheel_mode_changed.emit(mode)
 

@@ -4,6 +4,10 @@ Customizations Config Mixin
 Handles bulk export and import of all visual customisation settings
 (overlay, annotation, metadata panel, theme) to/from a JSON file.
 
+The ``overlay`` object may include **slice sync group strip height** (viewport px)
+alongside font and modality overlay fields; older export files omit it and import
+leaves the current config value unchanged.
+
 Mixin contract:
     Expects ``self.config`` (dict) and ``self.save_config()`` to be provided by
     the concrete ConfigManager class that inherits this mixin.
@@ -23,6 +27,7 @@ class _CustomizationsHost(Protocol):
     def get_overlay_visibility_state(self) -> int: ...
     def get_overlay_custom_fields(self) -> List[Any]: ...
     def get_overlay_font_size(self) -> int: ...
+    def get_slice_sync_group_strip_height_px(self) -> int: ...
     def get_metadata_panel_column_widths(self) -> List[int]: ...
     def get_roi_font_size(self) -> int: ...
     def get_roi_line_thickness(self) -> int: ...
@@ -38,6 +43,7 @@ class _CustomizationsHost(Protocol):
     def set_overlay_tags(self, modality: str, corner_tags: Dict[str, List[str]]) -> None: ...
     def set_overlay_font_size(self, size: int) -> None: ...
     def set_overlay_font_color(self, r: int, g: int, b: int) -> None: ...
+    def set_slice_sync_group_strip_height_px(self, height_px: int) -> None: ...
     def set_roi_font_size(self, size: int) -> None: ...
     def set_roi_font_color(self, r: int, g: int, b: int) -> None: ...
     def set_roi_line_thickness(self, thickness: int) -> None: ...
@@ -65,9 +71,9 @@ class CustomizationsConfigMixin:
         """
         Export customisation settings to a JSON file.
 
-        Exports overlay configuration, annotation options, metadata panel
-        settings, and theme.  Does NOT export disclaimer_accepted or other
-        non-customisation settings.
+        Exports overlay configuration (including slice-sync group strip height),
+        annotation options, metadata panel settings, and theme.  Does NOT export
+        disclaimer_accepted or other non-customisation settings.
 
         Args:
             file_path: Path where the customisation file should be saved
@@ -89,6 +95,7 @@ class CustomizationsConfigMixin:
                     "g": cfg.get("overlay_font_color_g", 255),
                     "b": cfg.get("overlay_font_color_b", 0),
                 },
+                "slice_sync_group_strip_height_px": h.get_slice_sync_group_strip_height_px(),
             }
 
             metadata_panel_data = {
@@ -200,6 +207,12 @@ class CustomizationsConfigMixin:
                         r, g, b = fc.get("r", 255), fc.get("g", 255), fc.get("b", 0)
                         if 0 <= r <= 255 and 0 <= g <= 255 and 0 <= b <= 255:
                             h.set_overlay_font_color(r, g, b)
+                    if "slice_sync_group_strip_height_px" in overlay and isinstance(
+                        overlay["slice_sync_group_strip_height_px"], int
+                    ):
+                        h.set_slice_sync_group_strip_height_px(
+                            int(overlay["slice_sync_group_strip_height_px"])
+                        )
 
             if "annotation" in import_data:
                 annotation = import_data["annotation"]

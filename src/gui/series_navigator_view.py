@@ -325,7 +325,9 @@ class SeriesThumbnail(QFrame):
 
         if navigator is not None:
             context_menu.addSeparator()
-            navigator._add_show_instances_action(context_menu, self.study_uid, self.series_uid)
+            add_show = getattr(navigator, "_add_show_instances_action", None)
+            if callable(add_show):
+                add_show(context_menu, self.study_uid, self.series_uid)
 
         context_menu.addSeparator()
 
@@ -346,11 +348,10 @@ class SeriesThumbnail(QFrame):
 
     def _get_series_navigator(self):
         """Walk up the parent chain to find the owning series navigator."""
-        from gui.series_navigator import SeriesNavigator as SeriesNavigatorClass
-
+        # Avoid importing ``gui.series_navigator`` at module level (Pyright import cycle).
         parent = self.parentWidget()
         while parent is not None:
-            if isinstance(parent, SeriesNavigatorClass):
+            if parent.__class__.__name__ == "SeriesNavigator":
                 return parent
             parent = parent.parentWidget()
         return None

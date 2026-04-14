@@ -19,27 +19,11 @@ Requirements:
 """
 
 from typing import List, Optional, Callable, Any, Tuple, Union
-from abc import ABC, abstractmethod
 from PySide6.QtCore import QPointF
 
 from utils.debug_log import debug_log, annotation_debug
 from utils.debug_flags import DEBUG_ANNOTATION
-
-
-class Command(ABC):
-    """
-    Abstract base class for commands.
-    """
-    
-    @abstractmethod
-    def execute(self) -> None:
-        """Execute the command."""
-        pass
-    
-    @abstractmethod
-    def undo(self) -> None:
-        """Undo the command."""
-        pass
+from utils.undo_redo_command import Command
 
 
 class UndoRedoManager:

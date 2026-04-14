@@ -28,7 +28,7 @@ from pydicom.datadict import dictionary_VR
 from pydicom.tag import BaseTag
 from pydicom.tag import Tag as make_tag
 
-from utils.undo_redo import Command
+from utils.undo_redo_command import Command
 
 
 class TagEditCommand(Command):

@@ -11,9 +11,15 @@ is persisted (movable headers).
 from __future__ import annotations
 
 import os
-from typing import Callable, Optional
+from typing import Any, Callable, Optional, Union
 
-from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, QTimer
+from PySide6.QtCore import (
+    QAbstractTableModel,
+    QModelIndex,
+    QPersistentModelIndex,
+    Qt,
+    QTimer,
+)
 from PySide6.QtGui import QAction, QShowEvent
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -97,7 +103,7 @@ class _StudyIndexGroupedModel(QAbstractTableModel):
     def __init__(self, column_ids: list[str], parent=None) -> None:
         super().__init__(parent)
         self._column_ids = list(column_ids)
-        self._rows: list[dict] = []
+        self._rows: list[dict[str, Any]] = []
 
     def column_id_at(self, logical_index: int) -> str:
         return self._column_ids[logical_index]
@@ -107,17 +113,25 @@ class _StudyIndexGroupedModel(QAbstractTableModel):
         self._column_ids = list(column_ids)
         self.endResetModel()
 
-    def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:  # noqa: N802
+    def rowCount(  # noqa: N802
+        self, parent: Union[QModelIndex, QPersistentModelIndex] = QModelIndex()
+    ) -> int:
         if parent.isValid():
             return 0
         return len(self._rows)
 
-    def columnCount(self, parent: QModelIndex = QModelIndex()) -> int:  # noqa: N802
+    def columnCount(  # noqa: N802
+        self, parent: Union[QModelIndex, QPersistentModelIndex] = QModelIndex()
+    ) -> int:
         if parent.isValid():
             return 0
         return len(self._column_ids)
 
-    def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole):
+    def data(  # noqa: N802
+        self,
+        index: Union[QModelIndex, QPersistentModelIndex],
+        role: int = Qt.ItemDataRole.DisplayRole,
+    ) -> Any:
         if not index.isValid() or role != Qt.ItemDataRole.DisplayRole:
             return None
         row = self._rows[index.row()]
@@ -140,12 +154,12 @@ class _StudyIndexGroupedModel(QAbstractTableModel):
             return _COLUMN_LABELS.get(cid, cid)
         return super().headerData(section, orientation, role)
 
-    def set_rows(self, rows: list[dict]) -> None:
+    def set_rows(self, rows: list[dict[str, Any]]) -> None:
         self.beginResetModel()
         self._rows = list(rows)
         self.endResetModel()
 
-    def append_rows(self, rows: list[dict]) -> None:
+    def append_rows(self, rows: list[dict[str, Any]]) -> None:
         if not rows:
             return
         first = len(self._rows)
@@ -159,7 +173,7 @@ class _StudyIndexGroupedModel(QAbstractTableModel):
         p = (self._rows[row].get("open_file_path") or "").strip()
         return p
 
-    def group_row_snapshot(self, row: int) -> dict:
+    def group_row_snapshot(self, row: int) -> dict[str, Any]:
         """Raw grouped row dict for the given row (study UID, folder path, counts, etc.)."""
         if row < 0 or row >= len(self._rows):
             return {}
@@ -309,7 +323,9 @@ class StudyIndexSearchDialog(QDialog):
         dt = yt if okt else ""
         return df, dt, None
 
-    def _service_query_kwargs(self, study_date_from: str, study_date_to: str) -> dict:
+    def _service_query_kwargs(
+        self, study_date_from: str, study_date_to: str
+    ) -> dict[str, Any]:
         return {
             "patient_name_contains": self._patient_name.text(),
             "patient_id_contains": self._patient_id.text(),

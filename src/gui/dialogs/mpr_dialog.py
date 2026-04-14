@@ -46,7 +46,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from core.mpr_controller import normalize_mpr_combine_slice_count
+from core.mpr_combine_slice_count import normalize_mpr_combine_slice_count
 from core.mpr_volume import MprVolume
 from core.slice_geometry import SlicePlane
 

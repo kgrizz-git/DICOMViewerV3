@@ -40,6 +40,7 @@ from PySide6.QtWidgets import QDialog, QMessageBox, QProgressDialog
 
 from core.mpr_builder import MprBuilder, MprBuilderWorker, MprResult
 from core.mpr_cache import MprCache
+from core.mpr_combine_slice_count import normalize_mpr_combine_slice_count
 from core.mpr_volume import (
     MprVolume,
     MprVolumeError,
@@ -52,21 +53,6 @@ from utils.dicom_utils import get_composite_series_key
 from utils.debug_flags import DEBUG_MPR
 
 # --- Runtime slab combine (right-pane “Combine Slices” + Create MPR dialog) ---
-
-_ALLOWED_MPR_COMBINE_COUNTS = (2, 3, 4, 6, 8)
-
-
-def normalize_mpr_combine_slice_count(n: int) -> int:
-    """Map a requested plane count to the nearest allowed UI value (2–8)."""
-    n = max(2, min(8, int(n)))
-    best = 4
-    best_d = 999
-    for c in _ALLOWED_MPR_COMBINE_COUNTS:
-        d = abs(c - n)
-        if d < best_d:
-            best_d = d
-            best = c
-    return best
 
 
 def apply_mpr_stack_combine(

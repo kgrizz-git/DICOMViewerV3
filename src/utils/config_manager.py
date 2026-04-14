@@ -182,6 +182,7 @@ class ConfigManager(
             "slice_location_lines_same_group_only": False,
             "slice_location_lines_focused_only": False,
             "slice_location_line_width_px": 1,
+            "slice_sync_group_strip_height_px": 5,
             # MPR cache
             "mpr_cache_max_mb": 500,
             # Local study index (SQLCipher; see core/study_index)

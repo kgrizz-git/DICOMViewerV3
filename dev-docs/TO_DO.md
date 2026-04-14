@@ -59,19 +59,14 @@ This file tracks active and near-term tasks.
 - [ ] **[P2]** Consider more sophisticated smoothing (PIL/NumPy) vs Qt-only scaling
 - [ ] **[P2]** Add ability to edit a drawn ellipse or rectangle ROI ([plan](plans/VIEWER_UX_FEATURES_PLAN.md#1-roi-editing-resize-handles))
 - [ ] **[P2]** Make window/level settings remembered when switching series and then switching back ([plan](plans/VIEWER_UX_FEATURES_PLAN.md#2-windowlevel-remembered-per-series))
-- [x] **[P1]** Hovering on a study label in the navigator should show a popup tooltip with the study description, date, and patient name (but should respect privacy mode). Hovering on a thumbnail should show a tooltip with that same info, plus series description ([plan](plans/NAVIGATOR_AND_FILE_LOADING_FEEDBACK_PLAN.md#1-navigator-tooltips-privacy-aware))
-- [x] **[P2]** The toast that pops up when already loaded files are skipped and not added during loading should appear in the center of the screen and have a slightly more opaque background ([plan](plans/NAVIGATOR_AND_FILE_LOADING_FEEDBACK_PLAN.md#2-duplicate-skip-toast-center--more-opaque))
 - [ ] **[P1]** Make the large-file warning (and any related file handling checks) trigger for >50 MB instead of 25 MB ([plan](plans/NAVIGATOR_AND_FILE_LOADING_FEEDBACK_PLAN.md#3-large-file-warning-threshold-50-mb)) - *NOTE: maybe hold off on this for now - 50 might be too high?*
 - [ ] **[P2]** Allow further subdivision of subwindows into up to 4 "tiles"? ([plan](plans/WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md#1-subwindow-further-subdivision-up-to-4-tiles))
-- [x] **[P1]** Make a "View Fullscreen" menu item and shortcut - make app full-screen, hide left/right/bottom panes, toolbar; careful not to duplicate any existing shortcuts ([plan](plans/WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md#2-view-fullscreen-command-and-shortcut))
-- [ ] **[P2]** When show instances separately is enabled, allow left/right keys to switch between instances ([plan](plans/WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md#4-leftright-keys-for-instance-switching-show-instances-separately)) **(already done?)**
 - [ ] **[P2]** When exporting PNG or JPG, allow anonymization and make using embedded window/level the default option ([plan](plans/EXPORT_PRIVACY_AND_WL_DEFAULT_PLAN.md#goal))
 - [ ] **[P2]** Make default pixel size and slice thickness more reasonable and make editing them easier (default to 1.0 mm, 1.0 mm?)
 - [ ] **[P2]** Make a Settings menu for grouping lots of options?
 - [ ] **[P2]** Consider a dedicated **Pylinac Configuration...** menu/dialog if more persisted QA customization options are added (likely), so pylinac/site defaults do not keep expanding the per-analysis Tools dialogs.
 - [ ] **[P2]** Allow dragging window dividers to make unequal divisions
 - [ ] **[P2]** Add ability to use toolbar icons instead of text
-- [x] **[P2]** Show a small colored icon on each subwindow title bar in a "sync group"to indicate which group it belongs to (group color), so the user can see at a glance which windows are linked.
 - [ ] **[P1]** Differentiate between frames, instances, and slices in the cine player
 - [ ] **[P2]** Add option to show # of frames or slices in a series in navigator (on by default) - keep it small
 - [ ] **[P2]** Where is it getting frame rate from?
@@ -82,7 +77,7 @@ This file tracks active and near-term tasks.
 
 - [ ] **[P2]** Add SQLite **FTS5** full-text search for the local study index (e.g. study/series description)—deferred past MVP; see [LOCAL_STUDY_DATABASE_AND_INDEXING_PLAN.md](plans/LOCAL_STUDY_DATABASE_AND_INDEXING_PLAN.md).
 - [ ] **[P1]** Add a "Deep Anonymizer" export option that strips out all tag data that could be used to indentify a scanner, institution, address, etc., as well as patient informaion. Should include institution name, address, station name, device serial number, etc.
-- [ ] **[P1]** Add a simple "DICOM metadata browser" mode that can ingest, browse, and export DICOM metadata, without any image display or processing (hopefully fast and efficient)
+- [ ] **[P1]** Add a simple "DICOM metadata browser" mode that can ingest, browse, and export DICOM metadata, without any image display or processing?(hopefully fast and efficient)
 - [ ] **[P1]** Be able to associate with DICOM extension and add to Open With menus ([details](FUTURE_WORK_DETAIL_NOTES.md#file-association-and-open-with-integration))
 - [ ] **[P2]** Add basic image processing for creating new DICOMs (kernels, smoothing, edge enhancement, sharpening, custom kernels) ([details](FUTURE_WORK_DETAIL_NOTES.md#basic-image-processing-and-creating-new-dicoms))
 - [ ] **[P2]** Integrate pylinac and other automated QC analysis tools ([details](FUTURE_WORK_DETAIL_NOTES.md#integrating-pylinac-and-other-automated-qc-tools), [pylinac integration overview](info/PYLINAC_INTEGRATION_OVERVIEW.md), [additional automated QA analysis (ACR gaps + CT checks)](info/AUTOMATED_QA_ADDITIONAL_ANALYSIS.md), [Stage 1 implementation plan](plans/PYLINAC_AND_AUTOMATED_QA_STAGE1_PLAN.md))
@@ -112,7 +107,6 @@ This file tracks active and near-term tasks.
 - [ ] **[P1]** Conduct documentation audit to ensure all features are documented and up to date.
 - [x] **[P1]** Introduce Help → Documentation, shorten Quick Start (`resources/help/quick_start_guide.html`), link to full docs in browser — see [DOCUMENTATION_IMPROVEMENT_PLAN_2026-04-03-200500.md](plans/DOCUMENTATION_IMPROVEMENT_PLAN_2026-04-03-200500.md).
 - [x] **[P1]** Add documentation for the pylinac integration and the automated QA analysis tools — [user-docs/USER_GUIDE_QA_PYLINAC.md](../user-docs/USER_GUIDE_QA_PYLINAC.md) (developer depth remains in `dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md`).
-- [x] **[P1]** Add documentation for the MPR features — [user-docs/USER_GUIDE_MPR.md](../user-docs/USER_GUIDE_MPR.md).
 - [ ] **[P2]** implement offline doc bundle + `file://` and policy in `BUILDING_EXECUTABLES.md` / installer notes. 
 
 

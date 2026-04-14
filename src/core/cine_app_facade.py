@@ -25,7 +25,7 @@ class CineAppFacade:
     """Cine-related behaviors formerly implemented as methods on ``DICOMViewerApp``."""
 
     # __weakref__ required so PySide6 signal connections can weak-reference bound methods.
-    __slots__ = ("_app", "__weakref__")
+    __slots__ = ("_app", "__weakref__")  # pyright: ignore[reportUninitializedInstanceVariable]
 
     def __init__(self, app: Any) -> None:
         self._app = app

@@ -205,10 +205,8 @@ class SubWindowContainer(QFrame):
         # Set initial border style
         self._update_border_style()
         
-        # Install on both QGraphicsView and its viewport. Mouse presses are usually
-        # delivered to the viewport, so listening to both ensures consistent focus behavior.
+        # Install event filter on image viewer to capture clicks
         self.image_viewer.installEventFilter(self)
-        self.image_viewer.viewport().installEventFilter(self)
 
     def set_slice_sync_strip_height(self, height_px: int) -> None:
         """
@@ -380,7 +378,7 @@ class SubWindowContainer(QFrame):
         if image_viewer is None:
             return super().eventFilter(obj, event)
 
-        if obj == image_viewer or obj == image_viewer.viewport():
+        if obj == image_viewer:
             if event.type() == QEvent.Type.MouseButtonDblClick:
                 # Double-click: expand to 1x1 only when click is on image or background (no interactive item)
                 if self._is_double_click_on_background_or_image(event):

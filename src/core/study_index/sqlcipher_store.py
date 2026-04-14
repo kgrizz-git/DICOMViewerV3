@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Any, Sequence
+import sqlite3
+from typing import Any, Sequence, cast
 
 # sqlcipher3 provides a sqlite3-compatible dbapi2 with encryption
 import sqlcipher3.dbapi2 as sqlcipher_sqlite
@@ -36,11 +37,12 @@ class StudyIndexStore:
         self._db_path = db_path
         self._passphrase = passphrase
 
-    def _connect(self) -> sqlcipher_sqlite.Connection:
+    def _connect(self) -> sqlite3.Connection:
         parent = os.path.dirname(os.path.abspath(self._db_path))
         if parent:
             os.makedirs(parent, exist_ok=True)
-        conn = sqlcipher_sqlite.connect(self._db_path, timeout=30.0)
+        _connect_fn = cast(Any, sqlcipher_sqlite).connect
+        conn = cast(sqlite3.Connection, _connect_fn(self._db_path, timeout=30.0))
         conn.execute(_pragma_key_sql(self._passphrase))
         conn.execute("PRAGMA journal_mode=WAL;")
         return conn
