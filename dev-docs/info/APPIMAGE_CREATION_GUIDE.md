@@ -459,7 +459,7 @@ Modify the "Create Release" step to include the AppImage:
 ```yaml
 - name: Create Release (on tag push)
   if: startsWith(github.ref, 'refs/tags/')
-  uses: softprops/action-gh-release@v2
+  uses: softprops/action-gh-release@v3
   with:
     files: |
       dist/DICOMViewerV3*
