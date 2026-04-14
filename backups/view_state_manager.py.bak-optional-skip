@@ -117,9 +117,7 @@ class ViewStateManager:
         
         # Viewport resize state - store scene center to preserve centered view
         self.saved_scene_center: Optional[QPointF] = None
-        # Viewport size (px) after last handle_viewport_resized image refit — optional no-op when unchanged + fit+centered
-        self._viewport_pixel_size_at_last_resize: Optional[tuple[int, int]] = None
-
+        
         # Current dataset reference (needed for some operations)
         self.current_dataset: Optional[Dataset] = None
         
@@ -939,9 +937,6 @@ class ViewStateManager:
                 print(f"[DEBUG-LAYOUT] [{ts}] handle_viewport_resized: view_state_manager id={id(self)} image_viewer id={id(self.image_viewer)} is_focused={is_focused} had_saved_scene_center={had_center} center={center_val}")
         # This works for splitter moves, series navigator show/hide, and layout changes
         if self.image_viewer.image_item is not None:
-            vp = self.image_viewer.viewport()
-            vw = int(vp.width()) if vp is not None else 0
-            vh = int(vp.height()) if vp is not None else 0
             if self.saved_scene_center is not None:
                 # print(f"[DEBUG-LAYOUT] handle_viewport_resized: Restoring scene center = {self.saved_scene_center}")
                 # First, fit the image to the new viewport size (rescale to fill)
@@ -951,18 +946,8 @@ class ViewStateManager:
                 self.saved_scene_center = None  # Clear after use
                 # print(f"[DEBUG-LAYOUT] handle_viewport_resized: Center restored, saved_scene_center cleared")
             else:
-                # No saved center: refit unless viewport size unchanged and already fit+centered (avoid redundant refit/recenter).
-                skip_fit = (
-                    self._viewport_pixel_size_at_last_resize is not None
-                    and self._viewport_pixel_size_at_last_resize == (vw, vh)
-                    and self.image_viewer.is_effectively_fit_and_centered()
-                )
-                if not skip_fit:
-                    # Unfocused pane or no saved center: still fit image to new viewport (e.g. when switching 2x2→1x2 the unfocused visible pane must rescale)
-                    self.image_viewer.fit_to_view(center_image=True)
-            self._viewport_pixel_size_at_last_resize = (vw, vh)
-        else:
-            self._viewport_pixel_size_at_last_resize = None
+                # Unfocused pane or no saved center: still fit image to new viewport (e.g. when switching 2x2→1x2 the unfocused visible pane must rescale)
+                self.image_viewer.fit_to_view(center_image=True)
         
         # Update overlay positions when viewport size changes
         # For QWidget overlays, always update (they stay fixed at viewport corners)

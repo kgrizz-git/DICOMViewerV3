@@ -17,4 +17,17 @@ else
   exit 1
 fi
 
+# Prune local backups/ by branch (non-fatal: never block the commit).
+BRANCH="$(git branch --show-current 2>/dev/null || true)"
+PRUNE_DAYS=0
+case "$BRANCH" in
+  main) PRUNE_DAYS=7 ;;
+  WIP) PRUNE_DAYS=14 ;;
+esac
+if [[ "$PRUNE_DAYS" -gt 0 ]]; then
+  if ! "$PY_BIN" "$REPO_ROOT/scripts/git-hook-prune-backups.py" --days "$PRUNE_DAYS"; then
+    echo "[backup hook] prune script failed (continuing with security gate)." >&2
+  fi
+fi
+
 exec "$PY_BIN" "$REPO_ROOT/scripts/git-hook-security-gate.py" --hook-type pre-commit

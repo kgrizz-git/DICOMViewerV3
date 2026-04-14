@@ -1157,28 +1157,6 @@ class SubwindowLifecycleController:
         if isinstance(mode, str) and mode in ("1x1", "1x2", "2x1"):
             self._schedule_viewport_resized_timer()
 
-    def _capture_viewport_centers_for_visible_subwindows(self) -> None:
-        """
-        Store each visible pane's viewport center in scene coordinates on its
-        ViewStateManager (``handle_viewport_resizing`` → ``saved_scene_center``).
-
-        Call immediately before scheduling the coalesced viewport-resized pass so
-        ``handle_viewport_resized`` can refit to the new size and then
-        ``centerOn(saved_scene_center)`` to preserve pan across focus and layout
-        changes. Each subwindow has its own ViewStateManager state.
-        """
-        app = self.app
-        subwindows = app.multi_window_layout.get_all_subwindows()
-        for idx, subwindow in enumerate(subwindows):
-            if not subwindow or not subwindow.isVisible():
-                continue
-            if idx not in app.subwindow_managers:
-                continue
-            managers = app.subwindow_managers[idx]
-            vsm = managers.get("view_state_manager")
-            if vsm is not None:
-                vsm.handle_viewport_resizing()
-
     def _sync_slider_state_for_focused_viewer(self, focused_idx: int) -> None:
         """
         Push the current slice position and total count to the focused viewer's
@@ -1231,6 +1209,15 @@ class SubwindowLifecycleController:
         app.config_manager.set_multi_window_layout(layout_mode)
         app.main_window.set_layout_mode(layout_mode)
         subwindows = app.multi_window_layout.get_all_subwindows()
+        focused_subwindow = app.multi_window_layout.get_focused_subwindow()
+        # Only capture viewport center for the focused visible subwindow to avoid
+        # multiple fit_to_view calls that can cause drift and layout churn
+        for idx, subwindow in enumerate(subwindows):
+            if subwindow and subwindow.isVisible() and subwindow is focused_subwindow and idx in app.subwindow_managers:
+                managers = app.subwindow_managers[idx]
+                if 'view_state_manager' in managers:
+                    managers['view_state_manager'].handle_viewport_resizing()
+                break
         self.ensure_all_subwindows_have_managers()
         self.connect_subwindow_signals()
 
@@ -1267,8 +1254,6 @@ class SubwindowLifecycleController:
 
     def _schedule_viewport_resized_timer(self) -> None:
         """Start or restart the coalesced 100ms timer that runs _trigger_viewport_resized."""
-        # Preserve pan: each visible pane saves viewport center before refit runs.
-        self._capture_viewport_centers_for_visible_subwindows()
         if self._viewport_resized_timer is None:
             self._viewport_resized_timer = QTimer()
             self._viewport_resized_timer.setSingleShot(True)

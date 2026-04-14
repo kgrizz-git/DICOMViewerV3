@@ -62,3 +62,13 @@ macOS/Linux equivalent:
 ```bash
 bash ./scripts/setup-hooks.sh
 ```
+
+After updating hook scripts under `.githooks/`, run the installer again so your
+local `.git/hooks/` copies pick up the change.
+
+The `pre-commit` hook also prunes **`backups/`** by file age when the current
+branch is **`main`** (remove files older than **7** days) or **`WIP`** (older
+than **14** days). Other branches are unchanged. Failures there are non-fatal
+and do not block the commit. To preview without deleting:
+`python scripts/git-hook-prune-backups.py --days 7 --dry-run` (from repo root,
+venv activated).

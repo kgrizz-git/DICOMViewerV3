@@ -689,69 +689,6 @@ class ImageViewerViewMixin:
             self.fit_to_view(center_image=False)
         
     
-    def compute_fit_zoom(self) -> Optional[float]:
-        """
-        Zoom factor that fits the current image item into the viewport (rotation-aware).
-
-        Returns:
-            Positive fit zoom, or None if the image or viewport is unavailable or invalid.
-        """
-        if self.image_item is None:
-            return None
-
-        scene_rect = self.image_item.boundingRect()
-        if scene_rect.isEmpty():
-            return None
-
-        vp = self.viewport()
-        if vp is None:
-            return None
-        viewport_w = float(vp.width())
-        viewport_h = float(vp.height())
-        if viewport_w <= 0 or viewport_h <= 0:
-            return None
-
-        img_w = scene_rect.width()
-        img_h = scene_rect.height()
-        if img_w <= 0 or img_h <= 0:
-            return None
-
-        # When the image is rotated 90° or 270°, the effective on-screen
-        # width/height are swapped compared to the scene dimensions.
-        if self._rotation_deg in (90, 270):  # type: ignore[attr-defined]
-            fit_zoom = min(viewport_w / img_h, viewport_h / img_w)
-        else:
-            fit_zoom = min(viewport_w / img_w, viewport_h / img_h)
-
-        return max(1e-6, fit_zoom)
-
-    def is_effectively_fit_and_centered(
-        self,
-        zoom_rel_tol: float = 1e-4,
-        center_px_tol: float = 2.0,
-    ) -> bool:
-        """
-        True if zoom matches fit-to-view (within tolerance) and the image center
-        lies under the viewport center (within a few viewport pixels).
-
-        Used to skip redundant ``fit_to_view`` when the viewport size did not change
-        and the view is already in the default fit+centered state.
-        """
-        fit_z = self.compute_fit_zoom()
-        if fit_z is None or self.current_zoom <= 0:
-            return False
-        if abs(self.current_zoom - fit_z) / fit_z > zoom_rel_tol:
-            return False
-        vc = self.get_viewport_center_scene()
-        if vc is None or self.image_item is None:
-            return False
-        ic = self.image_item.boundingRect().center()
-        p0 = QPointF(self.mapFromScene(vc))
-        p1 = QPointF(self.mapFromScene(ic))
-        dx = p0.x() - p1.x()
-        dy = p0.y() - p1.y()
-        return (dx * dx + dy * dy) ** 0.5 <= center_px_tol
-
     def fit_to_view(self, center_image: bool = False) -> None:
         """
         Fit the image to the current view size, preserving the current orientation
@@ -765,13 +702,34 @@ class ImageViewerViewMixin:
             center_image: If True, center the image in the viewport (for initialization/reset).
                          If False, preserve current view position.
         """
-        fit_zoom = self.compute_fit_zoom()
-        if fit_zoom is None:
+        if self.image_item is None:
             return
 
-        scene_rect = self.image_item.boundingRect()  # type: ignore[union-attr]
+        scene_rect = self.image_item.boundingRect()
+        if scene_rect.isEmpty():
+            return
 
-        self.current_zoom = fit_zoom
+        vp = self.viewport()
+        if vp is None:
+            return
+        viewport_w = float(vp.width())
+        viewport_h = float(vp.height())
+        if viewport_w <= 0 or viewport_h <= 0:
+            return
+
+        img_w = scene_rect.width()
+        img_h = scene_rect.height()
+        if img_w <= 0 or img_h <= 0:
+            return
+
+        # When the image is rotated 90° or 270°, the effective on-screen
+        # width/height are swapped compared to the scene dimensions.
+        if self._rotation_deg in (90, 270):  # type: ignore[attr-defined]
+            fit_zoom = min(viewport_w / img_h, viewport_h / img_w)
+        else:
+            fit_zoom = min(viewport_w / img_w, viewport_h / img_h)
+
+        self.current_zoom = max(1e-6, fit_zoom)
         self._apply_view_transform()
 
         # Always center on the image for fit_to_view

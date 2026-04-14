@@ -294,6 +294,7 @@ bash ./scripts/setup-hooks.sh
 Behavior:
 
 - `pre-commit`: runs full scans when committing on `main`
+- `pre-commit`: prunes `backups/` by mtime — on branch `main`, deletes files **strictly older than 7 days**; on branch **`WIP`**, **strictly older than 14 days** (other branches: no prune). Implemented by `scripts/git-hook-prune-backups.py`; prune errors are **non-fatal** (commit still proceeds).
 - `pre-push`: runs full scans whenever a push updates `refs/heads/main` (covers fast-forward merges pushed to `main`)
 
 ---
@@ -443,6 +444,7 @@ Notes:
 - Requires `gh auth login` first.
 - Uses GitHub REST endpoint `/repos/{owner}/{repo}/dependabot/alerts` with `gh api --paginate` (this API does not accept `?page=` pagination).
 - Exports normalized CSV columns for easier triage/spreadsheet use.
+- Output filenames matching `dev-docs/security/dependabot-*.json` / `dependabot-*.csv` are listed in `.gitignore` so snapshots stay local. If you ever committed them before adding ignore rules, stop tracking them once (files stay on disk), e.g. PowerShell: `Get-ChildItem dev-docs/security/dependabot-*.json, dev-docs/security/dependabot-*.csv | ForEach-Object { git rm --cached -- $_.FullName }`.
 
 ---
 
