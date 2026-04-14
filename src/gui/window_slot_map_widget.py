@@ -23,8 +23,8 @@ Requirements:
 
 from typing import Callable, List, Optional
 
-from PySide6.QtCore import Qt, QPoint, QRect, QSize
-from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPixmap
+from PySide6.QtCore import Qt, QPoint, QRect, QSize, Signal
+from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPixmap, QMouseEvent
 from PySide6.QtWidgets import QDialog, QHBoxLayout, QPushButton, QSizePolicy, QStyle, QVBoxLayout, QWidget
 
 from gui.style_constants import FOCUS_BORDER_COLOR
@@ -41,6 +41,8 @@ class WindowSlotMapWidget(QWidget):
     Each cell shows a thumbnail of the actual image for that view (if available)
     and a very small colored window number (1–4). Displayed-slot overlay when layout is not 2x2.
     """
+
+    cell_clicked = Signal(int)  # slot index 0–3 (grid TL, TR, BL, BR)
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -72,6 +74,25 @@ class WindowSlotMapWidget(QWidget):
     def refresh(self) -> None:
         """Request a repaint using the latest callback values."""
         self.update()
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:  # type: ignore[override]
+        """Left-click a cell to focus that window slot (see main app wiring)."""
+        if event.button() != Qt.MouseButton.LeftButton:
+            return super().mousePressEvent(event)
+        rect = self.rect().adjusted(1, 1, -1, -1)
+        side = min(rect.width(), rect.height())
+        if side <= 0:
+            return super().mousePressEvent(event)
+        cell_side = side // 2
+        ox = rect.left() + (rect.width() - side) // 2
+        oy = rect.top() + (rect.height() - side) // 2
+        p = event.position().toPoint()
+        col = (p.x() - ox) // cell_side
+        row = (p.y() - oy) // cell_side
+        if 0 <= col <= 1 and 0 <= row <= 1:
+            slot = row * 2 + col
+            self.cell_clicked.emit(int(slot))
+        super().mousePressEvent(event)
 
     # Internal helpers ---------------------------------------------------
 
@@ -330,10 +351,8 @@ class _LayoutMapTopBar(QWidget):
 
 class _DraggableWindowSlotMapContainer(QWidget):
     """
-    Container that holds a WindowSlotMapWidget and implements drag-to-move
-    for its parent window (used when shown as a popup from the context menu).
-    Mouse press/move/release on this widget move the parent QDialog and
-    constrain position to the boundary widget (e.g. main window).
+    Popup body: holds the top drag bar (moves the parent dialog) and the
+    ``WindowSlotMapWidget``. Map clicks are handled on the map itself (cell focus).
     """
 
     def __init__(
@@ -344,9 +363,6 @@ class _DraggableWindowSlotMapContainer(QWidget):
     ) -> None:
         super().__init__(parent)
         self._boundary_widget = boundary_widget
-        self._on_position_changed = on_position_changed
-        self._drag_start_global: Optional[QPoint] = None
-        self._window_start_pos: Optional[QPoint] = None
 
         # Keep popup width equal to the square map (no wider)
         total_w = 4 + WINDOW_SLOT_MAP_SIZE + 4
@@ -358,52 +374,11 @@ class _DraggableWindowSlotMapContainer(QWidget):
         self._top_bar = _LayoutMapTopBar(self, boundary_widget, on_position_changed)
         layout.addWidget(self._top_bar, 0, Qt.AlignmentFlag.AlignHCenter)
         self._map_widget = WindowSlotMapWidget(self)
-        # Allow drag from map area: clicks pass through to container
-        self._map_widget.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         layout.addWidget(self._map_widget)
 
     def get_map_widget(self) -> WindowSlotMapWidget:
         """Return the embedded WindowSlotMapWidget for setting callbacks and refresh."""
         return self._map_widget
-
-    def _boundary_rect_global(self) -> QRect:
-        """Return the boundary widget's frame geometry in global coordinates."""
-        return self._boundary_widget.frameGeometry()
-
-    def mousePressEvent(self, event) -> None:  # type: ignore[override]
-        if event.button() == Qt.MouseButton.LeftButton:
-            self._drag_start_global = event.globalPosition().toPoint()
-            win = self.window()
-            self._window_start_pos = win.mapToGlobal(QPoint(0, 0)) if win else QPoint(0, 0)
-        super().mousePressEvent(event)
-
-    def mouseMoveEvent(self, event) -> None:  # type: ignore[override]
-        if (
-            self._drag_start_global is not None
-            and self._window_start_pos is not None
-            and event.buttons() & Qt.MouseButton.LeftButton
-        ):
-            win = self.window()
-            if win is not None:
-                delta = event.globalPosition().toPoint() - self._drag_start_global
-                new_pos = self._window_start_pos + delta
-                boundary = self._boundary_rect_global()
-                # Clamp so the whole popup stays within the boundary
-                w, h = win.width(), win.height()
-                new_x = max(boundary.left(), min(new_pos.x(), boundary.right() - w))
-                new_y = max(boundary.top(), min(new_pos.y(), boundary.bottom() - h))
-                win.move(new_x, new_y)
-        super().mouseMoveEvent(event)
-
-    def mouseReleaseEvent(self, event) -> None:  # type: ignore[override]
-        if event.button() == Qt.MouseButton.LeftButton and self._drag_start_global is not None:
-            win = self.window()
-            if win is not None and self._on_position_changed is not None:
-                pos = win.mapToGlobal(QPoint(0, 0))
-                self._on_position_changed(pos.x(), pos.y())
-            self._drag_start_global = None
-            self._window_start_pos = None
-        super().mouseReleaseEvent(event)
 
 
 class WindowSlotMapPopupDialog(QDialog):

@@ -86,7 +86,6 @@ def _wire_dialog_signals(app: DICOMViewerApp) -> None:
     app.main_window.acr_mri_phantom_requested.connect(app._open_acr_mri_phantom_analysis)
     app.main_window.export_requested.connect(app._open_export)
     app.main_window.export_screenshots_requested.connect(app._open_export_screenshots)
-    app.main_window.save_mpr_dicom_requested.connect(app._on_save_mpr_as_dicom)
     app.main_window.about_this_file_requested.connect(app._open_about_this_file)
     app.main_window.create_mpr_view_requested.connect(
         lambda: app._mpr_controller.open_mpr_dialog(app.get_focused_subwindow_index())

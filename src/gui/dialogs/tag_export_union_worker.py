@@ -50,7 +50,9 @@ class TagExportUnionWorker(QThread):
                     include_private=self._include_private,
                     supplement_standard_tags=False,
                 )
-                for tag_str, tag_data in part.items():
+                for n, (tag_str, tag_data) in enumerate(part.items()):
+                    if n % 4000 == 0 and self.isInterruptionRequested():
+                        return
                     if tag_str not in merged:
                         merged[tag_str] = tag_data
             if self.isInterruptionRequested():

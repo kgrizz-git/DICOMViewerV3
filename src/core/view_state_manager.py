@@ -103,7 +103,9 @@ class ViewStateManager:
         # Value is dict with: window_center, window_width, zoom, h_scroll, v_scroll, scene_center, image_inverted
         # composite_series_key includes SeriesNumber if available
         self.series_defaults: Dict[str, Dict[str, Any]] = {}
-        
+        # Last user-adjusted W/L per series (study+composite series key), for restore when switching back.
+        self._user_wl_cache: Dict[str, Dict[str, float]] = {}
+
         # Track current series identifier for comparison
         self.current_series_identifier: Optional[str] = None
         
@@ -398,7 +400,8 @@ class ViewStateManager:
         # Get series identifier
         series_identifier = self.get_series_identifier(self.current_dataset)
         # print(f"[DEBUG-WL] Series identifier: {series_identifier[:20]}...")
-        
+        self.clear_user_window_level(series_identifier)
+
         # Try to get series-specific defaults
         if series_identifier in self.series_defaults:
             # print(f"[DEBUG-WL] Found series_defaults for this series")
@@ -999,6 +1002,37 @@ class ViewStateManager:
         # Set values in image viewer for drag tracking
         self.image_viewer.set_window_level_for_drag(center, width, center_range, width_range)
     
+    def save_user_window_level(self) -> None:
+        """
+        Cache current W/L in RAM for ``current_series_identifier`` when the user changed it.
+
+        Session-only: not written to config; cleared in ``reset_series_tracking`` (e.g. new
+        load / close-all paths) and when the app exits.
+        """
+        sid = self.current_series_identifier
+        if not sid:
+            return
+        if not self.window_level_user_modified:
+            return
+        if self.current_window_center is None or self.current_window_width is None:
+            return
+        self._user_wl_cache[sid] = {
+            "window_center": float(self.current_window_center),
+            "window_width": float(self.current_window_width),
+        }
+
+    def get_user_window_level(self, series_id: str) -> Optional[Dict[str, float]]:
+        """Return cached user W/L for *series_id*, or None."""
+        return self._user_wl_cache.get(series_id)
+
+    def clear_user_window_level(self, series_id: str) -> None:
+        """Drop cached user W/L for one series (e.g. after Reset View)."""
+        self._user_wl_cache.pop(series_id, None)
+
+    def clear_all_user_window_levels(self) -> None:
+        """Clear all cached user W/L (e.g. when closing all studies)."""
+        self._user_wl_cache.clear()
+
     def reset_window_level_state(self) -> None:
         """Reset window/level state when loading new files."""
         self.current_window_center = None
@@ -1022,6 +1056,7 @@ class ViewStateManager:
         # Clear series defaults when loading new files so window/level resets to defaults
         # even if the same series is loaded again
         self.series_defaults.clear()
+        self._user_wl_cache.clear()
     
     def set_rescale_parameters(self, slope: Optional[float], intercept: Optional[float], rescale_type: Optional[str]) -> None:
         # DEBUG: Log when rescale_type is set

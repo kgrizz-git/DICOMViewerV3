@@ -13,6 +13,7 @@ param(
     [switch]$Semgrep,
     [switch]$Secrets,
     [switch]$DebugFlags,
+    [switch]$Deps,
     [switch]$Verbose,
     [switch]$Report,
     [switch]$Quick,
@@ -56,6 +57,7 @@ OPTIONS:
     -Semgrep          Run only Semgrep SAST
     -Secrets          Run only secrets detection (Detect-secrets + TruffleHog)
     -DebugFlags       Check debug flags only
+    -Deps             Run pip-audit dependency scan
     -Quick            Run fast checks only (Semgrep + Debug flags)
     -Verbose          Detailed output
     -Report           Output JSON report
@@ -77,14 +79,29 @@ EXAMPLES:
     exit 0
 }
 
-# Activate venv if not already activated
-if ($env:VIRTUAL_ENV -eq $null) {
+# Resolve project Python from common venv locations
+$pythonExe = $null
+$activateScript = $null
+if (Test-Path ".\.venv\Scripts\python.exe") {
+    $pythonExe = ".\.venv\Scripts\python.exe"
+    $activateScript = ".\.venv\Scripts\Activate.ps1"
+} elseif (Test-Path ".\venv\Scripts\python.exe") {
+    $pythonExe = ".\venv\Scripts\python.exe"
+    $activateScript = ".\venv\Scripts\Activate.ps1"
+}
+
+if (-not $pythonExe) {
+    Write-Error-Custom "No project virtual environment found (.venv or venv)."
+    exit 1
+}
+
+if ($env:VIRTUAL_ENV -eq $null -and (Test-Path $activateScript)) {
     Write-Warning-Custom "Activating virtual environment..."
-    & ".\venv\Scripts\Activate.ps1"
+    & $activateScript
 }
 
 # Build the Python command
-$pythonCmd = ".\venv\Scripts\python.exe scripts\run_security_scan.py"
+$pythonCmd = "$pythonExe scripts\run_security_scan.py"
 
 if ($All -or (-not $Semgrep -and -not $Secrets -and -not $DebugFlags -and -not $Quick)) {
     $pythonCmd += " --all"
@@ -96,6 +113,7 @@ else {
     if ($Semgrep) { $pythonCmd += " --semgrep" }
     if ($Secrets) { $pythonCmd += " --secrets" }
     if ($DebugFlags) { $pythonCmd += " --debug-flags" }
+    if ($Deps) { $pythonCmd += " --deps" }
 }
 
 if ($Verbose) { $pythonCmd += " --verbose" }

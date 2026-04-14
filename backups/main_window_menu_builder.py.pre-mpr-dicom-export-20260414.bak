@@ -80,10 +80,6 @@ def build_menu_bar(main_window) -> None:
     export_screenshots_action.triggered.connect(main_window.export_screenshots_requested.emit)
     file_menu.addAction(export_screenshots_action)
 
-    save_mpr_dicom_action = QAction("Save MPR as DICOM…", main_window)
-    save_mpr_dicom_action.triggered.connect(main_window.save_mpr_dicom_requested.emit)
-    file_menu.addAction(save_mpr_dicom_action)
-
     file_menu.addSeparator()
 
     export_customizations_action = QAction("Export Customizations...", main_window)
@@ -298,18 +294,6 @@ def build_menu_bar(main_window) -> None:
     main_window.show_series_navigator_action.setChecked(False)  # Navigator starts hidden
     main_window.show_series_navigator_action.triggered.connect(main_window.toggle_series_navigator)
     view_menu.addAction(main_window.show_series_navigator_action)
-
-    main_window.show_navigator_slice_frame_count_action = QAction(
-        "Show Slice/Frame Count on Navigator Thumbnails", main_window
-    )
-    main_window.show_navigator_slice_frame_count_action.setCheckable(True)
-    main_window.show_navigator_slice_frame_count_action.setChecked(
-        main_window.config_manager.get_navigator_show_slice_frame_count()
-    )
-    main_window.show_navigator_slice_frame_count_action.triggered.connect(
-        main_window.toggle_navigator_slice_frame_count_badge
-    )
-    view_menu.addAction(main_window.show_navigator_slice_frame_count_action)
 
     view_menu.addSeparator()
 

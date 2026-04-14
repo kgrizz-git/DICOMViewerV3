@@ -508,22 +508,25 @@ class SeriesThumbnail(QFrame):
             indicator_font.setBold(True)
             indicator_font.setPointSize(7)
             painter.setFont(indicator_font)
-            fm = painter.fontMetrics()
-            text_w = fm.horizontalAdvance(indicator_text)
-            text_h = fm.height()
-            padding = 3
-            bottom_left = self.rect().bottomLeft()
-            x = int(bottom_left.x()) + padding
-            y_bottom = int(bottom_left.y()) - padding
-            text_rect = QRect(x, y_bottom - text_h, text_w, text_h)
-            # Text only: full-opacity yellow (same size/placement as before; no badge box).
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.setPen(QColor(255, 255, 0))
-            painter.drawText(
-                text_rect,
-                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom,
-                indicator_text,
+            indicator_rect = painter.fontMetrics().boundingRect(indicator_text)
+            indicator_padding = 3
+            indicator_bg_rect = indicator_rect.adjusted(
+                -indicator_padding,
+                -indicator_padding,
+                indicator_padding,
+                indicator_padding,
             )
+            bottom_left = self.rect().bottomLeft()
+            indicator_bg_rect.moveBottomLeft(
+                QPoint(
+                    int(bottom_left.x()) + indicator_padding,
+                    int(bottom_left.y()) - indicator_padding,
+                )
+            )
+            painter.setPen(QColor(255, 255, 0))
+            painter.setBrush(QColor(0, 0, 0, 180))
+            painter.drawRect(indicator_bg_rect)
+            painter.drawText(indicator_bg_rect, Qt.AlignmentFlag.AlignCenter, indicator_text)
 
         # Colored window numbers (1–4) in the top-right; rightmost = first slot in list.
         if self._dot_slots:

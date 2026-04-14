@@ -1125,47 +1125,11 @@ class DICOMViewerApp(QObject):
         """Current load generation and merged tag map, if background union has finished."""
         return (self._tag_export_union_generation, self._tag_export_union_merged)
 
-    def _drain_tag_export_union_worker(self, timeout_sec: float = 180.0) -> None:
-        """
-        Stop and join the tag-export union QThread before replacing it.
-
-        Without this, assigning a new ``TagExportUnionWorker`` drops the last
-        reference to a still-running ``QThread``, which triggers Qt's
-        "Destroyed while thread is still running" warning and can crash.
-
-        Uses short ``wait`` slices plus ``processEvents`` so the UI stays
-        responsive while a large multi-frame union unwinds cooperatively.
-        """
-        w = self._tag_export_union_worker
-        if w is None:
-            return
-        try:
-            w.finished_ok.disconnect(self._on_tag_export_union_worker_finished)
-        except TypeError:
-            pass
-        try:
-            w.failed.disconnect(self._on_tag_export_union_worker_failed)
-        except TypeError:
-            pass
-        if w.isRunning():
-            w.requestInterruption()
-            app = QApplication.instance()
-            deadline = time.time() + timeout_sec
-            while w.isRunning() and time.time() < deadline:
-                w.wait(50)
-                if app is not None:
-                    app.processEvents(QEventLoop.ProcessEventsFlag.AllEvents, 50)
-            if w.isRunning():
-                print(
-                    "[DICOMViewerApp] TagExportUnionWorker did not finish within "
-                    f"{timeout_sec:.0f}s after interruption; shutdown may still warn.",
-                    file=sys.stderr,
-                )
-        self._tag_export_union_worker = None
-
     def _schedule_tag_export_union_rebuild(self) -> None:
         """Rebuild in-memory tag union off the GUI thread (no disk cache)."""
-        self._drain_tag_export_union_worker()
+        prev = self._tag_export_union_worker
+        if prev is not None and prev.isRunning():
+            prev.requestInterruption()
         self._tag_export_union_generation += 1
         gen = self._tag_export_union_generation
         self._tag_export_union_merged = None
@@ -1352,7 +1316,6 @@ class DICOMViewerApp(QObject):
 
     def _on_app_about_to_quit(self) -> None:
         """Reset view–slot mapping and dissolve slice sync groups when the application is exiting."""
-        self._drain_tag_export_union_worker(timeout_sec=30.0)
         self.multi_window_layout.reset_slot_to_view_default()
         self.config_manager.set_slice_sync_groups([])
         self._slice_sync_coordinator.set_groups([])

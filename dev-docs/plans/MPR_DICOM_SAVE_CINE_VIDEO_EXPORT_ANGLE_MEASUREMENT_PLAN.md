@@ -175,11 +175,11 @@ The TO_DO text matches **Option B** (vertices P1–P2–P3 with angle at **P2**)
 
 ### MPR DICOM save
 
-- [ ] Dialog + eligibility (MPR focused subwindow only)
-- [ ] `mpr_dicom_export` writer with UIDs and geometry tags
-- [ ] Privacy / anonymization alignment
-- [ ] Tests + manual round-trip validation
-- [ ] `CHANGELOG.md` + version bump per release rules
+- [x] Dialog + eligibility (MPR focused subwindow only) — **2026-04-14:** File → **Save MPR as DICOM…** + ``MprController.prompt_save_mpr_as_dicom``; message if not MPR / no stack.
+- [x] `mpr_dicom_export` writer with UIDs and geometry tags — **`src/core/mpr_dicom_export.py`**; optional **ReferencedSeriesSequence** to source series.
+- [x] Privacy / anonymization alignment — reuses **`DICOMAnonymizer`**; export folder names follow anonymized template when enabled.
+- [x] Tests + manual round-trip validation — **`tests/test_mpr_dicom_export.py`** (pydicom read-back); manual external validator still optional.
+- [x] `CHANGELOG.md` + version bump per release rules — **CHANGELOG** [Unreleased] **Added**; **`src/version.py`** unchanged (pre-release accumulation per repo pattern).
 
 ### Cine export
 

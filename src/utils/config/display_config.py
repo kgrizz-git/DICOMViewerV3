@@ -99,6 +99,18 @@ class DisplayConfigMixin:
         self._config()["show_direction_labels"] = enabled
         self._save_config()
 
+    def get_navigator_show_slice_frame_count(self) -> bool:
+        """
+        When True, each series thumbnail shows a compact slice / frame count badge
+        (default on). When False, only multi-frame series show the legacy badge.
+        """
+        return bool(self._config().get("navigator_show_slice_frame_count", True))
+
+    def set_navigator_show_slice_frame_count(self, enabled: bool) -> None:
+        """Persist navigator slice/frame count badge visibility."""
+        self._config()["navigator_show_slice_frame_count"] = bool(enabled)
+        self._save_config()
+
     def get_scale_markers_color(self) -> tuple[int, int, int]:
         """
         Get scale marker color as RGB tuple.

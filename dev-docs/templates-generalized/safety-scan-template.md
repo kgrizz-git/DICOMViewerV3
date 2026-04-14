@@ -66,6 +66,12 @@ Instead, for each security/safety scan:
 5. **Review dependencies** - Check for known vulnerabilities in third-party libraries and packages
 6. **Analyze code flow** - Trace execution paths to understand how data flows and where vulnerabilities might exist
 7. **Consider attack scenarios** - Think like an attacker: what could go wrong?
+8. **Verify local hook enforcement is installed** - ensure repo-managed hooks from `.githooks/` are installed into `.git/hooks` on each developer machine (`scripts/install-local-git-hooks.ps1` on Windows, `scripts/setup-hooks.sh` on macOS/Linux)
+
+### Hook Policy
+
+- Keep `.githooks/` under version control so hook logic is reviewed and shared.
+- Do **not** add `.githooks/` to `.gitignore`.
 
 ---
 

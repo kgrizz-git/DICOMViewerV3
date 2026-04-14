@@ -36,7 +36,7 @@ import os
 
 import numpy as np
 from PIL import Image
-from PySide6.QtCore import QObject, Qt, QTimer, Signal
+from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtWidgets import QApplication, QDialog, QFileDialog, QMessageBox, QProgressDialog
 
 from core.mpr_builder import MprBuilder, MprBuilderWorker, MprResult
@@ -409,15 +409,6 @@ class MprController(QObject):
         data = self._app.subwindow_data.get(idx)
         if data is None:
             return
-
-        # Drop slice-location line manager before scene changes so stale line items
-        # cannot survive scene.clear() / restore ordering (matches _clear_subwindow).
-        try:
-            line_coord = getattr(self._app, "_slice_location_line_coordinator", None)
-            if line_coord is not None:
-                line_coord.remove_manager(idx)
-        except Exception:
-            pass
 
         previous_state = data.get("mpr_previous_state")
         image_viewer = self._get_image_viewer(idx)
@@ -945,16 +936,6 @@ class MprController(QObject):
             sync = getattr(self._app, "_sync_navigation_slider_for_subwindow", None)
             if callable(sync):
                 sync(idx)
-        except Exception:
-            pass
-
-        # Cross-view slice plane lines read MPR geometry after this method returns
-        # (e.g. ``SliceSyncCoordinator`` may update other panes in the same call stack).
-        # A deferred refresh avoids stale segments on MPR panes when native slices move.
-        try:
-            line_coord = getattr(self._app, "_slice_location_line_coordinator", None)
-            if line_coord is not None:
-                QTimer.singleShot(0, line_coord.refresh_all)
         except Exception:
             pass
 

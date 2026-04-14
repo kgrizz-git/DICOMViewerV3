@@ -1146,6 +1146,16 @@ class SubwindowLifecycleController:
         app._update_about_this_file_dialog()
         # Push current slice state to the newly focused viewer's edge-reveal slider
         self._sync_slider_state_for_focused_viewer(focused_idx)
+        # 1×1 / 1×2 / 2×1: focus can change which pane is visible (window map, swap) without a
+        # layout *mode* change, so on_layout_changed never runs. Reuse the same coalesced
+        # viewport pass as layout changes so newly shown panes get fit_to_view for the new size.
+        try:
+            mode = app.multi_window_layout.get_layout_mode()
+        except Exception:
+            mode = ""
+        # Require str so tests using MagicMock for layout do not treat mock == "1x1" as true.
+        if isinstance(mode, str) and mode in ("1x1", "1x2", "2x1"):
+            self._schedule_viewport_resized_timer()
 
     def _sync_slider_state_for_focused_viewer(self, focused_idx: int) -> None:
         """

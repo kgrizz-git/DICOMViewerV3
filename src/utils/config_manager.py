@@ -124,6 +124,7 @@ class ConfigManager(
             "privacy_view_enabled": False,
             "smooth_image_when_zoomed": False,
             "show_instances_separately": False,
+            "navigator_show_slice_frame_count": True,
             # Overlay
             "overlay_mode": "minimal",
             "overlay_visibility_state": 0,

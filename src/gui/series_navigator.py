@@ -102,6 +102,8 @@ class SeriesNavigator(QWidget):
         self._multiframe_info_map: Dict[Tuple[str, str], MultiFrameSeriesInfo] = {}
         self._show_instances_separately = False
         self._privacy_mode_enabled = False
+        # Compact slice/frame count on main series thumbnails (config-driven from main.py).
+        self._show_slice_frame_count_badge: bool = True
 
         # Current subwindow slot → (study_uid, series_key) assignments for dot indicators
         self._subwindow_assignments: Dict[int, tuple[Any, ...]] = {}
@@ -186,6 +188,14 @@ class SeriesNavigator(QWidget):
         """
         self._mpr_thumbnail_specs.pop(subwindow_index, None)
         self._rebuild_from_cached_studies()
+
+    def set_show_slice_frame_count_badge(self, show: bool) -> None:
+        """Toggle slice/frame count badge on series thumbnails (persists via config)."""
+        self._show_slice_frame_count_badge = bool(show)
+        for thumb in self.thumbnails.values():
+            thumb.set_show_slice_frame_count_badge(self._show_slice_frame_count_badge)
+        for thumb in self.instance_thumbnails.values():
+            thumb.set_show_slice_frame_count_badge(False)
 
     def set_multiframe_info_map(self, info_map: Dict[Tuple[str, str], MultiFrameSeriesInfo]) -> None:
         """Set per-series multiframe metadata used when painting thumbnails."""
@@ -499,6 +509,7 @@ class SeriesNavigator(QWidget):
                     )
                 else:
                     thumbnail.set_multiframe_info(1, 1)
+                thumbnail.set_show_slice_frame_count_badge(self._show_slice_frame_count_badge)
 
                 composite_key = f"{study_uid}:{series_uid}"
                 self.thumbnails[composite_key] = thumbnail
@@ -541,6 +552,7 @@ class SeriesNavigator(QWidget):
                         instance_thumbnail.about_this_file_requested.connect(self.about_this_file_requested.emit)
                         instance_thumbnail.close_series_signal.connect(self.close_series_requested.emit)
                         instance_thumbnail.close_study_signal.connect(self.close_study_requested.emit)
+                        instance_thumbnail.set_show_slice_frame_count_badge(False)
                         instance_thumbnail.setToolTip(
                             build_instance_navigator_tooltip(
                                 first_dataset,

@@ -41,7 +41,7 @@ from PySide6.QtWidgets import (
     QProgressDialog,
     QStyleFactory,
 )
-from PySide6.QtCore import QEventLoop, Qt, QPoint, QPointF, QObject, QTimer, QRectF, QSize, Signal
+from PySide6.QtCore import Qt, QPoint, QPointF, QObject, QTimer, QRectF, QSize, Signal
 from PySide6.QtGui import QCursor, QColor
 from typing import Any, Callable, Optional, Dict, List, Tuple, cast, Set
 import pydicom
@@ -329,9 +329,6 @@ class DICOMViewerApp(QObject):
             self.config_manager.get_show_instances_separately()
         )
         self.series_navigator.set_privacy_mode(self.privacy_view_enabled)
-        self.series_navigator.set_show_slice_frame_count_badge(
-            self.config_manager.get_navigator_show_slice_frame_count()
-        )
         self.cine_controls_widget = CineControlsWidget()
         self.intensity_projection_controls_widget = IntensityProjectionControlsWidget()
 
@@ -1125,47 +1122,11 @@ class DICOMViewerApp(QObject):
         """Current load generation and merged tag map, if background union has finished."""
         return (self._tag_export_union_generation, self._tag_export_union_merged)
 
-    def _drain_tag_export_union_worker(self, timeout_sec: float = 180.0) -> None:
-        """
-        Stop and join the tag-export union QThread before replacing it.
-
-        Without this, assigning a new ``TagExportUnionWorker`` drops the last
-        reference to a still-running ``QThread``, which triggers Qt's
-        "Destroyed while thread is still running" warning and can crash.
-
-        Uses short ``wait`` slices plus ``processEvents`` so the UI stays
-        responsive while a large multi-frame union unwinds cooperatively.
-        """
-        w = self._tag_export_union_worker
-        if w is None:
-            return
-        try:
-            w.finished_ok.disconnect(self._on_tag_export_union_worker_finished)
-        except TypeError:
-            pass
-        try:
-            w.failed.disconnect(self._on_tag_export_union_worker_failed)
-        except TypeError:
-            pass
-        if w.isRunning():
-            w.requestInterruption()
-            app = QApplication.instance()
-            deadline = time.time() + timeout_sec
-            while w.isRunning() and time.time() < deadline:
-                w.wait(50)
-                if app is not None:
-                    app.processEvents(QEventLoop.ProcessEventsFlag.AllEvents, 50)
-            if w.isRunning():
-                print(
-                    "[DICOMViewerApp] TagExportUnionWorker did not finish within "
-                    f"{timeout_sec:.0f}s after interruption; shutdown may still warn.",
-                    file=sys.stderr,
-                )
-        self._tag_export_union_worker = None
-
     def _schedule_tag_export_union_rebuild(self) -> None:
         """Rebuild in-memory tag union off the GUI thread (no disk cache)."""
-        self._drain_tag_export_union_worker()
+        prev = self._tag_export_union_worker
+        if prev is not None and prev.isRunning():
+            prev.requestInterruption()
         self._tag_export_union_generation += 1
         gen = self._tag_export_union_generation
         self._tag_export_union_merged = None
@@ -1352,7 +1313,6 @@ class DICOMViewerApp(QObject):
 
     def _on_app_about_to_quit(self) -> None:
         """Reset view–slot mapping and dissolve slice sync groups when the application is exiting."""
-        self._drain_tag_export_union_worker(timeout_sec=30.0)
         self.multi_window_layout.reset_slot_to_view_default()
         self.config_manager.set_slice_sync_groups([])
         self._slice_sync_coordinator.set_groups([])
@@ -1981,46 +1941,15 @@ class DICOMViewerApp(QObject):
         widget = getattr(self.main_window, "window_slot_map_widget", None)
         if widget is not None:
             try:
-                widget.cell_clicked.connect(
-                    self._on_window_slot_map_cell_clicked,
-                    Qt.ConnectionType.UniqueConnection,
-                )
-            except Exception:
-                pass
-            try:
                 widget.refresh()
             except Exception:
                 pass
         popup_widget = getattr(self, "_window_slot_map_widget_popup", None)
         if popup_widget is not None:
             try:
-                popup_widget.cell_clicked.connect(
-                    self._on_window_slot_map_cell_clicked,
-                    Qt.ConnectionType.UniqueConnection,
-                )
-            except Exception:
-                pass
-            try:
                 popup_widget.refresh()
             except Exception:
                 pass
-
-    def _on_window_slot_map_cell_clicked(self, slot: int) -> None:
-        """Focus the subwindow in grid slot *slot* (0–3); 1×2 / 2×1 re-arrange via layout."""
-        try:
-            stv = self.multi_window_layout.get_slot_to_view()
-        except Exception:
-            return
-        if slot < 0 or slot >= len(stv):
-            return
-        view_idx = int(stv[slot])
-        subwindows = self.multi_window_layout.get_all_subwindows()
-        if view_idx < 0 or view_idx >= len(subwindows):
-            return
-        sub = subwindows[view_idx]
-        if sub is None:
-            return
-        self.multi_window_layout.set_focused_subwindow(sub)
 
     def _on_window_slot_map_popup_requested(self) -> None:
         """Show or hide a small popup with the window-slot map near the cursor (toggle)."""
@@ -2065,13 +1994,6 @@ class DICOMViewerApp(QObject):
                 get_layout_mode=self.multi_window_layout.get_layout_mode,
                 get_focused_view_index=self.get_focused_subwindow_index,
                 get_thumbnail_for_view=self._get_thumbnail_for_view,
-            )
-        except Exception:
-            pass
-        try:
-            widget.cell_clicked.connect(
-                self._on_window_slot_map_cell_clicked,
-                Qt.ConnectionType.UniqueConnection,
             )
         except Exception:
             pass
@@ -2617,10 +2539,6 @@ class DICOMViewerApp(QObject):
     def _open_export_screenshots(self) -> None:
         """Handle Export Screenshots dialog request. One file per selected subwindow."""
         self._export_app_facade.open_export_screenshots()
-
-    def _on_save_mpr_as_dicom(self) -> None:
-        """File → Save MPR as DICOM… — requires focused subwindow in MPR mode."""
-        self._mpr_controller.prompt_save_mpr_as_dicom()
 
     def _resolve_focused_series_ordered_paths(
         self,

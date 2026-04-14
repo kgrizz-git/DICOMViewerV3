@@ -1,0 +1,398 @@
+"""
+MPR stack export as multi-file DICOM (derived series).
+
+Writes one classic DICOM instance per MPR plane from ``MprResult.slices``,
+with new ``SeriesInstanceUID`` / ``SOPInstanceUID`` per file, geometry from
+``MprResult.slice_stack``, and patient/study metadata copied from a template
+dataset (optionally anonymized like other exports).
+
+Pixel mapping (float32 MPR planes → stored integers)
+----------------------------------------------------
+1. **Physical values:** For each slice array, if ``use_rescaled_pixel_values``
+   is True and ``MprResult`` carries both ``rescale_slope`` and
+   ``rescale_intercept``, values are ``array * slope + intercept`` (same order
+   as ``MprResult.apply_rescale``). Otherwise the resampled float32 voxel
+   values are used as-is (SimpleITK output space).
+
+2. **Global range:** ``p_min`` / ``p_max`` are the min and max over **all**
+   planes after step 1 (stable window across the stack).
+
+3. **Linear int16 storage:** Stored samples are signed 16-bit with
+   ``RescaleSlope`` / ``RescaleIntercept`` chosen so that
+   ``physical ≈ stored * RescaleSlope + RescaleIntercept`` maps
+   ``stored = -32768`` → ``p_min`` and ``stored = 32767`` → ``p_max``::
+
+       slope = (p_max - p_min) / 65535   (or 1.0 if p_max <= p_min)
+       intercept = p_min + 32768 * slope
+
+4. **VOI LUT hint:** ``WindowCenter`` / ``WindowWidth`` are set from the same
+   ``p_min``/``p_max`` (optional overrides in ``MprDicomExportOptions``) for
+   viewers that honor these tags.
+
+SOP class selection: **CT** → ``CTImageStorage`` when modality is CT; **MR** →
+``MRImageStorage`` when modality is MR; otherwise **Secondary Capture** to
+avoid invalid MR/CT IOD claims for PET/NM/etc.
+
+``FrameOfReferenceUID`` is copied from the template when present (geometry is
+traceable to the source volume).
+
+Inputs:
+    ``output_dir``, ``MprResult``, template ``Dataset``, ``MprDicomExportOptions``.
+
+Outputs:
+    List of written file paths; raises ``MprDicomExportError`` on I/O or DICOM errors.
+
+Requirements:
+    numpy, pydicom (project dependencies).
+"""
+
+from __future__ import annotations
+
+import copy
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Callable, List, Optional, Tuple, Union
+
+import numpy as np
+import pydicom.uid
+from pydicom import dcmwrite
+from pydicom.dataset import Dataset, FileMetaDataset
+from pydicom.sequence import Sequence
+from pydicom.uid import (
+    CTImageStorage,
+    ExplicitVRLittleEndian,
+    MRImageStorage,
+    SecondaryCaptureImageStorage,
+    UID,
+)
+
+from core.mpr_builder import MprResult
+
+
+class MprDicomExportError(RuntimeError):
+    """Raised when MPR DICOM export cannot complete."""
+
+
+@dataclass
+class MprDicomExportOptions:
+    """Options for ``write_mpr_series``."""
+
+    orientation_label: str = ""
+    series_description_suffix: str = ""
+    anonymize: bool = False
+    use_rescaled_pixel_values: bool = True
+    window_center_override: Optional[float] = None
+    window_width_override: Optional[float] = None
+    series_number: Optional[int] = None
+
+
+def _sanitize_folder_name(name: str) -> str:
+    invalid_chars = '<>:"/\\|?*'
+    s = str(name)
+    for c in invalid_chars:
+        s = s.replace(c, "_")
+    s = s.replace(" ", "_").strip(". ")
+    return s or "UNKNOWN"
+
+
+def _physical_slices(
+    mpr_result: MprResult, use_rescaled: bool
+) -> List[np.ndarray]:
+    out: List[np.ndarray] = []
+    for arr in mpr_result.slices:
+        a = np.asarray(arr, dtype=np.float32)
+        if use_rescaled:
+            a = mpr_result.apply_rescale(a)
+        out.append(a)
+    return out
+
+
+def _stack_min_max(slices: List[np.ndarray]) -> Tuple[float, float]:
+    if not slices:
+        return 0.0, 1.0
+    mins = [float(np.min(s)) for s in slices]
+    maxs = [float(np.max(s)) for s in slices]
+    return min(mins), max(maxs)
+
+
+def _float_to_int16_with_rescale(
+    physical: np.ndarray, p_min: float, p_max: float
+) -> Tuple[np.ndarray, float, float]:
+    """Map physical float values to int16 with DICOM rescale tags."""
+    if p_max <= p_min:
+        slope = 1.0
+        intercept = float(p_min)
+        stored = np.zeros_like(physical, dtype=np.int16)
+        return stored, slope, intercept
+    slope = (p_max - p_min) / 65535.0
+    intercept = p_min + 32768.0 * slope
+    stored = np.clip(
+        np.rint((physical.astype(np.float64) - intercept) / slope),
+        -32768,
+        32767,
+    ).astype(np.int16)
+    return stored, float(slope), float(intercept)
+
+
+def _choose_sop_class_uid(modality: str) -> UID:
+    m = (modality or "").strip().upper()
+    if m == "CT":
+        return UID(str(CTImageStorage))
+    if m == "MR":
+        return UID(str(MRImageStorage))
+    return UID(str(SecondaryCaptureImageStorage))
+
+
+def _strip_conflicting_elements(ds: Dataset) -> None:
+    """Remove pixel blob and other data that will be regenerated."""
+    # Use numeric tags so ``tag in ds`` does not warn on invalid keyword strings.
+    for tag_int in (0x7FE00010, 0x7FE00008, 0x7FE00009, 0x7FE0000A):
+        if tag_int in ds:
+            del ds[tag_int]
+
+
+def _series_description_default(
+    template: Dataset, orientation_label: str, suffix: str
+) -> str:
+    base = str(getattr(template, "SeriesDescription", "") or "").strip()
+    orient = (orientation_label or "").strip() or "MPR"
+    desc = f"MPR {orient} from {base}" if base else f"MPR {orient}"
+    suf = (suffix or "").strip()
+    if suf:
+        desc = f"{desc} {suf}"
+    return desc[:64]
+
+
+def write_mpr_series(
+    output_dir: str | Path,
+    mpr_result: MprResult,
+    template_dataset: Dataset,
+    options: Optional[MprDicomExportOptions] = None,
+    *,
+    progress_callback: Optional[Callable[[int, int, str], Union[bool, None]]] = None,
+) -> List[Path]:
+    """
+    Write each MPR plane as one DICOM file under ``output_dir``.
+
+    Creates the same patient/study/series folder hierarchy as slice export when
+    ``anonymize`` is False; when True, folder names use anonymized patient tags.
+
+    Args:
+        output_dir: Root directory for export (folders created beneath).
+        mpr_result: Completed MPR build result.
+        template_dataset: Representative source slice (e.g. first of series);
+            patient/study tags are copied from a deep copy.
+        options: Export options; defaults used if None.
+        progress_callback: Optional ``(current_1_based, total, message) -> Optional[bool]``.
+            Return **False** to abort (raises ``MprDicomExportError``); other returns continue.
+
+    Returns:
+        Paths of written files in stack order.
+
+    Raises:
+        MprDicomExportError: On invalid input or write failures.
+    """
+    opts = options or MprDicomExportOptions()
+    if mpr_result.n_slices == 0:
+        raise MprDicomExportError("MPR result has no slices to export.")
+
+    root = Path(output_dir)
+    root.mkdir(parents=True, exist_ok=True)
+
+    physical_slices = _physical_slices(
+        mpr_result, bool(opts.use_rescaled_pixel_values)
+    )
+    p_min, p_max = _stack_min_max(physical_slices)
+    wc = float(opts.window_center_override) if opts.window_center_override is not None else (p_min + p_max) / 2.0
+    ww = float(opts.window_width_override) if opts.window_width_override is not None else max(p_max - p_min, 1.0)
+
+    template = copy.deepcopy(template_dataset)
+    modality = str(getattr(template, "Modality", "") or "")
+    sop_class = _choose_sop_class_uid(modality)
+
+    if opts.anonymize:
+        from utils.dicom_anonymizer import DICOMAnonymizer
+
+        folder_ds = DICOMAnonymizer().anonymize_dataset(template)
+    else:
+        folder_ds = template
+
+    patient_id = _sanitize_folder_name(str(getattr(folder_ds, "PatientID", "UNKNOWN_PATIENT")))
+    study_date = _sanitize_folder_name(str(getattr(folder_ds, "StudyDate", "UNKNOWN_DATE")))
+    study_description = _sanitize_folder_name(
+        str(getattr(folder_ds, "StudyDescription", "UNKNOWN_STUDY"))
+    )
+    series_number_src = getattr(folder_ds, "SeriesNumber", None)
+    if series_number_src is None or series_number_src == "":
+        series_number_str = "UNKNOWN_SERIES_NUM"
+    else:
+        series_number_str = (
+            str(int(series_number_src))
+            if isinstance(series_number_src, (int, float))
+            else str(series_number_src)
+        )
+    series_number_str = _sanitize_folder_name(series_number_str)
+    series_description_for_folder = _sanitize_folder_name(
+        _series_description_default(template, opts.orientation_label, opts.series_description_suffix)
+    )
+
+    patient_dir = root / patient_id
+    study_dir = patient_dir / f"{study_date}-{study_description}"
+    series_dir = study_dir / f"{series_number_str}-{series_description_for_folder}"
+    series_dir.mkdir(parents=True, exist_ok=True)
+
+    new_series_uid = pydicom.uid.generate_uid()
+    study_uid = str(getattr(template, "StudyInstanceUID", "") or pydicom.uid.generate_uid())
+    source_series_uid = str(getattr(template, "SeriesInstanceUID", "") or "")
+    frame_of_ref = getattr(template, "FrameOfReferenceUID", None)
+    for_uid = str(frame_of_ref) if frame_of_ref else None
+
+    series_num_val = opts.series_number
+    if series_num_val is None:
+        try:
+            sn = int(series_number_src) if series_number_src not in (None, "") else 1
+            series_num_val = sn + 500
+        except (TypeError, ValueError):
+            series_num_val = 501
+
+    written: List[Path] = []
+    total = mpr_result.n_slices
+    planes = getattr(mpr_result.slice_stack, "planes", None) or []
+
+    base_template = copy.deepcopy(template)
+    _strip_conflicting_elements(base_template)
+    if opts.anonymize:
+        from utils.dicom_anonymizer import DICOMAnonymizer
+
+        base_template = DICOMAnonymizer().anonymize_dataset(base_template)
+        _strip_conflicting_elements(base_template)
+
+    for i in range(total):
+        if progress_callback:
+            cont = progress_callback(i + 1, total, f"Slice {i + 1} / {total}")
+            if cont is False:
+                raise MprDicomExportError("Export cancelled.")
+
+        ds = copy.deepcopy(base_template)
+
+        sop_inst = pydicom.uid.generate_uid()
+
+        ds.file_meta = FileMetaDataset()
+        ds.file_meta.MediaStorageSOPClassUID = sop_class
+        ds.file_meta.MediaStorageSOPInstanceUID = sop_inst
+        ds.file_meta.TransferSyntaxUID = ExplicitVRLittleEndian
+        ds.file_meta.ImplementationClassUID = pydicom.uid.PYDICOM_IMPLEMENTATION_UID
+
+        ds.is_implicit_VR = False
+        ds.is_little_endian = True
+
+        ds.SOPClassUID = sop_class
+        ds.SOPInstanceUID = sop_inst
+        ds.SeriesInstanceUID = new_series_uid
+        ds.StudyInstanceUID = study_uid
+        ds.InstanceNumber = i + 1
+        try:
+            ds.SeriesNumber = int(series_num_val)
+        except Exception:
+            ds.SeriesNumber = series_num_val
+
+        ds.SeriesDescription = _series_description_default(
+            template, opts.orientation_label, opts.series_description_suffix
+        )[:64]
+
+        ds.ImageType = ["DERIVED", "SECONDARY", "REFORMATTED"]
+
+        if str(sop_class) == str(SecondaryCaptureImageStorage):
+            ds.Modality = "OT"
+        elif modality:
+            ds.Modality = modality
+
+        if for_uid:
+            ds.FrameOfReferenceUID = for_uid
+
+        try:
+            if source_series_uid:
+                ref_item = Dataset()
+                ref_item.SeriesInstanceUID = source_series_uid
+                rsq = Sequence()
+                rsq.append(ref_item)
+                ds.ReferencedSeriesSequence = rsq
+        except Exception:
+            pass
+
+        phys = physical_slices[i]
+        pixel_array, rs, ri = _float_to_int16_with_rescale(phys, p_min, p_max)
+        rows, cols = int(pixel_array.shape[0]), int(pixel_array.shape[1])
+        ds.Rows = rows
+        ds.Columns = cols
+        ds.BitsAllocated = 16
+        ds.BitsStored = 16
+        ds.HighBit = 15
+        ds.PixelRepresentation = 1
+        ds.SamplesPerPixel = 1
+        ds.PhotometricInterpretation = "MONOCHROME2"
+        ds.PixelData = pixel_array.tobytes()
+        ds.RescaleSlope = rs
+        ds.RescaleIntercept = ri
+        try:
+            ds.RescaleType = "US" if modality.upper() == "CT" else "UNSPECIFIED"
+        except Exception:
+            pass
+
+        try:
+            ds.WindowCenter = wc
+            ds.WindowWidth = ww
+        except Exception:
+            pass
+
+        try:
+            ds.SliceThickness = float(mpr_result.output_thickness_mm)
+            ds.SpacingBetweenSlices = float(mpr_result.output_thickness_mm)
+        except Exception:
+            pass
+
+        rs_mm, cs_mm = mpr_result.output_spacing_mm[0], mpr_result.output_spacing_mm[1]
+        ds.PixelSpacing = [float(rs_mm), float(cs_mm)]
+
+        if i < len(planes):
+            plane = planes[i]
+            rc = np.asarray(plane.row_cosine, dtype=float).reshape(-1)
+            cc = np.asarray(plane.col_cosine, dtype=float).reshape(-1)
+            org = np.asarray(plane.origin, dtype=float).reshape(-1)
+            if rc.size == 3 and cc.size == 3 and org.size == 3:
+                ds.ImageOrientationPatient = [
+                    float(rc[0]),
+                    float(rc[1]),
+                    float(rc[2]),
+                    float(cc[0]),
+                    float(cc[1]),
+                    float(cc[2]),
+                ]
+                ds.ImagePositionPatient = [float(org[0]), float(org[1]), float(org[2])]
+
+        try:
+            ds.ImageComments = (
+                f"Derived MPR reformatted series; source series UID {source_series_uid}; "
+                f"plane {i + 1}/{total}"
+            )[:1024]
+        except Exception:
+            pass
+
+        out_path = series_dir / f"MPR_{i + 1:04d}.dcm"
+        try:
+            dcmwrite(str(out_path), ds, write_like_original=False)
+        except Exception as exc:
+            raise MprDicomExportError(f"Failed to write {out_path}: {exc}") from exc
+        written.append(out_path.resolve())
+
+    if progress_callback:
+        progress_callback(total, total, "Done")
+
+    return written
+
+
+__all__ = [
+    "MprDicomExportError",
+    "MprDicomExportOptions",
+    "write_mpr_series",
+]

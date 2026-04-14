@@ -18,6 +18,12 @@ pip install -r requirements-dev.txt
 
 This installs `requirements.txt` plus **semgrep** and **detect-secrets**.
 
+Install dependency CVE scanner (`pip-audit`) in the same venv:
+
+```bash
+python -m pip install pip-audit
+```
+
 ### Step 2: Install TruffleHog v3 binary (recommended; aligns with CI)
 
 From project root:
@@ -51,7 +57,7 @@ detect-secrets  1.5.x    (Secrets detector)
 **Activation (PowerShell) for Python tools:**
 
 ```powershell
-.\venv\Scripts\Activate.ps1
+.\.venv\Scripts\Activate.ps1
 ```
 
 ---
@@ -244,7 +250,7 @@ detect-secrets scan src/ --only-json
 
 ```bash
 # 1. Activate venv
-.\venv\Scripts\Activate.ps1
+.\.venv\Scripts\Activate.ps1
 
 # 2. Run semgrep (fast)
 semgrep --config=p/security-audit src/ || echo "⚠ Review semgrep findings"
@@ -258,32 +264,37 @@ trufflehog filesystem . --fail --no-update && echo "✓ No verified secrets"
 
 ### Combine All Checks (One Command)
 
-```bash
-# PowerShell script to run all checks
-$failed = 0
-echo "Running security scans..."
-
-# Semgrep
-echo "`n[1/3] Semgrep (SAST)..."
-semgrep --config=p/security-audit src/ --json | Out-Null
-if ($LASTEXITCODE -ne 0) { $failed++ }
-
-# Detect-secrets
-echo "[2/3] Detect-secrets..."
-detect-secrets scan src/ | Out-Null
-if ($LASTEXITCODE -ne 0) { $failed++ }
-
-# TruffleHog
-echo "[3/3] TruffleHog (verified secrets)..."
-trufflehog filesystem . --fail --no-update 2>&1 | Out-Null
-# Note: trufflehog exit code may be unreliable, check output instead
-
-if ($failed -eq 0) {
-    echo "`n✓ All checks passed"
-} else {
-    echo "`n✗ Some checks failed - review above"
-}
+```powershell
+# Wrapper script (recommended)
+.\scripts\scan-security.ps1 -All -Report
 ```
+
+Equivalent direct Python command:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\run_security_scan.py --all --report
+```
+
+### Enforce scans for `main` via Git hooks
+
+Keep `.githooks/` **tracked in git** (do not gitignore it) so everyone gets the same hook logic.
+
+Install local hooks from this repo:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install-local-git-hooks.ps1
+```
+
+macOS/Linux install:
+
+```bash
+bash ./scripts/setup-hooks.sh
+```
+
+Behavior:
+
+- `pre-commit`: runs full scans when committing on `main`
+- `pre-push`: runs full scans whenever a push updates `refs/heads/main` (covers fast-forward merges pushed to `main`)
 
 ---
 
@@ -370,7 +381,7 @@ detect-secrets audit .secrets.baseline
 
 ```powershell
 # Verify installation
-.\venv\Scripts\python.exe -m semgrep --version
+.\.venv\Scripts\python.exe -m semgrep --version
 
 # Or use python module directly
 python -m semgrep --config=p/security-audit src/
@@ -406,6 +417,32 @@ The same tools run automatically in CI:
 **Local vs CI:**
 - Local: Run before committing (fast feedback)
 - CI: Runs on every push/PR (final verification)
+
+---
+
+## Dependabot Alert Export (Local)
+
+After installing/authenticating GitHub CLI, you can export Dependabot alerts to local files:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\export-dependabot-alerts.ps1
+```
+
+Optional parameters:
+
+```powershell
+# Explicit repository and state
+powershell -ExecutionPolicy Bypass -File .\scripts\export-dependabot-alerts.ps1 `
+  -Repo "kgrizz-git/DICOMViewerV3" `
+  -State open `
+  -OutputJson "dev-docs/security/dependabot-open.json" `
+  -OutputCsv "dev-docs/security/dependabot-open.csv"
+```
+
+Notes:
+- Requires `gh auth login` first.
+- Uses GitHub REST endpoint `/repos/{owner}/{repo}/dependabot/alerts` with `gh api --paginate` (this API does not accept `?page=` pagination).
+- Exports normalized CSV columns for easier triage/spreadsheet use.
 
 ---
 

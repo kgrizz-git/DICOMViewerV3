@@ -74,3 +74,15 @@ class TestScrollWheelMode:
         cm = _cm(tmp_path)
         cm.set_scroll_wheel_mode("invalid")
         assert cm.get_scroll_wheel_mode() == "slice"
+
+
+class TestNavigatorSliceFrameCount:
+    """Navigator thumbnail slice/frame count badge (display config)."""
+
+    def test_default_true(self, tmp_path):
+        assert _cm(tmp_path).get_navigator_show_slice_frame_count() is True
+
+    def test_set_false(self, tmp_path):
+        cm = _cm(tmp_path)
+        cm.set_navigator_show_slice_frame_count(False)
+        assert cm.get_navigator_show_slice_frame_count() is False

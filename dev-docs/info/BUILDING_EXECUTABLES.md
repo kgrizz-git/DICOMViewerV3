@@ -403,7 +403,7 @@ A GitHub Actions workflow file is already included in the project at `.github/wo
 
 1. **Trigger automatically** when you push a version tag (e.g., `v1.0.0`)
 2. **Build on all platforms** simultaneously (Windows, macOS, Linux)
-3. **Upload artifacts** with a bounded **`retention-days`** (see **`build.yml`**; also **`dev-docs/info/GITHUB_ACTIONS_STORAGE_AND_BILLING.md`** for **GB-hour** artifact storage on small plans). Artifacts include **`dist/`** outputs (and the Linux **AppImage** when built). PyInstaller’s **`build/`** folder is **never** uploaded — reproduce analysis issues locally. Per-OS size commands and a **baseline table** template: **`dev-docs/info/PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md`**. **GitHub Releases** from tag builds remain the long-lived distribution path.
+3. **Upload artifacts** with a bounded **`retention-days`** (see **`build.yml`**; also **`dev-docs/info/GITHUB_ACTIONS_STORAGE_AND_BILLING.md`** for **GB-hour** artifact storage on small plans). Artifacts are now platform-specific: **Windows** uploads `dist/DICOMViewerV3*`, **macOS** uploads a `.dmg` containing only `DICOMViewerV3.app`, and **Linux** uploads the `.AppImage`. PyInstaller’s **`build/`** folder is **never** uploaded — reproduce analysis issues locally. Per-OS size commands and a **baseline table** template: **`dev-docs/info/PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md`**. **GitHub Releases** from tag builds remain the long-lived distribution path.
 4. **Log bundle sizes** after each build (`du -sh` on `dist/` outputs; on macOS, drill-down under `.app/Contents/` plus **top 10 largest** entries under `Frameworks/` and `Resources/` via `sort -hr | head -10`) so regressions show up in the Actions log without uploading extra bytes.
 5. **Create releases** with executables attached when you push tags
 
@@ -471,9 +471,9 @@ GitHub Actions provides two ways to store and distribute your built executables:
 4. Click on the workflow run to view details
 5. Scroll down to the "Artifacts" section at the bottom
 6. Download the artifact for your platform:
-   - `DICOMViewerV3-Windows` (contains `.exe` and supporting files)
-   - `DICOMViewerV3-macOS` (contains `.app` bundle)
-   - `DICOMViewerV3-Linux` (contains Linux executable and supporting files)
+   - `DICOMViewerV3-Windows` (contains one-folder PyInstaller output)
+   - `DICOMViewerV3-macOS` (contains macOS `.dmg` with only `DICOMViewerV3.app`)
+   - `DICOMViewerV3-Linux` (contains `DICOMViewerV3-<version>-x86_64.AppImage`)
 
 **Note:** Artifacts are ZIP files. After downloading, extract them to access the executables.
 

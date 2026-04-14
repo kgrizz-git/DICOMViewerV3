@@ -1,0 +1,132 @@
+﻿{
+    "number":  2,
+    "state":  "fixed",
+    "dependency":  {
+                       "package":  {
+                                       "ecosystem":  "pip",
+                                       "name":  "Pygments"
+                                   },
+                       "manifest_path":  "requirements.txt",
+                       "scope":  "runtime",
+                       "relationship":  "transitive"
+                   },
+    "security_advisory":  {
+                              "ghsa_id":  "GHSA-5239-wwwm-4pmq",
+                              "cve_id":  "CVE-2026-4539",
+                              "summary":  "Pygments has Regular Expression Denial of Service (ReDoS) due to Inefficient Regex for GUID Matching",
+                              "description":  "A security flaw has been discovered in pygments before 2.20.0. The impacted element is the function AdlLexer of the file pygments/lexers/archetype.py. The manipulation results in inefficient regular expression complexity. The attack is only possible with local access. The exploit has been released to the public and may be used for attacks. The project was informed of the problem early through an issue report but has not responded yet.",
+                              "severity":  "low",
+                              "identifiers":  [
+                                                  {
+                                                      "value":  "GHSA-5239-wwwm-4pmq",
+                                                      "type":  "GHSA"
+                                                  },
+                                                  {
+                                                      "value":  "CVE-2026-4539",
+                                                      "type":  "CVE"
+                                                  }
+                                              ],
+                              "references":  [
+                                                 {
+                                                     "url":  "https://nvd.nist.gov/vuln/detail/CVE-2026-4539"
+                                                 },
+                                                 {
+                                                     "url":  "https://github.com/pygments/pygments/issues/3058"
+                                                 },
+                                                 {
+                                                     "url":  "https://github.com/pygments/pygments"
+                                                 },
+                                                 {
+                                                     "url":  "https://vuldb.com/?ctiid.352327"
+                                                 },
+                                                 {
+                                                     "url":  "https://vuldb.com/?id.352327"
+                                                 },
+                                                 {
+                                                     "url":  "https://vuldb.com/?submit.774685"
+                                                 },
+                                                 {
+                                                     "url":  "https://github.com/pygments/pygments/pull/3064"
+                                                 },
+                                                 {
+                                                     "url":  "https://github.com/pygments/pygments/commit/24b8aa76c6cd6d70f39c6dd605cce319c98e2ccc"
+                                                 },
+                                                 {
+                                                     "url":  "https://github.com/pygments/pygments/releases/tag/2.20.0"
+                                                 },
+                                                 {
+                                                     "url":  "https://github.com/advisories/GHSA-5239-wwwm-4pmq"
+                                                 }
+                                             ],
+                              "published_at":  "2026-03-22T06:30:15Z",
+                              "updated_at":  "2026-03-30T14:40:30Z",
+                              "withdrawn_at":  null,
+                              "vulnerabilities":  [
+                                                      {
+                                                          "package":  {
+                                                                          "ecosystem":  "pip",
+                                                                          "name":  "Pygments"
+                                                                      },
+                                                          "severity":  "low",
+                                                          "vulnerable_version_range":  "\u003c 2.20.0",
+                                                          "first_patched_version":  {
+                                                                                        "identifier":  "2.20.0"
+                                                                                    }
+                                                      }
+                                                  ],
+                              "cvss_severities":  {
+                                                      "cvss_v3":  {
+                                                                      "vector_string":  "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:N/I:N/A:L",
+                                                                      "score":  3.3
+                                                                  },
+                                                      "cvss_v4":  {
+                                                                      "vector_string":  "CVSS:4.0/AV:L/AC:L/AT:N/PR:L/UI:N/VC:N/VI:N/VA:L/SC:N/SI:N/SA:N/E:P",
+                                                                      "score":  1.9
+                                                                  }
+                                                  },
+                              "epss":  {
+                                           "percentage":  0.00014,
+                                           "percentile":  0.02682
+                                       },
+                              "cvss":  {
+                                           "vector_string":  "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:N/I:N/A:L",
+                                           "score":  3.3
+                                       },
+                              "cwes":  [
+                                           {
+                                               "cwe_id":  "CWE-400",
+                                               "name":  "Uncontrolled Resource Consumption"
+                                           },
+                                           {
+                                               "cwe_id":  "CWE-1333",
+                                               "name":  "Inefficient Regular Expression Complexity"
+                                           }
+                                       ],
+                              "classification":  "general"
+                          },
+    "security_vulnerability":  {
+                                   "package":  {
+                                                   "ecosystem":  "pip",
+                                                   "name":  "Pygments"
+                                               },
+                                   "severity":  "low",
+                                   "vulnerable_version_range":  "\u003c 2.20.0",
+                                   "first_patched_version":  {
+                                                                 "identifier":  "2.20.0"
+                                                             }
+                               },
+    "url":  "https://api.github.com/repos/kgrizz-git/DICOMViewerV3/dependabot/alerts/2",
+    "html_url":  "https://github.com/kgrizz-git/DICOMViewerV3/security/dependabot/2",
+    "created_at":  "2026-03-30T21:07:16Z",
+    "updated_at":  "2026-04-10T19:08:59Z",
+    "dismissal_request":  null,
+    "assignees":  [
+
+                  ],
+    "dismissed_at":  null,
+    "dismissed_by":  null,
+    "dismissed_reason":  null,
+    "dismissed_comment":  null,
+    "fixed_at":  "2026-04-10T19:08:59Z",
+    "auto_dismissed_at":  null
+}

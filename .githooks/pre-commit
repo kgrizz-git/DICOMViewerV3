@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+PY_BIN=""
+
+if [[ -x "$REPO_ROOT/.venv/bin/python" ]]; then
+  PY_BIN="$REPO_ROOT/.venv/bin/python"
+elif [[ -x "$REPO_ROOT/.venv/Scripts/python.exe" ]]; then
+  PY_BIN="$REPO_ROOT/.venv/Scripts/python.exe"
+elif [[ -x "$REPO_ROOT/venv/bin/python" ]]; then
+  PY_BIN="$REPO_ROOT/venv/bin/python"
+elif [[ -x "$REPO_ROOT/venv/Scripts/python.exe" ]]; then
+  PY_BIN="$REPO_ROOT/venv/Scripts/python.exe"
+else
+  echo "[security hook] No project Python found under .venv or venv." >&2
+  exit 1
+fi
+
+exec "$PY_BIN" "$REPO_ROOT/scripts/git-hook-security-gate.py" --hook-type pre-commit

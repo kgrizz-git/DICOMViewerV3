@@ -31,6 +31,12 @@ Security scanners and related CLI tools are **not** in `requirements.txt`. For p
 pip install -r requirements-dev.txt
 ```
 
+Optional dependency audit tool:
+
+```bash
+python -m pip install pip-audit
+```
+
 TruffleHog v3 (Windows):
 
 ```powershell
@@ -38,3 +44,21 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install-trufflehog-v3.ps1 -Ad
 ```
 
 See [SECURITY_TOOLS_CLI_GUIDE.md](SECURITY_TOOLS_CLI_GUIDE.md).
+
+Quick local run (PowerShell):
+
+```powershell
+.\scripts\scan-security.ps1 -All -Report
+```
+
+Install repo-managed security hooks (recommended):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install-local-git-hooks.ps1
+```
+
+macOS/Linux equivalent:
+
+```bash
+bash ./scripts/setup-hooks.sh
+```

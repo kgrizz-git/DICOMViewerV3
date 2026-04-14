@@ -488,9 +488,9 @@ class MultiWindowLayout(QWidget):
         # Emit signal
         # print(f"[DEBUG-FOCUS] MultiWindowLayout.set_focused_subwindow: Emitting focused_subwindow_changed signal")
         self.focused_subwindow_changed.emit(self.focused_subwindow)
-        # 1×1: single visible pane follows focused view — re-arrange so the window map
-        # can switch which pane is shown. 1×2 / 2×1: row/column follows focused slot.
-        if self.current_layout in ("1x1", "1x2", "2x1"):
+        # 1×2 / 2×1: which row or column is visible follows the focused slot — re-arrange
+        # so clicking the window map can reveal the correct pair of panes.
+        if self.current_layout in ("1x2", "2x1"):
             self._arrange_subwindows(self.current_layout)
 
     def get_focused_subwindow(self) -> Optional[SubWindowContainer]:

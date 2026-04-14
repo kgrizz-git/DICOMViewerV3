@@ -25,6 +25,7 @@ from pathlib import Path
 
 from PySide6.QtGui import QColor
 
+
 def _themes_dir() -> Path:
     """
     Resolve resources/themes for dev and frozen PyInstaller builds.
@@ -61,13 +62,6 @@ def get_theme_stylesheet(
     qss_file = themes_dir / f"{theme}.qss"
     if not qss_file.exists():
         qss_file = themes_dir / "light.qss"
-    if not qss_file.exists():
-        # Keep startup resilient in mis-packaged bundles: log and continue unstyled.
-        print(
-            "Warning: Theme stylesheet not found. "
-            f"Searched in '{themes_dir}' for '{theme}.qss' and 'light.qss'."
-        )
-        return ""
     stylesheet = qss_file.read_text(encoding="utf-8")
     return (
         stylesheet

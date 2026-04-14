@@ -20,22 +20,11 @@ Requirements:
     - PySide6.QtGui.QColor
 """
 
-import sys
 from pathlib import Path
 
 from PySide6.QtGui import QColor
 
-def _themes_dir() -> Path:
-    """
-    Resolve resources/themes for dev and frozen PyInstaller builds.
-
-    In a frozen bundle, resources are unpacked under ``sys._MEIPASS``.
-    """
-    if getattr(sys, "frozen", False):
-        meipass = getattr(sys, "_MEIPASS", None)
-        if meipass is not None:
-            return Path(str(meipass)) / "resources" / "themes"
-    return Path(__file__).parent.parent.parent / "resources" / "themes"
+_THEMES_DIR = Path(__file__).parent.parent.parent / "resources" / "themes"
 
 
 def get_theme_stylesheet(
@@ -57,17 +46,9 @@ def get_theme_stylesheet(
     Returns:
         Stylesheet string to pass to QApplication.instance().setStyleSheet()
     """
-    themes_dir = _themes_dir()
-    qss_file = themes_dir / f"{theme}.qss"
+    qss_file = _THEMES_DIR / f"{theme}.qss"
     if not qss_file.exists():
-        qss_file = themes_dir / "light.qss"
-    if not qss_file.exists():
-        # Keep startup resilient in mis-packaged bundles: log and continue unstyled.
-        print(
-            "Warning: Theme stylesheet not found. "
-            f"Searched in '{themes_dir}' for '{theme}.qss' and 'light.qss'."
-        )
-        return ""
+        qss_file = _THEMES_DIR / "light.qss"
     stylesheet = qss_file.read_text(encoding="utf-8")
     return (
         stylesheet

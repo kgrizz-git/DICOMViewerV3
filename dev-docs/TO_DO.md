@@ -1,7 +1,7 @@
 # To-Do Checklist
 
-**Last updated:** 2026-04-13  
-**Changes:** Marked navigator tooltips (T2) and duplicate-skip toast (T9) done per backlog slice; prior 2026-04-09: P0 macOS PyInstaller A/B size + build-time exclude strategy under Performance / Packaging.
+**Last updated:** 2026-04-14  
+**Changes:** Marked backlog **T3** (interactive window map, including **1×1** reveal on click), **T7** (navigator slice/frame count badge, default on, yellow text / no badge chrome), **T12** / per-series **W/L** (session-only RAM cache; cleared on close-all / new load; not config-persisted), and **slice position line** cleanup after MPR tear-down as shipped. Prior 2026-04-13: navigator tooltips (T2), duplicate-skip toast (T9); 2026-04-09: P0 macOS PyInstaller A/B under Performance / Packaging.
 
 ---
 
@@ -30,6 +30,8 @@ This file tracks active and near-term tasks.
 
 ## Bugs / Correctness
 
+- [x] **[P2]** Cross-view **slice position lines** could linger after **MPR clear/detach** or inconsistent clear paths — addressed by dropping the per-pane line manager at **MPR tear-down** (and existing clear-window path); coordinator refresh rebuilds lines. *(Shipped 2026-04-14.)*
+
 ## Performance / Packaging
 
 - [ ] **[P0]** **macOS PyInstaller — A/B `du` and safety:** On macOS, from the **same git ref**, build twice: (1) **current** spec with **`MACOS_PYSIDE6_MODULE_EXCLUDES`** applied, (2) a branch or env-gated spec that **does not** apply those darwin-only excludes. Compare **`du -sh dist/DICOMViewerV3.app`** (and top `Frameworks/` contributors); record numbers in **`dev-docs/info/PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md`**. **Smoke both** `.app` builds (launch, open DICOM, histogram, export/QA paths). *Why:* PyInstaller usually **does not** ship modules that never appear in the import graph, so excludes may save **little** until hooks/deps pull extra Qt; but **`excludes` can still cause `ImportError`** if any code path (including a **third-party** lazy import) touches a trimmed module — so **prefer default = include everything PyInstaller collects** and treat aggressive macOS trims as a **build-time opt-in** (e.g. env var or spec flag) only after A/B numbers justify it and smoke passes on the slim build.
@@ -49,7 +51,7 @@ This file tracks active and near-term tasks.
 ## UX / Workflow
 
 - [ ] **[P1]** Add option to have one large window on left and two smaller on right (above and below), or one large window on top and smaller on bottom (left and right), and maybe vice versa for each case. Make "2" key switch between 1x2 and 2x1, while "3" switches between different 3-window layouts just described.
-- [ ] **[P2]** Make window map thumbnail in navigator interactive (click square to focus and reveal) ([plan](plans/UX_IMPROVEMENTS_BATCH1_PLAN.md#1-window-map-thumbnail-interactive))
+- [x] **[P2]** **T3 —** Make window map thumbnail in navigator interactive (click square to focus and reveal) ([plan](plans/UX_IMPROVEMENTS_BATCH1_PLAN.md#1-window-map-thumbnail-interactive)). *Shipped:* inline bar + popup map; **1×1** re-arranges the single visible pane to the focused slot; **1×2 / 2×1** reveal row/column for that slot.*
 - [ ] **[P2]** Make toolbar contents and ordering customizable ([plan](plans/UX_IMPROVEMENTS_BATCH1_PLAN.md#2-toolbar-customization))
 - [ ] **[P2]** Improve discoverability/documentation of existing window/level drag interaction ([plan](plans/UX_IMPROVEMENTS_BATCH1_PLAN.md#3-alternative-windowlevel-interaction))
 - [ ] **[P1]** Set min/max window width/level using min/max pixel value possible (raw or rescaled) based on bit depth ([plan](plans/UX_IMPROVEMENTS_BATCH1_PLAN.md#4-minmax-windowlevel-from-bit-depth))
@@ -58,7 +60,7 @@ This file tracks active and near-term tasks.
 - [ ] **[P2]** Make right pane minimum width before collapsing 250 instead of 200
 - [ ] **[P2]** Consider more sophisticated smoothing (PIL/NumPy) vs Qt-only scaling
 - [ ] **[P2]** Add ability to edit a drawn ellipse or rectangle ROI ([plan](plans/VIEWER_UX_FEATURES_PLAN.md#1-roi-editing-resize-handles))
-- [ ] **[P2]** Make window/level settings remembered when switching series and then switching back ([plan](plans/VIEWER_UX_FEATURES_PLAN.md#2-windowlevel-remembered-per-series))
+- [x] **[P2]** **T12 —** Make window/level settings remembered when switching series focus and then switching back ([plan](plans/VIEWER_UX_FEATURES_PLAN.md#2-windowlevel-remembered-per-series)). *Shipped: **session-only** in-memory cache per pane (`ViewStateManager`); cleared on close-all / new load / `reset_series_tracking`; **Reset View** clears the cache entry for that series; **not** written to config.*
 - [ ] **[P1]** Make the large-file warning (and any related file handling checks) trigger for >50 MB instead of 25 MB ([plan](plans/NAVIGATOR_AND_FILE_LOADING_FEEDBACK_PLAN.md#3-large-file-warning-threshold-50-mb)) - *NOTE: maybe hold off on this for now - 50 might be too high?*
 - [ ] **[P2]** Allow further subdivision of subwindows into up to 4 "tiles"? ([plan](plans/WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md#1-subwindow-further-subdivision-up-to-4-tiles))
 - [ ] **[P2]** When exporting PNG or JPG, allow anonymization and make using embedded window/level the default option ([plan](plans/EXPORT_PRIVACY_AND_WL_DEFAULT_PLAN.md#goal))
@@ -68,14 +70,14 @@ This file tracks active and near-term tasks.
 - [ ] **[P2]** Allow dragging window dividers to make unequal divisions
 - [ ] **[P2]** Add ability to use toolbar icons instead of text
 - [ ] **[P1]** Differentiate between frames, instances, and slices in the cine player
-- [ ] **[P2]** Add option to show # of frames or slices in a series in navigator (on by default) - keep it small
+- [x] **[P2]** **T7 —** Add option to show # of frames or slices in a series/instance in navigator (on by default) - keep it small. *Shipped: **View → Show Slice/Frame Count on Navigator Thumbnails** (`navigator_show_slice_frame_count`, default on); compact label bottom-left on series thumbnails — **full-opacity yellow** text, no black background / no bordered box (top-left series label unchanged).*
 - [ ] **[P2]** Where is it getting frame rate from?
 - [ ] **[P1]** Should we block showing DICOM tags when an MPR window is selected (show just "MPR")? Or add some kind of warning that it is the underlying series data somehow?
 - [ ] **[P1]** Make spacebar cycle overlay visibility state on all windows?
 
 ## Features (Near-Term)
 
-- [ ] **[P2]** Add SQLite **FTS5** full-text search for the local study index (e.g. study/series description)—deferred past MVP; see [LOCAL_STUDY_DATABASE_AND_INDEXING_PLAN.md](plans/LOCAL_STUDY_DATABASE_AND_INDEXING_PLAN.md).
+- [ ] **[P2]** Add SQLite **FTS5** full-text search for the local study index (e.g. study/series description); see [LOCAL_STUDY_DATABASE_AND_INDEXING_PLAN.md](plans/LOCAL_STUDY_DATABASE_AND_INDEXING_PLAN.md).
 - [ ] **[P1]** Add a "Deep Anonymizer" export option that strips out all tag data that could be used to indentify a scanner, institution, address, etc., as well as patient informaion. Should include institution name, address, station name, device serial number, etc.
 - [ ] **[P1]** Add a simple "DICOM metadata browser" mode that can ingest, browse, and export DICOM metadata, without any image display or processing?(hopefully fast and efficient)
 - [ ] **[P1]** Be able to associate with DICOM extension and add to Open With menus ([details](FUTURE_WORK_DETAIL_NOTES.md#file-association-and-open-with-integration))

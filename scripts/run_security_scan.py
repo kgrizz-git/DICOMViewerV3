@@ -71,6 +71,8 @@ def check_debug_flags():
 def check_semgrep(verbose=False):
     print_header("Running Semgrep (SAST)")
     semgrep_path = get_tool_path(
+        "./.venv/Scripts/semgrep.exe",
+        "./.venv/bin/semgrep",
         "./venv/Scripts/semgrep.exe",
         "./venv/bin/semgrep",
     )
@@ -93,6 +95,8 @@ def check_semgrep(verbose=False):
 def check_detect_secrets(verbose=False):
     print_header("Running Detect-Secrets")
     detect_secrets_path = get_tool_path(
+        "./.venv/Scripts/detect-secrets.exe",
+        "./.venv/bin/detect-secrets",
         "./venv/Scripts/detect-secrets.exe",
         "./venv/bin/detect-secrets",
     )
@@ -118,8 +122,13 @@ def check_detect_secrets(verbose=False):
 def check_trufflehog(verbose=False):
     print_header("Running TruffleHog (Secrets)")
     trufflehog_path = get_tool_path(
+        "C:/tools/trufflehog-v3/trufflehog.exe",
+        "./tools/trufflehog-v3/trufflehog.exe",
+        "./tools/trufflehog-v3/trufflehog",
         "./tools/security/trufflehog/trufflehog.exe",
         "./tools/security/trufflehog/trufflehog",
+        "./.venv/Scripts/trufflehog.exe",
+        "./.venv/bin/trufflehog",
         "./venv/Scripts/trufflehog.exe",
         "./venv/bin/trufflehog",
     )
@@ -183,6 +192,38 @@ def check_trufflehog(verbose=False):
     print_ok("No verified or unverified secrets found by TruffleHog")
     return {"status": "pass"}
 
+def check_pip_audit(verbose=False):
+    print_header("Running pip-audit (Dependency CVEs)")
+    cmd = [sys.executable, "-m", "pip_audit", "-r", "requirements.txt", "--format", "json"]
+    returncode, stdout, stderr = run_cmd(cmd, "pip-audit", verbose)
+
+    # pip-audit exits non-zero when vulnerabilities are found, but JSON output is still useful.
+    output = (stdout or "").strip()
+    if not output:
+        if returncode == 0:
+            print_ok("No dependency vulnerabilities found")
+            return {"status": "pass"}
+        print_fail("pip-audit produced no output")
+        return {"status": "fail", "reason": "no_output"}
+
+    try:
+        report = json.loads(output)
+    except json.JSONDecodeError:
+        print_warn("Could not parse pip-audit JSON output")
+        return {"status": "unknown"}
+
+    deps = report.get("dependencies", [])
+    vuln_count = sum(len(dep.get("vulns", [])) for dep in deps)
+
+    if vuln_count == 0:
+        print_ok("No dependency vulnerabilities found")
+        return {"status": "pass"}
+
+    print_warn(f"pip-audit reported {vuln_count} vulnerabilities across requirements")
+    if verbose:
+        print(json.dumps(report, indent=2)[:2000])
+    return {"status": "review", "vulnerabilities": vuln_count}
+
 def main():
     parser = argparse.ArgumentParser(description="Run security scanning tools")
     parser.add_argument("--all", action="store_true", help="Run all checks")
@@ -190,6 +231,7 @@ def main():
     parser.add_argument("--secrets", action="store_true", help="Run only secrets detection")
     parser.add_argument("--trufflehog", action="store_true", help="Run only TruffleHog")
     parser.add_argument("--debug-flags", action="store_true", help="Check debug flags only")
+    parser.add_argument("--deps", action="store_true", help="Run dependency audit with pip-audit")
     parser.add_argument("--quick", action="store_true", help="Quick checks (Semgrep + debug)")
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     parser.add_argument("--report", action="store_true", help="JSON report")
@@ -199,18 +241,20 @@ def main():
     results, failed = {}, []
     
     # Determine what to run
-    run_all = args.all or not any([args.semgrep, args.secrets, args.trufflehog, args.debug_flags, args.quick])
+    run_all = args.all or not any([args.semgrep, args.secrets, args.trufflehog, args.debug_flags, args.deps, args.quick])
     
     if args.quick:
         run_debug_flags = True
         run_semgrep = True
         run_detect_secrets_check = False
         run_trufflehog_check = False
+        run_deps_check = False
     else:
         run_debug_flags = args.debug_flags or run_all
         run_semgrep = args.semgrep or run_all
         run_detect_secrets_check = args.secrets or run_all
         run_trufflehog_check = args.trufflehog or args.secrets or run_all
+        run_deps_check = args.deps or run_all
     
     if run_debug_flags:
         r = check_debug_flags()
@@ -235,6 +279,12 @@ def main():
         results["trufflehog"] = r
         if r.get("status") == "fail":
             failed.append("trufflehog")
+
+    if run_deps_check:
+        r = check_pip_audit(args.verbose)
+        results["pip_audit"] = r
+        if r.get("status") == "fail":
+            failed.append("pip_audit")
     
     # Summary
     print_header("Summary")

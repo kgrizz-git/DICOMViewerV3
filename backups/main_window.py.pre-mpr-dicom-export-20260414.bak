@@ -98,7 +98,6 @@ class MainWindow(QMainWindow):
     close_requested = Signal()  # Emitted when close is requested
     export_requested = Signal()
     export_screenshots_requested = Signal()  # Emitted when Export Screenshots is requested
-    save_mpr_dicom_requested = Signal()  # File → Save MPR as DICOM… (focused MPR pane)
     settings_requested = Signal()
     overlay_settings_requested = Signal()  # Emitted when overlay settings dialog is requested
     tag_viewer_requested = Signal()
@@ -174,7 +173,6 @@ class MainWindow(QMainWindow):
     show_left_pane_action: Optional[QAction] = None
     show_right_pane_action: Optional[QAction] = None
     show_series_navigator_action: Optional[QAction] = None
-    show_navigator_slice_frame_count_action: Optional[QAction] = None
     fullscreen_action: Optional[QAction] = None
     show_window_slot_map_action: Optional[QAction] = None
     slice_sync_action: Optional[QAction] = None
@@ -1346,13 +1344,6 @@ class MainWindow(QMainWindow):
                 self.series_navigator_container = container
                 self.series_navigator_visible = False
     
-    def toggle_navigator_slice_frame_count_badge(self, checked: bool) -> None:
-        """Persist and apply navigator slice/frame count badges on series thumbnails."""
-        self.config_manager.set_navigator_show_slice_frame_count(bool(checked))
-        nav = self.series_navigator
-        if nav is not None and hasattr(nav, "set_show_slice_frame_count_badge"):
-            nav.set_show_slice_frame_count_badge(bool(checked))
-
     def toggle_series_navigator(self) -> None:
         """Toggle series navigator visibility."""
         if self.series_navigator is None:

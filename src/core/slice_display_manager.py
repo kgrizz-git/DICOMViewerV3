@@ -418,6 +418,8 @@ class SliceDisplayManager:
             # Set default use_rescaled_values based on whether parameters exist
             # Default to True if parameters exist, False otherwise
             if is_new_study_series:
+                # Save user W/L for the series we are leaving (identifier still old).
+                self.view_state_manager.save_user_window_level()
                 use_rescaled = (rescale_slope is not None and rescale_intercept is not None)
                 self.view_state_manager.use_rescaled_values = use_rescaled
                 # print(f"[DEBUG-WL] NEW SERIES: Setting use_rescaled_values={use_rescaled} (slope={rescale_slope}, intercept={rescale_intercept})")
@@ -745,6 +747,15 @@ class SliceDisplayManager:
                         self.view_state_manager.current_window_width = None
             
             # For same series, preserve existing window/level values (already set above)
+
+            if is_new_study_series:
+                cached_wl = self.view_state_manager.get_user_window_level(series_identifier)
+                if cached_wl is not None:
+                    window_center = cached_wl["window_center"]
+                    window_width = cached_wl["window_width"]
+                    self.view_state_manager.current_window_center = window_center
+                    self.view_state_manager.current_window_width = window_width
+                    self.view_state_manager.window_level_user_modified = True
             
             # Convert to image
             image = None
