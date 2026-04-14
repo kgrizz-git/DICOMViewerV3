@@ -190,9 +190,9 @@ class SliceSyncConfigMixin:
 
     def get_slice_location_line_width_px(self) -> int:
         """
-        Return stroke width (pixels) for slice position / intersection lines.
+        Return cosmetic stroke width (viewport pixels) for slice position lines.
 
-        Clamped to 1–8 for sensible on-screen drawing.
+        Clamped to 1–8 for sensible on-screen drawing (same sense as ROI line width).
         """
         try:
             w = int(self._config().get("slice_location_line_width_px", 1))
@@ -201,7 +201,7 @@ class SliceSyncConfigMixin:
         return max(1, min(8, w))
 
     def set_slice_location_line_width_px(self, width_px: int) -> None:
-        """Persist slice position line width (pixels), clamped to 1–8."""
+        """Persist slice position line width (viewport px, cosmetic), clamped to 1–8."""
         w = max(1, min(8, int(width_px)))
         self._config()["slice_location_line_width_px"] = w
         self._save_config()

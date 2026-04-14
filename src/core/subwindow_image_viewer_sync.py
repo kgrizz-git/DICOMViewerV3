@@ -19,11 +19,29 @@ from __future__ import annotations
 
 from typing import Any, Tuple
 
+from gui.main_window_theme import get_theme_viewer_background_color
+
 
 def _iter_image_viewers(app: Any):
     for subwindow in app.multi_window_layout.get_all_subwindows():
         if subwindow and subwindow.image_viewer:
             yield subwindow.image_viewer
+
+
+def apply_theme_viewer_background_all(app: Any) -> None:
+    """
+    Set QGraphicsView letterbox background on every subwindow ImageViewer from
+    the current config theme.
+
+    ``MainWindow._apply_theme`` runs before subwindows exist and only updates
+    ``main_window.image_viewer`` (one pane); without this pass, viewers keep Qt's
+    default brush until the user toggles theme. Call once after subwindows are
+    created and again whenever the theme changes (see ``theme_changed`` wiring).
+    """
+    theme = app.config_manager.get_theme()
+    color = get_theme_viewer_background_color(theme)
+    for viewer in _iter_image_viewers(app):
+        viewer.set_background_color(color)
 
 
 def apply_initial_image_viewer_display_state(app: Any) -> None:

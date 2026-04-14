@@ -8,10 +8,10 @@ Inputs:
     subwindow_index (int): Index of the subwindow hosting the MPR view.
     pixel_array (np.ndarray): 2-D float array from the MPR slice.
     window_center, window_width (float): Optional W/L for rendering.
-    dot_color (str): Hex color string for the subwindow dot indicator.
+    dot_color (str): Hex color for the subwindow digit in the top-right corner.
 
 Outputs:
-    - Visual thumbnail with MPR badge and subwindow color dot.
+    - Visual thumbnail with MPR badge and subwindow number tint.
     - clicked(int) signal: emitted with subwindow_index on left-click.
     - drag_started(int) signal: emitted when a drag begins.
     - Drag MIME type ``application/x-dv3-mpr-assign`` with source subwindow
@@ -28,7 +28,7 @@ from typing import Optional
 import numpy as np
 from PIL import Image
 
-from PySide6.QtCore import Qt, Signal, QPoint, QByteArray, QMimeData
+from PySide6.QtCore import Qt, Signal, QPoint, QByteArray, QMimeData, QRect
 from PySide6.QtGui import (
     QColor,
     QDrag,
@@ -36,11 +36,12 @@ from PySide6.QtGui import (
     QImage,
     QMouseEvent,
     QPainter,
+    QPen,
     QPixmap,
 )
 from PySide6.QtWidgets import QMenu, QWidget
 
-from gui.navigator_colors import SUBWINDOW_DOT_COLORS
+from gui.navigator_colors import SUBWINDOW_DOT_COLORS, subwindow_slot_display_number
 
 # MIME type used to distinguish MPR thumbnail drags from regular series drags.
 MPR_ASSIGN_MIME = "application/x-dv3-mpr-assign"
@@ -55,8 +56,8 @@ class MprThumbnailWidget(QWidget):
     Displays a preview of the current MPR plane with:
     - A dark background when no preview image is available.
     - An ``MPR`` badge in the top-left corner.
-    - A subwindow color dot in the top-right corner (matching the series
-      navigator dot colors used by SeriesThumbnail).
+    - A very small colored window number in the top-right (same colors as
+      series navigator slot indicators).
 
     Clicking the widget emits ``clicked(subwindow_index)``.
     Dragging the widget produces a ``application/x-dv3-mpr-assign`` MIME event
@@ -181,7 +182,7 @@ class MprThumbnailWidget(QWidget):
 
     def set_dot_color(self, color: str) -> None:
         """
-        Update the subwindow dot color.
+        Update the color used for the subwindow number in the top-right corner.
 
         Args:
             color: Hex color string, e.g. ``"#2196F3"``.
@@ -194,7 +195,7 @@ class MprThumbnailWidget(QWidget):
     # ------------------------------------------------------------------
 
     def paintEvent(self, event) -> None:  # noqa: N802 (Qt convention)
-        """Paint the thumbnail: preview image + MPR badge + dot."""
+        """Paint the thumbnail: preview image + MPR badge + window number."""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
@@ -224,14 +225,33 @@ class MprThumbnailWidget(QWidget):
         painter.setPen(QColor(255, 200, 50))
         painter.drawText(badge_rect, Qt.AlignmentFlag.AlignCenter, badge_text)
 
-        # Subwindow dot — top-right corner.
-        DOT_DIAMETER = 8
-        DOT_MARGIN = 3
-        dot_x = self.THUMBNAIL_SIZE - DOT_MARGIN - DOT_DIAMETER
-        dot_y = DOT_MARGIN
-        painter.setBrush(QColor(self._dot_color))
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawEllipse(dot_x, dot_y, DOT_DIAMETER, DOT_DIAMETER)
+        # Subwindow number — top-right (detached MPR: no digit).
+        if self._subwindow_index >= 0:
+            slot_font = QFont()
+            slot_font.setBold(True)
+            slot_font.setPointSize(9)
+            painter.setFont(slot_font)
+            fm = painter.fontMetrics()
+            label = subwindow_slot_display_number(self._subwindow_index)
+            tw = fm.horizontalAdvance(label)
+            th = fm.height()
+            margin = 3
+            text_rect = QRect(
+                self.THUMBNAIL_SIZE - margin - tw,
+                margin,
+                tw,
+                th,
+            )
+            fill = QColor(self._dot_color)
+            for ox, oy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                painter.setPen(QPen(QColor(0, 0, 0, 210)))
+                painter.drawText(
+                    text_rect.translated(ox, oy),
+                    Qt.AlignmentFlag.AlignCenter,
+                    label,
+                )
+            painter.setPen(QPen(fill))
+            painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, label)
 
     # ------------------------------------------------------------------
     # Context menu

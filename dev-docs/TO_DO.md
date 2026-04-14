@@ -1,7 +1,7 @@
 # To-Do Checklist
 
-**Last updated:** 2026-04-09  
-**Changes:** P0 macOS PyInstaller A/B size + build-time exclude strategy under Performance / Packaging.
+**Last updated:** 2026-04-13  
+**Changes:** Marked navigator tooltips (T2) and duplicate-skip toast (T9) done per backlog slice; prior 2026-04-09: P0 macOS PyInstaller A/B size + build-time exclude strategy under Performance / Packaging.
 
 ---
 
@@ -59,11 +59,11 @@ This file tracks active and near-term tasks.
 - [ ] **[P2]** Consider more sophisticated smoothing (PIL/NumPy) vs Qt-only scaling
 - [ ] **[P2]** Add ability to edit a drawn ellipse or rectangle ROI ([plan](plans/VIEWER_UX_FEATURES_PLAN.md#1-roi-editing-resize-handles))
 - [ ] **[P2]** Make window/level settings remembered when switching series and then switching back ([plan](plans/VIEWER_UX_FEATURES_PLAN.md#2-windowlevel-remembered-per-series))
-- [ ] **[P1]** Hovering on a study label in the navigator should show a popup tooltip with the study description, date, and patient name (but should respect privacy mode). Hovering on a thumbnail should show a tooltip with that same info, plus series description ([plan](plans/NAVIGATOR_AND_FILE_LOADING_FEEDBACK_PLAN.md#1-navigator-tooltips-privacy-aware))
-- [ ] **[P2]** The toast that pops up when already loaded files are skipped and not added during loading should appear in the center of the screen and have a slightly more opaque background ([plan](plans/NAVIGATOR_AND_FILE_LOADING_FEEDBACK_PLAN.md#2-duplicate-skip-toast-center--more-opaque))
+- [x] **[P1]** Hovering on a study label in the navigator should show a popup tooltip with the study description, date, and patient name (but should respect privacy mode). Hovering on a thumbnail should show a tooltip with that same info, plus series description ([plan](plans/NAVIGATOR_AND_FILE_LOADING_FEEDBACK_PLAN.md#1-navigator-tooltips-privacy-aware))
+- [x] **[P2]** The toast that pops up when already loaded files are skipped and not added during loading should appear in the center of the screen and have a slightly more opaque background ([plan](plans/NAVIGATOR_AND_FILE_LOADING_FEEDBACK_PLAN.md#2-duplicate-skip-toast-center--more-opaque))
 - [ ] **[P1]** Make the large-file warning (and any related file handling checks) trigger for >50 MB instead of 25 MB ([plan](plans/NAVIGATOR_AND_FILE_LOADING_FEEDBACK_PLAN.md#3-large-file-warning-threshold-50-mb)) - *NOTE: maybe hold off on this for now - 50 might be too high?*
 - [ ] **[P2]** Allow further subdivision of subwindows into up to 4 "tiles"? ([plan](plans/WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md#1-subwindow-further-subdivision-up-to-4-tiles))
-- [ ] **[P1]** Make a "View Fullscreen" menu item and shortcut - make app full-screen, hide left/right/bottom panes, toolbar ([plan](plans/WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md#2-view-fullscreen-command-and-shortcut))
+- [x] **[P1]** Make a "View Fullscreen" menu item and shortcut - make app full-screen, hide left/right/bottom panes, toolbar; careful not to duplicate any existing shortcuts ([plan](plans/WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md#2-view-fullscreen-command-and-shortcut))
 - [ ] **[P2]** When show instances separately is enabled, allow left/right keys to switch between instances ([plan](plans/WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md#4-leftright-keys-for-instance-switching-show-instances-separately)) **(already done?)**
 - [ ] **[P2]** When exporting PNG or JPG, allow anonymization and make using embedded window/level the default option ([plan](plans/EXPORT_PRIVACY_AND_WL_DEFAULT_PLAN.md#goal))
 - [ ] **[P2]** Make default pixel size and slice thickness more reasonable and make editing them easier (default to 1.0 mm, 1.0 mm?)
@@ -71,7 +71,7 @@ This file tracks active and near-term tasks.
 - [ ] **[P2]** Consider a dedicated **Pylinac Configuration...** menu/dialog if more persisted QA customization options are added (likely), so pylinac/site defaults do not keep expanding the per-analysis Tools dialogs.
 - [ ] **[P2]** Allow dragging window dividers to make unequal divisions
 - [ ] **[P2]** Add ability to use toolbar icons instead of text
-- [ ] **[P2]** Show a small colored icon on each subwindow title bar in a "sync group"to indicate which group it belongs to (group color), so the user can see at a glance which windows are linked.
+- [x] **[P2]** Show a small colored icon on each subwindow title bar in a "sync group"to indicate which group it belongs to (group color), so the user can see at a glance which windows are linked.
 - [ ] **[P1]** Differentiate between frames, instances, and slices in the cine player
 - [ ] **[P2]** Add option to show # of frames or slices in a series in navigator (on by default) - keep it small
 - [ ] **[P2]** Where is it getting frame rate from?
@@ -81,7 +81,6 @@ This file tracks active and near-term tasks.
 ## Features (Near-Term)
 
 - [ ] **[P2]** Add SQLite **FTS5** full-text search for the local study index (e.g. study/series description)—deferred past MVP; see [LOCAL_STUDY_DATABASE_AND_INDEXING_PLAN.md](plans/LOCAL_STUDY_DATABASE_AND_INDEXING_PLAN.md).
-
 - [ ] **[P1]** Add a "Deep Anonymizer" export option that strips out all tag data that could be used to indentify a scanner, institution, address, etc., as well as patient informaion. Should include institution name, address, station name, device serial number, etc.
 - [ ] **[P1]** Add a simple "DICOM metadata browser" mode that can ingest, browse, and export DICOM metadata, without any image display or processing (hopefully fast and efficient)
 - [ ] **[P1]** Be able to associate with DICOM extension and add to Open With menus ([details](FUTURE_WORK_DETAIL_NOTES.md#file-association-and-open-with-integration))
@@ -104,6 +103,7 @@ This file tracks active and near-term tasks.
 - [ ] **[P2]** When projection is enabled, allow to show projection pixel values on histogram.
 - [ ] **[P2]** Enable adding multiple images distributions to histogram for comparison (probably via button histogram). Use different colors for each distribution.
 - [ ] **[P2]** Add toggle/preference to have up/down keys and scroll wheel up/down navigate by slice # or image position patient (eg, if increasing slice # has decreasing image position patient along the orientation vector, allow choosing whether up moves up in slice number (and lower on patient), or up in image position patient (and lower on slice number)).
+- [ ] **[P2]** Do we allow cine playback of multiple windows? We should be able to play each window's cine in sync, or independently, or a combination of both.
 
 ## Documentation
 

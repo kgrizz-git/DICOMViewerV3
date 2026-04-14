@@ -47,7 +47,13 @@ If Playwright is involved, include project-local setup status and relevant runti
 
 - If a suite is too heavy for the current session (duration, resource limits), add **Cloud: REQUEST:** in your HANDOFF with objective, branch/commit, commands, acceptance, timeout hint—**orchestrator** decides and may fill a **Cloud Task Packet** in `plans/orchestration-state.md`.
 
+## Batch run at slice end (`medium` / `high` risk)
+
+- When **`plans/orchestration-state.md`** **`## Risk tier`** is **`medium`** or **`high`** and the orchestrator (or run packet) marks the end of a **coder slice** (several related tasks landed in one batch), run the **full** automated suite once **after** the last **`coder`** in that slice, update **`logs/test-ledger.md`**, and report pass/fail—even if each coder already ran pytest. This is the **independent** verification gate (see **`.claude/agents/orchestrator.md`** § **Verification gates**).
+- If the slice touched **user-visible UX** (menus, shortcuts, dialogs, navigator, subwindow chrome, themes, fullscreen), add a subsection **Suggested manual smoke** (3–8 bullets: concrete clicks and keys). The orchestrator may instead dispatch **`ux`** for the checklist; if you are the only verification specialist, include smoke bullets in your HANDOFF either way.
+
 ## Reporting
 
 - Summarize: pass/fail counts, first failure with file:line, suspected category (logic, env, data), and recommended assignee (usually **coder**).
+- When UX was in scope, include **Suggested manual smoke** bullets or state “none (non-UX slice)”.
 - End with the structured **HANDOFF → orchestrator** block (see skill `team-orchestration-delegation`).

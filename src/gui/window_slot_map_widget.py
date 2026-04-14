@@ -13,7 +13,8 @@ Inputs (via callbacks set by the app):
 
 Outputs:
     - Square widget with 4 equal square cells; each cell shows the image
-      thumbnail for the view in that slot, plus slot number (1–4) and optional label.
+      thumbnail for the view in that slot, plus a very small colored window
+      number (1–4) in the corner.
     - Overlay highlighting for displayed slots when not in 2x2.
 
 Requirements:
@@ -23,11 +24,11 @@ Requirements:
 from typing import Callable, List, Optional
 
 from PySide6.QtCore import Qt, QPoint, QRect, QSize
-from PySide6.QtGui import QColor, QPainter, QPen, QPixmap
+from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QDialog, QHBoxLayout, QPushButton, QSizePolicy, QStyle, QVBoxLayout, QWidget
 
 from gui.style_constants import FOCUS_BORDER_COLOR
-from gui.navigator_colors import SUBWINDOW_DOT_COLORS
+from gui.navigator_colors import SUBWINDOW_DOT_COLORS, subwindow_slot_display_number
 
 
 # Fixed size for the whole widget so it stays small and square in the navigator bar.
@@ -38,7 +39,7 @@ class WindowSlotMapWidget(QWidget):
     """
     Square 2×2 thumbnail: four equal square cells, one per window slot.
     Each cell shows a thumbnail of the actual image for that view (if available)
-    and a small slot number (1–4). Displayed-slot overlay when layout is not 2x2.
+    and a very small colored window number (1–4). Displayed-slot overlay when layout is not 2x2.
     """
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
@@ -166,7 +167,6 @@ class WindowSlotMapWidget(QWidget):
 
         # Colors
         border_color = QColor(180, 180, 180)
-        text_color = QColor(255, 255, 255)
         bg_color = QColor(40, 40, 40, 255)
         display_overlay_color = QColor(255, 220, 100, 140)  # semi-transparent yellow for displayed slots
         focused_border_color = FOCUS_BORDER_COLOR
@@ -219,30 +219,32 @@ class WindowSlotMapWidget(QWidget):
                 painter.setPen(focus_pen)
                 painter.drawRect(cell_rect.adjusted(1, 1, -1, -1))
 
-            # Small slot number (1–4) in corner so thumbnail remains visible
-            painter.setPen(text_color)
-            slot_num = slot + 1
-            painter.drawText(
-                cell_rect.adjusted(2, 2, -2, -2),
-                Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft,
-                str(slot_num),
+            # Very small colored window number (1–4), top-right — matches navigator thumbnail legend.
+            label_font = QFont()
+            label_font.setBold(True)
+            label_font.setPointSize(9)
+            painter.setFont(label_font)
+            fm = painter.fontMetrics()
+            slot_label = subwindow_slot_display_number(slot)
+            tw = fm.horizontalAdvance(slot_label)
+            th = fm.height()
+            pad = 2
+            text_rect = QRect(
+                cell_rect.right() - pad - tw,
+                cell_rect.top() + pad,
+                tw,
+                th,
             )
-
-            # Colored dot per slot (matches series navigator legend).
-            # Draw as a small filled circle in the top-right corner without
-            # affecting the rest of the cell painting.
-            DOT_DIAMETER = 8
-            DOT_MARGIN = 3
-            color_str = SUBWINDOW_DOT_COLORS.get(slot, "#FFFFFF")
-            dot_color = QColor(color_str)
-            x = cell_rect.right() - DOT_MARGIN - DOT_DIAMETER
-            y = cell_rect.top() + DOT_MARGIN
-
-            painter.save()
-            painter.setPen(QPen(Qt.PenStyle.NoPen))
-            painter.setBrush(dot_color)
-            painter.drawEllipse(x, y, DOT_DIAMETER, DOT_DIAMETER)
-            painter.restore()
+            label_fill = QColor(SUBWINDOW_DOT_COLORS.get(slot, "#FFFFFF"))
+            for ox, oy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                painter.setPen(QColor(0, 0, 0, 220))
+                painter.drawText(
+                    text_rect.translated(ox, oy),
+                    Qt.AlignmentFlag.AlignCenter,
+                    slot_label,
+                )
+            painter.setPen(label_fill)
+            painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, slot_label)
 
         painter.end()
 
@@ -420,6 +422,10 @@ class WindowSlotMapPopupDialog(QDialog):
         super().__init__(parent)
         self.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint)
         self.setModal(False)
+        self.setObjectName("window_slot_map_popup_dialog")
+        self.setStyleSheet(
+            "#window_slot_map_popup_dialog { border: 1px solid #000000; background-color: palette(window); }"
+        )
         self._container = _DraggableWindowSlotMapContainer(
             self, boundary_widget, on_position_changed
         )

@@ -3,6 +3,8 @@ Main application ``QObject.eventFilter`` key routing.
 
 Handles:
     - Letting Ctrl/Cmd+Z reach the menu shortcut system.
+    - Escape exits application fullscreen when no modal is active and focus is not
+      in a text field or spin box (see ``_escape_may_exit_fullscreen``).
     - Restricting layout hotkeys (1–4) to when focus lives under allowed panes
       (series navigator, left/right panels, image viewers).
     - Delegating other keys to ``KeyboardEventHandler``.
@@ -29,9 +31,31 @@ from typing import Any, Optional
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeyEvent
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QAbstractSpinBox, QApplication, QLineEdit, QPlainTextEdit, QTextEdit
 
 from gui.image_viewer import ImageViewer
+
+
+def _escape_may_exit_fullscreen(app: Any) -> bool:
+    """
+    Return True if Escape should leave application fullscreen.
+
+    Skips when a modal dialog is active or when keyboard focus is in a text or
+    spin entry so inline editors keep Escape for cancel/clear semantics.
+    """
+    mw = app.main_window
+    if not mw.isFullScreen():
+        return False
+    if QApplication.activeModalWidget() is not None:
+        return False
+    fw = QApplication.focusWidget()
+    if fw is None:
+        return True
+    if isinstance(fw, (QLineEdit, QTextEdit, QPlainTextEdit)):
+        return False
+    if isinstance(fw, QAbstractSpinBox):
+        return False
+    return True
 
 
 def is_widget_allowed_for_layout_shortcuts(app: Any, widget: Optional[Any]) -> bool:
@@ -79,6 +103,14 @@ def dispatch_app_key_event(app: Any, event: Any) -> Optional[bool]:
     """
     if not isinstance(event, QKeyEvent):
         return None
+
+    if (
+        event.type() == QKeyEvent.Type.KeyPress
+        and event.key() == Qt.Key.Key_Escape
+        and _escape_may_exit_fullscreen(app)
+    ):
+        app.main_window.set_fullscreen(False)
+        return True
 
     if event.key() == Qt.Key.Key_Z:
         if event.modifiers() & (

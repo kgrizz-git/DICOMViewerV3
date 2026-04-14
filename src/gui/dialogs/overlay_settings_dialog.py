@@ -233,8 +233,9 @@ class OverlaySettingsDialog(QDialog):
         self.slice_line_width_spinbox.setRange(1, 8)
         self.slice_line_width_spinbox.setValue(1)
         self.slice_line_width_spinbox.setToolTip(
-            "Stroke width in pixels for lines showing where other windows' "
-            "slice planes intersect this view (not DICOM slice thickness)."
+            "Stroke width in viewport pixels (constant when zooming; same sense as "
+            "ROI line width) for lines showing where other windows' slice planes "
+            "intersect this view (not DICOM slice thickness)."
         )
         slice_lines_layout.addRow("Slice Position Line Width (px):", self.slice_line_width_spinbox)
 

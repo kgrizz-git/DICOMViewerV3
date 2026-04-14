@@ -62,7 +62,7 @@ Implement these UX/navigation improvements:
 ### Proposed UX
 
 - Menu entry: View Fullscreen (checkable).
-- Shortcut: F11 (primary), with Escape to exit fullscreen.
+- Shortcuts: **F11** and **Ctrl+F** (Qt shows **⌘F** on macOS); **Escape** exits fullscreen when focus is not in a text/spin control. Bare **F** is not used (would conflict with typing in fields).
 - Restore prior visibility/sizes when leaving fullscreen.
 
 ### Data/State

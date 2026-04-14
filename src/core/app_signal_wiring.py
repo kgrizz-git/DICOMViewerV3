@@ -29,6 +29,8 @@ Requirements:
 
 from typing import TYPE_CHECKING
 
+from core.subwindow_image_viewer_sync import apply_theme_viewer_background_all
+
 if TYPE_CHECKING:
     from main import DICOMViewerApp
 
@@ -138,6 +140,9 @@ def _wire_view_signals(app: DICOMViewerApp) -> None:
     app.main_window.direction_labels_color_changed.connect(app._on_direction_labels_color_changed)
     app.main_window.show_instances_separately_toggled.connect(app._on_show_instances_separately_toggled)
     app.main_window.theme_changed.connect(app.fusion_controls_widget.update_status_text_colors)
+    app.main_window.theme_changed.connect(
+        lambda _theme_name: apply_theme_viewer_background_all(app)
+    )
     app.main_window.slice_sync_toggled.connect(app._on_slice_sync_toggled)
     app.main_window.slice_sync_manage_requested.connect(app._open_slice_sync_dialog)
     app.main_window.slice_location_lines_toggled.connect(app._on_slice_location_lines_toggled)

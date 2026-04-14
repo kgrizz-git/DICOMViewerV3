@@ -2,8 +2,10 @@
 Slice Location Line Manager (per subwindow)
 
 Manages QGraphicsLineItem objects that display the intersection of other
-views' slice planes on the current image. Lines zoom and pan with the image
-(scene coordinates, no ItemIgnoresTransformations).
+views' slice planes on the current image. Line geometry uses scene coordinates
+so endpoints zoom and pan with the image (no ItemIgnoresTransformations).
+Stroke width uses a cosmetic QPen so it matches ROI-style overlays: width is
+in viewport pixels and does not grow or shrink when the view is zoomed.
 
 Line colors match the subwindow dot colors from navigator_colors (blue, green,
 orange, magenta) so each window's line is visually associated with its dot.
@@ -44,7 +46,7 @@ def _hex_to_rgb(hex_str: str) -> tuple[int, int, int]:
     )
 
 
-# Colors match SUBWINDOW_DOT_COLORS: blue(0), green(1), orange(2), magenta(3).
+# Colors match SUBWINDOW_DOT_COLORS (slot 0–3 = windows 1–4): blue, green, orange, magenta.
 # Index 0 = Window 1, etc. Wraps for indices >= 4.
 _SOURCE_COLORS: list[tuple[int, int, int]] = [
     _hex_to_rgb(SUBWINDOW_DOT_COLORS.get(i, "#2196F3"))
@@ -60,12 +62,23 @@ def _color_for_source(source_idx: int) -> tuple[int, int, int]:
     return _SOURCE_COLORS[idx]
 
 
+def _pen_for_line(color: tuple[int, int, int], width: int) -> QPen:
+    """
+    Build a pen for slice-location strokes: viewport-relative width (cosmetic),
+    aligned with ROI / measurement / crosshair overlay lines.
+    """
+    pen = QPen(QColor(*color), width)
+    pen.setCosmetic(True)
+    return pen
+
+
 class SliceLocationLineManager:
     """
     Manages slice location line items for one subwindow's scene.
 
-    Lines are drawn in scene coordinates (pixel coords = scene coords when
-    image is at origin) so they zoom and pan with the image.
+    Endpoints are in scene coordinates (image pixel space when the pixmap is
+    at the origin) so the line moves and scales with zoom/pan. Pen width is
+    cosmetic (viewport pixels), independent of zoom.
 
     Each line item is keyed by ``line_id`` from the segment descriptor.
     In middle mode line_id == source_idx (single line per source).
@@ -91,7 +104,7 @@ class SliceLocationLineManager:
         self._line_width_px: int = _DEFAULT_LINE_WIDTH
 
     def set_line_width_px(self, width_px: int) -> None:
-        """Set stroke width for slice position lines (1–8 pixels)."""
+        """Set stroke width for slice position lines (1–8 viewport pixels, cosmetic pen)."""
         self._line_width_px = max(1, min(8, int(width_px)))
 
     def set_scene(self, scene: Optional[QGraphicsScene]) -> None:
@@ -121,7 +134,7 @@ class SliceLocationLineManager:
 
         Args:
             segments: List of segment descriptors from get_slice_location_line_segments.
-            line_width_px: Optional pen width override (pixels); defaults to last set width.
+            line_width_px: Optional cosmetic pen width (viewport px); defaults to last set width.
         """
         if self._scene is None:
             return
@@ -129,6 +142,12 @@ class SliceLocationLineManager:
         lw = self._line_width_px if line_width_px is None else max(1, min(8, int(line_width_px)))
         if line_width_px is not None:
             self._line_width_px = lw
+
+        # Drop dead wrappers (e.g. after scene.clear()) so we never reuse zombies
+        # or skip removal because scene() no longer matches self._scene.
+        for lid, dead in list(self._line_items.items()):
+            if not isValid(dead):
+                self._line_items.pop(lid, None)
 
         seen_ids: set[str] = set()
         for seg in segments:
@@ -151,12 +170,26 @@ class SliceLocationLineManager:
             if item is not None:
                 item.setLine(col1, row1, col2, row2)
                 color = _color_for_source(source_idx)
-                item.setPen(QPen(QColor(*color), lw))
+                item.setPen(_pen_for_line(color, lw))
+                # Item may have been removed from the scene elsewhere; re-attach so
+                # geometry updates are visible. If it lives on another scene, move it.
+                if self._scene is not None:
+                    attached = item.scene()
+                    if attached is None:
+                        item.setZValue(_Z_VALUE)
+                        item.setFlag(item.GraphicsItemFlag.ItemIsSelectable, False)
+                        item.setFlag(item.GraphicsItemFlag.ItemIsFocusable, False)
+                        self._scene.addItem(item)
+                    elif attached is not self._scene:
+                        attached.removeItem(item)
+                        item.setZValue(_Z_VALUE)
+                        item.setFlag(item.GraphicsItemFlag.ItemIsSelectable, False)
+                        item.setFlag(item.GraphicsItemFlag.ItemIsFocusable, False)
+                        self._scene.addItem(item)
             else:
                 item = QGraphicsLineItem(col1, row1, col2, row2)
                 color = _color_for_source(source_idx)
-                pen = QPen(QColor(*color), lw)
-                item.setPen(pen)
+                item.setPen(_pen_for_line(color, lw))
                 item.setZValue(_Z_VALUE)
                 item.setFlag(item.GraphicsItemFlag.ItemIsSelectable, False)
                 item.setFlag(item.GraphicsItemFlag.ItemIsFocusable, False)
@@ -169,16 +202,18 @@ class SliceLocationLineManager:
                 item = self._line_items.pop(lid)
                 if not isValid(item):
                     continue
-                if self._scene and item.scene() == self._scene:
-                    self._scene.removeItem(item)
+                sc = item.scene()
+                if sc is not None:
+                    sc.removeItem(item)
 
     def clear(self) -> None:
         """Remove all line items from the scene."""
         for item in list(self._line_items.values()):
             if not isValid(item):
                 continue
-            if self._scene and item.scene() == self._scene:
-                self._scene.removeItem(item)
+            sc = item.scene()
+            if sc is not None:
+                sc.removeItem(item)
         self._line_items.clear()
 
     def set_visible(self, visible: bool) -> None:

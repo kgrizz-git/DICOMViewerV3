@@ -17,20 +17,21 @@ from PySide6.QtWidgets import (
     QLabel,
     QFrame,
 )
-from PySide6.QtCore import Qt, Signal, QPoint, QMimeData
+from PySide6.QtCore import Qt, Signal, QPoint, QMimeData, QRect
 from PySide6.QtGui import (
     QPixmap,
     QImage,
     QPainter,
     QFont,
     QColor,
+    QPen,
     QDrag,
     QMouseEvent,
 )
 from PIL import Image
 import numpy as np
 
-from gui.navigator_colors import SUBWINDOW_DOT_COLORS
+from gui.navigator_colors import SUBWINDOW_DOT_COLORS, subwindow_slot_display_number
 
 class StudyDivider(QFrame):
     """
@@ -124,6 +125,16 @@ class StudyLabel(QFrame):
         """
         self.setFixedWidth(width)
 
+    def apply_navigator_tooltip(self, text: str) -> None:
+        """
+        Set the hover tooltip on the frame and inner label.
+
+        Qt may deliver hover to the child ``QLabel``; mirroring the string keeps
+        the tooltip visible regardless of which child is hit-tested.
+        """
+        self.setToolTip(text)
+        self.label.setToolTip(text)
+
 
 class SeriesThumbnail(QFrame):
     """
@@ -162,7 +173,7 @@ class SeriesThumbnail(QFrame):
         self.is_current = False
         self._instance_count = 1
         self._max_frame_count = 1
-        # Subwindow slot indices whose series is displayed here (for dot indicators)
+        # Subwindow slot indices (0–3) whose series is displayed here — small colored digits in the corner
         self._dot_slots: List[int] = []
         self.drag_start_position = QPoint()
         self._drag_started = False
@@ -195,11 +206,12 @@ class SeriesThumbnail(QFrame):
     def set_subwindow_dots(self, slot_indices: List[int]) -> None:
         """
         Set which subwindow slot indices are currently displaying this series.
-        Each occupied slot will render a small colored dot in the top-right corner.
+        Each occupied slot renders a very small colored window number (1–4) in
+        the top-right corner.
 
         Args:
             slot_indices: List of subwindow slot indices (0–3) currently showing
-                          this series.  Pass an empty list to clear all dots.
+                          this series. Pass an empty list to clear indicators.
         """
         self._dot_slots = list(slot_indices)
         self.update()  # Trigger repaint
@@ -492,17 +504,34 @@ class SeriesThumbnail(QFrame):
             painter.drawRect(indicator_bg_rect)
             painter.drawText(indicator_bg_rect, Qt.AlignmentFlag.AlignCenter, indicator_text)
 
-        # Draw colored subwindow-assignment dots in the top-right corner.
-        # Each dot is 8 px diameter; consecutive dots are spaced 10 px apart leftward.
-        DOT_DIAMETER = 8
-        DOT_SPACING = 10
-        DOT_MARGIN = 3  # distance from right/top edge
-        for i, slot_idx in enumerate(self._dot_slots):
-            color_str = SUBWINDOW_DOT_COLORS.get(slot_idx, "#FFFFFF")
-            dot_color = QColor(color_str)
-            x = self.width() - DOT_MARGIN - DOT_DIAMETER - i * DOT_SPACING
-            y = DOT_MARGIN
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(dot_color)
-            painter.drawEllipse(x, y, DOT_DIAMETER, DOT_DIAMETER)
+        # Colored window numbers (1–4) in the top-right; rightmost = first slot in list.
+        if self._dot_slots:
+            DOT_MARGIN = 3
+            GAP = 1
+            slot_font = QFont()
+            slot_font.setBold(True)
+            slot_font.setPointSize(9)
+            painter.setFont(slot_font)
+            fm = painter.fontMetrics()
+            pieces: List[tuple[int, str]] = []
+            total_w = 0
+            for slot_idx in self._dot_slots:
+                ch = subwindow_slot_display_number(slot_idx)
+                w = fm.horizontalAdvance(ch)
+                pieces.append((slot_idx, ch))
+                total_w += w
+            total_w += GAP * max(0, len(pieces) - 1)
+            x = self.width() - DOT_MARGIN - total_w
+            y_top = DOT_MARGIN
+            for i, (slot_idx, ch) in enumerate(pieces):
+                w = fm.horizontalAdvance(ch)
+                h = fm.height()
+                rect = QRect(int(x), int(y_top), w, h)
+                fill = QColor(SUBWINDOW_DOT_COLORS.get(slot_idx, "#FFFFFF"))
+                for ox, oy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                    painter.setPen(QPen(QColor(0, 0, 0, 210)))
+                    painter.drawText(rect.translated(ox, oy), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop, ch)
+                painter.setPen(QPen(fill))
+                painter.drawText(rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop, ch)
+                x += w + (GAP if i < len(pieces) - 1 else 0)
 

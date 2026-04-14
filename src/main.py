@@ -42,7 +42,7 @@ from PySide6.QtWidgets import (
     QStyleFactory,
 )
 from PySide6.QtCore import Qt, QPoint, QPointF, QObject, QTimer, QRectF, QSize, Signal
-from PySide6.QtGui import QCursor
+from PySide6.QtGui import QCursor, QColor
 from typing import Any, Callable, Optional, Dict, List, Tuple, cast, Set
 import pydicom
 from pydicom.dataset import Dataset
@@ -76,6 +76,7 @@ from core.dicom_parser import DICOMParser
 from core.dicom_processor import DICOMProcessor
 from core.tag_edit_history import TagEditHistoryManager
 from utils.config_manager import ConfigManager
+from utils.slice_sync_group_palette import slice_sync_group_rgb, view_index_to_group_index
 from utils.dicom_utils import get_composite_series_key
 from tools.roi_manager import ROIItem
 from tools.annotation_manager import AnnotationManager
@@ -101,6 +102,7 @@ from core.qa_app_facade import QAAppFacade
 from core.export_app_facade import ExportAppFacade
 from core.subwindow_image_viewer_sync import (
     apply_initial_image_viewer_display_state,
+    apply_theme_viewer_background_all,
     set_direction_labels_all,
     set_direction_labels_color_all,
     set_scale_markers_all,
@@ -324,6 +326,7 @@ class DICOMViewerApp(QObject):
         self.series_navigator.set_show_instances_separately(
             self.config_manager.get_show_instances_separately()
         )
+        self.series_navigator.set_privacy_mode(self.privacy_view_enabled)
         self.cine_controls_widget = CineControlsWidget()
         self.intensity_projection_controls_widget = IntensityProjectionControlsWidget()
 
@@ -389,6 +392,9 @@ class DICOMViewerApp(QObject):
 
         # Propagate initial privacy, slice sync, smoothing, and scale/direction UI to all viewers
         apply_initial_image_viewer_display_state(self)
+        # Theme letterbox color: _apply_theme ran before subwindows existed; refresh every pane.
+        apply_theme_viewer_background_all(self)
+        self._refresh_slice_sync_group_indicators()
 
         # Resolve which subwindow currently has focus and set up its manager references.
         # Must happen before _initialize_handlers() which consumes these references.
@@ -547,6 +553,33 @@ class DICOMViewerApp(QObject):
                 'current_datasets': []
             }
         image_viewer.set_mouse_mode("pan")
+        apply_theme_viewer_background_all(self)
+        self._refresh_slice_sync_group_indicators()
+
+    def _refresh_slice_sync_group_indicators(self) -> None:
+        """
+        Update per-pane title-strip colors for slice-sync linked groups.
+
+        Uses **view** indices (0–3) from config, matching ``SliceSyncCoordinator``
+        and ``ImageViewer.subwindow_index``. The strip is hidden when sync is off
+        or the pane is not in a multi-member group.
+        """
+        sync_on = self.config_manager.get_slice_sync_enabled()
+        groups = list(self.config_manager.get_slice_sync_groups()) if sync_on else []
+        for sub in self.multi_window_layout.get_all_subwindows():
+            if sub is None:
+                continue
+            iv = sub.image_viewer
+            idx = getattr(iv, "subwindow_index", None) if iv is not None else None
+            if idx is None:
+                sub.set_slice_sync_group_indicator(None)
+                continue
+            gi = view_index_to_group_index(groups, int(idx))
+            if gi is None:
+                sub.set_slice_sync_group_indicator(None)
+            else:
+                r, g, b = slice_sync_group_rgb(gi)
+                sub.set_slice_sync_group_indicator(QColor(r, g, b))
 
     def _get_subwindow_dataset(self, idx: int) -> Optional[Dataset]:
         """Get current dataset for a subwindow. Delegates to subwindow lifecycle controller."""
@@ -1390,6 +1423,12 @@ class DICOMViewerApp(QObject):
             scene.clear()
             subwindow.image_viewer.image_item = None
             subwindow.image_viewer.viewport().update()
+            # scene.clear() destroys slice-location line items; drop manager state
+            # so the next refresh cannot leave stale dict entries or duplicate lines.
+            try:
+                self._slice_location_line_coordinator.remove_manager(idx)
+            except Exception:
+                pass
 
         # Reset subwindow_data to the empty template
         self.subwindow_data[idx] = {
@@ -2249,6 +2288,10 @@ class DICOMViewerApp(QObject):
         """
         self.privacy_view_enabled = enabled
         self._privacy_controller.apply_privacy(enabled)
+        if hasattr(self, "series_navigator") and self.series_navigator is not None:
+            self.series_navigator.set_privacy_mode(enabled)
+            self._refresh_series_navigator_state()
+            self.series_navigator.set_subwindow_assignments(self._get_subwindow_assignments())
 
     def _on_slice_sync_toggled(self, enabled: bool) -> None:
         """
@@ -2265,6 +2308,7 @@ class DICOMViewerApp(QObject):
         for subwindow in subwindows:
             if subwindow and subwindow.image_viewer:
                 subwindow.image_viewer.set_slice_sync_enabled_state(enabled)
+        self._refresh_slice_sync_group_indicators()
 
     def _open_slice_sync_dialog(self) -> None:
         """Open the Manage Sync Groups dialog."""
@@ -2284,6 +2328,7 @@ class DICOMViewerApp(QObject):
         self._slice_sync_coordinator.set_groups(groups)
         self._slice_sync_coordinator.invalidate_cache()
         self._slice_location_line_coordinator.refresh_all()
+        self._refresh_slice_sync_group_indicators()
 
     def _on_slice_location_lines_toggled(self, visible: bool) -> None:
         """

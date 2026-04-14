@@ -67,7 +67,8 @@ def get_theme_viewer_background_color(theme: str) -> QColor:
     Returns:
         QColor for ImageViewer.set_background_color()
     """
+    # Letterbox around the image: keep darker than mid-grey so borders read as "frame"
     if theme == "dark":
-        return QColor(27, 27, 27)  # #1b1b1b
+        return QColor(14, 14, 14)  # #0e0e0e (was #1b1b1b)
     else:
-        return QColor(64, 64, 64)  # #404040
+        return QColor(38, 38, 38)  # #262626 (was #404040)

@@ -45,6 +45,8 @@ class SliceLocationLineCoordinator:
         self.app = app
         self._managers: Dict[int, SliceLocationLineManager] = {}
         self._refreshing = False
+        # Coalesce nested refresh_all calls (e.g. signals during a refresh) so no pass is dropped.
+        self._pending_refresh_all: bool = False
 
     def ensure_manager(self, idx: int, scene: Optional[Any] = None) -> SliceLocationLineManager:
         """
@@ -77,6 +79,7 @@ class SliceLocationLineCoordinator:
         and visibility enabled.
         """
         if self._refreshing:
+            self._pending_refresh_all = True
             return
         visible = self._is_visible()
         if not visible:
@@ -97,10 +100,14 @@ class SliceLocationLineCoordinator:
                 self._refresh_for_subwindow(idx, only_same_group)
         finally:
             self._refreshing = False
+            if self._pending_refresh_all:
+                self._pending_refresh_all = False
+                self.refresh_all()
 
     def refresh_for_subwindow(self, target_idx: int) -> None:
         """Refresh slice location lines for a single target subwindow."""
         if self._refreshing:
+            self._pending_refresh_all = True
             return
         if not self._is_visible():
             self._clear_all_visible()

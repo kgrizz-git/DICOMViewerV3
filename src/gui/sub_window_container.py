@@ -12,6 +12,7 @@ Inputs:
     
 Outputs:
     - Focused subwindow with highlighted border
+    - Optional thin top color strip when slice sync groups apply (view indices)
     - Series/slice assignment signals
     - Drag-and-drop acceptance
     
@@ -20,9 +21,17 @@ Requirements:
     - ImageViewer for image display
 """
 
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QFrame, QSizePolicy
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFrame, QSizePolicy
 from PySide6.QtCore import Qt, Signal, QMimeData
-from PySide6.QtGui import QDragEnterEvent, QDragMoveEvent, QDropEvent, QColor, QPainter, QPen
+from PySide6.QtGui import (
+    QDragEnterEvent,
+    QDragMoveEvent,
+    QDropEvent,
+    QColor,
+    QPainter,
+    QPen,
+    QPalette,
+)
 from typing import Optional
 
 from gui.image_viewer import ImageViewer
@@ -60,6 +69,75 @@ def _parse_series_drop_mime(text: str) -> tuple[str, int, str]:
                 return rest, 0, study_uid
         return rest, 0, study_uid
     return "", 0, ""
+
+
+class _SliceSyncGroupBar(QWidget):
+    """
+    Full-width horizontal strip (5px) filled with the slice-sync group color.
+    Sits above the image viewer; subtler than a window-slot dot and reads as a group rail.
+    """
+
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self._fill: Optional[QColor] = None
+        self.setFixedHeight(5)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+    def set_fill_color(self, color: Optional[QColor]) -> None:
+        self._fill = color
+        self.update()
+
+    def paintEvent(self, _event) -> None:
+        if self._fill is None:
+            return
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), self._fill)
+        win = self.palette().color(QPalette.ColorRole.Window)
+        edge = QColor(40, 40, 40) if win.lightness() > 140 else QColor(90, 90, 90)
+        painter.setPen(QPen(edge, 1))
+        painter.drawLine(0, self.height() - 1, self.width(), self.height() - 1)
+
+
+class _PaneTitleBarFrame(QFrame):
+    """
+    Thin top strip holding the sync-group color bar; forwards DnD and mouse to the parent pane.
+    """
+
+    def __init__(self, container: "SubWindowContainer", parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self._container = container
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setFixedHeight(5)
+        self.setAcceptDrops(True)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+        row = QHBoxLayout(self)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(0)
+        self._bar = _SliceSyncGroupBar(self)
+        row.addWidget(self._bar, 1)
+
+    @property
+    def sync_bar(self) -> _SliceSyncGroupBar:
+        return self._bar
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        if self._container._mime_accepts_series_or_mpr(event.mimeData()):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event: QDragMoveEvent) -> None:
+        if self._container._mime_accepts_series_or_mpr(event.mimeData()):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event: QDropEvent) -> None:
+        SubWindowContainer.dropEvent(self._container, event)
+
+    def mousePressEvent(self, event) -> None:
+        SubWindowContainer.mousePressEvent(self._container, event)
 
 
 class SubWindowContainer(QFrame):
@@ -109,10 +187,15 @@ class SubWindowContainer(QFrame):
         # Set size policy to expand
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         
-        # Set up layout
+        # Set up layout: optional top strip (slice-sync group color) + image viewer
+        self._pane_title_bar = _PaneTitleBarFrame(self, parent=self)
+        self._sync_group_bar = self._pane_title_bar.sync_bar
+        self._pane_title_bar.hide()
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
+        layout.addWidget(self._pane_title_bar)
         layout.addWidget(self.image_viewer)
         
         # Enable drag-and-drop
@@ -123,7 +206,35 @@ class SubWindowContainer(QFrame):
         
         # Install event filter on image viewer to capture clicks
         self.image_viewer.installEventFilter(self)
-    
+
+    def set_slice_sync_group_indicator(self, color: Optional[QColor]) -> None:
+        """
+        Show or hide the slice-sync group color on the pane title strip.
+
+        When ``color`` is None, the strip is hidden (sync off, singleton, or pane
+        not in any group). Groups use **view** indices (0–3), not grid slots.
+        """
+        if color is None:
+            self._sync_group_bar.set_fill_color(None)
+            self._sync_group_bar.setToolTip("")
+            self._pane_title_bar.hide()
+        else:
+            self._sync_group_bar.set_fill_color(color)
+            self._sync_group_bar.setToolTip(
+                "Anatomic slice sync: this pane is in a linked group. "
+                "Same bar color means the same group."
+            )
+            self._pane_title_bar.show()
+
+    def _mime_accepts_series_or_mpr(self, mime: QMimeData) -> bool:
+        if mime.hasFormat(MPR_ASSIGN_MIME):
+            return True
+        if mime.hasText():
+            text = mime.text()
+            if text.startswith("series_uid:") or text.startswith("dv3_assign\t"):
+                return True
+        return False
+
     def set_focused(self, focused: bool) -> None:
         """
         Set the focus state of this subwindow.
@@ -317,16 +428,10 @@ class SubWindowContainer(QFrame):
         Args:
             event: Drag enter event
         """
-        mime = event.mimeData()
-        if mime.hasFormat(MPR_ASSIGN_MIME):
+        if self._mime_accepts_series_or_mpr(event.mimeData()):
             event.acceptProposedAction()
-            return
-        if mime.hasText():
-            text = mime.text()
-            if text.startswith("series_uid:") or text.startswith("dv3_assign\t"):
-                event.acceptProposedAction()
-                return
-        event.ignore()
+        else:
+            event.ignore()
 
     def dragMoveEvent(self, event: QDragMoveEvent) -> None:
         """
@@ -335,16 +440,10 @@ class SubWindowContainer(QFrame):
         Args:
             event: Drag move event
         """
-        mime = event.mimeData()
-        if mime.hasFormat(MPR_ASSIGN_MIME):
+        if self._mime_accepts_series_or_mpr(event.mimeData()):
             event.acceptProposedAction()
-            return
-        if mime.hasText():
-            text = mime.text()
-            if text.startswith("series_uid:") or text.startswith("dv3_assign\t"):
-                event.acceptProposedAction()
-                return
-        event.ignore()
+        else:
+            event.ignore()
 
     def dropEvent(self, event: QDropEvent) -> None:
         """

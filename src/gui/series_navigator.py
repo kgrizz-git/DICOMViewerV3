@@ -46,6 +46,9 @@ from gui.series_navigator_view import StudyDivider, StudyLabel, SeriesThumbnail
 from gui.series_navigator_model import (
     build_instance_entries_for_navigator,
     study_label_from_dataset,
+    build_study_navigator_tooltip,
+    build_series_navigator_tooltip,
+    build_instance_navigator_tooltip,
 )
 from gui.mpr_thumbnail_widget import MprThumbnailWidget
 from core.slice_display_lut import apply_window_level_rescale_conversion
@@ -98,6 +101,7 @@ class SeriesNavigator(QWidget):
         self._instance_start_indices: Dict[Tuple[str, str], List[int]] = {}
         self._multiframe_info_map: Dict[Tuple[str, str], MultiFrameSeriesInfo] = {}
         self._show_instances_separately = False
+        self._privacy_mode_enabled = False
 
         # Current subwindow slot → (study_uid, series_key) assignments for dot indicators
         self._subwindow_assignments: Dict[int, tuple[Any, ...]] = {}
@@ -196,6 +200,16 @@ class SeriesNavigator(QWidget):
         self._show_instances_separately = enabled
         if changed:
             self._rebuild_from_cached_studies()
+
+    def set_privacy_mode(self, enabled: bool) -> None:
+        """
+        Align navigator hover tooltips with View → Privacy mode.
+
+        Rebuilds from cached studies when any are loaded so ``Patient name``
+        lines match metadata / parser masking (``PRIVACY MODE``).
+        """
+        self._privacy_mode_enabled = bool(enabled)
+        self._rebuild_from_cached_studies()
 
     def get_show_instances_separately(self) -> bool:
         """Return the current navigator expansion preference."""
@@ -416,6 +430,15 @@ class SeriesNavigator(QWidget):
             # Add study label at top (spans full width of section)
             study_label = StudyLabel(study_label_text, study_section)
             study_label.set_width(section_width)
+            if first_dataset is not None:
+                study_label.apply_navigator_tooltip(
+                    build_study_navigator_tooltip(
+                        first_dataset,
+                        privacy_mode=self._privacy_mode_enabled,
+                    )
+                )
+            else:
+                study_label.apply_navigator_tooltip("")
             self.study_labels.append(study_label)
             section_layout.addWidget(study_label)
             
@@ -456,6 +479,13 @@ class SeriesNavigator(QWidget):
                 thumbnail.about_this_file_requested.connect(self.about_this_file_requested.emit)
                 thumbnail.close_series_signal.connect(self.close_series_requested.emit)
                 thumbnail.close_study_signal.connect(self.close_study_requested.emit)
+
+                thumbnail.setToolTip(
+                    build_series_navigator_tooltip(
+                        first_dataset,
+                        privacy_mode=self._privacy_mode_enabled,
+                    )
+                )
 
                 is_current = (series_uid == current_series_uid and study_uid == current_study_uid)
                 thumbnail.set_current(is_current)
@@ -509,6 +539,13 @@ class SeriesNavigator(QWidget):
                         instance_thumbnail.about_this_file_requested.connect(self.about_this_file_requested.emit)
                         instance_thumbnail.close_series_signal.connect(self.close_series_requested.emit)
                         instance_thumbnail.close_study_signal.connect(self.close_study_requested.emit)
+                        instance_thumbnail.setToolTip(
+                            build_instance_navigator_tooltip(
+                                first_dataset,
+                                instance_label,
+                                privacy_mode=self._privacy_mode_enabled,
+                            )
+                        )
                         instance_composite_key = f"{study_uid}:{series_uid}:{slice_index}"
                         self.instance_thumbnails[instance_composite_key] = instance_thumbnail
                         series_group_layout.addWidget(instance_thumbnail)
@@ -545,7 +582,7 @@ class SeriesNavigator(QWidget):
     def set_subwindow_assignments(self, assignments: Dict[int, tuple[Any, ...]]) -> None:
         """
         Update which subwindow slots are currently displaying which series, then
-        repaint the dot indicators on all thumbnails.
+        repaint the window-number indicators on all thumbnails.
 
         Must be called **after** update_series_list() so thumbnails exist.
 
@@ -553,7 +590,7 @@ class SeriesNavigator(QWidget):
             assignments: Mapping of subwindow_idx → assignment tuple for every
                          occupied subwindow. Supported formats are
                          `(study_uid, series_key)` and `(study_uid, series_key, slice_index)`.
-                         Pass an empty dict to clear all dots.
+                         Pass an empty dict to clear all indicators.
         """
         self._subwindow_assignments = dict(assignments)
         self._refresh_dot_indicators()
@@ -561,7 +598,7 @@ class SeriesNavigator(QWidget):
     def _refresh_dot_indicators(self) -> None:
         """
         Rebuild the reverse map from (study_uid, series_key) → [slot_indices] and
-        push the appropriate slot list to every thumbnail's set_subwindow_dots().
+        push the appropriate slot list to every thumbnail's ``set_subwindow_dots()``.
         """
         # Build reverse map: composite_key → list of slot indices
         reverse: Dict[str, List[int]] = {}
@@ -578,7 +615,7 @@ class SeriesNavigator(QWidget):
                 if instance_key is not None:
                     instance_reverse.setdefault(instance_key, []).append(slot_idx)
 
-        # Apply to thumbnails — thumbnails not in the map get empty list (no dots)
+        # Apply to thumbnails — thumbnails not in the map get empty list (no numbers)
         for composite_key, thumbnail in self.thumbnails.items():
             thumbnail.set_subwindow_dots(reverse.get(composite_key, []))
         for composite_key, thumbnail in self.instance_thumbnails.items():

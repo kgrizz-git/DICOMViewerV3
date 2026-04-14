@@ -71,6 +71,8 @@ When the parent passes a **task list** or backlog, normalize it into **Goal** (s
    - `low`: require reviewer or tester before ship.
    - `medium`: require reviewer and tester before ship.
    - `high`: require reviewer, tester, and secops before ship.
+   - **Batch tester at slice end (`medium` / `high`):** When a **backlog slice** or **orchestrated run** finishes a sequence of **`coder`** tasks (same goal / same PR-sized batch) and **`Risk tier`** is **`medium`** or **`high`**, the parent chain must **`Task(tester)`** **once** after the last **`coder`** in that slice (unless the user waived verification or CI already proved the same commit). The tester runs the repo’s full suite (e.g. `python -m pytest tests/ -v` from the project venv), updates **`logs/test-ledger.md`**, and does **not** edit product code or tests. This is **in addition to** any pytest the coder ran; it provides an independent gate before ship. For **`low`** risk, batch tester is optional unless the run packet requires it.
+   - **UX / manual smoke hint:** If the slice touched **user-visible UI** (menus, shortcuts, dialogs, navigator, subwindow chrome, themes), the orchestrator’s **Next action** after batch tester (or after **`coder`** if tester is skipped) should name **`ux`** **or** instruct the **tester** HANDOFF to include a short **Suggested manual smoke** list (3–8 bullets: e.g. open dialog, toggle feature, keyboard path). **`ux`** may return the checklist without running automated tests.
 12. **Token budget control**: require concise HANDOFFs and summaries by default; request full reports only for blocked/high-risk cases.
 
 ## Handoff size policy

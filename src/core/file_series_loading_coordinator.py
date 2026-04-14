@@ -51,6 +51,22 @@ from gui.series_navigator_model import build_instance_entries_for_navigator
 _WINDOW_LABELS = ["Window 1", "Window 2", "Window 3", "Window 4"]
 
 
+def _show_duplicate_skip_toast(app: Any, skipped_count: int) -> None:
+    """
+    Brief toast when additive load skipped files that were already loaded.
+
+    Centered on the main window with a slightly more opaque background than
+    default toasts (see NAVIGATOR_AND_FILE_LOADING_FEEDBACK_PLAN §2).
+    """
+    if skipped_count <= 0:
+        return
+    app.main_window.show_toast_message(
+        f"{skipped_count} file(s) already loaded and skipped",
+        position="center",
+        bg_alpha=0.85,
+    )
+
+
 def _get_first_new_series_by_dicom(
     new_series: List[Tuple[str, str]],
     current_studies: Dict[str, Dict[str, List[Dataset]]],
@@ -358,9 +374,7 @@ class FileSeriesLoadingCoordinator:
                 f"No new files — all {total} already loaded" if total else "No new files loaded"
             )
             if merge_result.skipped_file_count > 0:
-                app.main_window.show_toast_message(
-                    f"{merge_result.skipped_file_count} file(s) already loaded and skipped"
-                )
+                _show_duplicate_skip_toast(app, merge_result.skipped_file_count)
             return
 
         # Load PS/KO additively for brand-new study UIDs only
@@ -525,9 +539,7 @@ class FileSeriesLoadingCoordinator:
                 f"Added {k} slice(s) to existing series"
             )
         if merge_result.skipped_file_count > 0:
-            app.main_window.show_toast_message(
-                f"{merge_result.skipped_file_count} file(s) already loaded and skipped"
-            )
+            _show_duplicate_skip_toast(app, merge_result.skipped_file_count)
 
         # Apply slice location lines if enabled. Defer so display/layout has settled.
         app._slice_sync_coordinator.invalidate_cache()

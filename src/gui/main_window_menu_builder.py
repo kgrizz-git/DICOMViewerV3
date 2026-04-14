@@ -255,6 +255,26 @@ def build_menu_bar(main_window) -> None:
     main_window.show_instances_separately_action.triggered.connect(main_window._on_show_instances_separately_toggled)
     view_menu.addAction(main_window.show_instances_separately_action)
 
+    view_menu.addSeparator()
+
+    # Fullscreen: F11 + Ctrl+F (Cmd+F on macOS via Qt portable sequence). Bare "F" is
+    # not used — it would conflict with typing in search/metadata fields.
+    main_window.fullscreen_action = QAction("F&ullscreen", main_window)
+    main_window.fullscreen_action.setCheckable(True)
+    main_window.fullscreen_action.setChecked(False)
+    main_window.fullscreen_action.setShortcuts(
+        [
+            QKeySequence("F11"),
+            QKeySequence("Ctrl+F"),
+        ]
+    )
+    main_window.fullscreen_action.setToolTip(
+        "Toggle fullscreen (F11 or Ctrl+F). On macOS the menu shows ⌘F. "
+        "Press Escape to exit when a text field is not focused."
+    )
+    main_window.fullscreen_action.triggered.connect(lambda checked: main_window.set_fullscreen(bool(checked)))
+    view_menu.addAction(main_window.fullscreen_action)
+
     # Show/Hide Left Pane and Right Pane (initial check state default True; MainWindow syncs from splitter after central widget is created)
     main_window.show_left_pane_action = QAction("Show/Hide Left Pane", main_window)
     main_window.show_left_pane_action.setCheckable(True)

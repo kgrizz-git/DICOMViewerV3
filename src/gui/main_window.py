@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (QMainWindow, QMenuBar, QStatusBar,
                                 QScrollArea, QFrame, QGraphicsOpacityEffect, QToolButton)
 from PySide6.QtCore import Qt, Signal, QEvent, QBuffer, QByteArray, QIODevice, QDir, QTimer, QPropertyAnimation
 from PySide6.QtGui import QAction, QIcon, QKeySequence, QColor, QDragEnterEvent, QDropEvent, QPixmap
-from typing import Optional, TYPE_CHECKING, cast
+from typing import Any, Dict, List, Literal, Optional, TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from gui.image_viewer import ImageViewer
@@ -169,6 +169,7 @@ class MainWindow(QMainWindow):
     show_left_pane_action: Optional[QAction] = None
     show_right_pane_action: Optional[QAction] = None
     show_series_navigator_action: Optional[QAction] = None
+    fullscreen_action: Optional[QAction] = None
     show_window_slot_map_action: Optional[QAction] = None
     slice_sync_action: Optional[QAction] = None
     slice_location_lines_enable_action: Optional[QAction] = None
@@ -210,6 +211,10 @@ class MainWindow(QMainWindow):
         
         # Reference to image viewer (set by main.py after creation)
         self.image_viewer: Optional['ImageViewer'] = None
+
+        # View → Fullscreen: in-memory snapshot only (never write fullscreen layout to config defaults)
+        self._fullscreen_snapshot: Optional[Dict[str, Any]] = None
+        self._fullscreen_transitioning = False
         
         # Window properties
         self.setWindowTitle("DICOM Viewer V3")
@@ -263,22 +268,33 @@ class MainWindow(QMainWindow):
         self.pixel_info_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.statusBar().addPermanentWidget(self.pixel_info_label, stretch=1)
 
-    def show_toast_message(self, message: str, timeout_ms: int = 5000) -> None:
+    def show_toast_message(
+        self,
+        message: str,
+        timeout_ms: int = 5000,
+        *,
+        position: Literal["bottom-center", "center"] = "bottom-center",
+        bg_alpha: float = 0.75,
+    ) -> None:
         """
-        Show a temporary toast/banner message at the bottom-center of the window.
+        Show a temporary toast/banner message over the main window.
         Auto-dismisses after timeout_ms, then fades out over 300 ms.
 
         Args:
             message: Text to display.
             timeout_ms: Time in milliseconds before starting fade-out (default 5000).
+            position: ``bottom-center`` (default) or ``center`` of the main window
+                client area (widget coordinates).
+            bg_alpha: Background opacity for the toast panel, clamped to [0.0, 1.0].
         """
         if self._toast_timer is not None and self._toast_timer.isActive():
             self._toast_timer.stop()
         if self._toast_label is not None:
             self._toast_label.deleteLater()
+        alpha = max(0.0, min(1.0, float(bg_alpha)))
         label = QLabel(message, self)
         label.setStyleSheet(
-            "background-color: rgba(0, 0, 0, 0.75); color: white; padding: 10px 16px; "
+            f"background-color: rgba(0, 0, 0, {alpha}); color: white; padding: 10px 16px; "
             "border-radius: 6px; font-size: 14px;"
         )
         label.setWordWrap(True)
@@ -289,7 +305,10 @@ class MainWindow(QMainWindow):
         label.setGraphicsEffect(effect)
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         x = (self.width() - label.width()) // 2
-        y = self.height() - 100
+        if position == "center":
+            y = (self.height() - label.height()) // 2
+        else:
+            y = self.height() - 100
         label.setGeometry(max(0, x), max(0, y), label.width(), label.height())
         label.show()
         label.raise_()
@@ -1167,10 +1186,11 @@ class MainWindow(QMainWindow):
         # This allows preserving the centered view during resize
         self.viewport_resizing.emit()
         
-        # Save splitter positions
+        # Save splitter positions (skip while true fullscreen — chrome is forced narrow; do not persist that)
         sizes = self.splitter.sizes()
-        self.config_manager.set("splitter_sizes", sizes)
-        self.config_manager.save_config()
+        if not self.isFullScreen():
+            self.config_manager.set("splitter_sizes", sizes)
+            self.config_manager.save_config()
         
         # Sync View menu pane toggle check state when user drags splitter to 0 or expands
         if self.show_left_pane_action is not None:
@@ -1322,6 +1342,115 @@ class MainWindow(QMainWindow):
             self.show_series_navigator_action.setChecked(self.series_navigator_visible)
         self.series_navigator_visibility_changed.emit(self.series_navigator_visible)
 
+    def _take_fullscreen_snapshot(self) -> Dict[str, Any]:
+        """Capture splitter sizes, navigator bar, and toolbar visibility before entering fullscreen."""
+        container = getattr(self, "series_navigator_container", None)
+        bar_visible = bool(container.isVisible()) if container is not None else False
+        toolbar_vis = self.main_toolbar.isVisible() if hasattr(self, "main_toolbar") else True
+        return {
+            "splitter_sizes": list(self.splitter.sizes()),
+            "series_navigator_bar_visible": bar_visible,
+            "toolbar_visible": toolbar_vis,
+            "was_maximized": self.isMaximized(),
+        }
+
+    def _apply_fullscreen_chrome_hidden(self) -> None:
+        """Collapse side panes, hide bottom navigator bar and main toolbar (no config persist)."""
+        sizes = self.splitter.sizes()
+        total = max(sizes[0] + sizes[1] + sizes[2], 1)
+        self.viewport_resizing.emit()
+        self.splitter.setSizes([0, total, 0])
+        if self.show_left_pane_action is not None:
+            self.show_left_pane_action.setChecked(False)
+        if self.show_right_pane_action is not None:
+            self.show_right_pane_action.setChecked(False)
+        container = getattr(self, "series_navigator_container", None)
+        if container is not None:
+            container.setVisible(False)
+        if hasattr(self, "main_toolbar"):
+            self.main_toolbar.hide()
+        QTimer.singleShot(10, lambda: self.viewport_resized.emit())
+
+    def _restore_fullscreen_chrome(self, snap: Dict[str, Any]) -> None:
+        """Restore splitter, navigator bar, toolbar, and View menu checks from *snap*."""
+        self.viewport_resizing.emit()
+        restored: List[int] = list(snap["splitter_sizes"])
+        if len(restored) == 3:
+            self.splitter.setSizes(restored)
+            if self.show_left_pane_action is not None:
+                self.show_left_pane_action.setChecked(restored[0] > 0)
+            if self.show_right_pane_action is not None:
+                self.show_right_pane_action.setChecked(restored[2] > 0)
+        bar_vis = bool(snap.get("series_navigator_bar_visible", False))
+        self.series_navigator_visible = bar_vis
+        container = getattr(self, "series_navigator_container", None)
+        if container is not None:
+            container.setVisible(bar_vis)
+        if self.show_series_navigator_action is not None:
+            self.show_series_navigator_action.setChecked(bar_vis)
+        tb_vis = bool(snap.get("toolbar_visible", True))
+        if hasattr(self, "main_toolbar"):
+            self.main_toolbar.setVisible(tb_vis)
+        QTimer.singleShot(10, lambda: self.viewport_resized.emit())
+
+    def set_fullscreen(self, enable: bool) -> None:
+        """
+        Enter or leave application fullscreen.
+
+        Entering hides left/right panes, the series navigator bar, and the main toolbar
+        using a snapshot so leaving restores prior layout without persisting fullscreen
+        as user defaults.
+        """
+        if enable:
+            if self.isFullScreen():
+                if self.fullscreen_action is not None:
+                    self.fullscreen_action.setChecked(True)
+                return
+            self._fullscreen_transitioning = True
+            try:
+                self._fullscreen_snapshot = self._take_fullscreen_snapshot()
+                self._apply_fullscreen_chrome_hidden()
+                self.showFullScreen()
+                if self.fullscreen_action is not None:
+                    self.fullscreen_action.setChecked(True)
+            finally:
+                self._fullscreen_transitioning = False
+            return
+
+        # --- exit ---
+        self._fullscreen_transitioning = True
+        try:
+            snap = self._fullscreen_snapshot
+            self._fullscreen_snapshot = None
+            self.showNormal()
+            if snap is not None and snap.get("was_maximized"):
+                self.showMaximized()
+            if snap is not None:
+                self._restore_fullscreen_chrome(snap)
+            if self.fullscreen_action is not None:
+                self.fullscreen_action.setChecked(False)
+        finally:
+            self._fullscreen_transitioning = False
+
+    def changeEvent(self, event: QEvent) -> None:
+        """If the user leaves fullscreen via the OS, restore chrome from the snapshot."""
+        super().changeEvent(event)
+        if event.type() != QEvent.Type.WindowStateChange:
+            return
+        if self._fullscreen_transitioning:
+            return
+        if not self.isFullScreen() and self._fullscreen_snapshot is not None:
+            self._fullscreen_transitioning = True
+            try:
+                snap = self._fullscreen_snapshot
+                self._fullscreen_snapshot = None
+                if snap is not None:
+                    self._restore_fullscreen_chrome(snap)
+                if self.fullscreen_action is not None:
+                    self.fullscreen_action.setChecked(False)
+            finally:
+                self._fullscreen_transitioning = False
+
     def set_window_slot_map_visible(self, visible: bool) -> None:
         """
         Show or hide the window-slot thumbnail widget (when series navigator is visible).
@@ -1453,6 +1582,22 @@ class MainWindow(QMainWindow):
         Args:
             event: Close event
         """
+        # Avoid persisting fullscreen geometry / forced splitter; restore chrome first
+        if self.isFullScreen():
+            snap = self._fullscreen_snapshot
+            self._fullscreen_snapshot = None
+            self.showNormal()
+            if snap is not None:
+                self._restore_fullscreen_chrome(snap)
+                if snap.get("was_maximized"):
+                    self.showMaximized()
+            if self.fullscreen_action is not None:
+                self.fullscreen_action.setChecked(False)
+        elif self._fullscreen_snapshot is not None:
+            snap = self._fullscreen_snapshot
+            self._fullscreen_snapshot = None
+            self._restore_fullscreen_chrome(snap)
+
         # Save window geometry
         geometry = self.geometry()
         self.config_manager.set("window_width", geometry.width())

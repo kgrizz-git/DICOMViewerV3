@@ -16,7 +16,7 @@ description: "Defines safe multi-agent orchestration: delegation, sequencing, br
 | `ux` | UX/UI assessment: **desktop/Qt/native** workflows by default in Qt apps; **web** flows via Playwright/Chrome when the product is browser-based | no |
 | `reviewer` | Spec vs implementation; lints; plan checklist updates | no |
 | `secops` | Security scans; timestamped reports | yes (default) |
-| `tester` | Runs tests; maintains `logs/test-ledger.md`; **no code edits** | yes |
+| `tester` | Runs tests; maintains `logs/test-ledger.md`; **no code edits**. At **slice end** for **`medium`/`high`** risk, run **batch full-suite** verification per orchestrator policy; add **Suggested manual smoke** when UX changed (see `test-ledger-runner` skill) | yes |
 | `docreviewer` | Doc accuracy; timestamped `docs_log-*.md`; no direct code edits | yes |
 | `docwriter` | Updates documentation; hands off to docreviewer when done | no |
 
