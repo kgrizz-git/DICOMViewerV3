@@ -305,7 +305,7 @@ jobs:
 
       - name: Create Release (Windows, on tag push)
         if: startsWith(github.ref, 'refs/tags/') && matrix.os == 'windows-latest'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             dist/DICOMViewerV3*
@@ -317,7 +317,7 @@ jobs:
 
       - name: Create Release (macOS DMG, on tag push)
         if: startsWith(github.ref, 'refs/tags/') && matrix.os == 'macos-latest'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             DICOMViewerV3-*-macOS.dmg
@@ -329,7 +329,7 @@ jobs:
 
       - name: Create Release (Linux AppImage, on tag push)
         if: startsWith(github.ref, 'refs/tags/') && matrix.os == 'ubuntu-latest'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             DICOMViewerV3-*-x86_64.AppImage
