@@ -53,3 +53,16 @@ def test_write_json_csv_roundtrip(tmp_path: Path) -> None:
     rows = list(csv.DictReader(cp.open(encoding="utf-8")))
     assert len(rows) == 1
     assert float(rows[0]["ctdi_vol_mgy"]) == pytest.approx(1.0)
+
+
+def test_write_csv_escapes_formula_like_cells(tmp_path: Path) -> None:
+    s = CtRadiationDoseSummary(
+        manufacturer="=malicious",
+        ctdi_vol_mgy=1.0,
+        dlp_mgy_cm=2.0,
+        irradiation_event_count=1,
+    )
+    cp = tmp_path / "dose.csv"
+    write_dose_summary_csv(cp, s, anonymize=False)
+    rows = list(csv.DictReader(cp.open(encoding="utf-8")))
+    assert rows[0]["manufacturer"] == "'=malicious"

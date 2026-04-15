@@ -73,7 +73,7 @@ When **intensity projection** (AIP / MIP / MinIP) is **enabled** for a **2D stac
 ## Checklist
 
 - [x] **(HIST1-1)** Shared “projection pixels from series” helper + tests  
-  `parallel-safe: no`, `stream: Q`, `after: ROI_RGB1` — **done** 2026-04-15 (`compute_intensity_projection_raw_array` in `slice_display_pixels.py`; pure helper test **deferred**)
+  `parallel-safe: no`, `stream: Q`, `after: ROI_RGB1` — **done** 2026-04-15 (`compute_intensity_projection_raw_array` in `slice_display_pixels.py`; helper unit test in `tests/test_slice_display_pixels_projection_raw.py`)
 - [x] **(HIST1-2)** Wire callbacks from **`SubwindowLifecycleController`** into **`HistogramDialog`** — **done** 2026-04-15
 - [x] **(HIST1-3)** UI toggle + optional config persistence — **done** 2026-04-15 (`histogram_use_projection_pixels` in `display_config` / `config_manager` defaults)
 - [x] **(HIST1-4)** **`CHANGELOG`** + manual smoke notes — **done** 2026-04-15 (**CHANGELOG**); manual smoke: enable projection → open histogram → toggle checkbox

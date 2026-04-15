@@ -196,33 +196,6 @@ def _format_float(v: Optional[float]) -> str:
     return f"{v:.4f}"
 
 
-def _extract_channel_stats(
-    stats: Dict[str, float | int | None],
-) -> Tuple[int, Dict[str, str]]:
-    """
-    Extract per-channel statistics from ROI stats payload.
-
-    Returns:
-        (channel_count, values) where values maps keys like ``mean_ch0`` to
-        formatted strings for export.
-    """
-    channel_count = int(stats.get("multichannel_count") or 0)
-    values: Dict[str, str] = {}
-    for c in range(channel_count):
-        for metric in ("mean", "std", "min", "max"):
-            k = f"{metric}_ch{c}"
-            v = stats.get(k)
-            values[k] = f"{float(v):.4f}" if v is not None else ""
-    return channel_count, values
-
-
-def _safe_spreadsheet_value(v: Any) -> Any:
-    """Neutralize formula-like cell values for CSV/XLSX exports."""
-    if isinstance(v, str) and v[:1] in ("=", "+", "-", "@"):
-        return "'" + v
-    return v
-
-
 def write_txt(
     file_path: str,
     collected: CollectedSeries,
@@ -305,21 +278,6 @@ def write_txt(
                             lines.append(f"    Area       {area_mm2_f:.2f}    mm²")
                     else:
                         lines.append(f"    Area       {area_px_f:.1f}    pixels")
-                    channel_count, channel_values = _extract_channel_stats(stats)
-                    for c in range(channel_count):
-                        ch = c + 1
-                        lines.append(
-                            f"    Ch{ch} Mean   {channel_values.get(f'mean_ch{c}', '')}    {unit_str}"
-                        )
-                        lines.append(
-                            f"    Ch{ch} Std    {channel_values.get(f'std_ch{c}', '')}    {unit_str}"
-                        )
-                        lines.append(
-                            f"    Ch{ch} Min    {channel_values.get(f'min_ch{c}', '')}    {unit_str}"
-                        )
-                        lines.append(
-                            f"    Ch{ch} Max    {channel_values.get(f'max_ch{c}', '')}    {unit_str}"
-                        )
                 lines.append("")
             cross_idx = 0
             for cross_item in crosshairs:
@@ -383,8 +341,7 @@ def write_csv(
         "Patient Y (mm)",
         "Patient Z (mm)",
     ]
-    row_payloads: List[Tuple[List[str], Dict[str, str]]] = [(headers, {})]
-    max_channel_count = 0
+    rows: List[List[str]] = [headers]
 
     for (study_uid, series_uid), slice_list in collected:
         series_dict = current_studies.get(study_uid, {}).get(series_uid, [])
@@ -422,7 +379,6 @@ def write_csv(
                     "",
                     "",
                 ]
-                channel_values: Dict[str, str] = {}
                 if dataset and roi_manager:
                     stats, rescale_unit = compute_roi_statistics(
                         roi_item, dataset, use_rescale, roi_manager, dicom_processor
@@ -450,9 +406,7 @@ def write_csv(
                     row[11] = f"{area_px_f:.1f}"
                     row[12] = f"{float(area_mm2_v):.4f}" if area_mm2_v is not None else ""
                     row[13] = rescale_unit or ""
-                    channel_count, channel_values = _extract_channel_stats(stats)
-                    max_channel_count = max(max_channel_count, channel_count)
-                row_payloads.append((row, channel_values))
+                rows.append(row)
 
             for cross_item in crosshairs:
                 data = get_crosshair_export_data(cross_item, dataset) if dataset else {}
@@ -479,41 +433,7 @@ def write_csv(
                     _format_float(data.get("patient_y")),
                     _format_float(data.get("patient_z")),
                 ]
-                row_payloads.append((row, {}))
-
-    if max_channel_count > 0:
-        dynamic_headers: List[str] = []
-        for c in range(max_channel_count):
-            ch = c + 1
-            dynamic_headers.extend(
-                [
-                    f"Mean Ch{ch}",
-                    f"Std Dev Ch{ch}",
-                    f"Min Ch{ch}",
-                    f"Max Ch{ch}",
-                ]
-            )
-        rows: List[List[str]] = []
-        for base_row, channel_values in row_payloads:
-            out_row = list(base_row)
-            if base_row is headers:
-                out_row.extend(dynamic_headers)
-                rows.append(out_row)
-                continue
-            for c in range(max_channel_count):
-                out_row.extend(
-                    [
-                        channel_values.get(f"mean_ch{c}", ""),
-                        channel_values.get(f"std_ch{c}", ""),
-                        channel_values.get(f"min_ch{c}", ""),
-                        channel_values.get(f"max_ch{c}", ""),
-                    ]
-                )
-            rows.append([_safe_spreadsheet_value(cell) for cell in out_row])
-    else:
-        rows = [row for row, _ in row_payloads]
-        if len(rows) > 1:
-            rows = [rows[0]] + [[_safe_spreadsheet_value(cell) for cell in r] for r in rows[1:]]
+                rows.append(row)
 
     with open(file_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
@@ -567,11 +487,7 @@ def write_xlsx(
         study_desc = getattr(first_ds, "StudyDescription", "Study")[:31]
         study_desc = _sanitize_filename(study_desc) or "Study"
 
-        ws.cell(
-            row=row,
-            column=1,
-            value=_safe_spreadsheet_value(f"Series {series_num}: {series_desc}"),
-        )
+        ws.cell(row=row, column=1, value=f"Series {series_num}: {series_desc}")
         ws.cell(row=row, column=1).font = bold_font
         row += 1
 
@@ -612,19 +528,19 @@ def write_xlsx(
 
                     ws.cell(row=row, column=1, value="Mean")
                     ws.cell(row=row, column=2, value=round(mean_f, 2))
-                    ws.cell(row=row, column=3, value=_safe_spreadsheet_value(unit_str))
+                    ws.cell(row=row, column=3, value=unit_str)
                     row += 1
                     ws.cell(row=row, column=1, value="Std Dev")
                     ws.cell(row=row, column=2, value=round(std_f, 2))
-                    ws.cell(row=row, column=3, value=_safe_spreadsheet_value(unit_str))
+                    ws.cell(row=row, column=3, value=unit_str)
                     row += 1
                     ws.cell(row=row, column=1, value="Min")
                     ws.cell(row=row, column=2, value=round(min_f, 2))
-                    ws.cell(row=row, column=3, value=_safe_spreadsheet_value(unit_str))
+                    ws.cell(row=row, column=3, value=unit_str)
                     row += 1
                     ws.cell(row=row, column=1, value="Max")
                     ws.cell(row=row, column=2, value=round(max_f, 2))
-                    ws.cell(row=row, column=3, value=_safe_spreadsheet_value(unit_str))
+                    ws.cell(row=row, column=3, value=unit_str)
                     row += 1
                     ws.cell(row=row, column=1, value="Pixels")
                     ws.cell(row=row, column=2, value=count_i)
@@ -644,41 +560,6 @@ def write_xlsx(
                         ws.cell(row=row, column=2, value=area_px_f)
                         ws.cell(row=row, column=3, value="pixels")
                     row += 1
-                    channel_count, channel_values = _extract_channel_stats(stats)
-                    for c in range(channel_count):
-                        ch = c + 1
-                        ws.cell(row=row, column=1, value=f"Ch{ch} Mean")
-                        ws.cell(
-                            row=row,
-                            column=2,
-                            value=_safe_spreadsheet_value(channel_values.get(f"mean_ch{c}", "")),
-                        )
-                        ws.cell(row=row, column=3, value=_safe_spreadsheet_value(unit_str))
-                        row += 1
-                        ws.cell(row=row, column=1, value=f"Ch{ch} Std Dev")
-                        ws.cell(
-                            row=row,
-                            column=2,
-                            value=_safe_spreadsheet_value(channel_values.get(f"std_ch{c}", "")),
-                        )
-                        ws.cell(row=row, column=3, value=_safe_spreadsheet_value(unit_str))
-                        row += 1
-                        ws.cell(row=row, column=1, value=f"Ch{ch} Min")
-                        ws.cell(
-                            row=row,
-                            column=2,
-                            value=_safe_spreadsheet_value(channel_values.get(f"min_ch{c}", "")),
-                        )
-                        ws.cell(row=row, column=3, value=_safe_spreadsheet_value(unit_str))
-                        row += 1
-                        ws.cell(row=row, column=1, value=f"Ch{ch} Max")
-                        ws.cell(
-                            row=row,
-                            column=2,
-                            value=_safe_spreadsheet_value(channel_values.get(f"max_ch{c}", "")),
-                        )
-                        ws.cell(row=row, column=3, value=_safe_spreadsheet_value(unit_str))
-                        row += 1
             for cross_idx, cross_item in enumerate(crosshairs, start=1):
                 ws.cell(row=row, column=1, value=f"  Crosshair {cross_idx}")
                 ws.cell(row=row, column=1).font = bold_font
@@ -691,7 +572,7 @@ def write_xlsx(
                     row += 1
                     ws.cell(row=row, column=1, value="Slice Index (0-based)"); ws.cell(row=row, column=2, value=data["slice_index"]); ws.cell(row=row, column=3, value="")
                     row += 1
-                    ws.cell(row=row, column=1, value="Pixel Value"); ws.cell(row=row, column=2, value=_safe_spreadsheet_value(data["pixel_value_str"])); ws.cell(row=row, column=3, value="")
+                    ws.cell(row=row, column=1, value="Pixel Value"); ws.cell(row=row, column=2, value=data["pixel_value_str"]); ws.cell(row=row, column=3, value="")
                     row += 1
                     ws.cell(row=row, column=1, value="Patient X (mm)"); ws.cell(row=row, column=2, value=_format_float(data["patient_x"])); ws.cell(row=row, column=3, value="")
                     row += 1

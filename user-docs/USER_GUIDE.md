@@ -14,6 +14,9 @@ This hub links topic guides for the application. **In the running app**, use **H
 
 - **Cine:** In the left pane **Cine Playback** group, use the **Play / Pause** toggle, **Stop**, and **Loop** (plus speed and frame slider). On multi-frame series, the image **right-click** menu offers the same play/pause toggle, stop, and loop when cine is available.
 - **Clear This Window:** **Right-click** the image background (not on an ROI) → **Clear This Window** removes the series from **that pane only**; loaded studies and series remain in the navigator.
+- **Radiation dose SR report:** For CT dose SR files, open **Tools → Radiation dose report…** (or image right-click menu when available) to review CTDIvol/DLP summary values and export JSON/CSV. The report updates masking live when Privacy Mode is toggled.
+- **ROI statistics (RGB):** For multi-channel slices, ROI statistics can include per-channel values (mean/std/min/max) in the panel and exports. Toggle this under **Annotation options → ROI statistics**.
+- **Histogram and projection:** In the histogram dialog, use **Use intensity projection pixels** to match histogram bins to the active AIP/MIP/MinIP slab instead of the single current slice.
 
 ## Source and versioning
 

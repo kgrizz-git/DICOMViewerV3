@@ -1,7 +1,7 @@
 # To-Do Checklist
 
-**Last updated:** 2026-04-14  
-**Changes:** Marked backlog **T3** (interactive window map, including **1×1** reveal on click), **T7** (navigator slice/frame count badge, default on, yellow text / no badge chrome), **T12** / per-series **W/L** (session-only RAM cache; cleared on close-all / new load; not config-persisted), and **slice position line** cleanup after MPR tear-down as shipped. Prior 2026-04-13: navigator tooltips (T2), duplicate-skip toast (T9); 2026-04-09: P0 macOS PyInstaller A/B under Performance / Packaging.
+**Last updated:** 2026-04-15  
+**Changes:** Marked **RDSR parsing/browsing/export** as shipped (Tools/context report dialog, privacy-aware JSON/CSV export), marked **ROI per-channel statistics** as shipped (panel/overlay/config + ROI stats export), marked **histogram projection pixels** as shipped (checkbox + persisted preference), and applied CSV/XLSX spreadsheet formula-injection hardening in export paths with regression tests.
 
 ---
 
@@ -94,12 +94,12 @@ This file tracks active and near-term tasks.
 - [ ] **[P2]** Advanced ROI/contouring abilities (contouring, auto-detect ROI, 3D ROI across views) ([details](FUTURE_WORK_DETAIL_NOTES.md#advanced-roi-and-contouring))
 - [ ] **[P2]** Allow hanging protocols? Configuration of windows/tiles, certain views/phases/priors loaded ([plan](plans/HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md#1-hanging-protocols))
 - [ ] **[P2]** Once database is added, allow pulling priors ([plan](plans/HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md#2-pulling-priors-after-local-database))
-- [ ] **[P1]** Also try RDSR parsing/browsing/export support - have some examples, add to repo ([plan](plans/HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md#3-rdsr-parsing-and-export))
+- [x] **[P1]** Also try RDSR parsing/browsing/export support - have some examples, add to repo ([plan](plans/HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md#3-rdsr-parsing-and-export)) — **2026-04-15:** CT dose SR parse support + report dialog via **Tools** and image context menu; privacy-aware display and JSON/CSV export with optional anonymization.
 - [ ] **[P1]** Allow some configuration to interpret MTF results (separately for MRI and CT) where the user needs to review some images along with pylinac MTF plots and decide the "visibility cutoff" MTF value which they think corresponds to the limit of visibility and we report the (interpolated) spatial frequency that gives that MTF value, OR we could have them define a "passing" MTF value and state which inserts pass/fail a visibility check based on that. ([details](FUTURE_WORK_DETAIL_NOTES.md#interpreting-mtf-results))
-- [ ] **[P2]** For ROIs, allow computing and displaying stats per color channel (RGB, etc.) (on by default, when RGB data present, can be enabled in settings)
+- [x] **[P2]** For ROIs, allow computing and displaying stats per color channel (RGB, etc.) (on by default, when RGB data present, can be enabled in settings) — **2026-04-15:** per-channel mean/std/min/max in ROI panel/overlay, persisted setting, and per-channel ROI statistics export columns/rows.
 - [ ] **[P2]** For screenshot export, allow choosing to export multi-window view as single image, as well. Maybe also entire application window as single image, including left/right panes and toolbar etc (if currently displayed).
 - [ ] **[P2]** In overlay  config, allow something like "simple view" and "detailed view", where additional tags can be shown, and spacebar cycles through simple, detailed, and hidden views.
-- [ ] **[P2]** When projection is enabled, allow to show projection pixel values on histogram.
+- [x] **[P2]** When projection is enabled, allow to show projection pixel values on histogram. — **2026-04-15:** histogram dialog toggle uses intensity-projection slab pixels (AIP/MIP/MinIP), persisted via `histogram_use_projection_pixels`.
 - [ ] **[P2]** Enable adding multiple images distributions to histogram for comparison (probably via button histogram). Use different colors for each distribution.
 - [ ] **[P2]** Add toggle/preference to have up/down keys and scroll wheel up/down navigate by slice # or image position patient (eg, if increasing slice # has decreasing image position patient along the orientation vector, allow choosing whether up moves up in slice number (and lower on patient), or up in image position patient (and lower on slice number)).
 - [ ] **[P2]** Do we allow cine playback of multiple windows? We should be able to play each window's cine in sync, or independently, or a combination of both.

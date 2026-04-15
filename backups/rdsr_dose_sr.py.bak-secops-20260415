@@ -409,12 +409,6 @@ def write_dose_summary_csv(
     anonymize: bool,
 ) -> None:
     """Write a single-row CSV of the dose summary (flattened)."""
-
-    def _safe_spreadsheet_value(v: object) -> object:
-        if isinstance(v, str) and v[:1] in ("=", "+", "-", "@"):
-            return "'" + v
-        return v
-
     p = Path(path)
     row = dose_summary_to_export_dict(summary, anonymize=anonymize)
     fieldnames = [
@@ -434,4 +428,4 @@ def write_dose_summary_csv(
     with p.open("w", encoding="utf-8", newline="") as f:
         w = csv.DictWriter(f, fieldnames=fieldnames)
         w.writeheader()
-        w.writerow({k: _safe_spreadsheet_value(row.get(k, "")) for k in fieldnames})
+        w.writerow({k: row.get(k, "") for k in fieldnames})

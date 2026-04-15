@@ -808,8 +808,8 @@ Before considering implementation complete, manually verify:
   `parallel-safe: no`, `stream: P`, `after: RDSR1` (default phasing) — **done** 2026-04-15 (`pixel_array.ndim == 3` and `shape[2] >= 2` in `roi_manager.calculate_statistics`)
 - [x] **(RGB1-2)** Implement per-channel stats in **`roi_manager`** + wire **`roi_coordinator` / `ROIStatisticsPanel`** — **done** 2026-04-15
 - [x] **(RGB1-3)** Add **`roi_config`** key + settings UI + **`default_config`** — **done** 2026-04-15 (`roi_show_per_channel_statistics`, Annotation options)
-- [ ] **(RGB1-4)** Extend **export** + **overlay** text + persistence as needed — **partial:** overlay + customizations export/import **done**; **ROI statistics file export** path unchanged (aggregate columns only) — follow-up if tabular export must list channels
-- [x] **(RGB1-5)** Unit tests + **`CHANGELOG.md` [Unreleased] Added** — **partial:** **CHANGELOG** + **`test_rdsr_export_io`** (dose export); dedicated **RGB ROI** unit test **deferred** (Qt `ROIItem` harness)
+- [x] **(RGB1-4)** Extend **export** + **overlay** text + persistence as needed — **done** 2026-04-15 (ROI statistics export now includes per-channel columns in CSV and per-channel rows in TXT/XLSX; overlay + customizations export/import already complete)
+- [x] **(RGB1-5)** Unit tests + **`CHANGELOG.md` [Unreleased] Added** — **done** 2026-04-15 (`tests/test_roi_export_service_multichannel.py` validates multichannel ROI stats + export columns; CHANGELOG updated)
 
 ### Risks
 
