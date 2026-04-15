@@ -14,6 +14,7 @@ This document outlines how **pylinac** could be integrated into DICOM Viewer V3 
 
 - [PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md](PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md) — ACR MRI Large **low-contrast detectability** (algorithm, scoring, PDF/figure circle colors); aligned with **pylinac 3.42.0** (project pin).
 - [PYLINAC_CUSTOMIZATION_AND_EXTENSIONS.md](PYLINAC_CUSTOMIZATION_AND_EXTENSIONS.md) — **Living tracker**: how we customize, extend, or wrap pylinac (config, runners, subclasses); persist vs per-run `analyze()` kwargs.
+- [PYLINAC_CATPHAN_AND_NUCLEAR_MODULES.md](PYLINAC_CATPHAN_AND_NUCLEAR_MODULES.md) — **CatPhan / Quart CT** and **`pylinac.nuclear`** (IAEA/NMQC-style NM/SPECT): tests performed, expected DICOM inputs, demo ZIPs / external sample data.
 
 The goals are:
 - **Leverage pylinac** for robust, validated phantom analysis rather than re‑implementing QA physics.
@@ -58,7 +59,7 @@ This is a **snapshot** of pylinac usage in **application code** (`src/qa`, Tools
 
 Compared against pylinac’s public docs TOC (wording may vary slightly by release; **runtime is pinned to 3.42.0** — see [Verified pylinac package version](#verified-pylinac-package-version)), the app currently wires **ACR CT** and **ACR MRI Large** only. Additional documented areas not currently exposed in DICOMViewerV3 include:
 
-- **Main modules not exposed**: Calibration (TG-51/TRS-398), Starshot, VMAT, CatPhan, "Cheese" phantoms, GE Helios, Quart, Log Analyzer, Picket Fence, Winston-Lutz (single + multi-target), Planar Imaging, Field Profile Analysis, Field Analysis, Nuclear.
+- **Main modules not exposed**: Calibration (TG-51/TRS-398), Starshot, VMAT, CatPhan, "Cheese" phantoms, GE Helios, Quart, Log Analyzer, Picket Fence, Winston-Lutz (single + multi-target), Planar Imaging, Field Profile Analysis, Field Analysis, Nuclear. **Details (tests, inputs, demo data):** [PYLINAC_CATPHAN_AND_NUCLEAR_MODULES.md](PYLINAC_CATPHAN_AND_NUCLEAR_MODULES.md).
 - **ACR-class capabilities not yet exposed in UI/runner surface**: zip-based load paths (`from_zip`), broader `analyze(...)` tuning knobs (e.g. x/y/angle and ROI/scale adjustments where supported), and subimage plotting/saving helpers (e.g. `plot_analyzed_subimage`, `save_analyzed_subimage`) as first-class app features.
 - **Topic/ancillary tooling not surfaced as app features**: image/gamma/MTF/contrast/noise-power utilities, XIM handling, DICOM conversion helpers, and image/plan generators remain library-level tools rather than integrated user workflows.
 

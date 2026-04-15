@@ -2,6 +2,10 @@
 
 ## Goal
 
+### Single-branch integration queue — **2026-04-15** (user: **M2b → M2c → M3 → M4** on **one** branch)
+
+**Success criteria (2026-04-15 parent):** **M2b–M4** **implemented** on **`feature/rdsr-dose-sr`** (**`pytest`** **478**); optional formal **`RDSR1`** **`high`** **`reviewer`**/**`secops`** if not waived. **Original criteria:** On **one** git branch (no second worktree), land in order: **(M2b)** **`RDSR1-P2`** — dose SR **browse** UI + **Privacy Mode** (**`dev-docs/plans/HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md` §3.3, §3.5**); **(M2c)** **`RDSR1-P3`** — **JSON** + **CSV** export per **§3.4** (no SR write unless product answers plan **Questions**); **(M3)** **`ROI_RGB1`** per **`VIEWER_UX_FEATURES_PLAN.md` §7**; **(M4)** **`HIST_PROJ1`** per **`HISTOGRAM_PROJECTION_PIXEL_VALUES_PLAN.md`**. **CINE1** remains **`complete`** on **`feature/cine-video-export`**; integration tip for new work is **`feature/rdsr-dose-sr`** — **merge `feature/cine-video-export` into `feature/rdsr-dose-sr`** when the cine branch has commits not already contained (same lineage — **default safe**); if a future merge/rebase surfaces **non-trivial conflicts** or unrelated WIP, treat as **`open_question`** (e.g. rename tip to **`feature/viewer-backlog-20260415`**) and **stop** until user picks tip/merge strategy. **Do not push** (orchestrator / agents).
+
 ### Track A — UX / navigator backlog (ongoing)
 
 Backlog from `dev-docs/TO_DO.md`: ship P1 items (MPR navigator assign/clear follow-up, privacy-aware navigator tooltips, slice-position line thickness, **Create MPR view…** menu, **View → Fullscreen**) and queue P2 items (interactive window map, ROI resize handles, PNG/JPG export anonymization + embedded WL default, navigator slice/frame count, **duplicate-skip toast** polish, **sync-group title-bar icon**). Success: prioritized execution, minimal merge conflict, full pytest from activated venv.
@@ -27,7 +31,18 @@ Backlog from `dev-docs/TO_DO.md`: ship P1 items (MPR navigator assign/clear foll
 | **P2** | L71 | **T7** | Navigator: show **# frames/slices** per series (default **on**, compact) | Small spec acceptable; align with `series_navigator_*` |
 | **P2** | L78 | **SD8** | SQLite **FTS5** full-text search on local study index | `LOCAL_STUDY_DATABASE_AND_INDEXING_PLAN.md` — **planner** spike (schema/migration/query API) then **coder** |
 
+### Backlog slice — 2026-04-14 (user orchestrator: cine export, RDSR, ROI RGB stats, histogram projection)
+
+| Priority | TO_DO | Task ID | Summary | Plan / anchor |
+|----------|-------|---------|---------|----------------|
+| **P1** | L90 | **CINE1** | Export **mpg / gif / avi** for **cine** (encoding pipeline, UI entrypoints, progress/cancel, tests) | `dev-docs/plans/MPR_DICOM_SAVE_CINE_VIDEO_EXPORT_ANGLE_MEASUREMENT_PLAN.md` **§2 — Cine video export**; **MPR save-as-DICOM (§1)** treated **done** in state history |
+| **P1** | L97 | **RDSR1** | **RDSR** parsing / browsing / export; **example data** in repo where **license + size** allow | `dev-docs/plans/HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md` **§3 — RDSR parsing and export** |
+| **P2** | L99 | **ROI_RGB1** | ROI stats **per color channel** (RGB, etc.): **on by default when RGB data present**; **optional setting** to enable/disable per checked-in `dev-docs/TO_DO.md` — **do not** assume “off by default” without **user** product confirmation | `dev-docs/plans/VIEWER_UX_FEATURES_PLAN.md` **§7 — ROI_RGB1** (`roi_config`, statistics panel, `roi_measurement_controller` per plan) |
+| **P2** | L102 | **HIST_PROJ1** | When **projection** is on, show **projection pixel values** on the **histogram** | `dev-docs/plans/HISTOGRAM_PROJECTION_PIXEL_VALUES_PLAN.md` (**HIST_PROJ1**); `HistogramDialog` vs `SliceDisplayManager` data path per plan |
+
 **Phasing (recommended):** **Slice 1 — P1:** **MPR2** first (standalone writer + MPR-gated UI; DICOM conformance / UID policy per plan; **risk `high`** → **reviewer** + **tester** + **secops** at slice end). **Slice 2 — P2 navigator cluster:** **T7** then **T3** (same widgets; sequence reduces merge risk) or single **coder** PR with tests. **Slice 3 — P2 viewer:** **T12** (W/L cache keyed by series/view identity) then **T4** (ROI handles — scene interaction; may touch overlapping ROI paths). **Slice 4 — P2 chrome:** **T14** (toolbar model + persistence). **Slice 5 — Track B+:** **SD8** after **MPR2** ship or in parallel **only** if second branch/worktree — default **sequence after** MPR2 to limit merge conflicts on `main_window` / export paths.
+
+**Phasing (this slice — 2026-04-14 user queue):** **Ordered milestones (single branch default):** **(M1)** **CINE1** — **researcher** then **coder** (**M1** **coded** 2026-04-14 on **`feature/cine-video-export`**); slice-end **`medium`** gates **closed** **2026-04-15** (**`reviewer`** **yes_with_followups** → **`tester`** **468** passed + ledger → **`secops`** Semgrep **0** + **`assessments/security-assessment-20260415-1530-cine1.md`**). **(M2)** **RDSR1** — **P0/P1** **done** **2026-04-15** on **`feature/rdsr-dose-sr`** (fixtures **`tests/fixtures/dicom_rdsr/`**, **`src/core/rdsr_dose_sr.py`**, **8** tests); **(M2b)** **`RDSR1-P2`** browse UI + **Privacy** (**`HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md` §3.3 / §3.5**); **(M2c)** **`RDSR1-P3`** **JSON/CSV** export (**§3.4**); **risk `high`** for **browse + export** — run **`reviewer`** + **`tester`** (full **`pytest`** + **`logs/test-ledger.md`**) + **`secops`** **once after M2c** (efficient single batch; optional light **`ux`**/`reviewer` spot-check after P2 if UI diff is large). **(M3)** **ROI_RGB1** — **`VIEWER_UX_FEATURES_PLAN.md` §7**; **coder** after **M2c** on **same branch**. **(M4)** **HIST_PROJ1** — **`HISTOGRAM_PROJECTION_PIXEL_VALUES_PLAN.md`**; **coder** after **M3**; verification **`medium`** default (**`tester`** at least after M4; **`reviewer`** if touch-set warrants). **`NEXT_TASK_TOOL_SECOND: none`** — no parallel second **`Task`** on this ordered single-branch run unless user approves **second worktree** and plans mark streams **parallel-safe**. **Parent (2026-04-15):** **M2b–M4** **coded** on **`feature/rdsr-dose-sr`** — full suite **`pytest`** **478** ~46 s; **`RDSR1`** rollup **`verify_pending`** for optional **`reviewer`**/**`secops`** (PHI/export).
 
 ### Track B — Local study database and indexing **[P1]** (new)
 
@@ -37,17 +52,19 @@ Ship a **local metadata index** (background scanning, incremental refresh, path-
 
 ## Phase
 
-`multi-track` — **2026-04-14:** **MPR2** slice **`complete`** (export / verification gate **closed**): **reviewer** + **`MPR2-theme`** + **`tester`** (**439**→**441**/0 **`pytest`** after **T7**/**T3**/**T12** + display-config tests, **`logs/test-ledger.md`**) + **`secops`** targeted delta — **Semgrep** `p/security-audit` + `p/python` on scoped files **0** findings; artifact **`assessments/security-assessment-20260414-2000.md`**. **Post-ship hotfix (same day):** runtime **pydicom** **ambiguous VR OB/OW** on **Pixel Data** `(7FE0,0010)` under **ExplicitVRLittleEndian** — **parent/coder** fix: write **Pixel Data** as explicit **`OW`** **`DataElement`** in **`src/core/mpr_dicom_export.py`**, test assert, **`CHANGELOG`** **Fixed**; **user should re-smoke** **File → Save MPR as DICOM…** after the fix lands. **Track A P2 (2026-04-14 parent pass):** **`T7`** (navigator slice/frame count badge + config **`navigator_show_slice_frame_count`** + View menu), **`T3`** (window slot map **`cell_clicked`**, popup drag **top bar only**, **`main._on_window_slot_map_cell_clicked`**, **`MultiWindowLayout.set_focused_subwindow`** re-**`_arrange_subwindows`** for **1×2**/**2×1**), **`T12`** (**`ViewStateManager._user_wl_cache`**, save on series switch, restore on return, clear on **`reset_view`**, clear all on **`reset_series_tracking`**) + **`CHANGELOG`** [Unreleased] + **`default_config`** in **`config_manager.py`** — **all landed**. **Deferred this pass:** **`T4`** (ROI resize handles), **`T14`** (toolbar customization), **`SD8`** FTS5 (store migration + UI). **Next default:** **`coder`** **`T4`** *or* **`planner`** **`SD8`** if FTS5 spike first; **`SD8`** parallel only with second **worktree/branch** (**`NEXT_TASK_TOOL_SECOND: none`** on single branch).
+`multi-track` — **2026-04-15:** **`CINE1`** **M1** **`complete`** on **`feature/cine-video-export`** — **`reviewer`** **yes_with_followups**; **`tester`** full suite **468** passed (~68.7 s) + **`logs/test-ledger.md`**; **`secops`** Semgrep **0** scoped + **`assessments/security-assessment-20260415-1530-cine1.md`** (**gitleaks** not on PATH — CI **TruffleHog**). **Ship:** **user merge** **`feature/cine-video-export`** when ready. **`M2–M4` (RDSR1 / ROI_RGB1 / HIST_PROJ1):** **implementation `done`** on **`feature/rdsr-dose-sr`** — **RDSR1-P2+P3** + **ROI_RGB1** + **HIST_PROJ1**; **full `pytest`** **478** (~46 s). **`RDSR1` M2 `high` gates:** **`verify_pending`** (optional **`reviewer`**/**`secops`**) or treat as **pytest-closed** per user. **Tip:** **`feature/rdsr-dose-sr`**; merge **`feature/cine-video-export`** when needed. **`open_question`:** merge/rebase **unsafe** only. **2026-04-14:** **MPR2** slice **`complete`** (export / verification gate **closed**): **reviewer** + **`MPR2-theme`** + **`tester`** (**439**→**441**/0 **`pytest`** after **T7**/**T3**/**T12** + display-config tests, **`logs/test-ledger.md`**) + **`secops`** targeted delta — **Semgrep** `p/security-audit` + `p/python` on scoped files **0** findings; artifact **`assessments/security-assessment-20260414-2000.md`**. **Post-ship hotfix (same day):** runtime **pydicom** **ambiguous VR OB/OW** on **Pixel Data** `(7FE0,0010)` under **ExplicitVRLittleEndian** — **parent/coder** fix: write **Pixel Data** as explicit **`OW`** **`DataElement`** in **`src/core/mpr_dicom_export.py`**, test assert, **`CHANGELOG`** **Fixed**; **user should re-smoke** **File → Save MPR as DICOM…** after the fix lands. **Track A P2 (2026-04-14 parent pass):** **`T7`** (navigator slice/frame count badge + config **`navigator_show_slice_frame_count`** + View menu), **`T3`** (window slot map **`cell_clicked`**, popup drag **top bar only**, **`main._on_window_slot_map_cell_clicked`**, **`MultiWindowLayout.set_focused_subwindow`** re-**`_arrange_subwindows`** for **1×2**/**2×1**), **`T12`** (**`ViewStateManager._user_wl_cache`**, save on series switch, restore on return, clear on **`reset_view`**, clear all on **`reset_series_tracking`**) + **`CHANGELOG`** [Unreleased] + **`default_config`** in **`config_manager.py`** — **all landed**. **Deferred this pass:** **`T4`** (ROI resize handles), **`T14`** (toolbar customization), **`SD8`** FTS5 (store migration + UI). **New user slice (same day):** **`CINE1`**, **`RDSR1`**, **`ROI_RGB1`**, **`HIST_PROJ1`** — **`planner`** pass **done** (§2/§3/§7 + **HIST_PROJ1** plan file); **M1** **`CINE1`** **`dependency_row_locked`** = **`imageio` + `imageio-ffmpeg`** (fallbacks in **Assignments**); **M1** **verification closed** **2026-04-15**; **`RDSR1` P0–P3** + **ROI_RGB1** + **HIST_PROJ1** **landed** **2026-04-15** (parent, **`pytest` 478**). **Prior backlog default** (if user resumes **T4**/**SD8** first): **`coder`** **`T4`** *or* **`planner`** **`SD8`**; **`SD8`** parallel only with second **worktree/branch** (**`NEXT_TASK_TOOL_SECOND: none`** on single branch).
 
 ## Execution mode
 
 - Track A: `full` (multi-surface UX + export + ROI).
 - Track B: `full` (new subsystem: DB + workers + UI + privacy implications).
+- **Slice — CINE1 / RDSR1 / ROI_RGB1 / HIST_PROJ1 (2026-04-14):** `full` (multi-milestone; plan deltas + implementation gates). **2026-04-15 user pass:** **`full`** for **M2b–M4** single-branch sequence.
 
 ## Risk tier
 
 - Track A: `medium` (privacy/tooltips, Qt drag-drop, export pipeline, ROI scene interaction).
 - Track B: `medium` (PHI persistence on disk, threading/cancellation, path traversal safety).
+- **Slice — CINE1 / RDSR1 / ROI_RGB1 / HIST_PROJ1:** **`medium`** floor overall; **`RDSR1`** (**M2b+M2c**): treat as **`high`** PHI/browse/export sensitivity — **formal** **`reviewer`** + **`secops`** **optional `verify_pending`** after parent **`pytest`** **478** (ledger refresh if missing); full batch was **once after `RDSR1-P3`**. **`ROI_RGB1` / `HIST_PROJ1`:** **`medium`** — **parent `tester`** gate met (**478**); add **`reviewer`** only if user wants extra pass. **`CINE1`**: **`medium`** — **M1** **slice `complete`** (2026-04-15): **`reviewer`** + **`tester`** + **`secops`** **closed**; optional doc reconcile §2 narrative `[ ]` vs checklist (**non-blocking**). **`dependency_row_locked`** **`imageio` + `imageio-ffmpeg`**; **pins** in **`requirements.txt`** per **Assignments**.
 
 ## Chain mode
 
@@ -57,9 +74,9 @@ Ship a **local metadata index** (background scanning, incremental refresh, path-
 
 | Field | Value |
 |-------|-------|
-| Orchestrator cycles (this run) | 15 |
+| Orchestrator cycles (this run) | 23 |
 | Max orchestrator cycles | 40 |
-| Specialist completions (this run) | 10 |
+| Specialist completions (this run) | 18 |
 | Max specialist completions | 120 |
 
 ## Streams
@@ -77,6 +94,10 @@ Ship a **local metadata index** (background scanning, incremental refresh, path-
 | **J** | **Window layout polish:** **T10** fullscreen (P1) **done**; **T11** sync-group title-bar icon (P2) **done** | **done** (no pending T10/T11 this slice) |
 | **L** | **Track B — FTS5** (**SD8**): user re-queued 2026-04-14; planner → coder (after **MPR2** unless second branch) | **queued** |
 | **M** | **MPR DICOM export** (**MPR2** P1): save computed MPR stack as DICOM per plan §1 | **done** + **hotfix** (2026-04-14): **Pixel Data** explicit **`OW`** — **re-smoke** export after fix |
+| **N** | **Cine video export** (**CINE1** P1): mpg/gif/avi | **done** — **M1** **complete** (2026-04-15): **`reviewer`** **yes_with_followups**; **`tester`** full **`pytest`** **468** passed (~68.7 s) + **`logs/test-ledger.md`**; **`secops`** Semgrep **0** scoped; **`assessments/security-assessment-20260415-1530-cine1.md`** (**gitleaks** not on PATH — noted). Branch **`feature/cine-video-export`** — **user merge** when ready |
+| **O** | **RDSR** (**RDSR1**): **P0–P3** **done** on **`feature/rdsr-dose-sr`** (browse/export UI + privacy + **`rdsr_dose_sr`** + **`tests/test_rdsr_export_io.py`**) | **`done`** — **M2** **`high`** slice gates **`verify_pending`** (optional **`reviewer`**/**`secops`** on PHI/export paths) |
+| **P** | **ROI per-channel stats** (**ROI_RGB1** — **M3**) | **`done`** — **`roi_show_per_channel_statistics`**, **`roi_manager`**, **`ROIStatisticsPanel`**, annotation options, customizations JSON, overlay (**pytest** **478**) |
+| **Q** | **Histogram + projection** (**HIST_PROJ1** — **M4**) | **`done`** — **`compute_intensity_projection_raw_array`**, histogram checkbox + **`histogram_use_projection_pixels`**, **`get_histogram_callbacks_for_subwindow`** (**pytest** **478**) |
 
 ## Assignments
 
@@ -106,10 +127,19 @@ Ship a **local metadata index** (background scanning, incremental refresh, path-
 | **SD5** | **researcher** *(optional)* | **SQLite/sqlcipher: `GROUP BY` aggregates, `GROUP_CONCAT(DISTINCT …)` / portable alternatives; pagination cost at large N** | **`dev-docs/plans/LOCAL_STUDY_DATABASE_AND_INDEXING_PLAN.md` § Grouped study query** | **skipped** (coder implemented aggregates + tests) |
 | **SD6** | **planner** | **Extend plan: grouped API + pagination policy + File menu entrypoints + Qt model/column-persist spec; task DAG for SD7** | **Edit:** `LOCAL_STUDY_DATABASE_AND_INDEXING_PLAN.md` | **done** |
 | **SD7** | **coder** | **Implement after SD6: store/service grouped query + browse mode; refactor dialog (`QTableView`/model); config for column order; File + Tools entry** | **Plan § Stream H;** `study_index_search_dialog.py`, `sqlcipher_store.py`, `index_service.py`, `main_window_menu_builder.py`, `study_index_config.py` | **done** |
+| **CINE1** | **coder** (**M1** **done** 2026-04-14) → **`reviewer`** / **`tester`** / **`secops`** (**all done** 2026-04-15) | **P1** Cine **mpg/gif/avi** — plan **`dev-docs/plans/MPR_DICOM_SAVE_CINE_VIDEO_EXPORT_ANGLE_MEASUREMENT_PLAN.md` §2**; **CINE1-S0…P5** **[x]**; pins **`imageio==2.37.3`**, **`imageio-ffmpeg==0.6.0`**; core **`cine_video_export.py`**, dialogs **`cine_export_*`**, **`main`/`main_window`/`main_window_menu_builder`/`app_signal_wiring`**, **`tests/test_cine_video_export.py`**, docs/backups per **Handoff log**. **`dependency_row_locked`** unchanged. | **done** — **slice `complete`**: **`reviewer`** **yes_with_followups** (§2 narrative `[ ]` doc follow-up optional); **`tester`** **468** passed, ledger updated; **`secops`** scoped Semgrep **0**, assessment **`assessments/security-assessment-20260415-1530-cine1.md`** (**gitleaks** not local — CI **TruffleHog**) |
+| **RDSR1-P2** | **coder** | **M2b** Browse UI (**§3.3**) + **Privacy** (**§3.5**); entrypoints Tools / context when dose SR; mirror metadata/index PHI rules | **`dev-docs/plans/HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md` §3** | **done** — **`feature/rdsr-dose-sr`** (parent) |
+| **RDSR1-P3** | **coder** (after **RDSR1-P2**) | **M2c** Export **JSON** + **CSV** (**§3.4**); warnings / anonymize scope per plan; **no** DICOM SR write unless user answers plan **Questions** | same §3 | **done** — **`feature/rdsr-dose-sr`** (parent) |
+| **RDSR1** | **—** (status rollup) | **RDSR1** umbrella: **P0–P3** **`done`**; formal **M2** **`high`** batch (**`reviewer`** + **`secops`**) still **`verify_pending`** if user wants PHI/export audit (**`tester`**: full **`pytest`** **478** ~46 s parent) | same §3 | **`verify_pending`** — **coding `done`**; optional **`reviewer`**/**`secops`** |
+| **ROI_RGB1** | **coder** (after **M2c**) | **M3** ROI stats **per channel**; **default-on when RGB present** + settings toggle per **`dev-docs/TO_DO.md` L99** | **`dev-docs/plans/VIEWER_UX_FEATURES_PLAN.md` §7** | **done** — parent (**pytest** **478**) |
+| **HIST_PROJ1** | **coder** (after **M3**) | **M4** Histogram **projection** pixels when projection on; v1 scope per plan | **`dev-docs/plans/HISTOGRAM_PROJECTION_PIXEL_VALUES_PLAN.md`** | **done** — parent (**pytest** **478**) |
 
 ## Git / worktree
 
 - Branch: none yet (user controls commits; **do not push** without user request).
+- **Single integration branch (2026-04-15 user):** **`feature/rdsr-dose-sr`** — **M2b→M4** **coded** (**RDSR1** through **HIST_PROJ1**); **ordered** queue **complete** for implementation (no second worktree). **`feature/cine-video-export`:** **merge into `feature/rdsr-dose-sr`** when cine has newer commits not on RDSR tip (**default safe**: RDSR branch was created from cine HEAD per **Handoff log**). **Vice-versa merge** (RDSR → cine) **not** required for this queue unless user wants cine-only branch updated. **If** merge/rebase is **unsafe** (messy conflicts, unrelated WIP): **`open_question`** — user may cut e.g. **`feature/viewer-backlog-20260415`** from current tip after manual reconcile; orchestrator does **not** pick rename without user.
+- **CINE1 / M1:** **`feature/cine-video-export`** — **implementation + slice verification `complete`** (2026-04-15); **Stream N** **`done`**. **User:** merge **`feature/cine-video-export`** into **`feature/rdsr-dose-sr`** (or to **`main`**) per release process; **do not push** without user.
+- **RDSR1 / M2–M4:** **`feature/rdsr-dose-sr`** — **P0–P3** + **ROI_RGB1** + **HIST_PROJ1** **implemented** (parent); **M2** formal **`reviewer`**/**`secops`** **optional** (**`verify_pending`**). Alt name **`feature/rdsr-parse-export`** superseded unless user renames.
 - Track A proposal: unchanged (`feature/mpr-navigator-followup`, etc.).
 - **Track B proposal:** `feature/local-study-index` (single branch for MVP vertical slice) **or** separate branches per stream (2A/2B) only if two coders — default **one** branch to reduce merge pain.
 
@@ -119,17 +149,33 @@ Ship a **local metadata index** (background scanning, incremental refresh, path-
 
 ## Blockers
 
+**`CINE1` (2026-04-15):** **Verification gate `closed`** — no coding blockers. **Informational / non-blocking:** **MPG** vs **MP4**/labeling; **vendored ffmpeg** redistribution sign-off (see **Iteration guard** **CINE1**); **gitleaks** not on local PATH (**secops** noted) — rely on CI **TruffleHog** for secret scan.
+
+**`M2–M4` / `RDSR1`–`HIST_PROJ1` (2026-04-15 parent):** **No hard blockers** — full **`pytest`** **478** passed (~46 s). **Informational:** **`RDSR1`** rollup remains **`verify_pending`** until optional **`reviewer`**/**`secops`** (PHI/export touch-set) or user waives formal batch.
+
 **MPR2 slice:** **Cleared (2026-04-14)** — theme + full **`pytest`** + targeted **`secops`** (**`assessments/security-assessment-20260414-2000.md`**) — **no** open verification blockers on export slice. **Informational:** **MPR2** runtime **ambiguous VR** on save (**OB/OW** for **Pixel Data**) — **hotfix** in flight (**explicit `OW`**); not a merge **blocker** for **T7** once parent lands fix. **Informational (secops):** anonymizer scope **0010**-only; product may later tighten de-ID / UX copy if desired. **Track B** user decisions (2026-04-13) unchanged: configurable DB path; encrypted SQLite MVP; Privacy Mode for index UI.
+
+**Open questions (non-blocking):** **RDSR1** — fixture strategy: **synthetic pydicom** minimal SR preferred; else standard examples with provenance or public packs (**license** + **de-ID**). **Git (2026-04-15):** default **resolved** for queue — **one branch** **`feature/rdsr-dose-sr`**; **merge `feature/cine-video-export` → `feature/rdsr-dose-sr`** when needed to carry **CINE1** tip; **`open_question`** only if that merge/rebase is **unsafe** (then user names tip, e.g. **`feature/viewer-backlog-20260415`**). **`main`** integration order remains **user** decision. **CINE1** product/legal bullets remain informational (see **Iteration guard**).
 
 ## Next action
 
-1. **Default dispatch (user chose idle orchestrator this turn):** **`Task(coder)`** on **`T4`** — ROI ellipse/rect **resize/edit handles** per **`VIEWER_UX_FEATURES_PLAN.md`** §1. **Alternate:** **`Task(planner)`** on **`SD8`** — **FTS5** spike (store migration + query API + UI) per **`LOCAL_STUDY_DATABASE_AND_INDEXING_PLAN.md`** when FTS5 should precede ROI work.
-2. **After MPR2 Pixel Data VR hotfix lands:** **user** (or **`tester`** on request) **re-smoke** **File → Save MPR as DICOM…** (Explicit VR save path); optional **`reviewer`** if diff is large.
-3. **P2 phasing (2026-04-14):** **T7** ✓ **T3** ✓ **T12** ✓ **landed**; **next** **T4** (ROI) → **T14** (toolbar); **`SD8`** after spike or **parallel** only with **second worktree** — **`NEXT_TASK_TOOL_SECOND: none`** on single branch.
-4. **Optional `ux`:** Short manual smoke for **window map** + **navigator counts** + **W/L return** when convenient.
-5. **Git:** **do not push** without user request.
+1. **M2–M4 slice (parent):** **RDSR1-P2+P3**, **ROI_RGB1**, **HIST_PROJ1** **landed** on **`feature/rdsr-dose-sr`**; **full `pytest`** **478** passed (~46 s).
+2. **Optional verification (`RDSR1` `high` treat):** **`Task(reviewer)`** quick pass on PHI/export paths — **or** waive if treating the slice as **pytest-closed** only.
+3. **`Task(secops)`** targeted delta on **`rdsr_dose_sr`**, dose dialog, export wiring — **or** skip if user accepts **pytest**-only gate for this slice.
+4. **`Task(tester)`** — refresh **`logs/test-ledger.md`** for **478** run if not already recorded (ledger hygiene; no code edits).
+5. **Optional `ux`:** manual smoke — Tools **Radiation dose report**, context menu, JSON/CSV save; ROI per-channel stats toggle; histogram with projection + checkbox.
+6. **Prior backlog:** **`T4`** / **`SD8`** / **`T14`** etc.; **`NEXT_TASK_TOOL_SECOND: none`** on single branch.
+7. **Git:** **do not push** without user request; user chooses **`main`** vs continued **feature** integration.
 
 ## Session checkpoint
+
+- **2026-04-15 — M2b→M4 parent implementation `done` (`feature/rdsr-dose-sr`):** **RDSR1-P2+P3** (Tools + context **Radiation dose report**, privacy, JSON/CSV, **`rdsr_dose_sr`**, **`tests/test_rdsr_export_io.py`**), **ROI_RGB1** (`roi_show_per_channel_statistics`, **`roi_manager`**, **`ROIStatisticsPanel`**, annotation options, customizations JSON, overlay line), **HIST_PROJ1** (`compute_intensity_projection_raw_array`, histogram checkbox + **`histogram_use_projection_pixels`**, **`get_histogram_callbacks_for_subwindow`**). **Full `pytest`:** **478** passed (~46 s). **Streams O/P/Q** → **`done`** (implementation); **Assignments** **RDSR1-P2/-P3**, **ROI_RGB1**, **HIST_PROJ1** → **`done`**; **RDSR1** rollup → **`verify_pending`** (optional **`reviewer`**/**`secops`** on PHI/export). **Global guard:** orchestrator cycles **22→23**; specialist completions **17→18** (**+1** parent batch). **Next:** optional **`Task(reviewer)`** → **`Task(secops)`** + **`tester`** (ledger only); else idle. **`NEXT_TASK_TOOL_SECOND: none`**.
+- **2026-04-15 — Single-branch queue locked (M2b→M2c→M3→M4):** User: **RDSR1-P2 + P3**, then **ROI_RGB1**, then **HIST_PROJ1**, **all on `feature/rdsr-dose-sr`**; **merge `feature/cine-video-export` → `feature/rdsr-dose-sr`** when needed (**default safe**); **`open_question`** only if merge unsafe → e.g. **`feature/viewer-backlog-20260415`**. **Streams O/P/Q** = **M2b/M2c**, **M3**, **M4**. **Risk:** **`RDSR1`** **`high`** verification **once after M2c**; **M3/M4** **`medium`** + **`tester`** after **M4**. **Execution mode:** **`full`**. **Assignments:** **`RDSR1-P2`** **ready**, **`RDSR1-P3`** queued, rollup **RDSR1** **`partial`**. **Global guard:** orchestrator cycles **21→22** (this orchestrator pass). **Next:** **`Task(coder)`** **`RDSR1-P2`**. **`NEXT_TASK_TOOL_SECOND: none`**.
+- **2026-04-15 — `RDSR1` M2 `partial` (P0/P1 done; P2/P3 + gates open):** **`coder`** completed **`RDSR1-P0` + `RDSR1-P1`** on **`feature/rdsr-dose-sr`** — `src/core/rdsr_dose_sr.py`, `tests/fixtures/dicom_rdsr/*`, `tests/scripts/generate_rdsr_dose_sr_fixtures.py`, `tests/test_rdsr_dose_sr.py` (**8** green), **CHANGELOG**, plan **P0/P1 [x]**, backups noted (**Handoff log**). **Assignments** **RDSR1** → **`partial`**; **Stream O** → **`implementation_active`**. **Global guard:** orchestrator cycles **20→21**; specialist completions **16→17** (**+1** **`coder`**). **Next:** default **`Task(coder)`** **`RDSR1-P2`** (browse + Privacy); alt **`Task(reviewer)`** on **`rdsr` touch-set** first if API review wanted. **User:** **`open_question`** — merge **`feature/cine-video-export`** vs continue **`feature/rdsr-dose-sr`** / integration order (**do not push** without user).
+- **2026-04-15 — `CINE1` M1 shipped (verification `complete`); `RDSR1` next:** **`reviewer`** **yes_with_followups**; **`tester`** **`python -m pytest tests/ -v`** — **468** passed (~68.7 s); **`logs/test-ledger.md`** updated; **`secops`** Semgrep **0** on scoped paths; **`assessments/security-assessment-20260415-1530-cine1.md`** (**gitleaks** not on PATH). **Assignments** **CINE1** → **`done`**; **Stream N** → **`done`**; **M1** milestone **`complete`**. **User:** merge **`feature/cine-video-export`** when ready. **Global guard:** orchestrator cycles **19→20**; specialist completions **13→16** (**+3**: **reviewer**, **tester**, **secops**). **Next:** **`Task(coder)`** **`RDSR1`** (**M2**) per **`HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md` §3**.
+- **2026-04-15 — `CINE1` M1 coded; verification gate open:** **`coder`** completed **CINE1** on **`feature/cine-video-export`** (pins **`imageio`/`imageio-ffmpeg`**, **`cine_video_export.py`**, export dialogs + encode thread, **File → Export cine as…**, wiring, **`tests/test_cine_video_export.py`**, **CHANGELOG/README/AGENTS**, plan checklist **[x]**, backups **`backups/*bak-cine-20260414`**). **Coder verify:** **468** **`pytest`** green; **`basedpyright`** on new cine modules **0** errors. **Assignments** **CINE1** → **`verify_pending`**; **Stream N** → **coded** + **verification open**. **Global guard:** orchestrator cycles **18→19**; specialist completions **12→13** (**+1** **`coder`**). **Next:** **`Task(reviewer)`** → **`Task(tester)`** (full suite + **`logs/test-ledger.md`**) → **`Task(secops)`** delta.
+- **2026-04-14 — M1 research gate closed:** **`researcher`** completed **CINE1** / **RDSR1** fixture brief. **Locked §2.1 row:** **`imageio`** + **`imageio-ffmpeg`** (Windows + PyInstaller primary); fallbacks: **`IMAGEIO_FFMPEG_EXE`** / system ffmpeg → subprocess ffmpeg → OpenCV → Qt Multimedia → Pillow-only (no MPG/AVI). **Licensing:** BSD wrappers + **FFmpeg** LGPL/GPL vendored binary — PyInstaller / attribution / source-offer + bundle size. **RDSR fixtures:** synthetic **pydicom** minimal SR preferred; else licensed + de-ID public/standard examples. **Non-blocking `needs_user`:** strict **MPG** vs **MP4**/labeling; legal sign-off on redistributing vendored ffmpeg — tracked under **Blockers** / **Iteration guard**, **Phase** not **`blocked`**. **Guards:** orchestrator cycles **17→18**; specialist completions **11→12** (**researcher**). **Next (superseded 2026-04-15):** was **`Task(coder)`** **CINE1** — **coder** **done**; see **2026-04-15** checkpoint for **`Task(reviewer)`** chain.
+- **One paragraph (2026-04-14):** **MPR2** is **shipped** with verification + **secops** closed (re-smoke **Save MPR as DICOM** after OB/OW hotfix still noted). **Track A** deferred **T4**/**T14**; **SD8** queued. **New slice** **CINE1**/**RDSR1**/**ROI_RGB1**/**HIST_PROJ1**: **planner** finished — concrete plans at **`dev-docs/plans/MPR_DICOM_SAVE_CINE_VIDEO_EXPORT_ANGLE_MEASUREMENT_PLAN.md` §2**, **`HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md` §3**, **`VIEWER_UX_FEATURES_PLAN.md` §7**, **`dev-docs/plans/HISTOGRAM_PROJECTION_PIXEL_VALUES_PLAN.md`**; **Assignments** + **Streams N–Q** updated; **M1** **`researcher`** **complete** — **`coder`** **CINE1** on **`feature/cine-video-export`**; **Execution mode** **`full`**, **Risk** **`medium`** floor (**RDSR1** **`high`** at its slice end).
 
 - Context: **Track B** — local study index modules exist under **`src/core/study_index/`** and **`study_index_search_dialog.py`** (MVP: Tools entry, flat `search()` + limit). **Stream H** adds grouped rows, full-index browse (paginated), column reorder persistence, **File** menu entry. Open path centralized in **`FileOperationsHandler`** / **`app_signal_wiring`**; recents via **`paths_config`**.
 - Locked decisions (**Track B, 2026-04-13**): **User-configurable** study-index DB path. **Disk:** **encrypted SQLite mandatory for MVP** (not hashing for searchable fields—see plan). **UI:** cleartext when privacy off; **Privacy Mode on** → index/search columns follow **same rules as metadata** (`privacy_mode` / patient tags). **Scope:** **MVP only** (no managed copy in this track yet).
@@ -138,6 +184,8 @@ Ship a **local metadata index** (background scanning, incremental refresh, path-
 - **Backlog slice 2026-04-13:** **T2** **landed** (navigator tooltips; pytest **416** green); **T10** **landed** (fullscreen; pytest **421** green); **T9** **landed** (duplicate-skip toast; pytest **425** green); **T11** **landed** (sync-group title-bar dot; pytest **429** green; L74); **SD8** FTS5 deferred (L83). Streams **B** (T2/T9 done; **T7** open), **J** (**T10**/**T11** done), **L** (FTS deferred).
 - **T2 locked UX (2026-04-13):** Navigator tooltips use **plain text**; **Privacy Mode** shows **patient-name tags only** (group **0010**, same family as metadata); **dates** shown as **YYYY-MM-DD** when the value parses as a valid date.
 - Last updated: 2026-04-14 — **T7**/**T3**/**T12** landed (parent pass); full **`pytest`** **441**/0; **`CHANGELOG`** [Unreleased] + **`navigator_show_slice_frame_count`** / **`default_config`**; defer **T4**, **T14**, **SD8**; orchestrator guard cycles **14→15** (prior: **MPR2** OB/OW hotfix + **re-smoke** note still applies).
+- **2026-04-14 (orchestrator user slice):** Queued **CINE1** (L90), **RDSR1** (L97), **ROI_RGB1** (L99 per **TO_DO** default-on when RGB + settings), **HIST_PROJ1** (L102); **Streams N–Q**; **Assignments** rows; **Risk**/execution notes; **Next action** was **`planner`** first; orchestrator cycles **15→16**.
+- **2026-04-14 (post-planner CINE1/RDSR1/ROI_RGB1/HIST_PROJ1):** Plan artifacts landed (**§2 CINE1** + **CINE1-S0…P5**, **§3 RDSR1** + **RDSR1-P0…G**, **`VIEWER_UX_FEATURES_PLAN.md` §7**, **`HISTOGRAM_PROJECTION_PIXEL_VALUES_PLAN.md`**). **Assignments** refreshed with full **`dev-docs/plans/…`** paths; **Streams N–Q** → **spec_complete**. **M1** first dispatch was **`researcher`** (time-boxed deps + optional RDSR fixture licensing brief) before **`coder`** pins **`requirements.txt`** — **superseded:** **`researcher`** **done** 2026-04-14; **`dependency_row_locked`**; **`coder`** next (see **Session checkpoint** lead bullet). **Guards (that event):** orchestrator cycles **16→17**; specialist completions **10→11** (**planner**).
 - **2026-04-14:** User `/orchestrator` integrated TO_DO **L52, L53, L60–61, L71, L78, L85** → **Assignments** **MPR2**, **T12**, **T14**; **SD8** **queued**; **Stream M** + **L** updated; **Orchestrator cycles** **6→7**.
 - **2026-04-14 (post-MPR2 coder):** **Stream M** → **done**; **Assignments** **MPR2** → **done** (implementation + `tests/test_mpr_dicom_export.py` **4** passed; `basedpyright` clean on touched modules); disk verified: `mpr_dicom_export.py`, `mpr_dicom_save_dialog.py`, wiring grep OK. Full **`pytest tests/`** **436 passed / 3 failed** (`test_main_window_theme.py`). **Orchestrator cycles** **7→8**; **Specialist completions** **4→5**.
 - **2026-04-14 (post-MPR2 reviewer):** Reviewer verdict for **MPR2** = **approved**, merge recommendation **yes_with_followups**. Follow-ups captured: coder fix `basedpyright` errors in `tests/test_mpr_dicom_export.py` (typing-only), then batch **tester** + ledger, then targeted **secops**; optional **debugger** for the 3 orthogonal theme failures only if tester flags coupling. **Orchestrator cycles** **8→9**; **Specialist completions** **5→6**.
@@ -153,11 +201,227 @@ Ship a **local metadata index** (background scanning, incremental refresh, path-
 | T1–T11 | 0 | 5 each | Escalate if DnD, ROI edit, navigator tooltip, or fullscreen shortcut loops without progress |
 | SD8 | 0 | 4 | FTS5 spike ↔ implementation; escalate if schema migration unclear |
 | MPR2 | 0 | 5 | Escalate if SOP class / UID / pixel mapping blocks export without product decision |
+| CINE1 | 0 | 5 | **§2.1 row locked** 2026-04-14 (**`imageio` + `imageio-ffmpeg`**). Escalate if encoder integration loops without progress. **`open_question` (non-blocking):** strict **MPG** vs **MP4**/labeling; legal sign-off on **vendored ffmpeg** redistribution / frozen bundle |
+| RDSR1 | 0 | 6 | SR tree size, PHI in export, sample data licensing — escalate to **user** if policy unclear |
+| ROI_RGB1 | 0 | 4 | RGB detection vs palette-color; stats UI clutter |
+| HIST_PROJ1 | 0 | 4 | Projection buffer vs displayed slice — clarify data source in plan |
 | T12, T14 | 0 | 4 each | W/L cache key semantics; toolbar persistence vs upgrades |
 | SD1–SD4 | 0 | 5 each | Escalate if indexer deadlocks or test flakiness without root cause |
 | SD5–SD7 | 0 | 5 each | Escalate if grouped-query performance or column-persist regressions loop without root cause |
 
 ## Handoff log (newest first)
+
+### 2026-04-15 — orchestrator (parent handoff: **RDSR1-P2+P3**, **ROI_RGB1**, **HIST_PROJ1** landed; **`pytest` 478**)
+
+- **Parent ask:** Record **M2b–M4** implementation on **`feature/rdsr-dose-sr`**; mark **RDSR1** **done** or **`verify_pending`**; update **Streams O/P/Q**, **Assignments**, **Next action**, **Handoff log**, increment **Global orchestration guard**; **`NEXT_TASK_TOOL`** **`none`** or **`reviewer`**; **`NEXT_TASK_TOOL_SECOND: none`**.
+- **Executed:** **Streams O/P/Q**, **Assignments** (**RDSR1-P2/-P3**/**ROI_RGB1**/**HIST_PROJ1** **`done`**; **RDSR1** **`verify_pending`**), **Phase** (M2–M4 implementation **`done`**), **Git / worktree**, **Next action**, **Session checkpoint** (lead bullet), this **Handoff log**; **Global guard** **22→23** / **17→18**.
+- **HANDOFF → parent:**
+- Status: done
+- Artifacts: `plans/orchestration-state.md`
+- Plan deltas: none (orchestrator)
+- Risks: **`RDSR1`** PHI/browse/export — optional **`reviewer`**/**`secops`** still recommended
+- Recommended next: **`none`** (idle until user asks) **— or** **`Task(reviewer)`** then **`Task(secops)`** to clear **`RDSR1`** **`verify_pending`**
+- Stream: O / P / Q (**done** implementation)
+- Git: **`feature/rdsr-dose-sr`**; **do not push**
+- Git proposal: none
+- PR: none
+- Cloud: none
+- Merge recommendation: n/a
+
+### 2026-04-15 — orchestrator (user queue: **single-branch** **M2b→M2c→M3→M4**; **Git** + **streams**)
+
+- **Parent ask:** Continue **RDSR1-P2 + P3**, **ROI_RGB1**, **HIST_PROJ1** on **one** branch; merge **`feature/cine-video-export`** into working branch if needed; **`NEXT_TASK_TOOL_SECOND: none`** unless unsafe → **`open_question`** / alt branch name.
+- **Executed:** **Goal** — new **Single-branch integration queue — 2026-04-15**; **Phasing** paragraph — **M2b/M2c** labels + **high** gates **once after M2c**; **Phase**, **Risk**, **Streams O/P/Q** (**M2b/M2c**, **M3**, **M4**); **Assignments** — **`RDSR1-P2`**, **`RDSR1-P3`**, rollup **`RDSR1`**, **`ROI_RGB1`**, **`HIST_PROJ1`**; **Git / worktree** — canonical **`feature/rdsr-dose-sr`**, merge direction **cine → rdsr** when tip ahead; **Blockers** — narrowed **`open_question`** to **unsafe-merge** case only; **Next action** — ordered list **M2b…M4** + post-**M4** **`tester`**; **Session checkpoint** (lead bullet); **Global guard** **21→22**.
+- **HANDOFF → parent:**
+- Status: done
+- Artifacts: `plans/orchestration-state.md`
+- Plan deltas: none (orchestrator)
+- Risks: **`RDSR1`** export/browse remains **`high`** sensitivity — batch **reviewer/tester/secops** after **P3**
+- Recommended next: **`Task(coder)`** **`RDSR1-P2`**
+- Stream: O (**M2b**)
+- Git: **`feature/rdsr-dose-sr`**; merge **`feature/cine-video-export`** when needed; **do not push**
+- Git proposal: none
+- PR: none
+- Cloud: none
+- Merge recommendation: n/a
+
+### 2026-04-15 — orchestrator (autonomous chain: **`coder`** **`RDSR1-P0` + `RDSR1-P1`** **merged** → **`RDSR1-P2`** default)
+
+- **Parent ask:** Merge **`coder`** **RDSR1** **P0/P1** on **`feature/rdsr-dose-sr`**; set **RDSR1** **`partial`**; **Stream O** **`implementation_active`**; increment **Specialist completions** **+1**, **Orchestrator cycles**; **Next** **`coder`** **P2** or **`reviewer`** first; record **`open_question`** **branches**; **`NEXT_TASK_TOOL_SECOND: none`**.
+- **Executed:** **Global orchestration guard** **20→21** / **16→17**; **Stream O**, **Assignments RDSR1**, **Phase** (M2 partial), **Phasing** M2 bullet, **Git**, **Blockers** open question, **Next action**, **Session checkpoint** (lead bullet), this **Handoff log** entry.
+- **HANDOFF → parent:**
+- Status: done
+- Artifacts: `plans/orchestration-state.md`
+- Plan deltas: none (orchestrator)
+- Risks: **`RDSR1`** slice-end **`high`**-treat gates **still required** after **P2**/**P3**
+- Recommended next: **`Task(coder)`** **`RDSR1-P2`** (default) | alt: **`Task(reviewer)`** on parser/fixtures/tests if early API gate desired
+- Stream: O (**implementation_active**)
+- Git: **`feature/rdsr-dose-sr`**; **`feature/cine-video-export`** merge order — **user**
+- Git proposal: none
+- PR: none
+- Cloud: none
+- Merge recommendation: n/a
+
+### 2026-04-15 — orchestrator (autonomous chain: **`CINE1`** **M1** verification **`complete`** → **`M2` `RDSR1`**)
+
+- **Parent ask:** Merge **`reviewer`** (**yes_with_followups**), **`tester`** (**468** passed, ~68.7 s, ledger), **`secops`** (Semgrep **0**, **`assessments/security-assessment-20260415-1530-cine1.md`**, **gitleaks** not on PATH); set **CINE1** / **Stream N** / **M1** **`done`**/**`complete`**; increment **Specialist completions** **+3** and **Orchestrator cycles**; **Session checkpoint** — CINE1 shipped pending user merge **`feature/cine-video-export`**; **RDSR1** next; **`NEXT_TASK_TOOL: coder`** **`RDSR1`**; **`NEXT_TASK_TOOL_SECOND: none`**.
+- **Executed:** **Assignments** **CINE1** → **`done`** (slice **`complete`**); **Stream N** → **`done`**; **Stream O** / **RDSR1** → **`ready`**; **Phase**, **Risk**, **Git**, **Blockers**, **Next action**, **Session checkpoint** (lead bullet), **Phasing** paragraph, **Handoff log** this entry. **Global orchestration guard:** **Orchestrator cycles** **19→20**; **Specialist completions** **13→16**.
+
+- **HANDOFF → parent:**
+- Status: done
+- Artifacts: `plans/orchestration-state.md`
+- Plan deltas: none (orchestrator)
+- Risks: **`RDSR1`** still **`high`**-treat at **M2** slice end; **CINE1** optional doc reconcile §2 narrative vs checklist (**reviewer** follow-up)
+- Recommended next: **`Task(coder)`** **`RDSR1`** — **`tests/fixtures/dicom_rdsr/`** + parser MVP per **`HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md` §3** (default **no** **`researcher`** unless fixture-only script)
+- Stream: N (**done**); O (**M2** lead)
+- Git: **`feature/cine-video-export`** — **user merge** when ready; **do not push** without user
+- Git proposal: **coder** may propose **`feature/rdsr-parse-export`** after **CINE1** merge or continue from merged tip
+- PR: none
+- Cloud: none
+- Merge recommendation: n/a
+
+### 2026-04-15 — **secops** (**CINE1** targeted delta — deps / FFmpeg / subprocess / temp / cancel)
+
+- **Executed:** Read scoped cine export modules + **`requirements.txt`** pins; **Semgrep** **`p/python`** + **`p/security-audit`** on **`src/core/cine_video_export.py`**, **`src/gui/dialogs/cine_export_{encode_thread,dialog}.py`**, **`src/core/app_signal_wiring.py`**, **`src/gui/main_window_menu_builder.py`**, **`src/main.py`** — **0** findings. **gitleaks** not available locally; CI secret scan is **TruffleHog** (`.github/workflows/security-checks.yml`). Assessment: **`assessments/security-assessment-20260415-1530-cine1.md`**.
+
+- **HANDOFF → orchestrator:**
+- Status: done
+- Artifacts: `assessments/security-assessment-20260415-1530-cine1.md`
+- Plan deltas: none (**secops**)
+- Risks: **`medium`** floor unchanged — **vendored FFmpeg** supply-chain + **LGPL/GPL** redistribution obligations for frozen builds (already documented in **README** / **AGENTS**); no Semgrep issues in scope
+- Recommended next: **orchestrator** (close **CINE1** verification row / merge summary) — **coder** only if product chooses follow-ups (e.g. encode **join**/cleanup hardening)
+- Stream: N
+- Git: dirty; branch: **feature/cine-video-export**; worktree: none
+- Git proposal: none
+- PR: none
+- Cloud: none
+- Merge recommendation: n/a (**secops**)
+
+### 2026-04-15 — orchestrator (autonomous chain: **`coder`** **CINE1** **done** → **`medium`** slice-end gates)
+
+- **Parent ask:** Merge **`coder`** HANDOFF; **CINE1** → **done** or **`verify_pending`** until **`reviewer`**/**`tester`**/**`secops`**; **Stream N**; **Next action** **`reviewer`** → **`tester`** → **`secops`**; increment **Specialist completions** (**+1** **`coder`**) and **Orchestrator cycles**; **Session checkpoint** — **CINE1** coded; verification gate open.
+- **Executed:** **Assignments** **CINE1** → **`verify_pending`** (implementation complete; independent gates outstanding); **Stream N** → **coded** + verification chain; **Phase** — **CINE1** **M1** coded, gates open; **Blockers** — **CINE1** verification row; **Git** — **`feature/cine-video-export`** landed **CINE1** locally; **Next action** item **1** → **`Task(reviewer)`** lead. **Global orchestration guard:** **Orchestrator cycles** **18→19**; **Specialist completions** **12→13**.
+
+- **HANDOFF → parent:**
+- Status: done
+- Artifacts: `plans/orchestration-state.md`
+- Plan deltas: none (orchestrator); **CINE1** plan checklist already **[x]** per **coder**
+- Risks: **`medium`** — vendored **ffmpeg** / subprocess / cancel paths need **`secops`** delta
+- Recommended next: **reviewer** → **tester** → **secops**
+- Stream: N
+- Git: **`feature/cine-video-export`** (local; **do not push** without user)
+- Git proposal: none
+- PR: none
+- Cloud: none
+- Merge recommendation: n/a
+
+### 2026-04-14 — coder (**CINE1** M1 — GIF / AVI / MPG cine export)
+
+- **Executed:** Branch **`feature/cine-video-export`**; pinned **`imageio==2.37.3`**, **`imageio-ffmpeg==0.6.0`** in **`requirements.txt`**; new **`src/core/cine_video_export.py`** (frame indices, PIL rasterize path aligned with PNG export, **`encode_cine_video_from_png_paths`**, eligibility helper); **`src/gui/dialogs/cine_export_dialog.py`**, **`src/gui/dialogs/cine_export_encode_thread.py`**; **`main.py`** **`_on_export_cine_video`** (temp PNGs + **`CineVideoEncodeThread`**); **`main_window.py`** signal, **`main_window_menu_builder.py`** **File → Export cine as…**, **`app_signal_wiring.py`** connect; **`CHANGELOG.md` [Unreleased]**, **`README.md`** / **`AGENTS.md`** FFmpeg LGPL/GPL + PyInstaller note; **`dev-docs/plans/MPR_DICOM_SAVE_CINE_VIDEO_EXPORT_ANGLE_MEASUREMENT_PLAN.md`** checklist **CINE1-S0…P5** marked **[x]**; backups **`backups/*bak-cine-20260414`** for touched substantial files.
+- **Verify:** **`python -m pytest tests/ -v`** — **468 passed** (89.9 s); **`basedpyright --level error`** on new cine modules — **0 errors**.
+
+- **HANDOFF → orchestrator:**
+- Status: done
+- Artifacts: `requirements.txt`; `src/core/cine_video_export.py`; `src/gui/dialogs/cine_export_dialog.py`; `src/gui/dialogs/cine_export_encode_thread.py`; `src/main.py`; `src/gui/main_window.py`; `src/gui/main_window_menu_builder.py`; `src/core/app_signal_wiring.py`; `tests/test_cine_video_export.py`; `CHANGELOG.md`; `README.md`; `AGENTS.md`; `dev-docs/plans/MPR_DICOM_SAVE_CINE_VIDEO_EXPORT_ANGLE_MEASUREMENT_PLAN.md`; `plans/orchestration-state.md` (this log); `backups/*bak-cine-20260414`
+- Plan deltas: **CINE1-S0…P5** **[x]** in plan checklist § Cine export
+- Risks: **MPG** = FFmpeg **best-effort** (MPEG-2 in PS); odd FPS may still fail on some FFmpeg builds — user FPS clamped **1–120**; **multi-window synced cine** still **out of scope** (**L105**)
+- Recommended next: **reviewer** (slice-end **`medium`**) then **tester** (ledger) then **`secops`** (ffmpeg / subprocess path)
+- Stream: N
+- Git: **`feature/cine-video-export`** (local; **do not push** without user)
+- Git proposal: none
+- PR: none
+- Cloud: none
+- Merge recommendation: n/a
+
+### 2026-04-14 — orchestrator (autonomous chain: **`researcher`** **CINE1** / **RDSR1** brief **merged** → **`coder`** **M1**)
+
+- **Parent ask:** Merge **`researcher`** conclusion: lock **§2.1** row; record licensing + **RDSR** fixture prefs; increment guards; **Next action** → **`coder`** **CINE1** (**CINE1-S0…P5**, **S0** satisfied in state); **`NEXT_TASK_TOOL_SECOND: none`**.
+- **Executed:** **Handoff log** this entry. **Assignments** **CINE1** → owner **`coder`**, **`dependency_row_locked`** **`imageio` + `imageio-ffmpeg`**, fallbacks + license notes in-row; status **`ready_for_coder`**. **Stream N** → **`implementation_active`**. **Blockers:** added **`open_question`** bullets (**MPG** vs **MP4**/labeling; **ffmpeg** redistribution sign-off; **RDSR1** synthetic vs public fixtures) — **non-blocking** for **M1** start. **Phase** / **Risk** bullets aligned (researcher gate cleared). **Session checkpoint** — research merge paragraph + refreshed “one paragraph”. **Global orchestration guard:** **Orchestrator cycles** **17→18**; **Specialist completions** **11→12** (**researcher**).
+- **Researcher conclusion (summary):** **Chosen row (§2.1):** **`imageio` + `imageio-ffmpeg`** — primary for Windows + PyInstaller; ranked fallbacks: **`IMAGEIO_FFMPEG_EXE`** / system ffmpeg → raw subprocess ffmpeg → OpenCV → Qt Multimedia → Pillow-only (reject MPG/AVI). **Licensing:** BSD wrappers + **FFmpeg** LGPL/GPL for vendored binary — PyInstaller attribution / source-offer; bundle size risk. **`needs_user` (non-blocking):** strict **MPG** vs acceptable **MP4**/labeling; legal sign-off on redistributing vendored ffmpeg. **RDSR fixtures:** prefer synthetic **pydicom** minimal SR; alternatives standard examples (provenance) or public packs with license + de-ID.
+
+- **HANDOFF → parent:**
+- Status: done
+- Artifacts: `plans/orchestration-state.md`
+- Plan deltas: none (orchestrator); **coder** may mark plan checklist **CINE1-S0** when editing plan
+- Risks: **CINE1** ship/legal + codec labeling open questions; **secops** at slice end when vendored ffmpeg lands
+- Recommended next: **coder** (**M1** **CINE1-P1…P5**)
+- Stream: N
+- Git: **`feature/cine-video-export`** when **coder** starts (**approved**)
+- Git proposal: unchanged
+- PR: none
+- Cloud: none
+- Merge recommendation: n/a
+
+### 2026-04-14 — researcher (brief: **CINE1** §2.1 + **RDSR1** fixtures)
+
+- **HANDOFF → orchestrator:**
+- Status: done
+- Artifacts: (parent/orchestrator — brief text merged into state **Session checkpoint** + **Assignments** **CINE1** + **Blockers** open questions)
+- Plan deltas: none required before **coder** (optional: mark **`MPR_…PLAN.md`** checklist **CINE1-S0** when implementation starts)
+- Risks: **FFmpeg** license / redistribution; **MPG** vs **MP4** product choice
+- Recommended next: **coder** (**M1**)
+- Stream: N (+ **O** fixture notes for **M2**)
+- Git: n/a
+- Git proposal: n/a
+- PR: none
+- Cloud: none
+- Merge recommendation: n/a
+
+### 2026-04-14 — orchestrator (merge: **planner** done → **M1** dispatch)
+
+- **Parent ask:** Autonomous chain after **`planner`** — refresh **Assignments** (**CINE1**, **RDSR1**, **ROI_RGB1**, **HIST_PROJ1**) with plan paths + **planned**/**ready** statuses; set **Next action**; increment guards; **session checkpoint**; **`NEXT_TASK_TOOL`**.
+- **Executed:** **Assignments** — full **`dev-docs/plans/…`** links + checklist id refs; **CINE1** **planned** (researcher gate default before **`requirements.txt`**); **RDSR1**/**ROI_RGB1**/**HIST_PROJ1** **planned** (M2–M4, spec complete). **Streams N–Q** → **spec_complete**. **Phase** — **planner** gate cleared for this slice. **Global orchestration guard:** **Orchestrator cycles** **16→17**; **Specialist completions** **10→11** (**planner**).
+- **Decision:** First dispatch **`researcher`** (**≤90 min**): recommend **default row** from **§2.1** for Windows+venv + optional **RDSR1** public fixture pointers (**§3.6**). Parent may waive → **`coder`** **CINE1** with user-accepted matrix row. **`NEXT_TASK_TOOL_SECOND: none`** (single branch).
+
+- **HANDOFF → parent:**
+- Status: done
+- Artifacts: `plans/orchestration-state.md`
+- Plan deltas: merged **planner** artifacts (no new plan edits by orchestrator)
+- Risks: unchanged — **CINE1** codec variability; **RDSR1** PHI/export; **HIST_PROJ1** performance note in plan
+- Recommended next: **researcher** (M1 time-box) | alt: **coder** **CINE1** if user waives dep spike
+- Stream: N
+- Git: user-controlled; do not push
+- Git proposal: **`feature/cine-video-export`** when **CINE1** coding starts (**approved**)
+- PR: none
+- Cloud: none
+- Merge recommendation: n/a
+
+### 2026-04-14 — planner (slice **CINE1**/**RDSR1**/**ROI_RGB1**/**HIST_PROJ1** — plan deltas only)
+
+- **Executed:** Expanded **`dev-docs/plans/MPR_DICOM_SAVE_CINE_VIDEO_EXPORT_ANGLE_MEASUREMENT_PLAN.md` §2** (**CINE1**): phased checklist, UI entrypoints, frame source + **L105** multi-window deferral, MPG/GIF/AVI encoding notes, **Windows codec pitfalls**, **§2.1 dependency matrix** (imageio-ffmpeg vs ffmpeg subprocess vs OpenCV vs Qt vs Pillow), progress/cancel, **test strategy** (unit vs size-capped integration), **CHANGELOG**/version/docs expectations; updated **§ Checklist → Cine export** with **CINE1-S0…P5** ids. Expanded **`dev-docs/plans/HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md` §3** (**RDSR1**): TID **10001** MVP scope, **out-of-MVP** list, **§3.2 pydicom vs highdicom**, **§3.3 browse UI**, **§3.4 export formats** (JSON/CSV first; SR write gated), **§3.5 Privacy Mode**, **§3.6 sample data** (path under **`tests/fixtures/dicom_rdsr/`** preferred, optional **`SampleDICOMData/`**, license + de-ID + max size). Anchored **ROI_RGB1** as **`VIEWER_UX_FEATURES_PLAN.md` §7**. Added **`dev-docs/plans/HISTOGRAM_PROJECTION_PIXEL_VALUES_PLAN.md`** (**HIST_PROJ1**): current **`HistogramDialog`** vs **`SliceDisplayManager`** gap, data path, toggle UX, tests, files. **Single-branch order** documented: **M1 CINE1 → M2 RDSR1 → M3 ROI_RGB1 → M4 HIST_PROJ1**.
+- **Plan ready** for **`researcher`** (optional: **CINE1** codec wheel / **RDSR1** public fixture licensing) then **`coder`** **M1** per state.
+
+- **HANDOFF → orchestrator:**
+- Status: done
+- Artifacts: `dev-docs/plans/MPR_DICOM_SAVE_CINE_VIDEO_EXPORT_ANGLE_MEASUREMENT_PLAN.md`; `dev-docs/plans/HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md`; `dev-docs/plans/VIEWER_UX_FEATURES_PLAN.md` (§7 **ROI_RGB1**); `dev-docs/plans/HISTOGRAM_PROJECTION_PIXEL_VALUES_PLAN.md`
+- Plan deltas: **CINE1** §2 + checklist ids; **RDSR1** §3 + checklist ids; **ROI_RGB1** anchor §7; **HIST_PROJ1** new plan file
+- Risks: **RDSR1** SR write still **question-gated** in plan; **HIST_PROJ1** global min/max across series may be **O(N²)** if projection pre-scan — coder must pick v1 scope
+- Recommended next: **researcher** (optional spike on **CINE1** deps / **RDSR1** fixture sources) **or** **coder** on **CINE1** if orchestrator accepts matrix default without spike
+- Stream: N
+- Git: n/a; branch: n/a; worktree: none
+- Git proposal: `feature/cine-video-export` when **CINE1** coding starts (orchestrator-approved)
+- PR: none
+- Cloud: none
+- Merge recommendation: n/a
+
+### 2026-04-14 — orchestrator (user slice: **CINE1**, **RDSR1**, **ROI_RGB1**, **HIST_PROJ1**)
+
+- **User ask:** Integrate **TO_DO** **L90** (cine **mpg/gif/avi**), **L97** (**RDSR** + examples), **L99** (ROI **per-channel** stats — follow **checked-in** `dev-docs/TO_DO.md`: **on by default when RGB present**, settings), **L102** (histogram + **projection** values); **MPR2** §1 done per history; **chain** **`autonomous`**; **no push**; **venv** per **AGENTS.md**; **stable IDs**; **no** **`NEXT_TASK_TOOL_SECOND`** unless checklist + second worktree.
+- **Executed:** **Goal** — new **Backlog slice — 2026-04-14 (user orchestrator: cine export, RDSR, ROI RGB stats, histogram projection)** table + milestone phasing **M1–M4**. **Streams** **N–Q**. **Assignments** — **CINE1**, **RDSR1**, **ROI_RGB1**, **HIST_PROJ1** (**queued**). **Execution mode** / **Risk tier** bullets for this slice. **Phase** — new slice queued alongside prior deferrals. **Iteration guard** — rows for **CINE1**, **RDSR1**, **ROI_RGB1**, **HIST_PROJ1**. **Global orchestration guard:** **Orchestrator cycles** **15→16**.
+- **Decision:** First specialist **`planner`** (milestones + plan edits for §2/§3 + stubs for ROI/histogram); **`researcher`** optional after planner flags dep/licensing unknowns. **`NEXT_TASK_TOOL_SECOND: none`** (four streams, single-branch default).
+
+- **HANDOFF → parent:**
+- Status: done
+- Artifacts: `plans/orchestration-state.md`
+- Plan deltas: pending (**planner** edits to `MPR_DICOM_SAVE_CINE_VIDEO_EXPORT_ANGLE_MEASUREMENT_PLAN.md`, `HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md`, + ROI/histogram anchors)
+- Risks: **RDSR1** PHI/export; **CINE1** codec deps
+- Recommended next: **planner** (slice above)
+- Stream: N (lead)
+- Git: user-controlled; do not push
+- Git proposal: none
+- PR: none
+- Cloud: none
+- Merge recommendation: n/a
 
 ### 2026-04-14 — orchestrator (parent backlog merge: **T7**/**T3**/**T12** **done**, **441** pytest; defer **T4**/**T14**/**SD8**)
 
@@ -508,5 +772,76 @@ Ship a **local metadata index** (background scanning, incremental refresh, path-
   - **PR:** none
   - **Cloud:** none
   - **Merge recommendation:** n/a
+
+### 2026-04-15 — reviewer (**CINE1** plan §2 phased checklist S0–P5 vs `feature/cine-video-export`)
+
+- **Scope:** `requirements.txt`, `src/core/cine_video_export.py`, `src/gui/dialogs/cine_export_dialog.py`, `src/gui/dialogs/cine_export_encode_thread.py`, `src/main.py` (`_on_export_cine_video`), `src/gui/main_window.py`, `src/gui/main_window_menu_builder.py`, `src/core/app_signal_wiring.py`, `tests/test_cine_video_export.py`, `CHANGELOG.md` / `README.md` / `AGENTS.md` (cine/ffmpeg notes).
+- **Verify:** `python -m pytest tests/test_cine_video_export.py -v` → **6 passed** (~2.4 s, venv).
+
+```text
+HANDOFF → orchestrator:
+- Status: done
+- Artifacts: same as scope + this subsection
+- Plan deltas: none edited — consolidated **CINE1-S0…P5** rows in `MPR_DICOM_SAVE_CINE_VIDEO_EXPORT_ANGLE_MEASUREMENT_PLAN.md` §2 (tail) **verified** against code; **§2 narrative bullets** (lines ~117–157) remain `[ ]` in source — **doc inconsistency** only; optional **planner/docwriter** reconcile
+- Risks: **imageio-ffmpeg** vendored FFmpeg — **secops** slice-end delta per state; **no automated test** for cancel/partial delete path
+- Recommended next: **tester** (full `pytest tests/` + `logs/test-ledger.md` per **medium** gate) then **secops**
+- Stream: none
+- Git: unknown (subagent); branch: **feature/cine-video-export** (user); worktree: none
+- Git proposal: none
+- PR: none
+- Cloud: none
+- Merge recommendation: **yes_with_followups**
+```
+
+### 2026-04-15 — tester (**CINE1** gate: full `pytest tests/` + `logs/test-ledger.md`)
+
+- **Command:** `.\.venv\Scripts\Activate.ps1`; `python -m pytest tests/ -v` (~69 s wall; budget up to 600 s).
+- **Outcome:** **468 passed**, **0 failed**, **0 skipped**; **3** warnings (SWIG `DeprecationWarning` via import bootstrap; existing).
+- **Ledger:** `logs/test-ledger.md` updated (newest first; **≤5** rows for `python -m pytest tests/ -v` group).
+
+```text
+HANDOFF → orchestrator:
+- Status: done
+- Artifacts: logs/test-ledger.md; pytest stdout (468 passed, ~68.7 s)
+- Plan deltas: none
+- Risks: none — suite green; vendored **imageio-ffmpeg** / export paths still warrant **secops** delta per slice policy
+- Recommended next: secops (CINE1 slice-end security delta: new deps, ffmpeg paths, touched export/menu modules) — if policy satisfied after secops, reviewer merge follow-ups already noted for §2 doc bullets
+- Stream: N
+- Git: dirty; branch: feature/cine-video-export; worktree: none
+- Git proposal: none
+- PR: none
+- Cloud: none
+- Merge recommendation: n/a
+```
+
+**Suggested manual smoke (File → Export cine as…):**
+
+- Open a multi-frame series, start **cine** playback, then **File → Export cine as…**; confirm the dialog opens **on top** and the focused pane is implied in the export context.
+- **Cancel** from the dialog (and **Esc** if bound): no output file written; viewer/cine state unchanged.
+- Cycle export **format** choices (**MPG**, **GIF**, **AVI** per UI): filename extension or filter updates; start export to a temp folder and confirm a playable/readable file for each format you ship (spot-check one short clip).
+- With **progress** visible: let a longer export run, then **Cancel** mid-encode — confirm UI returns idle, **no** orphaned temp files (or partial file behavior matches spec), and no hang.
+- **Disabled path:** with **no** cine-capable / single-frame data, confirm the menu action is **disabled** or shows a clear message (no silent no-op).
+- After a successful export, **re-open** the dialog and export again — defaults (path, format, fps if exposed) behave consistently.
+
+### 2026-04-15 — coder (**RDSR1** M2: **RDSR1-P0** + **RDSR1-P1**)
+
+- **Scope:** `src/core/rdsr_dose_sr.py`, `tests/fixtures/dicom_rdsr/*` + `README.md`, `tests/scripts/generate_rdsr_dose_sr_fixtures.py`, `tests/test_rdsr_dose_sr.py`, `CHANGELOG.md` [Unreleased], `dev-docs/plans/HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md` (§3.1–§3.2 + checklist), backups `backups/CHANGELOG.md.bak-rdsr-20260415`, `backups/HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md.bak-rdsr-20260415`.
+- **Verify:** `python -m pytest tests/test_rdsr_dose_sr.py -v` → **8 passed**; `python -m basedpyright src/core/rdsr_dose_sr.py` → **0 errors / 0 warnings**.
+- **Git:** new branch **`feature/rdsr-dose-sr`** from prior **`feature/cine-video-export`** HEAD (RDSR files independent of CINE1 working tree dirt).
+
+```text
+HANDOFF → orchestrator:
+- Status: done
+- Artifacts: src/core/rdsr_dose_sr.py; tests/fixtures/dicom_rdsr/README.md; tests/fixtures/dicom_rdsr/synthetic_ct_dose_xray_rdsr.dcm; tests/fixtures/dicom_rdsr/synthetic_ct_dose_comprehensive_sr.dcm; tests/scripts/generate_rdsr_dose_sr_fixtures.py; tests/test_rdsr_dose_sr.py; CHANGELOG.md [Unreleased] Added; dev-docs/plans/HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md (P0/P1 [x], §3.1–§3.2 notes); backups per AGENTS
+- Plan deltas: **RDSR1-P0**, **RDSR1-P1** checklist rows [x]; §3.1 MVP bullets [x]; §3.2 **pydicom-only** recorded
+- Risks: PHI/export still **out of scope** this pass (P2+); slice-end **reviewer**/**tester**/**secops** still required before treating **RDSR1** slice **complete**
+- Recommended next: **coder** (**RDSR1-P2** browse UI) *or* **reviewer** (quick API/fixture review before UI) — orchestrator picks
+- Stream: O
+- Git: dirty (unrelated WIP on branch); branch: **feature/rdsr-dose-sr**; worktree: none
+- Git proposal: none (branch created from current HEAD per M2 instructions)
+- PR: none
+- Cloud: none
+- Merge recommendation: n/a
+```
 
 _Specialists append dated subsections above this line._

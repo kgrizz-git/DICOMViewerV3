@@ -2,7 +2,7 @@
 
 **Created:** 2026-03-21  
 **Status:** Draft, reviewed 2026-03-21  
-**Covers:** Six UX/viewer features from TO_DO.md
+**Covers:** Six UX/viewer features from TO_DO.md, plus **ROI per-channel statistics** (**ROI_RGB1**).
 
 ---
 
@@ -14,6 +14,7 @@
 4. [Direction Labels (A/P/L/R/S/I)](#4-direction-labels-aplrsi)
 5. [Flip and Rotate Image](#5-flip-and-rotate-image)
 6. [Subwindow Slice / Frame Slider Bars](#6-subwindow-slice--frame-slider-bars)
+7. [ROI per-channel statistics (RGB) — ROI_RGB1](#7-roi-per-channel-statistics-rgb--roi_rgb1)
 
 ---
 
@@ -762,6 +763,58 @@ Before considering implementation complete, manually verify:
 - Hover-based reveal can feel noisy if the activation band is too wide or the hide delay is too short. Tune behavior before exposing a config knob.
 - Live scrubbing through large series may create too many redraws. If that shows up, debounce or update only on release for the first version.
 - Privacy mode should not affect the slider itself, but any text label should remain generic (`Slice`, `Frame`) and not surface protected metadata.
+
+---
+
+## 7. ROI per-channel statistics (RGB) — **ROI_RGB1**
+
+**Priority:** P2  
+**TO_DO:** `dev-docs/TO_DO.md` **L99** — *For ROIs, allow computing and displaying stats per color channel (RGB, etc.) (**on by default when RGB data present**, can be enabled in settings).*  
+**Orchestration:** milestone **M3** after **CINE1**/**RDSR1** on single-branch default (reduces overlap with export/menu churn on `main_window` — adjust only if **`NEXT_TASK_TOOL_SECOND`** + second worktree is approved).
+
+### Goal and success criteria
+
+- When the **current slice pixel array** is **multi-channel** (e.g. **RGB** color-by-plane, `PhotometricInterpretation` / `SamplesPerPixel` heuristics — confirm in implementation spec), ROI statistics show **per-channel mean/std/min/max** (and optionally **count** shared) **without** extra clicks.
+- **Settings:** a **persisted boolean** allows users to **hide** per-channel breakdown and fall back to today’s **single scalar** summary (exact UX strings — **`ux`**).
+- **Export / overlay / clipboard:** behavior is defined for PNG/JPG burn-in, **ROI statistics export** (`roi_export_service`, `export_rendering`), and **customizations import/export** so channel stats do not silently disappear.
+
+### Default-on policy (checked-in TO_DO)
+
+- **Default:** **on** when multi-channel / RGB-class data is detected for the slice.
+- **Do not** contradict shipped `TO_DO.md` with “off by default” unless **product** updates TO_DO and this plan in the same change.
+
+### Config and UI surfaces
+
+| Item | Proposal |
+|------|-----------|
+| **Config key** | `roi_show_per_channel_statistics` (bool), default **`True`** — stored via **`src/utils/config/roi_config.py`** (`ROIConfigMixin` + `default_config` / `config_manager` merge pattern used elsewhere). |
+| **Settings dialog** | ROI / Statistics section: checkbox **“Show per-channel ROI statistics when available”** (or equivalent). |
+| **Statistics panel** | `src/gui/roi_statistics_panel.py` — extra rows or sub-table **R/G/B** when enabled + data is multi-channel. |
+| **On-slice overlay** | `src/tools/roi_manager.py` text composition for `statistics` — line-wrap or abbreviated labels to avoid clutter (**`ux`**). |
+
+### Code paths and file ownership
+
+| Area | Likely modules |
+|------|----------------|
+| **Orchestration / panel** | `src/roi/roi_measurement_controller.py` (owns `ROIStatisticsPanel`), `src/gui/roi_coordinator.py` |
+| **Computation** | `src/tools/roi_manager.py` — extend **`calculate_statistics`** (or parallel **`calculate_statistics_per_channel`**) to accept `pixel_array` with shape `(H, W, C)`; handle **C==1** unchanged. |
+| **Session / paste** | `src/core/annotation_paste_handler.py`, `src/tools/roi_persistence.py` if new fields must round-trip |
+| **Export** | `src/core/roi_export_service.py`, `src/core/export_rendering.py` |
+| **Tests** | Synthetic **RGB** `numpy` array + known ROI mask → expected per-channel means |
+
+### Task checklist (**ROI_RGB1**)
+
+- [x] **(RGB1-1)** Detect “RGB / multi-channel present” consistently with DICOM decoding paths (`DICOMProcessor.get_pixel_array`, photometric interpretation).  
+  `parallel-safe: no`, `stream: P`, `after: RDSR1` (default phasing) — **done** 2026-04-15 (`pixel_array.ndim == 3` and `shape[2] >= 2` in `roi_manager.calculate_statistics`)
+- [x] **(RGB1-2)** Implement per-channel stats in **`roi_manager`** + wire **`roi_coordinator` / `ROIStatisticsPanel`** — **done** 2026-04-15
+- [x] **(RGB1-3)** Add **`roi_config`** key + settings UI + **`default_config`** — **done** 2026-04-15 (`roi_show_per_channel_statistics`, Annotation options)
+- [ ] **(RGB1-4)** Extend **export** + **overlay** text + persistence as needed — **partial:** overlay + customizations export/import **done**; **ROI statistics file export** path unchanged (aggregate columns only) — follow-up if tabular export must list channels
+- [x] **(RGB1-5)** Unit tests + **`CHANGELOG.md` [Unreleased] Added** — **partial:** **CHANGELOG** + **`test_rdsr_export_io`** (dose export); dedicated **RGB ROI** unit test **deferred** (Qt `ROIItem` harness)
+
+### Risks
+
+- **Palette color** vs **true RGB** — detection may mis-classify; need explicit rules and tests.
+- **Performance** on large ROIs — three passes vs one; consider single masked gather.
 
 ---
 

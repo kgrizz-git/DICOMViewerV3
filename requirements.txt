@@ -23,6 +23,9 @@ PySide6>=6.6.0
 pydicom>=2.4.0
 numpy>=1.24.0
 Pillow>=10.0.0
+# Cine export (GIF / AVI / MPG): imageio + bundled FFmpeg via imageio-ffmpeg (LGPL/GPL components — see CHANGELOG [Unreleased] and README).
+imageio==2.37.3
+imageio-ffmpeg==0.6.0
 matplotlib>=3.8.0
 openpyxl>=3.1.0
 # Local encrypted study index (SQLCipher-compatible Python binding; wheels on Windows/macOS/Linux for supported Python versions)

@@ -66,46 +66,109 @@ Allow the user to **write the computed MPR stack** (the same slices shown in an 
 
 ---
 
-## 2. Cine video export (MPG, GIF, AVI)
+## 2. Cine video export (MPG, GIF, AVI) — **Task ID: CINE1**
 
 ### Goal
 
 From a **cine-capable** subwindow, export the **full loop** (respecting loop bounds and direction if applicable) to **MPG (MPEG)**, **GIF**, or **AVI**, at a user-chosen frame rate (default: effective cine FPS from `CinePlayer` / DICOM).
 
+**Single-branch phasing (orchestrator default):** **M1** implements **CINE1** before **RDSR1** / **ROI_RGB1** / **HIST_PROJ1** unless a second worktree is approved.
+
+### Task graph and gates
+
+| Ordering | Notes |
+|----------|--------|
+| After dependency row locked in plan + optional **`researcher`** brief → **UI/dialog** → **frame iterator** → **encoders** → **progress/cancel** → **tests** + **CHANGELOG** | Do not edit `requirements.txt` until the dependency gate is explicit in state/plan. |
+| **Verification gates** | (1) **`reviewer`** — export path, cancel semantics, no `shell=True`. (2) **`tester`** — full pytest + ledger when slice ends. (3) **`secops`** — if new native binaries / subprocess invocations land. |
+
+**Multi-window / sync cine (deferral):** `dev-docs/TO_DO.md` **L105** (*cine playback across multiple windows: sync vs independent*) is **out of scope** for **CINE1** MVP export. **MVP:** export **only the focused subwindow’s** cine loop and bounds. Document follow-up in L105 or a future plan slice when product chooses sync semantics.
+
 ### Prerequisites
 
-- [ ] Decide dependency strategy: **ffmpeg** subprocess (user must install) vs **Python wheels** (`imageio`, `imageio-ffmpeg`, `opencv-python`). Prefer minimal friction on Windows: e.g. `imageio` + `imageio-ffmpeg` bundles a binary — confirm license and size impact in `requirements.txt`.
-- [ ] Privacy: same rules as screenshot export (optional burn-in vs clean pixels; respect privacy mode).
+- [ ] Decide dependency strategy using **§2.1 Dependency decision matrix** (record chosen row in plan + `CHANGELOG` / `AGENTS.md` if install steps change).
+- [ ] Privacy: same rules as screenshot export (optional burn-in vs clean pixels; respect **Privacy Mode**).
+- [ ] **UX (defer to `ux`):** whether export uses **LUT-applied “as displayed”** pixels vs **raw/rescaled array** first (matrix size vs fidelity).
 
 ### Design decisions
 
 | Topic | Recommendation |
 |-------|----------------|
 | **Resolution** | Native pixel matrix of the displayed image after standard LUT **or** explicit “as displayed” (if W/L and zoom must match UI, add a second mode later). |
-| **Scope** | **Focused subwindow** first; multi-window batch can reuse export manager patterns later. |
+| **Scope** | **Focused subwindow** first; multi-window batch **deferred** (see L105). |
 | **Palette GIF** | Quantize to 256 colors; document quality tradeoff for medical grayscale. |
 | **MPG vs MP4** | User asked for **MPG**; implement **MPEG-1/2** or **transport** as supported by chosen backend; if only MP4 is trivial, document mapping (e.g. “MPG via ffmpeg `-f mpeg`”). |
 
-### Implementation outline
+### §2.1 Dependency decision matrix (encoding backend)
 
-1. **UI**  
-   - Cine toolbar or **Export** submenu: “Export cine as…” → format + path + FPS + loop/range (reuse loop start/end from `CineControlsWidget` if present).
+| Approach | Distribution | Pros | Cons / pitfalls |
+|----------|--------------|------|------------------|
+| **`imageio` + `imageio-ffmpeg`** | PyPI; may vendor **ffmpeg** binary via `imageio-ffmpeg` | Single pip story on Windows; API for GIF/MP4/MPEG depending on backend build | Wheel **size**; **license** stack (ffmpeg LGPL/GPL components — confirm ship posture for frozen **PyInstaller** bundle); version **pin** discipline |
+| **ffmpeg / ffprobe subprocess** | User-installed or app installer | Maximum **codec** flexibility; no Python-native encoder maintenance | **PATH** / “not installed” UX; **quoting** and **no `shell=True`**; **cancel** = terminate child process + cleanup partial file; Windows ** Defender** / execution policy friction |
+| **`opencv-python` + `cv2.VideoWriter`** | PyPI wheel | Familiar to CV devs | On Windows, **fourcc** / backend often falls back to **MSMF** with **limited** MPEG-1; many deployments still need **ffmpeg** DLL for reliability |
+| **Qt Multimedia** (`PySide6` already present) | Qt runtime | Theoretically native | **Codec availability** varies by OS install; **GIF** support is awkward; higher **integration** cost for batch frames |
+| **Pillow / imageio GIF-only path** | Mostly Python + numpy | **GIF** without native video stack | **No MPG/AVI**; slow on large matrices; **256-color** quantization |
 
-2. **Frame capture**  
-   - Drive playback **deterministically**: iterate frame indices `0 … N-1` (or loop range), calling the same path as `_on_cine_frame_advance` / `SliceNavigator.advance_to_frame` **without** relying on real-time `QTimer` for export (avoid dropped frames).  
-   - After each advance, grab the **rendered** image: either `QImage` grab of the `ImageViewer` viewport or reuse the same pixmap/array used for PNG export (must match fusion/overlay options per product choice).
+**Windows codec pitfalls (all backends):** missing **H.264/MPEG** encoders on stock Windows; **MSMF** rejecting fourcc; **32-bit vs 64-bit** ffmpeg mismatch in PATH; long paths and **antivirus** locks on temp files during encode.
 
-3. **Encode**  
-   - Feed frames to encoder; **GIF**: variable delay per frame from FPS; **AVI/MPG**: fixed FPS.  
-   - Run encoder in background `QThread` with cancel support (pattern from `LoadingProgressManager` / export).
+**Recommendation for planner (non-binding):** short **`researcher`** spike comparing **`imageio`+`imageio-ffmpeg`** vs **documented optional system ffmpeg** for **MPG**; use **GIF** path that works with minimal deps first if product wants incremental ship.
 
-4. **Tests**  
-   - Smoke: 4-frame synthetic series → export to temp file → assert file exists and non-empty (skip heavy decode assertions in CI if needed).
+### UI entrypoints (MVP)
+
+- [ ] **File → Export** (or **Tools**) submenu: **“Export cine as…”** — gated on **cine-capable** series in **focused** subwindow (mirror **MPR save** eligibility patterns: clear message if disabled).  
+  `parallel-safe: no`, `stream: N`, `after: none` — touches `main_window_menu_builder.py`, `app_signal_wiring.py`, `main.py` / facade hooks.
+- [ ] **Cine toolbar** affordance (optional second entry): icon or overflow **“Export…”** — **`ux`** decides clutter vs discoverability.  
+  `parallel-safe: no`, `stream: N`, `after: none`
+- [ ] **Dialog fields:** output path, **format** (GIF / AVI / MPG), **FPS**, **loop range** (reuse `CineControlsWidget` / `CinePlayer` loop bounds if present), **include overlays** (checkbox; default off or match PNG export — **`ux`**).
+- [ ] Dialog **WindowStaysOnTopHint** only at open; defocus behavior per app rule (match `mpr_dicom_save_dialog` / export dialogs).
+
+### Frame source
+
+- [ ] **Loop bounds:** export frames in **`[loop_start, loop_end]`** inclusive (or full `0 … N-1` if loop disabled); respect **direction** if cine supports reverse.
+- [ ] **Deterministic stepping:** advance with same logic as `_on_cine_frame_advance` / slice navigator **without** relying on `QTimer` tick timing (no dropped frames).  
+  `parallel-safe: no`, `stream: N`, `after: dependency-gate`
+- [ ] **Pixel source:** single code path chosen in design table (viewport grab vs `SliceDisplayManager` / export pixmap pipeline); document **fusion** and **Privacy Mode** behavior explicitly.
+- [ ] **Multi-window:** **not** in **CINE1** MVP — see **L105** deferral above.
+
+### Encoding options (MPG vs AVI vs GIF)
+
+- [ ] **GIF:** per-frame delay from FPS; **quantize** if RGB intermediate; document medical grayscale limitation.
+- [ ] **AVI:** pick **fourcc** compatible with chosen backend; document **Windows** fallback behavior.
+- [ ] **MPG:** target **MPEG-1 System** or documented **ffmpeg** `-f mpeg` mux; if backend only yields **MP4**, ship **MP4** behind same dialog with **user-visible** format list update + **`CHANGELOG`** **Changed** entry (requires **product** sign-off — **`needs_user`** if MPG is strict).
+
+### Progress / cancel
+
+- [ ] **`QThread`** worker + **`QProgressDialog`** (reuse patterns from `LoadingProgressManager` / `export_manager.py`).
+- [ ] **Cancel:** cooperative flag between frames; on hard cancel, delete **partial** output file where safe; document **leftover** behavior in dialog help text (align **MPR2** reviewer note on partial files).
+- [ ] **Memory:** prefer **streaming** frames into encoder when API allows; otherwise cap concurrent buffered frames or document RAM risk for large matrices.
+
+### Test strategy
+
+| Layer | Content |
+|-------|---------|
+| **Unit** | Pure helpers: frame index list from loop settings; rescale/FPS timing math. |
+| **Integration** | Small synthetic **multi-frame** fixture (4–8 frames, low res) → export to **`tmp_path`** → assert **file exists**, **size > 0**, optional **magic bytes** / `imageio.imread` frame count **≤ cap** (avoid golden blobs in git). |
+| **Golden / binary** | **Avoid** committing large video artifacts; cap artifact size in CI (e.g. `< 512 KiB` per test file). |
+| **Manual smoke** | Full-screen / overlay on/off; cancel mid-run; re-open file in external player. |
+
+### `CHANGELOG` / version expectations
+
+- [ ] **`CHANGELOG.md` [Unreleased] Added** — user-visible **Export cine** + formats + dependency/install note if applicable.
+- [ ] **`src/version.py`** — bump per **`dev-docs/info/SEMANTIC_VERSIONING_GUIDE.md`** only at release boundary; feature accumulation may stay **[Unreleased]** until release chore.
+- [ ] **`README.md` / `AGENTS.md`** — if users must install **ffmpeg** or accept **imageio-ffmpeg** binary, document explicitly.
+
+### Implementation outline (concise)
+
+1. **UI** — Dialog + menu/toolbar wiring; eligibility checks.  
+2. **Frame capture** — Deterministic index loop + pixel grab path.  
+3. **Encode** — Pluggable backend per matrix row §2.1.  
+4. **Worker** — Thread + progress + cancel.  
+5. **Tests + docs** — As above.
 
 ### Risks
 
 - **Performance**: large matrices × many frames → memory; stream frames to encoder when possible.  
-- **IP/licensing**: confirm codec libraries are OK for distribution in packaged executables.
+- **IP/licensing**: confirm codec libraries are OK for distribution in packaged executables.  
+- **Windows variability**: codec / PATH / AV locks — mitigate with clear errors and **docs**.
 
 ---
 
@@ -181,17 +244,18 @@ The TO_DO text matches **Option B** (vertices P1–P2–P3 with angle at **P2**)
 - [x] Tests + manual round-trip validation — **`tests/test_mpr_dicom_export.py`** (pydicom read-back); manual external validator still optional.
 - [x] `CHANGELOG.md` + version bump per release rules — **CHANGELOG** [Unreleased] **Added**; **`src/version.py`** unchanged (pre-release accumulation per repo pattern).
 
-### Cine export
+### Cine export (**CINE1** — see §2 phased checklist)
 
-- [ ] Encoder dependency chosen and documented (`README` / `AGENTS.md` if install steps change)
-- [ ] Off-timer frame iteration + capture
-- [ ] GIF / AVI / MPG paths
-- [ ] Progress + cancel
-- [ ] Tests (minimal) + `CHANGELOG.md`
+- [x] **(CINE1-S0)** Dependency row chosen + optional **`researcher`** brief logged (`parallel-safe: yes`, `stream: N`, `after: none`) — **2026-04-14:** **`imageio` + `imageio-ffmpeg`** pinned in **`requirements.txt`**; orchestration **`dependency_row_locked`**.
+- [x] **(CINE1-P1)** UI entrypoints + export dialog + eligibility (focused subwindow; **L105** out of scope) — **2026-04-14:** **File → Export cine as…**, **`CineExportDialog`**, **`describe_focused_cine_export_blocker`** (MPR + non-cine gating).
+- [x] **(CINE1-P2)** Off-timer frame iteration + pixel capture path (overlays / privacy behavior documented) — **2026-04-14:** deterministic index list + **`rasterize_cine_export_frame`** (same PIL path as PNG export; overlays optional; **Privacy** follows overlay/export rules when overlays on).
+- [x] **(CINE1-P3)** GIF / AVI / MPG encode paths per §2.1 matrix — **2026-04-14:** **`encode_cine_video_from_png_paths`** (GIF-PIL writer, FFMPEG **png** in AVI, **mpeg2video** + **`-f mpeg`** for MPG).
+- [x] **(CINE1-P4)** `QThread` + progress + cancel + partial-file policy — **2026-04-14:** **`CineVideoEncodeThread`** for encode; main-thread render + **`QProgressDialog`** cancel; partial output removed on failure/cancel.
+- [x] **(CINE1-P5)** Tests (size-capped) + `CHANGELOG.md` + docs if deps change — **2026-04-14:** **`tests/test_cine_video_export.py`**, **`CHANGELOG`** [Unreleased], **`README`** / **`AGENTS.md`** FFmpeg note.
 
 ### Angle measurement
 
-- [ ] Three-click tool + visuals + config reuse
-- [ ] Export + paste/copy compatibility
-- [ ] Tests for geometry math
-- [ ] `CHANGELOG.md`
+- [x] Three-click tool + visuals + config reuse — **2026-04-14:** toolbar **Angle** / **Shift+M**, `measure_angle` mode, `AngleMeasurementItem` + previews
+- [x] Export + paste/copy compatibility — **`export_rendering`**, clipboard `measurement_kind` `angle` / `distance`
+- [x] Tests for geometry math — **`tests/test_angle_measurement_geometry.py`**
+- [x] `CHANGELOG.md` — **[Unreleased] Added**

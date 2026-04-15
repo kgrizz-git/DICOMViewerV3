@@ -22,6 +22,8 @@ Requirements:
 
 import sys
 import os
+import tempfile
+import threading
 import time
 import inspect
 import warnings
@@ -112,6 +114,13 @@ from core.subwindow_image_viewer_sync import (
 )
 from core.subwindow_manager_factory import build_managers_for_subwindow
 from core.cine_app_facade import CineAppFacade
+from core.cine_video_export import (
+    build_cine_export_frame_indices,
+    cleanup_temp_frame_dir,
+    describe_focused_cine_export_blocker,
+    rasterize_cine_export_frame,
+    safe_remove_partial_output,
+)
 from core.main_app_key_event_filter import dispatch_app_key_event, is_widget_allowed_for_layout_shortcuts
 from core.window_level_preset_handler import apply_window_level_preset
 from gui.dialog_coordinator import DialogCoordinator
@@ -119,6 +128,9 @@ from gui.mouse_mode_handler import MouseModeHandler
 from gui.keyboard_event_handler import KeyboardEventHandler
 from gui.dialogs.tag_export_union_worker import TagExportUnionWorker
 from gui.dialogs.disclaimer_dialog import DisclaimerDialog
+from gui.dialogs.cine_export_dialog import CineExportDialog
+from gui.dialogs.cine_export_encode_thread import CineVideoEncodeThread
+from gui.dialogs.radiation_dose_report_dialog import RadiationDoseReportDialog
 
 # Import fusion components
 from core.fusion_processor import FusionProcessor
@@ -1102,6 +1114,7 @@ class DICOMViewerApp(QObject):
                 self, QApplication.focusWidget()
             ),
             open_quick_window_level_callback=self._open_quick_window_level,
+            cancel_angle_draw_callback=self.measurement_coordinator.handle_angle_draw_cancel_requested,
         )
 
     def _keyboard_delete_roi(self, roi: object) -> None:
@@ -2621,6 +2634,287 @@ class DICOMViewerApp(QObject):
     def _on_save_mpr_as_dicom(self) -> None:
         """File → Save MPR as DICOM… — requires focused subwindow in MPR mode."""
         self._mpr_controller.prompt_save_mpr_as_dicom()
+
+    def _open_radiation_dose_report(self, subwindow_idx: Optional[int] = None) -> None:
+        """
+        Tools → Radiation dose report… — parse the focused (or given) pane's current
+        dataset when it is a Radiation Dose SR / dose-bearing SR (see ``rdsr_dose_sr``).
+        """
+        from core.rdsr_dose_sr import (
+            RadiationDoseSrParseError,
+            is_radiation_dose_sr,
+            parse_ct_radiation_dose_summary,
+        )
+
+        idx = (
+            subwindow_idx
+            if subwindow_idx is not None
+            else self.get_focused_subwindow_index()
+        )
+        if idx < 0:
+            return
+        data = self.subwindow_data.get(idx, {})
+        if data.get("is_mpr"):
+            QMessageBox.information(
+                self.main_window,
+                "Radiation dose report",
+                "MPR views do not carry an SR dose object. Switch to a 2D SR instance.",
+            )
+            return
+        ds = self._get_subwindow_dataset(idx)
+        if ds is None:
+            QMessageBox.information(
+                self.main_window,
+                "Radiation dose report",
+                "No DICOM file is loaded in this window.",
+            )
+            return
+        if not is_radiation_dose_sr(ds):
+            QMessageBox.information(
+                self.main_window,
+                "Radiation dose report",
+                "The current file is not a recognized radiation dose structured report.",
+            )
+            return
+        try:
+            summary = parse_ct_radiation_dose_summary(ds)
+        except RadiationDoseSrParseError as e:
+            QMessageBox.warning(
+                self.main_window,
+                "Radiation dose report",
+                f"Could not parse dose content:\n{e}",
+            )
+            return
+        raw_desc = getattr(ds, "SeriesDescription", None) or "Dose SR"
+        desc = str(raw_desc).strip() or "Dose SR"
+        dlg = RadiationDoseReportDialog(
+            self.main_window,
+            summary,
+            get_privacy_enabled=self.config_manager.get_privacy_view,
+            main_window=self.main_window,
+            series_description=desc[:120],
+        )
+        dlg.show()
+        dlg.raise_()
+        dlg.activateWindow()
+
+    def _on_export_cine_video(self) -> None:
+        """
+        File → Export cine as… — GIF / AVI / MPG for the focused 2D multi-frame pane.
+
+        Renders each frame with the same PIL path as PNG export (not a viewport grab),
+        writes temporary PNGs, then encodes in a ``QThread`` (imageio / FFmpeg, no
+        ``shell=True``). Cancel removes partial output when possible.
+        """
+        blocker = describe_focused_cine_export_blocker(self)
+        if blocker:
+            QMessageBox.information(self.main_window, "Export cine", blocker)
+            return
+
+        idx = self.get_focused_subwindow_index()
+        data = self.subwindow_data.get(idx, {})
+        study_uid = str(data.get("current_study_uid") or "")
+        series_uid = str(data.get("current_series_uid") or "")
+        studies = self.current_studies
+        if not studies or study_uid not in studies or series_uid not in studies[study_uid]:
+            QMessageBox.warning(self.main_window, "Export cine", "Series data is not available.")
+            return
+        series_list = studies[study_uid][series_uid]
+        total = len(series_list)
+        if total < 2:
+            QMessageBox.information(self.main_window, "Export cine", "Not enough frames to export.")
+            return
+
+        fps_default = float(self.cine_player.get_effective_frame_rate())
+        dlg = CineExportDialog(
+            self.main_window,
+            default_fps=fps_default,
+            total_frames=total,
+            loop_start=self.cine_player.loop_start_frame,
+            loop_end=self.cine_player.loop_end_frame,
+        )
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        opts = dlg.build_options()
+        indices = build_cine_export_frame_indices(
+            total,
+            opts.loop_start_frame,
+            opts.loop_end_frame,
+            opts.use_cine_loop_bounds,
+        )
+        if not indices:
+            QMessageBox.warning(self.main_window, "Export cine", "No frames in the selected range.")
+            return
+
+        ext = "." + opts.video_format.lower()
+        filters = "GIF Image (*.gif);;AVI Video (*.avi);;MPEG Program Stream (*.mpg)"
+        ds0 = series_list[0]
+        raw_desc = getattr(ds0, "SeriesDescription", None) or "cine_export"
+        stem = str(raw_desc).strip() or "cine_export"
+        for ch in '<>:"/\\|?*':
+            stem = stem.replace(ch, "_")
+        stem = stem[:80]
+        start_dir = self.config_manager.get_last_export_path() or os.getcwd()
+        if os.path.isfile(start_dir):
+            start_dir = os.path.dirname(start_dir)
+        if not start_dir or not os.path.isdir(start_dir):
+            start_dir = os.getcwd()
+        default_path = os.path.join(start_dir, stem + ext)
+        outp = self._export_app_facade.prompt_save_path(
+            "Save cine export as",
+            default_path,
+            filters,
+        )
+        if not outp:
+            return
+        base, old_ext = os.path.splitext(outp)
+        if old_ext.lower() != ext:
+            outp = base + ext
+        self.config_manager.set_last_export_path(os.path.dirname(os.path.abspath(outp)))
+
+        managers = self.subwindow_managers.get(idx, {})
+        vsm = managers.get("view_state_manager")
+        sdm = managers.get("slice_display_manager")
+        if (
+            vsm is not None
+            and vsm.current_window_center is not None
+            and vsm.current_window_width is not None
+        ):
+            wl_opt = "current"
+            wc = vsm.current_window_center
+            ww = vsm.current_window_width
+        else:
+            wl_opt = "dataset"
+            wc = None
+            ww = None
+        use_rescaled = bool(getattr(vsm, "use_rescaled_values", False)) if vsm else False
+        proj_en = bool(getattr(sdm, "projection_enabled", False)) if sdm else False
+        proj_ty = str(getattr(sdm, "projection_type", "aip") or "aip") if sdm else "aip"
+        proj_cnt = int(getattr(sdm, "projection_slice_count", 4) or 4) if sdm else 4
+
+        cancel_event = threading.Event()
+        temp_dir = tempfile.mkdtemp(prefix="dv3_cine_")
+        png_paths: List[Path] = []
+        try:
+            progress = QProgressDialog(
+                "Rendering cine frames…",
+                "Cancel",
+                0,
+                len(indices),
+                self.main_window,
+            )
+            progress.setWindowModality(Qt.WindowModality.WindowModal)
+            progress.setMinimumDuration(0)
+            for step, frame_idx in enumerate(indices):
+                if progress.wasCanceled():
+                    cancel_event.set()
+                    break
+                progress.setValue(step)
+                dataset = series_list[frame_idx]
+                img = rasterize_cine_export_frame(
+                    dataset,
+                    studies,
+                    study_uid,
+                    series_uid,
+                    frame_idx,
+                    total,
+                    wl_opt,
+                    wc,
+                    ww,
+                    opts.include_overlays,
+                    use_rescaled,
+                    managers.get("roi_manager"),
+                    managers.get("overlay_manager"),
+                    managers.get("measurement_tool"),
+                    self.config_manager,
+                    managers.get("text_annotation_tool"),
+                    managers.get("arrow_annotation_tool"),
+                    proj_en,
+                    proj_ty,
+                    proj_cnt,
+                )
+                if img is None:
+                    QMessageBox.critical(
+                        self.main_window,
+                        "Export cine",
+                        f"Failed to rasterize frame {frame_idx + 1} of {total}.",
+                    )
+                    safe_remove_partial_output(outp)
+                    return
+                out_png = Path(temp_dir) / f"f{step:05d}.png"
+                img.save(str(out_png), "PNG")
+                png_paths.append(out_png)
+                QApplication.processEvents()
+
+            progress.setValue(len(indices))
+            progress.close()
+
+            if cancel_event.is_set() or not png_paths:
+                safe_remove_partial_output(outp)
+                return
+
+            progress_enc = QProgressDialog(
+                "Encoding video…",
+                "Cancel",
+                0,
+                0,
+                self.main_window,
+            )
+            progress_enc.setWindowModality(Qt.WindowModality.WindowModal)
+            progress_enc.setMinimumDuration(0)
+            progress_enc.canceled.connect(cancel_event.set)
+            progress_enc.show()
+            QApplication.processEvents()
+
+            enc_thread = CineVideoEncodeThread(
+                png_paths,
+                outp,
+                opts.video_format,
+                opts.fps,
+                cancel_event,
+            )
+            enc_err: List[Optional[str]] = [None]
+
+            def _on_enc_fail(msg: str) -> None:
+                enc_err[0] = msg
+
+            def _on_enc_ok() -> None:
+                if enc_err[0] is None:
+                    enc_err[0] = ""
+
+            enc_loop = QEventLoop()
+            enc_thread.failed.connect(_on_enc_fail)
+            enc_thread.succeeded.connect(_on_enc_ok)
+            enc_thread.finished.connect(enc_loop.quit)
+            enc_thread.start()
+            enc_loop.exec()
+            progress_enc.close()
+            enc_thread.wait(60_000)
+
+            if enc_err[0] is None:
+                QMessageBox.critical(
+                    self.main_window,
+                    "Export cine",
+                    "Encoding did not complete.",
+                )
+                safe_remove_partial_output(outp)
+            elif enc_err[0] == "":
+                QMessageBox.information(
+                    self.main_window,
+                    "Export cine",
+                    f"Successfully wrote:\n{outp}",
+                )
+            else:
+                low = enc_err[0].lower()
+                if "cancel" not in low:
+                    QMessageBox.critical(
+                        self.main_window,
+                        "Export cine",
+                        enc_err[0],
+                    )
+                safe_remove_partial_output(outp)
+        finally:
+            cleanup_temp_frame_dir(temp_dir)
 
     def _resolve_focused_series_ordered_paths(
         self,

@@ -845,12 +845,31 @@ class ROIManager:
             "max": float(np.max(roi_pixels)),
             "count": int(len(roi_pixels)),
             "area_pixels": area_pixels,
-            "area_mm2": area_mm2
+            "area_mm2": area_mm2,
         }
-        
+
+        show_pc = (
+            self.config_manager is not None
+            and self.config_manager.get_roi_show_per_channel_statistics()
+        )
+        if show_pc and pixel_array.ndim == 3 and pixel_array.shape[2] >= 2:
+            nc = int(pixel_array.shape[2])
+            stats["multichannel_count"] = nc
+            for c in range(nc):
+                ch_raw = pixel_array[:, :, c][mask]
+                if len(ch_raw) == 0:
+                    continue
+                ch = ch_raw.astype(np.float32)
+                if rescale_slope is not None and rescale_intercept is not None:
+                    ch = ch * float(rescale_slope) + float(rescale_intercept)
+                stats[f"mean_ch{c}"] = float(np.mean(ch))
+                stats[f"std_ch{c}"] = float(np.std(ch))
+                stats[f"min_ch{c}"] = float(np.min(ch))
+                stats[f"max_ch{c}"] = float(np.max(ch))
+
         # Store statistics in ROI item
         roi.statistics = stats
-        
+
         return stats
     
     def create_statistics_overlay(self, roi: ROIItem, statistics: RoiStatisticsMap,
@@ -896,6 +915,17 @@ class ROIManager:
             lines.append(f"Min: {statistics['min']:.2f}{unit_suffix}")
         if "max" in roi.visible_statistics and "max" in statistics:
             lines.append(f"Max: {statistics['max']:.2f}{unit_suffix}")
+        mc = int(statistics.get("multichannel_count") or 0)
+        if mc >= 2 and "mean" in roi.visible_statistics:
+            labels = ("R", "G", "B") if mc == 3 else tuple(str(i) for i in range(mc))
+            bits: list[str] = []
+            for c in range(mc):
+                mk = f"mean_ch{c}"
+                if mk in statistics:
+                    lab = labels[c] if c < len(labels) else str(c)
+                    bits.append(f"{lab} μ={statistics[mk]:.2f}{unit_suffix}")
+            if bits:
+                lines.append("Ch mean: " + "  ".join(bits))
         if "count" in roi.visible_statistics and "count" in statistics:
             lines.append(f"Pixels: {statistics['count']}")
         if "area" in roi.visible_statistics:

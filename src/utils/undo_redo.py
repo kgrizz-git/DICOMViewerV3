@@ -365,9 +365,11 @@ class MeasurementCommand(Command):
                         self.scene.addItem(self.measurement_item.text_item)
                     # Ensure text is visible and positioned correctly
                     self.measurement_item.text_item.setVisible(True)
-                    # Update distance to refresh text position and content
+                    # Update distance / angle to refresh text position and content
                     if hasattr(self.measurement_item, 'update_distance'):
                         self.measurement_item.update_distance()
+                    elif hasattr(self.measurement_item, 'update_angle_geometry'):
+                        self.measurement_item.update_angle_geometry()
 
 
 class TextAnnotationCommand(Command):
@@ -748,6 +750,52 @@ class MeasurementMoveCommand(Command):
             # Update distance to recalculate line, text, and handle positions
             if hasattr(self.measurement_item, 'update_distance'):
                 self.measurement_item.update_distance()
+
+
+class AngleMeasurementMoveCommand(Command):
+    """Undo/redo for moving an angle measurement (all three vertices)."""
+
+    def __init__(
+        self,
+        angle_item,
+        old_p1: "QPointF",
+        old_p2: "QPointF",
+        old_p3: "QPointF",
+        new_p1: "QPointF",
+        new_p2: "QPointF",
+        new_p3: "QPointF",
+        scene,
+    ):
+        self.angle_item = angle_item
+        self.old_p1 = old_p1
+        self.old_p2 = old_p2
+        self.old_p3 = old_p3
+        self.new_p1 = new_p1
+        self.new_p2 = new_p2
+        self.new_p3 = new_p3
+        self.scene = scene
+
+    def execute(self) -> None:
+        if self.angle_item is None or self.scene is None:
+            return
+        if self.angle_item.scene() == self.scene:
+            self.angle_item.p1 = self.new_p1
+            self.angle_item.p2 = self.new_p2
+            self.angle_item.p3 = self.new_p3
+            self.angle_item.setPos(self.new_p2)
+            if hasattr(self.angle_item, "update_angle_geometry"):
+                self.angle_item.update_angle_geometry()
+
+    def undo(self) -> None:
+        if self.angle_item is None or self.scene is None:
+            return
+        if self.angle_item.scene() == self.scene:
+            self.angle_item.p1 = self.old_p1
+            self.angle_item.p2 = self.old_p2
+            self.angle_item.p3 = self.old_p3
+            self.angle_item.setPos(self.old_p2)
+            if hasattr(self.angle_item, "update_angle_geometry"):
+                self.angle_item.update_angle_geometry()
 
 
 class CrosshairCommand(Command):

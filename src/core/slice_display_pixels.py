@@ -114,3 +114,42 @@ def create_slice_projection_pil_image(
     except Exception as e:
         print(f"Error converting projection array to PIL Image: {e}")
         return None
+
+
+def compute_intensity_projection_raw_array(
+    dicom_processor: DICOMProcessor,
+    projection_type: str,
+    projection_slice_count: int,
+    series_datasets: List[Dataset],
+    current_slice_index: int,
+) -> Optional[np.ndarray]:
+    """
+    Build a **raw** (pre–window/level) 2D numpy projection over a slice range, matching
+    viewer / ROI projection slice bounds. Returns ``None`` if projection cannot be formed.
+
+    Used by the histogram when **Use intensity projection pixels** is enabled so the
+    distribution matches the combined-slice intensity path (AIP / MIP / MinIP).
+    """
+    total_slices = len(series_datasets)
+    if total_slices < 2:
+        return None
+    start_slice = max(0, current_slice_index)
+    end_slice = min(
+        total_slices - 1, current_slice_index + projection_slice_count - 1
+    )
+    if end_slice - start_slice + 1 < 2:
+        return None
+    projection_slices: List[Dataset] = []
+    for i in range(start_slice, end_slice + 1):
+        if 0 <= i < total_slices:
+            projection_slices.append(series_datasets[i])
+    if len(projection_slices) < 2:
+        return None
+    projection_array: Optional[np.ndarray] = None
+    if projection_type == "aip":
+        projection_array = dicom_processor.average_intensity_projection(projection_slices)
+    elif projection_type == "mip":
+        projection_array = dicom_processor.maximum_intensity_projection(projection_slices)
+    elif projection_type == "minip":
+        projection_array = dicom_processor.minimum_intensity_projection(projection_slices)
+    return projection_array

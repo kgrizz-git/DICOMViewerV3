@@ -58,6 +58,7 @@ class SubwindowLifecycleController:
         self._clear_window_slots: Dict[int, Any] = {}  # id(image_viewer) -> callable
         self._cine_toggle_slots: Dict[int, Any] = {}  # id(image_viewer) -> callable
         self._cine_stop_slots: Dict[int, Any] = {}  # id(image_viewer) -> callable
+        self._rdsr_report_slots: Dict[int, Any] = {}  # id(image_viewer) -> callable (dose SR dialog)
         # Single restartable timer for 100ms viewport-resized callback; coalesces rapid layout changes.
         self._viewport_resized_timer: Optional[QTimer] = None
 
@@ -187,6 +188,7 @@ class SubwindowLifecycleController:
         vsm = self.app.subwindow_managers[idx].get('view_state_manager')
         if vsm is None:
             return {}
+        sdm = self.app.subwindow_managers[idx].get("slice_display_manager")
         return {
             'get_current_dataset': lambda i=idx: self.get_subwindow_dataset(i),
             'get_current_slice_index': lambda i=idx: self.get_subwindow_slice_index(i),
@@ -202,7 +204,48 @@ class SubwindowLifecycleController:
             'get_series_uid': lambda i=idx: self.get_subwindow_series_uid(i),
             'get_series_datasets': lambda i=idx: self.get_subwindow_datasets(i),
             'get_all_studies': lambda: getattr(self.app, 'current_studies', {}),
+            'get_projection_enabled': (
+                (lambda: bool(sdm.projection_enabled)) if sdm is not None else (lambda: False)
+            ),
+            'get_projection_type': (
+                (lambda: str(sdm.projection_type)) if sdm is not None else (lambda: "aip")
+            ),
+            'get_projection_slice_count': (
+                (lambda: int(sdm.projection_slice_count)) if sdm is not None else (lambda: 4)
+            ),
+            'get_projection_pixel_array': lambda i=idx: self._get_histogram_projection_pixel_array(
+                i
+            ),
+            'get_histogram_use_projection_pixels': self.app.config_manager.get_histogram_use_projection_pixels,
+            'set_histogram_use_projection_pixels': self.app.config_manager.set_histogram_use_projection_pixels,
         }
+
+    def _get_histogram_projection_pixel_array(self, idx: int):
+        """
+        Raw 2D numpy projection for histogram when intensity projection is enabled
+        for subwindow ``idx``. Returns ``None`` if not applicable.
+        """
+        import numpy as np
+
+        if idx not in self.app.subwindow_managers:
+            return None
+        sdm = self.app.subwindow_managers[idx].get("slice_display_manager")
+        if sdm is None or not sdm.projection_enabled:
+            return None
+        series = self.get_subwindow_datasets(idx)
+        if not series or len(series) < 2:
+            return None
+        z = self.get_subwindow_slice_index(idx)
+        from core.slice_display_pixels import compute_intensity_projection_raw_array
+
+        arr = compute_intensity_projection_raw_array(
+            self.app.dicom_processor,
+            str(sdm.projection_type),
+            int(sdm.projection_slice_count),
+            list(series),
+            z,
+        )
+        return arr if isinstance(arr, np.ndarray) else None
 
     def get_focused_subwindow(self):
         """
@@ -542,8 +585,16 @@ class SubwindowLifecycleController:
                         image_viewer.about_this_file_requested.disconnect(app._open_about_this_file)
                     except (TypeError, RuntimeError):
                         pass
-                    # histogram_requested uses a lambda; disconnect stored slot if any
                     vid = id(image_viewer)
+                    if vid in self._rdsr_report_slots:
+                        try:
+                            image_viewer.radiation_dose_report_requested.disconnect(
+                                self._rdsr_report_slots[vid]
+                            )
+                        except (TypeError, RuntimeError):
+                            pass
+                        del self._rdsr_report_slots[vid]
+                    # histogram_requested uses a lambda; disconnect stored slot if any
                     if vid in self._histogram_slots:
                         try:
                             image_viewer.histogram_requested.disconnect(self._histogram_slots[vid])
@@ -638,6 +689,9 @@ class SubwindowLifecycleController:
                 hist_slot = lambda i=idx: app.dialog_coordinator.open_histogram(i)
                 image_viewer.histogram_requested.connect(hist_slot)
                 self._histogram_slots[vid] = hist_slot
+                rdsr_slot = lambda i=idx: app._open_radiation_dose_report(i)
+                image_viewer.radiation_dose_report_requested.connect(rdsr_slot)
+                self._rdsr_report_slots[vid] = rdsr_slot
                 image_viewer.get_file_path_callback = lambda i=idx: app._get_current_slice_file_path(i)
                 image_viewer.get_slice_location_lines_visible_callback = (
                     lambda: app.config_manager.get_slice_location_lines_visible()
@@ -743,6 +797,12 @@ class SubwindowLifecycleController:
                 app.image_viewer.measurement_started.disconnect()
                 app.image_viewer.measurement_updated.disconnect()
                 app.image_viewer.measurement_finished.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+            try:
+                app.image_viewer.angle_measurement_clicked.disconnect()
+                app.image_viewer.angle_measurement_preview.disconnect()
+                app.image_viewer.angle_draw_cancel_requested.disconnect()
             except (TypeError, RuntimeError):
                 pass
             try:
@@ -903,6 +963,15 @@ class SubwindowLifecycleController:
         app.image_viewer.measurement_started.connect(app.measurement_coordinator.handle_measurement_started)
         app.image_viewer.measurement_updated.connect(app.measurement_coordinator.handle_measurement_updated)
         app.image_viewer.measurement_finished.connect(app.measurement_coordinator.handle_measurement_finished)
+        app.image_viewer.angle_measurement_clicked.connect(
+            app.measurement_coordinator.handle_angle_measurement_clicked
+        )
+        app.image_viewer.angle_measurement_preview.connect(
+            app.measurement_coordinator.handle_angle_measurement_preview
+        )
+        app.image_viewer.angle_draw_cancel_requested.connect(
+            app.measurement_coordinator.handle_angle_draw_cancel_requested
+        )
         if hasattr(app, 'text_annotation_coordinator') and app.text_annotation_coordinator is not None:
             app.image_viewer.text_annotation_started.connect(app.text_annotation_coordinator.handle_text_annotation_started)
             app.image_viewer.text_annotation_finished.connect(app.text_annotation_coordinator.handle_text_annotation_finished)

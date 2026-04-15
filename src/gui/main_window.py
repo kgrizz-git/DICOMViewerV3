@@ -99,6 +99,7 @@ class MainWindow(QMainWindow):
     export_requested = Signal()
     export_screenshots_requested = Signal()  # Emitted when Export Screenshots is requested
     save_mpr_dicom_requested = Signal()  # File → Save MPR as DICOM… (focused MPR pane)
+    export_cine_video_requested = Signal()  # File → Export cine as… (focused multi-frame 2D pane)
     settings_requested = Signal()
     overlay_settings_requested = Signal()  # Emitted when overlay settings dialog is requested
     tag_viewer_requested = Signal()
@@ -141,6 +142,7 @@ class MainWindow(QMainWindow):
     slice_location_lines_mode_toggled = Signal(str)  # Emitted when line mode changes ("middle" or "begin_end")
     about_this_file_requested = Signal()  # Emitted when About this File is requested
     histogram_requested = Signal()  # Emitted when Histogram dialog is requested
+    radiation_dose_report_requested = Signal()  # Tools → Radiation dose report (focused pane)
     export_roi_statistics_requested = Signal()  # Emitted when Export ROI Statistics is requested
     export_customizations_requested = Signal()  # Emitted when Export Customizations is requested
     import_customizations_requested = Signal()  # Emitted when Import Customizations is requested
@@ -198,6 +200,7 @@ class MainWindow(QMainWindow):
     mouse_mode_ellipse_roi_action: Optional[QAction] = None
     mouse_mode_rectangle_roi_action: Optional[QAction] = None
     mouse_mode_measure_action: Optional[QAction] = None
+    mouse_mode_measure_angle_action: Optional[QAction] = None
     mouse_mode_text_annotation_action: Optional[QAction] = None
     mouse_mode_arrow_annotation_action: Optional[QAction] = None
     mouse_mode_crosshair_action: Optional[QAction] = None
@@ -817,6 +820,7 @@ class MainWindow(QMainWindow):
             self.mouse_mode_ellipse_roi_action,
             self.mouse_mode_rectangle_roi_action,
             self.mouse_mode_measure_action,
+            self.mouse_mode_measure_angle_action,
             self.mouse_mode_text_annotation_action,
             self.mouse_mode_arrow_annotation_action,
             self.mouse_mode_crosshair_action,
@@ -844,6 +848,8 @@ class MainWindow(QMainWindow):
             self.mouse_mode_rectangle_roi_action.setChecked(True)
         elif mode == "measure":
             self.mouse_mode_measure_action.setChecked(True)
+        elif mode == "measure_angle":
+            self.mouse_mode_measure_angle_action.setChecked(True)
         elif mode == "text_annotation":
             self.mouse_mode_text_annotation_action.setChecked(True)
         elif mode == "arrow_annotation":
@@ -881,6 +887,8 @@ class MainWindow(QMainWindow):
             return "roi_rectangle"
         elif self.mouse_mode_measure_action.isChecked():
             return "measure"
+        elif self.mouse_mode_measure_angle_action.isChecked():
+            return "measure_angle"
         elif self.mouse_mode_text_annotation_action.isChecked():
             return "text_annotation"
         elif self.mouse_mode_arrow_annotation_action.isChecked():
@@ -912,6 +920,7 @@ class MainWindow(QMainWindow):
             self.mouse_mode_ellipse_roi_action,
             self.mouse_mode_rectangle_roi_action,
             self.mouse_mode_measure_action,
+            self.mouse_mode_measure_angle_action,
             self.mouse_mode_text_annotation_action,
             self.mouse_mode_arrow_annotation_action,
             self.mouse_mode_crosshair_action,
@@ -938,6 +947,8 @@ class MainWindow(QMainWindow):
             self.mouse_mode_rectangle_roi_action.setChecked(True)
         elif mode == "measure":
             self.mouse_mode_measure_action.setChecked(True)
+        elif mode == "measure_angle":
+            self.mouse_mode_measure_angle_action.setChecked(True)
         elif mode == "text_annotation":
             self.mouse_mode_text_annotation_action.setChecked(True)
         elif mode == "arrow_annotation":

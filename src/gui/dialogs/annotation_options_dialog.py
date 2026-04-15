@@ -105,6 +105,9 @@ class AnnotationOptionsDialog(QDialog):
         self.original_roi_default_visible_statistics = list(
             self.config_manager.get_roi_default_visible_statistics()
         )
+        self.original_roi_show_per_channel_statistics = (
+            self.config_manager.get_roi_show_per_channel_statistics()
+        )
 
     def _connect_live_preview_signals(self) -> None:
         """Connect controls that should live-update the viewer before OK (Cancel restores originals)."""
@@ -139,6 +142,7 @@ class AnnotationOptionsDialog(QDialog):
             self.max_checkbox,
             self.pixels_checkbox,
             self.area_checkbox,
+            self.roi_per_channel_checkbox,
         ):
             cb.toggled.connect(self._on_live_update)
     
@@ -243,7 +247,15 @@ class AnnotationOptionsDialog(QDialog):
         stats_layout.addWidget(self.max_checkbox)
         stats_layout.addWidget(self.pixels_checkbox)
         stats_layout.addWidget(self.area_checkbox)
-        
+
+        self.roi_per_channel_checkbox = QCheckBox(
+            "Show per-channel statistics when image is multi-channel (e.g. RGB)"
+        )
+        self.roi_per_channel_checkbox.setToolTip(
+            "When enabled, mean/std/min/max are listed per color channel for multi-channel slices."
+        )
+        stats_layout.addWidget(self.roi_per_channel_checkbox)
+
         stats_group.setLayout(stats_layout)
         left_col.addWidget(stats_group)
         left_col.addStretch()
@@ -522,6 +534,9 @@ class AnnotationOptionsDialog(QDialog):
         self.max_checkbox.setChecked("max" in default_stats)
         self.pixels_checkbox.setChecked("count" in default_stats)
         self.area_checkbox.setChecked("area" in default_stats)
+        self.roi_per_channel_checkbox.setChecked(
+            self.config_manager.get_roi_show_per_channel_statistics()
+        )
     
     def _repopulate_variant_combo(
         self,
@@ -612,6 +627,9 @@ class AnnotationOptionsDialog(QDialog):
         """Persist default ROI statistics visibility for live preview (same list as OK)."""
         self.config_manager.set_roi_default_visible_statistics(
             self._selected_stats_from_checkboxes()
+        )
+        self.config_manager.set_roi_show_per_channel_statistics(
+            self.roi_per_channel_checkbox.isChecked()
         )
 
     def _on_live_update(self) -> None:
@@ -734,7 +752,10 @@ class AnnotationOptionsDialog(QDialog):
         self.config_manager.set_roi_default_visible_statistics(
             self._selected_stats_from_checkboxes()
         )
-        
+        self.config_manager.set_roi_show_per_channel_statistics(
+            self.roi_per_channel_checkbox.isChecked()
+        )
+
         # Emit signal to notify that settings were applied
         self.settings_applied.emit()
         
@@ -765,6 +786,9 @@ class AnnotationOptionsDialog(QDialog):
         self.config_manager.set_arrow_annotation_size(self.original_arrow_annotation_size)
         self.config_manager.set_roi_default_visible_statistics(
             list(self.original_roi_default_visible_statistics)
+        )
+        self.config_manager.set_roi_show_per_channel_statistics(
+            self.original_roi_show_per_channel_statistics
         )
         self.settings_changed.emit()
         super().reject()

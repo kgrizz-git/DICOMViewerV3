@@ -19,6 +19,7 @@ from PySide6.QtCore import QPointF, QTimer, Qt
 from typing import Any, Optional, Callable, TYPE_CHECKING, Dict
 from pydicom.dataset import Dataset
 from tools.measurement_tool import MeasurementTool
+from tools.angle_measurement_items import AngleMeasurementItem
 from gui.image_viewer import ImageViewer
 from utils.dicom_utils import get_composite_series_key
 from utils.debug_flags import DEBUG_MAGNIFIER, DEBUG_MEASUREMENT_SERIES
@@ -70,6 +71,62 @@ class MeasurementCoordinator:
         # Measurement move tracking with batching
         self._measurement_move_tracking: Dict[object, Dict[str, Any]] = {}  # Tracks ongoing moves
         self._move_batch_timer: Optional[QTimer] = None  # Timer for debouncing
+
+    def handle_angle_draw_cancel_requested(self) -> None:
+        """Cancel in-progress angle placement (Esc or leaving angle mode)."""
+        if self.image_viewer.scene is not None:
+            self.measurement_tool.cancel_angle_in_progress(self.image_viewer.scene)
+
+    def handle_angle_measurement_clicked(self, pos: QPointF) -> None:
+        """One click for angle tool (P1, then P2, then P3 commits)."""
+        if self.image_viewer.scene is None:
+            return
+        if self.measurement_tool.measuring:
+            self.measurement_tool.cancel_measurement(self.image_viewer.scene)
+        current_dataset = self.get_current_dataset()
+        if current_dataset is not None:
+            study_uid = getattr(current_dataset, "StudyInstanceUID", "")
+            series_uid = get_composite_series_key(current_dataset)
+            instance_identifier = self.get_current_slice_index()
+            self.measurement_tool.set_current_slice(study_uid, series_uid, instance_identifier)
+
+        committed = self.measurement_tool.handle_angle_click(pos, self.image_viewer.scene)
+        if committed is None:
+            return
+
+        if self.undo_redo_manager:
+            from utils.undo_redo import MeasurementCommand
+
+            current_dataset = self.get_current_dataset()
+            study_uid = ""
+            series_uid = ""
+            instance_identifier = self.get_current_slice_index()
+            if current_dataset is not None:
+                study_uid = getattr(current_dataset, "StudyInstanceUID", "")
+                series_uid = get_composite_series_key(current_dataset)
+            command = MeasurementCommand(
+                self.measurement_tool,
+                "add",
+                committed,
+                self.image_viewer.scene,
+                study_uid,
+                series_uid,
+                instance_identifier,
+            )
+            self.undo_redo_manager.execute_command(command)
+            if self.update_undo_redo_state_callback:
+                self.update_undo_redo_state_callback()
+
+        committed.on_moved_callback = lambda m=committed: self._on_measurement_moved(m)
+        committed.on_mouse_release_callback = lambda m=committed: self.finalize_measurement_move_immediately(m)
+        committed.on_handle_drag_start_callback = self._on_handle_drag_start
+        committed.on_handle_drag_move_callback = self._on_handle_drag_move
+        committed.on_handle_drag_end_callback = self._on_handle_drag_end
+
+    def handle_angle_measurement_preview(self, pos: QPointF) -> None:
+        """Rubber-band update while placing an angle."""
+        if self.image_viewer.scene is not None:
+            self.measurement_tool.update_angle_preview(pos, self.image_viewer.scene)
     
     def handle_measurement_started(self, pos: QPointF) -> None:
         """
@@ -78,6 +135,8 @@ class MeasurementCoordinator:
         Args:
             pos: Starting position
         """
+        if self.image_viewer.scene is not None:
+            self.measurement_tool.cancel_angle_in_progress(self.image_viewer.scene)
         # Set current slice context before starting measurement
         current_dataset = self.get_current_dataset()
         if current_dataset is not None:
@@ -173,7 +232,7 @@ class MeasurementCoordinator:
         Handle measurement deletion request from context menu.
         
         Args:
-            measurement_item: MeasurementItem to delete
+            measurement_item: ``MeasurementItem`` or ``AngleMeasurementItem`` to delete
         """
         if self.image_viewer.scene is None:
             return
@@ -277,10 +336,11 @@ class MeasurementCoordinator:
             return
         
         from tools.measurement_tool import MeasurementItem
+
         for item in self.image_viewer.scene.items():
-            if isinstance(item, MeasurementItem):
+            if isinstance(item, (MeasurementItem, AngleMeasurementItem)):
                 # Hide/show the text item within the measurement
-                if hasattr(item, 'text_item') and item.text_item is not None:
+                if hasattr(item, "text_item") and item.text_item is not None:
                     item.text_item.setVisible(not hide)
     
     def hide_measurement_graphics(self, hide: bool) -> None:
@@ -294,8 +354,9 @@ class MeasurementCoordinator:
             return
         
         from tools.measurement_tool import MeasurementItem
+
         for item in self.image_viewer.scene.items():
-            if isinstance(item, MeasurementItem):
+            if isinstance(item, (MeasurementItem, AngleMeasurementItem)):
                 item.setVisible(not hide)
     
     def _on_measurement_moved(self, measurement_item) -> None:
@@ -309,46 +370,83 @@ class MeasurementCoordinator:
         """
         try:
             # Check if measurement is still valid
-            if measurement_item is None or not hasattr(measurement_item, 'start_point'):
+            if measurement_item is None:
                 return
-            
-            # Check if handles are being updated (handle drag in progress)
-            if hasattr(measurement_item, '_updating_handles') and measurement_item._updating_handles:
-                # This is a handle drag, track both start and end points
-                current_start = measurement_item.start_point
-                current_end = measurement_item.end_point
-                
-                # Check if measurement is being tracked for movement
-                if measurement_item not in self._measurement_move_tracking:
-                    # Store initial positions and start tracking
-                    self._measurement_move_tracking[measurement_item] = {
-                        'initial_start': current_start,
-                        'initial_end': current_end,
-                        'current_start': current_start,
-                        'current_end': current_end
-                    }
+            if isinstance(measurement_item, AngleMeasurementItem):
+                if hasattr(measurement_item, "_updating_handles") and measurement_item._updating_handles:
+                    cur = (measurement_item.p1, measurement_item.p2, measurement_item.p3)
+                    if measurement_item not in self._measurement_move_tracking:
+                        self._measurement_move_tracking[measurement_item] = {
+                            "kind": "angle",
+                            "initial_p1": cur[0],
+                            "initial_p2": cur[1],
+                            "initial_p3": cur[2],
+                            "current_p1": cur[0],
+                            "current_p2": cur[1],
+                            "current_p3": cur[2],
+                        }
+                    else:
+                        self._measurement_move_tracking[measurement_item]["current_p1"] = measurement_item.p1
+                        self._measurement_move_tracking[measurement_item]["current_p2"] = measurement_item.p2
+                        self._measurement_move_tracking[measurement_item]["current_p3"] = measurement_item.p3
                 else:
-                    # Update current positions (don't create command yet)
-                    self._measurement_move_tracking[measurement_item]['current_start'] = current_start
-                    self._measurement_move_tracking[measurement_item]['current_end'] = current_end
+                    cur = (measurement_item.p1, measurement_item.p2, measurement_item.p3)
+                    if measurement_item not in self._measurement_move_tracking:
+                        self._measurement_move_tracking[measurement_item] = {
+                            "kind": "angle",
+                            "initial_p1": cur[0],
+                            "initial_p2": cur[1],
+                            "initial_p3": cur[2],
+                            "current_p1": cur[0],
+                            "current_p2": cur[1],
+                            "current_p3": cur[2],
+                        }
+                    else:
+                        self._measurement_move_tracking[measurement_item]["current_p1"] = measurement_item.p1
+                        self._measurement_move_tracking[measurement_item]["current_p2"] = measurement_item.p2
+                        self._measurement_move_tracking[measurement_item]["current_p3"] = measurement_item.p3
+            elif hasattr(measurement_item, "start_point"):
+                # Check if handles are being updated (handle drag in progress)
+                if hasattr(measurement_item, '_updating_handles') and measurement_item._updating_handles:
+                    # This is a handle drag, track both start and end points
+                    current_start = measurement_item.start_point
+                    current_end = measurement_item.end_point
+                    
+                    # Check if measurement is being tracked for movement
+                    if measurement_item not in self._measurement_move_tracking:
+                        # Store initial positions and start tracking
+                        self._measurement_move_tracking[measurement_item] = {
+                            'kind': 'linear',
+                            'initial_start': current_start,
+                            'initial_end': current_end,
+                            'current_start': current_start,
+                            'current_end': current_end
+                        }
+                    else:
+                        # Update current positions (don't create command yet)
+                        self._measurement_move_tracking[measurement_item]['current_start'] = current_start
+                        self._measurement_move_tracking[measurement_item]['current_end'] = current_end
+                else:
+                    # This is a group move (dragging the line)
+                    current_start = measurement_item.start_point
+                    current_end = measurement_item.end_point
+                    
+                    # Check if measurement is being tracked for movement
+                    if measurement_item not in self._measurement_move_tracking:
+                        # Store initial positions and start tracking
+                        self._measurement_move_tracking[measurement_item] = {
+                            'kind': 'linear',
+                            'initial_start': current_start,
+                            'initial_end': current_end,
+                            'current_start': current_start,
+                            'current_end': current_end
+                        }
+                    else:
+                        # Update current positions (don't create command yet)
+                        self._measurement_move_tracking[measurement_item]['current_start'] = current_start
+                        self._measurement_move_tracking[measurement_item]['current_end'] = current_end
             else:
-                # This is a group move (dragging the line)
-                current_start = measurement_item.start_point
-                current_end = measurement_item.end_point
-                
-                # Check if measurement is being tracked for movement
-                if measurement_item not in self._measurement_move_tracking:
-                    # Store initial positions and start tracking
-                    self._measurement_move_tracking[measurement_item] = {
-                        'initial_start': current_start,
-                        'initial_end': current_end,
-                        'current_start': current_start,
-                        'current_end': current_end
-                    }
-                else:
-                    # Update current positions (don't create command yet)
-                    self._measurement_move_tracking[measurement_item]['current_start'] = current_start
-                    self._measurement_move_tracking[measurement_item]['current_end'] = current_end
+                return
             
             # Start/restart batch timer (200ms delay)
             if self._move_batch_timer is not None:
@@ -373,26 +471,51 @@ class MeasurementCoordinator:
             return
         
         tracking = self._measurement_move_tracking[measurement_item]
-        initial_start = tracking['initial_start']
-        initial_end = tracking['initial_end']
-        final_start = tracking['current_start']
-        final_end = tracking['current_end']
-        
-        # Only create command if position actually changed
-        if (initial_start != final_start or initial_end != final_end) and self.undo_redo_manager and self.image_viewer.scene:
-            from utils.undo_redo import MeasurementMoveCommand
-            command = MeasurementMoveCommand(
-                measurement_item,
-                initial_start,
-                initial_end,
-                final_start,
-                final_end,
-                self.image_viewer.scene
-            )
-            self.undo_redo_manager.execute_command(command)
-            # Update undo/redo state after command execution
-            if self.update_undo_redo_state_callback:
-                self.update_undo_redo_state_callback()
+        if "initial_p1" in tracking:
+            ip1 = tracking["initial_p1"]
+            ip2 = tracking["initial_p2"]
+            ip3 = tracking["initial_p3"]
+            fp1 = tracking["current_p1"]
+            fp2 = tracking["current_p2"]
+            fp3 = tracking["current_p3"]
+            changed = ip1 != fp1 or ip2 != fp2 or ip3 != fp3
+            if changed and self.undo_redo_manager and self.image_viewer.scene:
+                from utils.undo_redo import AngleMeasurementMoveCommand
+
+                command = AngleMeasurementMoveCommand(
+                    measurement_item,
+                    ip1,
+                    ip2,
+                    ip3,
+                    fp1,
+                    fp2,
+                    fp3,
+                    self.image_viewer.scene,
+                )
+                self.undo_redo_manager.execute_command(command)
+                if self.update_undo_redo_state_callback:
+                    self.update_undo_redo_state_callback()
+        else:
+            initial_start = tracking['initial_start']
+            initial_end = tracking['initial_end']
+            final_start = tracking['current_start']
+            final_end = tracking['current_end']
+            
+            # Only create command if position actually changed
+            if (initial_start != final_start or initial_end != final_end) and self.undo_redo_manager and self.image_viewer.scene:
+                from utils.undo_redo import MeasurementMoveCommand
+                command = MeasurementMoveCommand(
+                    measurement_item,
+                    initial_start,
+                    initial_end,
+                    final_start,
+                    final_end,
+                    self.image_viewer.scene
+                )
+                self.undo_redo_manager.execute_command(command)
+                # Update undo/redo state after command execution
+                if self.update_undo_redo_state_callback:
+                    self.update_undo_redo_state_callback()
         
         # Clear tracking
         del self._measurement_move_tracking[measurement_item]

@@ -80,6 +80,13 @@ def build_menu_bar(main_window) -> None:
     export_screenshots_action.triggered.connect(main_window.export_screenshots_requested.emit)
     file_menu.addAction(export_screenshots_action)
 
+    export_cine_action = QAction("Export cine as…", main_window)
+    export_cine_action.setStatusTip(
+        "Export the focused window's cine loop as GIF, AVI, or MPG (FFmpeg via imageio)"
+    )
+    export_cine_action.triggered.connect(main_window.export_cine_video_requested.emit)
+    file_menu.addAction(export_cine_action)
+
     save_mpr_dicom_action = QAction("Save MPR as DICOM…", main_window)
     save_mpr_dicom_action.triggered.connect(main_window.save_mpr_dicom_requested.emit)
     file_menu.addAction(save_mpr_dicom_action)
@@ -469,6 +476,13 @@ def build_menu_bar(main_window) -> None:
     )
     study_index_action.triggered.connect(main_window.study_index_search_requested.emit)
     tools_menu.addAction(study_index_action)
+
+    radiation_dose_action = QAction("&Radiation dose report…", main_window)
+    radiation_dose_action.setStatusTip(
+        "Show parsed CT dose metrics for a Radiation Dose SR in the focused window"
+    )
+    radiation_dose_action.triggered.connect(main_window.radiation_dose_report_requested.emit)
+    tools_menu.addAction(radiation_dose_action)
 
     about_this_file_action = QAction("About this File...", main_window)
     about_this_file_action.setMenuRole(QAction.MenuRole.NoRole)

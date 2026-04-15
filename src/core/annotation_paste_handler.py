@@ -78,9 +78,19 @@ class AnnotationPasteHandler:
                 selected_items = subwindow.image_viewer.scene.selectedItems()
                 from tools.measurement_tool import MeasurementItem
 
+                from tools.angle_measurement_items import AngleMeasurementItem
+                from tools.measurement_items import DraggableMeasurementText
+                from tools.angle_measurement_items import DraggableAngleMeasurementText
+
                 for item in selected_items:
-                    if isinstance(item, MeasurementItem):
+                    if isinstance(item, (MeasurementItem, AngleMeasurementItem)):
                         selected_measurements.append(item)
+                    elif isinstance(item, DraggableMeasurementText) and item.measurement is not None:
+                        if item.measurement not in selected_measurements:
+                            selected_measurements.append(item.measurement)
+                    elif isinstance(item, DraggableAngleMeasurementText) and item.measurement is not None:
+                        if item.measurement not in selected_measurements:
+                            selected_measurements.append(item.measurement)
             except RuntimeError:
                 pass
         return selected_measurements
@@ -368,7 +378,7 @@ class AnnotationPasteHandler:
         managers: dict[str, Any],
         meas_data: dict[str, Any],
         offset: QPointF,
-    ) -> MeasurementItem | None:
+    ) -> Any | None:
         """
         Recreate a measurement from clipboard data.
 
@@ -379,17 +389,90 @@ class AnnotationPasteHandler:
             offset: QPointF offset to apply
 
         Returns:
-            Created MeasurementItem or None
+            Created ``MeasurementItem``, ``AngleMeasurementItem``, or None
         """
+        from PySide6.QtCore import QLineF
         from PySide6.QtWidgets import QGraphicsLineItem
         from PySide6.QtGui import QPen, QColor, QFont
         from tools.measurement_tool import MeasurementItem, DraggableMeasurementText
+        from tools.angle_measurement_items import AngleMeasurementItem, DraggableAngleMeasurementText
+        from utils.bundled_fonts import make_qfont
         from utils.undo_redo import MeasurementCommand
 
         if not subwindow.image_viewer or not subwindow.image_viewer.scene:
             return None
 
         measurement_tool = managers['measurement_tool']
+
+        kind = meas_data.get("measurement_kind", "distance")
+        if kind == "angle":
+            p1 = QPointF(meas_data["p1"]["x"] + offset.x(), meas_data["p1"]["y"] + offset.y())
+            p2 = QPointF(meas_data["p2"]["x"] + offset.x(), meas_data["p2"]["y"] + offset.y())
+            p3 = QPointF(meas_data["p3"]["x"] + offset.x(), meas_data["p3"]["y"] + offset.y())
+            toff = meas_data.get("text_offset_viewport") or {"x": 0.0, "y": -30.0}
+            text_off = QPointF(float(toff["x"]), float(toff["y"]))
+
+            if self._app.config_manager:
+                line_thickness = self._app.config_manager.get_measurement_line_thickness()
+                line_color = self._app.config_manager.get_measurement_line_color()
+                font_size = self._app.config_manager.get_measurement_font_size()
+                font_color = self._app.config_manager.get_measurement_font_color()
+                font_family = self._app.config_manager.get_measurement_font_family()
+                font_variant = self._app.config_manager.get_measurement_font_variant()
+            else:
+                line_thickness = 2
+                line_color = (0, 255, 0)
+                font_size = 14
+                font_color = (255, 255, 0)
+                font_family = "IBM Plex Sans"
+                font_variant = "Bold"
+
+            line_pen = QPen(QColor(*line_color), line_thickness)
+            line_pen.setCosmetic(True)
+            line1 = QGraphicsLineItem(QLineF(p1 - p2, QPointF(0, 0)))
+            line2 = QGraphicsLineItem(QLineF(QPointF(0, 0), p3 - p2))
+            line1.setPen(line_pen)
+            line2.setPen(line_pen)
+
+            draggable = DraggableAngleMeasurementText(None, lambda _o: None)
+            draggable.setDefaultTextColor(QColor(*font_color))
+            draggable.setFont(make_qfont(font_family, font_variant, font_size))
+            draggable.setFlag(draggable.GraphicsItemFlag.ItemIgnoresTransformations, True)
+            draggable.setFlag(draggable.GraphicsItemFlag.ItemIsMovable, True)
+            draggable.setFlag(draggable.GraphicsItemFlag.ItemSendsGeometryChanges, True)
+            draggable.setFlag(draggable.GraphicsItemFlag.ItemIsSelectable, True)
+
+            angle_item = AngleMeasurementItem(p1, p2, p3, line1, line2, draggable)
+            angle_item.text_offset_viewport = text_off
+            draggable.measurement = angle_item
+
+            scene = subwindow.image_viewer.scene
+            scene.addItem(angle_item)
+            angle_item.setZValue(150)
+            scene.addItem(draggable)
+            draggable.setZValue(151)
+            angle_item.update_angle_geometry()
+
+            key = (
+                measurement_tool.current_study_uid,
+                measurement_tool.current_series_uid,
+                measurement_tool.current_instance_identifier,
+            )
+            if key not in measurement_tool.measurements:
+                measurement_tool.measurements[key] = []
+            measurement_tool.measurements[key].append(angle_item)
+
+            command = MeasurementCommand(
+                measurement_tool,
+                "add",
+                angle_item,
+                scene,
+                measurement_tool.current_study_uid,
+                measurement_tool.current_series_uid,
+                measurement_tool.current_instance_identifier,
+            )
+            self._app.undo_redo_manager.execute_command(command)
+            return angle_item
 
         start = QPointF(meas_data['start_point']['x'] + offset.x(),
                        meas_data['start_point']['y'] + offset.y())

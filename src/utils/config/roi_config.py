@@ -90,6 +90,18 @@ class ROIConfigMixin:
         self._config()["roi_default_visible_statistics"] = statistics
         self._save_config()
 
+    def get_roi_show_per_channel_statistics(self) -> bool:
+        """
+        When True (default), multi-channel (e.g. RGB) slices show per-channel ROI stats
+        in the statistics panel and overlay when available.
+        """
+        return bool(self._config().get("roi_show_per_channel_statistics", True))
+
+    def set_roi_show_per_channel_statistics(self, enabled: bool) -> None:
+        """Enable or disable per-channel ROI statistics display."""
+        self._config()["roi_show_per_channel_statistics"] = bool(enabled)
+        self._save_config()
+
     def get_roi_font_family(self) -> str:
         """Get ROI statistics overlay font family."""
         return self._config().get("roi_font_family", "IBM Plex Sans")

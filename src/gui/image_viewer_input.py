@@ -104,8 +104,9 @@ class ImageViewerInputMixin:
         Set mouse interaction mode.
         
         Args:
-            mode: "select", "roi_ellipse", "roi_rectangle", "measure", "zoom", "pan", or "auto_window_level"
+            mode: "select", "roi_ellipse", "roi_rectangle", "measure", "measure_angle", "zoom", "pan", or "auto_window_level"
         """
+        prev_mode = self.mouse_mode
         if getattr(self, "_mpr_mode_override", False):
             # In MPR mode we intentionally restrict which tools can be
             # activated to avoid half-implemented interaction types.
@@ -118,6 +119,7 @@ class ImageViewerInputMixin:
                 "roi_ellipse",
                 "roi_rectangle",
                 "measure",
+                "measure_angle",
                 "auto_window_level",
                 "text_annotation",
                 "arrow_annotation",
@@ -151,6 +153,11 @@ class ImageViewerInputMixin:
             self.setDragMode(QGraphicsView.DragMode.NoDrag)
             # Cursor set by _apply_cursor_for_mouse_mode() below
             # Reset measurement state when switching to measure mode
+            self.measuring = False
+            self.measurement_start_pos = None
+        elif mode == "measure_angle":
+            self.roi_drawing_mode = None
+            self.setDragMode(QGraphicsView.DragMode.NoDrag)
             self.measuring = False
             self.measurement_start_pos = None
         elif mode == "zoom":
@@ -201,12 +208,15 @@ class ImageViewerInputMixin:
         self._apply_cursor_for_mouse_mode()
         self._sync_cursor_to_parent_chain()
 
+        if prev_mode == "measure_angle" and mode != "measure_angle":
+            self.angle_draw_cancel_requested.emit()
+
     def _apply_cursor_for_mouse_mode(self) -> None:
         """Set cursor to the one appropriate for the current mouse_mode (used by set_mouse_mode and restore_cursor_for_current_mode)."""
         mode = self.mouse_mode
         if mode == "select":
             self.setCursor(Qt.CursorShape.ArrowCursor)
-        elif mode in ("roi_ellipse", "roi_rectangle", "measure", "magnifier", "crosshair", "arrow_annotation") or mode == "auto_window_level":
+        elif mode in ("roi_ellipse", "roi_rectangle", "measure", "measure_angle", "magnifier", "crosshair", "arrow_annotation") or mode == "auto_window_level":
             self.setCursor(Qt.CursorShape.CrossCursor)
         elif mode == "zoom":
             self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -266,6 +276,7 @@ class ImageViewerInputMixin:
                 # Check if clicking on empty space (image item or None)
                 from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsEllipseItem
                 from tools.measurement_tool import MeasurementItem, MeasurementHandle, DraggableMeasurementText
+                from tools.angle_measurement_items import AngleMeasurementItem, AngleVertexHandle, DraggableAngleMeasurementText
                 
                 is_empty_space = (item is None or item == self.image_item)
                 
@@ -280,9 +291,9 @@ class ImageViewerInputMixin:
                 if not is_roi_item:
                     is_roi_item = isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem)) and item != self.image_item
                 
-                is_measurement_item = isinstance(item, MeasurementItem)
-                is_handle = isinstance(item, MeasurementHandle)
-                is_measurement_text = isinstance(item, DraggableMeasurementText)
+                is_measurement_item = isinstance(item, (MeasurementItem, AngleMeasurementItem))
+                is_handle = isinstance(item, (MeasurementHandle, AngleVertexHandle))
+                is_measurement_text = isinstance(item, (DraggableMeasurementText, DraggableAngleMeasurementText))
                 
                 # Check for text and arrow annotation items
                 from tools.text_annotation_tool import TextAnnotationItem
@@ -295,7 +306,7 @@ class ImageViewerInputMixin:
                 if item is not None:
                     parent = item.parentItem()
                     while parent is not None:
-                        if isinstance(parent, MeasurementItem):
+                        if isinstance(parent, (MeasurementItem, AngleMeasurementItem)):
                             is_measurement_child = True
                             break
                         parent = parent.parentItem()
@@ -309,7 +320,7 @@ class ImageViewerInputMixin:
                         from tools.text_annotation_tool import TextAnnotationItem
                         from tools.arrow_annotation_tool import ArrowAnnotationItem
                         for scene_item in self.scene.items():
-                            if isinstance(scene_item, (MeasurementItem, DraggableMeasurementText, TextAnnotationItem, ArrowAnnotationItem)):
+                            if isinstance(scene_item, (MeasurementItem, AngleMeasurementItem, DraggableMeasurementText, DraggableAngleMeasurementText, TextAnnotationItem, ArrowAnnotationItem)):
                                 scene_item.setSelected(False)
                         
                         # Clear scene selection (this will visually deselect ROIs)
@@ -354,12 +365,13 @@ class ImageViewerInputMixin:
                 else:
                     # Not clicking on ROI (clicking on image item, empty space, or other items) - deselect measurements and emit signal for deselection
                     from tools.measurement_tool import MeasurementItem, DraggableMeasurementText
+                    from tools.angle_measurement_items import AngleMeasurementItem, DraggableAngleMeasurementText
                     from tools.text_annotation_tool import TextAnnotationItem
                     from tools.arrow_annotation_tool import ArrowAnnotationItem
                     if self.scene is not None:
                         # Deselect all measurements, text annotations, arrow annotations, and their text labels
                         for scene_item in self.scene.items():
-                            if isinstance(scene_item, (MeasurementItem, DraggableMeasurementText, TextAnnotationItem, ArrowAnnotationItem)):
+                            if isinstance(scene_item, (MeasurementItem, AngleMeasurementItem, DraggableMeasurementText, DraggableAngleMeasurementText, TextAnnotationItem, ArrowAnnotationItem)):
                                 scene_item.setSelected(False)
                         # Also clear scene selection to ensure everything is deselected
                         self.scene.clearSelection()
@@ -377,15 +389,16 @@ class ImageViewerInputMixin:
             # Check if it's a ROI item (QGraphicsRectItem or QGraphicsEllipseItem) but not the image item
             from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsEllipseItem
             from tools.measurement_tool import MeasurementItem, MeasurementHandle, DraggableMeasurementText
+            from tools.angle_measurement_items import AngleMeasurementItem, AngleVertexHandle, DraggableAngleMeasurementText
             
             is_roi_item = (item is not None and 
                           item != self.image_item and
                           isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem)))
             
             # Check if clicking on measurement-related items
-            is_measurement_item = isinstance(item, MeasurementItem)
-            is_handle = isinstance(item, MeasurementHandle)
-            is_measurement_text = isinstance(item, DraggableMeasurementText)
+            is_measurement_item = isinstance(item, (MeasurementItem, AngleMeasurementItem))
+            is_handle = isinstance(item, (MeasurementHandle, AngleVertexHandle))
+            is_measurement_text = isinstance(item, (DraggableMeasurementText, DraggableAngleMeasurementText))
             
             # Check for text and arrow annotation items
             from tools.text_annotation_tool import TextAnnotationItem
@@ -398,7 +411,7 @@ class ImageViewerInputMixin:
             if item is not None:
                 parent = item.parentItem()
                 while parent is not None:
-                    if isinstance(parent, MeasurementItem):
+                    if isinstance(parent, (MeasurementItem, AngleMeasurementItem)):
                         is_measurement_child = True
                         break
                     parent = parent.parentItem()
@@ -422,7 +435,7 @@ class ImageViewerInputMixin:
                 if self.scene is not None:
                     # Deselect all measurements, text annotations, arrow annotations, and their text labels
                     for scene_item in self.scene.items():
-                        if isinstance(scene_item, (MeasurementItem, DraggableMeasurementText, TextAnnotationItem, ArrowAnnotationItem)):
+                        if isinstance(scene_item, (MeasurementItem, AngleMeasurementItem, DraggableMeasurementText, DraggableAngleMeasurementText, TextAnnotationItem, ArrowAnnotationItem)):
                             scene_item.setSelected(False)
                     # Also clear scene selection to ensure everything is deselected
                     self.scene.clearSelection()
@@ -447,6 +460,8 @@ class ImageViewerInputMixin:
                         self.measuring = False
                         self.measurement_start_pos = None
                         self.measurement_finished.emit()
+                elif self.mouse_mode == "measure_angle":
+                    self.angle_measurement_clicked.emit(scene_pos)
                 elif self.mouse_mode == "magnifier":
                     # Magnifier mode - activate magnifier
                     if not self.magnifier_active:
@@ -539,9 +554,10 @@ class ImageViewerInputMixin:
                 self.zoom_mouse_moved = False  # Track if mouse actually moved
                 # Deselect measurements when clicking away
                 from tools.measurement_tool import MeasurementItem, DraggableMeasurementText
+                from tools.angle_measurement_items import AngleMeasurementItem, DraggableAngleMeasurementText
                 if self.scene is not None:
                     for scene_item in self.scene.items():
-                        if isinstance(scene_item, (MeasurementItem, DraggableMeasurementText)):
+                        if isinstance(scene_item, (MeasurementItem, AngleMeasurementItem, DraggableMeasurementText, DraggableAngleMeasurementText)):
                             scene_item.setSelected(False)
                     self.scene.clearSelection()
                 # Emit signal for clicking on image (not ROI) to allow deselection
@@ -558,6 +574,8 @@ class ImageViewerInputMixin:
                     self.measuring = False
                     self.measurement_start_pos = None
                     self.measurement_finished.emit()
+            elif self.mouse_mode == "measure_angle":
+                self.angle_measurement_clicked.emit(scene_pos)
             elif self.roi_drawing_mode:
                 # Start ROI drawing only if not clicking on existing ROI
                 self.roi_drawing_start = scene_pos
@@ -565,12 +583,14 @@ class ImageViewerInputMixin:
             else:
                 # Clicking on other items (overlay, etc.) but not on ROI or measurement - deselect measurements and allow deselection
                 # This ensures measurements are deselected when clicking on overlays or other items after dragging handles
+                from tools.measurement_tool import MeasurementItem, DraggableMeasurementText
+                from tools.angle_measurement_items import AngleMeasurementItem, DraggableAngleMeasurementText
                 from tools.text_annotation_tool import TextAnnotationItem
                 from tools.arrow_annotation_tool import ArrowAnnotationItem
                 if self.scene is not None:
                     # Deselect all measurements, text annotations, arrow annotations, and their text labels
                     for scene_item in self.scene.items():
-                        if isinstance(scene_item, (MeasurementItem, DraggableMeasurementText, TextAnnotationItem, ArrowAnnotationItem)):
+                        if isinstance(scene_item, (MeasurementItem, AngleMeasurementItem, DraggableMeasurementText, DraggableAngleMeasurementText, TextAnnotationItem, ArrowAnnotationItem)):
                             scene_item.setSelected(False)
                     # Also clear scene selection to ensure everything is deselected
                     self.scene.clearSelection()
@@ -675,6 +695,9 @@ class ImageViewerInputMixin:
             if event.buttons() & Qt.MouseButton.LeftButton:
                 scene_pos = self.mapToScene(event.position().toPoint())
                 self.measurement_updated.emit(scene_pos)
+        elif self.mouse_mode == "measure_angle":
+            scene_pos = self.mapToScene(event.position().toPoint())
+            self.angle_measurement_preview.emit(scene_pos)
         elif self.mouse_mode == "arrow_annotation" and self.arrow_annotating and self.arrow_annotation_start_pos is not None:
             # Arrow annotation mode - update arrow while dragging
             if self.dragMode() == QGraphicsView.DragMode.ScrollHandDrag:

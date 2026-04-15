@@ -305,9 +305,13 @@ class SubWindowContainer(QFrame):
             from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsEllipseItem
             try:
                 from tools.measurement_tool import MeasurementItem, DraggableMeasurementText
+                from tools.angle_measurement_items import AngleMeasurementItem, DraggableAngleMeasurementText, AngleVertexHandle
             except ImportError:
                 MeasurementItem = type(None)
                 DraggableMeasurementText = type(None)
+                AngleMeasurementItem = type(None)
+                DraggableAngleMeasurementText = type(None)
+                AngleVertexHandle = type(None)
             try:
                 from tools.text_annotation_tool import TextAnnotationItem
             except ImportError:
@@ -322,14 +326,14 @@ class SubWindowContainer(QFrame):
                 CrosshairItem = type(None)
             if isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem)) and item is not view.image_item:
                 return False
-            if isinstance(item, (MeasurementItem, DraggableMeasurementText, TextAnnotationItem, ArrowAnnotationItem)):
+            if isinstance(item, (MeasurementItem, AngleMeasurementItem, DraggableMeasurementText, DraggableAngleMeasurementText, AngleVertexHandle, TextAnnotationItem, ArrowAnnotationItem)):
                 return False
             if CrosshairItem is not type(None) and isinstance(item, CrosshairItem):
                 return False
             # Check parent chain for measurement/text/arrow (e.g. handle or child of annotation)
             parent = item.parentItem()
             while parent is not None:
-                if isinstance(parent, (MeasurementItem, DraggableMeasurementText, TextAnnotationItem, ArrowAnnotationItem)):
+                if isinstance(parent, (MeasurementItem, AngleMeasurementItem, DraggableMeasurementText, DraggableAngleMeasurementText, TextAnnotationItem, ArrowAnnotationItem)):
                     return False
                 if CrosshairItem is not type(None) and isinstance(parent, CrosshairItem):
                     return False

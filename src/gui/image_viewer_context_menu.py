@@ -36,21 +36,31 @@ def handle_mouse_press_right_button(viewer: Any, event: Any) -> bool:
     # Check if it's a ROI item or measurement item
     from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsEllipseItem
     from tools.measurement_tool import MeasurementItem
+    from tools.measurement_items import DraggableMeasurementText
+    from tools.angle_measurement_items import AngleMeasurementItem, DraggableAngleMeasurementText
 
     # Check if item is directly a ROI or measurement
     is_roi_item = isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem))
-    is_measurement_item = isinstance(item, MeasurementItem)
+    is_measurement_item = isinstance(item, (MeasurementItem, AngleMeasurementItem))
 
     # If not directly a measurement, check if it's a child of a measurement
     if not is_measurement_item and item is not None:
         # Walk up parent chain to find MeasurementItem
         parent = item.parentItem()
         while parent is not None:
-            if isinstance(parent, MeasurementItem):
+            if isinstance(parent, (MeasurementItem, AngleMeasurementItem)):
                 is_measurement_item = True
                 item = parent  # Use the parent MeasurementItem for the menu
                 break
             parent = parent.parentItem()
+
+    if not is_measurement_item and item is not None:
+        if isinstance(item, DraggableAngleMeasurementText) and item.measurement is not None:
+            is_measurement_item = True
+            item = item.measurement
+        elif isinstance(item, DraggableMeasurementText) and item.measurement is not None:
+            is_measurement_item = True
+            item = item.measurement
 
     if is_roi_item:
         # Show context menu for ROI immediately
@@ -136,6 +146,10 @@ def handle_mouse_press_right_button(viewer: Any, event: Any) -> bool:
         annotation_options_action = context_menu.addAction("Annotation Options...")
         annotation_options_action.triggered.connect(viewer.annotation_options_requested.emit)
 
+        context_menu.exec(event.globalPosition().toPoint())
+        viewer.right_mouse_context_menu_shown = True
+        return True
+
     # Check if clicking on text annotation item
     from tools.text_annotation_tool import TextAnnotationItem
     is_text_annotation_item = isinstance(item, TextAnnotationItem)
@@ -214,21 +228,31 @@ def show_image_background_context_menu_on_right_release(viewer: Any, event: Any)
 
     from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsEllipseItem
     from tools.measurement_tool import MeasurementItem
+    from tools.measurement_items import DraggableMeasurementText
+    from tools.angle_measurement_items import AngleMeasurementItem, DraggableAngleMeasurementText
 
     # Check if item is directly a ROI or measurement
     is_roi_item = isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem))
-    is_measurement_item = isinstance(item, MeasurementItem)
+    is_measurement_item = isinstance(item, (MeasurementItem, AngleMeasurementItem))
 
     # If not directly a measurement, check if it's a child of a measurement
     if not is_measurement_item and item is not None:
         # Walk up parent chain to find MeasurementItem
         parent = item.parentItem()
         while parent is not None:
-            if isinstance(parent, MeasurementItem):
+            if isinstance(parent, (MeasurementItem, AngleMeasurementItem)):
                 is_measurement_item = True
                 item = parent  # Use the parent MeasurementItem for the menu
                 break
             parent = parent.parentItem()
+
+    if not is_measurement_item and item is not None:
+        if isinstance(item, DraggableAngleMeasurementText) and item.measurement is not None:
+            is_measurement_item = True
+            item = item.measurement
+        elif isinstance(item, DraggableMeasurementText) and item.measurement is not None:
+            is_measurement_item = True
+            item = item.measurement
 
     if not is_roi_item and not is_measurement_item:
         # Show context menu for image (not on ROI)
@@ -538,6 +562,7 @@ def show_image_background_context_menu_on_right_release(viewer: Any, event: Any)
             "Rectangle ROI (R)": "roi_rectangle",
             "Crosshair ROI (H)": "crosshair",
             "Measure (M)": "measure",
+            "Angle (Shift+M)": "measure_angle",
             "Arrow Annotation (A)": "arrow_annotation",
             "Text Annotation (T)": "text_annotation",
             "Window/Level ROI (W)": "auto_window_level"
@@ -580,6 +605,21 @@ def show_image_background_context_menu_on_right_release(viewer: Any, event: Any)
         shortcut_text = "Cmd+Shift+H" if sys.platform == "darwin" else "Ctrl+Shift+H"
         histogram_action = context_menu.addAction(f"Histogram ({shortcut_text})")
         histogram_action.triggered.connect(viewer.histogram_requested.emit)
+
+        rdsr_action = context_menu.addAction("Radiation dose report…")
+        rdsr_visible = False
+        gds = getattr(viewer, "get_current_dataset_callback", None)
+        if gds is not None:
+            try:
+                _ds = gds()
+                if _ds is not None:
+                    from core.rdsr_dose_sr import is_radiation_dose_sr
+
+                    rdsr_visible = bool(is_radiation_dose_sr(_ds))
+            except Exception:
+                rdsr_visible = False
+        rdsr_action.setVisible(rdsr_visible)
+        rdsr_action.triggered.connect(viewer.radiation_dose_report_requested.emit)
 
         context_menu.addSeparator()
 
