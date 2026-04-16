@@ -1,8 +1,7 @@
 """
 Radiation dose SR (RDSR) summary dialog — read-only table, JSON/CSV export.
 
-Shows :class:`core.rdsr_dose_sr.CtRadiationDoseSummary` for the current DICOM radiation dose SR (RDSR),
-when the bounded dose parser recognizes the instance (often CT-related dose concepts).
+Shows :class:`core.rdsr_dose_sr.CtRadiationDoseSummary` for the current DICOM dose SR.
 Privacy Mode masks UIDs and device strings in the table; export offers an **Anonymize**
 checkbox that applies the same masking before writing files.
 
@@ -51,7 +50,7 @@ def _fmt(v: Any) -> str:
 
 
 class RadiationDoseReportDialog(QDialog):
-    """Modeless-capable dialog listing parsed radiation dose metrics from a dose SR (RDSR)."""
+    """Modeless-capable dialog listing CT dose metrics from a parsed dose SR."""
 
     def __init__(
         self,
@@ -66,18 +65,15 @@ class RadiationDoseReportDialog(QDialog):
         self._summary = summary
         self._get_privacy_enabled = get_privacy_enabled
         self._series_description = series_description or "Radiation dose SR"
-        self.setWindowTitle(f"Radiation dose summary — {self._series_description}")
+        self.setWindowTitle(f"Radiation dose report — {self._series_description}")
         self.setModal(False)
         self.resize(560, 420)
         self.setMinimumSize(400, 280)
 
         layout = QVBoxLayout(self)
         self._hint = QLabel(
-            "Fixed dose-summary rows extracted from this SR when the parser finds standard "
-            "identifiers and CT-style dose NUM items; many fluoroscopy RDSRs use different template "
-            "nodes, so several cells may be empty. This is not a full SR tree—use "
-            "Tools → View/Edit DICOM Tags for every element. Export may contain identifiers unless "
-            "Anonymize export is checked."
+            "Parsed CT radiation dose summary. Export may contain identifiers unless "
+            "**Anonymize export** is checked."
         )
         self._hint.setWordWrap(True)
         layout.addWidget(self._hint)
@@ -126,7 +122,6 @@ class RadiationDoseReportDialog(QDialog):
         return s
 
     def _populate_table(self) -> None:
-        """Populate the fixed schema from ``CtRadiationDoseSummary`` (MVP subset), not a generic SR walk."""
         s = self._display_summary()
         rows: list[tuple[str, str]] = [
             ("Study Instance UID", _fmt(s.study_instance_uid)),

@@ -32,6 +32,7 @@ from gui.overlay_coordinator import OverlayCoordinator
 from gui.text_annotation_coordinator import TextAnnotationCoordinator
 from gui.arrow_annotation_coordinator import ArrowAnnotationCoordinator
 from gui.fusion_coordinator import FusionCoordinator
+from core.rdsr_dose_sr import is_radiation_dose_sr
 
 from tools.roi_manager import ROIManager
 from tools.measurement_tool import MeasurementTool
@@ -86,6 +87,14 @@ def build_managers_for_subwindow(
         roi_coordinator=None,
         display_rois_for_slice=None,
     )
+
+    def open_structured_report_browser(ds):
+        """Dose SR → radiation summary dialog; other SR → flat tag viewer (until a tree SR UI exists)."""
+        if is_radiation_dose_sr(ds):
+            app._open_radiation_dose_report(idx)
+        else:
+            app.dialog_coordinator.open_tag_viewer(ds, privacy_mode=app.privacy_view_enabled)
+
     managers["slice_display_manager"] = SliceDisplayManager(
         app.dicom_processor,
         image_viewer,
@@ -99,6 +108,7 @@ def build_managers_for_subwindow(
         text_annotation_tool=managers.get("text_annotation_tool"),
         arrow_annotation_tool=managers.get("arrow_annotation_tool"),
         update_tag_viewer_callback=app._update_tag_viewer,
+        open_structured_report_browser_callback=open_structured_report_browser,
         display_rois_callback=None,
         display_measurements_callback=None,
         roi_list_panel=app.roi_list_panel,

@@ -6,6 +6,14 @@
 
 **Success criteria (2026-04-15 parent):** **M2b–M4** **implemented** on **`feature/rdsr-dose-sr`** (**`pytest`** **478**); optional formal **`RDSR1`** **`high`** **`reviewer`**/**`secops`** if not waived. **Original criteria:** On **one** git branch (no second worktree), land in order: **(M2b)** **`RDSR1-P2`** — dose SR **browse** UI + **Privacy Mode** (**`dev-docs/plans/HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md` §3.3, §3.5**); **(M2c)** **`RDSR1-P3`** — **JSON** + **CSV** export per **§3.4** (no SR write unless product answers plan **Questions**); **(M3)** **`ROI_RGB1`** per **`VIEWER_UX_FEATURES_PLAN.md` §7**; **(M4)** **`HIST_PROJ1`** per **`HISTOGRAM_PROJECTION_PIXEL_VALUES_PLAN.md`**. **CINE1** remains **`complete`** on **`feature/cine-video-export`**; integration tip for new work is **`feature/rdsr-dose-sr`** — **merge `feature/cine-video-export` into `feature/rdsr-dose-sr`** when the cine branch has commits not already contained (same lineage — **default safe**); if a future merge/rebase surfaces **non-trivial conflicts** or unrelated WIP, treat as **`open_question`** (e.g. rename tip to **`feature/viewer-backlog-20260415`**) and **stop** until user picks tip/merge strategy. **Do not push** (orchestrator / agents).
 
+### P0 — SR navigator + SR metadata (`dev-docs/TO_DO.md` L56–57) — **2026-04-15**
+
+**Success criteria:** (1) Folders that contain only SR instances (e.g. **`test-DICOM-data/pyskindose_samples/`** — four `.dcm` Philips/Siemens-style reports) show **every** SR in the **study/series navigator** (eliminate misleading **“0 studies, 0 series, N files loaded”** when files are present). (2) **SR browser / metadata (tag) view** lists **all** SR-relevant fields the app can safely enumerate (align `dicom_parser` / SR-specific walks with pydicom; fix gaps vs “not all fields”). **Constraints:** **`.venv`** per **AGENTS.md**; **backups/** with ISO-like date **before** tracked **Python** edits (verify copy); **CHANGELOG** + **`src/version.py`** patch if user-visible behavior changes; **do not push**; do **not** edit failing tests without user agreement. **Dispatch:** **`explore`** **done** → **`coder`** **done** (2026-04-15) → **`tester`** batch at slice end (**`medium`** — **done**: parent relay full **`pytest`** **487** passed ~2m42s, **`tests/test_sr_organizer_and_metadata.py`** included).
+
+### SR_UX — TO_DO L54–L56 — **2026-04-16** (user)
+
+**Success criteria:** (1) **L54 [P1]:** Clicking an **SR thumbnail** shows a clear **“No Image”** (or equivalent) in the image pane—not a blank/error state; optional **“Open SR…”** (or similar) opens the **SR browser** in a **new window** or matches existing SR-open patterns. (2) **L55 [P1]:** SR-related **dialog/title copy** is **modality-agnostic** (no CT-only framing like “CT radiation dose summary”); copy reflects **Structured Report** generically; **RDSR** may be **CT, fluoroscopy, or X-ray**; leave room for other SR SOP classes. (3) **L56 [P0]:** SR browser / tag view shows **all** SR fields the stack can safely enumerate—**examine** **`test-DICOM-data/pyskindose_samples/`** (Philips/Siemens RDSR + optional **`pydicom_test-SR.dcm`**) and **close gaps** in **`dicom_parser` / `get_all_tags` / SR walks / `tag_viewer_dialog` / metadata paths**; **do not assume CT-only SRs**. **Constraints:** **`backups/`** with ISO-like date **before** tracked **Python** edits (verify); **`CHANGELOG`** + **`src/version.py`** patch bump if user-visible; **do not push**; **do not** change failing tests without user agreement—add/adjust tests if green. **Verification:** full **`pytest`** from **`.venv`** — **488** passed ~104 s (2026-04-16 parent). **`dev-docs/TO_DO.md`** L54–56 **`[x]`**. **Dispatch:** **`researcher`** → **parent `coder`** → **`pytest`** — **slice `complete`**.
+
 ### Track A — UX / navigator backlog (ongoing)
 
 Backlog from `dev-docs/TO_DO.md`: ship P1 items (MPR navigator assign/clear follow-up, privacy-aware navigator tooltips, slice-position line thickness, **Create MPR view…** menu, **View → Fullscreen**) and queue P2 items (interactive window map, ROI resize handles, PNG/JPG export anonymization + embedded WL default, navigator slice/frame count, **duplicate-skip toast** polish, **sync-group title-bar icon**). Success: prioritized execution, minimal merge conflict, full pytest from activated venv.
@@ -52,7 +60,7 @@ Ship a **local metadata index** (background scanning, incremental refresh, path-
 
 ## Phase
 
-`multi-track` — **2026-04-15:** **`CINE1`** **M1** **`complete`** on **`feature/cine-video-export`** — **`reviewer`** **yes_with_followups**; **`tester`** full suite **468** passed (~68.7 s) + **`logs/test-ledger.md`**; **`secops`** Semgrep **0** scoped + **`assessments/security-assessment-20260415-1530-cine1.md`** (**gitleaks** not on PATH — CI **TruffleHog**). **Ship:** **user merge** **`feature/cine-video-export`** when ready. **`M2–M4` (RDSR1 / ROI_RGB1 / HIST_PROJ1):** **implementation + strict verification `complete`** on **`feature/rdsr-dose-sr`** — **RDSR1-P2+P3** + **ROI_RGB1** + **HIST_PROJ1**; **full `pytest`** **478** (~46 s). **`RDSR1` M2 `high` gates:** **reviewer PASS** + **secops re-check PASS** after formula-injection hardening (tester already satisfied). **Tip:** **`feature/rdsr-dose-sr`**; merge **`feature/cine-video-export`** when needed. **`open_question`:** merge/rebase **unsafe** only. **2026-04-14:** **MPR2** slice **`complete`** (export / verification gate **closed**): **reviewer** + **`MPR2-theme`** + **`tester`** (**439**→**441**/0 **`pytest`** after **T7**/**T3**/**T12** + display-config tests, **`logs/test-ledger.md`**) + **`secops`** targeted delta — **Semgrep** `p/security-audit` + `p/python` on scoped files **0** findings; artifact **`assessments/security-assessment-20260414-2000.md`**. **Post-ship hotfix (same day):** runtime **pydicom** **ambiguous VR OB/OW** on **Pixel Data** `(7FE0,0010)` under **ExplicitVRLittleEndian** — **parent/coder** fix: write **Pixel Data** as explicit **`OW`** **`DataElement`** in **`src/core/mpr_dicom_export.py`**, test assert, **`CHANGELOG`** **Fixed**; **user should re-smoke** **File → Save MPR as DICOM…** after the fix lands. **Track A P2 (2026-04-14 parent pass):** **`T7`** (navigator slice/frame count badge + config **`navigator_show_slice_frame_count`** + View menu), **`T3`** (window slot map **`cell_clicked`**, popup drag **top bar only**, **`main._on_window_slot_map_cell_clicked`**, **`MultiWindowLayout.set_focused_subwindow`** re-**`_arrange_subwindows`** for **1×2**/**2×1**), **`T12`** (**`ViewStateManager._user_wl_cache`**, save on series switch, restore on return, clear on **`reset_view`**, clear all on **`reset_series_tracking`**) + **`CHANGELOG`** [Unreleased] + **`default_config`** in **`config_manager.py`** — **all landed**. **Deferred this pass:** **`T4`** (ROI resize handles), **`T14`** (toolbar customization), **`SD8`** FTS5 (store migration + UI). **New user slice (same day):** **`CINE1`**, **`RDSR1`**, **`ROI_RGB1`**, **`HIST_PROJ1`** — **`planner`** pass **done** (§2/§3/§7 + **HIST_PROJ1** plan file); **M1** **`CINE1`** **`dependency_row_locked`** = **`imageio` + `imageio-ffmpeg`** (fallbacks in **Assignments**); **M1** **verification closed** **2026-04-15**; **`RDSR1` P0–P3** + **ROI_RGB1** + **HIST_PROJ1** **landed** **2026-04-15** (parent, **`pytest` 478**). **Prior backlog default** (if user resumes **T4**/**SD8** first): **`coder`** **`T4`** *or* **`planner`** **`SD8`**; **`SD8`** parallel only with second **worktree/branch** (**`NEXT_TASK_TOOL_SECOND: none`** on single branch).
+`complete` — **SR_UX** (2026-04-16): **`dev-docs/TO_DO.md`** **L54–L56** **`[x]`** — **`SR_L54_THUMB`**, **`SR_L55_COPY`**, **`SR_L56_ENUM`** **`done`**; full **`pytest tests/`** **488** passed ~104 s (parent); **`src/version.py` 0.2.2**; **CHANGELOG**; backups **`backups/*.bak-sr-ux-20260416-001331.bak`**. **Prior — SR_P0** (2026-04-15): **P0** SR navigator + SR metadata (`dev-docs/TO_DO.md` L56–57 legacy line refs) — **`SR_P0_NAV`** + **`SR_P0_META`** **`coder` `complete`** + **slice `medium` verification `closed`** (synthetic **`2.25.*`** UIDs in **`dicom_organizer`**, duplicate tag keys in **`get_all_tags`**, UI tag column shows map keys **`#2`**, **`tests/test_sr_organizer_and_metadata.py`**, **CHANGELOG** / **`src/version.py` 0.2.1`, backups); **batch `tester`:** full **`pytest tests/`** **487** passed ~2m42s (parent relay). **Prior (still true):** `multi-track` — **2026-04-15:** **`CINE1`** **M1** **`complete`** on **`feature/cine-video-export`** — **`reviewer`** **yes_with_followups**; **`tester`** full suite **468** passed (~68.7 s) + **`logs/test-ledger.md`**; **`secops`** Semgrep **0** scoped + **`assessments/security-assessment-20260415-1530-cine1.md`** (**gitleaks** not on PATH — CI **TruffleHog**). **Ship:** **user merge** **`feature/cine-video-export`** when ready. **`M2–M4` (RDSR1 / ROI_RGB1 / HIST_PROJ1):** **implementation + strict verification `complete`** on **`feature/rdsr-dose-sr`** — **RDSR1-P2+P3** + **ROI_RGB1** + **HIST_PROJ1**; **full `pytest`** **478** (~46 s). **`RDSR1` M2 `high` gates:** **reviewer PASS** + **secops re-check PASS** after formula-injection hardening (tester already satisfied). **Tip:** **`feature/rdsr-dose-sr`**; merge **`feature/cine-video-export`** when needed. **`open_question`:** merge/rebase **unsafe** only. **2026-04-14:** **MPR2** slice **`complete`** (export / verification gate **closed**): **reviewer** + **`MPR2-theme`** + **`tester`** (**439**→**441**/0 **`pytest`** after **T7**/**T3**/**T12** + display-config tests, **`logs/test-ledger.md`**) + **`secops`** targeted delta — **Semgrep** `p/security-audit` + `p/python` on scoped files **0** findings; artifact **`assessments/security-assessment-20260414-2000.md`**. **Post-ship hotfix (same day):** runtime **pydicom** **ambiguous VR OB/OW** on **Pixel Data** `(7FE0,0010)` under **ExplicitVRLittleEndian** — **parent/coder** fix: write **Pixel Data** as explicit **`OW`** **`DataElement`** in **`src/core/mpr_dicom_export.py`**, test assert, **`CHANGELOG`** **Fixed**; **user should re-smoke** **File → Save MPR as DICOM…** after the fix lands. **Track A P2 (2026-04-14 parent pass):** **`T7`** (navigator slice/frame count badge + config **`navigator_show_slice_frame_count`** + View menu), **`T3`** (window slot map **`cell_clicked`**, popup drag **top bar only**, **`main._on_window_slot_map_cell_clicked`**, **`MultiWindowLayout.set_focused_subwindow`** re-**`_arrange_subwindows`** for **1×2**/**2×1**), **`T12`** (**`ViewStateManager._user_wl_cache`**, save on series switch, restore on return, clear on **`reset_view`**, clear all on **`reset_series_tracking`**) + **`CHANGELOG`** [Unreleased] + **`default_config`** in **`config_manager.py`** — **all landed**. **Deferred this pass:** **`T4`** (ROI resize handles), **`T14`** (toolbar customization), **`SD8`** FTS5 (store migration + UI). **New user slice (same day):** **`CINE1`**, **`RDSR1`**, **`ROI_RGB1`**, **`HIST_PROJ1`** — **`planner`** pass **done** (§2/§3/§7 + **HIST_PROJ1** plan file); **M1** **`CINE1`** **`dependency_row_locked`** = **`imageio` + `imageio-ffmpeg`** (fallbacks in **Assignments**); **M1** **verification closed** **2026-04-15**; **`RDSR1` P0–P3** + **ROI_RGB1** + **HIST_PROJ1** **landed** **2026-04-15** (parent, **`pytest` 478**). **Prior backlog default** (if user resumes **T4**/**SD8** first): **`coder`** **`T4`** *or* **`planner`** **`SD8`**; **`SD8`** parallel only with second **worktree/branch** (**`NEXT_TASK_TOOL_SECOND: none`** on single branch).
 
 ## Execution mode
 
@@ -64,7 +72,7 @@ Ship a **local metadata index** (background scanning, incremental refresh, path-
 
 - Track A: `medium` (privacy/tooltips, Qt drag-drop, export pipeline, ROI scene interaction).
 - Track B: `medium` (PHI persistence on disk, threading/cancellation, path traversal safety).
-- **Slice — CINE1 / RDSR1 / ROI_RGB1 / HIST_PROJ1:** **`medium`** floor overall; **`RDSR1`** (**M2b+M2c**): treated as **`high`** PHI/browse/export sensitivity — strict closeout now **complete** (**reviewer PASS** + **secops re-check PASS**; tester previously satisfied via **`pytest`** **478**). **`ROI_RGB1` / `HIST_PROJ1`:** **`medium`** — **parent `tester`** gate met (**478**); add **`reviewer`** only if user wants extra pass. **`CINE1`**: **`medium`** — **M1** **slice `complete`** (2026-04-15): **`reviewer`** + **`tester`** + **`secops`** **closed**; optional doc reconcile §2 narrative `[ ]` vs checklist (**non-blocking**). **`dependency_row_locked`** **`imageio` + `imageio-ffmpeg`**; **pins** in **`requirements.txt`** per **Assignments**.
+- **Slice — CINE1 / RDSR1 / ROI_RGB1 / HIST_PROJ1:** **`medium`** floor overall; **`RDSR1`** (**M2b+M2c**): treated as **`high`** PHI/browse/export sensitivity — strict closeout now **complete** (**reviewer PASS** + **secops re-check PASS**; tester previously satisfied via **`pytest`** **478**). **`ROI_RGB1` / `HIST_PROJ1`:** **`medium`** — **parent `tester`** gate met (**478**); add **`reviewer`** only if user wants extra pass. **`CINE1`**: **`medium`** — **M1** **slice `complete`** (2026-04-15): **`reviewer`** + **`tester`** + **`secops`** **closed**; optional doc reconcile §2 narrative `[ ]` vs checklist (**non-blocking**). **`SR_P0` (TO_DO L56–57):** **`medium`** — **coded** 2026-04-15; **batch `tester`** gate **closed** (parent relay: **`pytest`** **487** ~2m42s, **`test_sr_organizer_and_metadata`**). **Automated** slice verification **ship-closed**; optional **`reviewer`**/**`ux`** per user. **`dependency_row_locked`** **`imageio` + `imageio-ffmpeg`**; **pins** in **`requirements.txt`** per **Assignments**. **`SR_UX` (L54–L56):** **`medium`** — SR UX + copy + enumeration; **slice-end** **`tester`** + optional **`ux`** for thumbnail/SR open smoke.
 
 ## Chain mode
 
@@ -74,9 +82,9 @@ Ship a **local metadata index** (background scanning, incremental refresh, path-
 
 | Field | Value |
 |-------|-------|
-| Orchestrator cycles (this run) | 25 |
+| Orchestrator cycles (this run) | 30 |
 | Max orchestrator cycles | 40 |
-| Specialist completions (this run) | 20 |
+| Specialist completions (this run) | 23 |
 | Max specialist completions | 120 |
 
 ## Streams
@@ -133,6 +141,11 @@ Ship a **local metadata index** (background scanning, incremental refresh, path-
 | **RDSR1** | **—** (status rollup) | **RDSR1** umbrella: **P0–P3** **`done`**; strict **M2** **`high`** closeout satisfied by **reviewer PASS** + **secops re-check PASS** (tester already satisfied via full **`pytest`** **478** ~46 s parent) | same §3 | **`done`** — strict **`RDSR1-G`** **closed** |
 | **ROI_RGB1** | **coder** (after **M2c**) | **M3** ROI stats **per channel**; **default-on when RGB present** + settings toggle per **`dev-docs/TO_DO.md` L99** | **`dev-docs/plans/VIEWER_UX_FEATURES_PLAN.md` §7** | **done** — parent (**pytest** **478**) |
 | **HIST_PROJ1** | **coder** (after **M3**) | **M4** Histogram **projection** pixels when projection on; v1 scope per plan | **`dev-docs/plans/HISTOGRAM_PROJECTION_PIXEL_VALUES_PLAN.md`** | **done** — parent (**pytest** **478**) |
+| **SR_P0_NAV** | **coder** | **P0** Navigator: **`DICOMOrganizer._organize_files_into_batch`** skips instances when **`StudyInstanceUID`** or **`SeriesInstanceUID`** is empty → SR-only folders can show **0 studies / 0 series** while **`merge_batch`** still increments **`added_file_count`** → status **“N files loaded”**. Call chain: **`loading_pipeline.run_load_pipeline`** → **`handle_additive_load`** → **`SeriesNavigator.update_series_list`**. **Fix scope:** allow SR (and similar) into studies/series with **stable synthetic UID** policy when UIDs missing (**document** behavior); optionally align status when files load but **zero** series. **Samples:** `test-DICOM-data/pyskindose_samples/*.dcm` (4) — **informational:** repo copies inspected as **HTML**, not DICOM — use **real** PySkinDose SR for manual smoke. | **`dev-docs/TO_DO.md`** L56; organizer / loading pipeline / **`series_navigator_*`** | **`done`** — **`_ensure_study_and_series_uids`** + deterministic **`2.25.*`** synthetic UIDs before grouping; backups |
+| **SR_P0_META** | **coder** | **P0** Metadata: **`DICOMParser.get_all_tags`** dedupes by **`str(tag)`**, skips **`VR == "SQ"`**, skips **`0xFFFE`** — bad for SR **`ContentSequence`** (repeated tag numbers). **Fix scope:** SR-aware tag enumeration or hierarchical display — **minimal safe fix** preferred; align with pydicom where practical. | **`dev-docs/TO_DO.md`** L57; **`src/core/dicom_parser.py`**, metadata / SR browser | **`done`** — duplicate leaves: keys **`canonical`**, **`canonical#2`**, …; **`tag`** canonical for export; privacy uses canonical group; **`metadata_panel`**, **`tag_viewer_dialog`**, **`tag_export_dialog`** show full map key; **`tests/test_sr_organizer_and_metadata.py`**; backups |
+| **SR_L54_THUMB** | **researcher** → **coder** | **P1** SR thumbnail click: image pane shows **“No Image”** (not blank/error); optional **Open SR…** → SR browser **new window** or existing open flow. | **`dev-docs/TO_DO.md`** L54; series navigator / subwindow / SR browser entrypoints | **done** — placeholder PIL + **`NoPixelPlaceholderOverlay`** + **`open_tag_viewer_callback`**; **`dev-docs/TO_DO.md`** **[x]** |
+| **SR_L55_COPY** | **researcher** → **coder** | **P1** Generalize SR dialog/title strings (**no CT-only** dose-summary wording); RDSR = CT/fluoro/X-ray; room for other SR classes. | **`dev-docs/TO_DO.md`** L55; SR/RDSR dialogs, menus | **done** — **`radiation_dose_report_dialog`**, **`main_window_menu_builder`**, **`USER_GUIDE`**; **TO_DO [x]** |
+| **SR_L56_ENUM** | **researcher** → **planner**? → **coder** | **P0** Close gaps vs **`pyskindose_samples/`** + optional **`pydicom_test-SR.dcm`** — full SR field enumeration in browser/tag/metadata (`dicom_parser`, SR walks, dialogs). **Not CT-only.** | **`dev-docs/TO_DO.md`** L56; **`src/core/dicom_parser.py`**, **`tag_viewer_dialog`**, metadata | **done** — **`file_meta.iterall()`** merge in **`get_all_tags`**; **`display_slice`** no early return on no pixels; **`TestParserFileMetaTags`**; **TO_DO [x]** |
 
 ## Git / worktree
 
@@ -155,17 +168,21 @@ Ship a **local metadata index** (background scanning, incremental refresh, path-
 
 **MPR2 slice:** **Cleared (2026-04-14)** — theme + full **`pytest`** + targeted **`secops`** (**`assessments/security-assessment-20260414-2000.md`**) — **no** open verification blockers on export slice. **Informational:** **MPR2** runtime **ambiguous VR** on save (**OB/OW** for **Pixel Data**) — **hotfix** in flight (**explicit `OW`**); not a merge **blocker** for **T7** once parent lands fix. **Informational (secops):** anonymizer scope **0010**-only; product may later tighten de-ID / UX copy if desired. **Track B** user decisions (2026-04-13) unchanged: configurable DB path; encrypted SQLite MVP; Privacy Mode for index UI.
 
-**Open questions (non-blocking):** **RDSR1** — fixture strategy: **synthetic pydicom** minimal SR preferred; else standard examples with provenance or public packs (**license** + **de-ID**). **Git (2026-04-15):** default **resolved** for queue — **one branch** **`feature/rdsr-dose-sr`**; **merge `feature/cine-video-export` → `feature/rdsr-dose-sr`** when needed to carry **CINE1** tip; **`open_question`** only if that merge/rebase is **unsafe** (then user names tip, e.g. **`feature/viewer-backlog-20260415`**). **`main`** integration order remains **user** decision. **CINE1** product/legal bullets remain informational (see **Iteration guard**).
+**Open questions (non-blocking):** **RDSR1** — fixture strategy: **synthetic pydicom** minimal SR preferred; else standard examples with provenance or public packs (**license** + **de-ID**). **Git (2026-04-15):** default **resolved** for queue — **one branch** **`feature/rdsr-dose-sr`**; **merge `feature/cine-video-export` → `feature/rdsr-dose-sr`** when needed to carry **CINE1** tip; **`open_question`** only if that merge/rebase is **unsafe** (then user names tip, e.g. **`feature/viewer-backlog-20260415`**). **`main`** integration order remains **user** decision. **CINE1** product/legal bullets remain informational (see **Iteration guard**). **`SR_P0` manual smoke:** **`test-DICOM-data/pyskindose_samples/*.dcm`** — **informational** (parent): **`dcmread`** shows **HTML**, not DICOM — **retest** SR flows with **real** PySkinDose SR files when available.
 
 ## Next action
 
-1. **Strict `RDSR1-G` closeout complete:** reviewer PASS + secops re-check PASS (formula-injection hardening validated; targeted tests + Semgrep clean in scope).
-2. **Verification posture:** tester gate already satisfied earlier via full **`pytest`** (**478**, ~46 s); no additional RDSR rerun required unless new code lands.
-3. **Backlog sequencing resumes:** prioritize pending queue (**`T4`**, **`T14`**, **`SD8`**) per user preference; keep **`NEXT_TASK_TOOL_SECOND: none`** on single-branch flow unless user authorizes a parallel worktree.
-4. **Git:** **do not push** without user request; user chooses integration/merge order to **`main`**.
+1. **SR_UX** slice **closed** (2026-04-16 parent implementation). Resume backlog per user priority: **`T4`** / **`T14`** / **`SD8`**, or optional **`Task(reviewer)`**/**`ux`** on **SR_UX** touch-set.
+2. Optional: update **`logs/test-ledger.md`** with **`pytest`** **488** relay if batch policy requires it.
+3. **Deferred:** unchanged — **`T4`** / **`T14`** / **`SD8`** until user pulls next slice.
 
 ## Session checkpoint
 
+- **2026-04-16 — SR_UX (`TO_DO` L54–L56) orchestrator kickoff:** Goal + **Assignments** **`SR_L54_THUMB`**, **`SR_L55_COPY`**, **`SR_L56_ENUM`** added; **Phase** **`running`**; **Orchestrator cycles** **29→30**. **Next:** **`Task(researcher)`** — codebase + fixture gap brief (paths only; no product edits). **Chain** **`autonomous`**. **Do not push**; **backups/** before **Python** edits on **coder** turn.
+- **2026-04-15 — SR_P0 post-`tester` (parent relay):** Full **`pytest tests/`** **487** passed ~2m42s; **`tests/test_sr_organizer_and_metadata.py`** in run. **SR_P0** slice **`medium`** verification **closed** (automated gate). **Guards:** orchestrator cycles **28→29**; specialist completions **22→23** (**+1** **`tester`**). **Next:** user priority **`T4`** / **`T14`** / **`SD8`** **or** optional **`Task(reviewer)`**/**`ux`** for **SR_P0**. **Phase** **`running`** (backlog open).
+- **2026-04-15 — SR_P0 post-`coder`:** **`SR_P0_NAV`** + **`SR_P0_META`** **`done`** — organizer synthetic UIDs, **`get_all_tags`** duplicate keys, UI tag column, **`tests/test_sr_organizer_and_metadata.py`**, **CHANGELOG** / **`0.2.1`**, backups. **Guards:** orchestrator cycles **27→28**; specialist completions **21→22** (**+1** **`coder`**). **Next:** **`Task(tester)`** full suite + ledger (**`medium`** slice gate). **Phase** **`running`** (backlog **T4**/**T14**/**SD8** still open).
+- **2026-04-15 — SR_P0 post-`explore`:** **`explore`** finished; root causes merged into **Assignments** (**`SR_P0_NAV`**, **`SR_P0_META`**) + **Handoff log**. **Guards:** orchestrator cycles **26→27**; specialist completions **20→21** (**+1** **`explore`**). **Next:** **`Task(coder)`** — synthetic UID policy + optional status + SR tag enumeration; backups/**CHANGELOG**/version per Goal. **Phase** **`running`**.
+- **2026-04-15 — SR_P0 orchestrator kickoff:** New **P0** slice (**`SR_P0_NAV`** + **`SR_P0_META`**) from **`dev-docs/TO_DO.md`** L56–57; **Phase** **`running`**; **Orchestrator cycles** **25→26**. **Next:** **`Task(explore)`** codebase map (navigator + SR metadata paths); samples **`test-DICOM-data/pyskindose_samples/`**. **Do not push**; backups before **Python** edits (**coder**).
 - **2026-04-15 — secops re-check merged, strict `RDSR1-G` closed:** Latest secops handoff confirms prior medium CSV/XLSX formula-injection finding resolved in reviewed RDSR/ROI export paths (`_safe_spreadsheet_value`/prefix guard), targeted tests **2 passed**, and targeted Semgrep clean. **Assignments/Streams:** **RDSR1** rollup moved to **`done`**; **Stream O** strict gate closed. **Global guard:** orchestrator cycles **24→25**; specialist completions **19→20** (**+1 secops completion**). **Next:** resume backlog sequencing (**`T4`** / **`T14`** / **`SD8`**) per user choice. **`NEXT_TASK_TOOL_SECOND: none`**.
 - **2026-04-15 — Single-branch queue locked (M2b→M2c→M3→M4):** User: **RDSR1-P2 + P3**, then **ROI_RGB1**, then **HIST_PROJ1**, **all on `feature/rdsr-dose-sr`**; **merge `feature/cine-video-export` → `feature/rdsr-dose-sr`** when needed (**default safe**); **`open_question`** only if merge unsafe → e.g. **`feature/viewer-backlog-20260415`**. **Streams O/P/Q** = **M2b/M2c**, **M3**, **M4**. **Risk:** **`RDSR1`** **`high`** verification **once after M2c**; **M3/M4** **`medium`** + **`tester`** after **M4**. **Execution mode:** **`full`**. **Assignments:** **`RDSR1-P2`** **ready**, **`RDSR1-P3`** queued, rollup **RDSR1** **`partial`**. **Global guard:** orchestrator cycles **21→22** (this orchestrator pass). **Next:** **`Task(coder)`** **`RDSR1-P2`**. **`NEXT_TASK_TOOL_SECOND: none`**.
 - **2026-04-15 — `RDSR1` M2 `partial` (P0/P1 done; P2/P3 + gates open):** **`coder`** completed **`RDSR1-P0` + `RDSR1-P1`** on **`feature/rdsr-dose-sr`** — `src/core/rdsr_dose_sr.py`, `tests/fixtures/dicom_rdsr/*`, `tests/scripts/generate_rdsr_dose_sr_fixtures.py`, `tests/test_rdsr_dose_sr.py` (**8** green), **CHANGELOG**, plan **P0/P1 [x]**, backups noted (**Handoff log**). **Assignments** **RDSR1** → **`partial`**; **Stream O** → **`implementation_active`**. **Global guard:** orchestrator cycles **20→21**; specialist completions **16→17** (**+1** **`coder`**). **Next:** default **`Task(coder)`** **`RDSR1-P2`** (browse + Privacy); alt **`Task(reviewer)`** on **`rdsr` touch-set** first if API review wanted. **User:** **`open_question`** — merge **`feature/cine-video-export`** vs continue **`feature/rdsr-dose-sr`** / integration order (**do not push** without user).
@@ -205,8 +222,96 @@ Ship a **local metadata index** (background scanning, incremental refresh, path-
 | T12, T14 | 0 | 4 each | W/L cache key semantics; toolbar persistence vs upgrades |
 | SD1–SD4 | 0 | 5 each | Escalate if indexer deadlocks or test flakiness without root cause |
 | SD5–SD7 | 0 | 5 each | Escalate if grouped-query performance or column-persist regressions loop without root cause |
+| **SR_P0** | 0 | 5 | Organizer UID synthesis vs study-index invariants; `get_all_tags` dedupe vs SR nested items — escalate if DICOM conformance ambiguous |
+| **SR_UX** | 0 | 5 | L54 thumbnail UX vs load errors; L55 copy audit; L56 enumeration vs fixtures — escalate if SR tree walk semantics unclear |
 
 ## Handoff log (newest first)
+
+### 2026-04-16 — parent → orchestrator (**SR_UX** slice **complete**)
+
+- **Shipped:** **L54** — **`_make_no_pixel_placeholder_pil`**, **`NoPixelPlaceholderOverlay`**, **`SliceDisplayManager`** no early **`return`** on **`dataset_to_image`** **`None`**, **`open_tag_viewer_callback`** from **`subwindow_manager_factory`** → **`dialog_coordinator.open_tag_viewer`**. **L55** — copy in **`radiation_dose_report_dialog.py`**, **`main_window_menu_builder.py`**, **`user-docs/USER_GUIDE.md`**. **L56** — **`get_all_tags`** merges **`file_meta.iterall()`**; **`tests/test_sr_organizer_and_metadata.py`** **`TestParserFileMetaTags`**; **`CHANGELOG`** / **`0.2.2`**; **TO_DO** **`[x]`** L54–56.
+- **Verify:** **`pytest tests/`** **488** passed ~104 s (Windows **`.venv`**).
+- **Backups:** **`backups/*bak-sr-ux-20260416-001331.bak`**.
+
+HANDOFF → orchestrator:
+
+- Status: done
+- Artifacts: product code + tests + **CHANGELOG** + **`src/version.py`** + **`dev-docs/TO_DO.md`** + **`plans/orchestration-state.md`** + **`user-docs/USER_GUIDE.md`**
+- Plan deltas: **SR_UX** assignments → **`done`**; **Phase** **`complete`**
+- Risks: hierarchical SR tree UI still **not** implemented (flat tags only) — product backlog if desired
+- Recommended next: **`NEXT_TASK_TOOL: none`** for **SR_UX** queue — resume **`T4`**/**`T14`**/**`SD8`** per user
+- Stream: none
+- Git: dirty (expected); **do not push** (user rule)
+- Git proposal: none
+- PR: none
+- Cloud: none
+- Merge recommendation: n/a
+
+### 2026-04-16 — orchestrator → parent (**SR_UX** slice kickoff)
+
+- **User:** Execute **`dev-docs/TO_DO.md`** **L54–L56** end-to-end (SR thumbnail placeholder + Open SR; generic SR copy; full SR enumeration vs fixtures). **Constraints:** **`backups/`** before tracked Python edits; **CHANGELOG** + **`src/version.py`** if user-visible; **do not push**; no test edits without user agreement on failures.
+- **State:** **Goal** § **SR_UX**; **Assignments** **`SR_L54_THUMB`**, **`SR_L55_COPY`**, **`SR_L56_ENUM`** **pending**; **Orchestrator cycles** **29→30**; **Session checkpoint** + **Next action** updated.
+
+HANDOFF → orchestrator:
+
+- Status: done
+- Artifacts: `plans/orchestration-state.md`
+- Plan deltas: SR_UX Goal + 3 assignment rows; Phase/Next action/Risk/session/guard
+- Risks: none
+- Recommended next: **`Task(researcher)`** — SR_UX brief (paths, string grep targets, fixture vs parser diff)
+- Stream: none
+- Git: n/a
+- Git proposal: none
+- PR: none
+- Cloud: none
+- Merge recommendation: n/a
+
+### 2026-04-15 — tester → orchestrator (parent relay: **SR_P0** batch gate)
+
+- **Executed (parent relay):** Full **`pytest tests/`** — **487** passed, **0** failed (~2m42s). New tests **`tests/test_sr_organizer_and_metadata.py`** included in collection.
+- **Disposition:** **SR_P0** slice-end **`medium`** **`tester`** gate **satisfied** — treat **automated** verification **closed** pending optional **reviewer**/**ux** if user wants extra spec or manual smoke.
+- **Follow-up:** Confirm **`logs/test-ledger.md`** contains this run if batch policy requires it (relay did not assert ledger diff).
+
+HANDOFF → orchestrator:
+
+- Status: done
+- Artifacts: relay only (no file list)
+- Plan deltas: none
+- Risks: low — regression suite green at **487**
+- Recommended next: **`Task(orchestrator)`** merge state (this pass) **or** optional **`Task(reviewer)`** / **`Task(ux)`** — then **`Task(coder)`** backlog per user (**`T4`** / **`T14`** / **`SD8`**)
+- Stream: none
+- Git: n/a (relay)
+- Git proposal: none
+- PR: none
+- Cloud: none
+- Merge recommendation: n/a
+
+### 2026-04-15 — orchestrator (parent relay: **coder** SR_P0 slice closed → verify)
+
+- **Parent ask:** Merge **`SR_P0_NAV`** / **`SR_P0_META`** to **`complete`**, refresh **Next action** / **Handoff log** / guards; **`NEXT_TASK_TOOL`** **tester** vs **none**.
+- **Executed:** **Assignments** **`SR_P0_NAV`**, **`SR_P0_META`** → **`done`** (artifacts: `src/core/dicom_organizer.py`, `src/core/dicom_parser.py`, `src/gui/metadata_panel.py`, `tag_viewer_dialog.py`, `tag_export_dialog.py`, `tests/test_sr_organizer_and_metadata.py`, **CHANGELOG**, **`src/version.py` 0.2.1**, `backups/*`). **Phase** narrative: **SR_P0 coded**; **slice verification** = **`tester`** batch (**`medium`**). **Risk** table: **`SR_P0`** **`medium`** + pending **tester**. **Guards:** orchestrator cycles **27→28**; specialist completions **21→22** (**+1** **`coder`** relay). **Blockers:** informational — **`pyskindose_samples`** may not be valid DICOM for smoke.
+- **Recommended next:** **`Task(tester)`** — full **`pytest`** + **`logs/test-ledger.md`**; then **`Task(orchestrator)`** to fan out optional **reviewer**/**ux** or backlog (**T4** / **T14** / **SD8**).
+
+### 2026-04-15 — explore → orchestrator (SR_P0_NAV + SR_P0_META map)
+
+Facts for **coder** (parent relay):
+
+- **Navigator (`SR_P0_NAV`):** `DICOMOrganizer._organize_files_into_batch` skips files when `StudyInstanceUID` or `SeriesInstanceUID` is empty → SR-only folders can show **0 studies, 0 series** while `merge_batch` still sets `added_file_count` → status **N files loaded**. Chain: `loading_pipeline.run_load_pipeline` → `handle_additive_load` → `SeriesNavigator.update_series_list`.
+- **Metadata (`SR_P0_META`):** `DICOMParser.get_all_tags` dedupes by `str(tag)`, skips `VR=="SQ"`, skips `0xFFFE` — problematic for SR `ContentSequence` (repeated tag numbers).
+
+HANDOFF → orchestrator:
+
+- Status: done
+- Artifacts: none (findings merged into `plans/orchestration-state.md`)
+- Plan deltas: **SR_P0_NAV**, **SR_P0_META** → **ready** for **coder**
+- Risks: synthetic UID policy must stay stable and not collide with real UIDs; tag-tree changes may affect privacy masking — re-check metadata privacy paths
+- Recommended next: **Task(coder)** SR_P0 slice (organizer + optional status + `get_all_tags` / SR display)
+- Stream: none
+- Git: n/a
+- Git proposal: none
+- PR: none
+- Cloud: none
+- Merge recommendation: n/a
 
 ### 2026-04-15 — orchestrator (autonomous chain: merge secops PASS and close strict `RDSR1-G`)
 

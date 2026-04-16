@@ -8,4 +8,4 @@ a "v" prefix, e.g. v3.0.0).
 See dev-docs/info/SEMANTIC_VERSIONING_GUIDE.md for version increment rules.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.2.3"

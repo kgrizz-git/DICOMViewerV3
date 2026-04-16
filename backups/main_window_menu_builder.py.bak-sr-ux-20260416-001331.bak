@@ -479,7 +479,7 @@ def build_menu_bar(main_window) -> None:
 
     radiation_dose_action = QAction("&Radiation dose report…", main_window)
     radiation_dose_action.setStatusTip(
-        "Show parsed radiation dose metrics for a Radiation Dose SR in the focused window"
+        "Show parsed CT dose metrics for a Radiation Dose SR in the focused window"
     )
     radiation_dose_action.triggered.connect(main_window.radiation_dose_report_requested.emit)
     tools_menu.addAction(radiation_dose_action)

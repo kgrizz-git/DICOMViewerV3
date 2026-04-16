@@ -68,9 +68,7 @@ class DICOMParser:
 
         Walks the full DICOM hierarchy with :meth:`~pydicom.dataset.Dataset.iterall`
         so elements inside sequences (e.g. functional groups) are included, not only
-        top-level attributes. For PS3.10 file datasets, **file meta** ``(0002,eeee)``
-        elements are merged first (via ``file_meta.iterall()``) so transfer syntax and
-        media storage tags appear alongside the main dataset attributes.
+        top-level attributes.
 
         Duplicate tag numbers (same group/element from multiple sequence items, e.g.
         SR ``ContentSequence`` leaves): each occurrence is kept under a unique dict key
@@ -99,14 +97,14 @@ class DICOMParser:
         tags: Dict[str, Any] = {}
         occurrence_by_canonical: Dict[str, int] = {}
 
-        def _consume_elem(elem) -> None:
+        for elem in self.dataset.iterall():
             tag = elem.tag
             if tag.group == 0xFFFE:
-                return
+                continue
             if elem.VR == "SQ":
-                return
+                continue
             if not include_private and tag.is_private:
-                return
+                continue
 
             canonical = str(tag)
             occ = occurrence_by_canonical.get(canonical, 0) + 1
@@ -143,18 +141,6 @@ class DICOMParser:
                     "is_private": tag.is_private,
                     "name": canonical,
                 }
-
-        # File meta information group (0002,eeee) is separate from ``Dataset.iterall()`` on PS3.10 files.
-        fm = getattr(self.dataset, "file_meta", None)
-        if fm is not None and hasattr(fm, "iterall"):
-            try:
-                for elem in fm.iterall():
-                    _consume_elem(elem)
-            except Exception:
-                pass
-
-        for elem in self.dataset.iterall():
-            _consume_elem(elem)
 
         if supplement_standard_tags:
             # Deferred import keeps module load free of tag_export_catalog (union

@@ -18,7 +18,6 @@ from typing import Optional, Callable, Any, List, Tuple, TYPE_CHECKING
 from gui.image_viewer_input import ImageViewerInputMixin
 from gui.image_viewer_view import ImageViewerViewMixin
 from gui.edge_reveal_slider_overlay import EdgeRevealSliderOverlay
-from gui.no_pixel_placeholder_overlay import NoPixelPlaceholderOverlay
 
 if TYPE_CHECKING:
     from tools.roi_manager import ROIItem
@@ -341,8 +340,6 @@ class ImageViewer(ImageViewerInputMixin, ImageViewerViewMixin, QGraphicsView):
         self._slider_overlay.slider_value_changed.connect(
             self._on_slider_overlay_value_changed
         )
-        # Bottom hint + optional "Open tag browser…" for SR / no-pixel datasets
-        self._no_pixel_placeholder_overlay = NoPixelPlaceholderOverlay(self.viewport())
         # Global on/off toggle (driven by View menu).  True by default.
         self._slice_slider_enabled: bool = True
         # Called with 0-based slice index when the user drags the overlay slider.
@@ -507,39 +504,4 @@ class ImageViewer(ImageViewerInputMixin, ImageViewerViewMixin, QGraphicsView):
         self._slider_overlay.setGeometry(
             vp.width() - overlay_width, 0, overlay_width, vp_h
         )
-
-    def set_no_pixel_placeholder_bar(
-        self,
-        active: bool,
-        *,
-        open_callback: Optional[Callable[[], None]] = None,
-        show_open_button: bool = True,
-    ) -> None:
-        """
-        Show or hide the bottom bar for structured reports without pixel data.
-
-        When ``active`` and ``show_open_button`` are True and ``open_callback`` is set,
-        the user can open the tag browser without using the main menu.
-        """
-        self._no_pixel_placeholder_overlay.configure(
-            active=active,
-            show_open_button=show_open_button,
-            open_callback=open_callback,
-        )
-        self._reposition_no_pixel_placeholder_overlay()
-        if active:
-            self._no_pixel_placeholder_overlay.raise_()
-
-    def _reposition_no_pixel_placeholder_overlay(self) -> None:
-        """Pin the SR / no-pixel hint bar to the bottom of the viewport."""
-        vp = self.viewport()
-        if vp is None:
-            return
-        bar_h = 88
-        if not self._no_pixel_placeholder_overlay.isVisible():
-            return
-        if vp.height() < bar_h + 40:
-            self._no_pixel_placeholder_overlay.setGeometry(0, 0, vp.width(), min(vp.height(), bar_h + 20))
-            return
-        self._no_pixel_placeholder_overlay.setGeometry(0, vp.height() - bar_h, vp.width(), bar_h)
 
