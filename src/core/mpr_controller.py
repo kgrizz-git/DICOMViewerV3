@@ -934,6 +934,11 @@ class MprController(QObject):
         if idx == getattr(self._app, "focused_subwindow_index", -1):
             self._app.current_dataset = overlay_dataset
             self._app.current_slice_index = slice_index
+        # Keep per-pane histogram dialog in sync with MPR scroll.
+        try:
+            self._app.dialog_coordinator.update_histogram_for_subwindow(idx)
+        except Exception:
+            pass
         _mpr_log(
             f"Display slice window={idx} "
             f"index={slice_index + 1}/{result.n_slices} "

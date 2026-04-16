@@ -681,6 +681,15 @@ class DICOMViewerApp(QObject):
         if pixel_array is None:
             return
 
+        result = data.get("mpr_result")
+        n_slices: Optional[int] = None
+        if result is not None:
+            try:
+                n_raw = int(getattr(result, "n_slices", 0) or 0)
+                n_slices = n_raw if n_raw > 0 else None
+            except (TypeError, ValueError):
+                n_slices = None
+
         wc: Optional[float] = None
         ww: Optional[float] = None
         wl_controls = getattr(self, "window_level_controls", None)
@@ -700,6 +709,7 @@ class DICOMViewerApp(QObject):
             str(data.get("current_series_uid", "") or ""),
             wc,
             ww,
+            n_slices,
         )
 
     def _clear_mpr_navigator_thumbnail(self, idx: int) -> None:
@@ -737,9 +747,17 @@ class DICOMViewerApp(QObject):
         payload = getattr(self._mpr_controller, "_detached_mpr_payload", None)
         study_uid = ""
         series_uid = ""
+        n_slices: Optional[int] = None
         if isinstance(payload, dict):
             study_uid = str(payload.get("current_study_uid", "") or "")
             series_uid = str(payload.get("current_series_uid", "") or "")
+            res = payload.get("mpr_result")
+            if res is not None:
+                try:
+                    n_raw = int(getattr(res, "n_slices", 0) or 0)
+                    n_slices = n_raw if n_raw > 0 else None
+                except (TypeError, ValueError):
+                    n_slices = None
         wc: Optional[float] = None
         ww: Optional[float] = None
         wl_controls = getattr(self, "window_level_controls", None)
@@ -758,6 +776,7 @@ class DICOMViewerApp(QObject):
             series_uid,
             wc,
             ww,
+            n_slices,
         )
 
     def _on_mpr_detached(self, former_idx: int) -> None:

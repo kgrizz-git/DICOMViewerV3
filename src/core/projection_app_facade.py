@@ -184,6 +184,7 @@ class ProjectionAppFacade:
 
         # MPR combine refresh must run even when app.current_dataset is None (MPR uses subwindow_data).
         focused_idx = app.focused_subwindow_index
+        app.dialog_coordinator.update_histogram_for_subwindow(focused_idx)
         if (
             hasattr(app, "_mpr_controller")
             and app._mpr_controller.is_mpr(focused_idx)
@@ -233,6 +234,7 @@ class ProjectionAppFacade:
         app.slice_display_manager.set_projection_type(projection_type)
         app.intensity_projection_controls_widget.set_projection_type(projection_type)
         focused_idx = app.focused_subwindow_index
+        app.dialog_coordinator.update_histogram_for_subwindow(focused_idx)
         if hasattr(app, "_mpr_controller") and app._mpr_controller.is_mpr(focused_idx):
             mp_data = app.subwindow_data.get(focused_idx)
             if mp_data is not None:
@@ -262,6 +264,7 @@ class ProjectionAppFacade:
         app.slice_display_manager.set_projection_slice_count(count)
         app.intensity_projection_controls_widget.set_slice_count(count)
         focused_idx = app.focused_subwindow_index
+        app.dialog_coordinator.update_histogram_for_subwindow(focused_idx)
         if hasattr(app, "_mpr_controller") and app._mpr_controller.is_mpr(focused_idx):
             mp_data = app.subwindow_data.get(focused_idx)
             if mp_data is not None:

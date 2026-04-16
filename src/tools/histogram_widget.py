@@ -80,6 +80,8 @@ class HistogramWidget(QWidget):
         layout.addWidget(self.canvas)
         
         self.axes = self.figure.add_subplot(111)
+        # Keep labels fully visible while minimizing unused top margin.
+        self.figure.subplots_adjust(left=0.11, right=0.98, top=0.97, bottom=0.17)
         self.axes.set_xlabel("Pixel Value")
         self.axes.set_ylabel("Frequency")
         self.axes.grid(True, alpha=0.3)

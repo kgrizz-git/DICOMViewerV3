@@ -114,9 +114,16 @@ class SubwindowLifecycleController:
         return None
 
     def get_subwindow_slice_index(self, idx: int) -> int:
-        """Get current slice index for a subwindow."""
+        """Get current displayed slice index for a subwindow.
+
+        For MPR panes this is ``mpr_slice_index``; for native panes this is
+        ``current_slice_index``.
+        """
         if idx in self.app.subwindow_data:
-            return self.app.subwindow_data[idx].get('current_slice_index', 0)
+            data = self.app.subwindow_data[idx]
+            if bool(data.get("is_mpr")):
+                return int(data.get("mpr_slice_index", data.get("current_slice_index", 0)) or 0)
+            return int(data.get("current_slice_index", 0) or 0)
         return 0
 
     def get_subwindow_slice_display_manager(self, idx: int):
@@ -204,15 +211,8 @@ class SubwindowLifecycleController:
             'get_series_uid': lambda i=idx: self.get_subwindow_series_uid(i),
             'get_series_datasets': lambda i=idx: self.get_subwindow_datasets(i),
             'get_all_studies': lambda: getattr(self.app, 'current_studies', {}),
-            'get_projection_enabled': (
-                (lambda: bool(sdm.projection_enabled)) if sdm is not None else (lambda: False)
-            ),
-            'get_projection_type': (
-                (lambda: str(sdm.projection_type)) if sdm is not None else (lambda: "aip")
-            ),
-            'get_projection_slice_count': (
-                (lambda: int(sdm.projection_slice_count)) if sdm is not None else (lambda: 4)
-            ),
+            'get_projection_enabled': lambda i=idx: self._get_histogram_projection_enabled(i),
+            'get_current_pixel_array': lambda i=idx: self._get_histogram_current_pixel_array(i),
             'get_projection_pixel_array': lambda i=idx: self._get_histogram_projection_pixel_array(
                 i
             ),
@@ -220,12 +220,80 @@ class SubwindowLifecycleController:
             'set_histogram_use_projection_pixels': self.app.config_manager.set_histogram_use_projection_pixels,
         }
 
+    def _get_histogram_projection_enabled(self, idx: int) -> bool:
+        """Return whether projection/combine is active for histogram in subwindow ``idx``."""
+        data = self.app.subwindow_data.get(idx, {})
+        if bool(data.get("is_mpr")):
+            return bool(data.get("mpr_combine_enabled", False))
+        sdm = self.app.subwindow_managers.get(idx, {}).get("slice_display_manager")
+        return bool(getattr(sdm, "projection_enabled", False)) if sdm is not None else False
+
+    def _get_histogram_current_pixel_array(self, idx: int):
+        """
+        Return raw pixels of what the pane is currently showing, without forcing projection mode.
+        For MPR panes this is the uncombined current MPR slice.
+        """
+        import numpy as np
+
+        data = self.app.subwindow_data.get(idx, {})
+        if not bool(data.get("is_mpr")):
+            return None
+        result = data.get("mpr_result")
+        if result is None:
+            return None
+        try:
+            slice_index = int(data.get("mpr_slice_index", data.get("current_slice_index", 0)) or 0)
+        except (TypeError, ValueError):
+            slice_index = 0
+        if slice_index < 0 or slice_index >= int(getattr(result, "n_slices", 0) or 0):
+            return None
+        try:
+            from core.mpr_controller import apply_mpr_stack_combine
+
+            arr = apply_mpr_stack_combine(
+                result.slices,
+                slice_index,
+                enabled=False,
+                mode=str(data.get("mpr_combine_mode", "aip") or "aip"),
+                n_planes=int(data.get("mpr_combine_slice_count", 4) or 4),
+            )
+            return arr if isinstance(arr, np.ndarray) else None
+        except Exception:
+            return None
+
     def _get_histogram_projection_pixel_array(self, idx: int):
         """
         Raw 2D numpy projection for histogram when intensity projection is enabled
         for subwindow ``idx``. Returns ``None`` if not applicable.
         """
         import numpy as np
+
+        data = self.app.subwindow_data.get(idx, {})
+        if bool(data.get("is_mpr")):
+            if not bool(data.get("mpr_combine_enabled", False)):
+                return None
+            result = data.get("mpr_result")
+            if result is None:
+                return None
+            try:
+                slice_index = int(data.get("mpr_slice_index", data.get("current_slice_index", 0)) or 0)
+            except (TypeError, ValueError):
+                return None
+            if slice_index < 0 or slice_index >= int(getattr(result, "n_slices", 0) or 0):
+                return None
+            try:
+                from core.mpr_controller import apply_mpr_stack_combine
+
+                arr = apply_mpr_stack_combine(
+                    result.slices,
+                    slice_index,
+                    enabled=True,
+                    mode=str(data.get("mpr_combine_mode", "aip") or "aip"),
+                    n_planes=int(data.get("mpr_combine_slice_count", 4) or 4),
+                )
+                return arr if isinstance(arr, np.ndarray) else None
+            except Exception:
+                return None
 
         if idx not in self.app.subwindow_managers:
             return None

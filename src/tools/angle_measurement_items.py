@@ -22,7 +22,7 @@ import math
 from typing import Callable, Optional
 
 from PySide6.QtCore import Qt, QPointF, QLineF, QRectF
-from PySide6.QtGui import QBrush, QColor, QPainter, QPainterPath, QPen
+from PySide6.QtGui import QBrush, QColor, QPainter, QPainterPath, QPainterPathStroker, QPen
 from PySide6.QtWidgets import (
     QGraphicsEllipseItem,
     QGraphicsItem,

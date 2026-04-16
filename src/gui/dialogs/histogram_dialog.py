@@ -75,6 +75,7 @@ class HistogramDialog(QDialog):
         get_restore_geometry: Optional[HistogramGeometryFn] = None,
         save_geometry_callback: Optional[HistogramSaveGeometryFn] = None,
         get_projection_enabled: Optional[HistogramBoolFn] = None,
+        get_current_pixel_array: Optional[HistogramProjectionPixelsFn] = None,
         get_projection_pixel_array: Optional[HistogramProjectionPixelsFn] = None,
         get_histogram_use_projection_pixels: Optional[HistogramBoolFn] = None,
         set_histogram_use_projection_pixels: Optional[HistogramVoidBoolFn] = None,
@@ -117,6 +118,7 @@ class HistogramDialog(QDialog):
         self.get_series_datasets = get_series_datasets
         self.get_all_studies = get_all_studies
         self.get_projection_enabled = get_projection_enabled
+        self.get_current_pixel_array = get_current_pixel_array
         self.get_projection_pixel_array = get_projection_pixel_array
         self.get_histogram_use_projection_pixels = get_histogram_use_projection_pixels
         self.set_histogram_use_projection_pixels = set_histogram_use_projection_pixels
@@ -298,17 +300,23 @@ class HistogramDialog(QDialog):
         
         # Get pixel array for current frame/slice (or projection slab when enabled)
         pixel_array = None
-        if is_multiframe(dataset):
-            pixel_array = get_frame_pixel_array(dataset, slice_index)
-        else:
-            pixel_array = DICOMProcessor.get_pixel_array(dataset)
-            # For single-frame, pixel_array might be 2D (height, width) or 3D (frames, height, width)
-            if pixel_array is not None and len(pixel_array.shape) == 3:
-                # Multi-frame but not detected as such, use first frame
-                if slice_index < pixel_array.shape[0]:
-                    pixel_array = pixel_array[slice_index]
-                else:
-                    pixel_array = pixel_array[0]
+        if self.get_current_pixel_array is not None:
+            try:
+                pixel_array = self.get_current_pixel_array()
+            except Exception:
+                pixel_array = None
+        if pixel_array is None:
+            if is_multiframe(dataset):
+                pixel_array = get_frame_pixel_array(dataset, slice_index)
+            else:
+                pixel_array = DICOMProcessor.get_pixel_array(dataset)
+                # For single-frame, pixel_array might be 2D (height, width) or 3D (frames, height, width)
+                if pixel_array is not None and len(pixel_array.shape) == 3:
+                    # Multi-frame but not detected as such, use first frame
+                    if slice_index < pixel_array.shape[0]:
+                        pixel_array = pixel_array[slice_index]
+                    else:
+                        pixel_array = pixel_array[0]
 
         projection_active = False
         if self.get_projection_enabled is not None:
@@ -316,6 +324,15 @@ class HistogramDialog(QDialog):
                 projection_active = bool(self.get_projection_enabled())
             except Exception:
                 projection_active = False
+        if not projection_active and self._projection_checkbox.isChecked():
+            # Projection is no longer active in the pane; force histogram mode back
+            # to per-slice pixels so UI state stays truthful and persistent config
+            # does not retain an unusable projection-only selection.
+            self._projection_checkbox.blockSignals(True)
+            self._projection_checkbox.setChecked(False)
+            self._projection_checkbox.blockSignals(False)
+            if self.set_histogram_use_projection_pixels is not None:
+                self.set_histogram_use_projection_pixels(False)
         self._projection_checkbox.setEnabled(projection_active)
         use_proj_pixels = bool(self._projection_checkbox.isChecked()) and projection_active
         if (
