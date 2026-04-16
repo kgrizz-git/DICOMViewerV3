@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from typing import cast
 
 from pydicom import Dataset
 from pydicom.dataset import FileMetaDataset
@@ -27,6 +28,7 @@ from pydicom.filewriter import dcmwrite
 from pydicom.sequence import Sequence
 from pydicom.uid import (
     ComprehensiveSRStorage,
+    EnhancedXRayRadiationDoseSRStorage,
     ExplicitVRLittleEndian,
     PYDICOM_IMPLEMENTATION_UID,
     XRayRadiationDoseSRStorage,
@@ -68,6 +70,28 @@ def _irradiation_event_container() -> Dataset:
     )
     d.RelationshipType = "CONTAINS"
     d.ContentSequence = Sequence([])
+    return d
+
+
+def _irradiation_event_xray_container_with_geometry() -> Dataset:
+    d = Dataset()
+    d.ValueType = "CONTAINER"
+    d.ContinuityOfContent = "SEPARATE"
+    d.ConceptNameCodeSequence = Sequence(
+        [_code_item("113706", "DCM", "Irradiation Event X-Ray Data")]
+    )
+    d.RelationshipType = "CONTAINS"
+    d.ContentSequence = Sequence(
+        [
+            _num_item("112011", "DCM", 27.5, "deg", "degree"),
+            _num_item("112012", "DCM", -5.5, "deg", "degree"),
+            _num_item("113750", "DCM", 980.0, "mm", "millimeter"),
+            _num_item("113748", "DCM", 650.0, "mm", "millimeter"),
+            _num_item("113790", "DCM", 1500.0, "mm2", "square millimeter"),
+            _num_item("122130", "DCM", 22.5, "Gy.cm2", "gray square centimeter"),
+            _num_item("113733", "DCM", 75.0, "kV", "kilovolt"),
+        ]
+    )
     return d
 
 
@@ -122,6 +146,21 @@ def build_synthetic_ct_dose_sr(*, sop_class_uid: str) -> Dataset:
     return ds
 
 
+def build_synthetic_enhanced_xray_rdsr() -> Dataset:
+    """Build a minimal Enhanced X-Ray Radiation Dose SR fixture with one event and geometry fields."""
+    ds = build_synthetic_ct_dose_sr(sop_class_uid=str(EnhancedXRayRadiationDoseSRStorage))
+    ds.SeriesDescription = "Synthetic Enhanced X-Ray dose SR (test fixture)"
+    root = cast(Dataset, ds.ContentSequence[0])
+    root.ContentSequence = Sequence(
+        [
+            _irradiation_event_xray_container_with_geometry(),
+            _num_item("113838", "DCM", 120.0, "mGy.cm", "milliGray centimeter"),
+        ]
+    )
+    ds.file_meta.MediaStorageSOPClassUID = ds.SOPClassUID
+    return ds
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -136,9 +175,13 @@ def main() -> int:
     fixtures = [
         ("synthetic_ct_dose_xray_rdsr.dcm", str(XRayRadiationDoseSRStorage)),
         ("synthetic_ct_dose_comprehensive_sr.dcm", str(ComprehensiveSRStorage)),
+        ("synthetic_enhanced_xray_rdsr.dcm", str(EnhancedXRayRadiationDoseSRStorage)),
     ]
     for name, sop in fixtures:
-        ds = build_synthetic_ct_dose_sr(sop_class_uid=sop)
+        if sop == str(EnhancedXRayRadiationDoseSRStorage):
+            ds = build_synthetic_enhanced_xray_rdsr()
+        else:
+            ds = build_synthetic_ct_dose_sr(sop_class_uid=sop)
         path = os.path.join(out_dir, name)
         dcmwrite(path, ds, write_like_original=False)
         size = os.path.getsize(path)

@@ -66,7 +66,7 @@ class ImageViewer(ImageViewerInputMixin, ImageViewerViewMixin, QGraphicsView):
     cine_stop_requested = Signal()  # Emitted when cine stop is requested from context menu
     cine_loop_toggled = Signal(bool)  # Emitted when cine loop is toggled from context menu (True = enabled)
     histogram_requested = Signal()  # Emitted when histogram dialog is requested from context menu
-    radiation_dose_report_requested = Signal()  # Context menu: RDSR / dose SR summary for current file
+    structured_report_browser_requested = Signal()  # Context menu: Structured Report browser for SR
     quick_window_level_requested = Signal()  # Emitted when Quick Window/Level dialog is requested (context menu or shortcut Q)
     export_roi_statistics_requested = Signal()  # Emitted when Export ROI Statistics is requested from context menu
     measurement_started = Signal(QPointF)  # Emitted when measurement starts (start position)

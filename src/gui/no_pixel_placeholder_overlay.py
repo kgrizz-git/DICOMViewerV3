@@ -41,8 +41,8 @@ class NoPixelPlaceholderOverlay(QWidget):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(8, 4, 8, 4)
         self._hint = QLabel(
-            "Structured Report — no pixel image. Use the button for the dose summary (RDSR) or "
-            "full tag list; Tools → Radiation dose report / View/Edit DICOM Tags are the same entry points."
+            "Structured Report — no pixel image. Use the button for the SR browser (document tree, "
+            "dose events, summary) or the flat tag list; Tools → Structured Report… matches this action."
         )
         self._hint.setWordWrap(True)
         self._hint.setAlignment(Qt.AlignmentFlag.AlignCenter)

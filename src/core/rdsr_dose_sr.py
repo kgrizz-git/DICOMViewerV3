@@ -15,7 +15,7 @@ vendor templates may yield partial summaries without error.
 **DICOM references (concept codes, DCM):** PS3.16 **DCM** codes **113830** (CTDIvol), **113838**
 (DLP), **113835** (size-specific dose estimate), **113819** (CT irradiation event data container).
 
-See ``dev-docs/plans/HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md`` §3 for scope and MVP limits.
+See ``dev-docs/plans/supporting/HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md`` §3 for scope and MVP limits.
 """
 
 from __future__ import annotations

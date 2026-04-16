@@ -12,6 +12,7 @@ CT dose family) **ContentSequence** walks only — **not** for clinical validati
 |------|-------------|
 | **`synthetic_ct_dose_xray_rdsr.dcm`** | **Synthetic** SR: **SOP Class** = X-Ray Radiation Dose SR Storage (`1.2.840.10008.5.1.4.1.1.88.67`). |
 | **`synthetic_ct_dose_comprehensive_sr.dcm`** | **Synthetic** SR: **SOP Class** = Comprehensive SR Storage (`1.2.840.10008.5.1.4.1.1.88.33`) with the same dose-related **NUM** content (parser **secondary** detection path). |
+| **`synthetic_enhanced_xray_rdsr.dcm`** | **Synthetic** SR: **SOP Class** = Enhanced X-Ray Radiation Dose SR Storage (`1.2.840.10008.5.1.4.1.1.88.76`) with one event containing primary/secondary angles, source-detector distance, and collimated field area. |
 
 ## Provenance
 
@@ -45,5 +46,5 @@ CT dose family) **ContentSequence** walks only — **not** for clinical validati
 ## SecOps / PHI
 
 - **No PHI in git:** fixtures are synthetic. Any replacement with real SR must follow the
-  checklist in **`dev-docs/plans/HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md`** §3.6 (provenance, license,
+  checklist in **`dev-docs/plans/supporting/HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md`** §3.6 (provenance, license,
   de-ID, size) plus a **secops** spot-check before merge.

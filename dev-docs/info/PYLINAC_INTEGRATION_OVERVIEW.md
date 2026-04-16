@@ -4,7 +4,7 @@
 
 This document outlines how **pylinac** could be integrated into DICOM Viewer V3 to provide **automated QA analysis of phantoms**, with a primary focus on **ACR CT/CBCT and MRI phantoms** and secondary support for **CatPhan** models.
 
-**Actionable Stage 1 checklist:** [PYLINAC_AND_AUTOMATED_QA_STAGE1_PLAN.md](../plans/PYLINAC_AND_AUTOMATED_QA_STAGE1_PLAN.md).
+**Actionable Stage 1 checklist:** [PYLINAC_AND_AUTOMATED_QA_STAGE1_PLAN.md](../plans/completed/PYLINAC_AND_AUTOMATED_QA_STAGE1_PLAN.md).
 
 **Scan-extent tolerance + reproducibility metadata (planned implementation):** [PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md](../plans/PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md).
 
@@ -63,7 +63,7 @@ Compared against pylinac’s public docs TOC (wording may vary slightly by relea
 - **ACR-class capabilities not yet exposed in UI/runner surface**: zip-based load paths (`from_zip`), broader `analyze(...)` tuning knobs (e.g. x/y/angle and ROI/scale adjustments where supported), and subimage plotting/saving helpers (e.g. `plot_analyzed_subimage`, `save_analyzed_subimage`) as first-class app features.
 - **Topic/ancillary tooling not surfaced as app features**: image/gamma/MTF/contrast/noise-power utilities, XIM handling, DICOM conversion helpers, and image/plan generators remain library-level tools rather than integrated user workflows.
 
-**Related:** phased checklist and ordering of near-term work—[PYLINAC_AND_AUTOMATED_QA_STAGE1_PLAN.md](../plans/PYLINAC_AND_AUTOMATED_QA_STAGE1_PLAN.md) (Stage 1 plan; not a duplicate of this status section).
+**Related:** phased checklist and ordering of near-term work—[PYLINAC_AND_AUTOMATED_QA_STAGE1_PLAN.md](../plans/completed/PYLINAC_AND_AUTOMATED_QA_STAGE1_PLAN.md) (Stage 1 plan; not a duplicate of this status section).
 
 ---
 

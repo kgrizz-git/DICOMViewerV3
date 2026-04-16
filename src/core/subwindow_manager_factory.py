@@ -32,7 +32,7 @@ from gui.overlay_coordinator import OverlayCoordinator
 from gui.text_annotation_coordinator import TextAnnotationCoordinator
 from gui.arrow_annotation_coordinator import ArrowAnnotationCoordinator
 from gui.fusion_coordinator import FusionCoordinator
-from core.rdsr_dose_sr import is_radiation_dose_sr
+from core.sr_sop_classes import is_structured_report_dataset
 
 from tools.roi_manager import ROIManager
 from tools.measurement_tool import MeasurementTool
@@ -89,9 +89,15 @@ def build_managers_for_subwindow(
     )
 
     def open_structured_report_browser(ds):
-        """Dose SR → radiation summary dialog; other SR → flat tag viewer (until a tree SR UI exists)."""
-        if is_radiation_dose_sr(ds):
-            app._open_radiation_dose_report(idx)
+        """SR storage / Modality SR → structured report browser; otherwise flat tag viewer."""
+        if is_structured_report_dataset(ds):
+            app.dialog_coordinator.open_structured_report_browser(
+                ds,
+                get_privacy_enabled=app.config_manager.get_privacy_view,
+                open_tag_viewer_callback=lambda d: app.dialog_coordinator.open_tag_viewer(
+                    d, privacy_mode=app.config_manager.get_privacy_view()
+                ),
+            )
         else:
             app.dialog_coordinator.open_tag_viewer(ds, privacy_mode=app.privacy_view_enabled)
 

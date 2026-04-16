@@ -161,7 +161,7 @@ class SliceDisplayManager:
             overlay_manager: Overlay manager
             view_state_manager: View state manager for coordination
             update_tag_viewer_callback: Optional callback to update tag viewer
-            open_structured_report_browser_callback: Optional callback ``(dataset,)`` — e.g. dose SR
+            open_structured_report_browser_callback: Optional callback ``(dataset,)`` — SR browser or tag viewer
                 opens the radiation **summary** dialog; other SR may open the tag viewer until a tree UI exists.
             display_rois_callback: Optional callback to display ROIs
             display_measurements_callback: Optional callback to display measurements

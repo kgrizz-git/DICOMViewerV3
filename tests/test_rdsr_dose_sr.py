@@ -39,12 +39,23 @@ def comprehensive_sr_ds() -> Dataset:
     return pydicom.dcmread(path)
 
 
+@pytest.fixture(scope="module")
+def enhanced_xray_rdsr_ds() -> Dataset:
+    path = _fixture_path("synthetic_enhanced_xray_rdsr.dcm")
+    assert path.is_file(), f"missing fixture {path}"
+    return pydicom.dcmread(path)
+
+
 def test_is_radiation_dose_sr_xray_rdsr_fixture(xray_rdsr_ds: Dataset) -> None:
     assert is_radiation_dose_sr(xray_rdsr_ds) is True
 
 
 def test_is_radiation_dose_sr_comprehensive_fixture(comprehensive_sr_ds: Dataset) -> None:
     assert is_radiation_dose_sr(comprehensive_sr_ds) is True
+
+
+def test_is_radiation_dose_sr_enhanced_fixture(enhanced_xray_rdsr_ds: Dataset) -> None:
+    assert is_radiation_dose_sr(enhanced_xray_rdsr_ds) is True
 
 
 def test_parse_xray_rdsr_fixture_values(xray_rdsr_ds: Dataset) -> None:
@@ -96,6 +107,7 @@ def test_fixture_files_small_policy() -> None:
     for name in (
         "synthetic_ct_dose_xray_rdsr.dcm",
         "synthetic_ct_dose_comprehensive_sr.dcm",
+        "synthetic_enhanced_xray_rdsr.dcm",
     ):
         p = _fixture_path(name)
         assert p.stat().st_size <= 512 * 1024

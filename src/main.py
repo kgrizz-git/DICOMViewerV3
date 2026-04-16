@@ -130,7 +130,6 @@ from gui.dialogs.tag_export_union_worker import TagExportUnionWorker
 from gui.dialogs.disclaimer_dialog import DisclaimerDialog
 from gui.dialogs.cine_export_dialog import CineExportDialog
 from gui.dialogs.cine_export_encode_thread import CineVideoEncodeThread
-from gui.dialogs.radiation_dose_report_dialog import RadiationDoseReportDialog
 
 # Import fusion components
 from core.fusion_processor import FusionProcessor
@@ -2654,16 +2653,12 @@ class DICOMViewerApp(QObject):
         """File → Save MPR as DICOM… — requires focused subwindow in MPR mode."""
         self._mpr_controller.prompt_save_mpr_as_dicom()
 
-    def _open_radiation_dose_report(self, subwindow_idx: Optional[int] = None) -> None:
+    def _open_structured_report_browser(self, subwindow_idx: Optional[int] = None) -> None:
         """
-        Tools → Radiation dose report… — parse the focused (or given) pane's current
-        dataset when it is a Radiation Dose SR / dose-bearing SR (see ``rdsr_dose_sr``).
+        Tools → Structured Report… — open the SR document browser for the focused pane's
+        current dataset when it is a Structured Report (SR storage class or Modality SR).
         """
-        from core.rdsr_dose_sr import (
-            RadiationDoseSrParseError,
-            is_radiation_dose_sr,
-            parse_ct_radiation_dose_summary,
-        )
+        from core.sr_sop_classes import is_structured_report_dataset
 
         idx = (
             subwindow_idx
@@ -2676,46 +2671,32 @@ class DICOMViewerApp(QObject):
         if data.get("is_mpr"):
             QMessageBox.information(
                 self.main_window,
-                "Radiation dose report",
-                "MPR views do not carry an SR dose object. Switch to a 2D SR instance.",
+                "Structured Report",
+                "MPR views do not carry the SR document. Switch to a 2D SR instance.",
             )
             return
         ds = self._get_subwindow_dataset(idx)
         if ds is None:
             QMessageBox.information(
                 self.main_window,
-                "Radiation dose report",
+                "Structured Report",
                 "No DICOM file is loaded in this window.",
             )
             return
-        if not is_radiation_dose_sr(ds):
+        if not is_structured_report_dataset(ds):
             QMessageBox.information(
                 self.main_window,
-                "Radiation dose report",
-                "The current file is not a recognized radiation dose structured report.",
+                "Structured Report",
+                "The current file is not a Structured Report (SR storage class or Modality SR).",
             )
             return
-        try:
-            summary = parse_ct_radiation_dose_summary(ds)
-        except RadiationDoseSrParseError as e:
-            QMessageBox.warning(
-                self.main_window,
-                "Radiation dose report",
-                f"Could not parse dose content:\n{e}",
-            )
-            return
-        raw_desc = getattr(ds, "SeriesDescription", None) or "Dose SR"
-        desc = str(raw_desc).strip() or "Dose SR"
-        dlg = RadiationDoseReportDialog(
-            self.main_window,
-            summary,
+        self.dialog_coordinator.open_structured_report_browser(
+            ds,
             get_privacy_enabled=self.config_manager.get_privacy_view,
-            main_window=self.main_window,
-            series_description=desc[:120],
+            open_tag_viewer_callback=lambda d: self.dialog_coordinator.open_tag_viewer(
+                d, privacy_mode=self.config_manager.get_privacy_view()
+            ),
         )
-        dlg.show()
-        dlg.raise_()
-        dlg.activateWindow()
 
     def _on_export_cine_video(self) -> None:
         """

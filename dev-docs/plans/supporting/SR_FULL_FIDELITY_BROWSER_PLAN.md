@@ -1,7 +1,7 @@
 # SR full-fidelity browser and RDSR per-event presentation — implementation plan
 
 **Status:** Draft for implementation — **product decisions locked** (revision below, 2026-04-17)  
-**Related:** `dev-docs/TO_DO.md` (UX / SR full fidelity), `dev-docs/plans/HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md` §3 (existing RDSR MVP), `src/core/rdsr_dose_sr.py`, `src/gui/dialogs/radiation_dose_report_dialog.py`, `src/core/tag_export_writer.py` / `openpyxl` (reuse for **.xlsx** export), `test-DICOM-data/pyskindose_samples/` (local samples; gitignored — **CI fixtures** under `tests/fixtures/`, see §11)
+**Related:** `dev-docs/TO_DO.md` (UX / SR full fidelity), `dev-docs/plans/supporting/HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md` §3 (existing RDSR MVP), `src/core/rdsr_dose_sr.py`, `src/gui/dialogs/radiation_dose_report_dialog.py`, `src/core/tag_export_writer.py` / `openpyxl` (reuse for **.xlsx** export), `test-DICOM-data/pyskindose_samples/` (local samples; gitignored — **CI fixtures** under `tests/fixtures/`, see §11)
 
 ---
 

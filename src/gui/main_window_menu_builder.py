@@ -477,12 +477,12 @@ def build_menu_bar(main_window) -> None:
     study_index_action.triggered.connect(main_window.study_index_search_requested.emit)
     tools_menu.addAction(study_index_action)
 
-    radiation_dose_action = QAction("&Radiation dose report…", main_window)
-    radiation_dose_action.setStatusTip(
-        "Show parsed radiation dose metrics for a Radiation Dose SR in the focused window"
+    sr_browser_action = QAction("&Structured Report…", main_window)
+    sr_browser_action.setStatusTip(
+        "Open the Structured Report browser (SR tree, dose events, dose summary) for the focused SR"
     )
-    radiation_dose_action.triggered.connect(main_window.radiation_dose_report_requested.emit)
-    tools_menu.addAction(radiation_dose_action)
+    sr_browser_action.triggered.connect(main_window.structured_report_browser_requested.emit)
+    tools_menu.addAction(sr_browser_action)
 
     about_this_file_action = QAction("About this File...", main_window)
     about_this_file_action.setMenuRole(QAction.MenuRole.NoRole)

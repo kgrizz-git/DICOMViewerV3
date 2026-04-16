@@ -81,7 +81,7 @@ def _wire_dialog_signals(app: DICOMViewerApp) -> None:
     app.main_window.fusion_technical_doc_requested.connect(app._open_fusion_technical_doc)
     app.main_window.tag_export_requested.connect(app._open_tag_export)
     app.main_window.histogram_requested.connect(app.dialog_coordinator.open_histogram)
-    app.main_window.radiation_dose_report_requested.connect(app._open_radiation_dose_report)
+    app.main_window.structured_report_browser_requested.connect(app._open_structured_report_browser)
     app.main_window.export_roi_statistics_requested.connect(app._open_export_roi_statistics)
     app.main_window.acr_ct_phantom_requested.connect(app._open_acr_ct_phantom_analysis)
     app.main_window.acr_mri_phantom_requested.connect(app._open_acr_mri_phantom_analysis)

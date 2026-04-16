@@ -656,7 +656,7 @@ class SubwindowLifecycleController:
                     vid = id(image_viewer)
                     if vid in self._rdsr_report_slots:
                         try:
-                            image_viewer.radiation_dose_report_requested.disconnect(
+                            image_viewer.structured_report_browser_requested.disconnect(
                                 self._rdsr_report_slots[vid]
                             )
                         except (TypeError, RuntimeError):
@@ -757,9 +757,9 @@ class SubwindowLifecycleController:
                 hist_slot = lambda i=idx: app.dialog_coordinator.open_histogram(i)
                 image_viewer.histogram_requested.connect(hist_slot)
                 self._histogram_slots[vid] = hist_slot
-                rdsr_slot = lambda i=idx: app._open_radiation_dose_report(i)
-                image_viewer.radiation_dose_report_requested.connect(rdsr_slot)
-                self._rdsr_report_slots[vid] = rdsr_slot
+                sr_slot = lambda i=idx: app._open_structured_report_browser(i)
+                image_viewer.structured_report_browser_requested.connect(sr_slot)
+                self._rdsr_report_slots[vid] = sr_slot
                 image_viewer.get_file_path_callback = lambda i=idx: app._get_current_slice_file_path(i)
                 image_viewer.get_slice_location_lines_visible_callback = (
                     lambda: app.config_manager.get_slice_location_lines_visible()

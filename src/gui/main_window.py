@@ -142,7 +142,7 @@ class MainWindow(QMainWindow):
     slice_location_lines_mode_toggled = Signal(str)  # Emitted when line mode changes ("middle" or "begin_end")
     about_this_file_requested = Signal()  # Emitted when About this File is requested
     histogram_requested = Signal()  # Emitted when Histogram dialog is requested
-    radiation_dose_report_requested = Signal()  # Tools → Radiation dose report (focused pane)
+    structured_report_browser_requested = Signal()  # Tools → Structured Report browser (focused pane)
     export_roi_statistics_requested = Signal()  # Emitted when Export ROI Statistics is requested
     export_customizations_requested = Signal()  # Emitted when Export Customizations is requested
     import_customizations_requested = Signal()  # Emitted when Import Customizations is requested

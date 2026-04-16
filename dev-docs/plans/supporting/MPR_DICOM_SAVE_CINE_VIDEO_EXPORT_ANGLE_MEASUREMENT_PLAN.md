@@ -9,7 +9,7 @@ This document implements three related items from `dev-docs/TO_DO.md` (**Feature
 **Related context**
 
 - Existing MPR pipeline: `src/core/mpr_builder.py` (`MprResult`), `src/core/mpr_volume.py`, `src/core/mpr_controller.py`, `src/core/mpr_cache.py` (NPZ cache is **not** a substitute for standards-based DICOM export).
-- Broader MPR/oblique plan: [SLICE_SYNC_AND_MPR_PLAN.md](SLICE_SYNC_AND_MPR_PLAN.md) (ROIs/measurements on MPR are still deferred there; **this plan** assumes angle and linear measurements remain **disabled on MPR subwindows** unless product direction changes).
+- Broader MPR/oblique plan: [SLICE_SYNC_AND_MPR_PLAN.md](../completed/SLICE_SYNC_AND_MPR_PLAN.md) (ROIs/measurements on MPR are still deferred there; **this plan** assumes angle and linear measurements remain **disabled on MPR subwindows** unless product direction changes).
 - Cine: `src/gui/cine_player.py`, `src/gui/cine_controls_widget.py`, wiring in `src/core/app_signal_wiring.py` and handlers in `src/main.py` (`_on_cine_frame_advance`, etc.).
 - Linear measurements: `src/tools/measurement_tool.py`, config under measurement settings in `src/utils/config/` (`measurement_config.py`), integration in `src/core/slice_display_manager.py` and per-subwindow managers in `src/core/subwindow_lifecycle_controller.py`.
 
@@ -211,7 +211,7 @@ The TO_DO text matches **Option B** (vertices P1–P2–P3 with angle at **P2**)
 
 4. **Wiring**  
    - Toolbar / menu: “Angle” next to distance measurement.  
-   - Disable on MPR subwindows if linear measurements remain disabled (consistent with [SLICE_SYNC_AND_MPR_PLAN.md](SLICE_SYNC_AND_MPR_PLAN.md)).
+   - Disable on MPR subwindows if linear measurements remain disabled (consistent with [SLICE_SYNC_AND_MPR_PLAN.md](../completed/SLICE_SYNC_AND_MPR_PLAN.md)).
 
 5. **Export / screenshots**  
    - Include angle graphics in PNG/JPG export paths where linear measurements are drawn (`export_manager.py`).

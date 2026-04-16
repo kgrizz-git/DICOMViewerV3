@@ -606,20 +606,20 @@ def show_image_background_context_menu_on_right_release(viewer: Any, event: Any)
         histogram_action = context_menu.addAction(f"Histogram ({shortcut_text})")
         histogram_action.triggered.connect(viewer.histogram_requested.emit)
 
-        rdsr_action = context_menu.addAction("Radiation dose report…")
-        rdsr_visible = False
+        sr_action = context_menu.addAction("Structured Report…")
+        sr_visible = False
         gds = getattr(viewer, "get_current_dataset_callback", None)
         if gds is not None:
             try:
                 _ds = gds()
                 if _ds is not None:
-                    from core.rdsr_dose_sr import is_radiation_dose_sr
+                    from core.sr_sop_classes import is_structured_report_dataset
 
-                    rdsr_visible = bool(is_radiation_dose_sr(_ds))
+                    sr_visible = bool(is_structured_report_dataset(_ds))
             except Exception:
-                rdsr_visible = False
-        rdsr_action.setVisible(rdsr_visible)
-        rdsr_action.triggered.connect(viewer.radiation_dose_report_requested.emit)
+                sr_visible = False
+        sr_action.setVisible(sr_visible)
+        sr_action.triggered.connect(viewer.structured_report_browser_requested.emit)
 
         context_menu.addSeparator()
 
