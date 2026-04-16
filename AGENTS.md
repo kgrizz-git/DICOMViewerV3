@@ -76,6 +76,7 @@ src/
 │   ├── dicom_parser.py                # Dataset metadata: get_all_tags (iterall + optional export catalog merge)
 │   ├── sr_sop_classes.py              # SR storage SOP class registry; ``is_structured_report_dataset``
 │   ├── sr_document_tree.py            # Generic SR ``ContentSequence`` tree builder + JSON export helper
+│   ├── sr_concept_identity.py         # SR coded-concept normalization (designator fold, LongCodeValue) for dose-event matching
 │   ├── rdsr_irradiation_events.py     # RDSR irradiation event rows (PS3.16 **113706** / **113819** containers)
 │   ├── tag_export_catalog.py          # Curated standard tags for Export DICOM Tags picker; synthetic_tag_export_tree_entry for preset-only rows missing from the file union
 │   ├── tag_export_union.py            # union_tags_across_datasets (merged tag map); separate from catalog to avoid a dicom_parser ↔ catalog import cycle for static analysis

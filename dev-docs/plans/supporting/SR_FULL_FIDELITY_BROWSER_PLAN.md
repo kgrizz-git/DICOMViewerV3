@@ -129,7 +129,8 @@ Implement a small **registry** (`src/core/sr_sop_classes.py` or extend `rdsr_dos
 - [ ] `src/core/rdsr_irradiation_events.py`: extract **event roots** (113706) + flatten NUM/CODE for table model; **88.76** path via **TID 10042** per PS3.16 ([Enhanced templates](https://dicom.nema.org/medical/dicom/current/output/chtml/part16/sect_EnhancedXRayRadiationDoseSRIODTemplates.html)).  
 - [ ] UI: `QTableView` + model; sort by datetime when present. **Row ↔ tree (“sync”):** *Selecting an irradiation-event row scrolls/expands the tree and selects the corresponding `CONTAINER` node* (minimum v1). **Optional v1.1:** selecting a tree node that maps to an event highlights the table row—implement if low cost after row→tree works.  
 - [ ] Tests: vendor samples where available; CI uses **committed** fixtures; **N ≥ 1** only where fixture guarantees it.  
-- [ ] **Export:** per-event **CSV** and **.xlsx** from table model; **JSON** tree export from document model (separate action or format picker).
+- [ ] **Export:** per-event **CSV** and **.xlsx** from table model; **JSON** tree export from document model (separate action or format picker).  
+- **Related:** dose-event column **normalization**, ambiguity notes, flatten caps, and optional **highdicom** follow-up are tracked in [SR_DOSE_EVENTS_NORMALIZATION_AND_HIGHDICOM_PLAN.md](SR_DOSE_EVENTS_NORMALIZATION_AND_HIGHDICOM_PLAN.md) (Stage 1–2).
 
 ### Phase 4 — Consolidate legacy dose summary (1–2 days)
 

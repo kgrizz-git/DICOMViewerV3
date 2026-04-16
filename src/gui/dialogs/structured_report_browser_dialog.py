@@ -252,7 +252,13 @@ class StructuredReportBrowserDialog(QDialog):
         hint.setWordWrap(True)
         layout.addWidget(hint)
 
-        warn_parts = list(self._tree_data.warnings) + list(self._events.notes)
+        warn_parts = list(self._tree_data.warnings)
+        if self._events.truncated_subtree:
+            warn_parts.append(
+                "Dose events: at least one irradiation event subtree hit the flatten depth/item cap. "
+                "Path-specific lines follow; use the Document tab for the full SR tree."
+            )
+        warn_parts.extend(self._events.notes)
         if warn_parts:
             wlab = QLabel("\n".join(warn_parts))
             wlab.setWordWrap(True)

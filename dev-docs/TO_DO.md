@@ -83,7 +83,7 @@ This file tracks active and near-term tasks.
 ## Features (Near-Term)
 
 - [ ] **[P1]** Integrate with PySkinDose?
-- [ ] **[P1]** Add highdicom for further SR support ([plan](plans/supporting/SR_FULL_FIDELITY_BROWSER_PLAN.md#4-dependencies---highdicom-allowed), [research: capabilities & fit](info/HIGHDICOM_OVERVIEW.md))
+- [ ] **[P1]** Add highdicom and further SR support — **phased rollout:** [normalization & highdicom (Stage 1 → Stage 2)](plans/supporting/SR_DOSE_EVENTS_NORMALIZATION_AND_HIGHDICOM_PLAN.md); umbrella [SR full fidelity plan](plans/supporting/SR_FULL_FIDELITY_BROWSER_PLAN.md#4-dependencies---highdicom-allowed); [research: capabilities & fit](info/HIGHDICOM_OVERVIEW.md)
 - [ ] **[P2]** Add SQLite **FTS5** full-text search for the local study index (e.g. study/series description); see [LOCAL_STUDY_DATABASE_AND_INDEXING_PLAN.md](plans/supporting/LOCAL_STUDY_DATABASE_AND_INDEXING_PLAN.md).
 - [ ] **[P1]** Add a "Deep Anonymizer" export option that strips out all tag data that could be used to indentify a scanner, institution, address, etc., as well as patient informaion. Should include institution name, address, station name, device serial number, etc.
 - [ ] **[P1]** Add a simple "DICOM metadata browser" mode that can ingest, browse, and export DICOM metadata, without any image display or processing?(hopefully fast and efficient)
