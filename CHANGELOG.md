@@ -5,6 +5,7 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ## [Unreleased]
 
 ### Changed
+- **RDSR CT dose summary:** `core/rdsr_dose_sr` concept matching for bounded walks and `parse_ct_radiation_dose_summary` now uses **`core.sr_concept_identity.concept_identity_matches`** (same normalization as dose-event rows: designator fold, **LongCodeValue**, etc.). **Semantic versioning note: patch** (parser robustness).
 - **SR dose-event extraction (Stage 1 normalization):** Added `core/sr_concept_identity.py` for normalized concept matching (designator strip/ASCII fold except URN-like strings, **LongCodeValue** when **CodeValue** is empty). `core/rdsr_irradiation_events.py` now flattens per-event subtrees with **depth-aware** NUM/CODE/TEXT selection, **ambiguity notes** when competing values share the same policy tier, **truncation** flags (`truncated_subtree`, per-row `subtree_truncated`) when `max_depth` / `max_items` caps apply, optional `max_flat_depth` / `max_flat_items` on `extract_irradiation_events` for tests, **multi-segment** `MeasuredValueSequence` joined with `; `, and **113769** UID from **TEXT** as well as **UIDREF**. Structured Report browser shows a summary line when dose-event flattening was capped. Tests in `tests/test_sr_document_tree.py`; **USER_GUIDE** notes heuristic limits. **Semantic versioning note: patch** (SR dose-events robustness).
 
 ### Added

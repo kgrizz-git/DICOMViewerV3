@@ -105,6 +105,20 @@ Our [SR full-fidelity browser plan](../plans/supporting/SR_FULL_FIDELITY_BROWSER
 
 The plan already captures the right integration rule: **one canonical tree model**; use highdicom only where it clearly helps ([SR plan](../plans/supporting/SR_FULL_FIDELITY_BROWSER_PLAN.md) §11 item 4).
 
+### 4a. Local spike — application venv (2026-04-16)
+
+A short install probe was run in the project **`.venv`** (Windows, Python 3.13) for [SR dose-events plan Phase 2.0](../plans/supporting/SR_DOSE_EVENTS_NORMALIZATION_AND_HIGHDICOM_PLAN.md).
+
+| Observation | Detail |
+|---------------|--------|
+| **highdicom 0.27.x (PyPI)** | Declares **`pydicom >= 3.0.1`**. |
+| **Viewer pin** | **`pylinac == 3.42.0`** requires **`pydicom < 3, >= 2.0`** (see `requirements.txt` and `dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md`). |
+| **Result** | **highdicom 0.27 cannot coexist** with the current production venv constraints without dropping or re-verifying the pylinac pin on **pydicom 3**. |
+| **Cold `import highdicom`** (measured once while pydicom 3 was temporarily present) | ≈ **2.4 s** on one workstation — not a benchmark; order-of-magnitude for “lazy import” discussions and PyInstaller cold start. |
+| **Cleanup** | **highdicom was uninstalled** and **pydicom restored to 2.4.x** so the default venv matches the shipped stack. |
+
+**Mitigations for a future Phase 2.1+:** (1) a **separate CI job** or disposable venv with **pydicom 3 + highdicom** for contract tests only; (2) revisit when **pylinac** officially supports pydicom 3 and ACR QA is re-verified; (3) evaluate **older highdicom** wheels (if any) that still support pydicom 2 — only if their SR read API remains useful for RDSR (most recent releases target pydicom 3).
+
 ---
 
 ## 5. How highdicom could extend DICOM Viewer V3
@@ -150,3 +164,4 @@ The plan already captures the right integration rule: **one canonical tree model
 | Date | Change |
 |------|--------|
 | 2026-04-16 | Initial research note from public docs / PyPI metadata. |
+| 2026-04-16 | §4a: local spike — **highdicom 0.27** requires **pydicom ≥ 3**; conflicts with **pylinac** pin on pydicom 2; cold import timing noted; mitigations for optional CI / future pydicom 3 alignment. |

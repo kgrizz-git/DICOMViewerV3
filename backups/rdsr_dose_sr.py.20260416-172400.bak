@@ -9,9 +9,8 @@ collect a small set of **CT** metrics and identifiers useful for in-app traceabi
 
 **Outputs:** ``CtRadiationDoseSummary`` (dataclass) and boolean helpers for load/index gates.
 
-**Requirements:** ``pydicom`` plus :mod:`core.sr_concept_identity` for normalized concept-name
-matching (same rules as dose-event extraction). Parsing is **not** a full generic SR renderer;
-unknown vendor templates may yield partial summaries without error.
+**Requirements:** ``pydicom`` only (no Qt). Parsing is **not** a full generic SR renderer; unknown
+vendor templates may yield partial summaries without error.
 
 **DICOM references (concept codes, DCM):** PS3.16 **DCM** codes **113830** (CTDIvol), **113838**
 (DLP), **113835** (size-specific dose estimate), **113819** (CT irradiation event data container).
@@ -37,8 +36,6 @@ from pydicom.uid import (
     ExtensibleSRStorage,
     XRayRadiationDoseSRStorage,
 )
-
-from core.sr_concept_identity import concept_identity_matches
 
 # pydicom element access is largely untyped in stubs; keep checks explicit at runtime.
 # pyright: reportAny=false
@@ -116,9 +113,23 @@ def _modality_str(ds: Dataset) -> str:
     return str(m).strip() if m is not None else ""
 
 
+def _concept_tuple(item: Dataset) -> tuple[str | None, str | None]:
+    """Return (CodeValue, CodingSchemeDesignator) from the first Concept Name Code item."""
+    cseq = getattr(item, "ConceptNameCodeSequence", None)
+    if not cseq:
+        return (None, None)
+    seq = cast(Sequence[Dataset], cseq)
+    if len(seq) == 0:
+        return (None, None)
+    c0 = seq[0]
+    cv = getattr(c0, "CodeValue", None)
+    scheme = getattr(c0, "CodingSchemeDesignator", None)
+    return (str(cv) if cv is not None else None, str(scheme) if scheme is not None else None)
+
+
 def _concept_matches(item: Dataset, expected: tuple[str, str]) -> bool:
-    """True when the item's concept name matches ``expected`` after :mod:`core.sr_concept_identity` normalization."""
-    return concept_identity_matches(item, expected)
+    cv, scheme = _concept_tuple(item)
+    return cv == expected[0] and scheme == expected[1]
 
 
 def _parse_numeric_measurement(item: Dataset) -> float | None:

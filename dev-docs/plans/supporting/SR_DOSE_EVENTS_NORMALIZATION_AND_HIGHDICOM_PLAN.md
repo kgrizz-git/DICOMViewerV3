@@ -88,9 +88,9 @@
 
 ### Phase 2.0 — Spike and dependency decision (owner: researcher | coder, timebox: 1–2 sessions)
 
-- [ ] **(S1)** Spike: `pip install highdicom` in venv; load **one** X-Ray RDSR + **one** Enhanced X-Ray RDSR from `tests/fixtures/dicom_rdsr/` (and optional local Philips sample if available).
-- [ ] **(S2)** Record: which TID / SOP classes highdicom can **materialize** vs still require generic walk; **license** compatibility; **import time** and **PyInstaller** hidden-import needs (see `SR_FULL_FIDELITY_BROWSER_PLAN.md` §4, `dev-docs/info/` bundle notes).
-- [ ] **(S3)** **Gate S:** decision table — adopt highdicom for (A) dose-event row build only, (B) validation + pydicom display, or (C) defer if no win vs Stage 1; update this plan’s “Completion notes”.
+- [x] **(S1)** Spike: `pip install highdicom` in venv — **blocked for default app venv:** highdicom **0.27.x** requires **pydicom ≥ 3.0.1**; **pylinac 3.42.0** requires **pydicom < 3**. Fixture `srread` exercises deferred to an isolated **pydicom 3** env or optional CI (see `dev-docs/info/HIGHDICOM_OVERVIEW.md` §4a).
+- [x] **(S2)** Record: **License** still MIT per PyPI (unchanged). **Import time:** one cold `import highdicom` sample ≈ **2.4 s** (Windows dev box, not a benchmark). **RDSR TID materialization:** prior doc review stands — no first-class TID-10003 row API like TID-1500 `MeasurementReport`; generic `ContentSequence` path expected. **PyInstaller:** still TBD in a pydicom-3 + highdicom build job.
+- [x] **(S3)** **Gate S (2026-04-16):** **(C) defer** wiring highdicom into the **default** runtime until the **pydicom major** split is resolved (pylinac re-verify on pydicom 3, or optional highdicom-only CI/venv). **Stage 1** pydicom flatten remains the supported dose-events path. Revisit **(A)/(B)** after a green **pydicom 3 + highdicom** contract-test lane exists.
 
 ### Phase 2.1 — Adapter interface (owner: coder)
 
@@ -120,6 +120,7 @@
 | Risk | Mitigation |
 |------|------------|
 | highdicom **does not cover** all vendor RDSR shapes | Mandatory pydicom fallback; Stage 1 improves fallback quality. |
+| **pydicom 2 vs 3** | highdicom **0.27+** requires pydicom **3**; app/pylinac stack remains on pydicom **2** until re-verified — optional CI or defer (see **HIGHDICOM_OVERVIEW** §4a). |
 | **Bundle size** growth | Optional extra / slim build; spike documents import graph. |
 | False confidence from partial TID support | UI copy + notes: “template-assisted” vs “generic flatten.” |
 | Duplicate columns after Stage 2 merge | Adapter dedupes against `_FIXED_CONCEPT_CODES` / same keys as Stage 1. |
@@ -149,4 +150,5 @@
 
 ## Completion notes
 
-- **2026-04-16 — Stage 1 (partial):** Implemented Phases **1.1–1.4** and **1.5** (except **T3.2** profiling / default `max_items` change): `src/core/sr_concept_identity.py`, hardened `src/core/rdsr_irradiation_events.py` (normalized matching, depth-aware NUM/CODE/TEXT picks, ambiguity `notes`, `truncated_subtree` / per-row `subtree_truncated`, multi-`MeasuredValueSequence` joined with `; `, **113769** TEXT), `StructuredReportBrowserDialog` summary when capped, `tests/test_sr_document_tree.py`, **USER_GUIDE**, cross-link from **SR_FULL_FIDELITY_BROWSER_PLAN** § Phase 3. **Stage 2** (highdicom) not started; **T3.2** remains open pending profiling.
+- **2026-04-16 — Stage 1 (partial):** Implemented Phases **1.1–1.4** and **1.5** (except **T3.2** profiling / default `max_items` change): `src/core/sr_concept_identity.py`, hardened `src/core/rdsr_irradiation_events.py` (normalized matching, depth-aware NUM/CODE/TEXT picks, ambiguity `notes`, `truncated_subtree` / per-row `subtree_truncated`, multi-`MeasuredValueSequence` joined with `; `, **113769** TEXT), `StructuredReportBrowserDialog` summary when capped, `tests/test_sr_document_tree.py`, **USER_GUIDE**, cross-link from **SR_FULL_FIDELITY_BROWSER_PLAN** § Phase 3. **T3.2** remains open pending profiling (defaults stay **max_flat_items=1500**, **max_flat_depth=14** until measured).
+- **2026-04-16 — Stage 2.0 / Gate S:** highdicom **0.27** install conflicts with **pylinac**’s pydicom **2.x** pin; cold import order-of-magnitude recorded; **Gate S → defer (C)** for default app venv. **`rdsr_dose_sr`** now shares **`sr_concept_identity`** for concept matching (aligned with dose-event extraction). Details: **`dev-docs/info/HIGHDICOM_OVERVIEW.md`** §4a.
