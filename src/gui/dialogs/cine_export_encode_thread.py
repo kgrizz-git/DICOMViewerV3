@@ -2,7 +2,7 @@
 Background thread for cine video encoding (imageio / FFmpeg).
 
 Reads temporary PNG frames written on the main thread and streams them into
-GIF / AVI / MPG. Subprocesses are owned by imageio-ffmpeg (**no** ``shell=True``).
+GIF / AVI / MP4 / MPG. Subprocesses are owned by imageio-ffmpeg (**no** ``shell=True``).
 
 Inputs:
     - Ordered PNG paths, output path, format, FPS, optional ``threading.Event`` cancel flag.
@@ -26,7 +26,7 @@ from core.cine_video_export import encode_cine_video_from_png_paths
 
 
 class CineVideoEncodeThread(QThread):
-    """Encode PNG frame files to GIF / AVI / MPG in a worker thread."""
+    """Encode PNG frame files to GIF / AVI / MP4 / MPG in a worker thread."""
 
     succeeded = Signal()
     failed = Signal(str)

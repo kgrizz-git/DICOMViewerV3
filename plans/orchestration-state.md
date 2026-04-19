@@ -4,6 +4,10 @@
 
 ### Single-branch integration queue — **2026-04-15** (user: **M2b → M2c → M3 → M4** on **one** branch)
 
+### CINE1-FU — Cine video export follow-ups (`dev-docs/TO_DO.md` **L97–100**) — **2026-04-17** (user)
+
+**Success criteria:** **[P0]** **MPG/AVI** (and shipped variants) **play in Windows Media Player** where feasible — today **`src/core/cine_video_export.py`** uses **AVI + FFmpeg `png`** (WMP may report **MPNG**) and **MPG + `mpeg2video`** in **MPEG-PS**; verify **imageio 2.37.3** / **imageio-ffmpeg 0.6.0** pins and **`IMAGEIO_FFMPEG_EXE`**; pick **broad Windows** codecs (e.g. **mpeg4** in AVI, or **MP4 + H.264** if product accepts LGPL/GPL toolchain + **CHANGELOG**/user-docs note — **`needs_user`** only if strict **MPG** label vs container rename). **[P0]** **GIF** (and **AVI/MPG**) honor **user FPS** vs **cine effective FPS** (**GIF** `duration` / delay metadata). **[P0]** **Raster size / scaling / overlay-related options** match **static JPG/PNG export** — trace **`ExportManager`** / **`export_rendering`** / slice export paths; reuse or mirror. **[P1]** **Title Case** UI: **“Export Cine As…”** (menu **`QAction`**, **`CineExportDialog`** title, **`QMessageBox`** titles where consistent). **Deliverables:** **`coder`** implementation + **`tester`** regression (**`tests/test_cine_video_export.py`** extend; avoid golden video blobs — assert params / GIF delay / file size smoke); **`dev-docs/TO_DO.md`** nested **L97–100** **`[x]`** when done or **blocker** note; **CHANGELOG** / **`src/version.py`** if user-visible. **Constraints:** **`.venv`**; **backups/** before substantive Python edits; **do not push**. **Plan:** **`dev-docs/plans/supporting/MPR_DICOM_SAVE_CINE_VIDEO_EXPORT_ANGLE_MEASUREMENT_PLAN.md` §2**. **Risk:** **`medium`** (export + ffmpeg); batch **`tester`** at slice end; optional **`secops`** delta on touched export/subprocess paths.
+
 **Success criteria (2026-04-15 parent):** **M2b–M4** **implemented** on **`feature/rdsr-dose-sr`** (**`pytest`** **478**); optional formal **`RDSR1`** **`high`** **`reviewer`**/**`secops`** if not waived. **Original criteria:** On **one** git branch (no second worktree), land in order: **(M2b)** **`RDSR1-P2`** — dose SR **browse** UI + **Privacy Mode** (**`dev-docs/plans/supporting/HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md` §3.3, §3.5**); **(M2c)** **`RDSR1-P3`** — **JSON** + **CSV** export per **§3.4** (no SR write unless product answers plan **Questions**); **(M3)** **`ROI_RGB1`** per **`dev-docs/plans/supporting/VIEWER_UX_FEATURES_PLAN.md` §7**; **(M4)** **`HIST_PROJ1`** per **`HISTOGRAM_PROJECTION_PIXEL_VALUES_PLAN.md`**. **CINE1** remains **`complete`** on **`feature/cine-video-export`**; integration tip for new work is **`feature/rdsr-dose-sr`** — **merge `feature/cine-video-export` into `feature/rdsr-dose-sr`** when the cine branch has commits not already contained (same lineage — **default safe**); if a future merge/rebase surfaces **non-trivial conflicts** or unrelated WIP, treat as **`open_question`** (e.g. rename tip to **`feature/viewer-backlog-20260415`**) and **stop** until user picks tip/merge strategy. **Do not push** (orchestrator / agents).
 
 ### P0 — SR navigator + SR metadata (`dev-docs/TO_DO.md` L56–57) — **2026-04-15**
@@ -60,7 +64,7 @@ Ship a **local metadata index** (background scanning, incremental refresh, path-
 
 ## Phase
 
-`complete` — **SR_UX** (2026-04-16): **`dev-docs/TO_DO.md`** **L54–L56** **`[x]`** — **`SR_L54_THUMB`**, **`SR_L55_COPY`**, **`SR_L56_ENUM`** **`done`**; full **`pytest tests/`** **488** passed ~104 s (parent); **`src/version.py` 0.2.2**; **CHANGELOG**; backups **`backups/*.bak-sr-ux-20260416-001331.bak`**. **Prior — SR_P0** (2026-04-15): **P0** SR navigator + SR metadata (`dev-docs/TO_DO.md` L56–57 legacy line refs) — **`SR_P0_NAV`** + **`SR_P0_META`** **`coder` `complete`** + **slice `medium` verification `closed`** (synthetic **`2.25.*`** UIDs in **`dicom_organizer`**, duplicate tag keys in **`get_all_tags`**, UI tag column shows map keys **`#2`**, **`tests/test_sr_organizer_and_metadata.py`**, **CHANGELOG** / **`src/version.py` 0.2.1`, backups); **batch `tester`:** full **`pytest tests/`** **487** passed ~2m42s (parent relay). **Prior (still true):** `multi-track` — **2026-04-15:** **`CINE1`** **M1** **`complete`** on **`feature/cine-video-export`** — **`reviewer`** **yes_with_followups**; **`tester`** full suite **468** passed (~68.7 s) + **`logs/test-ledger.md`**; **`secops`** Semgrep **0** scoped + **`assessments/security-assessment-20260415-1530-cine1.md`** (**gitleaks** not on PATH — CI **TruffleHog**). **Ship:** **user merge** **`feature/cine-video-export`** when ready. **`M2–M4` (RDSR1 / ROI_RGB1 / HIST_PROJ1):** **implementation + strict verification `complete`** on **`feature/rdsr-dose-sr`** — **RDSR1-P2+P3** + **ROI_RGB1** + **HIST_PROJ1**; **full `pytest`** **478** (~46 s). **`RDSR1` M2 `high` gates:** **reviewer PASS** + **secops re-check PASS** after formula-injection hardening (tester already satisfied). **Tip:** **`feature/rdsr-dose-sr`**; merge **`feature/cine-video-export`** when needed. **`open_question`:** merge/rebase **unsafe** only. **2026-04-14:** **MPR2** slice **`complete`** (export / verification gate **closed**): **reviewer** + **`MPR2-theme`** + **`tester`** (**439**→**441**/0 **`pytest`** after **T7**/**T3**/**T12** + display-config tests, **`logs/test-ledger.md`**) + **`secops`** targeted delta — **Semgrep** `p/security-audit` + `p/python` on scoped files **0** findings; artifact **`assessments/security-assessment-20260414-2000.md`**. **Post-ship hotfix (same day):** runtime **pydicom** **ambiguous VR OB/OW** on **Pixel Data** `(7FE0,0010)` under **ExplicitVRLittleEndian** — **parent/coder** fix: write **Pixel Data** as explicit **`OW`** **`DataElement`** in **`src/core/mpr_dicom_export.py`**, test assert, **`CHANGELOG`** **Fixed**; **user should re-smoke** **File → Save MPR as DICOM…** after the fix lands. **Track A P2 (2026-04-14 parent pass):** **`T7`** (navigator slice/frame count badge + config **`navigator_show_slice_frame_count`** + View menu), **`T3`** (window slot map **`cell_clicked`**, popup drag **top bar only**, **`main._on_window_slot_map_cell_clicked`**, **`MultiWindowLayout.set_focused_subwindow`** re-**`_arrange_subwindows`** for **1×2**/**2×1**), **`T12`** (**`ViewStateManager._user_wl_cache`**, save on series switch, restore on return, clear on **`reset_view`**, clear all on **`reset_series_tracking`**) + **`CHANGELOG`** [Unreleased] + **`default_config`** in **`config_manager.py`** — **all landed**. **Deferred this pass:** **`T4`** (ROI resize handles), **`T14`** (toolbar customization), **`SD8`** FTS5 (store migration + UI). **New user slice (same day):** **`CINE1`**, **`RDSR1`**, **`ROI_RGB1`**, **`HIST_PROJ1`** — **`planner`** pass **done** (§2/§3/§7 + **HIST_PROJ1** plan file); **M1** **`CINE1`** **`dependency_row_locked`** = **`imageio` + `imageio-ffmpeg`** (fallbacks in **Assignments**); **M1** **verification closed** **2026-04-15**; **`RDSR1` P0–P3** + **ROI_RGB1** + **HIST_PROJ1** **landed** **2026-04-15** (parent, **`pytest` 478**). **Prior backlog default** (if user resumes **T4**/**SD8** first): **`coder`** **`T4`** *or* **`planner`** **`SD8`**; **`SD8`** parallel only with second **worktree/branch** (**`NEXT_TASK_TOOL_SECOND: none`** on single branch).
+**`complete`** — **CINE1-FU** (2026-04-17): **`dev-docs/TO_DO.md` L97–100** nested **`[x]`**; **`coder`**/**`tester`** **`done`** (codecs/FPS/static-export parity/title case; **`tests/test_cine_video_export.py`**); full **`pytest tests/`** **513** passed ~97 s (`.venv`); **`logs/test-ledger.md`** — slice-end **`medium`** gate **closed** (optional **`reviewer`**/**`secops`**/**`ux`** smoke per user). **Prior:** **`running`** — **CINE1-FU** — **`coder`** kickoff. **Prior:** **`complete`** — **SR_UX** (2026-04-16): **`dev-docs/TO_DO.md`** **L54–L56** **`[x]`** — **`SR_L54_THUMB`**, **`SR_L55_COPY`**, **`SR_L56_ENUM`** **`done`**; full **`pytest tests/`** **488** passed ~104 s (parent); **`src/version.py` 0.2.2**; **CHANGELOG**; backups **`backups/*.bak-sr-ux-20260416-001331.bak`**. **Prior — SR_P0** (2026-04-15): **P0** SR navigator + SR metadata (`dev-docs/TO_DO.md` L56–57 legacy line refs) — **`SR_P0_NAV`** + **`SR_P0_META`** **`coder` `complete`** + **slice `medium` verification `closed`** (synthetic **`2.25.*`** UIDs in **`dicom_organizer`**, duplicate tag keys in **`get_all_tags`**, UI tag column shows map keys **`#2`**, **`tests/test_sr_organizer_and_metadata.py`**, **CHANGELOG** / **`src/version.py` 0.2.1`, backups); **batch `tester`:** full **`pytest tests/`** **487** passed ~2m42s (parent relay). **Prior (still true):** `multi-track` — **2026-04-15:** **`CINE1`** **M1** **`complete`** on **`feature/cine-video-export`** — **`reviewer`** **yes_with_followups**; **`tester`** full suite **468** passed (~68.7 s) + **`logs/test-ledger.md`**; **`secops`** Semgrep **0** scoped + **`assessments/security-assessment-20260415-1530-cine1.md`** (**gitleaks** not on PATH — CI **TruffleHog**). **Ship:** **user merge** **`feature/cine-video-export`** when ready. **`M2–M4` (RDSR1 / ROI_RGB1 / HIST_PROJ1):** **implementation + strict verification `complete`** on **`feature/rdsr-dose-sr`** — **RDSR1-P2+P3** + **ROI_RGB1** + **HIST_PROJ1**; **full `pytest`** **478** (~46 s). **`RDSR1` M2 `high` gates:** **reviewer PASS** + **secops re-check PASS** after formula-injection hardening (tester already satisfied). **Tip:** **`feature/rdsr-dose-sr`**; merge **`feature/cine-video-export`** when needed. **`open_question`:** merge/rebase **unsafe** only. **2026-04-14:** **MPR2** slice **`complete`** (export / verification gate **closed**): **reviewer** + **`MPR2-theme`** + **`tester`** (**439**→**441**/0 **`pytest`** after **T7**/**T3**/**T12** + display-config tests, **`logs/test-ledger.md`**) + **`secops`** targeted delta — **Semgrep** `p/security-audit` + `p/python` on scoped files **0** findings; artifact **`assessments/security-assessment-20260414-2000.md`**. **Post-ship hotfix (same day):** runtime **pydicom** **ambiguous VR OB/OW** on **Pixel Data** `(7FE0,0010)` under **ExplicitVRLittleEndian** — **parent/coder** fix: write **Pixel Data** as explicit **`OW`** **`DataElement`** in **`src/core/mpr_dicom_export.py`**, test assert, **`CHANGELOG`** **Fixed**; **user should re-smoke** **File → Save MPR as DICOM…** after the fix lands. **Track A P2 (2026-04-14 parent pass):** **`T7`** (navigator slice/frame count badge + config **`navigator_show_slice_frame_count`** + View menu), **`T3`** (window slot map **`cell_clicked`**, popup drag **top bar only**, **`main._on_window_slot_map_cell_clicked`**, **`MultiWindowLayout.set_focused_subwindow`** re-**`_arrange_subwindows`** for **1×2**/**2×1**), **`T12`** (**`ViewStateManager._user_wl_cache`**, save on series switch, restore on return, clear on **`reset_view`**, clear all on **`reset_series_tracking`**) + **`CHANGELOG`** [Unreleased] + **`default_config`** in **`config_manager.py`** — **all landed**. **Deferred this pass:** **`T4`** (ROI resize handles), **`T14`** (toolbar customization), **`SD8`** FTS5 (store migration + UI). **New user slice (same day):** **`CINE1`**, **`RDSR1`**, **`ROI_RGB1`**, **`HIST_PROJ1`** — **`planner`** pass **done** (§2/§3/§7 + **HIST_PROJ1** plan file); **M1** **`CINE1`** **`dependency_row_locked`** = **`imageio` + `imageio-ffmpeg`** (fallbacks in **Assignments**); **M1** **verification closed** **2026-04-15**; **`RDSR1` P0–P3** + **ROI_RGB1** + **HIST_PROJ1** **landed** **2026-04-15** (parent, **`pytest` 478**). **Prior backlog default** (if user resumes **T4**/**SD8** first): **`coder`** **`T4`** *or* **`planner`** **`SD8`**; **`SD8`** parallel only with second **worktree/branch** (**`NEXT_TASK_TOOL_SECOND: none`** on single branch).
 
 ## Execution mode
 
@@ -72,7 +76,7 @@ Ship a **local metadata index** (background scanning, incremental refresh, path-
 
 - Track A: `medium` (privacy/tooltips, Qt drag-drop, export pipeline, ROI scene interaction).
 - Track B: `medium` (PHI persistence on disk, threading/cancellation, path traversal safety).
-- **Slice — CINE1 / RDSR1 / ROI_RGB1 / HIST_PROJ1:** **`medium`** floor overall; **`RDSR1`** (**M2b+M2c**): treated as **`high`** PHI/browse/export sensitivity — strict closeout now **complete** (**reviewer PASS** + **secops re-check PASS**; tester previously satisfied via **`pytest`** **478**). **`ROI_RGB1` / `HIST_PROJ1`:** **`medium`** — **parent `tester`** gate met (**478**); add **`reviewer`** only if user wants extra pass. **`CINE1`**: **`medium`** — **M1** **slice `complete`** (2026-04-15): **`reviewer`** + **`tester`** + **`secops`** **closed**; optional doc reconcile §2 narrative `[ ]` vs checklist (**non-blocking**). **`SR_P0` (TO_DO L56–57):** **`medium`** — **coded** 2026-04-15; **batch `tester`** gate **closed** (parent relay: **`pytest`** **487** ~2m42s, **`test_sr_organizer_and_metadata`**). **Automated** slice verification **ship-closed**; optional **`reviewer`**/**`ux`** per user. **`dependency_row_locked`** **`imageio` + `imageio-ffmpeg`**; **pins** in **`requirements.txt`** per **Assignments**. **`SR_UX` (L54–L56):** **`medium`** — SR UX + copy + enumeration; **slice-end** **`tester`** + optional **`ux`** for thumbnail/SR open smoke.
+- **Slice — CINE1 / RDSR1 / ROI_RGB1 / HIST_PROJ1:** **`medium`** floor overall; **`RDSR1`** (**M2b+M2c**): treated as **`high`** PHI/browse/export sensitivity — strict closeout now **complete** (**reviewer PASS** + **secops re-check PASS**; tester previously satisfied via **`pytest`** **478**). **`ROI_RGB1` / `HIST_PROJ1`:** **`medium`** — **parent `tester`** gate met (**478**); add **`reviewer`** only if user wants extra pass. **`CINE1`**: **`medium`** — **M1** **slice `complete`** (2026-04-15): **`reviewer`** + **`tester`** + **`secops`** **closed**; optional doc reconcile §2 narrative `[ ]` vs checklist (**non-blocking**). **`CINE1-FU`**: **`medium`** — **slice `complete`** (2026-04-17): **`tester`** full **`pytest`** **513**; optional **`reviewer`**/**`secops`**/**`ux`** per user (**waived** for in-scope **TO_DO** **L97–100** closeout). **`SR_P0` (TO_DO L56–57):** **`medium`** — **coded** 2026-04-15; **batch `tester`** gate **closed** (parent relay: **`pytest`** **487** ~2m42s, **`test_sr_organizer_and_metadata`**). **Automated** slice verification **ship-closed**; optional **`reviewer`**/**`ux`** per user. **`dependency_row_locked`** **`imageio` + `imageio-ffmpeg`**; **pins** in **`requirements.txt`** per **Assignments**. **`SR_UX` (L54–L56):** **`medium`** — SR UX + copy + enumeration; **slice-end** **`tester`** + optional **`ux`** for thumbnail/SR open smoke.
 
 ## Chain mode
 
@@ -82,9 +86,9 @@ Ship a **local metadata index** (background scanning, incremental refresh, path-
 
 | Field | Value |
 |-------|-------|
-| Orchestrator cycles (this run) | 30 |
+| Orchestrator cycles (this run) | 32 |
 | Max orchestrator cycles | 40 |
-| Specialist completions (this run) | 23 |
+| Specialist completions (this run) | 25 |
 | Max specialist completions | 120 |
 
 ## Streams
@@ -102,7 +106,7 @@ Ship a **local metadata index** (background scanning, incremental refresh, path-
 | **J** | **Window layout polish:** **T10** fullscreen (P1) **done**; **T11** sync-group title-bar icon (P2) **done** | **done** (no pending T10/T11 this slice) |
 | **L** | **Track B — FTS5** (**SD8**): user re-queued 2026-04-14; planner → coder (after **MPR2** unless second branch) | **queued** |
 | **M** | **MPR DICOM export** (**MPR2** P1): save computed MPR stack as DICOM per plan §1 | **done** + **hotfix** (2026-04-14): **Pixel Data** explicit **`OW`** — **re-smoke** export after fix |
-| **N** | **Cine video export** (**CINE1** P1): mpg/gif/avi | **done** — **M1** **complete** (2026-04-15): **`reviewer`** **yes_with_followups**; **`tester`** full **`pytest`** **468** passed (~68.7 s) + **`logs/test-ledger.md`**; **`secops`** Semgrep **0** scoped; **`assessments/security-assessment-20260415-1530-cine1.md`** (**gitleaks** not on PATH — noted). Branch **`feature/cine-video-export`** — **user merge** when ready |
+| **N** | **Cine video export** (**CINE1** P1): mpg/gif/avi | **M1 `done`** (2026-04-15) — **`CINE1-FU` `complete`** (2026-04-17): WMP-friendly codecs, GIF FPS, static-export parity, title case; **`pytest`** **513** + ledger |
 | **O** | **RDSR** (**RDSR1**): **P0–P3** **done** on **`feature/rdsr-dose-sr`** (browse/export UI + privacy + **`rdsr_dose_sr`** + **`tests/test_rdsr_export_io.py`**) | **`done`** — **M2** **`high`** strict gate **closed** (2026-04-15): **reviewer PASS** + **secops re-check PASS**; tester already satisfied (full **`pytest`** **478**) |
 | **P** | **ROI per-channel stats** (**ROI_RGB1** — **M3**) | **`done`** — **`roi_show_per_channel_statistics`**, **`roi_manager`**, **`ROIStatisticsPanel`**, annotation options, customizations JSON, overlay (**pytest** **478**) |
 | **Q** | **Histogram + projection** (**HIST_PROJ1** — **M4**) | **`done`** — **`compute_intensity_projection_raw_array`**, histogram checkbox + **`histogram_use_projection_pixels`**, **`get_histogram_callbacks_for_subwindow`** (**pytest** **478**) |
@@ -146,6 +150,7 @@ Ship a **local metadata index** (background scanning, incremental refresh, path-
 | **SR_L54_THUMB** | **researcher** → **coder** | **P1** SR thumbnail click: image pane shows **“No Image”** (not blank/error); optional **Open SR…** → SR browser **new window** or existing open flow. | **`dev-docs/TO_DO.md`** L54; series navigator / subwindow / SR browser entrypoints | **done** — placeholder PIL + **`NoPixelPlaceholderOverlay`** + **`open_tag_viewer_callback`**; **`dev-docs/TO_DO.md`** **[x]** |
 | **SR_L55_COPY** | **researcher** → **coder** | **P1** Generalize SR dialog/title strings (**no CT-only** dose-summary wording); RDSR = CT/fluoro/X-ray; room for other SR classes. | **`dev-docs/TO_DO.md`** L55; SR/RDSR dialogs, menus | **done** — **`radiation_dose_report_dialog`**, **`main_window_menu_builder`**, **`USER_GUIDE`**; **TO_DO [x]** |
 | **SR_L56_ENUM** | **researcher** → **planner**? → **coder** | **P0** Close gaps vs **`pyskindose_samples/`** + optional **`pydicom_test-SR.dcm`** — full SR field enumeration in browser/tag/metadata (`dicom_parser`, SR walks, dialogs). **Not CT-only.** | **`dev-docs/TO_DO.md`** L56; **`src/core/dicom_parser.py`**, **`tag_viewer_dialog`**, metadata | **done** — **`file_meta.iterall()`** merge in **`get_all_tags`**; **`display_slice`** no early return on no pixels; **`TestParserFileMetaTags`**; **TO_DO [x]** |
+| **CINE1-FU** | **coder** → **tester** (slice end) → optional **secops** | **`dev-docs/TO_DO.md` L97–100**: WMP-friendly **MPG/AVI** codecs; **GIF**/video **FPS**; align cine raster with **static image export**; **Title Case** **Export Cine As…** | **`MPR_DICOM_SAVE_CINE_VIDEO_EXPORT_ANGLE_MEASUREMENT_PLAN.md` §2**; **`src/core/cine_video_export.py`**, **`src/main.py`** **`_on_export_cine_video`**, **`gui/dialogs/cine_export_*.py`**, **`main_window_menu_builder.py`**; compare **`export_manager`/`export_rendering`** | **`done`** — **`coder`** **2026-04-17** (CHANGELOG **`0.2.8`**, backups **`backups/cine1-fu-20260417-002052/`**); **`tester`** full **`pytest`** **513** passed, **`logs/test-ledger.md`**; optional **`reviewer`**/**`secops`** waived unless user requests |
 
 ## Git / worktree
 
@@ -172,12 +177,14 @@ Ship a **local metadata index** (background scanning, incremental refresh, path-
 
 ## Next action
 
-1. **SR_UX** slice **closed** (2026-04-16 parent implementation). Resume backlog per user priority: **`T4`** / **`T14`** / **`SD8`**, or optional **`Task(reviewer)`**/**`ux`** on **SR_UX** touch-set.
-2. Optional: update **`logs/test-ledger.md`** with **`pytest`** **488** relay if batch policy requires it.
-3. **Deferred:** unchanged — **`T4`** / **`T14`** / **`SD8`** until user pulls next slice.
+1. **CINE1-FU** slice **`complete`** — resume backlog per user: **`T4`** (ROI handles) / **`T14`** (toolbar customization) / **`SD8`** (FTS5) **or** new **`Task(coder)`** slice from **`dev-docs/TO_DO.md`**.
+2. Optional (not required for **CINE1-FU** closeout): **`Task(reviewer)`** on cine export touch-set, **`Task(secops)`** delta on **`cine_video_export`**, **`Task(ux)`** / manual smoke from **`logs/test-ledger.md`** (Export Cine dialog, AVI/MPG/GIF in WMP/GIF viewer).
+3. **Git:** user merge **`feature/cine-video-export`** (or WIP branch carrying **CINE1-FU**) into integration tip when ready — **do not push** without user.
 
 ## Session checkpoint
 
+- **2026-04-17 — CINE1-FU (`TO_DO` L97–100) slice `complete` (orchestrator merge):** **`coder`**/**`tester`** HANDOFFs merged; **Assignments** **`CINE1-FU`** → **`done`**; **Phase** **`complete`** (**CINE1-FU**); **Stream N** **`CINE1-FU` complete**; **Guards:** orchestrator cycles **31→32**; specialist completions **23→25** (**+1** **`coder`**, **+1** **`tester`**). **`pytest`** **513** ~97 s; **`logs/test-ledger.md`**. **Next:** **`NEXT_TASK_TOOL: none`** unless user wants optional **`reviewer`**/**`secops`**/**`ux`**; else backlog **`T4`**/**`T14`**/**`SD8`**. **Chain** **`autonomous`**.
+- **2026-04-17 — CINE1-FU (`TO_DO` L97–100) orchestrator kickoff:** Goal § **CINE1-FU**; **Assignments** **`CINE1-FU`** **`queued`→`coder`**; **Phase** **`running`**; **Stream N** notes **follow-up**; **Orchestrator cycles** **30→31**. **Next:** **`Task(coder)`** **`CINE1-FU`**. **Chain** **`autonomous`**. **Evidence:** **`cine_video_export.py`** AVI uses **`codec="png"`**; MPG **`mpeg2video`** + **`-f mpeg`**; GIF **`duration=1/fps`**.
 - **2026-04-16 — SR_UX (`TO_DO` L54–L56) orchestrator kickoff:** Goal + **Assignments** **`SR_L54_THUMB`**, **`SR_L55_COPY`**, **`SR_L56_ENUM`** added; **Phase** **`running`**; **Orchestrator cycles** **29→30**. **Next:** **`Task(researcher)`** — codebase + fixture gap brief (paths only; no product edits). **Chain** **`autonomous`**. **Do not push**; **backups/** before **Python** edits on **coder** turn.
 - **2026-04-15 — SR_P0 post-`tester` (parent relay):** Full **`pytest tests/`** **487** passed ~2m42s; **`tests/test_sr_organizer_and_metadata.py`** in run. **SR_P0** slice **`medium`** verification **closed** (automated gate). **Guards:** orchestrator cycles **28→29**; specialist completions **22→23** (**+1** **`tester`**). **Next:** user priority **`T4`** / **`T14`** / **`SD8`** **or** optional **`Task(reviewer)`**/**`ux`** for **SR_P0**. **Phase** **`running`** (backlog open).
 - **2026-04-15 — SR_P0 post-`coder`:** **`SR_P0_NAV`** + **`SR_P0_META`** **`done`** — organizer synthetic UIDs, **`get_all_tags`** duplicate keys, UI tag column, **`tests/test_sr_organizer_and_metadata.py`**, **CHANGELOG** / **`0.2.1`**, backups. **Guards:** orchestrator cycles **27→28**; specialist completions **21→22** (**+1** **`coder`**). **Next:** **`Task(tester)`** full suite + ledger (**`medium`** slice gate). **Phase** **`running`** (backlog **T4**/**T14**/**SD8** still open).
@@ -226,6 +233,61 @@ Ship a **local metadata index** (background scanning, incremental refresh, path-
 | **SR_UX** | 0 | 5 | L54 thumbnail UX vs load errors; L55 copy audit; L56 enumeration vs fixtures — escalate if SR tree walk semantics unclear |
 
 ## Handoff log (newest first)
+
+### 2026-04-17 — orchestrator (**CINE1-FU** fan-in: **`coder`** + **`tester`**)
+
+- **Merged:** **Assignments** **`CINE1-FU`** → **`done`**; **Phase** **`complete`** (**CINE1-FU**); **Stream N** follow-up **complete**; **Next action** backlog + optional gates; **Session checkpoint** lead bullet; **Global guard** cycles **31→32**, specialist **23→25** (**+2**).
+- **Evidence:** **`dev-docs/TO_DO.md`** L96 parent **[x]** + L97–100 nested **[x]** with **2026-04-17** notes (WMP codecs, GIF FPS, export-scale parity, title case); **`logs/test-ledger.md`** row — **513** passed (**CINE1-FU** slice-end).
+- **User scope:** only **TO_DO** **L97–100** work — **`reviewer`** not required for slice closeout; **`NEXT_TASK_TOOL: none`**.
+
+```text
+HANDOFF → parent:
+- Status: done
+- Phase: complete (CINE1-FU)
+- NEXT_TASK_TOOL: none
+- NEXT_TASK_TOOL_SECOND: none
+```
+
+### 2026-04-17 — tester (**CINE1-FU** batch full `pytest`)
+
+- **Command:** `python -m pytest tests/ -v` (Windows **`.venv`**, ~**97** s).
+- **Result:** **513 passed**, **0** failed, **0** skipped; **3** SWIG `DeprecationWarning` (existing).
+- **Ledger:** `logs/test-ledger.md`.
+
+```text
+HANDOFF → orchestrator:
+- Status: done
+- Artifacts: logs/test-ledger.md
+- Plan deltas: none (verification only)
+- Risks: none; optional UX smoke: Export Cine dialog title case + AVI/MPG/GIF spot playback (WMP/GIF viewer) per CINE1-FU goal
+- Recommended next: reviewer (CINE1-FU spec/diff gate) | optional ux or secops delta on export/subprocess if user wants extra assurance
+- Stream: N
+- Git: dirty; branch: WIP; worktree: none
+- Git proposal: none
+- PR: none
+- Cloud: none
+- Merge recommendation: n/a
+```
+
+### 2026-04-17 — coder (**CINE1-FU**)
+
+- **Scope:** `src/core/cine_video_export.py`, `src/gui/dialogs/cine_export_dialog.py`, `src/main.py`, `src/gui/main_window_menu_builder.py`, `src/gui/main_window.py`, `tests/test_cine_video_export.py`, `dev-docs/TO_DO.md` (L97–100), `CHANGELOG.md` [Unreleased], `src/version.py` **0.2.8**, backups `backups/cine1-fu-20260417-002052/`.
+- **Verify:** `python -m pytest tests/test_cine_video_export.py -v` → **13 passed** (~2.4 s, Windows `.venv`).
+
+```text
+HANDOFF → orchestrator:
+- Status: done
+- Artifacts: src/core/cine_video_export.py; src/gui/dialogs/cine_export_dialog.py; src/main.py; src/gui/main_window_menu_builder.py; src/gui/main_window.py; tests/test_cine_video_export.py; dev-docs/TO_DO.md; CHANGELOG.md; src/version.py; plans/orchestration-state.md (this entry); backups/cine1-fu-20260417-002052/
+- Plan deltas: dev-docs/TO_DO.md L97–100 nested items [x] with 2026-04-17 notes (CINE1-FU criteria)
+- Risks: MPG still MPEG-2 PS — WMP may need optional MPEG-2 Video Extension on some Windows SKUs; no H.264/MP4 added
+- Recommended next: tester (batch or scoped pytest per medium-risk slice) | optional secops delta on export/subprocess paths
+- Stream: N
+- Git: dirty; branch: unknown; worktree: none
+- Git proposal: none
+- PR: none
+- Cloud: none
+- Merge recommendation: n/a
+```
 
 ### 2026-04-16 — parent → orchestrator (**SR_UX** slice **complete**)
 
@@ -1042,5 +1104,10 @@ HANDOFF → orchestrator:
 - Cloud: none
 - Merge recommendation: n/a
 ```
+
+### 2026-04-17 — orchestrator (**CINE1-FU** kickoff, `dev-docs/TO_DO.md` L97–100)
+
+- **Action:** Read **`TO_DO.md`**, plan **§2**, **`cine_video_export.py`** / grep (**AVI** `codec="png"` → WMP **MPNG**; **MPG** `mpeg2video`); **`requirements.txt`** pins; updated **Goal** § **CINE1-FU**, **Assignments**, **Phase**, **Stream N**, **Next action**, **Session checkpoint**, **Global guard** (**30→31**).
+- **Dispatch:** **`Task(coder)`** with full **Goal** § **CINE1-FU** criteria; then autonomous **`tester`** / optional **`secops`**.
 
 _Specialists append dated subsections above this line._

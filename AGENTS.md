@@ -31,7 +31,7 @@ From project root, after activation:
 
 If no venv exists, create one, for example `python -m venv venv` or `python -m venv .venv`, activate it, then `pip install -r requirements.txt`.
 
-**Cine video export:** **`requirements.txt`** pins **`imageio`** + **`imageio-ffmpeg`**. The latter vendors a **FFmpeg** binary (typical stack includes **LGPL**/**GPL**-licensed components). PyInstaller / frozen builds should follow FFmpeg license obligations (attribution, source offers where required). **`IMAGEIO_FFMPEG_EXE`** can point to a system FFmpeg instead of the wheel binary if you document that path for your deployment.
+**Cine video export:** **`requirements.txt`** pins **`imageio`** + **`imageio-ffmpeg`**. The latter vendors a **FFmpeg** binary (typical stack includes **LGPL**/**GPL**-licensed components). PyInstaller / frozen builds should follow FFmpeg license obligations (attribution, source offers where required). **`IMAGEIO_FFMPEG_EXE`** can point to a system FFmpeg instead of the wheel binary if you document that path for your deployment. Exports include **GIF**, **AVI** / **MP4** (**MPEG-4 Part 2**, not H.264 by default) and **MPG** (MPEG-2 program stream); on **Windows 11 Media Player**, **`.mp4`** is the most reliable choice without the Store **MPEG-2 Video Extension** that **`.mpg`** often needs.
 
 Optional for contributors: `pip install -r requirements-dev.txt` adds local Python security scanners (semgrep, detect-secrets). Install TruffleHog v3 separately via `powershell -ExecutionPolicy Bypass -File .\scripts\install-trufflehog-v3.ps1 -AddToUserPath` so local scans align with CI's TruffleHog v3 action/binary line.
 

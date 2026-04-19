@@ -1,7 +1,7 @@
 # To-Do Checklist
 
-**Last updated:** 2026-04-16  
-**Changes:** Moved linked implementation plans into [`plans/supporting/`](plans/supporting/) and refreshed `plans/…` links in this file (plus `plans/completed/…` where the canonical plan already lived there). *(Prior same day: unequal pane splitters + cine axes linked to [`SPLITTER_UNEQUAL_PANES_AND_CINE_PLAYBACK_AXES.md`](SPLITTER_UNEQUAL_PANES_AND_CINE_PLAYBACK_AXES.md); 2026-04-15: RDSR shipped, ROI per-channel stats shipped, histogram projection pixels shipped, export formula-injection hardening.)*
+**Last updated:** 2026-04-17  
+**Changes:** PySkinDose P1 links to [`plans/supporting/PYSKINDOSE_INTEGRATION_PLAN.md`](plans/supporting/PYSKINDOSE_INTEGRATION_PLAN.md) only; highdicom/SR item points at SR plans directly. *(Prior: 2026-04-16 — moved linked implementation plans into [`plans/supporting/`](plans/supporting/) and refreshed `plans/…` links; unequal pane splitters + cine axes linked to [`SPLITTER_UNEQUAL_PANES_AND_CINE_PLAYBACK_AXES.md`](SPLITTER_UNEQUAL_PANES_AND_CINE_PLAYBACK_AXES.md); 2026-04-15: RDSR shipped, ROI per-channel stats shipped, histogram projection pixels shipped, export formula-injection hardening.)*
 
 ---
 
@@ -82,7 +82,7 @@ This file tracks active and near-term tasks.
 
 ## Features (Near-Term)
 
-- [ ] **[P1]** Integrate with PySkinDose?
+- [ ] **[P1]** Integrate with PySkinDose? — **Plan:** [PySkinDose integration](plans/supporting/PYSKINDOSE_INTEGRATION_PLAN.md).
 - [ ] **[P1]** Add highdicom and further SR support — **phased rollout:** [normalization & highdicom (Stage 1 → Stage 2)](plans/supporting/SR_DOSE_EVENTS_NORMALIZATION_AND_HIGHDICOM_PLAN.md); umbrella [SR full fidelity plan](plans/supporting/SR_FULL_FIDELITY_BROWSER_PLAN.md#4-dependencies---highdicom-allowed); [research: capabilities & fit](info/HIGHDICOM_OVERVIEW.md)
 - [ ] **[P2]** Add SQLite **FTS5** full-text search for the local study index (e.g. study/series description); see [LOCAL_STUDY_DATABASE_AND_INDEXING_PLAN.md](plans/supporting/LOCAL_STUDY_DATABASE_AND_INDEXING_PLAN.md).
 - [ ] **[P1]** Add a "Deep Anonymizer" export option that strips out all tag data that could be used to indentify a scanner, institution, address, etc., as well as patient informaion. Should include institution name, address, station name, device serial number, etc.
@@ -94,10 +94,11 @@ This file tracks active and near-term tasks.
     - [ ] **[P1]** [Nuclear module](info/PYLINAC_CATPHAN_AND_NUCLEAR_MODULES.md#2-nuclear-module-pylinacnuclear)
 - [ ] **[P2]** Make more robust to pylinac errors and processing limitations—for example, if pylinac expects at least a 100 mm scan extent but the scan extent is 99.5 mm, find a way to still run analysis and report results (see [pylinac flexibility & workarounds](info/PYLINAC_FLEXIBILITY_AND_WORKAROUNDS.md)).
 - [x] **[P1]** Enable export mpg/gif/avi for cine ([plan](plans/supporting/MPR_DICOM_SAVE_CINE_VIDEO_EXPORT_ANGLE_MEASUREMENT_PLAN.md#2-cine-video-export-mpg-gif-avi))
-    - [ ] **[P0]** MPEG and AVI exports are not opening in Windows Media Player - for AVI said it was encoded as MPNG - are we using widely compatible codecs?
-    - [ ] **[P0]** Frame rate taking effect? Eg, on GIF
-    - [ ] **[P0]** Mimic handling for exporting JPG/PNG/etc. (scaling, etc.)
-    - [ ] **[P1]** Capitalize words in Export Cine As... 
+    - [x] **[P0]** MPEG and AVI exports are not opening in Windows Media Player - for AVI said it was encoded as MPNG - are we using widely compatible codecs? — **2026-04-17:** AVI → **MPEG-4 Part 2** (`mpeg4` + `yuv420p`). **2026-04-17c (0.2.10):** **MP4** export (same codec, `+faststart`); Win11 Media Player treats **`.mpg`** as MPEG-1/2 only — **MPG** = **MPEG-2** PS + install **MPEG-2 Video Extension** for WMP, or use **MP4**/**AVI**. **No H.264** in this pass (licensing/product).
+    - [x] **[P0]** Frame rate taking effect? Eg, on GIF — **2026-04-17 / 2026-04-17b:** `gif_frame_duration_milliseconds` (imageio Pillow plugin expects **ms**, not seconds) + `effective_fps_for_encoder`; tests + GIF metadata check vs FPS.
+    - [x] **[P0]** Mimic handling for exporting JPG/PNG/etc. (scaling, etc.) — **2026-04-17:** Cine dialog **resolution** combo (native…4×) + `main.py` passes `export_scale`, **`scale_annotations_with_image=False`**, **`subwindow_annotation_managers`** (same aggregation as **Export Images**).
+    - [x] **[P1]** Capitalize words in Export Cine As...  — **2026-04-17:** Menu, dialog title, **QMessageBox** / save-as caption title case (**Export Cine As…** / **Export Cine**).
+    - [ ] check above, mp4 works, gif works
 - [x] **[P2]** Add measure angle as another measurement/annotation - ([plan](plans/supporting/MPR_DICOM_SAVE_CINE_VIDEO_EXPORT_ANGLE_MEASUREMENT_PLAN.md#3-angle-measurement-tool)) — **2026-04-14:** toolbar **Angle** / **Shift+M**, three-click at-vertex angle; export + clipboard + tests
     - [ ] **[P1]** Check if export ROI statistics includes angle measurement (and distance measurement)
 - [ ] **[P2]** Interactive oblique rotation on MPR (drag handles/crosshairs) ([details](FUTURE_WORK_DETAIL_NOTES.md#interactive-oblique-rotation-on-mpr))

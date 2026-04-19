@@ -19,7 +19,7 @@ from core.cine_video_export import (
     effective_fps_for_encoder,
     encode_cine_video_from_png_paths,
     ffmpeg_codec_and_params_for_cine_container,
-    gif_frame_duration_milliseconds,
+    gif_frame_duration_seconds,
 )
 
 
@@ -43,12 +43,12 @@ def test_effective_fps_clamps_and_zero_defaults() -> None:
     assert effective_fps_for_encoder("GIF", -3.0) == 10.0
 
 
-def test_gif_frame_duration_ms_matches_effective_fps() -> None:
-    """GIF Pillow writer ``duration`` is in ms → ms * (fps/1000) should equal 1 s per frame cycle."""
+def test_gif_frame_duration_matches_effective_fps() -> None:
+    """GIF imageio ``duration`` must be inverse of clamped FPS (dialog → encoder)."""
     for req in (15.0, 0.0, 200.0):
         eff = effective_fps_for_encoder("GIF", req)
-        d_ms = gif_frame_duration_milliseconds("GIF", req)
-        assert abs((d_ms / 1000.0) * eff - 1.0) < 1e-9
+        d = gif_frame_duration_seconds("GIF", req)
+        assert abs(d * eff - 1.0) < 1e-9
 
 
 def test_ffmpeg_codec_mappings() -> None:
@@ -56,10 +56,6 @@ def test_ffmpeg_codec_mappings() -> None:
         "mpeg4",
         ["-pix_fmt", "yuv420p"],
     )
-    c4, p4 = ffmpeg_codec_and_params_for_cine_container("MP4")
-    assert c4 == "mpeg4"
-    assert "-pix_fmt" in p4 and "yuv420p" in p4
-    assert "+faststart" in "".join(p4)
     c, p = ffmpeg_codec_and_params_for_cine_container("MPG")
     assert c == "mpeg2video"
     assert "-f" in p and "mpeg" in p
@@ -71,10 +67,7 @@ def test_ffmpeg_codec_mapping_rejects_gif() -> None:
         ffmpeg_codec_and_params_for_cine_container("GIF")
 
 
-@pytest.mark.parametrize(
-    "fmt,ext",
-    [("GIF", ".gif"), ("AVI", ".avi"), ("MP4", ".mp4"), ("MPG", ".mpg")],
-)
+@pytest.mark.parametrize("fmt,ext", [("GIF", ".gif"), ("AVI", ".avi"), ("MPG", ".mpg")])
 def test_encode_cine_video_from_png_paths_small(tmp_path: Path, fmt: str, ext: str) -> None:
     """Write 4 tiny PNGs and encode; assert non-empty output under size cap."""
     pngs = []
@@ -118,22 +111,6 @@ def test_avi_encode_requests_mpeg4_writer(tmp_path: Path) -> None:
     mock_writer.close.assert_called_once()
 
 
-def test_mp4_encode_requests_mpeg4_faststart_writer(tmp_path: Path) -> None:
-    pngs = []
-    for i in range(2):
-        p = tmp_path / f"m{i}.png"
-        Image.fromarray(np.zeros((8, 8, 3), dtype=np.uint8), mode="RGB").save(p)
-        pngs.append(p)
-    out = tmp_path / "x.mp4"
-    mock_writer = MagicMock()
-    with patch("core.cine_video_export.imageio.get_writer", return_value=mock_writer) as gw:
-        encode_cine_video_from_png_paths(pngs, str(out), "MP4", fps=18.0, cancel_event=None)
-    kwargs = gw.call_args.kwargs
-    assert kwargs.get("codec") == "mpeg4"
-    assert kwargs.get("ffmpeg_params") == ["-pix_fmt", "yuv420p", "-movflags", "+faststart"]
-    mock_writer.close.assert_called_once()
-
-
 def test_mpg_encode_requests_mpeg2_ps_writer(tmp_path: Path) -> None:
     pngs = []
     for i in range(2):
@@ -161,22 +138,5 @@ def test_gif_encode_passes_duration_from_fps(tmp_path: Path) -> None:
     with patch("core.cine_video_export.imageio.get_writer", return_value=mock_writer) as gw:
         encode_cine_video_from_png_paths(pngs, str(out), "GIF", fps=25.0, cancel_event=None)
     kwargs = gw.call_args.kwargs
-    assert kwargs.get("duration") == pytest.approx(1000.0 / 25.0)
+    assert kwargs.get("duration") == pytest.approx(1.0 / 25.0)
     mock_writer.close.assert_called_once()
-
-
-def test_gif_file_frame_duration_metadata_scales_with_fps(tmp_path: Path) -> None:
-    """Integration: Pillow reads per-frame ``duration`` in ms; slower FPS → longer delay."""
-    delays: dict[float, int] = {}
-    for fps in (10.0, 40.0):
-        pngs = []
-        for i in range(3):
-            p = tmp_path / f"h{fps}_{i}.png"
-            Image.fromarray(np.zeros((10, 10, 3), dtype=np.uint8), mode="RGB").save(p)
-            pngs.append(p)
-        out = tmp_path / f"anim_{fps}.gif"
-        encode_cine_video_from_png_paths(pngs, str(out), "GIF", fps=fps, cancel_event=None)
-        with Image.open(out) as im:
-            im.seek(0)
-            delays[fps] = int(im.info.get("duration", 0))
-    assert delays[10.0] > delays[40.0]

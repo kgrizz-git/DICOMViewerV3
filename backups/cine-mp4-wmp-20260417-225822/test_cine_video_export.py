@@ -56,12 +56,8 @@ def test_ffmpeg_codec_mappings() -> None:
         "mpeg4",
         ["-pix_fmt", "yuv420p"],
     )
-    c4, p4 = ffmpeg_codec_and_params_for_cine_container("MP4")
-    assert c4 == "mpeg4"
-    assert "-pix_fmt" in p4 and "yuv420p" in p4
-    assert "+faststart" in "".join(p4)
     c, p = ffmpeg_codec_and_params_for_cine_container("MPG")
-    assert c == "mpeg2video"
+    assert c == "mpeg4"
     assert "-f" in p and "mpeg" in p
     assert "yuv420p" in p
 
@@ -71,10 +67,7 @@ def test_ffmpeg_codec_mapping_rejects_gif() -> None:
         ffmpeg_codec_and_params_for_cine_container("GIF")
 
 
-@pytest.mark.parametrize(
-    "fmt,ext",
-    [("GIF", ".gif"), ("AVI", ".avi"), ("MP4", ".mp4"), ("MPG", ".mpg")],
-)
+@pytest.mark.parametrize("fmt,ext", [("GIF", ".gif"), ("AVI", ".avi"), ("MPG", ".mpg")])
 def test_encode_cine_video_from_png_paths_small(tmp_path: Path, fmt: str, ext: str) -> None:
     """Write 4 tiny PNGs and encode; assert non-empty output under size cap."""
     pngs = []
@@ -118,23 +111,7 @@ def test_avi_encode_requests_mpeg4_writer(tmp_path: Path) -> None:
     mock_writer.close.assert_called_once()
 
 
-def test_mp4_encode_requests_mpeg4_faststart_writer(tmp_path: Path) -> None:
-    pngs = []
-    for i in range(2):
-        p = tmp_path / f"m{i}.png"
-        Image.fromarray(np.zeros((8, 8, 3), dtype=np.uint8), mode="RGB").save(p)
-        pngs.append(p)
-    out = tmp_path / "x.mp4"
-    mock_writer = MagicMock()
-    with patch("core.cine_video_export.imageio.get_writer", return_value=mock_writer) as gw:
-        encode_cine_video_from_png_paths(pngs, str(out), "MP4", fps=18.0, cancel_event=None)
-    kwargs = gw.call_args.kwargs
-    assert kwargs.get("codec") == "mpeg4"
-    assert kwargs.get("ffmpeg_params") == ["-pix_fmt", "yuv420p", "-movflags", "+faststart"]
-    mock_writer.close.assert_called_once()
-
-
-def test_mpg_encode_requests_mpeg2_ps_writer(tmp_path: Path) -> None:
+def test_mpg_encode_requests_mpeg4_ps_writer(tmp_path: Path) -> None:
     pngs = []
     for i in range(2):
         p = tmp_path / f"b{i}.png"
@@ -145,7 +122,7 @@ def test_mpg_encode_requests_mpeg2_ps_writer(tmp_path: Path) -> None:
     with patch("core.cine_video_export.imageio.get_writer", return_value=mock_writer) as gw:
         encode_cine_video_from_png_paths(pngs, str(out), "MPG", fps=8.0, cancel_event=None)
     kwargs = gw.call_args.kwargs
-    assert kwargs.get("codec") == "mpeg2video"
+    assert kwargs.get("codec") == "mpeg4"
     assert kwargs.get("ffmpeg_params") == ["-f", "mpeg", "-pix_fmt", "yuv420p"]
     mock_writer.close.assert_called_once()
 

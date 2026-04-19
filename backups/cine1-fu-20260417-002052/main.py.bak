@@ -2700,7 +2700,7 @@ class DICOMViewerApp(QObject):
 
     def _on_export_cine_video(self) -> None:
         """
-        File → Export Cine As… — GIF / AVI / MP4 / MPG for the focused 2D multi-frame pane.
+        File → Export cine as… — GIF / AVI / MPG for the focused 2D multi-frame pane.
 
         Renders each frame with the same PIL path as PNG export (not a viewport grab),
         writes temporary PNGs, then encodes in a ``QThread`` (imageio / FFmpeg, no
@@ -2708,7 +2708,7 @@ class DICOMViewerApp(QObject):
         """
         blocker = describe_focused_cine_export_blocker(self)
         if blocker:
-            QMessageBox.information(self.main_window, "Export Cine", blocker)
+            QMessageBox.information(self.main_window, "Export cine", blocker)
             return
 
         idx = self.get_focused_subwindow_index()
@@ -2717,12 +2717,12 @@ class DICOMViewerApp(QObject):
         series_uid = str(data.get("current_series_uid") or "")
         studies = self.current_studies
         if not studies or study_uid not in studies or series_uid not in studies[study_uid]:
-            QMessageBox.warning(self.main_window, "Export Cine", "Series data is not available.")
+            QMessageBox.warning(self.main_window, "Export cine", "Series data is not available.")
             return
         series_list = studies[study_uid][series_uid]
         total = len(series_list)
         if total < 2:
-            QMessageBox.information(self.main_window, "Export Cine", "Not enough frames to export.")
+            QMessageBox.information(self.main_window, "Export cine", "Not enough frames to export.")
             return
 
         fps_default = float(self.cine_player.get_effective_frame_rate())
@@ -2743,13 +2743,11 @@ class DICOMViewerApp(QObject):
             opts.use_cine_loop_bounds,
         )
         if not indices:
-            QMessageBox.warning(self.main_window, "Export Cine", "No frames in the selected range.")
+            QMessageBox.warning(self.main_window, "Export cine", "No frames in the selected range.")
             return
 
         ext = "." + opts.video_format.lower()
-        filters = (
-            "GIF Image (*.gif);;AVI Video (*.avi);;MP4 Video (*.mp4);;MPEG Program Stream (*.mpg)"
-        )
+        filters = "GIF Image (*.gif);;AVI Video (*.avi);;MPEG Program Stream (*.mpg)"
         ds0 = series_list[0]
         raw_desc = getattr(ds0, "SeriesDescription", None) or "cine_export"
         stem = str(raw_desc).strip() or "cine_export"
@@ -2763,7 +2761,7 @@ class DICOMViewerApp(QObject):
             start_dir = os.getcwd()
         default_path = os.path.join(start_dir, stem + ext)
         outp = self._export_app_facade.prompt_save_path(
-            "Save Cine Export As",
+            "Save cine export as",
             default_path,
             filters,
         )
@@ -2793,19 +2791,6 @@ class DICOMViewerApp(QObject):
         proj_en = bool(getattr(sdm, "projection_enabled", False)) if sdm else False
         proj_ty = str(getattr(sdm, "projection_type", "aip") or "aip") if sdm else "aip"
         proj_cnt = int(getattr(sdm, "projection_slice_count", 4) or 4) if sdm else 4
-
-        # Match **Export Images**: aggregate annotations from all subwindows when drawing overlays.
-        subwindow_annotation_managers: List[Dict[str, Any]] = []
-        for si in sorted(self.subwindow_managers.keys()):
-            m = self.subwindow_managers[si]
-            subwindow_annotation_managers.append(
-                {
-                    "roi_manager": m.get("roi_manager"),
-                    "measurement_tool": m.get("measurement_tool"),
-                    "text_annotation_tool": m.get("text_annotation_tool"),
-                    "arrow_annotation_tool": m.get("arrow_annotation_tool"),
-                }
-            )
 
         cancel_event = threading.Event()
         temp_dir = tempfile.mkdtemp(prefix="dv3_cine_")
@@ -2847,14 +2832,11 @@ class DICOMViewerApp(QObject):
                     proj_en,
                     proj_ty,
                     proj_cnt,
-                    export_scale=opts.export_scale,
-                    scale_annotations_with_image=False,
-                    subwindow_annotation_managers=subwindow_annotation_managers,
                 )
                 if img is None:
                     QMessageBox.critical(
                         self.main_window,
-                        "Export Cine",
+                        "Export cine",
                         f"Failed to rasterize frame {frame_idx + 1} of {total}.",
                     )
                     safe_remove_partial_output(outp)
@@ -2912,14 +2894,14 @@ class DICOMViewerApp(QObject):
             if enc_err[0] is None:
                 QMessageBox.critical(
                     self.main_window,
-                    "Export Cine",
+                    "Export cine",
                     "Encoding did not complete.",
                 )
                 safe_remove_partial_output(outp)
             elif enc_err[0] == "":
                 QMessageBox.information(
                     self.main_window,
-                    "Export Cine",
+                    "Export cine",
                     f"Successfully wrote:\n{outp}",
                 )
             else:
@@ -2927,7 +2909,7 @@ class DICOMViewerApp(QObject):
                 if "cancel" not in low:
                     QMessageBox.critical(
                         self.main_window,
-                        "Export Cine",
+                        "Export cine",
                         enc_err[0],
                     )
                 safe_remove_partial_output(outp)

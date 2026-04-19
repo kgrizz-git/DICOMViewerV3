@@ -3,21 +3,21 @@ Cine video export — frame index math, per-frame rasterization, and imageio enc
 
 Builds deterministic frame lists from cine loop bounds, renders each frame with the
 same LUT / photometric / projection / overlay path as :class:`core.export_manager.ExportManager`
-PNG export (no ``grab()``), then writes **GIF** / **AVI** / **MP4** / **MPG** via **imageio** +
-**imageio-ffmpeg** (FFmpeg subprocess with **no** ``shell=True``).
+PNG export (no ``grab()``), then writes GIF / AVI / MPG via **imageio** + **imageio-ffmpeg**
+(FFmpeg subprocess with **no** ``shell=True``).
 
-**Codecs (Windows 11 Media Player):** **GIF** uses imageio’s Pillow-backed writer; per-frame
-delay is **milliseconds** (:func:`gif_frame_duration_milliseconds`) per the Pillow plugin API.
-**AVI** and **MP4** use **MPEG-4 Part 2** (``mpeg4``) with **YUV 4:2:0** — not motion-JPEG /
-PNG-in-AVI (**MPNG**). **MP4** adds ``-movflags +faststart`` so metadata is front-loaded for
-players that stream from disk. Microsoft documents in-the-box **Media Player** support for
-``.mp4`` with **MPEG-4** video; **``.mpg`` is treated as MPEG-1/2** in that matrix and
-typically needs the free **MPEG-2 Video Extension** from the Store, so **MPG** here uses
-canonical **MPEG-2** in a program stream (FFmpeg ``mpeg2video``) for standards-minded
-archives and apps that have the extension — use **MP4** or **AVI** on stock Windows 11 if
-you need playback without installing that add-on. This module does **not** write **H.264**
-(**libx264** / AVC) by default (patent and redistribution policy vary; see **AGENTS.md** /
-**CHANGELOG**).
+**Codecs (Windows Media Player–friendly defaults):** **GIF** uses imageio’s Pillow-backed
+GIF writer; per-frame delay is passed as **milliseconds** (:func:`gif_frame_duration_milliseconds`)
+because imageio v3’s Pillow plugin documents ``duration`` in **ms** (passing seconds makes
+every frame ~0 ms and viewers clamp delays, so FPS appears unchanged). **AVI** uses
+**MPEG-4 Part 2** (FFmpeg ``mpeg4``) with **YUV 4:2:0** — not motion-JPEG / PNG-in-AVI
+(which WMP often labels **MPNG**). **MPG** uses the same **MPEG-4 Part 2** video inside an
+MPEG **program stream** (``.mpg``) so **Windows Media Player** can decode it without the
+optional **MPEG-2 Video Extension** (FFmpeg ``mpeg2video`` in ``.mpg`` is commonly blocked
+on stock Windows). This
+module does **not** write **MP4 / H.264** by default (patent and redistribution policy
+vary; the app already documents FFmpeg’s **LGPL/GPL** components in **AGENTS.md** /
+**CHANGELOG** — add MP4 only after an explicit product decision and user-docs note).
 
 Inputs:
     - ``Dataset`` per frame, ``studies`` map, window/level, optional ROI/overlay managers.
@@ -105,24 +105,21 @@ def ffmpeg_codec_and_params_for_cine_container(video_format: str) -> Tuple[str, 
     """
     Return ``(codec, ffmpeg_params)`` for FFmpeg-backed cine containers.
 
-    ``video_format`` is ``\"AVI\"``, ``\"MP4\"``, or ``\"MPG\"`` (case-insensitive).
+    ``video_format`` is ``\"GIF\"``, ``\"AVI\"``, or ``\"MPG\"`` (case-insensitive).
     GIF is not handled here — callers use the dedicated GIF writer.
 
     Raises:
-        ValueError: if the format is not AVI, MP4, or MPG.
+        ValueError: if the format is not AVI or MPG.
     """
     fmt = str(video_format).strip().upper()
     if fmt == "AVI":
         # MPEG-4 Part 2 in AVI — broadly supported on Windows vs. PNG/MJPEG-in-AVI (MPNG).
         return ("mpeg4", ["-pix_fmt", "yuv420p"])
-    if fmt == "MP4":
-        # MPEG-4 Part 2 in MP4 — matches Windows 11 Media Player “MPEG-4” in-box path for .mp4.
-        return ("mpeg4", ["-pix_fmt", "yuv420p", "-movflags", "+faststart"])
     if fmt == "MPG":
-        # MPEG-2 in MPEG program stream — conventional .mpg. Windows 11 Media Player lists
-        # .mpg under MPEG-1/2 and commonly requires the Store **MPEG-2 Video Extension**;
-        # putting MPEG-4 video in .mpg still fails there, so prefer **MP4**/**AVI** for MPEG-4.
-        return ("mpeg2video", ["-f", "mpeg", "-pix_fmt", "yuv420p"])
+        # MPEG-4 Part 2 in an MPEG program stream: decodes in stock Windows Media Player
+        # without the optional MPEG-2 Video Extension (mpeg2video in .mpg often will not).
+        # Unusual vs. broadcast MPEG-1/2, but FFmpeg muxes it cleanly at arbitrary FPS.
+        return ("mpeg4", ["-f", "mpeg", "-pix_fmt", "yuv420p"])
     raise ValueError(f"No FFmpeg codec mapping for format: {video_format!r}")
 
 
@@ -286,15 +283,37 @@ def encode_cine_video_from_png_paths(
         finally:
             writer.close()
 
-    elif fmt in ("AVI", "MP4", "MPG"):
-        vid_codec, vid_extra = ffmpeg_codec_and_params_for_cine_container(fmt)
+    elif fmt == "AVI":
+        avi_codec, avi_extra = ffmpeg_codec_and_params_for_cine_container("AVI")
         writer = imageio.get_writer(
             output_path,
             format=cast(Any, "FFMPEG"),
             mode="I",
             fps=eff_fps,
-            codec=vid_codec,
-            ffmpeg_params=vid_extra,
+            codec=avi_codec,
+            ffmpeg_params=avi_extra,
+            ffmpeg_log_level="error",
+        )
+        try:
+            for p in paths:
+                if cancel_event and cancel_event.is_set():
+                    raise RuntimeError("Export cancelled.")
+                arr = imageio.imread(str(p))
+                if arr.ndim == 2:
+                    arr = np.stack([arr] * 3, axis=-1)
+                writer.append_data(arr)
+        finally:
+            writer.close()
+
+    elif fmt == "MPG":
+        mpg_codec, mpg_extra = ffmpeg_codec_and_params_for_cine_container("MPG")
+        writer = imageio.get_writer(
+            output_path,
+            format=cast(Any, "FFMPEG"),
+            mode="I",
+            fps=eff_fps,
+            codec=mpg_codec,
+            ffmpeg_params=mpg_extra,
             ffmpeg_log_level="error",
         )
         try:

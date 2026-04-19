@@ -40,7 +40,7 @@ from PySide6.QtWidgets import (
 class CineExportOptions:
     """User-selected options for cine video export."""
 
-    video_format: str  # "GIF", "AVI", "MP4", or "MPG"
+    video_format: str  # "GIF", "AVI", or "MPG"
     fps: float
     use_cine_loop_bounds: bool
     loop_start_frame: int
@@ -72,15 +72,12 @@ class CineExportDialog(QDialog):
         last = max(0, self._total - 1)
 
         self._format_combo = QComboBox()
-        self._format_combo.addItems(["GIF", "AVI", "MP4", "MPG"])
-        # Default **MP4**: Windows 11 Media Player documents in-box playback for .mp4 + MPEG-4;
-        # .mpg is routed to MPEG-1/2 and usually needs the Store MPEG-2 Video Extension.
-        self._format_combo.setCurrentIndex(2)
+        self._format_combo.addItems(["GIF", "AVI", "MPG"])
+        self._format_combo.setCurrentIndex(0)
         self._format_combo.setToolTip(
-            "**MP4** and **AVI**: MPEG-4 Part 2 (FFmpeg `mpeg4`), YUV 4:2:0 — best for Windows 11 "
-            "Media Player without installing codecs. **MPG**: MPEG-2 program stream (needs the "
-            "free **MPEG-2 Video Extension** from the Microsoft Store for typical WMP playback). "
-            "**GIF**: animated GIF."
+            "MPG uses MPEG-4 Part 2 in an MPEG program stream (FFmpeg), YUV 4:2:0 — "
+            "intended to play in Windows Media Player without the MPEG-2 extension. "
+            "AVI uses the same video codec in an AVI container (not PNG-in-AVI / MPNG)."
         )
 
         self._resolution_combo = QComboBox()

@@ -99,7 +99,7 @@ class MainWindow(QMainWindow):
     export_requested = Signal()
     export_screenshots_requested = Signal()  # Emitted when Export Screenshots is requested
     save_mpr_dicom_requested = Signal()  # File → Save MPR as DICOM… (focused MPR pane)
-    export_cine_video_requested = Signal()  # File → Export cine as… (focused multi-frame 2D pane)
+    export_cine_video_requested = Signal()  # File → Export Cine As… (focused multi-frame 2D pane)
     settings_requested = Signal()
     overlay_settings_requested = Signal()  # Emitted when overlay settings dialog is requested
     tag_viewer_requested = Signal()

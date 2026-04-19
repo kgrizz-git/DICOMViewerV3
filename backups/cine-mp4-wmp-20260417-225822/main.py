@@ -2700,7 +2700,7 @@ class DICOMViewerApp(QObject):
 
     def _on_export_cine_video(self) -> None:
         """
-        File → Export Cine As… — GIF / AVI / MP4 / MPG for the focused 2D multi-frame pane.
+        File → Export Cine As… — GIF / AVI / MPG for the focused 2D multi-frame pane.
 
         Renders each frame with the same PIL path as PNG export (not a viewport grab),
         writes temporary PNGs, then encodes in a ``QThread`` (imageio / FFmpeg, no
@@ -2747,9 +2747,7 @@ class DICOMViewerApp(QObject):
             return
 
         ext = "." + opts.video_format.lower()
-        filters = (
-            "GIF Image (*.gif);;AVI Video (*.avi);;MP4 Video (*.mp4);;MPEG Program Stream (*.mpg)"
-        )
+        filters = "GIF Image (*.gif);;AVI Video (*.avi);;MPEG Program Stream (*.mpg)"
         ds0 = series_list[0]
         raw_desc = getattr(ds0, "SeriesDescription", None) or "cine_export"
         stem = str(raw_desc).strip() or "cine_export"

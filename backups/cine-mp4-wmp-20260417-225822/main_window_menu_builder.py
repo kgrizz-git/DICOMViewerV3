@@ -82,7 +82,7 @@ def build_menu_bar(main_window) -> None:
 
     export_cine_action = QAction("Export Cine As…", main_window)
     export_cine_action.setStatusTip(
-        "Export the focused window's cine loop as GIF, AVI, MP4, or MPEG program stream (FFmpeg via imageio)"
+        "Export the focused window's cine loop as GIF, AVI, or MPG (FFmpeg via imageio)"
     )
     export_cine_action.triggered.connect(main_window.export_cine_video_requested.emit)
     file_menu.addAction(export_cine_action)
