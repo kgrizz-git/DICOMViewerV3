@@ -97,7 +97,7 @@ def test_write_csv_includes_multichannel_columns(tmp_path: Path, monkeypatch) ->
     ds.SeriesNumber = "1"
     ds.SeriesDescription = "RGB"
     current_studies = {"study": {"series": [ds]}}
-    collected = [(("study", "series"), [(0, [SimpleNamespace(shape_type="rectangle")], [])])]
+    collected = [(("study", "series"), [(0, [SimpleNamespace(shape_type="rectangle")], [], [])])]
     subwindow_managers = {0: {"roi_manager": object()}}
     out_path = tmp_path / "roi.csv"
 
@@ -141,7 +141,7 @@ def test_write_csv_escapes_formula_like_text_cells(tmp_path: Path, monkeypatch) 
     ds.SeriesNumber = "1"
     ds.SeriesDescription = "=bad"
     current_studies = {"study": {"series": [ds]}}
-    collected = [(("study", "series"), [(0, [SimpleNamespace(shape_type="rectangle")], [])])]
+    collected = [(("study", "series"), [(0, [SimpleNamespace(shape_type="rectangle")], [], [])])]
     subwindow_managers = {0: {"roi_manager": object()}}
     out_path = tmp_path / "roi_safe.csv"
 

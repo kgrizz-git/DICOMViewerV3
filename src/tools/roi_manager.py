@@ -916,16 +916,44 @@ class ROIManager:
         if "max" in roi.visible_statistics and "max" in statistics:
             lines.append(f"Max: {statistics['max']:.2f}{unit_suffix}")
         mc = int(statistics.get("multichannel_count") or 0)
-        if mc >= 2 and "mean" in roi.visible_statistics:
+        if mc >= 2:
             labels = ("R", "G", "B") if mc == 3 else tuple(str(i) for i in range(mc))
-            bits: list[str] = []
-            for c in range(mc):
-                mk = f"mean_ch{c}"
-                if mk in statistics:
-                    lab = labels[c] if c < len(labels) else str(c)
-                    bits.append(f"{lab} μ={statistics[mk]:.2f}{unit_suffix}")
-            if bits:
-                lines.append("Ch mean: " + "  ".join(bits))
+            if "mean" in roi.visible_statistics:
+                bits: list[str] = []
+                for c in range(mc):
+                    mk = f"mean_ch{c}"
+                    if mk in statistics:
+                        lab = labels[c] if c < len(labels) else str(c)
+                        bits.append(f"{lab} μ={statistics[mk]:.2f}{unit_suffix}")
+                if bits:
+                    lines.append("Ch mean: " + "  ".join(bits))
+            if "std" in roi.visible_statistics:
+                bits_std: list[str] = []
+                for c in range(mc):
+                    sk = f"std_ch{c}"
+                    if sk in statistics:
+                        lab = labels[c] if c < len(labels) else str(c)
+                        bits_std.append(f"{lab} σ={statistics[sk]:.2f}{unit_suffix}")
+                if bits_std:
+                    lines.append("Ch std: " + "  ".join(bits_std))
+            if "min" in roi.visible_statistics:
+                bits_min: list[str] = []
+                for c in range(mc):
+                    nk = f"min_ch{c}"
+                    if nk in statistics:
+                        lab = labels[c] if c < len(labels) else str(c)
+                        bits_min.append(f"{lab} min={statistics[nk]:.2f}{unit_suffix}")
+                if bits_min:
+                    lines.append("Ch min: " + "  ".join(bits_min))
+            if "max" in roi.visible_statistics:
+                bits_max: list[str] = []
+                for c in range(mc):
+                    xk = f"max_ch{c}"
+                    if xk in statistics:
+                        lab = labels[c] if c < len(labels) else str(c)
+                        bits_max.append(f"{lab} max={statistics[xk]:.2f}{unit_suffix}")
+                if bits_max:
+                    lines.append("Ch max: " + "  ".join(bits_max))
         if "count" in roi.visible_statistics and "count" in statistics:
             lines.append(f"Pixels: {statistics['count']}")
         if "area" in roi.visible_statistics:

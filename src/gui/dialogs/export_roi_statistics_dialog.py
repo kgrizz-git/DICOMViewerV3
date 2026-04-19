@@ -1,12 +1,12 @@
 """
 Export ROI Statistics Dialog
 
-Dialog for exporting ROI statistics and crosshair coordinates to TXT, CSV, or XLSX.
+Dialog for exporting ROI statistics, crosshair coordinates, and distance/angle measurements to TXT, CSV, or XLSX.
 Series selection (with annotation counts), format choice, rescale option, and file path.
 
 Inputs:
     - current_studies: {study_uid: {series_uid: [Dataset]}}
-    - subwindow_managers: {idx: {'roi_manager', 'crosshair_manager', ...}}
+    - subwindow_managers: {idx: {'roi_manager', 'crosshair_manager', 'measurement_tool', ...}}
     - config_manager: for last export path
 
 Outputs:
@@ -53,10 +53,11 @@ def _count_annotations_for_series(
     series_uid: str,
     num_slices: int,
     subwindow_managers: Dict[int, Dict[str, Any]],
-) -> Tuple[int, int]:
-    """Return (roi_count, crosshair_count) for the given series across all subwindows."""
+) -> Tuple[int, int, int]:
+    """Return (roi_count, crosshair_count, measurement_count) for the series across subwindows."""
     roi_count = 0
     crosshair_count = 0
+    measurement_count = 0
     for z in range(num_slices):
         key = (study_uid, series_uid, z)
         for idx in subwindow_managers:
@@ -65,7 +66,10 @@ def _count_annotations_for_series(
                 roi_count += len(managers["roi_manager"].rois.get(key, []))
             if managers.get("crosshair_manager") and hasattr(managers["crosshair_manager"], "crosshairs"):
                 crosshair_count += len(managers["crosshair_manager"].crosshairs.get(key, []))
-    return roi_count, crosshair_count
+            mt = managers.get("measurement_tool")
+            if mt is not None and hasattr(mt, "get_measurements_for_slice"):
+                measurement_count += len(mt.get_measurements_for_slice(study_uid, series_uid, z))
+    return roi_count, crosshair_count, measurement_count
 
 
 def _any_series_has_rescale(current_studies: Dict[str, Dict[str, List[Dataset]]]) -> bool:
@@ -81,10 +85,10 @@ def _any_series_has_rescale(current_studies: Dict[str, Dict[str, List[Dataset]]]
 
 class ExportROIStatisticsDialog(QDialog):
     """
-    Dialog for exporting ROI statistics and crosshair data.
+    Dialog for exporting ROI statistics, crosshair data, and measurements.
 
     Features:
-    - Series tree with study → series and annotation counts (ROIs, crosshairs)
+    - Series tree with study → series and annotation counts (ROIs, crosshairs, measurements)
     - Format: TXT, CSV, XLSX
     - Rescale checkbox (use HU etc. when available)
     - File path with Browse; default filename from AccessionNumber or PatientID
@@ -211,16 +215,20 @@ class ExportROIStatisticsDialog(QDialog):
                 series_num = getattr(first_ds, "SeriesNumber", "")
                 series_desc = getattr(first_ds, "SeriesDescription", "Unknown Series")
                 num_slices = len(datasets)
-                roi_count, cross_count = _count_annotations_for_series(
+                roi_count, cross_count, meas_count = _count_annotations_for_series(
                     study_uid, series_uid, num_slices, self.subwindow_managers
                 )
                 suffix = ""
-                if roi_count or cross_count:
+                if roi_count or cross_count or meas_count:
                     parts = []
                     if roi_count:
                         parts.append(f"{roi_count} ROI{'s' if roi_count != 1 else ''}")
                     if cross_count:
                         parts.append(f"{cross_count} crosshair{'s' if cross_count != 1 else ''}")
+                    if meas_count:
+                        parts.append(
+                            f"{meas_count} measurement{'s' if meas_count != 1 else ''}"
+                        )
                     suffix = "  (" + ", ".join(parts) + ")"
                 series_text = f"Series {series_num}: {series_desc}{suffix}"
                 series_item = QTreeWidgetItem(study_item)
