@@ -1,7 +1,7 @@
 # Documentation structure, completeness, and Quick Guide alignment
 
 **Created:** 2026-04-20  
-**Status:** In progress (Phases 1–4 partially implemented 2026-04-20)  
+**Status:** Substantially complete (Phases 1–5 and Phase 6 CODE_DOCUMENTATION item done as of 2026-04-20; optional **CONTRIBUTING.md** split still open.)  
 **Inputs:**
 
 - [Documentation assessment — 2026-04-20](../../doc-assessments/doc-assessment-2026-04-20-002224.md) (findings + recommended architecture section)
@@ -55,7 +55,7 @@
 - [x] **Settings / configuration reference** — Add either:
   - **`user-docs/CONFIGURATION.md`** — Settings dialog groups in **UI order**, labels matching `settings_dialog.py` / related UI; defaults and effects in plain language; optional “config key” column for support, **or**
   - A major **“Settings reference”** section inside `USER_GUIDE.md` if you want a single file for users.
-- [ ] **Cross-check** — Walk `src/utils/config/*` mixins and `settings_dialog.py` for groups not yet mentioned (incremental passes are OK; mark gaps with TODO comments in the plan checklist until closed).
+- [x] **Cross-check** — Walk `src/utils/config/*` mixins and `settings_dialog.py` for groups not yet mentioned (incremental passes are OK; mark gaps with TODO comments in the plan checklist until closed). *(2026-04-20: `CONFIGURATION.md` expanded with on-disk paths, Overlay / Overlay Tags / Annotation dialogs, and a “other domains” table keyed to `default_config` / mixins.)*
 
 **Verification:** Every **Settings** group name visible in the app has at least one sentence in user docs or an explicit “documented elsewhere” pointer.
 
@@ -76,8 +76,8 @@
 
 **Objective:** Catch link rot and force periodic review.
 
-- [ ] **CI or local script** — Relative link check for `user-docs/*.md` (and key `dev-docs/` indexes you add). Optional: external URL check with allowlist.
-- [ ] **Cadence** — Note in `RELEASING.md` or `AGENTS.md`: after each **minor** release (or large UI change), run [doc-assessment-template.md](../../templates-generalized/doc-assessment-template.md) → new timestamped file under `dev-docs/doc-assessments/`.
+- [x] **CI or local script** — Relative link check for `user-docs/*.md` (and key `dev-docs/` indexes you add). Optional: external URL check with allowlist. *(Implemented: `scripts/check_user_docs_links.py`, `tests/test_user_docs_links.py`, `.github/workflows/user-docs-links.yml`.)*
+- [x] **Cadence** — Note in `RELEASING.md` or `AGENTS.md`: after each **minor** release (or large UI change), run [doc-assessment-template.md](../../templates-generalized/doc-assessment-template.md) → new timestamped file under `dev-docs/doc-assessments/`. *(Doc assessment cadence was already in `RELEASING.md`; extended with link-check commands.)*
 
 **Verification:** A deliberate broken relative link in a test branch fails the chosen check.
 
@@ -88,7 +88,7 @@
 **Objective:** Keep `AGENTS.md` operational; avoid unbounded growth.
 
 - [ ] If `AGENTS.md` exceeds comfort length, split **contributor / PR** prose into **`dev-docs/CONTRIBUTING.md`** and keep `AGENTS.md` focused on venv, commands, `src/` map, CI, agent rules.
-- [ ] Ensure [CODE_DOCUMENTATION.md](../../CODE_DOCUMENTATION.md) continues to point to real help loaders and `resources/help/*.html` paths (regression guard after refactors).
+- [x] Ensure [CODE_DOCUMENTATION.md](../../CODE_DOCUMENTATION.md) continues to point to real help loaders and `resources/help/*.html` paths (regression guard after refactors). *(Fusion technical HTML + loader row and `CONFIGURATION.md` index row added.)*
 
 **Verification:** New contributor path: README → AGENTS → dev-docs index → DEVELOPER_SETUP without hitting user-only tutorials.
 
@@ -116,4 +116,4 @@
 - [x] Quick Start HTML and `USER_GUIDE.md` agree on overlay / shortcut semantics for shared topics.
 - [x] Local study index and settings surface documented for end users.
 - [x] Maintainer policy recorded for doc URLs vs releases.
-- [ ] Optional: link checker in CI; doc assessment run recorded after major doc pass.
+- [x] Optional: link checker in CI; doc assessment run recorded after major doc pass. *(Link checker in CI; doc assessment remains a manual release habit.)*

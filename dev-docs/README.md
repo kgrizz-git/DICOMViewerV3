@@ -48,6 +48,13 @@ Deep dives on pylinac, DICOM behavior, GitHub Actions billing, fusion, SR, etc.:
 | [`templates-generalized/`](templates-generalized/) | Reusable templates (assessments, plans) |
 | [`refactor-assessments/`](refactor-assessments/) | Refactor-focused assessments |
 
+## Quality checks (documentation)
+
+| Script / workflow | Purpose |
+|-------------------|---------|
+| [`../scripts/check_user_docs_links.py`](../scripts/check_user_docs_links.py) | Validates relative links in `user-docs/*.md` and `dev-docs/README.md` |
+| [`.github/workflows/user-docs-links.yml`](../.github/workflows/user-docs-links.yml) | CI job that runs the script on `main` / `develop` |
+
 ## Orchestration (optional)
 
 | Document | Purpose |

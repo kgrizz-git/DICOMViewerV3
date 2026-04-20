@@ -1,0 +1,25 @@
+name: User docs links
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+  push:
+    branches:
+      - main
+      - develop
+
+permissions:
+  contents: read
+
+jobs:
+  check-relative-links:
+    name: Check user-docs relative links
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Run link checker
+        run: python scripts/check_user_docs_links.py --root "${{ github.workspace }}"
