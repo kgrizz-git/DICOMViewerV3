@@ -1,7 +1,7 @@
 # Documentation structure, completeness, and Quick Guide alignment
 
 **Created:** 2026-04-20  
-**Status:** Substantially complete (Phases 1–5 and Phase 6 CODE_DOCUMENTATION item done as of 2026-04-20; optional **CONTRIBUTING.md** split still open.)  
+**Status:** Complete for planned items as of 2026-04-20 (including **CONTRIBUTING.md** split and Phase 6).  
 **Inputs:**
 
 - [Documentation assessment — 2026-04-20](../../doc-assessments/doc-assessment-2026-04-20-002224.md) (findings + recommended architecture section)
@@ -87,7 +87,7 @@
 
 **Objective:** Keep `AGENTS.md` operational; avoid unbounded growth.
 
-- [ ] If `AGENTS.md` exceeds comfort length, split **contributor / PR** prose into **`dev-docs/CONTRIBUTING.md`** and keep `AGENTS.md` focused on venv, commands, `src/` map, CI, agent rules.
+- [x] If `AGENTS.md` exceeds comfort length, split **contributor / PR** prose into **`dev-docs/CONTRIBUTING.md`** and keep `AGENTS.md` focused on venv, commands, `src/` map, CI, agent rules. *(Done: [`CONTRIBUTING.md`](../../CONTRIBUTING.md); `AGENTS.md` slimmed; README / `dev-docs/README` / `DEVELOPER_SETUP` / `CODE_DOCUMENTATION` updated.)*
 - [x] Ensure [CODE_DOCUMENTATION.md](../../CODE_DOCUMENTATION.md) continues to point to real help loaders and `resources/help/*.html` paths (regression guard after refactors). *(Fusion technical HTML + loader row and `CONFIGURATION.md` index row added.)*
 
 **Verification:** New contributor path: README → AGENTS → dev-docs index → DEVELOPER_SETUP without hitting user-only tutorials.

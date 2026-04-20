@@ -1,5 +1,7 @@
 # Boundary-Only Hit Testing for ROIs and Annotations
 
+**Status:** **Shipped and archived** for **ROI ellipse/rectangle** (`shape()` stroked outlines in `roi_manager.py`); optional annotation/DICOM-overlay tightening per §3.2 remains future work.
+
 **Goal:** Tighten hit areas so that selection responds to the **boundary** (outline) of shapes—with a small tolerance—rather than the entire interior. This allows, for example, drawing an ellipse inside an existing ellipse without the inner click being captured by the outer ROI.
 
 **Related TO_DO:** dev-docs/TO_DO.md item: *"tighten 'hitboxes' or whatever for annotations and ROIs - eg, for a large ellipse ROI, would be better if only the ellipse boundary (with some tolerance) was hitbox, not entire interior as well"*.

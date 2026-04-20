@@ -72,7 +72,8 @@ python -m src.main
 
 ## Contributing / development
 
-- **[AGENTS.md](AGENTS.md)** — venv, commands, `src/` layout, CI notes.  
+- **[dev-docs/CONTRIBUTING.md](dev-docs/CONTRIBUTING.md)** — hooks, backups, security tooling, CI policy, releases, pylinac pin bumps, license inventory.  
+- **[AGENTS.md](AGENTS.md)** — AI/agent and quick-reference: venv, commands, `src/` layout, orchestration, in-app display notes.  
 - **[dev-docs/README.md](dev-docs/README.md)** — index of developer docs under `dev-docs/`.  
 - **[tests/README.md](tests/README.md)** — running tests.  
 - **[dev-docs/DEVELOPER_SETUP.md](dev-docs/DEVELOPER_SETUP.md)** — troubleshooting installs and paths.

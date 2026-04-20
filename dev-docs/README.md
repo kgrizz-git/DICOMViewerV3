@@ -7,8 +7,9 @@ This folder is for **contributors, maintainers, and release engineering**. End-u
 | Document | Purpose |
 |----------|---------|
 | [`DEVELOPER_SETUP.md`](DEVELOPER_SETUP.md) | Environment setup, hooks, troubleshooting installs |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Human contributor playbook: hooks, CI, releases, pylinac bumps, licenses |
 | [`CODE_DOCUMENTATION.md`](CODE_DOCUMENTATION.md) | Where major UI modules, dialogs, and bundled help files live |
-| [`../AGENTS.md`](../AGENTS.md) | Venv, run/test commands, `src/` map, CI and agent conventions |
+| [`../AGENTS.md`](../AGENTS.md) | AI agents and quick ops: venv, `src/` map, orchestration, display options |
 
 ## Releases and versioning
 

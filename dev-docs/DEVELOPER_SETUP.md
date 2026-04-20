@@ -1,6 +1,6 @@
 # Developer setup and troubleshooting
 
-Use this page with [AGENTS.md](../AGENTS.md) (venv, module layout) and [tests/README.md](../tests/README.md).
+Use this page with [CONTRIBUTING.md](CONTRIBUTING.md) (hooks, CI, releases), [AGENTS.md](../AGENTS.md) (venv, module layout, agents), and [tests/README.md](../tests/README.md).
 
 ## Common issues
 

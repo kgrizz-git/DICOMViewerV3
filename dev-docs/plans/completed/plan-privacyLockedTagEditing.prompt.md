@@ -1,5 +1,7 @@
 ## Plan: Privacy-Locked Tag Editing
 
+**Status:** **Shipped and archived** (`metadata_panel.py`, `tag_viewer_dialog.py`, `PrivacyController` / dialog coordinator wiring).
+
 Implement privacy-safe tag editing so patient tags cannot be edited while Privacy Mode is ON, and any already-open patient-tag edit popup is force-closed with a short user notice when Privacy Mode is enabled. Reuse existing privacy propagation and patient-tag detection instead of duplicating anonymization logic.
 
 **Steps**

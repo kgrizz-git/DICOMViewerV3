@@ -10,6 +10,7 @@ This file lists documentation that explains how the application works or serves 
 
 | Document | Description |
 |----------|-------------|
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Contributor workflows: Git hooks, CI, versioning, pylinac pin policy, license inventory. |
 | [README.md](../README.md) | Project overview, install, run, and pointers to in-app help and `user-docs/`. |
 | [USER_GUIDE.md](../user-docs/USER_GUIDE.md) | User guide hub (links to MPR, pylinac QA, fusion, etc.). |
 | [CONFIGURATION.md](../user-docs/CONFIGURATION.md) | User-facing summary of dialogs and JSON preference domains. |

@@ -1,5 +1,7 @@
 # View/Slot Layout and Swap – Implementation Plan
 
+**Status:** **Shipped and archived** (focus-based layouts, `slot_to_view`, double-click 1×1, Swap with Window 1–4, slot-based 1×2/2×1).
+
 This document is a multi-phase implementation plan for making layout switching focus-aware, allowing swap of view positions, double-click to expand a subwindow to 1x1, and adding a "Swap" option to the right-click context menu.
 
 **References:**
