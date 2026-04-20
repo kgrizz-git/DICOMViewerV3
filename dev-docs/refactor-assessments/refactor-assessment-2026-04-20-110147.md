@@ -336,5 +336,5 @@ No low-priority items identified in this focused two-file assessment.
 
 - [ ] Review prioritized recommendations with user/team
 - [x] Create implementation plan for high-priority item #1 (`display_slice` staged extraction) - implemented 
-- [ ] Create implementation plan for high-priority item #2 (`main.py` action module extraction)
-- [ ] Execute refactors incrementally with focused regression tests after each phase
+- [x] Create implementation plan for high-priority item #2 (`main.py` action module extraction) — plan: `.cursor/plans/main-py-action-modules_dae1bd54.plan.md`; implemented **2026-04-20** (`src/core/actions/`, shim `dialog_action_handlers.py`, `main.py` delegates).
+- [x] Execute refactors incrementally with focused regression tests after each phase — item #2 verified with `pytest tests/smoke/test_refactor_regression.py`, `tests/test_main_signals_view.py`, `tests/test_cine_video_export.py`.

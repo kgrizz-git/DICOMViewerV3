@@ -22,6 +22,8 @@ Requirements:
 
 import sys
 import os
+import tempfile
+import threading
 import time
 import inspect
 import warnings
@@ -38,6 +40,7 @@ from PySide6.QtWidgets import (
     QApplication,
     QDialog,
     QMessageBox,
+    QProgressDialog,
     QStyleFactory,
 )
 from PySide6.QtCore import QEventLoop, Qt, QPoint, QPointF, QObject, QTimer, QRectF, QSize, Signal
@@ -46,7 +49,7 @@ from typing import Any, Callable, Optional, Dict, List, Tuple, cast, Set
 import pydicom
 from pydicom.dataset import Dataset
 
-from core.actions import customization_actions, dialog_actions, view_actions
+from core import dialog_action_handlers
 from gui.main_window import MainWindow
 from gui.main_window_layout_helper import setup_main_window_content
 from gui.dialogs.file_dialog import FileDialog
@@ -102,9 +105,22 @@ from core.export_app_facade import ExportAppFacade
 from core.subwindow_image_viewer_sync import (
     apply_initial_image_viewer_display_state,
     apply_theme_viewer_background_all,
+    set_direction_labels_all,
+    set_direction_labels_color_all,
+    set_scale_markers_all,
+    set_scale_markers_color_all,
+    set_slice_slider_all,
+    set_smooth_when_zoomed_all,
 )
 from core.subwindow_manager_factory import build_managers_for_subwindow
 from core.cine_app_facade import CineAppFacade
+from core.cine_video_export import (
+    build_cine_export_frame_indices,
+    cleanup_temp_frame_dir,
+    describe_focused_cine_export_blocker,
+    rasterize_cine_export_frame,
+    safe_remove_partial_output,
+)
 from core.main_app_key_event_filter import dispatch_app_key_event, is_widget_allowed_for_layout_shortcuts
 from core.window_level_preset_handler import apply_window_level_preset
 from gui.dialog_coordinator import DialogCoordinator
@@ -112,6 +128,9 @@ from gui.mouse_mode_handler import MouseModeHandler
 from gui.keyboard_event_handler import KeyboardEventHandler
 from gui.dialogs.tag_export_union_worker import TagExportUnionWorker
 from gui.dialogs.disclaimer_dialog import DisclaimerDialog
+from gui.dialogs.cine_export_dialog import CineExportDialog
+from gui.dialogs.cine_export_encode_thread import CineVideoEncodeThread
+
 # Import fusion components
 from core.fusion_processor import FusionProcessor
 from gui.fusion_controls_widget import FusionControlsWidget
@@ -2133,20 +2152,30 @@ class DICOMViewerApp(QObject):
         self._subwindow_lifecycle_controller.connect_focused_subwindow_signals()
 
     def _open_files(self) -> None:
-        """Handle open files request. Delegates to ``dialog_actions.open_files``."""
-        dialog_actions.open_files(self)
+        """Handle open files request. Delegates to file/series loading coordinator."""
+        self._file_series_coordinator.open_files()
 
     def _open_folder(self) -> None:
-        """Handle open folder request. Delegates to ``dialog_actions.open_folder``."""
-        dialog_actions.open_folder(self)
+        """Handle open folder request. Delegates to file/series loading coordinator."""
+        self._file_series_coordinator.open_folder()
 
     def _open_recent_file(self, file_path: str) -> None:
-        """Handle open recent file/folder request. Delegates to ``dialog_actions.open_recent_file``."""
-        dialog_actions.open_recent_file(self, file_path)
+        """
+        Handle open recent file/folder request. Delegates to file/series loading coordinator.
+
+        Args:
+            file_path: Path to file or folder to open
+        """
+        self._file_series_coordinator.open_recent_file(file_path)
 
     def _open_files_from_paths(self, paths: list[str]) -> None:
-        """Handle open files/folders from drag-and-drop. Delegates to ``dialog_actions.open_files_from_paths``."""
-        dialog_actions.open_files_from_paths(self, paths)
+        """
+        Handle open files/folders from drag-and-drop. Delegates to file/series loading coordinator.
+
+        Args:
+            paths: List of file or folder paths to open
+        """
+        self._file_series_coordinator.open_files_from_paths(paths)
     
     def _on_series_navigation_requested(self, direction: int) -> None:
         """
@@ -2311,8 +2340,8 @@ class DICOMViewerApp(QObject):
         self._projection_app_facade.on_projection_slice_count_changed(count)
     
     def _open_settings(self) -> None:
-        """Handle settings dialog request. Delegates to ``dialog_actions.open_settings``."""
-        dialog_actions.open_settings(self)
+        """Handle settings dialog request."""
+        self.dialog_coordinator.open_settings()
 
     def _on_study_index_after_load(self, datasets, _studies, merge_result, source_dir, merge_paths) -> None:
         """Record opened files in the local study index when enabled in settings."""
@@ -2322,15 +2351,25 @@ class DICOMViewerApp(QObject):
 
     def _open_study_index_search(self) -> None:
         """Open the local study index browser (File menu and Tools menu)."""
-        dialog_actions.open_study_index_search(self)
+        from gui.dialogs.study_index_search_dialog import StudyIndexSearchDialog
+
+        dlg = StudyIndexSearchDialog(
+            self.study_index_service,
+            self.config_manager,
+            open_paths_callback=lambda paths: self.main_window.open_files_from_paths_requested.emit(
+                paths
+            ),
+            parent=self.main_window,
+        )
+        dlg.exec()
 
     def _open_overlay_settings(self) -> None:
-        """Handle Overlay Settings dialog request. Delegates to ``dialog_actions.open_overlay_settings``."""
-        dialog_actions.open_overlay_settings(self)
+        """Handle Overlay Settings dialog request."""
+        self.dialog_coordinator.open_overlay_settings()
     
     def _open_about_this_file(self) -> None:
         """Handle About This File dialog request."""
-        dialog_actions.open_about_this_file(self)
+        dialog_action_handlers.open_about_this_file(self)
     
     def _get_file_path_for_dataset(self, dataset, study_uid: str, series_uid: str, slice_index: int) -> Optional[str]:
         """Get file path for a dataset. Delegates to file/series loading coordinator."""
@@ -2353,40 +2392,124 @@ class DICOMViewerApp(QObject):
         self._file_series_coordinator.update_about_this_file_dialog()
 
     def _on_privacy_view_toggled(self, enabled: bool) -> None:
-        """Handle privacy view toggle. Delegates to ``view_actions.on_privacy_view_toggled``."""
-        view_actions.on_privacy_view_toggled(self, enabled)
+        """
+        Handle privacy view toggle.
+        
+        Propagates privacy mode state to all components that display tags
+        via the privacy controller.
+        
+        Args:
+            enabled: True if privacy view is enabled, False otherwise
+        """
+        self.privacy_view_enabled = enabled
+        self._privacy_controller.apply_privacy(enabled)
+        if hasattr(self, "series_navigator") and self.series_navigator is not None:
+            self.series_navigator.set_privacy_mode(enabled)
+            self._refresh_series_navigator_state()
+            self.series_navigator.set_subwindow_assignments(self._get_subwindow_assignments())
 
     def _on_slice_sync_toggled(self, enabled: bool) -> None:
-        """Handle View → Slice Sync → Enable Slice Sync toggle. Delegates to ``view_actions``."""
-        view_actions.on_slice_sync_toggled(self, enabled)
+        """
+        Handle the View → Slice Sync → Enable Slice Sync toggle.
+
+        Persists the new state and pushes it to the coordinator.
+
+        Args:
+            enabled: True to enable anatomic slice sync, False to disable.
+        """
+        self.config_manager.set_slice_sync_enabled(enabled)
+        self._slice_sync_coordinator.set_enabled(enabled)
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        for subwindow in subwindows:
+            if subwindow and subwindow.image_viewer:
+                subwindow.image_viewer.set_slice_sync_enabled_state(enabled)
+        self._refresh_slice_sync_group_indicators()
 
     def _open_slice_sync_dialog(self) -> None:
         """Open the Manage Sync Groups dialog."""
-        dialog_actions.open_slice_sync_dialog(self)
+        dialog_action_handlers.open_slice_sync_dialog(self)
 
     def _on_slice_sync_groups_changed(self, groups) -> None:
-        """Receive updated group assignments from the Slice Sync dialog. Delegates to ``view_actions``."""
-        view_actions.on_slice_sync_groups_changed(self, groups)
+        """
+        Receive updated group assignments from the Slice Sync dialog.
+
+        Persists to config, updates the coordinator, and invalidates the
+        geometry cache so stale stacks aren't reused.
+
+        Args:
+            groups: List[List[int]] — new group assignments.
+        """
+        self.config_manager.set_slice_sync_groups(groups)
+        self._slice_sync_coordinator.set_groups(groups)
+        self._slice_sync_coordinator.invalidate_cache()
+        self._slice_location_line_coordinator.refresh_all()
+        self._refresh_slice_sync_group_indicators()
 
     def _on_slice_location_lines_toggled(self, visible: bool) -> None:
-        """Handle View → Show Slice Location Lines → Enable/Disable toggle. Delegates to ``view_actions``."""
-        view_actions.on_slice_location_lines_toggled(self, visible)
+        """
+        Handle View → Show Slice Location Lines → Enable/Disable toggle.
+
+        Persists the setting and refreshes all subwindows.
+
+        Args:
+            visible: True to show slice location lines, False to hide.
+        """
+        self.config_manager.set_slice_location_lines_visible(visible)
+        self._slice_location_line_coordinator.refresh_all()
+        self.main_window.set_slice_location_lines_checked(visible)
 
     def _on_slice_location_lines_same_group_only_toggled(self, same_group_only: bool) -> None:
-        """Handle slice location lines same-group-only toggle. Delegates to ``view_actions``."""
-        view_actions.on_slice_location_lines_same_group_only_toggled(self, same_group_only)
+        """
+        Handle View → Show Slice Location Lines → Only Show For Same Group toggle.
+
+        Persists the setting and refreshes all subwindows.
+
+        Args:
+            same_group_only: True to show lines only from same linked group, False for all views.
+        """
+        self.config_manager.set_slice_location_lines_same_group_only(same_group_only)
+        self._slice_location_line_coordinator.refresh_all()
+        self.main_window.set_slice_location_lines_same_group_only_checked(same_group_only)
 
     def _on_slice_location_lines_focused_only_toggled(self, focused_only: bool) -> None:
-        """Handle slice location lines focused-only toggle. Delegates to ``view_actions``."""
-        view_actions.on_slice_location_lines_focused_only_toggled(self, focused_only)
+        """
+        Handle View → Show Slice Location Lines → Show Only For Focused Window toggle.
+
+        Persists the setting and refreshes all subwindows.
+
+        Args:
+            focused_only: True to show only the focused subwindow's line, False for all views.
+        """
+        self.config_manager.set_slice_location_lines_focused_only(focused_only)
+        self._slice_location_line_coordinator.refresh_all()
+        self.main_window.set_slice_location_lines_focused_only_checked(focused_only)
 
     def _on_slice_location_lines_mode_toggled(self, mode: str) -> None:
-        """Handle View → Show Slice Location Lines → slab mode toggle. Delegates to ``view_actions``."""
-        view_actions.on_slice_location_lines_mode_toggled(self, mode)
+        """
+        Handle View → Show Slice Location Lines → Show Slab Boundaries toggle.
+
+        Persists the new mode ("middle" or "begin_end") and refreshes all
+        subwindows so the change is immediately visible.
+
+        Args:
+            mode: "middle" for a single centre-plane line, or "begin_end" for
+                  two boundary lines at ±(SliceThickness/2).
+        """
+        self.config_manager.set_slice_location_line_mode(mode)
+        self._slice_location_line_coordinator.refresh_all()
+        self.main_window.set_slice_location_lines_slab_bounds_checked(mode)
 
     def _on_smooth_when_zoomed_toggled(self, enabled: bool) -> None:
-        """Handle smooth-when-zoomed toggle. Delegates to ``view_actions``."""
-        view_actions.on_smooth_when_zoomed_toggled(self, enabled)
+        """
+        Handle smooth-when-zoomed toggle from View menu or image viewer context menu.
+        Persists setting and pushes state to all image viewers; syncs View menu check state.
+
+        Args:
+            enabled: True if smooth when zoomed is enabled, False otherwise
+        """
+        self.config_manager.set_smooth_image_when_zoomed(enabled)
+        set_smooth_when_zoomed_all(self, enabled)
+        self.main_window.set_smooth_when_zoomed_checked(enabled)
 
     # ------------------------------------------------------------------
     # Orientation handlers (View menu → focused viewer)
@@ -2394,51 +2517,91 @@ class DICOMViewerApp(QObject):
 
     def _on_orientation_flip_h(self) -> None:
         """Toggle horizontal flip on the currently focused image viewer."""
-        view_actions.on_orientation_flip_h(self)
+        if self.image_viewer is not None:
+            self.image_viewer.flip_h()
 
     def _on_orientation_flip_v(self) -> None:
         """Toggle vertical flip on the currently focused image viewer."""
-        view_actions.on_orientation_flip_v(self)
+        if self.image_viewer is not None:
+            self.image_viewer.flip_v()
 
     def _on_orientation_rotate_cw(self) -> None:
         """Rotate the currently focused image viewer 90° clockwise."""
-        view_actions.on_orientation_rotate_cw(self)
+        if self.image_viewer is not None:
+            self.image_viewer.rotate_cw()
 
     def _on_orientation_rotate_ccw(self) -> None:
         """Rotate the currently focused image viewer 90° counter-clockwise."""
-        view_actions.on_orientation_rotate_ccw(self)
+        if self.image_viewer is not None:
+            self.image_viewer.rotate_ccw()
 
     def _on_orientation_rotate_180(self) -> None:
         """Rotate the currently focused image viewer 180°."""
-        view_actions.on_orientation_rotate_180(self)
+        if self.image_viewer is not None:
+            self.image_viewer.rotate_180()
 
     def _on_orientation_reset(self) -> None:
         """Reset orientation of the currently focused image viewer to default."""
-        view_actions.on_orientation_reset(self)
+        if self.image_viewer is not None:
+            self.image_viewer.reset_orientation()
 
     def _on_scale_markers_toggled(self, enabled: bool) -> None:
-        """Handle scale markers toggle. Delegates to ``view_actions``."""
-        view_actions.on_scale_markers_toggled(self, enabled)
+        """
+        Handle scale markers toggle from View menu or image viewer context menu.
+
+        Args:
+            enabled: True to show scale markers, False to hide
+        """
+        self.config_manager.set_show_scale_markers(enabled)
+        set_scale_markers_all(self, enabled)
+        self.main_window.set_scale_markers_checked(enabled)
 
     def _on_direction_labels_toggled(self, enabled: bool) -> None:
-        """Handle direction labels toggle. Delegates to ``view_actions``."""
-        view_actions.on_direction_labels_toggled(self, enabled)
+        """
+        Handle direction labels toggle from View menu or image viewer context menu.
+
+        Args:
+            enabled: True to show direction labels, False to hide
+        """
+        self.config_manager.set_show_direction_labels(enabled)
+        set_direction_labels_all(self, enabled)
+        self.main_window.set_direction_labels_checked(enabled)
 
     def _on_slice_slider_toggled(self, enabled: bool) -> None:
-        """Handle the in-view slice/frame slider toggle. Delegates to ``view_actions``."""
-        view_actions.on_slice_slider_toggled(self, enabled)
+        """
+        Handle the in-view slice/frame slider toggle from the View menu.
+
+        Persists the setting and propagates the enabled state to every
+        ImageViewer in the layout.
+
+        Args:
+            enabled: True to allow the slider to appear on hover, False to hide it.
+        """
+        self.config_manager.set_show_slice_slider(enabled)
+        set_slice_slider_all(self, enabled)
+        self.main_window.set_slice_slider_checked(enabled)
 
     def _on_scale_markers_color_changed(self, r: int, g: int, b: int) -> None:
         """Handle scale markers color change from the View menu."""
-        view_actions.on_scale_markers_color_changed(self, r, g, b)
+        self.config_manager.set_scale_markers_color(r, g, b)
+        set_scale_markers_color_all(self, (r, g, b))
 
     def _on_direction_labels_color_changed(self, r: int, g: int, b: int) -> None:
         """Handle direction labels color change from the View menu."""
-        view_actions.on_direction_labels_color_changed(self, r, g, b)
+        self.config_manager.set_direction_labels_color(r, g, b)
+        set_direction_labels_color_all(self, (r, g, b))
 
     def _on_show_instances_separately_toggled(self, enabled: bool) -> None:
         """Handle the View → Show Instances Separately toggle."""
-        view_actions.on_show_instances_separately_toggled(self, enabled)
+        self.config_manager.set_show_instances_separately(enabled)
+        self.series_navigator.set_show_instances_separately(enabled)
+        self.series_navigator.update_series_list(
+            self.current_studies,
+            self.current_study_uid,
+            self.current_series_uid,
+        )
+        self._refresh_series_navigator_state()
+        self.series_navigator.set_subwindow_assignments(self._get_subwindow_assignments())
 
     def _refresh_overlays_after_privacy_change(self) -> None:
         """Refresh overlays after privacy view change for all subwindows that have loaded data. Delegates to privacy controller."""
@@ -2446,35 +2609,35 @@ class DICOMViewerApp(QObject):
 
     def _open_tag_viewer(self) -> None:
         """Handle tag viewer dialog request."""
-        dialog_actions.open_tag_viewer(self)
+        self.dialog_coordinator.open_tag_viewer(self.current_dataset, privacy_mode=self.privacy_view_enabled)
     
     def _open_overlay_config(self) -> None:
         """Handle overlay configuration dialog request."""
-        dialog_actions.open_overlay_config(self)
+        dialog_action_handlers.open_overlay_config(self)
     
     def _open_annotation_options(self) -> None:
         """Handle annotation options dialog request."""
-        dialog_actions.open_annotation_options(self)
+        self.dialog_coordinator.open_annotation_options()
 
     def _open_quick_window_level(self) -> None:
         """Open Quick Window/Level dialog for the focused subwindow."""
-        dialog_actions.open_quick_window_level(self)
+        dialog_action_handlers.open_quick_window_level(self)
     
     def _open_quick_start_guide(self) -> None:
         """Handle Quick Start Guide dialog request."""
-        dialog_actions.open_quick_start_guide(self)
+        self.dialog_coordinator.open_quick_start_guide()
 
     def _open_user_documentation_in_browser(self) -> None:
         """Open the user guide hub (Markdown on GitHub) in the system browser."""
-        dialog_actions.open_user_documentation_in_browser(self)
+        self.dialog_coordinator.open_user_documentation_in_browser()
 
     def _open_fusion_technical_doc(self) -> None:
         """Handle Fusion Technical Documentation dialog request."""
-        dialog_actions.open_fusion_technical_doc(self)
+        self.dialog_coordinator.open_fusion_technical_doc()
     
     def _open_tag_export(self) -> None:
         """Handle Tag Export dialog request."""
-        dialog_actions.open_tag_export(self)
+        self.dialog_coordinator.open_tag_export()
 
     def _open_export_roi_statistics(self) -> None:
         """Handle Export ROI Statistics request (from menu or image viewer context menu)."""
@@ -2497,16 +2660,281 @@ class DICOMViewerApp(QObject):
         Tools → Structured Report… — open the SR document browser for the focused pane's
         current dataset when it is a Structured Report (SR storage class or Modality SR).
         """
-        dialog_actions.open_structured_report_browser(self, subwindow_idx)
+        from core.sr_sop_classes import is_structured_report_dataset
+
+        idx = (
+            subwindow_idx
+            if subwindow_idx is not None
+            else self.get_focused_subwindow_index()
+        )
+        if idx < 0:
+            return
+        data = self.subwindow_data.get(idx, {})
+        if data.get("is_mpr"):
+            QMessageBox.information(
+                self.main_window,
+                "Structured Report",
+                "MPR views do not carry the SR document. Switch to a 2D SR instance.",
+            )
+            return
+        ds = self._get_subwindow_dataset(idx)
+        if ds is None:
+            QMessageBox.information(
+                self.main_window,
+                "Structured Report",
+                "No DICOM file is loaded in this window.",
+            )
+            return
+        if not is_structured_report_dataset(ds):
+            QMessageBox.information(
+                self.main_window,
+                "Structured Report",
+                "The current file is not a Structured Report (SR storage class or Modality SR).",
+            )
+            return
+        self.dialog_coordinator.open_structured_report_browser(
+            ds,
+            get_privacy_enabled=self.config_manager.get_privacy_view,
+            open_tag_viewer_callback=lambda d: self.dialog_coordinator.open_tag_viewer(
+                d, privacy_mode=self.config_manager.get_privacy_view()
+            ),
+        )
 
     def _on_export_cine_video(self) -> None:
         """
         File → Export Cine As… — GIF / AVI / MP4 / MPG for the focused 2D multi-frame pane.
 
-        Delegates to ``dialog_actions.open_export_cine_video`` (same PIL render path and
-        threaded encode as before).
+        Renders each frame with the same PIL path as PNG export (not a viewport grab),
+        writes temporary PNGs, then encodes in a ``QThread`` (imageio / FFmpeg, no
+        ``shell=True``). Cancel removes partial output when possible.
         """
-        dialog_actions.open_export_cine_video(self)
+        blocker = describe_focused_cine_export_blocker(self)
+        if blocker:
+            QMessageBox.information(self.main_window, "Export Cine", blocker)
+            return
+
+        idx = self.get_focused_subwindow_index()
+        data = self.subwindow_data.get(idx, {})
+        study_uid = str(data.get("current_study_uid") or "")
+        series_uid = str(data.get("current_series_uid") or "")
+        studies = self.current_studies
+        if not studies or study_uid not in studies or series_uid not in studies[study_uid]:
+            QMessageBox.warning(self.main_window, "Export Cine", "Series data is not available.")
+            return
+        series_list = studies[study_uid][series_uid]
+        total = len(series_list)
+        if total < 2:
+            QMessageBox.information(self.main_window, "Export Cine", "Not enough frames to export.")
+            return
+
+        fps_default = float(self.cine_player.get_effective_frame_rate())
+        dlg = CineExportDialog(
+            self.main_window,
+            default_fps=fps_default,
+            total_frames=total,
+            loop_start=self.cine_player.loop_start_frame,
+            loop_end=self.cine_player.loop_end_frame,
+        )
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        opts = dlg.build_options()
+        indices = build_cine_export_frame_indices(
+            total,
+            opts.loop_start_frame,
+            opts.loop_end_frame,
+            opts.use_cine_loop_bounds,
+        )
+        if not indices:
+            QMessageBox.warning(self.main_window, "Export Cine", "No frames in the selected range.")
+            return
+
+        ext = "." + opts.video_format.lower()
+        filters = (
+            "GIF Image (*.gif);;AVI Video (*.avi);;MP4 Video (*.mp4);;MPEG Program Stream (*.mpg)"
+        )
+        ds0 = series_list[0]
+        raw_desc = getattr(ds0, "SeriesDescription", None) or "cine_export"
+        stem = str(raw_desc).strip() or "cine_export"
+        for ch in '<>:"/\\|?*':
+            stem = stem.replace(ch, "_")
+        stem = stem[:80]
+        start_dir = self.config_manager.get_last_export_path() or os.getcwd()
+        if os.path.isfile(start_dir):
+            start_dir = os.path.dirname(start_dir)
+        if not start_dir or not os.path.isdir(start_dir):
+            start_dir = os.getcwd()
+        default_path = os.path.join(start_dir, stem + ext)
+        outp = self._export_app_facade.prompt_save_path(
+            "Save Cine Export As",
+            default_path,
+            filters,
+        )
+        if not outp:
+            return
+        base, old_ext = os.path.splitext(outp)
+        if old_ext.lower() != ext:
+            outp = base + ext
+        self.config_manager.set_last_export_path(os.path.dirname(os.path.abspath(outp)))
+
+        managers = self.subwindow_managers.get(idx, {})
+        vsm = managers.get("view_state_manager")
+        sdm = managers.get("slice_display_manager")
+        if (
+            vsm is not None
+            and vsm.current_window_center is not None
+            and vsm.current_window_width is not None
+        ):
+            wl_opt = "current"
+            wc = vsm.current_window_center
+            ww = vsm.current_window_width
+        else:
+            wl_opt = "dataset"
+            wc = None
+            ww = None
+        use_rescaled = bool(getattr(vsm, "use_rescaled_values", False)) if vsm else False
+        proj_en = bool(getattr(sdm, "projection_enabled", False)) if sdm else False
+        proj_ty = str(getattr(sdm, "projection_type", "aip") or "aip") if sdm else "aip"
+        proj_cnt = int(getattr(sdm, "projection_slice_count", 4) or 4) if sdm else 4
+
+        # Match **Export Images**: aggregate annotations from all subwindows when drawing overlays.
+        subwindow_annotation_managers: List[Dict[str, Any]] = []
+        for si in sorted(self.subwindow_managers.keys()):
+            m = self.subwindow_managers[si]
+            subwindow_annotation_managers.append(
+                {
+                    "roi_manager": m.get("roi_manager"),
+                    "measurement_tool": m.get("measurement_tool"),
+                    "text_annotation_tool": m.get("text_annotation_tool"),
+                    "arrow_annotation_tool": m.get("arrow_annotation_tool"),
+                }
+            )
+
+        cancel_event = threading.Event()
+        temp_dir = tempfile.mkdtemp(prefix="dv3_cine_")
+        png_paths: List[Path] = []
+        try:
+            progress = QProgressDialog(
+                "Rendering cine frames…",
+                "Cancel",
+                0,
+                len(indices),
+                self.main_window,
+            )
+            progress.setWindowModality(Qt.WindowModality.WindowModal)
+            progress.setMinimumDuration(0)
+            for step, frame_idx in enumerate(indices):
+                if progress.wasCanceled():
+                    cancel_event.set()
+                    break
+                progress.setValue(step)
+                dataset = series_list[frame_idx]
+                img = rasterize_cine_export_frame(
+                    dataset,
+                    studies,
+                    study_uid,
+                    series_uid,
+                    frame_idx,
+                    total,
+                    wl_opt,
+                    wc,
+                    ww,
+                    opts.include_overlays,
+                    use_rescaled,
+                    managers.get("roi_manager"),
+                    managers.get("overlay_manager"),
+                    managers.get("measurement_tool"),
+                    self.config_manager,
+                    managers.get("text_annotation_tool"),
+                    managers.get("arrow_annotation_tool"),
+                    proj_en,
+                    proj_ty,
+                    proj_cnt,
+                    export_scale=opts.export_scale,
+                    scale_annotations_with_image=False,
+                    subwindow_annotation_managers=subwindow_annotation_managers,
+                )
+                if img is None:
+                    QMessageBox.critical(
+                        self.main_window,
+                        "Export Cine",
+                        f"Failed to rasterize frame {frame_idx + 1} of {total}.",
+                    )
+                    safe_remove_partial_output(outp)
+                    return
+                out_png = Path(temp_dir) / f"f{step:05d}.png"
+                img.save(str(out_png), "PNG")
+                png_paths.append(out_png)
+                QApplication.processEvents()
+
+            progress.setValue(len(indices))
+            progress.close()
+
+            if cancel_event.is_set() or not png_paths:
+                safe_remove_partial_output(outp)
+                return
+
+            progress_enc = QProgressDialog(
+                "Encoding video…",
+                "Cancel",
+                0,
+                0,
+                self.main_window,
+            )
+            progress_enc.setWindowModality(Qt.WindowModality.WindowModal)
+            progress_enc.setMinimumDuration(0)
+            progress_enc.canceled.connect(cancel_event.set)
+            progress_enc.show()
+            QApplication.processEvents()
+
+            enc_thread = CineVideoEncodeThread(
+                png_paths,
+                outp,
+                opts.video_format,
+                opts.fps,
+                cancel_event,
+            )
+            enc_err: List[Optional[str]] = [None]
+
+            def _on_enc_fail(msg: str) -> None:
+                enc_err[0] = msg
+
+            def _on_enc_ok() -> None:
+                if enc_err[0] is None:
+                    enc_err[0] = ""
+
+            enc_loop = QEventLoop()
+            enc_thread.failed.connect(_on_enc_fail)
+            enc_thread.succeeded.connect(_on_enc_ok)
+            enc_thread.finished.connect(enc_loop.quit)
+            enc_thread.start()
+            enc_loop.exec()
+            progress_enc.close()
+            enc_thread.wait(60_000)
+
+            if enc_err[0] is None:
+                QMessageBox.critical(
+                    self.main_window,
+                    "Export Cine",
+                    "Encoding did not complete.",
+                )
+                safe_remove_partial_output(outp)
+            elif enc_err[0] == "":
+                QMessageBox.information(
+                    self.main_window,
+                    "Export Cine",
+                    f"Successfully wrote:\n{outp}",
+                )
+            else:
+                low = enc_err[0].lower()
+                if "cancel" not in low:
+                    QMessageBox.critical(
+                        self.main_window,
+                        "Export Cine",
+                        enc_err[0],
+                    )
+                safe_remove_partial_output(outp)
+        finally:
+            cleanup_temp_frame_dir(temp_dir)
 
     def _resolve_focused_series_ordered_paths(
         self,
@@ -2609,11 +3037,11 @@ class DICOMViewerApp(QObject):
 
     def _open_acr_ct_phantom_analysis(self) -> None:
         """Open the Stage 1 ACR CT (pylinac) analysis flow (menu / signal slot)."""
-        dialog_actions.open_acr_ct_phantom_analysis(self)
+        self._qa_app_facade.open_acr_ct_phantom_analysis()
 
     def _open_acr_mri_phantom_analysis(self) -> None:
         """Open the Stage 1 ACR MRI Large (pylinac) analysis flow (menu / signal slot)."""
-        dialog_actions.open_acr_mri_phantom_analysis(self)
+        self._qa_app_facade.open_acr_mri_phantom_analysis()
 
     def _start_mri_batch_worker(
         self,
@@ -2633,7 +3061,7 @@ class DICOMViewerApp(QObject):
 
     def _open_path_in_system_viewer(self, path: str) -> None:
         """Open a file path with the OS default application (PDF viewer, etc.)."""
-        dialog_actions.open_path_in_system_viewer(self, path)
+        self._qa_app_facade.open_path_in_system_viewer(path)
 
     def _show_mri_compare_result_dialog(
         self,
@@ -2697,19 +3125,19 @@ class DICOMViewerApp(QObject):
 
     def _on_export_customizations(self) -> None:
         """Handle Export Customizations request."""
-        customization_actions.on_export_customizations(self)
+        self._customization_handlers.export_customizations()
 
     def _on_import_customizations(self) -> None:
         """Handle Import Customizations request."""
-        customization_actions.on_import_customizations(self)
+        self._customization_handlers.import_customizations()
 
     def _on_export_tag_presets(self) -> None:
         """Handle Export Tag Presets request."""
-        customization_actions.on_export_tag_presets(self)
+        self._customization_handlers.export_tag_presets()
 
     def _on_import_tag_presets(self) -> None:
         """Handle Import Tag Presets request."""
-        customization_actions.on_import_tag_presets(self)
+        self._customization_handlers.import_tag_presets()
 
     def _sync_all_overlay_managers_from_config(self) -> None:
         """Apply persisted overlay mode and visibility state to every pane's OverlayManager."""

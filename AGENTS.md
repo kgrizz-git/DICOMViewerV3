@@ -55,6 +55,7 @@ src/
 ├── roi/                           # ROI / measurement feature controllers
 │   └── roi_measurement_controller.py  # Owns ROIManager, MeasurementTool, AnnotationManager, panels
 ├── core/                          # Core processing, loading, and coordination logic
+│   ├── actions/                     # Menu/dialog/view/customization actions: ``dialog_actions``, ``view_actions``, ``customization_actions``; ``dialog_action_handlers`` re-exports for façades/tests
 │   ├── study_index/                 # Local encrypted study DB (SQLCipher MVP): store, service, port, study_date_format (UI DA↔US), background threads
 │   ├── loading_progress_manager.py    # Animated loading dots, QProgressDialog, cancellation (used by FileOperationsHandler)
 │   ├── privacy_controller.py          # Privacy-mode propagation and overlay refresh (called from main on privacy toggle)
@@ -118,7 +119,7 @@ src/
 | `MetadataController` | `src/metadata/metadata_controller.py` | `MetadataPanel`, `TagEditHistoryManager`, undo/redo callbacks, privacy mode for metadata |
 | `ROIMeasurementController` | `src/roi/roi_measurement_controller.py` | `ROIManager`, `MeasurementTool`, `AnnotationManager`, `ROIStatisticsPanel`, `ROIListPanel`; tracks active (focused-subwindow) managers via `update_focused_managers()` |
 | `SubwindowLifecycleController` | `src/core/subwindow_lifecycle_controller.py` | Per-subwindow manager creation, focus changes, display updates |
-| `PrivacyController` | `src/core/privacy_controller.py` | Privacy-mode propagation (metadata, overlay/crosshair managers, image viewers) and overlay refresh after privacy change; called from `DICOMViewerApp._on_privacy_view_toggled` |
+| `PrivacyController` | `src/core/privacy_controller.py` | Privacy-mode propagation (metadata, overlay/crosshair managers, image viewers) and overlay refresh after privacy change; invoked from `core.actions.view_actions.on_privacy_view_toggled` via `DICOMViewerApp._on_privacy_view_toggled` |
 
 ### `DICOMViewerApp.__init__` initialization order
 

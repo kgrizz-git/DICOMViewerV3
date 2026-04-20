@@ -1,10 +1,15 @@
 """
-Transformation script: update main.py to delegate the five logic-bearing
-_open_* handlers to dialog_action_handlers module functions.
+Transformation script (historical): update main.py to delegate the five logic-bearing
+_open_* handlers to module functions.
 
-Changes:
-  1. Remove QuickWindowLevelDialog import (moves to dialog_action_handlers).
-  2. Add: from core import dialog_action_handlers
+**Current source of truth:** implementations live in ``src/core/actions/dialog_actions.py``;
+``src/core/dialog_action_handlers.py`` re-exports the five ``open_*`` names for backward
+compatibility (``export_app_facade``, smoke tests). For new automation, target
+``core.actions.dialog_actions`` and keep ``DICOMViewerApp`` slots as thin delegates.
+
+Original scripted changes:
+  1. Remove QuickWindowLevelDialog import (moves to the dialog-actions module).
+  2. Add dialog-actions import (historically ``from core import dialog_action_handlers``).
   3. Replace the body of each of the five logic-bearing _open_* methods with
      a one-liner delegation call.
 """

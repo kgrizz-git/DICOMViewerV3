@@ -38,6 +38,7 @@ This file tracks active and near-term tasks.
 - [ ] **[P0]** See if executables can be made smaller (especially on macOS) ([details](FUTURE_WORK_DETAIL_NOTES.md#executable-size-especially-on-macos))
 - [ ] **[P1]** Check fusion responsiveness on Parallels with 3D fusion
 - [ ] **[P0]** Check dose RP values / order of magnitude / units for XA fluroscopy RDSRs
+- [ ] **[P0]** Doing Clear this window on a window with SR does not clear the message or button
 
 ## Maintenance
 
