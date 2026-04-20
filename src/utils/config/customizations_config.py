@@ -6,7 +6,8 @@ Handles bulk export and import of all visual customisation settings
 
 The ``overlay`` object may include **slice sync group strip height** (viewport px)
 alongside font and modality overlay fields; older export files omit it and import
-leaves the current config value unchanged.
+leaves the current config value unchanged. Exports may include ``tags_detailed_extra``
+(Additional tags in Detailed overlay mode); older files omit it.
 
 Mixin contract:
     Expects ``self.config`` (dict) and ``self.save_config()`` to be provided by
@@ -42,6 +43,7 @@ class _CustomizationsHost(Protocol):
     def set_overlay_visibility_state(self, state: int) -> None: ...
     def set_overlay_custom_fields(self, fields: List[Any]) -> None: ...
     def set_overlay_tags(self, modality: str, corner_tags: Dict[str, List[str]]) -> None: ...
+    def set_overlay_tags_detailed_extra(self, modality: str, corner_tags: Dict[str, List[str]]) -> None: ...
     def set_overlay_font_size(self, size: int) -> None: ...
     def set_overlay_font_color(self, r: int, g: int, b: int) -> None: ...
     def set_slice_sync_group_strip_height_px(self, height_px: int) -> None: ...
@@ -91,6 +93,7 @@ class CustomizationsConfigMixin:
                 "visibility_state": h.get_overlay_visibility_state(),
                 "custom_fields": h.get_overlay_custom_fields(),
                 "tags": cfg.get("overlay_tags", {}),
+                "tags_detailed_extra": cfg.get("overlay_tags_detailed_extra", {}),
                 "font_size": h.get_overlay_font_size(),
                 "font_color": {
                     "r": cfg.get("overlay_font_color_r", 255),
@@ -203,6 +206,12 @@ class CustomizationsConfigMixin:
                         for modality, corner_tags in overlay["tags"].items():
                             if isinstance(modality, str) and isinstance(corner_tags, dict):
                                 h.set_overlay_tags(modality, corner_tags)
+                    if "tags_detailed_extra" in overlay and isinstance(
+                        overlay["tags_detailed_extra"], dict
+                    ):
+                        for modality, corner_tags in overlay["tags_detailed_extra"].items():
+                            if isinstance(modality, str) and isinstance(corner_tags, dict):
+                                h.set_overlay_tags_detailed_extra(modality, corner_tags)
                     if "font_size" in overlay and isinstance(overlay["font_size"], int) and overlay["font_size"] > 0:
                         h.set_overlay_font_size(overlay["font_size"])
                     if "font_color" in overlay and isinstance(overlay["font_color"], dict):

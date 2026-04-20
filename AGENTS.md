@@ -33,6 +33,8 @@ If no venv exists, create one, for example `python -m venv venv` or `python -m v
 
 **Cine video export:** **`requirements.txt`** pins **`imageio`** + **`imageio-ffmpeg`**. The latter vendors a **FFmpeg** binary (typical stack includes **LGPL**/**GPL**-licensed components). PyInstaller / frozen builds should follow FFmpeg license obligations (attribution, source offers where required). **`IMAGEIO_FFMPEG_EXE`** can point to a system FFmpeg instead of the wheel binary if you document that path for your deployment. Exports include **GIF**, **AVI** / **MP4** (**MPEG-4 Part 2**, not H.264 by default) and **MPG** (MPEG-2 program stream); on **Windows 11 Media Player**, **`.mp4`** is the most reliable choice without the Store **MPEG-2 Video Extension** that **`.mpg`** often needs.
 
+**Third-party license inventory:** Maintain a rolling checklist of bundled Python packages, vendored binaries (e.g. FFmpeg), and **`resources/fonts/`** in **`dev-docs/info/BUNDLED_PACKAGES_AND_FONTS_LICENSES.md`** (update when pins, PyInstaller `datas`, or fonts change).
+
 Optional for contributors: `pip install -r requirements-dev.txt` adds local Python security scanners (semgrep, detect-secrets). Install TruffleHog v3 separately via `powershell -ExecutionPolicy Bypass -File .\scripts\install-trufflehog-v3.ps1 -AddToUserPath` so local scans align with CI's TruffleHog v3 action/binary line.
 
 ## Other conventions
@@ -96,7 +98,7 @@ src/
         ├── __init__.py
         ├── paths_config.py        # last_path, last_export_path, last_pylinac_output_path, recent_files, normalize_path
         ├── display_config.py      # theme, smooth_image_when_zoomed, privacy_view, scroll_wheel_mode
-        ├── overlay_config.py      # overlay mode/visibility/font/tags, get_all_modalities
+        ├── overlay_config.py      # overlay mode/visibility/font/tags + overlay_tags_detailed_extra (Detailed-only corner tags), get_all_modalities
         ├── layout_config.py       # multi_window_layout, view_slot_order
         ├── roi_config.py          # ROI font/line/default_visible_statistics
         ├── measurement_config.py  # measurement font/line

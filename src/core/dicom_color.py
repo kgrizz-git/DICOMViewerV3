@@ -92,6 +92,56 @@ def is_color_image(dataset: Dataset) -> Tuple[bool, Optional[str]]:
         return False, None
 
 
+def _photometric_string_from_dataset(dataset: Optional[Dataset]) -> Optional[str]:
+    """Return normalized PhotometricInterpretation string, or None."""
+    if dataset is None or not hasattr(dataset, "PhotometricInterpretation"):
+        return None
+    try:
+        raw = dataset.PhotometricInterpretation
+        if isinstance(raw, (list, tuple)):
+            s = str(raw[0]).strip() if raw else ""
+        else:
+            s = str(raw).strip()
+        return s.upper() if s else None
+    except Exception:
+        return None
+
+
+def multichannel_axis_labels(dataset: Optional[Dataset], channel_count: int) -> Tuple[str, ...]:
+    """
+    Short axis labels for per-channel ROI statistics / export (one label per channel index).
+
+    Uses ``PhotometricInterpretation`` when ``channel_count == 3``: **RGB** maps to
+    **R, G, B** (stored sample order after planar handling); **YBR\\*** maps to **Y, Cb, Cr**.
+    Otherwise uses **Ch0**, **Ch1**, … (including three-channel palette/unknown photometrics).
+
+    ROI statistics use raw ``pixel_array`` (no YBR→RGB conversion), so YBR labels match the
+    decoded luma/chroma planes.
+
+    Args:
+        dataset: Current slice DICOM dataset, or None (falls back to Ch0… for 3-channel).
+        channel_count: Number of channels (last axis of H×W×C array).
+
+    Returns:
+        Tuple of length ``channel_count``.
+    """
+    if channel_count <= 0:
+        return ()
+    if channel_count != 3:
+        return tuple(f"Ch{i}" for i in range(channel_count))
+
+    pi = _photometric_string_from_dataset(dataset)
+    if not pi:
+        return ("Ch0", "Ch1", "Ch2")
+
+    if pi.startswith("RGB"):
+        return ("R", "G", "B")
+    if pi.startswith("YBR"):
+        return ("Y", "Cb", "Cr")
+
+    return ("Ch0", "Ch1", "Ch2")
+
+
 def _is_already_rgb(pixel_array: np.ndarray) -> bool:
     """
     Check if a pixel array appears to already be in RGB format (not YBR).

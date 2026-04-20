@@ -31,7 +31,8 @@ class KeyboardEventHandler:
     Responsibilities:
     - Handle Delete/Backspace (delete ROI/measurement)
     - Handle Arrow keys (slice navigation)
-    - Handle Spacebar (toggle overlay)
+    - Handle Spacebar (cycle overlay detail minimal / detailed / hidden)
+    - Handle Shift+Space (legacy overlay visibility cycle on focused view)
     - Handle mode switching keys (P, Z, M, S, W, R, E, C, D, V, N)
     """
     
@@ -49,6 +50,8 @@ class KeyboardEventHandler:
         get_selected_roi: Callable[[], Optional[object]],
         delete_roi_callback: Callable[[object], None],
         delete_measurement_callback: Callable[[object], None],
+        cycle_overlay_detail_callback: Optional[Callable[[], None]] = None,
+        toggle_overlay_visibility_legacy_callback: Optional[Callable[[], None]] = None,
         update_roi_list_callback: Optional[Callable[[], None]] = None,
         clear_roi_statistics_callback: Optional[Callable[[], None]] = None,
         reset_view_callback: Optional[Callable[[], None]] = None,
@@ -77,7 +80,9 @@ class KeyboardEventHandler:
             set_mouse_mode: Callback to set mouse mode
             delete_all_rois_callback: Callback to delete all ROIs
             clear_measurements_callback: Callback to clear measurements
-            toggle_overlay_callback: Callback to toggle overlay
+            toggle_overlay_callback: Fallback when cycle callbacks are omitted
+            cycle_overlay_detail_callback: Space cycles minimal / detailed / hidden (all panes)
+            toggle_overlay_visibility_legacy_callback: Shift+Space legacy visibility cycle (focused pane)
             get_selected_roi: Callback to get selected ROI
             delete_roi_callback: Callback to delete ROI
             delete_measurement_callback: Callback to delete measurement
@@ -104,6 +109,8 @@ class KeyboardEventHandler:
         self.delete_all_rois_callback = delete_all_rois_callback
         self.clear_measurements_callback = clear_measurements_callback
         self.toggle_overlay_callback = toggle_overlay_callback
+        self.cycle_overlay_detail_callback = cycle_overlay_detail_callback
+        self.toggle_overlay_visibility_legacy_callback = toggle_overlay_visibility_legacy_callback
         self.get_selected_roi = get_selected_roi
         self.delete_roi_callback = delete_roi_callback
         self.delete_measurement_callback = delete_measurement_callback
@@ -197,9 +204,20 @@ class KeyboardEventHandler:
                 self.slice_navigator.previous_slice()
                 return True
         
-        # Spacebar to toggle overlay visibility
+        # Space: cycle overlay detail (minimal / detailed / hidden). Shift+Space: legacy visibility.
         elif event.key() == Qt.Key.Key_Space:
-            self.toggle_overlay_callback()
+            if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+                leg = self.toggle_overlay_visibility_legacy_callback
+                if leg is not None:
+                    leg()
+                else:
+                    self.toggle_overlay_callback()
+            else:
+                cyc = self.cycle_overlay_detail_callback
+                if cyc is not None:
+                    cyc()
+                else:
+                    self.toggle_overlay_callback()
             return True
         
         # P key for Pan mode

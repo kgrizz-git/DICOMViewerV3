@@ -64,6 +64,14 @@ def test_calculate_statistics_populates_multichannel_fields() -> None:
     assert stats["mean_ch0"] == 11.5
     assert stats["mean_ch1"] == 21.5
     assert stats["mean_ch2"] == 31.5
+    assert stats.get("channel_labels") == ("Ch0", "Ch1", "Ch2")
+
+    ds_rgb = Dataset()
+    ds_rgb.PhotometricInterpretation = "RGB"
+    stats_rgb = ROIManager.calculate_statistics(
+        fake_manager, roi, pixel_array, dataset=ds_rgb
+    )
+    assert stats_rgb.get("channel_labels") == ("R", "G", "B")
 
 
 def test_write_csv_includes_multichannel_columns(tmp_path: Path, monkeypatch) -> None:
@@ -78,7 +86,7 @@ def test_write_csv_includes_multichannel_columns(tmp_path: Path, monkeypatch) ->
                 "count": 4,
                 "area_pixels": 4.0,
                 "area_mm2": None,
-                "multichannel_count": 2,
+                "multichannel_count": 3,
                 "mean_ch0": 10.5,
                 "std_ch0": 0.5,
                 "min_ch0": 10.0,
@@ -87,6 +95,10 @@ def test_write_csv_includes_multichannel_columns(tmp_path: Path, monkeypatch) ->
                 "std_ch1": 0.7,
                 "min_ch1": 20.0,
                 "max_ch1": 21.0,
+                "mean_ch2": 30.5,
+                "std_ch2": 0.9,
+                "min_ch2": 30.0,
+                "max_ch2": 31.0,
             },
             "HU",
         )
@@ -96,6 +108,7 @@ def test_write_csv_includes_multichannel_columns(tmp_path: Path, monkeypatch) ->
     ds = Dataset()
     ds.SeriesNumber = "1"
     ds.SeriesDescription = "RGB"
+    ds.PhotometricInterpretation = "RGB"
     current_studies = {"study": {"series": [ds]}}
     collected = [(("study", "series"), [(0, [SimpleNamespace(shape_type="rectangle")], [], [])])]
     subwindow_managers = {0: {"roi_manager": object()}}
@@ -113,10 +126,127 @@ def test_write_csv_includes_multichannel_columns(tmp_path: Path, monkeypatch) ->
     with out_path.open("r", encoding="utf-8", newline="") as handle:
         rows = list(csv.DictReader(handle))
 
-    assert "Mean Ch1" in rows[0]
-    assert "Std Dev Ch2" in rows[0]
-    assert rows[0]["Mean Ch1"] == "10.5000"
-    assert rows[0]["Max Ch2"] == "21.0000"
+    assert "Mean (R)" in rows[0]
+    assert "Std Dev (G)" in rows[0]
+    assert "Max (B)" in rows[0]
+    assert rows[0]["Mean (R)"] == "10.5000"
+    assert rows[0]["Max (G)"] == "21.0000"
+    assert rows[0]["Std Dev (B)"] == "0.9000"
+
+
+def test_write_csv_ybr_uses_y_cb_cr_headers(tmp_path: Path, monkeypatch) -> None:
+    def _fake_stats(*args, **kwargs):
+        _ = (args, kwargs)
+        return (
+            {
+                "mean": 10.0,
+                "std": 1.0,
+                "min": 8.0,
+                "max": 12.0,
+                "count": 4,
+                "area_pixels": 4.0,
+                "area_mm2": None,
+                "multichannel_count": 3,
+                "mean_ch0": 10.5,
+                "std_ch0": 0.5,
+                "min_ch0": 10.0,
+                "max_ch0": 11.0,
+                "mean_ch1": 20.5,
+                "std_ch1": 0.7,
+                "min_ch1": 20.0,
+                "max_ch1": 21.0,
+                "mean_ch2": 30.5,
+                "std_ch2": 0.9,
+                "min_ch2": 30.0,
+                "max_ch2": 31.0,
+            },
+            "HU",
+        )
+
+    monkeypatch.setattr(roi_export_service, "compute_roi_statistics", _fake_stats)
+
+    ds = Dataset()
+    ds.SeriesNumber = "1"
+    ds.SeriesDescription = "YBR"
+    ds.PhotometricInterpretation = "YBR_FULL_422"
+    current_studies = {"study": {"series": [ds]}}
+    collected = [(("study", "series"), [(0, [SimpleNamespace(shape_type="rectangle")], [], [])])]
+    subwindow_managers = {0: {"roi_manager": object()}}
+    out_path = tmp_path / "roi_ybr.csv"
+
+    roi_export_service.write_csv(
+        file_path=str(out_path),
+        collected=collected,
+        current_studies=current_studies,
+        subwindow_managers=subwindow_managers,
+        use_rescale=False,
+        dicom_processor=object,
+    )
+
+    with out_path.open("r", encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+
+    assert "Mean (Y)" in rows[0]
+    assert "Std Dev (Cb)" in rows[0]
+    assert "Max (Cr)" in rows[0]
+    assert rows[0]["Mean (Y)"] == "10.5000"
+    assert rows[0]["Max (Cb)"] == "21.0000"
+    assert rows[0]["Std Dev (Cr)"] == "0.9000"
+
+
+def test_write_csv_two_channel_uses_ch0_ch1_headers(tmp_path: Path, monkeypatch) -> None:
+    """Non-RGB multichannel exports use Ch0, Ch1, … in CSV headers (not R/G/B)."""
+
+    def _fake_stats(*args, **kwargs):
+        _ = (args, kwargs)
+        return (
+            {
+                "mean": 1.0,
+                "std": 0.1,
+                "min": 0.0,
+                "max": 2.0,
+                "count": 1,
+                "area_pixels": 1.0,
+                "area_mm2": None,
+                "multichannel_count": 2,
+                "mean_ch0": 1.0,
+                "std_ch0": 0.1,
+                "min_ch0": 0.0,
+                "max_ch0": 2.0,
+                "mean_ch1": 3.0,
+                "std_ch1": 0.2,
+                "min_ch1": 2.0,
+                "max_ch1": 4.0,
+            },
+            "",
+        )
+
+    monkeypatch.setattr(roi_export_service, "compute_roi_statistics", _fake_stats)
+
+    ds = Dataset()
+    ds.SeriesNumber = "1"
+    ds.SeriesDescription = "TwoCh"
+    current_studies = {"study": {"series": [ds]}}
+    collected = [(("study", "series"), [(0, [SimpleNamespace(shape_type="rectangle")], [], [])])]
+    subwindow_managers = {0: {"roi_manager": object()}}
+    out_path = tmp_path / "roi2ch.csv"
+
+    roi_export_service.write_csv(
+        file_path=str(out_path),
+        collected=collected,
+        current_studies=current_studies,
+        subwindow_managers=subwindow_managers,
+        use_rescale=False,
+        dicom_processor=object,
+    )
+
+    with out_path.open("r", encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+
+    assert "Mean (Ch0)" in rows[0]
+    assert "Max (Ch1)" in rows[0]
+    assert rows[0]["Mean (Ch0)"] == "1.0000"
+    assert rows[0]["Std Dev (Ch1)"] == "0.2000"
 
 
 def test_write_csv_escapes_formula_like_text_cells(tmp_path: Path, monkeypatch) -> None:

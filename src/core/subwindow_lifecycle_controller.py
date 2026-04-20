@@ -412,6 +412,9 @@ class SubwindowLifecycleController:
         # Handlers may be unset until _initialize_handlers() (e.g. early init); do not use hasattr alone.
         if app.keyboard_event_handler is not None and app.image_viewer:
             app.keyboard_event_handler.image_viewer = app.image_viewer
+            app.keyboard_event_handler.toggle_overlay_visibility_legacy_callback = (
+                app.overlay_coordinator.handle_toggle_overlay
+            )
         if app.mouse_mode_handler is not None and app.image_viewer:
             app.mouse_mode_handler.image_viewer = app.image_viewer
             if hasattr(app, "_mpr_controller") and app._mpr_controller.is_mpr(focused_idx):
@@ -856,6 +859,10 @@ class SubwindowLifecycleController:
             except (TypeError, RuntimeError):
                 pass
             try:
+                app.image_viewer.toggle_overlay_requested.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+            try:
                 app.image_viewer.roi_drawing_started.disconnect()
                 app.image_viewer.roi_drawing_updated.disconnect()
                 app.image_viewer.roi_drawing_finished.disconnect()
@@ -1115,6 +1122,12 @@ class SubwindowLifecycleController:
             app.keyboard_event_handler.toggle_overlay_callback = (
                 app.overlay_coordinator.handle_toggle_overlay
             )
+            app.keyboard_event_handler.cycle_overlay_detail_callback = (
+                app._cycle_overlay_detail_mode
+            )
+            app.keyboard_event_handler.toggle_overlay_visibility_legacy_callback = (
+                app.overlay_coordinator.handle_toggle_overlay
+            )
             app.keyboard_event_handler.delete_measurement_callback = (
                 app.measurement_coordinator.handle_measurement_delete_requested
             )
@@ -1214,7 +1227,7 @@ class SubwindowLifecycleController:
         app.main_window.clear_measurements_requested.connect(app.measurement_coordinator.handle_clear_measurements)
         app.image_viewer.clear_measurements_requested.connect(app.measurement_coordinator.handle_clear_measurements)
         app.image_viewer.histogram_requested.connect(app.dialog_coordinator.open_histogram)
-        app.image_viewer.toggle_overlay_requested.connect(app.overlay_coordinator.handle_toggle_overlay)
+        app.image_viewer.toggle_overlay_requested.connect(app._cycle_overlay_detail_mode)
         app.main_window.viewport_resizing.connect(app.view_state_manager.handle_viewport_resizing)
         app.main_window.viewport_resized.connect(app.view_state_manager.handle_viewport_resized)
         app.slice_navigator.slice_changed.connect(app._update_histogram_for_focused_subwindow)

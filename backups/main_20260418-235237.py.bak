@@ -1113,8 +1113,6 @@ class DICOMViewerApp(QObject):
             delete_all_rois_callback=self.roi_coordinator.delete_all_rois_current_slice,
             clear_measurements_callback=self.measurement_coordinator.handle_clear_measurements,
             toggle_overlay_callback=self.overlay_coordinator.handle_toggle_overlay,
-            cycle_overlay_detail_callback=self._cycle_overlay_detail_mode,
-            toggle_overlay_visibility_legacy_callback=self.overlay_coordinator.handle_toggle_overlay,
             get_selected_roi=lambda: self.roi_manager.get_selected_roi(),
             delete_roi_callback=self._keyboard_delete_roi,
             delete_measurement_callback=self.measurement_coordinator.handle_measurement_delete_requested,
@@ -3139,41 +3137,8 @@ class DICOMViewerApp(QObject):
         """Handle Import Tag Presets request."""
         self._customization_handlers.import_tag_presets()
 
-    def _sync_all_overlay_managers_from_config(self) -> None:
-        """Apply persisted overlay mode and visibility state to every pane's OverlayManager."""
-        mode = self.config_manager.get_overlay_mode()
-        vis = self.config_manager.get_overlay_visibility_state()
-        for managers in self.subwindow_managers.values():
-            om = managers.get("overlay_manager")
-            if om is not None:
-                om.set_mode(mode)
-                om.set_visibility_state(vis)
-
-    def _cycle_overlay_detail_mode(self) -> None:
-        """
-        Cycle corner overlay detail across all panes: minimal -> detailed -> hidden -> minimal.
-        Persists ``overlay_mode`` and resets legacy visibility state to 0 so measurements stay visible.
-        """
-        order = ("minimal", "detailed", "hidden")
-        cur = self.config_manager.get_overlay_mode()
-        if cur not in order:
-            cur = "minimal"
-        nxt = order[(order.index(cur) + 1) % len(order)]
-        self.config_manager.set_overlay_mode(nxt)
-        self.config_manager.set_overlay_visibility_state(0)
-        for managers in self.subwindow_managers.values():
-            om = managers.get("overlay_manager")
-            if om is not None:
-                om.set_mode(nxt)
-                om.set_visibility_state(0)
-            oc = managers.get("overlay_coordinator")
-            if oc is not None:
-                oc.restore_measurement_and_roi_visibility()
-        self._refresh_overlay_all_subwindows()
-
     def _on_overlay_config_applied(self) -> None:
         """Handle overlay configuration being applied."""
-        self._sync_all_overlay_managers_from_config()
         self._refresh_overlay_all_subwindows()
         self._refresh_slice_sync_group_indicators()
 
@@ -3375,6 +3340,10 @@ class DICOMViewerApp(QObject):
         Handle clear measurements request from toolbar or context menu.
         """
         self.measurement_coordinator.handle_clear_measurements()
+    
+    def _on_toggle_overlay_requested(self) -> None:
+        """Handle toggle overlay request from context menu."""
+        self.overlay_coordinator.handle_toggle_overlay()
     
     def _on_roi_selected(self, roi) -> None:
         """

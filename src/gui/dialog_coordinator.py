@@ -297,9 +297,9 @@ class DialogCoordinator:
         )
         dialog.exec()
 
-    def open_export_screenshots(self, subwindows: List[Any]) -> None:
+    def open_export_screenshots(self, subwindows: List[Any], multi_window_layout: Optional[Any] = None) -> None:
         """
-        Open Export Screenshots dialog. One file per selected subwindow (viewport grab).
+        Open Export Screenshots dialog (per-view, composite grid, or full main window).
         """
         if not subwindows:
             QMessageBox.warning(
@@ -311,6 +311,7 @@ class DialogCoordinator:
         dialog = ScreenshotExportDialog(
             subwindows,
             config_manager=self.config_manager,
+            multi_window_layout=multi_window_layout,
             parent=self.main_window
         )
         dialog.exec()

@@ -165,8 +165,19 @@ class OverlayCoordinator:
                     if self.get_multiframe_overlay_context else None,
                 )
     
+    def restore_measurement_and_roi_visibility(self) -> None:
+        """Show measurement labels/graphics and ROI overlays (undo visibility-state suppression)."""
+        if self.hide_measurement_labels:
+            self.hide_measurement_labels(False)
+        if self.hide_measurement_graphics:
+            self.hide_measurement_graphics(False)
+        if self._hide_roi_graphics_callback:
+            self._hide_roi_graphics_callback(False)
+        if self.hide_roi_statistics_overlays:
+            self.hide_roi_statistics_overlays(False)
+
     def handle_toggle_overlay(self) -> None:
-        """Handle toggle overlay request from context menu."""
+        """Cycle legacy overlay visibility (0=all, 1=hide corner, 2=hide corner+measurements); Shift+Space."""
         # Toggle overlay visibility (cycles through 3 states)
         new_state = self.overlay_manager.toggle_overlay_visibility()
         

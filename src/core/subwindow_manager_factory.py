@@ -77,6 +77,10 @@ def build_managers_for_subwindow(
         config_manager=app.config_manager,
     )
     managers["overlay_manager"].set_privacy_mode(app.privacy_view_enabled)
+    managers["overlay_manager"].set_mode(app.config_manager.get_overlay_mode())
+    managers["overlay_manager"].set_visibility_state(
+        app.config_manager.get_overlay_visibility_state()
+    )
     managers["view_state_manager"] = ViewStateManager(
         app.dicom_processor,
         image_viewer,

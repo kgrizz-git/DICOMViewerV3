@@ -32,6 +32,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from pydicom.dataset import Dataset
 
+from core.dicom_color import multichannel_axis_labels
 from core.dicom_processor import DICOMProcessor
 from tools.angle_measurement_items import AngleMeasurementItem
 from tools.measurement_items import MeasurementItem
@@ -176,6 +177,7 @@ def compute_roi_statistics(
         rescale_slope=rescale_slope,
         rescale_intercept=rescale_intercept,
         pixel_spacing=pixel_spacing,
+        dataset=dataset,
     )
     return (stats, rescale_type)
 
@@ -365,6 +367,21 @@ def _format_float(v: Optional[float]) -> str:
     return f"{v:.4f}"
 
 
+def _channel_stat_csv_headers_from_labels(labels: Tuple[str, ...]) -> List[str]:
+    """CSV column titles for per-channel columns (mean/std/min/max each), given axis labels."""
+    out: List[str] = []
+    for lab in labels:
+        out.extend(
+            [
+                f"Mean ({lab})",
+                f"Std Dev ({lab})",
+                f"Min ({lab})",
+                f"Max ({lab})",
+            ]
+        )
+    return out
+
+
 def _extract_channel_stats(
     stats: Dict[str, float | int | None],
 ) -> Tuple[int, Dict[str, str]]:
@@ -475,19 +492,20 @@ def write_txt(
                     else:
                         lines.append(f"    Area       {area_px_f:.1f}    pixels")
                     channel_count, channel_values = _extract_channel_stats(stats)
+                    ch_labels = multichannel_axis_labels(dataset, channel_count)
                     for c in range(channel_count):
-                        ch = c + 1
+                        lab = ch_labels[c]
                         lines.append(
-                            f"    Ch{ch} Mean   {channel_values.get(f'mean_ch{c}', '')}    {unit_str}"
+                            f"    {lab} Mean   {channel_values.get(f'mean_ch{c}', '')}    {unit_str}"
                         )
                         lines.append(
-                            f"    Ch{ch} Std    {channel_values.get(f'std_ch{c}', '')}    {unit_str}"
+                            f"    {lab} Std    {channel_values.get(f'std_ch{c}', '')}    {unit_str}"
                         )
                         lines.append(
-                            f"    Ch{ch} Min    {channel_values.get(f'min_ch{c}', '')}    {unit_str}"
+                            f"    {lab} Min    {channel_values.get(f'min_ch{c}', '')}    {unit_str}"
                         )
                         lines.append(
-                            f"    Ch{ch} Max    {channel_values.get(f'max_ch{c}', '')}    {unit_str}"
+                            f"    {lab} Max    {channel_values.get(f'max_ch{c}', '')}    {unit_str}"
                         )
                 lines.append("")
             cross_idx = 0
@@ -559,6 +577,7 @@ def write_csv(
         (headers, {}, _empty_measurement_csv_row())
     ]
     max_channel_count = 0
+    label_ref_dataset: Optional[Dataset] = None
 
     for (study_uid, series_uid), slice_list in collected:
         series_dict = current_studies.get(study_uid, {}).get(series_uid, [])
@@ -626,6 +645,8 @@ def write_csv(
                     row[13] = rescale_unit or ""
                     channel_count, channel_values = _extract_channel_stats(stats)
                     max_channel_count = max(max_channel_count, channel_count)
+                    if channel_count > 0 and label_ref_dataset is None:
+                        label_ref_dataset = dataset
                 row_payloads.append((row, channel_values, _empty_measurement_csv_row()))
 
             for cross_item in crosshairs:
@@ -685,16 +706,9 @@ def write_csv(
                 )
 
     dynamic_headers: List[str] = []
-    for c in range(max_channel_count):
-        ch = c + 1
-        dynamic_headers.extend(
-            [
-                f"Mean Ch{ch}",
-                f"Std Dev Ch{ch}",
-                f"Min Ch{ch}",
-                f"Max Ch{ch}",
-            ]
-        )
+    if max_channel_count > 0:
+        hdr_labels = multichannel_axis_labels(label_ref_dataset, max_channel_count)
+        dynamic_headers = _channel_stat_csv_headers_from_labels(hdr_labels)
 
     rows: List[List[str]] = []
     for base_row, channel_values, meas_part in row_payloads:
@@ -846,9 +860,10 @@ def write_xlsx(
                         ws.cell(row=row, column=3, value="pixels")
                     row += 1
                     channel_count, channel_values = _extract_channel_stats(stats)
+                    ch_labels = multichannel_axis_labels(dataset, channel_count)
                     for c in range(channel_count):
-                        ch = c + 1
-                        ws.cell(row=row, column=1, value=f"Ch{ch} Mean")
+                        lab = ch_labels[c]
+                        ws.cell(row=row, column=1, value=f"{lab} Mean")
                         ws.cell(
                             row=row,
                             column=2,
@@ -856,7 +871,7 @@ def write_xlsx(
                         )
                         ws.cell(row=row, column=3, value=_safe_spreadsheet_value(unit_str))
                         row += 1
-                        ws.cell(row=row, column=1, value=f"Ch{ch} Std Dev")
+                        ws.cell(row=row, column=1, value=f"{lab} Std Dev")
                         ws.cell(
                             row=row,
                             column=2,
@@ -864,7 +879,7 @@ def write_xlsx(
                         )
                         ws.cell(row=row, column=3, value=_safe_spreadsheet_value(unit_str))
                         row += 1
-                        ws.cell(row=row, column=1, value=f"Ch{ch} Min")
+                        ws.cell(row=row, column=1, value=f"{lab} Min")
                         ws.cell(
                             row=row,
                             column=2,
@@ -872,7 +887,7 @@ def write_xlsx(
                         )
                         ws.cell(row=row, column=3, value=_safe_spreadsheet_value(unit_str))
                         row += 1
-                        ws.cell(row=row, column=1, value=f"Ch{ch} Max")
+                        ws.cell(row=row, column=1, value=f"{lab} Max")
                         ws.cell(
                             row=row,
                             column=2,

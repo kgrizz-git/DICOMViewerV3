@@ -135,7 +135,10 @@ class ExportAppFacade:
         dialog_action_handlers.open_export(self._app)
 
     def open_export_screenshots(self) -> None:
-        """Export screenshots — one file per selected subwindow."""
+        """Export screenshots (per-view, composite grid, or full main window)."""
         app = self._app
         subwindows = app.multi_window_layout.get_all_subwindows()
-        app.dialog_coordinator.open_export_screenshots(subwindows)
+        app.dialog_coordinator.open_export_screenshots(
+            subwindows,
+            multi_window_layout=app.multi_window_layout,
+        )

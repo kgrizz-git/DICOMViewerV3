@@ -18,6 +18,45 @@ from core.dicom_parser import DICOMParser
 from core.multiframe_handler import get_frame_count, is_multiframe
 from utils.dicom_utils import get_patient_tag_keywords
 
+# Keys used for per-corner overlay tag maps in config and UI.
+OVERLAY_CORNER_KEYS: tuple[str, ...] = (
+    "upper_left",
+    "upper_right",
+    "lower_left",
+    "lower_right",
+)
+
+
+def merge_simple_and_detailed_extra_corner_tags(
+    simple: Dict[str, List[str]],
+    extras: Dict[str, List[str]],
+) -> Dict[str, List[str]]:
+    """
+    Build effective corner tag lists for Detailed overlay mode.
+
+    Order: all Simple tags first, then any Extra tags not already in Simple
+    (extras keep their relative order).
+
+    Args:
+        simple: Per-corner tag keyword lists (minimal / default layout).
+        extras: Additional tags per corner shown only in detailed mode.
+
+    Returns:
+        New dict with the same four corner keys.
+    """
+    out: Dict[str, List[str]] = {}
+    for key in OVERLAY_CORNER_KEYS:
+        base = [str(t) for t in (simple.get(key) or [])]
+        seen = set(base)
+        merged = list(base)
+        for tag in extras.get(key) or []:
+            s = str(tag)
+            if s not in seen:
+                merged.append(s)
+                seen.add(s)
+        out[key] = merged
+    return out
+
 
 def get_overlay_text(
     parser: DICOMParser,

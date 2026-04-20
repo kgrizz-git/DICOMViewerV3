@@ -218,6 +218,58 @@ class OverlayConfigMixin:
         cast(MutableMapping[str, Any], cfg["overlay_tags"])[modality] = corner_tags
         self._save_config()
 
+    def get_overlay_tags_detailed_extra(self, modality: str = "default") -> Dict[str, List[str]]:
+        """
+        Get additional overlay tags per corner for Detailed mode only.
+
+        These append after Simple tags (deduplicated at render time). Same four
+        corner keys as ``get_overlay_tags``.
+
+        Args:
+            modality: Modality name (e.g. "CT", "MR", "default").
+
+        Returns:
+            Dict with keys upper_left, upper_right, lower_left, lower_right
+            (lists may be empty).
+        """
+        empty = {
+            "upper_left": [],
+            "upper_right": [],
+            "lower_left": [],
+            "lower_right": [],
+        }
+        cfg = self._config()
+        root = cfg.get("overlay_tags_detailed_extra")
+        if not isinstance(root, dict):
+            return {k: list(v) for k, v in empty.items()}
+        by_mod = cast(MutableMapping[str, Any], root)
+        if modality not in by_mod:
+            return {k: list(v) for k, v in empty.items()}
+        tags = cast(MutableMapping[str, Any], by_mod[modality])
+        return {
+            "upper_left": list(tags.get("upper_left", [])),
+            "upper_right": list(tags.get("upper_right", [])),
+            "lower_left": list(tags.get("lower_left", [])),
+            "lower_right": list(tags.get("lower_right", [])),
+        }
+
+    def set_overlay_tags_detailed_extra(
+        self, modality: str, corner_tags: Dict[str, List[str]]
+    ) -> None:
+        """
+        Set additional per-corner tags for Detailed overlay mode.
+
+        Args:
+            modality: Modality name (e.g. "CT", "MR").
+            corner_tags: Dict with keys upper_left, upper_right, lower_left,
+                lower_right and values as lists of tag keywords.
+        """
+        cfg = self._config()
+        if "overlay_tags_detailed_extra" not in cfg:
+            cfg["overlay_tags_detailed_extra"] = {}
+        cast(MutableMapping[str, Any], cfg["overlay_tags_detailed_extra"])[modality] = corner_tags
+        self._save_config()
+
     def get_all_modalities(self) -> List[str]:
         """
         Get list of all modalities with saved overlay configurations.
@@ -226,6 +278,13 @@ class OverlayConfigMixin:
             List of modality names
         """
         cfg = self._config()
-        if "overlay_tags" not in cfg:
-            return []
-        return list(cast(MutableMapping[str, Any], cfg["overlay_tags"]).keys())
+        keys: set[str] = set()
+        if "overlay_tags" in cfg and isinstance(cfg["overlay_tags"], dict):
+            keys.update(cast(MutableMapping[str, Any], cfg["overlay_tags"]).keys())
+        if "overlay_tags_detailed_extra" in cfg and isinstance(
+            cfg["overlay_tags_detailed_extra"], dict
+        ):
+            keys.update(
+                cast(MutableMapping[str, Any], cfg["overlay_tags_detailed_extra"]).keys()
+            )
+        return sorted(keys)

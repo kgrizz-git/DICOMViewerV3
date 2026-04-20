@@ -30,7 +30,9 @@ from shiboken6 import isValid
 from PySide6.QtGui import QPen, QColor, QTransform, QPainterPath, QPainterPathStroker
 from typing import List, Optional, Tuple, Dict, Set, Callable
 import numpy as np
+from pydicom.dataset import Dataset
 
+from core.dicom_color import multichannel_axis_labels
 from utils.bundled_fonts import make_qfont
 from utils.config_manager import ConfigManager
 from gui.view_transform_helpers import graphics_view_uniform_zoom
@@ -752,22 +754,29 @@ class ROIManager:
                     
                     text_item.setFont(font)
     
-    def calculate_statistics(self, roi: ROIItem, pixel_array: np.ndarray, 
-                            rescale_slope: Optional[float] = None,
-                            rescale_intercept: Optional[float] = None,
-                            pixel_spacing: Optional[Tuple[float, float]] = None) -> RoiStatisticsMap:
+    def calculate_statistics(
+        self,
+        roi: ROIItem,
+        pixel_array: np.ndarray,
+        rescale_slope: Optional[float] = None,
+        rescale_intercept: Optional[float] = None,
+        pixel_spacing: Optional[Tuple[float, float]] = None,
+        dataset: Optional[Dataset] = None,
+    ) -> RoiStatisticsMap:
         """
         Calculate statistics for an ROI.
-        
+
         Args:
             roi: ROI item
             pixel_array: Image pixel array
             rescale_slope: Optional rescale slope to apply to pixel values
             rescale_intercept: Optional rescale intercept to apply to pixel values
             pixel_spacing: Optional pixel spacing tuple (row_spacing, col_spacing) in mm for area calculation
-            
+            dataset: Optional DICOM dataset for ``PhotometricInterpretation``-based ``channel_labels``
+
         Returns:
-            Dictionary with statistics (mean, std, min, max, count, area_pixels, area_mm2)
+            Dictionary with statistics (mean, std, min, max, count, area_pixels, area_mm2);
+            multichannel runs may include ``channel_labels`` (tuple of short names per channel).
         """
         height, width = pixel_array.shape[:2]
         
@@ -866,6 +875,7 @@ class ROIManager:
                 stats[f"std_ch{c}"] = float(np.std(ch))
                 stats[f"min_ch{c}"] = float(np.min(ch))
                 stats[f"max_ch{c}"] = float(np.max(ch))
+            stats["channel_labels"] = tuple(multichannel_axis_labels(dataset, nc))
 
         # Store statistics in ROI item
         roi.statistics = stats
@@ -917,7 +927,11 @@ class ROIManager:
             lines.append(f"Max: {statistics['max']:.2f}{unit_suffix}")
         mc = int(statistics.get("multichannel_count") or 0)
         if mc >= 2:
-            labels = ("R", "G", "B") if mc == 3 else tuple(str(i) for i in range(mc))
+            raw_lbl = statistics.get("channel_labels")
+            if isinstance(raw_lbl, (list, tuple)) and len(raw_lbl) == mc:
+                labels = tuple(str(x) for x in raw_lbl)
+            else:
+                labels = tuple(f"Ch{i}" for i in range(mc))
             if "mean" in roi.visible_statistics:
                 bits: list[str] = []
                 for c in range(mc):

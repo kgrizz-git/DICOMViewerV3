@@ -285,7 +285,9 @@ def show_image_background_context_menu_on_right_release(viewer: Any, event: Any)
         reset_orientation_action.triggered.connect(viewer.reset_orientation)
 
         # Toggle Overlay action
-        toggle_overlay_action = context_menu.addAction("Toggle Overlay (Spacebar)")
+        toggle_overlay_action = context_menu.addAction(
+            "Cycle overlay detail (Space) / legacy toggle (Shift+Space)"
+        )
         toggle_overlay_action.triggered.connect(viewer.toggle_overlay_requested.emit)
 
         # Overlay Configuration submenu

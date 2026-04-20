@@ -218,7 +218,11 @@ class ROIStatisticsPanel(QWidget):
 
         mc = int(statistics.get("multichannel_count") or 0)
         if mc >= 2:
-            labels = ("R", "G", "B") if mc == 3 else tuple(f"Ch{i}" for i in range(mc))
+            raw_lbl = statistics.get("channel_labels")
+            if isinstance(raw_lbl, (list, tuple)) and len(raw_lbl) == mc:
+                labels = tuple(str(x) for x in raw_lbl)
+            else:
+                labels = tuple(f"Ch{i}" for i in range(mc))
             for c in range(mc):
                 lbl = labels[c] if c < len(labels) else f"Ch{c}"
                 if f"mean_ch{c}" in statistics:
