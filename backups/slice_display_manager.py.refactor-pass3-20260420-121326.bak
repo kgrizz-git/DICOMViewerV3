@@ -681,148 +681,6 @@ class SliceDisplayManager:
 
         return window_center, window_width, use_rescaled_values
 
-    def _render_base_image_pipeline(
-        self,
-        dataset: Dataset,
-        current_studies: Dict[str, Dict[str, list[Dataset]]],
-        current_study_uid: str,
-        current_series_uid: str,
-        current_slice_index: int,
-        window_center: Optional[float],
-        window_width: Optional[float],
-        use_rescaled_values: bool,
-        rescale_slope: Optional[float],
-        rescale_intercept: Optional[float],
-        is_same_series: bool,
-        is_new_study_series: bool,
-        series_identifier: str,
-        preserve_view_override: Optional[bool],
-    ) -> None:
-        """Projection, single-slice render, fusion, viewer image + fit (same order as prior display_slice)."""
-        image = None
-        if self.projection_enabled:
-            try:
-                image = self._create_projection_image(
-                    dataset,
-                    current_studies,
-                    current_study_uid,
-                    current_series_uid,
-                    current_slice_index,
-                    window_center,
-                    window_width,
-                    use_rescaled_values,
-                    rescale_slope,
-                    rescale_intercept,
-                )
-                if image is None:
-                    pass
-            except Exception as e:
-                error_type = type(e).__name__
-                print(f"Error creating projection image ({error_type}): {e}")
-                pass
-
-        no_pixel_placeholder = False
-        if image is None:
-            if DEBUG_WL:
-                print(
-                    f"[DEBUG-WL] dataset_to_image: window_center={window_center} window_width={window_width} "
-                    f"apply_rescale={use_rescaled_values}"
-                )
-            try:
-                if window_center is not None and window_width is not None:
-                    image = self.dicom_processor.dataset_to_image(
-                        dataset,
-                        window_center=window_center,
-                        window_width=window_width,
-                        apply_rescale=use_rescaled_values,
-                    )
-                else:
-                    image = self.dicom_processor.dataset_to_image(
-                        dataset,
-                        apply_rescale=use_rescaled_values,
-                    )
-                if image is None:
-                    image = _make_no_pixel_placeholder_pil()
-                    no_pixel_placeholder = True
-            except (MemoryError, ValueError, AttributeError, RuntimeError) as e:
-                error_type = type(e).__name__
-                error_msg = f"Error converting dataset to image ({error_type}): {str(e)}"
-                raise RuntimeError(error_msg) from e
-            except Exception as e:
-                error_type = type(e).__name__
-                error_msg = f"Unexpected error converting dataset to image ({error_type}): {str(e)}"
-                raise RuntimeError(error_msg) from e
-
-        apply_inversion = None
-        preserve_view = is_same_series and not is_new_study_series
-        force_fit_to_view = False
-        if preserve_view_override is not None:
-            preserve_view = preserve_view_override
-            force_fit_to_view = not preserve_view_override
-        if not preserve_view:
-            if series_identifier and series_identifier in self.view_state_manager.series_defaults:
-                series_inverted = self.view_state_manager.get_series_inversion_state(series_identifier)
-                apply_inversion = series_inverted
-            self.view_state_manager.restore_orientation(series_identifier)
-
-        if (
-            self.fusion_coordinator is not None
-            and image is not None
-            and not no_pixel_placeholder
-        ):
-            try:
-                base_datasets = current_studies.get(current_study_uid, {}).get(current_series_uid, [])
-                if base_datasets:
-                    fused_image = self.fusion_coordinator.get_fused_image(
-                        image,
-                        base_datasets,
-                        current_slice_index,
-                    )
-                    if fused_image is not None:
-                        image = fused_image
-            except Exception as e:
-                print(f"Error applying fusion: {e}")
-
-        modality = getattr(dataset, "Modality", None) or ""
-        show_sr_bar = bool(no_pixel_placeholder and modality == "SR")
-        if show_sr_bar and self.open_structured_report_browser_callback is not None:
-
-            def _open_sr_browser_for_current() -> None:
-                self.open_structured_report_browser_callback(dataset)  # type: ignore[misc]
-
-            self.image_viewer.set_no_pixel_placeholder_bar(
-                True,
-                open_callback=_open_sr_browser_for_current,
-                show_open_button=True,
-            )
-        elif show_sr_bar:
-            self.image_viewer.set_no_pixel_placeholder_bar(
-                True,
-                open_callback=None,
-                show_open_button=False,
-            )
-        else:
-            self.image_viewer.set_no_pixel_placeholder_bar(False)
-
-        self.image_viewer.set_image(image, preserve_view=preserve_view, apply_inversion=apply_inversion)
-
-        if is_new_study_series or force_fit_to_view:
-            self.image_viewer.fit_to_view(center_image=True)
-            if is_new_study_series:
-                stored_zoom = self.image_viewer.current_zoom
-                stored_h_scroll = self.image_viewer.horizontalScrollBar().value()
-                stored_v_scroll = self.image_viewer.verticalScrollBar().value()
-                self.view_state_manager.initial_fit_zoom = stored_zoom
-                if series_identifier in self.view_state_manager.series_defaults:
-                    self.view_state_manager.series_defaults[series_identifier].update(
-                        {
-                            "zoom": stored_zoom,
-                            "h_scroll": stored_h_scroll,
-                            "v_scroll": stored_v_scroll,
-                            "initial_fit_zoom": stored_zoom,
-                        }
-                    )
-
     def _sync_controls_and_metadata(
         self,
         dataset: Dataset,
@@ -1156,23 +1014,183 @@ class SliceDisplayManager:
                 rescale_slope=rescale_slope,
                 rescale_intercept=rescale_intercept,
             )
+            
+            # Convert to image
+            image = None
+            # Check if projection mode is enabled
+            if self.projection_enabled:
+                # Projection mode: gather slices and calculate projection
+                try:
+                    image = self._create_projection_image(
+                        dataset,
+                        current_studies,
+                        current_study_uid,
+                        current_series_uid,
+                        current_slice_index,
+                        window_center,
+                        window_width,
+                        use_rescaled_values,
+                        rescale_slope,
+                        rescale_intercept
+                    )
+                    if image is None:
+                        # Projection failed (e.g., not enough slices available near end of dataset)
+                        # Fall back to normal display but keep projection enabled
+                        # so it works again when scrolling to a valid position
+                        # Continue with normal dataset conversion below
+                        pass
+                except Exception as e:
+                    # Projection error - fall back to normal display
+                    # Only disable on actual errors, not just insufficient slices
+                    error_type = type(e).__name__
+                    print(f"Error creating projection image ({error_type}): {e}")
+                    # Don't disable projection mode for insufficient slices - only for actual errors
+                    # Keep projection enabled so user can scroll back and it will work again
+                    # Continue with normal dataset conversion below
+                    pass
+            
+            # Normal mode or projection fallback: convert single dataset to image
+            # If projection failed (image is None) or projection is disabled, convert normally
+            # Always pass window_center/window_width when we have them so the image uses the same
+            # (correctly rescaled-converted) values we store and show in the controls. For new series
+            # we computed and converted WL above; passing them here ensures one consistent application.
+            no_pixel_placeholder = False
+            if image is None:
+                if DEBUG_WL:
+                    print(
+                        f"[DEBUG-WL] dataset_to_image: window_center={window_center} window_width={window_width} "
+                        f"apply_rescale={use_rescaled_values}"
+                    )
+                try:
+                    if window_center is not None and window_width is not None:
+                        image = self.dicom_processor.dataset_to_image(
+                            dataset,
+                            window_center=window_center,
+                            window_width=window_width,
+                            apply_rescale=use_rescaled_values
+                        )
+                    else:
+                        image = self.dicom_processor.dataset_to_image(
+                            dataset,
+                            apply_rescale=use_rescaled_values
+                        )
+                    # print(f"[DISPLAY] Image conversion complete: {image is not None}")
+                    if image is None:
+                        # No pixel data (e.g. SR): use a neutral placeholder and continue so metadata /
+                        # tag viewer and overlays still refresh (do not return early).
+                        image = _make_no_pixel_placeholder_pil()
+                        no_pixel_placeholder = True
+                except (MemoryError, ValueError, AttributeError, RuntimeError) as e:
+                    # Pixel array access errors during image conversion
+                    error_type = type(e).__name__
+                    error_msg = f"Error converting dataset to image ({error_type}): {str(e)}"
+                    # print(error_msg)
+                    # Re-raise to be caught by outer exception handler
+                    raise RuntimeError(error_msg) from e
+                except Exception as e:
+                    # Other unexpected errors
+                    error_type = type(e).__name__
+                    error_msg = f"Unexpected error converting dataset to image ({error_type}): {str(e)}"
+                    # print(error_msg)
+                    raise RuntimeError(error_msg) from e
+            
+            # Restore inversion state for this series if it exists
+            # Only pass apply_inversion when preserve_view=False (new slice)
+            # When preserve_view=True (scrolling), pass None so set_image() knows it's a new slice
+            apply_inversion = None
+            preserve_view = is_same_series and not is_new_study_series
+            force_fit_to_view = False
+            if preserve_view_override is not None:
+                preserve_view = preserve_view_override
+                force_fit_to_view = not preserve_view_override
+            if not preserve_view:
+                # New slice - apply stored inversion state if it exists
+                if series_identifier and series_identifier in self.view_state_manager.series_defaults:
+                    # Series has stored state - get inversion value
+                    series_inverted = self.view_state_manager.get_series_inversion_state(series_identifier)
+                    # Pass inversion state for new slice
+                    apply_inversion = series_inverted
+                # Restore per-series flip/rotation orientation (or reset to default)
+                self.view_state_manager.restore_orientation(series_identifier)
+            # When preserve_view=True (scrolling), apply_inversion stays None
+            # This allows set_image() to detect it's a new slice and store new original_image
+            
+            # Apply fusion if enabled (skip synthetic no-pixel placeholders)
+            if (
+                self.fusion_coordinator is not None
+                and image is not None
+                and not no_pixel_placeholder
+            ):
+                try:
+                    # Get base datasets for current series
+                    base_datasets = current_studies.get(current_study_uid, {}).get(current_series_uid, [])
+                    if base_datasets:
+                        fused_image = self.fusion_coordinator.get_fused_image(
+                            image,
+                            base_datasets,
+                            current_slice_index
+                        )
+                        if fused_image is not None:
+                            image = fused_image
+                except Exception as e:
+                    print(f"Error applying fusion: {e}")
+                    # Continue with non-fused image
+            
+            # Set image in viewer - preserve zoom/pan if same series
+            # print(f"[DISPLAY] About to set image in viewer...")
+            # print(f"[DISPLAY] Slice index: {current_slice_index}, Preserve view: {preserve_view}")
+            # print(f"[DISPLAY] Image size: {image.size if image else 'None'}, mode: {image.mode if image else 'None'}")
+            # print(f"[DISPLAY] Image id: {id(image) if image else 'None'}")
+            # print(f"[DISPLAY] Apply inversion: {apply_inversion}")
 
-            self._render_base_image_pipeline(
-                dataset=dataset,
-                current_studies=current_studies,
-                current_study_uid=current_study_uid,
-                current_series_uid=current_series_uid,
-                current_slice_index=current_slice_index,
-                window_center=window_center,
-                window_width=window_width,
-                use_rescaled_values=use_rescaled_values,
-                rescale_slope=rescale_slope,
-                rescale_intercept=rescale_intercept,
-                is_same_series=is_same_series,
-                is_new_study_series=is_new_study_series,
-                series_identifier=series_identifier,
-                preserve_view_override=preserve_view_override,
+            modality = getattr(dataset, "Modality", None) or ""
+            show_sr_bar = bool(
+                no_pixel_placeholder
+                and modality == "SR"
             )
+            if show_sr_bar and self.open_structured_report_browser_callback is not None:
+
+                def _open_sr_browser_for_current() -> None:
+                    self.open_structured_report_browser_callback(dataset)  # type: ignore[misc]
+
+                self.image_viewer.set_no_pixel_placeholder_bar(
+                    True,
+                    open_callback=_open_sr_browser_for_current,
+                    show_open_button=True,
+                )
+            elif show_sr_bar:
+                self.image_viewer.set_no_pixel_placeholder_bar(
+                    True,
+                    open_callback=None,
+                    show_open_button=False,
+                )
+            else:
+                self.image_viewer.set_no_pixel_placeholder_bar(False)
+
+            self.image_viewer.set_image(image, preserve_view=preserve_view, apply_inversion=apply_inversion)
+
+            # print(f"[DISPLAY] Image set in viewer successfully")
+            
+            # If new study/series or explicitly requested, fit to view and center
+            if is_new_study_series or force_fit_to_view:
+                self.image_viewer.fit_to_view(center_image=True)
+                if is_new_study_series:
+                    # Store zoom and scroll positions after fit_to_view
+                    stored_zoom = self.image_viewer.current_zoom
+                    stored_h_scroll = self.image_viewer.horizontalScrollBar().value()
+                    stored_v_scroll = self.image_viewer.verticalScrollBar().value()
+                    
+                    # Store the initial fit zoom in view state manager
+                    self.view_state_manager.initial_fit_zoom = stored_zoom
+                    
+                    # Update series defaults with zoom/pan info if we have window/level already stored
+                    if series_identifier in self.view_state_manager.series_defaults:
+                        self.view_state_manager.series_defaults[series_identifier].update({
+                            'zoom': stored_zoom,
+                            'h_scroll': stored_h_scroll,
+                            'v_scroll': stored_v_scroll,
+                            'initial_fit_zoom': stored_zoom  # Store for export font scaling
+                        })
 
             self._sync_controls_and_metadata(
                 dataset=dataset,

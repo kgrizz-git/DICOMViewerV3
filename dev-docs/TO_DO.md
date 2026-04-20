@@ -37,6 +37,7 @@ This file tracks active and near-term tasks.
     - [P2] Particularly w/ large dataset (large files or many files) - would loading compressed initially save time? If we make a database, keep compressed cache?
 - [ ] **[P0]** See if executables can be made smaller (especially on macOS) ([details](FUTURE_WORK_DETAIL_NOTES.md#executable-size-especially-on-macos))
 - [ ] **[P1]** Check fusion responsiveness on Parallels with 3D fusion
+- [ ] **[P0]** Check dose RP values / order of magnitude / units for XA fluroscopy RDSRs
 
 ## Maintenance
 
@@ -47,6 +48,7 @@ This file tracks active and near-term tasks.
 
 ## UX / Workflow
 
+- [ ] **[P1]** Allow a search bar in study index that searches all fields for the term/string
 - [ ] **[P1]** **Confirmed:** Ctrl+X does not cut ROIs/measurements/annotations like Ctrl+C / Ctrl+V—Edit only wires `StandardKey.Copy` / `StandardKey.Paste` to `AnnotationPasteHandler` (`main_window_menu_builder.py`, `app_signal_wiring.py`); there is no Cut shortcut or handler. **Implement:** add Edit → Cut with `QKeySequence.StandardKey.Cut`, call the same clipboard path as copy, then delete the same selected items using the existing per-type delete APIs already used elsewhere.
 - [ ] **[P2]** Give option (on by default) to suppress certain tag names (not values) on overlay - StudyDescription, SeriesDescription, InstitutionName, PatientName; abbreviate ImagePositionPatient as IPP and ImageOrientationPatient as IOP.
 - [ ] **[P0]** Full-fidelity Structured Report browsing: dynamic `ContentSequence` tree (all value types), template-aware **RDSR** views with **per-event** rows (fluoroscopy / TID 10003 family), registry for major **SR SOP classes**, not only the fixed dose-summary table or flat tags. *Prior (2026-04-16): file meta merged into `get_all_tags`; no-pixel `display_slice` path refreshes metadata/tag list—covers **tags**, not SR document semantics.* **Plan:** [SR full fidelity browser](plans/supporting/SR_FULL_FIDELITY_BROWSER_PLAN.md).
