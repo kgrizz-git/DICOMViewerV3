@@ -251,6 +251,7 @@ class QuickStartGuideDialog(QDialog):
             content = content.replace(f"{{{key}}}", val)
         doc_placeholders = {
             "doc_USER_GUIDE": user_doc_url("USER_GUIDE.md"),
+            "doc_CONFIGURATION": user_doc_url("CONFIGURATION.md"),
             "doc_USER_GUIDE_MPR": user_doc_url("USER_GUIDE_MPR.md"),
             "doc_USER_GUIDE_QA_PYLINAC": user_doc_url("USER_GUIDE_QA_PYLINAC.md"),
             "doc_IMAGE_FUSION": user_doc_url("IMAGE_FUSION_TECHNICAL_DOCUMENTATION.md"),

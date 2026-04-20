@@ -14,6 +14,8 @@ Outputs: full https URLs as strings.
 """
 
 # Full URL prefix through .../user-docs (no trailing slash required).
+# Maintainers: for frozen builds whose behavior lags `main`, you may point this at a
+# tag path (e.g. .../blob/v0.2.10/user-docs) so Help links match the binary—see RELEASING.md.
 USER_DOCS_GITHUB_PREFIX = (
     "https://github.com/kgrizz-git/DICOMViewerV3/blob/main/user-docs"
 )

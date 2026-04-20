@@ -8,9 +8,16 @@ View DICOM studies with **multi-window layouts**, **window/level**, **cine**, **
 
 ## Documentation
 
-- **In the app:** **Help → Quick Start Guide** — short onboarding, **table of contents**, and links that open full guides in your **browser** (GitHub).
+**End users (running a release binary or the app from source):**
+
+- **In the app:** **Help → Quick Start Guide** — short onboarding, **table of contents**, and links that open full guides in your **browser** (GitHub; requires internet for those links).
 - **Help → Documentation** — opens the **[user guide hub](user-docs/USER_GUIDE.md)** in your browser.
-- **In this repo:** Topic guides under **[user-docs/](user-docs/)** (MPR, pylinac QA, image fusion, etc.).
+- **In this repo:** Topic guides under **[user-docs/](user-docs/)** — hub **[USER_GUIDE.md](user-docs/USER_GUIDE.md)**, **[CONFIGURATION.md](user-docs/CONFIGURATION.md)** (settings and local study index), plus MPR, QA, fusion, etc.
+
+**Developers and contributors:**
+
+- **[AGENTS.md](AGENTS.md)** — venv, run/test commands, `src/` layout, CI notes.
+- **[dev-docs/README.md](dev-docs/README.md)** — index into setup, releasing, security, plans, and reference material under `dev-docs/`.
 
 ## Requirements
 
@@ -66,6 +73,7 @@ python -m src.main
 ## Contributing / development
 
 - **[AGENTS.md](AGENTS.md)** — venv, commands, `src/` layout, CI notes.  
+- **[dev-docs/README.md](dev-docs/README.md)** — index of developer docs under `dev-docs/`.  
 - **[tests/README.md](tests/README.md)** — running tests.  
 - **[dev-docs/DEVELOPER_SETUP.md](dev-docs/DEVELOPER_SETUP.md)** — troubleshooting installs and paths.
 

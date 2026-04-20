@@ -50,7 +50,7 @@ Text shown in the running application for **Quick Start Guide** and **About** is
 
 - **Menu:** Help → Documentation (browser)…  
 - **Behavior:** Opens the user guide hub on GitHub via `QDesktopServices` from [src/gui/dialog_coordinator.py](../src/gui/dialog_coordinator.py) (`open_user_documentation_in_browser`).  
-- **Configurable URL:** Edit **`USER_DOCS_GITHUB_PREFIX`** in [src/utils/doc_urls.py](../src/utils/doc_urls.py) (forks / different branch). Quick Start HTML uses placeholders `{doc_*}` filled in [src/gui/dialogs/quick_start_guide_dialog.py](../src/gui/dialogs/quick_start_guide_dialog.py).
+- **Configurable URL:** Edit **`USER_DOCS_GITHUB_PREFIX`** in [src/utils/doc_urls.py](../src/utils/doc_urls.py) (forks / different branch). Quick Start HTML uses placeholders `{doc_*}` (including `{doc_CONFIGURATION}`) filled in [src/gui/dialogs/quick_start_guide_dialog.py](../src/gui/dialogs/quick_start_guide_dialog.py); keep placeholders in sync when adding new `user-docs/*.md` links.
 
 ### About dialog
 

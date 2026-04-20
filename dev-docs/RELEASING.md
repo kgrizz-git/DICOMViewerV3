@@ -51,3 +51,19 @@ See [dev-docs/info/SEMANTIC_VERSIONING_GUIDE.md](info/SEMANTIC_VERSIONING_GUIDE.
 | Git tag           | `vX.Y.Z` (must match `__version__`) |
 
 Never change the contents of a version after it has been released or the tag pushed. If you need to fix something, release a new version (e.g. patch) instead.
+
+## In-app user documentation URLs
+
+**Help → Documentation** and the links inside **Help → Quick Start Guide** are built from **`USER_DOCS_GITHUB_PREFIX`** in [`src/utils/doc_urls.py`](../src/utils/doc_urls.py). That constant must end at the `user-docs` path segment (no trailing filename).
+
+| Scenario | Suggested prefix |
+|----------|------------------|
+| **Living docs** (default open-source flow) | `.../blob/main/user-docs` so Help always tracks the latest Markdown on `main`. |
+| **Release-matched docs** for a frozen binary | Point at the **same tag** as the executable (e.g. `.../blob/v0.2.10/user-docs`) so menu text cannot describe features absent from that build. Revert or branch the constant when cutting releases if you ship custom builds. |
+| **Forks / alternate hosting** | Set the prefix to your repo, branch, or published docs root; keep paths under `user-docs/` consistent so `user_doc_url("…")` still resolves. |
+
+When **keyboard shortcuts**, **menus**, or **Help HTML** (`resources/help/quick_start_guide.html`) change in a user-visible way, update **`user-docs/USER_GUIDE.md`** (and related topic files) in the **same** change set when possible so the GitHub hub and Quick Start stay aligned.
+
+## Documentation maintenance cadence
+
+After each **minor** or **major** release—or after a large UI or Help change—run a new copy of [`templates-generalized/doc-assessment-template.md`](templates-generalized/doc-assessment-template.md) into `doc-assessments/` and work through the checklist so drift is caught before the next release.

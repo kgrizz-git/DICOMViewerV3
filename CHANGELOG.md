@@ -6,6 +6,10 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 
 ## [Unreleased]
 
+### Added
+- **Planning docs:** `dev-docs/plans/supporting/DOCUMENTATION_STRUCTURE_AND_COMPLETENESS_PLAN.md` — phased plan for user vs developer doc separation, Quick Guide / hub parity, settings and study-index coverage, release doc URL policy, and quality gates; linked from `dev-docs/TO_DO.md`. **Semantic versioning note: patch** (documentation only).
+- **User / developer documentation (structure plan):** `user-docs/CONFIGURATION.md` (Edit → Settings, local study index); `dev-docs/README.md` (developer index); root **README** splits end-user vs developer entry points; **USER_GUIDE** quick-orientation line, topics link to configuration, and **Local study index** section; **Quick Start** HTML expanded (overlays, export/SR, settings) with **`{doc_CONFIGURATION}`** and hub-aligned **Space** / **Shift+Space** text; **RELEASING** adds in-app doc URL policy and doc cadence; **`doc_urls`** maintainer comment; **AGENTS** links the dev-docs index; **CODE_DOCUMENTATION** notes CONFIGURATION placeholder. **Semantic versioning note: patch** (documentation / Help wiring).
+
 ### Fixed
 - **Export Screenshots:** While saving, the blue **focused-pane** border is suppressed so composite (and other) captures show the same thin gray border on every pane as in an unfocused layout. **Semantic versioning note: patch** (export appearance).
 

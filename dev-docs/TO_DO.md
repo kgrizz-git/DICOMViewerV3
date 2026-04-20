@@ -101,8 +101,7 @@ This file tracks active and near-term tasks.
 
 ## Documentation
 
-**Plan (2026-04-03):** [DOCUMENTATION_IMPROVEMENT_PLAN_2026-04-03-200500.md](plans/completed/DOCUMENTATION_IMPROVEMENT_PLAN_2026-04-03-200500.md) — README slimming, `tests/README.md`, in-app Quick Start (TOC + browser links), `user-docs/` hub, MPR + pylinac user guides.
-
+- [ ] **[P1]** Documentation structure, Quick Guide alignment, settings reference, and discoverability ([plan](plans/supporting/DOCUMENTATION_STRUCTURE_AND_COMPLETENESS_PLAN.md), [assessment inputs](doc-assessments/doc-assessment-2026-04-20-002224.md)).
 - [ ] **[P1]** Conduct documentation audit to ensure all features are documented and up to date.
 - [x] **[P1]** Introduce Help → Documentation, shorten Quick Start (`resources/help/quick_start_guide.html`), link to full docs in browser — see [DOCUMENTATION_IMPROVEMENT_PLAN_2026-04-03-200500.md](plans/completed/DOCUMENTATION_IMPROVEMENT_PLAN_2026-04-03-200500.md).
 - [x] **[P1]** Add documentation for the pylinac integration and the automated QA analysis tools — [user-docs/USER_GUIDE_QA_PYLINAC.md](../user-docs/USER_GUIDE_QA_PYLINAC.md) (developer depth remains in `dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md`).
