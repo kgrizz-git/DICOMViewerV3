@@ -6,7 +6,8 @@ Runs on staged Python sources under src/ only. Uses the staged index
 (`git show :path`) so checks match what will be committed.
 
 Rules (see dev-docs/QUICK_REFERENCE_SECURITY.md):
-  - No traceback.print_exc() in staged files (entire blob; use sanitized logging).
+  - No traceback.print_exc() calls in staged files (entire blob; use sanitized logging).
+    Matches outside STRING/COMMENT tokens only so docstrings may mention the API.
   - On added lines: patient tag names from PATIENT_PII_FIELDS in log/print without
     sanitize_message / sanitize_exception.
   - On added lines: conservative path-like literals in logger calls without sanitizer.
@@ -29,10 +30,12 @@ from __future__ import annotations
 
 import argparse
 import ast
+import io
 import os
 import re
 import subprocess
 import sys
+import tokenize
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -132,23 +135,61 @@ def _line_allowed(line: str) -> bool:
     return ALLOW_LINE in s or ALLOW_PRINT_EXC in s
 
 
+def _string_and_comment_intervals(source: str) -> list[tuple[tuple[int, int], tuple[int, int]]]:
+    """Half-open (start, end) spans as (line, col) with 1-based lines, 0-based columns (tokenize convention)."""
+    intervals: list[tuple[tuple[int, int], tuple[int, int]]] = []
+    try:
+        for tok in tokenize.generate_tokens(io.StringIO(source).readline):
+            if tok.type in (tokenize.STRING, tokenize.COMMENT):
+                intervals.append((tok.start, tok.end))
+    except tokenize.TokenError:
+        pass
+    return intervals
+
+
+def _pos_ge_start(pos: tuple[int, int], start: tuple[int, int]) -> bool:
+    return pos[0] > start[0] or (pos[0] == start[0] and pos[1] >= start[1])
+
+
+def _pos_lt_end(pos: tuple[int, int], end: tuple[int, int]) -> bool:
+    return pos[0] < end[0] or (pos[0] == end[0] and pos[1] < end[1])
+
+
+def _pos_inside_any_interval(pos: tuple[int, int], intervals: list[tuple[tuple[int, int], tuple[int, int]]]) -> bool:
+    for start, end in intervals:
+        if _pos_ge_start(pos, start) and _pos_lt_end(pos, end):
+            return True
+    return False
+
+
+_PRINT_EXC_RE = re.compile(r"traceback\.print_exc\(", re.IGNORECASE)
+
+
 def check_traceback_print_exc(relpath: str, staged: str) -> list[Violation]:
+    intervals = _string_and_comment_intervals(staged)
     out: list[Violation] = []
     for i, line in enumerate(staged.splitlines(), start=1):
-        if "traceback.print_exc(" not in line:
+        if _PRINT_EXC_RE.search(line) is None:
             continue
         if line.lstrip().startswith("#"):
             continue
         if ALLOW_PRINT_EXC in line or _line_allowed(line):
             continue
-        out.append(
-            Violation(
-                "no-traceback-print-exc",
-                relpath,
-                i,
-                "Use logging with sanitize_exception(traceback.format_exc()) instead of traceback.print_exc().",
+        bad_outside = False
+        for m in _PRINT_EXC_RE.finditer(line):
+            pos = (i, m.start())
+            if not _pos_inside_any_interval(pos, intervals):
+                bad_outside = True
+                break
+        if bad_outside:
+            out.append(
+                Violation(
+                    "no-traceback-print-exc",
+                    relpath,
+                    i,
+                    "Use logging with sanitize_exception(traceback.format_exc()) instead of traceback.print_exc().",
+                )
             )
-        )
     return out
 
 

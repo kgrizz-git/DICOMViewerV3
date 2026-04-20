@@ -52,6 +52,26 @@ def test_check_traceback_print_exc_allow_inline() -> None:
     assert pc.check_traceback_print_exc("src/x.py", ok) == []
 
 
+def test_check_traceback_print_exc_ignored_in_docstring() -> None:
+    """Mentioning the API in a triple-quoted docstring must not fail the hook."""
+    src = '''"""
+    Prefer traceback.print_exc() for nothing — documentation only.
+    """
+x = 1
+'''
+    assert pc.check_traceback_print_exc("src/x.py", src) == []
+
+
+def test_check_traceback_print_exc_ignored_in_string_literal() -> None:
+    src = 'hint = "do not call traceback.print_exc() in production"\n'
+    assert pc.check_traceback_print_exc("src/x.py", src) == []
+
+
+def test_check_traceback_print_exc_ignored_in_end_of_line_comment() -> None:
+    src = "import traceback  # see traceback.print_exc() — banned\n"
+    assert pc.check_traceback_print_exc("src/x.py", src) == []
+
+
 def test_check_dialog_raw_exception() -> None:
     line = 'QMessageBox.critical(self, "E", str(e))'
     vs = pc.check_dialog_raw_exception("src/d.py", line, 10)

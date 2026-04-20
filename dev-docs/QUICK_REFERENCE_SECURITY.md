@@ -91,7 +91,8 @@ except Exception as e:
 
 # Hook 1: pre-commit (runs on `git commit`)
 #   ✓ Privacy / logging gate (all branches): staged src/*.py — scripts/git_hook_privacy_checks.py
-#       — no traceback.print_exc(); heuristics on added lines for patient tags in logs,
+#       — no traceback.print_exc() calls in code (docstrings/comments/strings ignored via tokenize);
+#         heuristics on added lines for patient tags in logs,
 #         path-like literals in logger calls, raw exception text in QMessageBox patterns,
 #         and logger.* with non-literal messages without sanitize_message / sanitize_exception
 #   ✓ On branch main only: DEBUG_* flags + detect-secrets on staged files (run_security_scan.py --pre-commit)
@@ -161,7 +162,7 @@ logger.info(log_msg)
 # ============════════════════════════════════════════════════════════════════════
 
 # [ ] All DEBUG_* flags set to False in src/utils/debug_flags.py  (hook: main pre-commit + run_security_scan)
-# [ ] No traceback.print_exc() left in code (use sanitized logging)  (hook: staged src/*.py full file)
+# [ ] No traceback.print_exc() in executable code (use sanitized logging)  (hook: staged src/*.py; skips STRING/COMMENT)
 # [ ] Patient field names wrapped in sanitize_message() or not logged  (hook: added lines heuristic)
 # [ ] File paths only logged in debug mode or sanitized  (hook: added lines, conservative)
 # [ ] Error dialogs use generic messages (not raw exception text)  (hook: added lines heuristic)

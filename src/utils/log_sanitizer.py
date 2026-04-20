@@ -133,7 +133,7 @@ def sanitized_format_exc() -> str:
     """
     Return the current exception traceback as a redacted string for logging.
 
-    Prefer this over traceback.print_exc() in application code so paths and
+    Prefer this over ``traceback.print_exc()`` in application code so paths and
     PHI-like patterns are not written raw to stderr or logs.
     """
     import traceback
