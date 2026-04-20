@@ -369,4 +369,4 @@ tests/
 - `src/core/fusion_handler.py` — `get_slice_location`, `find_matching_slice` (current 1D matching; not changed).
 - `src/core/image_resampler.py` — 3D resampling with `ImagePositionPatient`, `ImageOrientationPatient`, SimpleITK; basis for `MprBuilder`.
 - `src/core/loading_progress_manager.py` — progress/cancel dialog pattern for long operations; reuse for MPR build.
-- `dev-docs/plans/IMAGE_FUSION_IMPLEMENTATION_PLAN.md` — phased plan structure and style.
+- `dev-docs/plans/completed/IMAGE_FUSION_IMPLEMENTATION_PLAN.md` — phased plan structure and style.

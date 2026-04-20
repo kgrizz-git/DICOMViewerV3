@@ -92,7 +92,7 @@ The viewer can run **up to three** independent low-contrast analyses on the **sa
 - **JSON export** uses **`schema_version` `1.2`**, top-level **`compare_mode`: true**, a **`runs`** array (one object per enabled row, each with its own **`pylinac_analysis_profile`** and metrics), and **`combined_pdf_path`** when a merged PDF was written.
 - **Combined PDF**: a viewer-authored **summary page** (full interpretation text + parameter/score table) plus each run’s pylinac PDF concatenated — see **`PYLINAC_CUSTOMIZATION_AND_EXTENSIONS.md`** and **`dev-docs/plans/completed/MRI_COMPARE_COMBINED_PDF_PLAN.md`**.
 
-For the original feature checklist and design notes, see **`dev-docs/plans/PYLINAC_MRI_COMPARE_RUNS_AND_PDF_INTERPRETATION_PLAN.md`** (marked implemented; some checklist items superseded by the combined-PDF approach).
+For the original feature checklist and design notes, see **`dev-docs/plans/completed/PYLINAC_MRI_COMPARE_RUNS_AND_PDF_INTERPRETATION_PLAN.md`** (marked implemented; some checklist items superseded by the combined-PDF approach).
 
 ---
 

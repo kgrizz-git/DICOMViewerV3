@@ -2,7 +2,7 @@
 
 **Source:** `dev-docs/TO_DO.md` — P2 items (screenshot scope, overlay simple/detailed + Spacebar, histogram comparison).
 
-**Related prior work:** `dev-docs/plans/completed/EXPORT_ANNOTATIONS_AND_SCREENSHOTS_PLAN.md` (per-viewport screenshot export); `dev-docs/plans/HISTOGRAM_PROJECTION_PIXEL_VALUES_PLAN.md` (projection pixels in histogram).
+**Related prior work:** `dev-docs/plans/completed/EXPORT_ANNOTATIONS_AND_SCREENSHOTS_PLAN.md` (per-viewport screenshot export); `dev-docs/plans/completed/HISTOGRAM_PROJECTION_PIXEL_VALUES_PLAN.md` (projection pixels in histogram).
 
 **Priority:** P2 (nice-to-have UX).
 

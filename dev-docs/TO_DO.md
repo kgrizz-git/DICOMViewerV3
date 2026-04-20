@@ -1,7 +1,7 @@
 # To-Do Checklist
 
 **Last updated:** 2026-04-17  
-**Changes:** PySkinDose P1 links to [`plans/supporting/PYSKINDOSE_INTEGRATION_PLAN.md`](plans/supporting/PYSKINDOSE_INTEGRATION_PLAN.md) only; highdicom/SR item points at SR plans directly. *(Prior: 2026-04-16 — moved linked implementation plans into [`plans/supporting/`](plans/supporting/) and refreshed `plans/…` links; unequal pane splitters + cine axes linked to [`SPLITTER_UNEQUAL_PANES_AND_CINE_PLAYBACK_AXES.md`](SPLITTER_UNEQUAL_PANES_AND_CINE_PLAYBACK_AXES.md); 2026-04-15: RDSR shipped, ROI per-channel stats shipped, histogram projection pixels shipped, export formula-injection hardening.)*
+**Changes:** PySkinDose P1 links to [`plans/supporting/PYSKINDOSE_INTEGRATION_PLAN.md`](plans/supporting/PYSKINDOSE_INTEGRATION_PLAN.md) only; highdicom/SR item points at SR plans directly. *(Prior: 2026-04-16 — moved linked implementation plans into [`plans/supporting/`](plans/supporting/) and refreshed `plans/…` links; unequal pane splitters + cine axes linked to [`plans/supporting/SPLITTER_UNEQUAL_PANES_AND_CINE_PLAYBACK_AXES.md`](plans/supporting/SPLITTER_UNEQUAL_PANES_AND_CINE_PLAYBACK_AXES.md); 2026-04-15: RDSR shipped, ROI per-channel stats shipped, histogram projection pixels shipped, export formula-injection hardening.)*
 
 ---
 
@@ -9,7 +9,7 @@
 
 This file tracks active and near-term tasks.
 
-- Detailed implementation notes and tradeoffs: [FUTURE_WORK_DETAIL_NOTES.md](FUTURE_WORK_DETAIL_NOTES.md); **multi-pane splitters + cine axes:** [SPLITTER_UNEQUAL_PANES_AND_CINE_PLAYBACK_AXES.md](SPLITTER_UNEQUAL_PANES_AND_CINE_PLAYBACK_AXES.md)
+- Detailed implementation notes and tradeoffs: [FUTURE_WORK_DETAIL_NOTES.md](FUTURE_WORK_DETAIL_NOTES.md); **multi-pane splitters + cine axes:** [plans/supporting/SPLITTER_UNEQUAL_PANES_AND_CINE_PLAYBACK_AXES.md](plans/supporting/SPLITTER_UNEQUAL_PANES_AND_CINE_PLAYBACK_AXES.md)
 - Parallel implementation ownership/workstreams: [plans/supporting/PARALLEL_WORKSTREAM_OWNERSHIP_PLAN.md](plans/supporting/PARALLEL_WORKSTREAM_OWNERSHIP_PLAN.md)
 
 ## Priority Legend
@@ -67,9 +67,9 @@ This file tracks active and near-term tasks.
 - [ ] **[P2]** Make default pixel size and slice thickness more reasonable and make editing them easier (default to 1.0 mm, 1.0 mm?)
 - [ ] **[P2]** Make a Settings menu for grouping lots of options?
 - [ ] **[P2]** Consider a dedicated **Pylinac Configuration...** menu/dialog if more persisted QA customization options are added (likely), so pylinac/site defaults do not keep expanding the per-analysis Tools dialogs.
-- [ ] **[P2]** Allow dragging window dividers to make unequal divisions ([implementation notes](SPLITTER_UNEQUAL_PANES_AND_CINE_PLAYBACK_AXES.md#1-unequal-divisions-between-image-panes))
+- [ ] **[P2]** Allow dragging window dividers to make unequal divisions ([implementation notes](plans/supporting/SPLITTER_UNEQUAL_PANES_AND_CINE_PLAYBACK_AXES.md#1-unequal-divisions-between-image-panes))
 - [ ] **[P2]** Add ability to use toolbar icons instead of text
-- [ ] **[P1]** Differentiate between frames, instances, and slices in the cine player ([implementation notes](SPLITTER_UNEQUAL_PANES_AND_CINE_PLAYBACK_AXES.md#2-frames-instances-and-slices-in-the-cine-player))
+- [ ] **[P1]** Differentiate between frames, instances, and slices in the cine player ([implementation notes](plans/supporting/SPLITTER_UNEQUAL_PANES_AND_CINE_PLAYBACK_AXES.md#2-frames-instances-and-slices-in-the-cine-player))
 - [ ] **[P2]** Where is it getting frame rate from?
 - [ ] **[P1]** Should we block showing DICOM tags when an MPR window is selected (show just "MPR")? Or add some kind of warning that it is the underlying series data somehow?
 - [ ] **[P1]** Make spacebar cycle overlay visibility state on all windows?
@@ -101,7 +101,7 @@ This file tracks active and near-term tasks.
 
 ## Documentation
 
-- [ ] **[P1]** Documentation structure, Quick Guide alignment, settings reference, and discoverability ([plan](plans/supporting/DOCUMENTATION_STRUCTURE_AND_COMPLETENESS_PLAN.md), [assessment inputs](doc-assessments/doc-assessment-2026-04-20-002224.md)).
+- [ ] **[P1]** Documentation structure, Quick Guide alignment, settings reference, and discoverability ([plan](plans/completed/DOCUMENTATION_STRUCTURE_AND_COMPLETENESS_PLAN.md), [assessment inputs](doc-assessments/doc-assessment-2026-04-20-002224.md)).
 - [ ] **[P1]** Conduct documentation audit to ensure all features are documented and up to date.
 - [x] **[P1]** Introduce Help → Documentation, shorten Quick Start (`resources/help/quick_start_guide.html`), link to full docs in browser — see [DOCUMENTATION_IMPROVEMENT_PLAN_2026-04-03-200500.md](plans/completed/DOCUMENTATION_IMPROVEMENT_PLAN_2026-04-03-200500.md).
 - [x] **[P1]** Add documentation for the pylinac integration and the automated QA analysis tools — [user-docs/USER_GUIDE_QA_PYLINAC.md](../user-docs/USER_GUIDE_QA_PYLINAC.md) (developer depth remains in `dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md`).

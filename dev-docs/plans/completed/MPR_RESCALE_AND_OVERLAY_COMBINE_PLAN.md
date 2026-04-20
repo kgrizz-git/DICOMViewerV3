@@ -179,7 +179,7 @@ Tests:
 Documentation:
 
 - `dev-docs/TO_DO.md` (linking done in this task)
-- `dev-docs/plans/MPR_RESCALE_AND_OVERLAY_COMBINE_PLAN.md` (this file)
+- `dev-docs/plans/completed/MPR_RESCALE_AND_OVERLAY_COMBINE_PLAN.md` (this file)
 
 ---
 

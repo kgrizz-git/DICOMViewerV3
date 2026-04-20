@@ -6,7 +6,7 @@ This document outlines how **pylinac** could be integrated into DICOM Viewer V3 
 
 **Actionable Stage 1 checklist:** [PYLINAC_AND_AUTOMATED_QA_STAGE1_PLAN.md](../plans/completed/PYLINAC_AND_AUTOMATED_QA_STAGE1_PLAN.md).
 
-**Scan-extent tolerance + reproducibility metadata (planned implementation):** [PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md](../plans/PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md).
+**Scan-extent tolerance + reproducibility metadata (shipped; archived plan):** [PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md](../plans/completed/PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md).
 
 **What is already in the codebase vs planned:** see [Integration status (pylinac in DICOMViewerV3)](#integration-status-pylinac-in-dicomviewerv3) (living section—update it as integration progresses).
 
@@ -35,7 +35,7 @@ This is a **snapshot** of pylinac usage in **application code** (`src/qa`, Tools
 
 ### Verified pylinac package version
 
-**`requirements.txt`** pins **`pylinac==3.42.0`** and lists **`pypdf>=4.0.0`** as an explicit direct dependency (with a short comment in that file) for merging per-run pylinac PDFs into the combined compare report—see `dev-docs/plans/MRI_COMPARE_COMBINED_PDF_PLAN.md`. The **`pylinac==3.42.0`** pin is the **only** upstream pylinac release **verified end-to-end** with this project’s ACR CT / ACR MRI Large integration so far (constructors, `analyze()`, optional `check_uid`, and the relaxed scan-extent subclasses). Other pylinac versions may work but have **not** been regression-tested here; bump the pin only after explicit verification and update this subsection (and the comment in `requirements.txt`).
+**`requirements.txt`** pins **`pylinac==3.42.0`** and lists **`pypdf>=4.0.0`** as an explicit direct dependency (with a short comment in that file) for merging per-run pylinac PDFs into the combined compare report—see `dev-docs/plans/completed/MRI_COMPARE_COMBINED_PDF_PLAN.md`. The **`pylinac==3.42.0`** pin is the **only** upstream pylinac release **verified end-to-end** with this project’s ACR CT / ACR MRI Large integration so far (constructors, `analyze()`, optional `check_uid`, and the relaxed scan-extent subclasses). Other pylinac versions may work but have **not** been regression-tested here; bump the pin only after explicit verification and update this subsection (and the comment in `requirements.txt`).
 
 `reportlab` (a pylinac transitive dependency) is also used directly by the viewer to build the compare-mode summary page.
 
@@ -53,7 +53,7 @@ This is a **snapshot** of pylinac usage in **application code** (`src/qa`, Tools
 - **Automatic phantom identification** (metadata/heuristics) and a **single “phantom picker”** that routes to many analyzers—today the user picks **CT vs MRI ACR** via separate menu entries.
 - **Deep GUI integration**: showing pylinac **annotated images or ROIs** as **overlays** in the main image viewer; **batch** or **queued** runs; **site-configurable pass/fail thresholds** in the viewer (beyond exporting metrics and optional PDF).
 - **Broader pylinac domains** outside this project’s ACR focus—e.g. **Winston–Lutz**, **Picket Fence**, **Starshot**, **VMAT**, **log analysis**, and similar therapy-QA modules—unless/until explicitly scoped.
-- **Relaxed image extent + scan-extent tolerance + JSON run profiles** — **shipped**: **`ACRCTForViewer`** / **`ACRMRILargeForViewer`** widen **`_is_within_image_extent`** for default Stage‑1 runs (edge slices allowed). **Vanilla pylinac** opt-out uses stock classes and stock interior-only bounds. Optional **0.5–2.0 mm** still relaxes **`_ensure_physical_scan_extent`** when `QARequest.scan_extent_tolerance_mm > 0` (stock physical check when **0**, and N/A when vanilla); proactive tolerance in **ACR CT** / **ACR MRI** dialogs; **reactive** retry after strict extent failure (skipped when vanilla); **`pylinac_analysis_profile`** includes **`relaxed_image_extent`** and **`vanilla_pylinac`**. Plan: [PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md](../plans/PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md). Background: [PYLINAC_FLEXIBILITY_AND_WORKAROUNDS.md](PYLINAC_FLEXIBILITY_AND_WORKAROUNDS.md).
+- **Relaxed image extent + scan-extent tolerance + JSON run profiles** — **shipped**: **`ACRCTForViewer`** / **`ACRMRILargeForViewer`** widen **`_is_within_image_extent`** for default Stage‑1 runs (edge slices allowed). **Vanilla pylinac** opt-out uses stock classes and stock interior-only bounds. Optional **0.5–2.0 mm** still relaxes **`_ensure_physical_scan_extent`** when `QARequest.scan_extent_tolerance_mm > 0` (stock physical check when **0**, and N/A when vanilla); proactive tolerance in **ACR CT** / **ACR MRI** dialogs; **reactive** retry after strict extent failure (skipped when vanilla); **`pylinac_analysis_profile`** includes **`relaxed_image_extent`** and **`vanilla_pylinac`**. Plan: [PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md](../plans/completed/PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md). Background: [PYLINAC_FLEXIBILITY_AND_WORKAROUNDS.md](PYLINAC_FLEXIBILITY_AND_WORKAROUNDS.md).
 
 ### Pylinac docs coverage snapshot (public docs TOC)
 
@@ -180,7 +180,7 @@ Every pylinac-backed run should be **auditable**: a physicist or script must be 
 4. **Schema bumps:** When adding breaking JSON fields, increment **`schema_version`** and note in **`CHANGELOG.md`**.
 5. **PDF / reports:** If added later, mirror the “non‑vanilla” hint when **`vanilla_equivalent`** is false.
 
-**Plan (checklist complete):** [PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md](../plans/PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md).
+**Plan (checklist complete):** [PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md](../plans/completed/PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md).
 
 ### 2.5 ACR CT phantom datasets (`ACRCT`): slices, z‑coverage, and thickness
 

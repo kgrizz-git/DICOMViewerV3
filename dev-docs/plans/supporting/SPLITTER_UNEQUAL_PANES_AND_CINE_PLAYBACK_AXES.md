@@ -47,7 +47,7 @@ So the checklist item targets **intra–image-grid** proportions (e.g. one large
 
 ### Out of scope / follow-ups
 
-- **Subdividing a single subwindow into tiles** is a separate, heavier item (see [`plans/WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md`](plans/WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md) if present).
+- **Subdividing a single subwindow into tiles** is a separate, heavier item (see [`plans/supporting/WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md`](plans/supporting/WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md) if present).
 - **Preset asymmetric layouts** (e.g. one large + two small) overlaps with other TO_DO items about fixed templates; draggable splitters give users **continuous** control without defining every template.
 
 ---

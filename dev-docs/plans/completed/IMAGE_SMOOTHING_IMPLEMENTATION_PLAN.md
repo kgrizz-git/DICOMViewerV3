@@ -242,7 +242,7 @@ Use this checklist when implementing Phase 5. Mark items only after they are ful
 ### 9.2 Documentation
 
 - [x] **AGENTS.md / README:** Add a line noting that "Smooth when zoomed" (image smoothing) is a user-configurable option in the View menu and image viewer context menu; default is off; persisted in config. AGENTS.md "View and display options" section and README "Image Display" bullet added.
-- [x] **Research doc:** In `dev-docs/info/IMAGE_SMOOTHING_WHEN_MAGNIFIED_RESEARCH.md`, add a short **Implementation** subsection at the end stating the recommended approach has been implemented per this plan (`dev-docs/plans/IMAGE_SMOOTHING_IMPLEMENTATION_PLAN.md`), covering config, two-tier idle behavior, context menu and View menu, magnifier, and tests.
+- [x] **Research doc:** In `dev-docs/info/IMAGE_SMOOTHING_WHEN_MAGNIFIED_RESEARCH.md`, add a short **Implementation** subsection at the end stating the recommended approach has been implemented per this plan (`dev-docs/plans/completed/IMAGE_SMOOTHING_IMPLEMENTATION_PLAN.md`), covering config, two-tier idle behavior, context menu and View menu, magnifier, and tests.
 - [x] **Export/import customizations (optional):** If desired, include `smooth_image_when_zoomed` in `config_manager.export_customizations()` / `import_customizations()` so it is saved and restored with other view preferences. Document here if skipped. **Skipped:** Not added to export/import customizations in this implementation; can be added in a follow-up if desired.
 
 ---
