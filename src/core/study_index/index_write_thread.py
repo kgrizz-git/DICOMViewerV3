@@ -4,12 +4,15 @@ Background thread: upsert study index rows without blocking the UI thread.
 
 from __future__ import annotations
 
-import traceback
+import logging
 from typing import Any, Sequence
 
 from PySide6.QtCore import QThread, Signal
 
 from core.study_index.sqlcipher_store import StudyIndexStore
+from utils.log_sanitizer import sanitized_format_exc
+
+_logger = logging.getLogger(__name__)
 
 
 class StudyIndexWriteThread(QThread):
@@ -37,5 +40,5 @@ class StudyIndexWriteThread(QThread):
             store.upsert_rows(self._rows)
             self.finished_ok.emit()
         except Exception as e:
-            traceback.print_exc()
+            _logger.debug("%s", sanitized_format_exc())
             self.failed.emit(f"{type(e).__name__}: {e}")

@@ -23,6 +23,7 @@ Requirements:
 import sys
 import os
 import time
+import logging
 import inspect
 import warnings
 import json
@@ -83,9 +84,12 @@ from tools.histogram_widget import HistogramWidget
 from gui.overlay_manager import OverlayManager
 from utils.annotation_clipboard import AnnotationClipboard
 from utils.bundled_fonts import register_fonts_with_qt
+from utils.log_sanitizer import sanitized_format_exc
 
 from metadata.metadata_controller import MetadataController
 from roi.roi_measurement_controller import ROIMeasurementController
+
+_logger = logging.getLogger(__name__)
 
 # Import handler classes
 from core.file_operations_handler import FileOperationsHandler
@@ -2230,8 +2234,8 @@ class DICOMViewerApp(QObject):
             self.main_window.update_status(error_msg)
             # Log to console for debugging
             print(f"Error displaying slice: {error_msg}")
-            traceback.print_exc()
-    
+            _logger.debug("%s", sanitized_format_exc())
+
     def _redisplay_current_slice(self, preserve_view: bool = True) -> None:
         """
         Redisplay the current slice via SliceDisplayManager with optional preserve_view override.
@@ -3524,7 +3528,7 @@ def main():
         return app.run()
     except Exception as e:
         print(f"Fatal error: {e}")
-        traceback.print_exc()
+        _logger.debug("%s", sanitized_format_exc())
         return 1
 
 

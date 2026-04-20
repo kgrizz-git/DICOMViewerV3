@@ -22,9 +22,13 @@ Requirements:
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict
 
 from utils.debug_flags import DEBUG_PROJECTION
+from utils.log_sanitizer import sanitized_format_exc
+
+_log = logging.getLogger(__name__)
 
 
 class ProjectionAppFacade:
@@ -156,9 +160,7 @@ class ProjectionAppFacade:
                             print(
                                 f"[DEBUG-PROJECTION] _on_projection_enabled_changed: Error checking ROI coordinator callback: {e}"
                             )
-                            import traceback
-
-                            traceback.print_exc()
+                            _log.debug("%s", sanitized_format_exc())
 
             # Widget state should already match signal, but verify and sync if needed
             if current_widget_state != enabled:

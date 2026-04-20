@@ -15,6 +15,8 @@ Requirements:
     - ImageViewer for scene operations
 """
 
+import logging
+
 from PySide6.QtCore import QPointF, QTimer
 from typing import Any, Optional, Callable, TYPE_CHECKING, Dict
 from pydicom.dataset import Dataset
@@ -23,9 +25,12 @@ from gui.image_viewer import ImageViewer
 from utils.dicom_utils import get_composite_series_key
 from utils.debug_log import debug_log, annotation_debug
 from utils.debug_flags import DEBUG_ANNOTATION
+from utils.log_sanitizer import sanitized_format_exc
 
 if TYPE_CHECKING:
     from utils.undo_redo import UndoRedoManager
+
+_logger = logging.getLogger(__name__)
 
 
 class ArrowAnnotationCoordinator:
@@ -329,9 +334,8 @@ class ArrowAnnotationCoordinator:
             # Don't create command yet - just update tracking
             # Command will be created on mouse release via callback
         except Exception as e:
-            import traceback
-            traceback.print_exc()
-    
+            _logger.debug("%s", sanitized_format_exc())
+
     def _finalize_arrow_move(self, arrow_item) -> None:
         """
         Finalize arrow move by creating undo/redo command.

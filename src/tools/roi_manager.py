@@ -21,6 +21,7 @@ Clipboard-oriented JSON dicts for copy/paste are built in ``tools.roi_persistenc
 (Phase 5B); ``utils.annotation_clipboard`` imports that module.
 """
 
+import logging
 import math
 
 from PySide6.QtWidgets import (QGraphicsEllipseItem, QGraphicsRectItem, QGraphicsItem,
@@ -36,6 +37,9 @@ from core.dicom_color import multichannel_axis_labels
 from utils.bundled_fonts import make_qfont
 from utils.config_manager import ConfigManager
 from gui.view_transform_helpers import graphics_view_uniform_zoom
+from utils.log_sanitizer import sanitized_format_exc
+
+_logger = logging.getLogger(__name__)
 
 # Statistics payloads use int for pixel counts and None for optional area in mm².
 RoiStatisticsMap = dict[str, float | int | None]
@@ -230,9 +234,8 @@ class DraggableStatisticsOverlay(QGraphicsTextItem):
             except Exception as e:
                 # print(f"[DEBUG-OVERLAY] Error in overlay itemChange: {e}")
                 pass
-                import traceback
-                traceback.print_exc()
-        
+                _logger.debug("%s", sanitized_format_exc())
+
         return super().itemChange(change, value)
     
     def mark_deleted(self) -> None:

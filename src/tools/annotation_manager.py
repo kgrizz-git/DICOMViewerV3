@@ -17,6 +17,8 @@ Requirements:
     - pydicom for RT STRUCT parsing
 """
 
+import logging
+
 from PySide6.QtWidgets import (QGraphicsItem, QGraphicsTextItem, QGraphicsLineItem,
                                 QGraphicsEllipseItem, QGraphicsPathItem, QGraphicsPolygonItem,
                                 QGraphicsScene)
@@ -28,6 +30,9 @@ import pydicom
 from pydicom.dataset import Dataset
 from core.presentation_state_handler import PresentationStateHandler
 from core.key_object_handler import KeyObjectHandler
+from utils.log_sanitizer import sanitized_format_exc
+
+_logger = logging.getLogger(__name__)
 
 
 class AnnotationManager:
@@ -320,10 +325,9 @@ class AnnotationManager:
                 # print(f"[ANNOTATIONS] No Key Objects found for study {study_uid[:20]}...")
                 pass
         except Exception as e:
-            import traceback
             # print(f"[ANNOTATIONS] Error getting annotations for image: {e}")
-            traceback.print_exc()
-        
+            _logger.debug("%s", sanitized_format_exc())
+
         return annotations
     
     def create_presentation_state_items(self, scene, annotations: List[Dict[str, Any]], 
@@ -523,10 +527,9 @@ class AnnotationManager:
                         # print(f"[ANNOTATIONS] Created overlay graphics: {len(overlay_paths)} path(s), size: {overlay_cols}x{overlay_rows}, origin: ({overlay_origin_x}, {overlay_origin_y})")
                         pass
         except Exception as e:
-            import traceback
             # print(f"[ANNOTATIONS] Error creating presentation state items: {e}")
-            traceback.print_exc()
-        
+            _logger.debug("%s", sanitized_format_exc())
+
         return items
     
     def _transform_coordinates(
@@ -610,10 +613,9 @@ class AnnotationManager:
             if overlay_annotations:
                 annotations.extend(overlay_annotations)
         except Exception as e:
-            import traceback
             # print(f"[ANNOTATIONS] Error extracting embedded annotations: {e}")
-            traceback.print_exc()
-        
+            _logger.debug("%s", sanitized_format_exc())
+
         return annotations
     
     def _parse_overlay_data(self, dataset: Dataset) -> List[Dict[str, Any]]:
@@ -731,10 +733,9 @@ class AnnotationManager:
                     }
                     overlays.append(overlay_ann)
         except Exception as e:
-            import traceback
             # print(f"[ANNOTATIONS] Error parsing overlay data: {e}")
-            traceback.print_exc()
-        
+            _logger.debug("%s", sanitized_format_exc())
+
         return overlays
     
     def _convert_overlay_bitmap_to_graphics(
@@ -959,10 +960,9 @@ class AnnotationManager:
                 # print(f"[ANNOTATIONS] OpenCV and scipy not available, skipping path extraction")
                 pass
             except Exception as e:
-                import traceback
                 # print(f"[ANNOTATIONS] Error extracting paths: {e}")
-                traceback.print_exc()
-        
+                _logger.debug("%s", sanitized_format_exc())
+
         except ImportError:
             # numpy not available, use simple approach
             # print(f"[ANNOTATIONS] numpy not available, using simple pixel extraction")
@@ -986,10 +986,9 @@ class AnnotationManager:
                                 bit_idx = 0
                                 byte_idx += 1
         except Exception as e:
-            import traceback
             # print(f"[ANNOTATIONS] Error converting overlay bitmap: {e}")
-            traceback.print_exc()
-        
+            _logger.debug("%s", sanitized_format_exc())
+
         return {'coordinates': coordinates, 'paths': paths}
     
     def _create_overlay_bitmap_item(self, overlay_data, cols: int, rows: int,
@@ -1105,11 +1104,10 @@ class AnnotationManager:
             # print(f"[ANNOTATIONS] numpy or Qt not available for bitmap rendering")
             return None
         except Exception as e:
-            import traceback
             # print(f"[ANNOTATIONS] Error creating overlay bitmap: {e}")
-            traceback.print_exc()
+            _logger.debug("%s", sanitized_format_exc())
             return None
-    
+
     def _render_overlay_paths(
         self,
         overlay_paths: List[List[Tuple[float, float]]],

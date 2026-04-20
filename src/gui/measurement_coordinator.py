@@ -15,6 +15,8 @@ Requirements:
     - ImageViewer for scene operations
 """
 
+import logging
+
 from PySide6.QtCore import QPointF, QTimer, Qt
 from typing import Any, Optional, Callable, TYPE_CHECKING, Dict
 from pydicom.dataset import Dataset
@@ -23,9 +25,12 @@ from tools.angle_measurement_items import AngleMeasurementItem
 from gui.image_viewer import ImageViewer
 from utils.dicom_utils import get_composite_series_key
 from utils.debug_flags import DEBUG_MAGNIFIER, DEBUG_MEASUREMENT_SERIES
+from utils.log_sanitizer import sanitized_format_exc
 
 if TYPE_CHECKING:
     from utils.undo_redo import UndoRedoManager
+
+_logger = logging.getLogger(__name__)
 
 
 class MeasurementCoordinator:
@@ -457,9 +462,8 @@ class MeasurementCoordinator:
             self._move_batch_timer.timeout.connect(lambda: self._finalize_measurement_move(measurement_item))
             self._move_batch_timer.start(200)  # 200ms delay
         except Exception as e:
-            import traceback
-            traceback.print_exc()
-    
+            _logger.debug("%s", sanitized_format_exc())
+
     def _finalize_measurement_move(self, measurement_item) -> None:
         """
         Finalize measurement move by creating undo/redo command.

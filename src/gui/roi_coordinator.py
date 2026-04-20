@@ -37,6 +37,11 @@ from core.dicom_processor import DICOMProcessor
 from gui.window_level_controls import WindowLevelControls
 from gui.main_window import MainWindow
 from utils.dicom_utils import get_pixel_spacing, get_composite_series_key
+from utils.log_sanitizer import sanitized_format_exc
+
+import logging
+
+_logger = logging.getLogger(__name__)
 
 
 class ROICoordinator:
@@ -187,8 +192,7 @@ class ROICoordinator:
                         pass
             except Exception as e:
                 # print(f"[DEBUG-ROI-STATS] _get_pixel_array_for_statistics: Error getting projection_enabled: {e}")
-                import traceback
-                traceback.print_exc()
+                _logger.debug("%s", sanitized_format_exc())
                 projection_enabled = False
         
         if not projection_enabled:
@@ -291,8 +295,7 @@ class ROICoordinator:
             
         except Exception as e:
             # print(f"[DEBUG-ROI-STATS] _get_pixel_array_for_statistics: Exception during projection: {e}")
-            import traceback
-            traceback.print_exc()
+            _logger.debug("%s", sanitized_format_exc())
             # Any error during projection, fall back to original
             return self.dicom_processor.get_pixel_array(current_dataset)
     
@@ -407,8 +410,7 @@ class ROICoordinator:
                                     aw.setChecked(False)
             except Exception as e:
                 print(f"Error in auto window/level: {e}")
-                import traceback
-                traceback.print_exc()
+                _logger.debug("%s", sanitized_format_exc())
                 # If error occurs, still delete ROI and switch back to pan mode
                 if roi_item is not None:
                     # roi_item is already the ROIItem we need
@@ -802,9 +804,8 @@ class ROICoordinator:
                 pass
         except Exception as e:
             # print(f"[DEBUG-ROI-STATS] Error calculating ROI statistics: {e}")
-            import traceback
-            traceback.print_exc()
-    
+            _logger.debug("%s", sanitized_format_exc())
+
     def handle_scene_selection_changed(self) -> None:
         """Handle scene selection change (e.g., when ROI is moved)."""
         try:
@@ -1031,9 +1032,8 @@ class ROICoordinator:
                 # Statistics panel will be updated by update_roi_statistics
                 pass
         except Exception as e:
-            import traceback
-            traceback.print_exc()
-    
+            _logger.debug("%s", sanitized_format_exc())
+
     def _finalize_roi_move(self, roi) -> None:
         """
         Finalize ROI move by creating undo/redo command.

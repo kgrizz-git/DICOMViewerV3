@@ -129,6 +129,18 @@ def sanitize_exception(traceback_str: str) -> str:
     return "\n".join(sanitized_lines)
 
 
+def sanitized_format_exc() -> str:
+    """
+    Return the current exception traceback as a redacted string for logging.
+
+    Prefer this over traceback.print_exc() in application code so paths and
+    PHI-like patterns are not written raw to stderr or logs.
+    """
+    import traceback
+
+    return sanitize_exception(traceback.format_exc())
+
+
 def create_safe_exception_handler(func_name: str = "") -> str:
     """
     Template for a safe exception handler that logs without leaking PII.

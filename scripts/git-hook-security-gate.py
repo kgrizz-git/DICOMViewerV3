@@ -85,6 +85,21 @@ def main() -> int:
     args = parser.parse_args()
 
     root = repo_root()
+    py = project_python(root)
+    if py is None:
+        print("[security hook] No project Python found under .venv or venv.", file=sys.stderr)
+        return 1
+
+    # Privacy / logging checks on staged src/*.py — all branches, fast.
+    privacy_script = root / "scripts" / "git_hook_privacy_checks.py"
+    proc_priv = subprocess.run(
+        [str(py), str(privacy_script)],
+        cwd=str(root),
+        text=True,
+    )
+    if proc_priv.returncode != 0:
+        return proc_priv.returncode
+
     should_scan = False
     if args.hook_type == "pre-commit":
         should_scan = should_scan_pre_commit()
@@ -93,11 +108,6 @@ def main() -> int:
 
     if not should_scan:
         return 0
-
-    py = project_python(root)
-    if py is None:
-        print("[security hook] No project Python found under .venv or venv.", file=sys.stderr)
-        return 1
 
     exit_code = run_scan(root, py, hook_type=args.hook_type)
     if exit_code != 0:

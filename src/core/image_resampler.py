@@ -18,7 +18,9 @@ Requirements:
     - pydicom for DICOM tag access
 """
 
+import logging
 import threading
+
 import numpy as np
 from typing import Any, Optional, List, Tuple, Dict
 from pydicom.dataset import Dataset
@@ -33,7 +35,11 @@ except ImportError:
     pass
 
 from utils.dicom_utils import get_image_orientation, get_slice_thickness
+from utils.log_sanitizer import sanitized_format_exc
+
 from core.dicom_processor import DICOMProcessor
+
+_logger = logging.getLogger(__name__)
 
 
 class ImageResampler:
@@ -285,8 +291,7 @@ class ImageResampler:
             
         except Exception as e:
             print(f"Error converting DICOM series to SimpleITK: {e}")
-            import traceback
-            traceback.print_exc()
+            _logger.debug("%s", sanitized_format_exc())
             return None
     
     def _get_location(self, ds: Dataset) -> Optional[float]:
@@ -438,8 +443,7 @@ class ImageResampler:
             
         except Exception as e:
             print(f"Error resampling image: {e}")
-            import traceback
-            traceback.print_exc()
+            _logger.debug("%s", sanitized_format_exc())
             return None
     
     def get_resampled_slice(

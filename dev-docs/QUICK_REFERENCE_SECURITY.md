@@ -90,13 +90,16 @@ except Exception as e:
 # Installed via: bash scripts/setup-hooks.sh
 
 # Hook 1: pre-commit (runs on `git commit`)
-#   ✓ Checks all DEBUG_* flags are False
-#   ✓ Blocks commit if any flag is True
+#   ✓ Privacy / logging gate (all branches): staged src/*.py — scripts/git_hook_privacy_checks.py
+#       — no traceback.print_exc(); heuristics on added lines for patient tags in logs,
+#         path-like literals in logger calls, raw exception text in QMessageBox patterns,
+#         and logger.* with non-literal messages without sanitize_message / sanitize_exception
+#   ✓ On branch main only: DEBUG_* flags + detect-secrets on staged files (run_security_scan.py --pre-commit)
 #   ✓ Bypass: git commit --no-verify (emergency only)
+#   ✓ Warn-only privacy: set DICOMVIEWER_PRIVACY_HOOK=warn (prints issues, does not block)
 
 # Hook 2: pre-push (runs on `git push`)
-#   ✓ Strict check when pushing to main/develop/tags
-#   ✓ Prevents release builds with debugging enabled
+#   ✓ Full security suite when updating refs/heads/main (run_security_scan.py --all)
 #   ✓ Bypass: git push --no-verify (emergency only)
 
 # Manual setup (if hooks.sh doesn't work):
@@ -157,12 +160,12 @@ logger.info(log_msg)
 # CHECKLIST: Before each commit
 # ============════════════════════════════════════════════════════════════════════
 
-# [ ] All DEBUG_* flags set to False in src/utils/debug_flags.py
-# [ ] No traceback.print_exc() left in code (use sanitized logging)
-# [ ] Patient field names wrapped in sanitize_message() or not logged
-# [ ] File paths only logged in debug mode or sanitized
-# [ ] Error dialogs use generic messages (not raw exception text)
-# [ ] New log calls checked: `python3 -c "from src.utils.log_sanitizer import ..."`
+# [ ] All DEBUG_* flags set to False in src/utils/debug_flags.py  (hook: main pre-commit + run_security_scan)
+# [ ] No traceback.print_exc() left in code (use sanitized logging)  (hook: staged src/*.py full file)
+# [ ] Patient field names wrapped in sanitize_message() or not logged  (hook: added lines heuristic)
+# [ ] File paths only logged in debug mode or sanitized  (hook: added lines, conservative)
+# [ ] Error dialogs use generic messages (not raw exception text)  (hook: added lines heuristic)
+# [ ] New log calls checked: `python3 -c "from src.utils.log_sanitizer import ..."`  (manual + hook AST on added lines)
 # [ ] Pre-commit hook passes: `git commit` should work without --no-verify
 
 
@@ -176,6 +179,9 @@ logger.info(log_msg)
 # Test sanitizer:
 #   python3 -c "from src.utils.log_sanitizer import sanitize_message; \
 #   print(sanitize_message('Patient John Doe (ID: MRN123)'))"
+
+# Run privacy hook manually (repo root, venv on; respects staged index):
+#   .\.venv\Scripts\python.exe .\scripts\git_hook_privacy_checks.py
 
 # Check debug flags:
 #   grep "DEBUG_.*= True" src/utils/debug_flags.py
