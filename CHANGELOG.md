@@ -2,6 +2,8 @@
 
 All notable changes to DICOM Viewer V3 are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). See [dev-docs/info/SEMANTIC_VERSIONING_GUIDE.md](dev-docs/info/SEMANTIC_VERSIONING_GUIDE.md) for version increment rules.
 
+**Current version:** `0.2.10` — kept in sync with [`src/version.py`](src/version.py) (`__version__`). This is the canonical app version even when changes are only listed under **[Unreleased]** between formal tagged releases; bump both together when you cut a release or intentionally advance the project version.
+
 ## [Unreleased]
 
 ### Fixed
