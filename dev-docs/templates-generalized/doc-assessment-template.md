@@ -1,7 +1,7 @@
 # Documentation Assessment Template - [PROJECT_NAME]
 
-**Template Version**: 2.0  
-**Last Updated**: 2026-04-03
+**Template Version**: 3.0  
+**Last Updated**: 2026-04-20
 
 ## Purpose
 
@@ -15,6 +15,7 @@ This document provides a systematic approach to assess the accuracy, agreement, 
 - System requirements and dependencies
 - Troubleshooting guidance
 - API/function interfaces (for library modules)
+- User-facing information, including presented through the help or about menu in the app, as well as developer-facing documentation
 
 ## How to Use This Document
 
