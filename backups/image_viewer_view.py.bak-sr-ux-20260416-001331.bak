@@ -1,0 +1,1410 @@
+"""
+Image viewer — view / scene / pixmap / zoom / overlays (Phase 3 split).
+
+Mixin used by `gui.image_viewer.ImageViewer` together with input and context-menu helpers.
+
+Requirements: PySide6, PIL, numpy.
+"""
+# Pyright: see ``image_viewer_input.py`` — Qt mixin composition on ``ImageViewer``.
+# pyright: reportAttributeAccessIssue=false, reportUninitializedInstanceVariable=false
+from __future__ import annotations
+
+from PySide6.QtWidgets import QGraphicsView, QGraphicsPixmapItem, QApplication
+from PySide6.QtCore import Qt, QRectF, QRect, QPointF, QPoint, QTimer
+from PySide6.QtGui import (
+    QPixmap,
+    QImage,
+    QPainter,
+    QColor,
+    QTransform,
+    QPen,
+    QMouseEvent,
+)
+from PIL import Image
+from core.direction_labels import compute_direction_labels_from_iop, apply_orientation_to_labels
+from utils.bundled_fonts import make_qfont
+from utils.debug_flags import DEBUG_MAGNIFIER
+import numpy as np
+import os
+from typing import Optional, Callable, Any, List, Tuple, Dict, Union, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from tools.roi_manager import ROIItem
+
+
+class ImageViewerViewMixin:
+    """Display, scaling, smoothing, scale/direction overlays, pixel readout helpers."""
+
+    def set_background_color(self, color: QColor) -> None:
+        """
+        Set the background color of the image viewer.
+
+        Args:
+            color: QColor for the background
+        """
+        self.setBackgroundBrush(color)
+
+    def set_subwindow_index(self, idx: int) -> None:
+        """
+        Set this viewer's index (0-3) in the multi-window layout.
+        Used so the context menu can build the Swap submenu and identify the source view.
+        """
+        self.subwindow_index = idx
+
+    def _apply_smoothing_mode(self) -> None:
+        """
+        Apply the current smooth-when-zoomed setting to the view and image item.
+        When smoothing is enabled, uses fast transformation during zoom/pan (interacting)
+        and smooth transformation after idle. Sets or clears SmoothPixmapTransform on the view
+        and sets the image item's transformation mode. Antialiasing hint is unchanged.
+        """
+        # When smoothing is on but we're interacting (zoom/pan), use fast until idle
+        effective_smooth = self._smooth_when_zoomed and not self._smooth_idle_interacting
+        if effective_smooth:
+            self.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+            if self.image_item is not None:
+                self.image_item.setTransformationMode(Qt.TransformationMode.SmoothTransformation)
+        else:
+            self.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
+            if self.image_item is not None:
+                self.image_item.setTransformationMode(Qt.TransformationMode.FastTransformation)
+
+    def _on_smooth_idle_timeout(self) -> None:
+        """Leave interacting state and apply smooth mode if smoothing is enabled."""
+        self._smooth_idle_interacting = False
+        self._apply_smoothing_mode()
+
+    def _restart_smooth_idle_timer(self) -> None:
+        """
+        Restart the smooth-idle timer and switch to fast mode while interacting.
+        Call on zoom, pan, or scrollbar change when smoothing is enabled.
+        """
+        if not self._smooth_when_zoomed:
+            return
+        self._smooth_idle_interacting = True
+        self._apply_smoothing_mode()
+        self._smooth_idle_timer.start(300)
+
+    def set_smooth_when_zoomed_state(self, enabled: bool) -> None:
+        """
+        Set the smooth-when-zoomed state for this viewer. Used by main to sync the global config to this viewer.
+
+        Args:
+            enabled: True to enable image smoothing when zoomed, False for fast (blocky) scaling
+        """
+        self._smooth_when_zoomed = enabled
+        self._smooth_idle_interacting = False
+        self._smooth_idle_timer.stop()
+        self._apply_smoothing_mode()
+
+    def set_slice_sync_enabled_state(self, enabled: bool) -> None:
+        """
+        Set the slice-sync enabled state for this viewer's context menu.
+
+        Args:
+            enabled: True if global slice sync is enabled, False otherwise
+        """
+        self._slice_sync_enabled = enabled
+
+    def set_scale_markers_state(self, enabled: bool) -> None:
+        """
+        Set whether scale markers should be rendered.
+
+        Args:
+            enabled: True to show scale markers, False to hide
+        """
+        self._show_scale_markers = enabled
+        self.viewport().update()
+
+    def set_direction_labels_state(self, enabled: bool) -> None:
+        """
+        Set whether orientation direction labels should be rendered.
+
+        Args:
+            enabled: True to show direction labels, False to hide
+        """
+        self._show_direction_labels = enabled
+        self.viewport().update()
+
+    def set_scale_markers_color_state(self, color: Tuple[int, int, int]) -> None:
+        """Set the RGB color used when drawing scale markers."""
+        self._scale_markers_color = color
+        self.viewport().update()
+
+    def set_direction_labels_color_state(self, color: Tuple[int, int, int]) -> None:
+        """Set the RGB color used when drawing direction labels."""
+        self._direction_labels_color = color
+        self.viewport().update()
+
+    def set_direction_label_size_state(self, size: int) -> None:
+        """Set the point size used for direction labels."""
+        self._direction_label_size = max(1, int(size))
+        self.viewport().update()
+
+    def set_scale_markers_tick_intervals_state(self, major_interval_mm: int, minor_interval_mm: int) -> None:
+        """Set the scale markers major/minor tick intervals in millimetres."""
+        self._scale_markers_major_tick_interval_mm = max(1, int(major_interval_mm))
+        self._scale_markers_minor_tick_interval_mm = max(1, int(minor_interval_mm))
+        self.viewport().update()
+
+    def _apply_view_transform(self) -> None:
+        """
+        Compose flip + rotation + zoom into a single QTransform and apply it to the view.
+
+        This is the single authoritative place that calls ``setTransform()``.
+        All zoom, flip, and rotation setters funnel through here so the matrix
+        is always consistent.  Callers that need to preserve the viewport
+        center (e.g. zoom_in/zoom_out) must save ``mapToScene(viewport center)``
+        before calling this method and call ``centerOn()`` afterwards.
+
+        ``self.current_zoom`` is the authoritative scalar zoom factor and is
+        always kept up-to-date by zoom methods *before* this call.
+        """
+        t = QTransform()
+        # Apply rotation first (around the scene origin, which is the image top-left)
+        if self._rotation_deg != 0:  # type: ignore[attr-defined]
+            t.rotate(float(self._rotation_deg))  # type: ignore[attr-defined]
+        # Apply flip via scale with negative factors
+        sx = -1.0 if self._flip_h else 1.0  # type: ignore[attr-defined]
+        sy = -1.0 if self._flip_v else 1.0  # type: ignore[attr-defined]
+        if sx != 1.0 or sy != 1.0:
+            t.scale(sx, sy)
+        # Apply zoom
+        t.scale(self.current_zoom, self.current_zoom)
+        self.setTransform(t)
+        self.last_transform = self.transform()
+        self._restart_smooth_idle_timer()
+        self.zoom_changed.emit(self.current_zoom)
+
+    def drawForeground(self, painter: QPainter, rect: Union[QRectF, QRect]) -> None:
+        """
+        Draw viewer-only overlays (scale markers and direction labels) on top of scene items.
+        """
+        super().drawForeground(painter, rect)
+
+        if self.image_item is None:
+            return
+
+        dataset = self.get_current_dataset_callback() if self.get_current_dataset_callback else None
+        if dataset is None:
+            return
+
+        painter.save()
+        try:
+            painter.resetTransform()
+            if self._show_scale_markers:
+                self._draw_scale_markers(painter, dataset)
+            if self._show_direction_labels:
+                self._draw_direction_labels(painter, dataset)
+        finally:
+            painter.restore()
+
+    def _draw_scale_markers(self, painter: QPainter, dataset: Any) -> None:
+        """Draw mm/cm ruler ticks on viewport left and bottom edges using PixelSpacing."""
+        spacing = self._extract_pixel_spacing(dataset)
+        if spacing is None or self.image_item is None:
+            return
+
+        row_spacing_mm, col_spacing_mm = spacing
+        if row_spacing_mm <= 0.0 or col_spacing_mm <= 0.0:
+            return
+
+        image_rect = self.image_item.sceneBoundingRect()
+        view_scene_rect = self.mapToScene(self.viewport().rect()).boundingRect()
+        visible_rect = image_rect.intersected(view_scene_rect)
+        if visible_rect.isEmpty():
+            return
+
+        zoom = max(0.0001, self.current_zoom)
+        viewport_rect = self.viewport().rect()
+        major_tick_len_px = 14.0
+        minor_tick_len_px = 8.0
+
+        pen = QPen(QColor(self._scale_markers_color[0], self._scale_markers_color[1], self._scale_markers_color[2], 220))
+        pen.setWidthF(1.0)
+        painter.setPen(pen)
+
+        minor_tick_mm = max(1, self._scale_markers_minor_tick_interval_mm)
+        major_tick_mm = max(1, self._scale_markers_major_tick_interval_mm)
+
+        # Bottom ruler: minor ticks and major ticks are drawn independently.
+        minor_step_x = minor_tick_mm / col_spacing_mm
+        if minor_step_x >= 1e-6:
+            start_mm_x = int(max(0.0, np.floor((visible_rect.left() - image_rect.left()) / minor_step_x)))
+            end_mm_x = int(np.ceil((visible_rect.right() - image_rect.left()) / minor_step_x))
+            bottom_y = float(viewport_rect.bottom())
+            for mm_idx in range(start_mm_x, end_mm_x + 1):
+                scene_x = image_rect.left() + (mm_idx * minor_step_x)
+                if scene_x < visible_rect.left() - 0.5 or scene_x > visible_rect.right() + 0.5:
+                    continue
+                viewport_x = float(self.mapFromScene(QPointF(scene_x, visible_rect.center().y())).x())
+                if viewport_x < viewport_rect.left() - 1 or viewport_x > viewport_rect.right() + 1:
+                    continue
+                painter.drawLine(QPointF(viewport_x, bottom_y), QPointF(viewport_x, bottom_y - minor_tick_len_px))
+
+        major_step_x = major_tick_mm / col_spacing_mm
+        if major_step_x >= 1e-6:
+            start_major_x = int(max(0.0, np.floor((visible_rect.left() - image_rect.left()) / major_step_x)))
+            end_major_x = int(np.ceil((visible_rect.right() - image_rect.left()) / major_step_x))
+            bottom_y = float(viewport_rect.bottom())
+            for major_idx in range(start_major_x, end_major_x + 1):
+                scene_x = image_rect.left() + (major_idx * major_step_x)
+                if scene_x < visible_rect.left() - 0.5 or scene_x > visible_rect.right() + 0.5:
+                    continue
+                viewport_x = float(self.mapFromScene(QPointF(scene_x, visible_rect.center().y())).x())
+                if viewport_x < viewport_rect.left() - 1 or viewport_x > viewport_rect.right() + 1:
+                    continue
+                painter.drawLine(QPointF(viewport_x, bottom_y), QPointF(viewport_x, bottom_y - major_tick_len_px))
+
+        # Left ruler: minor ticks and major ticks are drawn independently.
+        minor_step_y = minor_tick_mm / row_spacing_mm
+        if minor_step_y >= 1e-6:
+            start_mm_y = int(max(0.0, np.floor((visible_rect.top() - image_rect.top()) / minor_step_y)))
+            end_mm_y = int(np.ceil((visible_rect.bottom() - image_rect.top()) / minor_step_y))
+            left_x = float(viewport_rect.left())
+            for mm_idx in range(start_mm_y, end_mm_y + 1):
+                scene_y = image_rect.top() + (mm_idx * minor_step_y)
+                if scene_y < visible_rect.top() - 0.5 or scene_y > visible_rect.bottom() + 0.5:
+                    continue
+                viewport_y = float(self.mapFromScene(QPointF(visible_rect.center().x(), scene_y)).y())
+                if viewport_y < viewport_rect.top() - 1 or viewport_y > viewport_rect.bottom() + 1:
+                    continue
+                painter.drawLine(QPointF(left_x, viewport_y), QPointF(left_x + minor_tick_len_px, viewport_y))
+
+        major_step_y = major_tick_mm / row_spacing_mm
+        if major_step_y >= 1e-6:
+            start_major_y = int(max(0.0, np.floor((visible_rect.top() - image_rect.top()) / major_step_y)))
+            end_major_y = int(np.ceil((visible_rect.bottom() - image_rect.top()) / major_step_y))
+            left_x = float(viewport_rect.left())
+            for major_idx in range(start_major_y, end_major_y + 1):
+                scene_y = image_rect.top() + (major_idx * major_step_y)
+                if scene_y < visible_rect.top() - 0.5 or scene_y > visible_rect.bottom() + 0.5:
+                    continue
+                viewport_y = float(self.mapFromScene(QPointF(visible_rect.center().x(), scene_y)).y())
+                if viewport_y < viewport_rect.top() - 1 or viewport_y > viewport_rect.bottom() + 1:
+                    continue
+                painter.drawLine(QPointF(left_x, viewport_y), QPointF(left_x + major_tick_len_px, viewport_y))
+
+    def _draw_direction_labels(self, painter: QPainter, dataset: Any) -> None:
+        """Draw patient-orientation direction labels on viewport edges."""
+        if self.image_item is None:
+            return
+
+        labels = self._compute_direction_labels(dataset)
+        if labels is None:
+            return
+
+        viewport_rect = self.viewport().rect()
+        top_bottom_margin_px = 16.0
+        side_margin_px = 14.0
+
+        overlay_font_family = "IBM Plex Sans"
+        overlay_font_variant = "Bold"
+        if self.config_manager is not None:
+            try:
+                overlay_font_family = self.config_manager.get_overlay_font_family()
+                overlay_font_variant = self.config_manager.get_overlay_font_variant()
+            except Exception:
+                pass
+        font_px = max(self._direction_label_size, 1)
+
+        font = make_qfont(overlay_font_family, overlay_font_variant, font_px)
+        painter.setFont(font)
+        painter.setPen(QPen(QColor(self._direction_labels_color[0], self._direction_labels_color[1], self._direction_labels_color[2], 230)))
+
+        font_metrics = painter.fontMetrics()
+        center_x = viewport_rect.center().x()
+        center_y = viewport_rect.center().y()
+
+        top_width = font_metrics.horizontalAdvance(labels["top"])
+        bottom_width = font_metrics.horizontalAdvance(labels["bottom"])
+        right_width = font_metrics.horizontalAdvance(labels["right"])
+        ascent = font_metrics.ascent()
+        cap_center_offset = (ascent - font_metrics.descent()) / 2.0
+
+        painter.drawText(
+            QPointF(
+                center_x - (top_width / 2.0),
+                viewport_rect.top() + top_bottom_margin_px + ascent,
+            ),
+            labels["top"],
+        )
+        painter.drawText(
+            QPointF(
+                center_x - (bottom_width / 2.0),
+                viewport_rect.bottom() - top_bottom_margin_px,
+            ),
+            labels["bottom"],
+        )
+        painter.drawText(
+            QPointF(
+                viewport_rect.left() + side_margin_px,
+                center_y + cap_center_offset,
+            ),
+            labels["left"],
+        )
+        painter.drawText(
+            QPointF(
+                viewport_rect.right() - side_margin_px - right_width,
+                center_y + cap_center_offset,
+            ),
+            labels["right"],
+        )
+
+    def _extract_pixel_spacing(self, dataset: Any) -> Optional[Tuple[float, float]]:
+        """Extract row and column pixel spacing in mm from the dataset."""
+        pixel_spacing = getattr(dataset, "PixelSpacing", None)
+        if pixel_spacing is None or len(pixel_spacing) < 2:
+            return None
+
+        try:
+            row_mm = float(pixel_spacing[0])
+            col_mm = float(pixel_spacing[1])
+        except (TypeError, ValueError):
+            return None
+        return (row_mm, col_mm)
+
+    def _compute_direction_labels(self, dataset: Any) -> Optional[Dict[str, str]]:
+        """
+        Compute top/bottom/left/right patient orientation labels from ImageOrientationPatient,
+        then remap them to account for any active flip or rotation display transform so the
+        labels always reflect the patient direction actually visible at each screen edge.
+        """
+        iop = getattr(dataset, "ImageOrientationPatient", None)
+        labels = compute_direction_labels_from_iop(iop)
+        if labels is None:
+            return None
+
+        flip_h: bool = getattr(self, "_flip_h", False)
+        flip_v: bool = getattr(self, "_flip_v", False)
+        rotation_deg: int = getattr(self, "_rotation_deg", 0)
+
+        if flip_h or flip_v or rotation_deg:
+            labels = apply_orientation_to_labels(labels, flip_h, flip_v, rotation_deg)
+
+        return labels
+
+    def _apply_inversion(self, image: Image.Image) -> Image.Image:
+        """
+        Apply inversion to a PIL Image.
+        
+        Args:
+            image: PIL Image to invert
+            
+        Returns:
+            Inverted PIL Image
+        """
+        try:
+            img_array = np.array(image)
+            if image.mode == 'L':
+                # Grayscale: invert each pixel value
+                img_array = 255 - img_array
+                return Image.fromarray(img_array, mode='L')
+            elif image.mode == 'RGB':
+                # RGB: invert each channel
+                img_array = 255 - img_array
+                return Image.fromarray(img_array, mode='RGB')
+            else:
+                # Convert to RGB first, then invert
+                rgb_image = image.convert('RGB')
+                img_array = np.array(rgb_image)
+                img_array = 255 - img_array
+                return Image.fromarray(img_array, mode='RGB')
+        except Exception as e:
+            print(f"Error inverting image: {e}")
+            return image  # Return original on error
+    
+    def invert_image(self) -> None:
+        """
+        Toggle image inversion state and update display.
+        """
+        if self.original_image is None:
+            # If no original image stored, we can't invert
+            # This should not happen in normal operation as set_image stores the original
+            return
+        
+        # Toggle inversion state FIRST
+        self.image_inverted = not self.image_inverted
+        
+        # Notify callback of state change (for persistence per series)
+        # This must happen BEFORE calling set_image to ensure state is stored
+        if self.inversion_state_changed_callback:
+            self.inversion_state_changed_callback(self.image_inverted)
+        
+        # Apply inversion to the original image and update display
+        # Pass the new inversion state explicitly to ensure synchronization
+        if self.image_inverted:
+            display_image = self._apply_inversion(self.original_image)
+        else:
+            display_image = self.original_image
+        
+        # Update the pixmap without changing zoom/pan
+        # Pass apply_inversion explicitly to ensure state synchronization
+        preserve_view = True
+        self.set_image(display_image, preserve_view=preserve_view, apply_inversion=self.image_inverted)
+    
+    def set_image(self, image: Image.Image, preserve_view: bool = False, apply_inversion: Optional[bool] = None) -> None:
+        """
+        Set the image to display.
+        
+        Preserves existing ROIs and overlay items when changing images.
+        
+        Args:
+            image: PIL Image to display
+            preserve_view: If True, preserve current zoom and pan position
+            apply_inversion: Optional bool to override inversion state. If None, uses self.image_inverted
+        """
+        # print(f"[VIEWER] set_image called")
+        # print(f"[VIEWER] Image size: {image.size}, mode: {image.mode}, preserve_view: {preserve_view}")
+        # print(f"[VIEWER] Image id: {id(image)}")
+        # print(f"[VIEWER] Apply inversion: {apply_inversion}")
+        # print(f"[VIEWER] Current image_inverted: {self.image_inverted}")
+        # print(f"[VIEWER] Current original_image id: {id(self.original_image) if self.original_image else 'None'}")
+        
+        # Store original image for inversion
+        # When preserve_view=False: new slice, always store new original_image
+        # When preserve_view=True and apply_inversion is not None: same slice, inversion toggle, preserve original_image
+        # When preserve_view=True and apply_inversion is None: new slice (scrolling), store new original_image
+        if not preserve_view:
+            # New slice - always store new original image (non-inverted)
+            # print(f"[VIEWER] Storing new original_image (preserve_view=False)")
+            # print(f"[VIEWER] Before: original_image id = {id(self.original_image) if self.original_image else 'None'}")
+            # print(f"[VIEWER] Image to copy id = {id(image)}")
+            self.original_image = image.copy()
+            # print(f"[VIEWER] After: original_image id = {id(self.original_image)}")
+            
+            # Update inversion state FIRST before determining if we need to invert
+            # If apply_inversion is provided, use it (stored state for this series)
+            # If apply_inversion is None, reset to False (no stored state for this series)
+            if apply_inversion is not None:
+                self.image_inverted = apply_inversion
+            else:
+                # No stored inversion state for this series - reset to False
+                self.image_inverted = False
+            
+            # Determine if we need to invert the image for display
+            # Use apply_inversion if provided, otherwise use current self.image_inverted state
+            should_invert = apply_inversion if apply_inversion is not None else self.image_inverted
+            
+            # Apply inversion if needed
+            if should_invert:
+                image = self._apply_inversion(image)
+        elif preserve_view:
+            # print(f"[VIEWER] preserve_view=True branch")
+            # print(f"[VIEWER] apply_inversion = {apply_inversion}")
+            # Same series - might be same slice (inversion toggle) or new slice (scrolling)
+            if apply_inversion is not None:
+                # Same slice - inversion toggle, preserve existing original_image
+                # Update inversion state to match apply_inversion
+                self.image_inverted = apply_inversion
+                # Apply inversion to the stored original image based on the state
+                if self.original_image is not None:
+                    if self.image_inverted:
+                        image = self._apply_inversion(self.original_image)
+                    else:
+                        image = self.original_image
+            else:
+                # New slice (scrolling within same series) - store new original_image
+                # print(f"[VIEWER] Storing new original_image (scrolling within same series)")
+                # print(f"[VIEWER] Before: original_image id = {id(self.original_image) if self.original_image else 'None'}")
+                # print(f"[VIEWER] Image to copy id = {id(image)}")
+                self.original_image = image.copy()
+                # print(f"[VIEWER] After: original_image id = {id(self.original_image)}")
+                # Don't reset inversion state - preserve it for the series
+                # Apply inversion if the series is currently inverted
+                if self.image_inverted:
+                    # print(f"[VIEWER] Applying inversion to new slice (series is inverted)")
+                    image = self._apply_inversion(image)
+                # If image_inverted is False, image is already non-inverted (from dataset), use as-is
+        # If preserve_view is True and apply_inversion is None,
+        # the image passed in is already in the correct state (inverted or not), so don't apply inversion again
+        
+        # Store current view state if preserving
+        if preserve_view and self.image_item is not None:
+            saved_zoom = self.current_zoom
+            # Save integer scrollbar positions directly.
+            # These are restored after the scene/transform change to avoid the
+            # float->int quantization error that accumulates when using
+            # mapToScene() + centerOn() across many slices (H5 drift bug).
+            saved_h_scroll = self.horizontalScrollBar().value()
+            saved_v_scroll = self.verticalScrollBar().value()
+        else:
+            saved_zoom = None
+            saved_h_scroll = None
+            saved_v_scroll = None
+        
+        # Convert PIL Image to QPixmap
+        # print(f"[VIEWER] Converting PIL Image to QImage...")
+        
+        # IMPORTANT: Keep a reference to the bytes buffer to prevent garbage collection
+        # before Qt finishes reading it. For large images, Python may GC the temporary
+        # bytes object returned by image.tobytes() before QImage/QPixmap finishes,
+        # causing a segfault.
+        image_bytes = image.tobytes()
+        
+        if image.mode == 'L':
+            # Grayscale - explicitly specify bytesPerLine (stride)
+            # print(f"[VIEWER] Converting grayscale image...")
+            bytes_per_line = image.width * 1  # 1 byte per pixel for grayscale
+            # print(f"[VIEWER] Image dimensions: {image.width}x{image.height}, bytes_per_line: {bytes_per_line}")
+            qimage = QImage(image_bytes, image.width, image.height, bytes_per_line,
+                          QImage.Format.Format_Grayscale8)
+        elif image.mode == 'RGB':
+            # RGB - explicitly specify bytesPerLine (stride)
+            # print(f"[VIEWER] Converting RGB image...")
+            bytes_per_line = image.width * 3  # 3 bytes per pixel for RGB
+            # print(f"[VIEWER] Image dimensions: {image.width}x{image.height}, bytes_per_line: {bytes_per_line}")
+            qimage = QImage(image_bytes, image.width, image.height, bytes_per_line,
+                          QImage.Format.Format_RGB888)
+        else:
+            # Convert to RGB
+            # print(f"[VIEWER] Converting {image.mode} to RGB...")
+            image = image.convert('RGB')
+            image_bytes = image.tobytes()
+            bytes_per_line = image.width * 3  # 3 bytes per pixel for RGB
+            # print(f"[VIEWER] Image dimensions: {image.width}x{image.height}, bytes_per_line: {bytes_per_line}")
+            qimage = QImage(image_bytes, image.width, image.height, bytes_per_line,
+                          QImage.Format.Format_RGB888)
+        
+        # Make a deep copy of the QImage so Qt owns the data
+        # This prevents crashes if the Python bytes buffer is garbage collected
+        # print(f"[VIEWER] Creating QImage copy...")
+        qimage = qimage.copy()
+        # print(f"[VIEWER] QImage copy created successfully")
+        
+        # print(f"[VIEWER] QImage created, converting to QPixmap...")
+        pixmap = QPixmap.fromImage(qimage)
+        # print(f"[VIEWER] QPixmap created: {pixmap.width()}x{pixmap.height()}, isNull: {pixmap.isNull()}")
+        # print(f"[VIEWER] Pixmap cache key: {pixmap.cacheKey() if hasattr(pixmap, 'cacheKey') else 'N/A'}")
+        
+        # Remove old image item only
+        # Note: ROIs and overlays will be preserved and re-added by their managers
+        if self.image_item is not None:
+            old_pixmap = self.image_item.pixmap()
+            # print(f"[VIEWER] Removing old image item, pixmap cache key: {old_pixmap.cacheKey() if old_pixmap and hasattr(old_pixmap, 'cacheKey') else 'None'}")
+            self.scene.removeItem(self.image_item)
+        
+        # Create new image item
+        # print(f"[VIEWER] Creating QGraphicsPixmapItem...")
+        self.image_item = QGraphicsPixmapItem(pixmap)
+        # Set image item to lowest Z-value so other items appear on top
+        self.image_item.setZValue(0)
+        # print(f"[VIEWER] New image item created, pixmap cache key: {self.image_item.pixmap().cacheKey() if self.image_item.pixmap() and hasattr(self.image_item.pixmap(), 'cacheKey') else 'None'}")
+        # print(f"[VIEWER] Adding item to scene...")
+        self.scene.addItem(self.image_item)
+        # print(f"[VIEWER] Item added to scene successfully")
+        self._apply_smoothing_mode()
+
+        # Force scene and viewport update to ensure display refreshes
+        # print(f"[VIEWER] Forcing scene and viewport update...")
+        self.scene.invalidate(self.scene.sceneRect())
+        self.viewport().update()
+        # print(f"[VIEWER] Scene and viewport updated")
+        
+        # Set scene rect to image dimensions to ensure proper overlay positioning
+        # print(f"[VIEWER] Getting image bounding rect...")
+        image_rect = self.image_item.boundingRect()
+        # print(f"[VIEWER] Image rect: {image_rect}")
+        
+        # Calculate fixed scene rect size that accommodates:
+        # - If image is larger than viewport: 2x image size
+        # - If image is smaller than viewport: 1.0x viewport at min zoom
+        # This ensures mapToScene() accuracy at all zoom levels without recalculation
+        image_width = image_rect.width()  # Scene coordinates
+        image_height = image_rect.height()  # Scene coordinates
+        
+        # Calculate viewport size in scene coordinates at zoom = 1.0
+        # At zoom = 1.0, viewport pixels = scene coordinates
+        viewport_width_pixels = self.viewport().width()
+        viewport_height_pixels = self.viewport().height()
+        viewport_width_scene = viewport_width_pixels  # At zoom = 1.0, they're equal
+        viewport_height_scene = viewport_height_pixels  # At zoom = 1.0, they're equal
+        
+        # Calculate viewport size in scene coordinates at minimum zoom (for else case)
+        viewport_at_min_zoom_width = viewport_width_pixels / self.min_zoom if self.min_zoom > 0 else viewport_width_pixels
+        viewport_at_min_zoom_height = viewport_height_pixels / self.min_zoom if self.min_zoom > 0 else viewport_height_pixels
+        
+        # Calculate viewport size in scene coordinates at zoom = 0.5
+        # At zoom = 0.5, each viewport pixel represents 2 scene coordinate units
+        viewport_at_zoom_0_5_width = viewport_width_pixels / 0.5
+        viewport_at_zoom_0_5_height = viewport_height_pixels / 0.5
+        
+        # Compare both in scene coordinates (at zoom = 1.0 for the comparison)
+        # If image is larger than viewport, use 2x image size
+        # Otherwise, use 3x image size + viewport at zoom 0.5
+        if image_width > viewport_width_scene:
+            scene_width = image_width * 2.0
+            # print(f"[SCENE_RECT] Image width ({image_width:.2f}) > viewport width in scene coords ({viewport_width_scene:.2f}) - using 2x image size: {scene_width:.2f}")
+        else:
+            scene_width = 3.0 * image_width + viewport_at_zoom_0_5_width
+            # print(f"[SCENE_RECT] Image width ({image_width:.2f}) <= viewport width in scene coords ({viewport_width_scene:.2f}) - using 3x image size + viewport at zoom 0.5: {scene_width:.2f}")
+        
+        if image_height > viewport_height_scene:
+            scene_height = image_height * 2.0
+            # print(f"[SCENE_RECT] Image height ({image_height:.2f}) > viewport height in scene coords ({viewport_height_scene:.2f}) - using 2x image size: {scene_height:.2f}")
+        else:
+            scene_height = 3.0 * image_height + viewport_at_zoom_0_5_height
+            # print(f"[SCENE_RECT] Image height ({image_height:.2f}) <= viewport height in scene coords ({viewport_height_scene:.2f}) - using 3x image size + viewport at zoom 0.5: {scene_height:.2f}")
+        
+        # Calculate margins to center the image in the expanded scene rect
+        margin_x = (scene_width - image_width) / 2.0
+        margin_y = (scene_height - image_height) / 2.0
+        
+        expanded_rect = QRectF(
+            image_rect.x() - margin_x,
+            image_rect.y() - margin_y,
+            scene_width,
+            scene_height
+        )
+        self.scene.setSceneRect(expanded_rect)
+        
+        # Centering is now handled by fit_to_view() when appropriate
+        # Don't center here as fit_to_view() will be called and may override it
+        if preserve_view and saved_zoom is not None:
+            # Restore zoom while preserving current flip/rotation orientation.
+            # _apply_view_transform() composes the full transform; scroll positions
+            # are restored below to avoid pan drift (H5).
+            self.current_zoom = saved_zoom
+            self._apply_view_transform()
+
+            # Restore pan by setting scrollbar integers directly.
+            # Using centerOn(saved_scene_center) introduces a float->int quantization
+            # error of up to 1/zoom per call. Over many slice changes this accumulates
+            # into visible pan drift (H5). Restoring the saved integer values bypasses
+            # the round-trip entirely. This is exact when the scene rect geometry is
+            # unchanged (same-series slice scrolling); for one-off scene rect changes
+            # (e.g. scrollbar appearance) it may shift by at most 1px, which is
+            # acceptable and non-accumulating.
+            if saved_h_scroll is not None and saved_v_scroll is not None:
+                self.horizontalScrollBar().setValue(saved_h_scroll)
+                self.verticalScrollBar().setValue(saved_v_scroll)
+
+            self.last_transform = self.transform()
+            self.zoom_changed.emit(self.current_zoom)
+
+        else:
+            # Reset zoom and fit to view
+            # Don't center here - centering should only happen when initializing new series or resetting view
+            self.current_zoom = 1.0
+            self.fit_to_view(center_image=False)
+        
+    
+    def compute_fit_zoom(self) -> Optional[float]:
+        """
+        Zoom factor that fits the current image item into the viewport (rotation-aware).
+
+        Returns:
+            Positive fit zoom, or None if the image or viewport is unavailable or invalid.
+        """
+        if self.image_item is None:
+            return None
+
+        scene_rect = self.image_item.boundingRect()
+        if scene_rect.isEmpty():
+            return None
+
+        vp = self.viewport()
+        if vp is None:
+            return None
+        viewport_w = float(vp.width())
+        viewport_h = float(vp.height())
+        if viewport_w <= 0 or viewport_h <= 0:
+            return None
+
+        img_w = scene_rect.width()
+        img_h = scene_rect.height()
+        if img_w <= 0 or img_h <= 0:
+            return None
+
+        # When the image is rotated 90° or 270°, the effective on-screen
+        # width/height are swapped compared to the scene dimensions.
+        if self._rotation_deg in (90, 270):  # type: ignore[attr-defined]
+            fit_zoom = min(viewport_w / img_h, viewport_h / img_w)
+        else:
+            fit_zoom = min(viewport_w / img_w, viewport_h / img_h)
+
+        return max(1e-6, fit_zoom)
+
+    def is_effectively_fit_and_centered(
+        self,
+        zoom_rel_tol: float = 1e-4,
+        center_px_tol: float = 2.0,
+    ) -> bool:
+        """
+        True if zoom matches fit-to-view (within tolerance) and the image center
+        lies under the viewport center (within a few viewport pixels).
+
+        Used to skip redundant ``fit_to_view`` when the viewport size did not change
+        and the view is already in the default fit+centered state.
+        """
+        fit_z = self.compute_fit_zoom()
+        if fit_z is None or self.current_zoom <= 0:
+            return False
+        if abs(self.current_zoom - fit_z) / fit_z > zoom_rel_tol:
+            return False
+        vc = self.get_viewport_center_scene()
+        if vc is None or self.image_item is None:
+            return False
+        ic = self.image_item.boundingRect().center()
+        p0 = QPointF(self.mapFromScene(vc))
+        p1 = QPointF(self.mapFromScene(ic))
+        dx = p0.x() - p1.x()
+        dy = p0.y() - p1.y()
+        return (dx * dx + dy * dy) ** 0.5 <= center_px_tol
+
+    def fit_to_view(self, center_image: bool = False) -> None:
+        """
+        Fit the image to the current view size, preserving the current orientation
+        (flip / rotation).
+
+        Computes the zoom factor directly from viewport and image dimensions so that
+        the result is correct when rotation is active (``fitInView`` would override the
+        orientation transform and read back an incorrect m11 value).
+
+        Args:
+            center_image: If True, center the image in the viewport (for initialization/reset).
+                         If False, preserve current view position.
+        """
+        fit_zoom = self.compute_fit_zoom()
+        if fit_zoom is None:
+            return
+
+        scene_rect = self.image_item.boundingRect()  # type: ignore[union-attr]
+
+        self.current_zoom = fit_zoom
+        self._apply_view_transform()
+
+        # Always center on the image for fit_to_view
+        self.centerOn(scene_rect.center())
+        self.last_transform = self.transform()
+        self.zoom_changed.emit(self.current_zoom)
+        self._restart_smooth_idle_timer()
+
+    def zoom_in(self) -> None:
+        """Zoom in on the image, centered on the current viewport center."""
+        if self.image_item is None:
+            return
+        new_zoom = min(self.current_zoom * self.zoom_factor, self.max_zoom)
+        # Preserve the scene point currently at the viewport centre so that
+        # the zoom appears to expand around that point.
+        center_scene = self.mapToScene(self.viewport().rect().center())
+        self.current_zoom = new_zoom
+        self._apply_view_transform()
+        self.centerOn(center_scene)
+        self._check_transform_changed()
+
+    def zoom_out(self) -> None:
+        """Zoom out from the image, centered on the current viewport center."""
+        if self.image_item is None:
+            return
+        new_zoom = max(self.current_zoom / self.zoom_factor, self.min_zoom)
+        center_scene = self.mapToScene(self.viewport().rect().center())
+        self.current_zoom = new_zoom
+        self._apply_view_transform()
+        self.centerOn(center_scene)
+        self._check_transform_changed()
+
+    def reset_zoom(self) -> None:
+        """Reset zoom to 1:1, preserving current flip/rotation."""
+        self.current_zoom = 1.0
+        self._apply_view_transform()
+        self._check_transform_changed()
+
+    def set_zoom(self, zoom_value: float) -> None:
+        """
+        Set zoom to a specific value, centered on the current viewport center.
+
+        Args:
+            zoom_value: Target zoom level
+        """
+        if self.image_item is None:
+            return
+        zoom_value = max(self.min_zoom, min(self.max_zoom, zoom_value))
+        center_scene = self.mapToScene(self.viewport().rect().center())
+        self.current_zoom = zoom_value
+        self._apply_view_transform()
+        self.centerOn(center_scene)
+        self._check_transform_changed()
+    
+    def set_scroll_wheel_mode(self, mode: str) -> None:
+        """
+        Set scroll wheel mode.
+        
+        Args:
+            mode: "slice" or "zoom"
+        """
+        if mode in ["slice", "zoom"]:
+            self.scroll_wheel_mode = mode
+    
+    def set_rescale_toggle_state(self, checked: bool) -> None:
+        """
+        Set the rescale toggle state (for context menu).
+        
+        Args:
+            checked: True to use rescaled values, False to use raw values
+        """
+        self.use_rescaled_values = checked
+    
+    def set_cine_controls_enabled(self, enabled: bool) -> None:
+        """
+        Set whether cine controls should be enabled in the context menu.
+        
+        Args:
+            enabled: True to enable cine controls in context menu, False to disable
+        """
+        self.cine_controls_enabled = enabled
+    
+    def set_privacy_view_state(self, enabled: bool) -> None:
+        """
+        Set the privacy view state (for context menu synchronization).
+        
+        Args:
+            enabled: True if privacy view is enabled, False otherwise
+        """
+        self._privacy_view_enabled = enabled
+    def set_window_level_for_drag(
+        self,
+        center: float,
+        width: float,
+        center_range: Tuple[float, float],
+        width_range: Tuple[float, float],
+    ) -> None:
+        """
+        Set window/level values for right mouse drag adjustment.
+        Also updates sensitivity based on ranges.
+        
+        Args:
+            center: Current window center value
+            width: Current window width value
+            center_range: (min, max) range for window center
+            width_range: (min, max) range for window width
+        """
+        self.right_mouse_drag_start_center = center
+        self.right_mouse_drag_start_width = width
+        
+        # Calculate sensitivity based on ranges
+        # Sensitivity: pixels per unit
+        # Use a reasonable default: 1 pixel = 1% of range
+        center_range_size = center_range[1] - center_range[0]
+        width_range_size = width_range[1] - width_range[0]
+        
+        if center_range_size > 0:
+            # 100 pixels of movement = 10% of range
+            self.window_center_sensitivity = center_range_size / 1000.0
+        else:
+            self.window_center_sensitivity = 1.0
+        
+        if width_range_size > 0:
+            # 100 pixels of movement = 10% of range
+            self.window_width_sensitivity = width_range_size / 1000.0
+        else:
+            self.window_width_sensitivity = 1.0
+    
+    def _check_transform_changed(self) -> None:
+        """
+        Check if transform has changed and emit signal if so.
+        
+        Uses QTimer to delay signal emission slightly to ensure transform is fully applied.
+        Also restarts the smooth-idle timer so we use fast transform during zoom/pan.
+        """
+        current_transform = self.transform()
+        if current_transform != self.last_transform:
+            self.last_transform = current_transform
+            self._restart_smooth_idle_timer()
+            # Use QTimer to delay signal emission slightly, ensuring transform is fully applied
+            QTimer.singleShot(10, lambda: self.transform_changed.emit())
+    
+    def _on_scrollbar_changed(self) -> None:
+        """
+        Handle scrollbar value changes (panning).
+        
+        When panning via scrollbars, the view's transform doesn't change,
+        but the viewport-to-scene mapping does change. We need to update
+        overlay positions to keep them anchored to viewport edges.
+        
+        Updates overlay positions immediately for smooth panning, using
+        a debounced timer only to ensure final position is correct when
+        panning stops.
+        """
+        # Check if scrollbar values actually changed
+        current_h = self.horizontalScrollBar().value()
+        current_v = self.verticalScrollBar().value()
+        
+        if current_h != self.last_horizontal_scroll or current_v != self.last_vertical_scroll:
+            self.last_horizontal_scroll = current_h
+            self.last_vertical_scroll = current_v
+
+            self._restart_smooth_idle_timer()
+
+            # Emit transform_changed immediately for smooth updates during panning
+            # This ensures overlay positions update in sync with viewport movement
+            self.transform_changed.emit()
+            
+            # Also set up a debounced timer for a final update when panning stops
+            # This ensures overlay positions are correct even if rapid panning
+            # causes some updates to be missed
+            if self._pan_update_timer is not None and self._pan_update_timer.isActive():
+                self._pan_update_timer.stop()
+            
+            if self._pan_update_timer is None:
+                self._pan_update_timer = QTimer()
+                self._pan_update_timer.setSingleShot(True)
+                self._pan_update_timer.timeout.connect(lambda: self.transform_changed.emit())
+            
+            # Start timer with short delay - this will fire if panning stops
+            # and ensures final position is correct
+            self._pan_update_timer.start(10)
+    
+    def get_viewport_center_scene(self) -> Optional[QPointF]:
+        """
+        Get the current viewport center point in scene coordinates.
+        
+        Returns:
+            QPointF representing the viewport center in scene coordinates,
+            or None if viewport is not available
+        """
+        if self.viewport() is None:
+            return None
+        
+        # Calculate viewport center in viewport coordinates
+        viewport_center_viewport = QPointF(
+            self.viewport().width() / 2.0,
+            self.viewport().height() / 2.0
+        )
+        
+        # Convert to scene coordinates
+        scene_center = self.mapToScene(viewport_center_viewport.toPoint())
+        return scene_center
+    
+    def set_pixel_info_callbacks(
+        self,
+        get_dataset: Callable[[], Any],
+        get_slice_index: Callable[[], int],
+        get_use_rescaled: Callable[[], bool]
+    ) -> None:
+        """
+        Set callbacks to get current dataset, slice index, and rescale setting for pixel value display.
+        
+        Args:
+            get_dataset: Callback to get current DICOM dataset
+            get_slice_index: Callback to get current slice index
+            get_use_rescaled: Callback to get whether to use rescaled values
+        """
+        self.get_current_dataset_callback = get_dataset
+        self.get_current_slice_index_callback = get_slice_index
+        self.get_use_rescaled_values_callback = get_use_rescaled
+    
+    def _update_pixel_info(self, event: QMouseEvent) -> None:
+        """
+        Update pixel information based on cursor position.
+        
+        Args:
+            event: Mouse event
+        """
+        if self.image_item is None:
+            self.pixel_info_changed.emit("", 0, 0, 0)
+            return
+        
+        # Convert viewport coordinates to scene coordinates
+        scene_pos = self.mapToScene(event.position().toPoint())
+        
+        # Get image item bounding rect
+        image_rect = self.image_item.boundingRect()
+        
+        # Check if cursor is over the image
+        if not image_rect.contains(scene_pos):
+            self.pixel_info_changed.emit("", 0, 0, 0)
+            return
+        
+        # Convert scene coordinates to image pixel coordinates
+        # Image item is positioned at (0, 0) in scene, so scene_pos is relative to image
+        x = int(scene_pos.x())
+        y = int(scene_pos.y())
+        
+        # Clamp to image bounds
+        x = max(0, min(x, int(image_rect.width()) - 1))
+        y = max(0, min(y, int(image_rect.height()) - 1))
+        
+        # Get z coordinate (slice index)
+        z = 0
+        if self.get_current_slice_index_callback:
+            z = self.get_current_slice_index_callback()
+        
+        # Get pixel value from dataset
+        pixel_value_str = ""
+        if self.get_current_dataset_callback:
+            dataset = self.get_current_dataset_callback()
+            if dataset is not None:
+                use_rescaled = False
+                if self.get_use_rescaled_values_callback:
+                    use_rescaled = self.get_use_rescaled_values_callback()
+                
+                pixel_value_str = self._get_pixel_value_at_coords(dataset, x, y, z, use_rescaled)
+        
+        # Emit signal with pixel info
+        self.pixel_info_changed.emit(pixel_value_str, x, y, z)
+    
+    def _extract_image_region(self, center_x: float, center_y: float, size: int, zoom_factor: float) -> Optional[QPixmap]:
+        """
+        Extract a region from the displayed image for magnifier.
+        
+        Args:
+            center_x: Scene X coordinate of center point
+            center_y: Scene Y coordinate of center point
+            size: Size of region to extract (in scene coordinates before zoom)
+            zoom_factor: Magnification factor to apply
+            
+        Returns:
+            QPixmap of the extracted and magnified region, or None if extraction fails
+        """
+        if self.image_item is None:
+            return None
+        
+        # Get the pixmap from the image item
+        source_pixmap = self.image_item.pixmap()
+        if source_pixmap.isNull():
+            return None
+        
+        # Calculate region bounds in pixmap coordinates
+        # The image item is positioned at (0, 0) in scene coordinates
+        # So scene coordinates directly map to pixmap coordinates
+        half_size = size / 2.0
+        x1 = max(0, int(center_x - half_size))
+        y1 = max(0, int(center_y - half_size))
+        x2 = min(source_pixmap.width(), int(center_x + half_size))
+        y2 = min(source_pixmap.height(), int(center_y + half_size))
+        
+        # Check if region is valid
+        if x2 <= x1 or y2 <= y1:
+            return None
+        
+        # Extract region from pixmap
+        extracted_width = x2 - x1
+        extracted_height = y2 - y1
+        region = source_pixmap.copy(x1, y1, extracted_width, extracted_height)
+        
+        if DEBUG_MAGNIFIER:
+            print(f"[DEBUG-MAGNIFIER] _extract_image_region: center=({center_x:.1f}, {center_y:.1f}), size={size:.3f}, zoom_factor={zoom_factor:.3f}")
+            print(f"[DEBUG-MAGNIFIER] _extract_image_region: extracted_region=({x1}, {y1}) to ({x2}, {y2}), dimensions=({extracted_width}x{extracted_height})")
+        
+        # Apply zoom factor; use same smooth/fast setting as main view
+        if zoom_factor != 1.0:
+            scaled_width = int(extracted_width * zoom_factor)
+            scaled_height = int(extracted_height * zoom_factor)
+            transform_mode = (
+                Qt.TransformationMode.SmoothTransformation
+                if self._smooth_when_zoomed
+                else Qt.TransformationMode.FastTransformation
+            )
+            if DEBUG_MAGNIFIER:
+                print(f"[DEBUG-MAGNIFIER] _extract_image_region: scaling to ({scaled_width}x{scaled_height})")
+            region = region.scaled(
+                scaled_width,
+                scaled_height,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                transform_mode
+            )
+            if DEBUG_MAGNIFIER:
+                print(f"[DEBUG-MAGNIFIER] _extract_image_region: final_pixmap_size=({region.width()}x{region.height()})")
+        else:
+            if DEBUG_MAGNIFIER:
+                print(f"[DEBUG-MAGNIFIER] _extract_image_region: no scaling, final_pixmap_size=({region.width()}x{region.height()})")
+        
+        return region
+
+    def _render_scene_region(self, center_x: float, center_y: float, size: float, zoom_factor: float) -> Optional[QPixmap]:
+        """
+        Render a region of the graphics scene (image + annotations) for the magnifier.
+        Uses QGraphicsScene.render() so measurements, ROIs, and other scene items are visible.
+
+        Args:
+            center_x: Scene X coordinate of center point
+            center_y: Scene Y coordinate of center point
+            size: Size of region to extract (in scene coordinates before zoom)
+            zoom_factor: Magnification factor to apply
+
+        Returns:
+            QPixmap of the rendered region, or None if rendering fails
+        """
+        if self.scene is None:
+            return None
+        half_size = size / 2.0
+        source_rect = QRectF(center_x - half_size, center_y - half_size, size, size)
+        # Clamp to image bounds when available so we don't render empty scene area
+        if self.image_item is not None:
+            image_rect = self.image_item.boundingRect()
+            source_rect = source_rect.intersected(image_rect)
+        else:
+            source_rect = source_rect.intersected(self.scene.sceneRect())
+        if source_rect.isEmpty() or source_rect.width() <= 0 or source_rect.height() <= 0:
+            return None
+        out_w = max(1, int(source_rect.width() * zoom_factor))
+        out_h = max(1, int(source_rect.height() * zoom_factor))
+        image = QImage(out_w, out_h, QImage.Format.Format_ARGB32_Premultiplied)
+        image.fill(QColor(0, 0, 0))
+        painter = QPainter(image)
+        try:
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, self._smooth_when_zoomed)
+            target_rect = QRectF(0, 0, out_w, out_h)
+            self.scene.render(painter, target_rect, source_rect)
+        finally:
+            painter.end()
+        return QPixmap.fromImage(image)
+
+    def show_handle_drag_magnifier(self, scene_pos: QPointF) -> None:
+        """
+        Show the handle-drag magnifier centered on the given scene position.
+        Used when the user Shift+drags a measurement handle for precise endpoint placement.
+        Widget is positioned with an offset so it does not cover the handle.
+        """
+        if self.handle_drag_magnifier_active:
+            if DEBUG_MAGNIFIER:
+                print(
+                    "[DEBUG-MAGNIFIER] ImageViewer.show_handle_drag_magnifier: "
+                    "already active; delegating to update_handle_drag_magnifier()"
+                )
+            self.update_handle_drag_magnifier(scene_pos)
+            return
+        if self.handle_drag_magnifier_widget is None:
+            from gui.magnifier_widget import MagnifierWidget
+            self.handle_drag_magnifier_widget = MagnifierWidget()
+        self.handle_drag_magnifier_active = True
+        current_zoom = self.current_zoom
+        magnifier_zoom = 2.0 * current_zoom
+        adjusted_region_size = (
+            float(self._handle_drag_magnifier_size) / (2.0 * current_zoom)
+            if current_zoom > 0
+            else float(self._handle_drag_magnifier_size) / 2.0
+        )
+        if DEBUG_MAGNIFIER:
+            print(
+                "[DEBUG-MAGNIFIER] ImageViewer.show_handle_drag_magnifier: "
+                f"scene_pos=({scene_pos.x():.1f},{scene_pos.y():.1f}), "
+                f"current_zoom={current_zoom:.3f}, "
+                f"adjusted_region_size={adjusted_region_size:.3f}, "
+                f"magnifier_zoom={magnifier_zoom:.3f}"
+            )
+        magnified_pixmap = self._render_scene_region(
+            scene_pos.x(), scene_pos.y(), adjusted_region_size, magnifier_zoom
+        )
+        if magnified_pixmap is not None and self.handle_drag_magnifier_widget is not None:
+            self.handle_drag_magnifier_widget.update_magnified_region(magnified_pixmap)
+            # Use the actual cursor position in global screen coordinates – identical to how
+            # the main Magnifier tool positions its widget, and avoids any silent exceptions
+            # from mapFromScene/mapToGlobal on QGraphicsView during a drag event.
+            from PySide6.QtGui import QCursor
+            global_pos = QCursor.pos()
+            if DEBUG_MAGNIFIER:
+                print(
+                    "[DEBUG-MAGNIFIER] ImageViewer.show_handle_drag_magnifier: "
+                    f"cursor_global_pos=({global_pos.x()},{global_pos.y()})"
+                )
+            self.handle_drag_magnifier_widget.show_at_position(global_pos)
+
+    def update_handle_drag_magnifier(self, scene_pos: QPointF) -> None:
+        """Update handle-drag magnifier content and position (called on handle move)."""
+        if not self.handle_drag_magnifier_active or self.handle_drag_magnifier_widget is None:
+            return
+        current_zoom = self.current_zoom
+        magnifier_zoom = 2.0 * current_zoom
+        adjusted_region_size = (
+            float(self._handle_drag_magnifier_size) / (2.0 * current_zoom)
+            if current_zoom > 0
+            else float(self._handle_drag_magnifier_size) / 2.0
+        )
+        if DEBUG_MAGNIFIER:
+            print(
+                "[DEBUG-MAGNIFIER] ImageViewer.update_handle_drag_magnifier: "
+                f"scene_pos=({scene_pos.x():.1f},{scene_pos.y():.1f}), "
+                f"current_zoom={current_zoom:.3f}, "
+                f"adjusted_region_size={adjusted_region_size:.3f}, "
+                f"magnifier_zoom={magnifier_zoom:.3f}"
+            )
+        magnified_pixmap = self._render_scene_region(
+            scene_pos.x(), scene_pos.y(), adjusted_region_size, magnifier_zoom
+        )
+        if magnified_pixmap is not None:
+            self.handle_drag_magnifier_widget.update_magnified_region(magnified_pixmap)
+            from PySide6.QtGui import QCursor
+            global_pos = QCursor.pos()
+            if DEBUG_MAGNIFIER:
+                print(
+                    "[DEBUG-MAGNIFIER] ImageViewer.update_handle_drag_magnifier: "
+                    f"cursor_global_pos=({global_pos.x()},{global_pos.y()})"
+                )
+            self.handle_drag_magnifier_widget.show_at_position(global_pos)
+
+    def hide_handle_drag_magnifier(self) -> None:
+        """Hide the handle-drag magnifier (called when handle drag ends)."""
+        self.handle_drag_magnifier_active = False
+        if self.handle_drag_magnifier_widget is not None:
+            if DEBUG_MAGNIFIER:
+                print("[DEBUG-MAGNIFIER] ImageViewer.hide_handle_drag_magnifier: hiding widget")
+            self.handle_drag_magnifier_widget.hide()
+
+    def _get_pixel_value_at_coords(
+        self,
+        dataset,
+        x: int,
+        y: int,
+        z: int,
+        use_rescaled: bool
+    ) -> str:
+        """
+        Get pixel value at specified coordinates.
+        
+        Args:
+            dataset: DICOM dataset
+            x: X coordinate (column)
+            y: Y coordinate (row)
+            z: Z coordinate (slice index)
+            use_rescaled: Whether to use rescaled values
+            
+        Returns:
+            Formatted string with pixel value(s)
+        """
+        try:
+            from pydicom.dataset import Dataset
+            from core.dicom_processor import DICOMProcessor
+            
+            # Get pixel array
+            pixel_array = DICOMProcessor.get_pixel_array(dataset)
+            if pixel_array is None:
+                return ""
+            
+            # Determine if this is a color image by checking SamplesPerPixel
+            samples_per_pixel = 1
+            if hasattr(dataset, 'SamplesPerPixel'):
+                spp_value = dataset.SamplesPerPixel
+                if isinstance(spp_value, (list, tuple)):
+                    samples_per_pixel = int(spp_value[0])
+                else:
+                    samples_per_pixel = int(spp_value)
+            
+            is_color = samples_per_pixel > 1
+            
+            # Handle different array shapes
+            array_shape = pixel_array.shape
+            
+            if len(array_shape) == 4:
+                # Multi-frame color: shape is (frames, rows, columns, channels)
+                if z < 0 or z >= array_shape[0]:
+                    return ""
+                frame_array = pixel_array[z]
+            elif len(array_shape) == 3:
+                # Could be:
+                # - Single-frame color: (height, width, channels) where channels = 3
+                # - Multi-frame grayscale: (frames, height, width) where frames > 1
+                if is_color and array_shape[2] == samples_per_pixel:
+                    # Single-frame color: (height, width, channels)
+                    frame_array = pixel_array
+                elif not is_color and array_shape[0] > 1:
+                    # Multi-frame grayscale: (frames, height, width)
+                    if z < 0 or z >= array_shape[0]:
+                        return ""
+                    frame_array = pixel_array[z]
+                else:
+                    # Single-frame grayscale or ambiguous - check last dimension
+                    if array_shape[2] == 3:
+                        # Likely single-frame color
+                        frame_array = pixel_array
+                    else:
+                        # Single-frame grayscale (shouldn't happen with 3D, but handle it)
+                        frame_array = pixel_array
+            else:
+                # Single-frame grayscale: shape is (height, width)
+                frame_array = pixel_array
+            
+            # Check bounds and extract pixel value
+            if len(frame_array.shape) == 2:
+                # Grayscale
+                if y < 0 or y >= frame_array.shape[0] or x < 0 or x >= frame_array.shape[1]:
+                    return ""
+                pixel_value = float(frame_array[y, x])
+                
+                # Apply rescale if needed
+                if use_rescaled:
+                    slope = getattr(dataset, 'RescaleSlope', 1.0)
+                    intercept = getattr(dataset, 'RescaleIntercept', 0.0)
+                    if isinstance(slope, (list, tuple)):
+                        slope = float(slope[0])
+                    else:
+                        slope = float(slope)
+                    if isinstance(intercept, (list, tuple)):
+                        intercept = float(intercept[0])
+                    else:
+                        intercept = float(intercept)
+                    pixel_value = pixel_value * slope + intercept
+                
+                # Format pixel value
+                if pixel_value == int(pixel_value):
+                    return str(int(pixel_value))
+                else:
+                    return f"{pixel_value:.1f}"
+                    
+            elif len(frame_array.shape) == 3:
+                # Color (RGB)
+                if y < 0 or y >= frame_array.shape[0] or x < 0 or x >= frame_array.shape[1]:
+                    return ""
+                if frame_array.shape[2] < 3:
+                    return ""
+                
+                r = int(frame_array[y, x, 0])
+                g = int(frame_array[y, x, 1])
+                b = int(frame_array[y, x, 2])
+                
+                # Apply rescale if needed (to all channels)
+                if use_rescaled:
+                    slope = getattr(dataset, 'RescaleSlope', 1.0)
+                    intercept = getattr(dataset, 'RescaleIntercept', 0.0)
+                    if isinstance(slope, (list, tuple)):
+                        slope = float(slope[0])
+                    else:
+                        slope = float(slope)
+                    if isinstance(intercept, (list, tuple)):
+                        intercept = float(intercept[0])
+                    else:
+                        intercept = float(intercept)
+                    
+                    r = int(r * slope + intercept)
+                    g = int(g * slope + intercept)
+                    b = int(b * slope + intercept)
+                
+                return f"R={r}, G={g}, B={b}"
+            else:
+                return ""
+            
+        except Exception as e:
+            # Silently fail - don't spam console with errors
+            return ""
+    
+    def resizeEvent(self, event) -> None:
+        """
+        Handle resize events.
+        
+        Args:
+            event: Resize event
+        """
+        super().resizeEvent(event)
+        # Emit transform_changed signal to update overlay positions
+        # Viewport size change affects overlay positioning
+        QTimer.singleShot(10, lambda: self.transform_changed.emit())
+        # Reposition the edge-reveal slider overlay on the right edge
+        if hasattr(self, "_slider_overlay"):
+            self._reposition_slider_overlay()
+        # Optionally auto-fit on resize
+        # self.fit_to_view()
+
+    def scrollContentsBy(self, dx: int, dy: int) -> None:  # noqa: N802
+        """
+        Keep viewport-anchored overlays fixed while the graphics view scrolls.
+
+        QGraphicsView pans by scrolling the viewport contents, which can visually
+        shift child widgets of the viewport until they are explicitly re-anchored.
+        Reposition the edge-reveal slider immediately after every scroll step so it
+        stays pinned to the right edge during pan/drag interactions.
+        """
+        super().scrollContentsBy(dx, dy)
+        if hasattr(self, "_slider_overlay"):
+            self._reposition_slider_overlay()

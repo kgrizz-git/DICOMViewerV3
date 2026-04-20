@@ -30,7 +30,9 @@ from shiboken6 import isValid
 from PySide6.QtGui import QPen, QColor, QTransform, QPainterPath, QPainterPathStroker
 from typing import List, Optional, Tuple, Dict, Set, Callable
 import numpy as np
+from pydicom.dataset import Dataset
 
+from core.dicom_color import multichannel_axis_labels
 from utils.bundled_fonts import make_qfont
 from utils.config_manager import ConfigManager
 from gui.view_transform_helpers import graphics_view_uniform_zoom
@@ -752,22 +754,29 @@ class ROIManager:
                     
                     text_item.setFont(font)
     
-    def calculate_statistics(self, roi: ROIItem, pixel_array: np.ndarray, 
-                            rescale_slope: Optional[float] = None,
-                            rescale_intercept: Optional[float] = None,
-                            pixel_spacing: Optional[Tuple[float, float]] = None) -> RoiStatisticsMap:
+    def calculate_statistics(
+        self,
+        roi: ROIItem,
+        pixel_array: np.ndarray,
+        rescale_slope: Optional[float] = None,
+        rescale_intercept: Optional[float] = None,
+        pixel_spacing: Optional[Tuple[float, float]] = None,
+        dataset: Optional[Dataset] = None,
+    ) -> RoiStatisticsMap:
         """
         Calculate statistics for an ROI.
-        
+
         Args:
             roi: ROI item
             pixel_array: Image pixel array
             rescale_slope: Optional rescale slope to apply to pixel values
             rescale_intercept: Optional rescale intercept to apply to pixel values
             pixel_spacing: Optional pixel spacing tuple (row_spacing, col_spacing) in mm for area calculation
-            
+            dataset: Optional DICOM dataset for ``PhotometricInterpretation``-based ``channel_labels``
+
         Returns:
-            Dictionary with statistics (mean, std, min, max, count, area_pixels, area_mm2)
+            Dictionary with statistics (mean, std, min, max, count, area_pixels, area_mm2);
+            multichannel runs may include ``channel_labels`` (tuple of short names per channel).
         """
         height, width = pixel_array.shape[:2]
         
@@ -845,12 +854,32 @@ class ROIManager:
             "max": float(np.max(roi_pixels)),
             "count": int(len(roi_pixels)),
             "area_pixels": area_pixels,
-            "area_mm2": area_mm2
+            "area_mm2": area_mm2,
         }
-        
+
+        show_pc = (
+            self.config_manager is not None
+            and self.config_manager.get_roi_show_per_channel_statistics()
+        )
+        if show_pc and pixel_array.ndim == 3 and pixel_array.shape[2] >= 2:
+            nc = int(pixel_array.shape[2])
+            stats["multichannel_count"] = nc
+            for c in range(nc):
+                ch_raw = pixel_array[:, :, c][mask]
+                if len(ch_raw) == 0:
+                    continue
+                ch = ch_raw.astype(np.float32)
+                if rescale_slope is not None and rescale_intercept is not None:
+                    ch = ch * float(rescale_slope) + float(rescale_intercept)
+                stats[f"mean_ch{c}"] = float(np.mean(ch))
+                stats[f"std_ch{c}"] = float(np.std(ch))
+                stats[f"min_ch{c}"] = float(np.min(ch))
+                stats[f"max_ch{c}"] = float(np.max(ch))
+            stats["channel_labels"] = tuple(multichannel_axis_labels(dataset, nc))
+
         # Store statistics in ROI item
         roi.statistics = stats
-        
+
         return stats
     
     def create_statistics_overlay(self, roi: ROIItem, statistics: RoiStatisticsMap,
@@ -896,6 +925,49 @@ class ROIManager:
             lines.append(f"Min: {statistics['min']:.2f}{unit_suffix}")
         if "max" in roi.visible_statistics and "max" in statistics:
             lines.append(f"Max: {statistics['max']:.2f}{unit_suffix}")
+        mc = int(statistics.get("multichannel_count") or 0)
+        if mc >= 2:
+            raw_lbl = statistics.get("channel_labels")
+            if isinstance(raw_lbl, (list, tuple)) and len(raw_lbl) == mc:
+                labels = tuple(str(x) for x in raw_lbl)
+            else:
+                labels = tuple(f"Ch{i}" for i in range(mc))
+            if "mean" in roi.visible_statistics:
+                bits: list[str] = []
+                for c in range(mc):
+                    mk = f"mean_ch{c}"
+                    if mk in statistics:
+                        lab = labels[c] if c < len(labels) else str(c)
+                        bits.append(f"{lab} μ={statistics[mk]:.2f}{unit_suffix}")
+                if bits:
+                    lines.append("Ch mean: " + "  ".join(bits))
+            if "std" in roi.visible_statistics:
+                bits_std: list[str] = []
+                for c in range(mc):
+                    sk = f"std_ch{c}"
+                    if sk in statistics:
+                        lab = labels[c] if c < len(labels) else str(c)
+                        bits_std.append(f"{lab} σ={statistics[sk]:.2f}{unit_suffix}")
+                if bits_std:
+                    lines.append("Ch std: " + "  ".join(bits_std))
+            if "min" in roi.visible_statistics:
+                bits_min: list[str] = []
+                for c in range(mc):
+                    nk = f"min_ch{c}"
+                    if nk in statistics:
+                        lab = labels[c] if c < len(labels) else str(c)
+                        bits_min.append(f"{lab} min={statistics[nk]:.2f}{unit_suffix}")
+                if bits_min:
+                    lines.append("Ch min: " + "  ".join(bits_min))
+            if "max" in roi.visible_statistics:
+                bits_max: list[str] = []
+                for c in range(mc):
+                    xk = f"max_ch{c}"
+                    if xk in statistics:
+                        lab = labels[c] if c < len(labels) else str(c)
+                        bits_max.append(f"{lab} max={statistics[xk]:.2f}{unit_suffix}")
+                if bits_max:
+                    lines.append("Ch max: " + "  ".join(bits_max))
         if "count" in roi.visible_statistics and "count" in statistics:
             lines.append(f"Pixels: {statistics['count']}")
         if "area" in roi.visible_statistics:

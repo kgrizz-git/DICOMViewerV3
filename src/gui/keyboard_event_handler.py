@@ -31,7 +31,8 @@ class KeyboardEventHandler:
     Responsibilities:
     - Handle Delete/Backspace (delete ROI/measurement)
     - Handle Arrow keys (slice navigation)
-    - Handle Spacebar (toggle overlay)
+    - Handle Spacebar (cycle overlay detail minimal / detailed / hidden)
+    - Handle Shift+Space (legacy overlay visibility cycle on focused view)
     - Handle mode switching keys (P, Z, M, S, W, R, E, C, D, V, N)
     """
     
@@ -49,6 +50,8 @@ class KeyboardEventHandler:
         get_selected_roi: Callable[[], Optional[object]],
         delete_roi_callback: Callable[[object], None],
         delete_measurement_callback: Callable[[object], None],
+        cycle_overlay_detail_callback: Optional[Callable[[], None]] = None,
+        toggle_overlay_visibility_legacy_callback: Optional[Callable[[], None]] = None,
         update_roi_list_callback: Optional[Callable[[], None]] = None,
         clear_roi_statistics_callback: Optional[Callable[[], None]] = None,
         reset_view_callback: Optional[Callable[[], None]] = None,
@@ -62,7 +65,8 @@ class KeyboardEventHandler:
         delete_arrow_annotation_callback: Optional[Callable[[object], None]] = None,
         change_layout_callback: Optional[Callable[[str], None]] = None,
         is_focus_ok_for_reset_view: Optional[Callable[[], bool]] = None,
-        open_quick_window_level_callback: Optional[Callable[[], None]] = None
+        open_quick_window_level_callback: Optional[Callable[[], None]] = None,
+        cancel_angle_draw_callback: Optional[Callable[[], None]] = None,
     ):
         """
         Initialize the keyboard event handler.
@@ -76,7 +80,9 @@ class KeyboardEventHandler:
             set_mouse_mode: Callback to set mouse mode
             delete_all_rois_callback: Callback to delete all ROIs
             clear_measurements_callback: Callback to clear measurements
-            toggle_overlay_callback: Callback to toggle overlay
+            toggle_overlay_callback: Fallback when cycle callbacks are omitted
+            cycle_overlay_detail_callback: Space cycles minimal / detailed / hidden (all panes)
+            toggle_overlay_visibility_legacy_callback: Shift+Space legacy visibility cycle (focused pane)
             get_selected_roi: Callback to get selected ROI
             delete_roi_callback: Callback to delete ROI
             delete_measurement_callback: Callback to delete measurement
@@ -92,6 +98,7 @@ class KeyboardEventHandler:
             change_layout_callback: Optional callback to change layout mode (takes layout_mode string: "1x1", "1x2", "2x1", or "2x2")
             is_focus_ok_for_reset_view: Optional callback returning True if focus is in a widget where V should trigger Reset View (e.g. image viewer, navigator)
             open_quick_window_level_callback: Optional callback to open Quick Window/Level dialog for the focused subwindow (shortcut Q)
+            cancel_angle_draw_callback: Optional callback to cancel in-progress angle placement (Esc in measure_angle mode)
         """
         self.roi_manager = roi_manager
         self.measurement_tool = measurement_tool
@@ -102,6 +109,8 @@ class KeyboardEventHandler:
         self.delete_all_rois_callback = delete_all_rois_callback
         self.clear_measurements_callback = clear_measurements_callback
         self.toggle_overlay_callback = toggle_overlay_callback
+        self.cycle_overlay_detail_callback = cycle_overlay_detail_callback
+        self.toggle_overlay_visibility_legacy_callback = toggle_overlay_visibility_legacy_callback
         self.get_selected_roi = get_selected_roi
         self.delete_roi_callback = delete_roi_callback
         self.delete_measurement_callback = delete_measurement_callback
@@ -119,6 +128,7 @@ class KeyboardEventHandler:
         self.change_layout_callback = change_layout_callback
         self.is_focus_ok_for_reset_view = is_focus_ok_for_reset_view
         self.open_quick_window_level_callback = open_quick_window_level_callback
+        self.cancel_angle_draw_callback = cancel_angle_draw_callback
     
     def handle_key_event(self, event: QKeyEvent) -> bool:
         """
@@ -132,6 +142,12 @@ class KeyboardEventHandler:
         """
         if event.type() != QKeyEvent.Type.KeyPress:
             return False
+
+        if event.key() == Qt.Key.Key_Escape:
+            if getattr(self.image_viewer, "mouse_mode", "") == "measure_angle":
+                if self.cancel_angle_draw_callback:
+                    self.cancel_angle_draw_callback()
+                return True
         
         # Delete key to delete selected ROI or measurement
         if event.key() == Qt.Key.Key_Delete or event.key() == Qt.Key.Key_Backspace:
@@ -150,10 +166,11 @@ class KeyboardEventHandler:
                 try:
                     selected_items = self.image_viewer.scene.selectedItems()
                     from tools.measurement_tool import MeasurementItem
+                    from tools.angle_measurement_items import AngleMeasurementItem
                     from tools.text_annotation_tool import TextAnnotationItem
                     from tools.arrow_annotation_tool import ArrowAnnotationItem
                     for item in selected_items:
-                        if isinstance(item, MeasurementItem):
+                        if isinstance(item, (MeasurementItem, AngleMeasurementItem)):
                             self.delete_measurement_callback(item)
                             return True
                         elif isinstance(item, TextAnnotationItem):
@@ -187,9 +204,20 @@ class KeyboardEventHandler:
                 self.slice_navigator.previous_slice()
                 return True
         
-        # Spacebar to toggle overlay visibility
+        # Space: cycle overlay detail (minimal / detailed / hidden). Shift+Space: legacy visibility.
         elif event.key() == Qt.Key.Key_Space:
-            self.toggle_overlay_callback()
+            if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+                leg = self.toggle_overlay_visibility_legacy_callback
+                if leg is not None:
+                    leg()
+                else:
+                    self.toggle_overlay_callback()
+            else:
+                cyc = self.cycle_overlay_detail_callback
+                if cyc is not None:
+                    cyc()
+                else:
+                    self.toggle_overlay_callback()
             return True
         
         # P key for Pan mode
@@ -213,12 +241,15 @@ class KeyboardEventHandler:
             self.set_mouse_mode("magnifier")
             return True
         
-        # M key for Measure mode
+        # M key for Measure mode; Shift+M for angle measure
         elif event.key() == Qt.Key.Key_M:
             # Don't intercept if Cmd/Ctrl is pressed (for standard shortcuts)
             if event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier):
                 return False  # Let Qt handle Cmd+M / Ctrl+M
-            self.set_mouse_mode("measure")
+            if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+                self.set_mouse_mode("measure_angle")
+            else:
+                self.set_mouse_mode("measure")
             return True
         
         # S key for Select mode

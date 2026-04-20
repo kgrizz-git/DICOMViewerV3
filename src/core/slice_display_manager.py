@@ -46,6 +46,26 @@ from utils.dicom_utils import get_pixel_spacing, get_slice_thickness, get_compos
 from utils.debug_flags import DEBUG_WL, DEBUG_SERIES, DEBUG_MEASUREMENT_SERIES
 
 
+def _make_no_pixel_placeholder_pil(width: int = 640, height: int = 480) -> Image.Image:
+    """
+    Gray canvas with centered **No Image** text for instances without pixel data (e.g. SR).
+    """
+    from PIL import ImageDraw, ImageFont
+
+    img = Image.new("RGB", (width, height), (72, 72, 72))
+    draw = ImageDraw.Draw(img)
+    title = "No Image"
+    try:
+        font = ImageFont.truetype("arial.ttf", 36)
+    except Exception:
+        font = ImageFont.load_default()
+    bbox = draw.textbbox((0, 0), title, font=font)
+    tw = bbox[2] - bbox[0]
+    th = bbox[3] - bbox[1]
+    draw.text(((width - tw) // 2, (height - th) // 2), title, fill=(220, 220, 220), font=font)
+    return img
+
+
 def _overlay_metadata_dataset_for_slice(
     dataset: Dataset,
     current_studies: Dict[str, Any],
@@ -117,6 +137,7 @@ class SliceDisplayManager:
         text_annotation_tool=None,
         arrow_annotation_tool=None,
         update_tag_viewer_callback: Optional[Callable[..., None]] = None,
+        open_structured_report_browser_callback: Optional[Callable[[Dataset], None]] = None,
         display_rois_callback: Optional[Callable[..., None]] = None,
         display_measurements_callback: Optional[Callable[..., None]] = None,
         roi_list_panel: Optional[ROIListPanel] = None,
@@ -140,6 +161,8 @@ class SliceDisplayManager:
             overlay_manager: Overlay manager
             view_state_manager: View state manager for coordination
             update_tag_viewer_callback: Optional callback to update tag viewer
+            open_structured_report_browser_callback: Optional callback ``(dataset,)`` — SR browser or tag viewer
+                opens the radiation **summary** dialog; other SR may open the tag viewer until a tree UI exists.
             display_rois_callback: Optional callback to display ROIs
             display_measurements_callback: Optional callback to display measurements
             roi_list_panel: Optional ROI list panel for updating ROI list
@@ -160,6 +183,7 @@ class SliceDisplayManager:
         self.overlay_manager = overlay_manager
         self.view_state_manager = view_state_manager
         self.update_tag_viewer_callback = update_tag_viewer_callback
+        self.open_structured_report_browser_callback = open_structured_report_browser_callback
         self.display_rois_callback = display_rois_callback
         self.display_measurements_callback = display_measurements_callback
         self.roi_list_panel = roi_list_panel
@@ -796,6 +820,7 @@ class SliceDisplayManager:
             # Always pass window_center/window_width when we have them so the image uses the same
             # (correctly rescaled-converted) values we store and show in the controls. For new series
             # we computed and converted WL above; passing them here ensures one consistent application.
+            no_pixel_placeholder = False
             if image is None:
                 if DEBUG_WL:
                     print(
@@ -817,9 +842,10 @@ class SliceDisplayManager:
                         )
                     # print(f"[DISPLAY] Image conversion complete: {image is not None}")
                     if image is None:
-                        # Image conversion failed - this is already handled by dataset_to_image returning None
-                        # print(f"[DISPLAY] Image is None, returning")
-                        return
+                        # No pixel data (e.g. SR): use a neutral placeholder and continue so metadata /
+                        # tag viewer and overlays still refresh (do not return early).
+                        image = _make_no_pixel_placeholder_pil()
+                        no_pixel_placeholder = True
                 except (MemoryError, ValueError, AttributeError, RuntimeError) as e:
                     # Pixel array access errors during image conversion
                     error_type = type(e).__name__
@@ -855,8 +881,12 @@ class SliceDisplayManager:
             # When preserve_view=True (scrolling), apply_inversion stays None
             # This allows set_image() to detect it's a new slice and store new original_image
             
-            # Apply fusion if enabled
-            if self.fusion_coordinator is not None and image is not None:
+            # Apply fusion if enabled (skip synthetic no-pixel placeholders)
+            if (
+                self.fusion_coordinator is not None
+                and image is not None
+                and not no_pixel_placeholder
+            ):
                 try:
                     # Get base datasets for current series
                     base_datasets = current_studies.get(current_study_uid, {}).get(current_series_uid, [])
@@ -878,6 +908,30 @@ class SliceDisplayManager:
             # print(f"[DISPLAY] Image size: {image.size if image else 'None'}, mode: {image.mode if image else 'None'}")
             # print(f"[DISPLAY] Image id: {id(image) if image else 'None'}")
             # print(f"[DISPLAY] Apply inversion: {apply_inversion}")
+
+            modality = getattr(dataset, "Modality", None) or ""
+            show_sr_bar = bool(
+                no_pixel_placeholder
+                and modality == "SR"
+            )
+            if show_sr_bar and self.open_structured_report_browser_callback is not None:
+
+                def _open_sr_browser_for_current() -> None:
+                    self.open_structured_report_browser_callback(dataset)  # type: ignore[misc]
+
+                self.image_viewer.set_no_pixel_placeholder_bar(
+                    True,
+                    open_callback=_open_sr_browser_for_current,
+                    show_open_button=True,
+                )
+            elif show_sr_bar:
+                self.image_viewer.set_no_pixel_placeholder_bar(
+                    True,
+                    open_callback=None,
+                    show_open_button=False,
+                )
+            else:
+                self.image_viewer.set_no_pixel_placeholder_bar(False)
 
             self.image_viewer.set_image(image, preserve_view=preserve_view, apply_inversion=apply_inversion)
 

@@ -1,6 +1,6 @@
 # Release checklist (semantic versioning)
 
-Use this checklist when cutting a new release so version, changelog, and Git tags stay in sync. The app version is defined in **one place**: `src/version.py` (`__version__`).
+Use this checklist when cutting a new release so version, changelog, and Git tags stay in sync. The app version is defined in **`src/version.py`** (`__version__`); **`CHANGELOG.md`** repeats it in the **Current version** line at the top for readability—keep those two in sync whenever you bump the version.
 
 ## When to bump version
 
@@ -18,6 +18,7 @@ See [dev-docs/info/SEMANTIC_VERSIONING_GUIDE.md](info/SEMANTIC_VERSIONING_GUIDE.
    - Edit `src/version.py` and set `__version__ = "X.Y.Z"` to the new version.
 
 3. **Update CHANGELOG.md**
+   - Update the **Current version** line at the top (next to the intro) so it matches `src/version.py`.
    - Move items from the `[Unreleased]` section into a new `[X.Y.Z] - YYYY-MM-DD` section.
    - Keep an empty `[Unreleased]` section at the top for the next release.
    - Update the compare links at the bottom (add the new tag link and point Unreleased to the new tag).
@@ -45,7 +46,7 @@ See [dev-docs/info/SEMANTIC_VERSIONING_GUIDE.md](info/SEMANTIC_VERSIONING_GUIDE.
 
 | What              | Where to update      |
 |-------------------|----------------------|
-| Version number    | `src/version.py`     |
+| Version number    | `src/version.py` (and **Current version** at top of `CHANGELOG.md`) |
 | Release notes     | `CHANGELOG.md`       |
 | Git tag           | `vX.Y.Z` (must match `__version__`) |
 

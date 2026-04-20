@@ -20,9 +20,10 @@ Requirements:
 import copy
 
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
-                                QPushButton, QListWidget, QListWidgetItem,
-                                QComboBox, QGroupBox, QFormLayout, QDialogButtonBox,
-                                QLineEdit, QMessageBox, QTabWidget, QWidget)
+                                QPushButton, QListWidget,
+                                QComboBox, QGroupBox, QDialogButtonBox,
+                                QLineEdit, QMessageBox, QTabWidget, QWidget,
+                                QSizePolicy)
 from PySide6.QtCore import Qt, Signal
 from typing import Dict, List, Optional
 
@@ -91,9 +92,10 @@ class OverlayConfigDialog(QDialog):
     Dialog for configuring overlay tags per corner and modality.
 
     Features:
-    - Modality selection (tabs or dropdown)
-    - 4 corners with tag selection
-    - Add/remove tags from each corner
+    - Modality selection (dropdown)
+    - Four corners (tabs): per corner, **Simple** and **Detailed-only** tag lists are
+      visible together with buttons to move tags between them, plus a shared
+      available-tag picker
     - Live overlay preview: every tag addition, removal, reorder, or modality
       switch is immediately written to ConfigManager and reflected on the
       overlay while the dialog remains open.
@@ -128,7 +130,9 @@ class OverlayConfigDialog(QDialog):
         self.config_manager = config_manager
         self.setWindowTitle("Overlay Tags Configuration")
         self.setModal(True)
-        self.resize(700, 600)
+        # Wide, short default so the window fits laptop screens; inner lists scroll.
+        self.resize(1240, 480)
+        self.setMinimumSize(880, 380)
 
         # Valid modalities list (alphabetical order, default first)
         valid_modalities = ["default", "CR", "CT", "DX", "MG", "MR", "NM", "PT", "RF", "RT", "US", "XA"]
@@ -141,65 +145,105 @@ class OverlayConfigDialog(QDialog):
 
         # Store tag configurations per modality (working copy, updated on every change)
         self.modality_configs: Dict[str, Dict[str, List[str]]] = {}
+        self.modality_configs_detailed: Dict[str, Dict[str, List[str]]] = {}
 
-        # Per-corner UI references (populated in _create_corner_widget)
+        # Per-corner UI (populated in _create_corner_widget): one shared catalog + dual lists
         self.search_edits: Dict[str, QLineEdit] = {}
         self.available_lists: Dict[str, QListWidget] = {}
         self.selected_lists: Dict[str, QListWidget] = {}
         self.move_up_buttons: Dict[str, QPushButton] = {}
         self.move_down_buttons: Dict[str, QPushButton] = {}
+        self.detailed_selected_lists: Dict[str, QListWidget] = {}
+        self.detailed_move_up_buttons: Dict[str, QPushButton] = {}
+        self.detailed_move_down_buttons: Dict[str, QPushButton] = {}
 
         self._create_ui()
         self._load_configurations()
 
         # Deep-copy snapshot used to revert on Cancel
         self._original_configs: Dict[str, Dict[str, List[str]]] = copy.deepcopy(self.modality_configs)
+        self._original_configs_detailed: Dict[str, Dict[str, List[str]]] = copy.deepcopy(
+            self.modality_configs_detailed
+        )
+        self._original_overlay_mode: str = self.config_manager.get_overlay_mode()
 
         # Set the combo box to the initial modality after loading configurations
         if self.modality_combo.findText(self.current_modality) >= 0:
             self.modality_combo.setCurrentText(self.current_modality)
 
+        self._sync_detail_mode_combo_from_config()
+
     # ------------------------------------------------------------------
     # UI construction
     # ------------------------------------------------------------------
+
+    def _sync_detail_mode_combo_from_config(self) -> None:
+        """Set the detail-level combo from ConfigManager without emitting live updates."""
+        mode = self.config_manager.get_overlay_mode()
+        if mode not in ("minimal", "detailed", "hidden"):
+            mode = "minimal"
+        self.detail_mode_combo.blockSignals(True)
+        for i in range(self.detail_mode_combo.count()):
+            if self.detail_mode_combo.itemData(i) == mode:
+                self.detail_mode_combo.setCurrentIndex(i)
+                break
+        self.detail_mode_combo.blockSignals(False)
+
+    def _on_detail_mode_combo_changed(self, _index: int) -> None:
+        """Persist overlay mode and refresh live preview."""
+        mode = self.detail_mode_combo.currentData()
+        if mode not in ("minimal", "detailed", "hidden"):
+            return
+        self.config_manager.set_overlay_mode(mode)
+        self.config_changed.emit()
 
     def _create_ui(self) -> None:
         """Create the UI components."""
         layout = QVBoxLayout(self)
 
-        # Modality selection
-        modality_layout = QHBoxLayout()
-        modality_label = QLabel("Modality:")
+        # Single compact row: default overlay mode (Space) + modality picker.
+        header_group = QGroupBox("Overlay mode & modality")
+        header_group.setToolTip(
+            "Space cycles Simple → Detailed → Hidden on all views. "
+            "Shift+Space uses the older per-view visibility cycle (focused view only)."
+        )
+        header_row = QHBoxLayout()
+        header_row.addWidget(QLabel("Default (Space):"))
+        self.detail_mode_combo = QComboBox()
+        self.detail_mode_combo.addItem("Simple (fewer tags)", "minimal")
+        self.detail_mode_combo.addItem("Detailed (more tags)", "detailed")
+        self.detail_mode_combo.addItem("Hidden (no corner text)", "hidden")
+        self.detail_mode_combo.currentIndexChanged.connect(self._on_detail_mode_combo_changed)
+        header_row.addWidget(self.detail_mode_combo, 1)
+        header_row.addSpacing(24)
+        header_row.addWidget(QLabel("Modality:"))
         self.modality_combo = QComboBox()
-        # Sort modalities alphabetically, but keep "default" first
         modalities = ["default"] + sorted(["CR", "CT", "DX", "MG", "MR", "NM", "PT", "RF", "RT", "US", "XA"])
         self.modality_combo.addItems(modalities)
         self.modality_combo.currentTextChanged.connect(self._on_modality_changed)
-        modality_layout.addWidget(modality_label)
-        modality_layout.addWidget(self.modality_combo)
-        modality_layout.addStretch()
-        layout.addLayout(modality_layout)
+        header_row.addWidget(self.modality_combo, 1)
+        header_group.setLayout(header_row)
+        layout.addWidget(header_group)
 
-        # Create tab widget for 4 corners
+        tags_help = QLabel(
+            "Corner tabs: catalog at left; Simple and Detailed-only lists share one row. "
+            "→ Detailed / ← Simple move selection. Double-click catalog → Simple."
+        )
+        tags_help.setWordWrap(True)
+        tags_help.setMaximumHeight(42)
+        layout.addWidget(tags_help)
+
         corners_tab = QTabWidget()
-
-        # Upper Left
         self.upper_left_widget = self._create_corner_widget("Upper Left")
         corners_tab.addTab(self.upper_left_widget, "Upper Left")
-
-        # Upper Right
         self.upper_right_widget = self._create_corner_widget("Upper Right")
         corners_tab.addTab(self.upper_right_widget, "Upper Right")
-
-        # Lower Left
         self.lower_left_widget = self._create_corner_widget("Lower Left")
         corners_tab.addTab(self.lower_left_widget, "Lower Left")
-
-        # Lower Right
         self.lower_right_widget = self._create_corner_widget("Lower Right")
         corners_tab.addTab(self.lower_right_widget, "Lower Right")
-
-        layout.addWidget(corners_tab)
+        corners_tab.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        layout.addWidget(corners_tab, 1)
 
         # Buttons
         button_box = QDialogButtonBox(
@@ -209,120 +253,213 @@ class OverlayConfigDialog(QDialog):
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
 
+    def _corner_ui_maps(
+        self, layer: str
+    ) -> tuple[
+        Dict[str, QLineEdit],
+        Dict[str, QListWidget],
+        Dict[str, QListWidget],
+        Dict[str, QPushButton],
+        Dict[str, QPushButton],
+    ]:
+        """Return per-corner UI dicts for the simple list or the detailed-only list."""
+        if layer == "detailed":
+            return (
+                self.search_edits,
+                self.available_lists,
+                self.detailed_selected_lists,
+                self.detailed_move_up_buttons,
+                self.detailed_move_down_buttons,
+            )
+        return (
+            self.search_edits,
+            self.available_lists,
+            self.selected_lists,
+            self.move_up_buttons,
+            self.move_down_buttons,
+        )
+
     def _create_corner_widget(self, corner_name: str) -> QWidget:
         """
-        Create widget for configuring one corner.
-
-        Args:
-            corner_name: Name of the corner
-
-        Returns:
-            Widget with tag selection UI
+        One corner: catalog in a left column; Simple | arrows | Detailed in one row
+        so the tab stays short (lists scroll, fixed max height).
         """
         widget = QWidget()
-        layout = QVBoxLayout(widget)
+        root = QHBoxLayout(widget)
+        root.setSpacing(8)
 
-        # Available tags
-        available_group = QGroupBox("Available Tags")
+        # Fixed-ish catalog column: keeps overall dialog shorter than stacking catalog above lists.
+        list_max_h = 200
+        list_min_h = 120
+
+        available_group = QGroupBox("Catalog")
+        available_group.setMaximumWidth(280)
         available_layout = QVBoxLayout()
 
-        # Search/filter
         search_layout = QHBoxLayout()
         search_label = QLabel("Search:")
         search_edit = QLineEdit()
-        search_edit.setPlaceholderText("Filter tags...")
-        search_edit.textChanged.connect(lambda: self._filter_tags(corner_name))
+        search_edit.setPlaceholderText("Filter…")
+        search_edit.textChanged.connect(lambda _t, cn=corner_name: self._filter_tags(cn))
         search_layout.addWidget(search_label)
         search_layout.addWidget(search_edit)
         available_layout.addLayout(search_layout)
 
         self.search_edits[corner_name] = search_edit
 
-        # Available tags list
         available_list = QListWidget()
         available_list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
+        available_list.setMinimumHeight(list_min_h)
+        available_list.setMaximumHeight(list_max_h)
+        available_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         for tag in COMMON_TAGS:
             available_list.addItem(tag)
         available_list.itemDoubleClicked.connect(
-            lambda item: self._add_tag_to_corner(corner_name, item.text())
+            lambda item, cn=corner_name: self._add_tag_to_corner(cn, item.text(), "simple")
         )
 
         self.available_lists[corner_name] = available_list
 
         available_layout.addWidget(available_list)
+        add_row = QHBoxLayout()
+        add_simple = QPushButton("Add to Simple")
+        add_simple.clicked.connect(lambda _=False, cn=corner_name: self._add_selected_tags(cn, "simple"))
+        add_detailed = QPushButton("Add to Detailed")
+        add_detailed.clicked.connect(
+            lambda _=False, cn=corner_name: self._add_selected_tags(cn, "detailed")
+        )
+        add_row.addWidget(add_simple)
+        add_row.addWidget(add_detailed)
+        available_layout.addLayout(add_row)
         available_group.setLayout(available_layout)
-        layout.addWidget(available_group)
+        root.addWidget(available_group, 0)
 
-        # Buttons
-        button_layout = QHBoxLayout()
-        add_button = QPushButton("Add →")
-        add_button.clicked.connect(
-            lambda: self._add_selected_tags(corner_name)
-        )
-        button_layout.addWidget(add_button)
-        button_layout.addStretch()
-        layout.addLayout(button_layout)
+        dual = QHBoxLayout()
+        dual_wrap = QWidget()
+        dual_wrap.setLayout(dual)
 
-        # Selected tags
-        selected_group = QGroupBox(f"{corner_name} Tags")
-        selected_layout = QVBoxLayout()
+        simple_group = QGroupBox("Simple (minimal mode)")
+        simple_col = QVBoxLayout()
+        simple_list = QListWidget()
+        simple_list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
+        simple_list.setMinimumHeight(list_min_h)
+        simple_list.setMaximumHeight(list_max_h)
+        simple_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.selected_lists[corner_name] = simple_list
+        simple_col.addWidget(simple_list)
+        simple_btns = QHBoxLayout()
+        rm_s = QPushButton("Remove")
+        rm_s.clicked.connect(lambda _=False, cn=corner_name: self._remove_selected_tags(cn, "simple"))
+        mu_s = QPushButton("Move Up")
+        mu_s.clicked.connect(lambda _=False, cn=corner_name: self._move_tag_up(cn, "simple"))
+        md_s = QPushButton("Move Down")
+        md_s.clicked.connect(lambda _=False, cn=corner_name: self._move_tag_down(cn, "simple"))
+        simple_btns.addWidget(rm_s)
+        simple_btns.addWidget(mu_s)
+        simple_btns.addWidget(md_s)
+        simple_col.addLayout(simple_btns)
+        self.move_up_buttons[corner_name] = mu_s
+        self.move_down_buttons[corner_name] = md_s
+        simple_group.setLayout(simple_col)
+        dual.addWidget(simple_group, 1)
 
-        selected_list = QListWidget()
-        selected_list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
+        mid = QVBoxLayout()
+        mid.addStretch(1)
+        to_det = QPushButton("→\nDetailed")
+        to_det.setToolTip("Move selected tags from Simple to Detailed-only (removes from Simple).")
+        to_det.clicked.connect(lambda _=False, cn=corner_name: self._move_selected_simple_to_detailed(cn))
+        mid.addWidget(to_det)
+        to_sim = QPushButton("←\nSimple")
+        to_sim.setToolTip("Move selected tags from Detailed-only to Simple (removes from Detailed).")
+        to_sim.clicked.connect(lambda _=False, cn=corner_name: self._move_selected_detailed_to_simple(cn))
+        mid.addWidget(to_sim)
+        mid.addStretch(2)
+        dual.addLayout(mid)
 
-        self.selected_lists[corner_name] = selected_list
+        det_group = QGroupBox("Detailed only (additional)")
+        det_col = QVBoxLayout()
+        det_list = QListWidget()
+        det_list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
+        det_list.setMinimumHeight(list_min_h)
+        det_list.setMaximumHeight(list_max_h)
+        det_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.detailed_selected_lists[corner_name] = det_list
+        det_col.addWidget(det_list)
+        det_btns = QHBoxLayout()
+        rm_d = QPushButton("Remove")
+        rm_d.clicked.connect(lambda _=False, cn=corner_name: self._remove_selected_tags(cn, "detailed"))
+        mu_d = QPushButton("Move Up")
+        mu_d.clicked.connect(lambda _=False, cn=corner_name: self._move_tag_up(cn, "detailed"))
+        md_d = QPushButton("Move Down")
+        md_d.clicked.connect(lambda _=False, cn=corner_name: self._move_tag_down(cn, "detailed"))
+        det_btns.addWidget(rm_d)
+        det_btns.addWidget(mu_d)
+        det_btns.addWidget(md_d)
+        det_col.addLayout(det_btns)
+        self.detailed_move_up_buttons[corner_name] = mu_d
+        self.detailed_move_down_buttons[corner_name] = md_d
+        det_group.setLayout(det_col)
+        dual.addWidget(det_group, 1)
 
-        selected_layout.addWidget(selected_list)
+        root.addWidget(dual_wrap, 1)
 
-        # Button layout for Remove, Move Up, Move Down
-        button_layout = QHBoxLayout()
-
-        # Remove button
-        remove_button = QPushButton("Remove")
-        remove_button.clicked.connect(
-            lambda: self._remove_selected_tags(corner_name)
-        )
-        button_layout.addWidget(remove_button)
-
-        # Move Up button
-        move_up_button = QPushButton("Move Up")
-        move_up_button.clicked.connect(
-            lambda: self._move_tag_up(corner_name)
-        )
-        button_layout.addWidget(move_up_button)
-
-        # Move Down button
-        move_down_button = QPushButton("Move Down")
-        move_down_button.clicked.connect(
-            lambda: self._move_tag_down(corner_name)
-        )
-        button_layout.addWidget(move_down_button)
-
-        self.move_up_buttons[corner_name] = move_up_button
-        self.move_down_buttons[corner_name] = move_down_button
-
-        selected_layout.addLayout(button_layout)
-
-        # Connect selection changed signal to update button states
-        selected_list.itemSelectionChanged.connect(
-            lambda: self._update_move_buttons_state(corner_name)
-        )
-
-        # Initialize button states
-        self._update_move_buttons_state(corner_name)
-
-        selected_group.setLayout(selected_layout)
-        layout.addWidget(selected_group)
+        sel_changed = lambda cn=corner_name: self._on_corner_selection_changed(cn)
+        simple_list.itemSelectionChanged.connect(sel_changed)
+        det_list.itemSelectionChanged.connect(sel_changed)
+        self._on_corner_selection_changed(corner_name)
 
         return widget
+
+    def _on_corner_selection_changed(self, corner_name: str) -> None:
+        """Refresh move up/down for both lists when selection changes in either."""
+        self._update_move_buttons_state(corner_name, "simple")
+        self._update_move_buttons_state(corner_name, "detailed")
+
+    def _move_selected_simple_to_detailed(self, corner_name: str) -> None:
+        """Remove selected from Simple and append to Detailed if not already there."""
+        if corner_name not in self.selected_lists or corner_name not in self.detailed_selected_lists:
+            return
+        src = self.selected_lists[corner_name]
+        dst = self.detailed_selected_lists[corner_name]
+        existing_dst = {dst.item(i).text() for i in range(dst.count())}
+        tags = [item.text() for item in src.selectedItems()]
+        if not tags:
+            return
+        for item in list(src.selectedItems()):
+            src.takeItem(src.row(item))
+        for tag in tags:
+            if tag not in existing_dst:
+                dst.addItem(tag)
+                existing_dst.add(tag)
+        self._on_corner_selection_changed(corner_name)
+        self._on_live_update()
+
+    def _move_selected_detailed_to_simple(self, corner_name: str) -> None:
+        """Remove selected from Detailed and append to Simple if not already there."""
+        if corner_name not in self.selected_lists or corner_name not in self.detailed_selected_lists:
+            return
+        dst = self.selected_lists[corner_name]
+        src = self.detailed_selected_lists[corner_name]
+        existing_dst = {dst.item(i).text() for i in range(dst.count())}
+        tags = [item.text() for item in src.selectedItems()]
+        if not tags:
+            return
+        for item in list(src.selectedItems()):
+            src.takeItem(src.row(item))
+        for tag in tags:
+            if tag not in existing_dst:
+                dst.addItem(tag)
+                existing_dst.add(tag)
+        self._on_corner_selection_changed(corner_name)
+        self._on_live_update()
 
     # ------------------------------------------------------------------
     # Tag list helpers
     # ------------------------------------------------------------------
 
     def _filter_tags(self, corner_name: str) -> None:
-        """Filter available tags based on search text."""
-        if corner_name not in self.available_lists:
+        """Filter the shared available-tag catalog for this corner."""
+        if corner_name not in self.available_lists or corner_name not in self.search_edits:
             return
 
         search_text = self.search_edits[corner_name].text().lower()
@@ -335,13 +472,14 @@ class OverlayConfigDialog(QDialog):
             else:
                 item.setHidden(True)
 
-    def _add_selected_tags(self, corner_name: str) -> None:
+    def _add_selected_tags(self, corner_name: str, layer: str = "simple") -> None:
         """Add selected tags from available list to corner."""
-        if corner_name not in self.available_lists or corner_name not in self.selected_lists:
+        _se, al, sl, _mu, _md = self._corner_ui_maps(layer)
+        if corner_name not in al or corner_name not in sl:
             return
 
-        available_list = self.available_lists[corner_name]
-        selected_list = self.selected_lists[corner_name]
+        available_list = al[corner_name]
+        selected_list = sl[corner_name]
 
         added = False
         for item in available_list.selectedItems():
@@ -354,23 +492,25 @@ class OverlayConfigDialog(QDialog):
         if added:
             self._on_live_update()
 
-    def _add_tag_to_corner(self, corner_name: str, tag: str) -> None:
+    def _add_tag_to_corner(self, corner_name: str, tag: str, layer: str = "simple") -> None:
         """Add a tag to corner (double-click handler)."""
-        if corner_name not in self.selected_lists:
+        _se, _al, sl, _mu, _md = self._corner_ui_maps(layer)
+        if corner_name not in sl:
             return
 
-        selected_list = self.selected_lists[corner_name]
+        selected_list = sl[corner_name]
         existing = [selected_list.item(i).text() for i in range(selected_list.count())]
         if tag not in existing:
             selected_list.addItem(tag)
             self._on_live_update()
 
-    def _remove_selected_tags(self, corner_name: str) -> None:
+    def _remove_selected_tags(self, corner_name: str, layer: str = "simple") -> None:
         """Remove selected tags from corner."""
-        if corner_name not in self.selected_lists:
+        _se, _al, sl, _mu, _md = self._corner_ui_maps(layer)
+        if corner_name not in sl:
             return
 
-        selected_list = self.selected_lists[corner_name]
+        selected_list = sl[corner_name]
         items_to_remove = selected_list.selectedItems()
         if not items_to_remove:
             return
@@ -380,12 +520,13 @@ class OverlayConfigDialog(QDialog):
 
         self._on_live_update()
 
-    def _move_tag_up(self, corner_name: str) -> None:
+    def _move_tag_up(self, corner_name: str, layer: str = "simple") -> None:
         """Move selected tags up by one position in the corner's list."""
-        if corner_name not in self.selected_lists:
+        _se, _al, sl, _mu, _md = self._corner_ui_maps(layer)
+        if corner_name not in sl:
             return
 
-        selected_list = self.selected_lists[corner_name]
+        selected_list = sl[corner_name]
         selected_items = selected_list.selectedItems()
 
         if not selected_items:
@@ -413,15 +554,16 @@ class OverlayConfigDialog(QDialog):
             if item.text() in selected_texts:
                 item.setSelected(True)
 
-        self._update_move_buttons_state(corner_name)
+        self._update_move_buttons_state(corner_name, layer)
         self._on_live_update()
 
-    def _move_tag_down(self, corner_name: str) -> None:
+    def _move_tag_down(self, corner_name: str, layer: str = "simple") -> None:
         """Move selected tags down by one position in the corner's list."""
-        if corner_name not in self.selected_lists:
+        _se, _al, sl, _mu, _md = self._corner_ui_maps(layer)
+        if corner_name not in sl:
             return
 
-        selected_list = self.selected_lists[corner_name]
+        selected_list = sl[corner_name]
         selected_items = selected_list.selectedItems()
 
         if not selected_items:
@@ -450,19 +592,20 @@ class OverlayConfigDialog(QDialog):
             if item.text() in selected_texts:
                 item.setSelected(True)
 
-        self._update_move_buttons_state(corner_name)
+        self._update_move_buttons_state(corner_name, layer)
         self._on_live_update()
 
-    def _update_move_buttons_state(self, corner_name: str) -> None:
+    def _update_move_buttons_state(self, corner_name: str, layer: str = "simple") -> None:
         """Update enabled state of Move Up/Down buttons based on selection."""
-        if corner_name not in self.selected_lists:
+        _se, _al, sl, mu, md = self._corner_ui_maps(layer)
+        if corner_name not in sl:
             return
 
-        selected_list = self.selected_lists[corner_name]
+        selected_list = sl[corner_name]
         selected_items = selected_list.selectedItems()
 
-        move_up_button = self.move_up_buttons.get(corner_name)
-        move_down_button = self.move_down_buttons.get(corner_name)
+        move_up_button = mu.get(corner_name)
+        move_down_button = md.get(corner_name)
 
         if not move_up_button or not move_down_button:
             return
@@ -486,61 +629,82 @@ class OverlayConfigDialog(QDialog):
 
     def _on_modality_changed(self, modality: str) -> None:
         """Save current modality config to memory + config, then load the new one."""
-        self._save_current_modality_config()
+        self._save_current_modality_config("simple")
+        self._save_current_modality_config("detailed")
         self.current_modality = modality
-        self._load_modality_config(modality)
-        # Emit live update so the overlay shows the correct modality's tags
+        self._load_modality_config(modality, "simple")
+        self._load_modality_config(modality, "detailed")
         self._commit_current_modality_to_config()
+        self._commit_current_modality_detailed_to_config()
         self.config_changed.emit()
 
-    def _save_current_modality_config(self) -> None:
-        """Save current modality configuration to in-memory dict."""
+    def _save_current_modality_config(self, layer: str = "simple") -> None:
+        """Save current modality configuration to the in-memory dict for *layer*."""
+        _se, _al, sl, _mu, _md = self._corner_ui_maps(layer)
         config = {
-            "upper_left": [self.selected_lists["Upper Left"].item(i).text()
-                          for i in range(self.selected_lists["Upper Left"].count())],
-            "upper_right": [self.selected_lists["Upper Right"].item(i).text()
-                           for i in range(self.selected_lists["Upper Right"].count())],
-            "lower_left": [self.selected_lists["Lower Left"].item(i).text()
-                          for i in range(self.selected_lists["Lower Left"].count())],
-            "lower_right": [self.selected_lists["Lower Right"].item(i).text()
-                           for i in range(self.selected_lists["Lower Right"].count())]
+            "upper_left": [sl["Upper Left"].item(i).text() for i in range(sl["Upper Left"].count())],
+            "upper_right": [sl["Upper Right"].item(i).text() for i in range(sl["Upper Right"].count())],
+            "lower_left": [sl["Lower Left"].item(i).text() for i in range(sl["Lower Left"].count())],
+            "lower_right": [sl["Lower Right"].item(i).text() for i in range(sl["Lower Right"].count())],
         }
-        self.modality_configs[self.current_modality] = config
+        if layer == "detailed":
+            self.modality_configs_detailed[self.current_modality] = config
+        else:
+            self.modality_configs[self.current_modality] = config
 
     def _commit_current_modality_to_config(self) -> None:
-        """Write the current modality's in-memory config to ConfigManager."""
+        """Write the current modality's in-memory simple tags to ConfigManager."""
         if self.current_modality in self.modality_configs:
             self.config_manager.set_overlay_tags(
                 self.current_modality, self.modality_configs[self.current_modality]
             )
 
-    def _load_modality_config(self, modality: str) -> None:
+    def _commit_current_modality_detailed_to_config(self) -> None:
+        """Write the current modality's detailed-extra tags to ConfigManager."""
+        if self.current_modality in self.modality_configs_detailed:
+            self.config_manager.set_overlay_tags_detailed_extra(
+                self.current_modality, self.modality_configs_detailed[self.current_modality]
+            )
+
+    def _load_modality_config(self, modality: str, layer: str = "simple") -> None:
         """Load modality configuration from memory (if available) or config manager."""
-        if modality in self.modality_configs:
-            corner_tags = self.modality_configs[modality]
+        if layer == "detailed":
+            if modality in self.modality_configs_detailed:
+                corner_tags = self.modality_configs_detailed[modality]
+            else:
+                corner_tags = self.config_manager.get_overlay_tags_detailed_extra(modality)
+            lists = self.detailed_selected_lists
         else:
-            corner_tags = self.config_manager.get_overlay_tags(modality)
+            if modality in self.modality_configs:
+                corner_tags = self.modality_configs[modality]
+            else:
+                corner_tags = self.config_manager.get_overlay_tags(modality)
+            lists = self.selected_lists
 
         for corner_name, corner_key in [
             ("Upper Left", "upper_left"),
             ("Upper Right", "upper_right"),
             ("Lower Left", "lower_left"),
-            ("Lower Right", "lower_right")
+            ("Lower Right", "lower_right"),
         ]:
-            if corner_name in self.selected_lists:
-                selected_list = self.selected_lists[corner_name]
+            if corner_name in lists:
+                selected_list = lists[corner_name]
                 selected_list.clear()
                 for tag in corner_tags.get(corner_key, []):
                     selected_list.addItem(tag)
-                self._update_move_buttons_state(corner_name)
+                self._update_move_buttons_state(corner_name, layer)
 
     def _load_configurations(self) -> None:
         """Load all configurations from config manager into memory."""
         modalities = ["default"] + sorted(["CR", "CT", "DX", "MG", "MR", "NM", "PT", "RF", "RT", "US", "XA"])
         for modality in modalities:
             self.modality_configs[modality] = self.config_manager.get_overlay_tags(modality)
+            self.modality_configs_detailed[modality] = (
+                self.config_manager.get_overlay_tags_detailed_extra(modality)
+            )
 
-        self._load_modality_config(self.current_modality)
+        self._load_modality_config(self.current_modality, "simple")
+        self._load_modality_config(self.current_modality, "detailed")
 
     # ------------------------------------------------------------------
     # Live preview
@@ -548,12 +712,13 @@ class OverlayConfigDialog(QDialog):
 
     def _on_live_update(self) -> None:
         """
-        Persist the current modality config and emit config_changed for live preview.
-
-        Called after every tag addition, removal, or reorder.
+        Persist both Simple and Detailed-only lists for the current modality and
+        emit config_changed for live preview.
         """
-        self._save_current_modality_config()
+        self._save_current_modality_config("simple")
+        self._save_current_modality_config("detailed")
         self._commit_current_modality_to_config()
+        self._commit_current_modality_detailed_to_config()
         self.config_changed.emit()
 
     # ------------------------------------------------------------------
@@ -562,11 +727,13 @@ class OverlayConfigDialog(QDialog):
 
     def _apply_configuration(self) -> None:
         """Save all modality configs to ConfigManager, emit config_applied, and close."""
-        # Flush the currently visible modality before saving everything
-        self._save_current_modality_config()
+        self._save_current_modality_config("simple")
+        self._save_current_modality_config("detailed")
 
         for modality, config in self.modality_configs.items():
             self.config_manager.set_overlay_tags(modality, config)
+        for modality, config in self.modality_configs_detailed.items():
+            self.config_manager.set_overlay_tags_detailed_extra(modality, config)
 
         self.config_applied.emit()
         self.accept()
@@ -575,5 +742,8 @@ class OverlayConfigDialog(QDialog):
         """Restore all modalities to their original values on Cancel."""
         for modality, config in self._original_configs.items():
             self.config_manager.set_overlay_tags(modality, config)
+        for modality, config in self._original_configs_detailed.items():
+            self.config_manager.set_overlay_tags_detailed_extra(modality, config)
+        self.config_manager.set_overlay_mode(self._original_overlay_mode)
         self.config_changed.emit()
         super().reject()

@@ -31,12 +31,16 @@ From project root, after activation:
 
 If no venv exists, create one, for example `python -m venv venv` or `python -m venv .venv`, activate it, then `pip install -r requirements.txt`.
 
+**Cine video export:** **`requirements.txt`** pins **`imageio`** + **`imageio-ffmpeg`**. The latter vendors a **FFmpeg** binary (typical stack includes **LGPL**/**GPL**-licensed components). PyInstaller / frozen builds should follow FFmpeg license obligations (attribution, source offers where required). **`IMAGEIO_FFMPEG_EXE`** can point to a system FFmpeg instead of the wheel binary if you document that path for your deployment. Exports include **GIF**, **AVI** / **MP4** (**MPEG-4 Part 2**, not H.264 by default) and **MPG** (MPEG-2 program stream); on **Windows 11 Media Player**, **`.mp4`** is the most reliable choice without the Store **MPEG-2 Video Extension** that **`.mpg`** often needs.
+
+**Third-party license inventory:** Maintain a rolling checklist of bundled Python packages, vendored binaries (e.g. FFmpeg), and **`resources/fonts/`** in **`dev-docs/info/BUNDLED_PACKAGES_AND_FONTS_LICENSES.md`** (update when pins, PyInstaller `datas`, or fonts change).
+
 Optional for contributors: `pip install -r requirements-dev.txt` adds local Python security scanners (semgrep, detect-secrets). Install TruffleHog v3 separately via `powershell -ExecutionPolicy Bypass -File .\scripts\install-trufflehog-v3.ps1 -AddToUserPath` so local scans align with CI's TruffleHog v3 action/binary line.
 
 ## Other conventions
 
 - See `.cursor/rules` and user rules. Before major refactors only, backup files before changing. Do not proceed with edits until the backup is verified (e.g. file exists and has content) or the user has been asked. **Refactor backups:** copy prior versions into **`backups/`** with an **ISO-like date** in the name when practical (e.g. ``.YYYYMMDD-HHMMSS.bak`` or ``_YYYYMMDD_``) so **untracked** copies carry an obvious intent age; see `scripts/git-hook-prune-backups.py`.
-- **Local Git hooks** (see `dev-docs/DEVELOPER_SETUP.md`): installed `pre-commit` prunes **`backups/`** on **`main`** and **`WIP`** using **intent age** (strictly older than **3** days): **tracked** paths use **last Git commit** touching the file; **untracked** paths use the **newer** of embedded **`YYYYMMDD`** (in the path) and **mtime** (see script). Removals are staged with **`git add -u -- backups`**; then the **`main`** security gate runs as before.
+- **Local Git hooks** (see `dev-docs/DEVELOPER_SETUP.md`): installed `pre-commit` prunes **`backups/`** on **`main`** and **`WIP`** by **intent** (`scripts/git-hook-prune-backups.py --days 3 --max-commits 10`): **tracked** paths are removed if **more than 10 commits** have landed since the last commit that touched the file **or** (when **more than 10** commits hit the branch in the last **3** days) the touch time is **strictly older than 3 days**; **untracked** paths use the **older** of embedded **`YYYYMMDD`** and **mtime**, removed when that intent is **strictly older than 3 days**. Removals are staged with **`git add -u -- backups`**; then the **`main`** **pre-commit** hook runs a **light** security check (debug flags + **detect-secrets** on **staged** files only via `scripts/run_security_scan.py --pre-commit`). A **full** scan (`--all`) runs on **pre-push** to `main`. Set **`DICOMVIEWER_PRECOMMIT_FULL_SECURITY_SCAN=1`** to force the full suite on pre-commit.
 - **Multi-agent orchestration:** Subagents (`/orchestrator`, `/planner`, `/coder`, …) are invoked via the **Task** tool. **Default `CHAIN_MODE` is `autonomous`:** the **primary agent** chains **`Task(orchestrator)`** after **each** non-orchestrator specialist until **complete** / **blocked** / **`needs_user`** / guard limits, unless **`plans/orchestration-state.md`** sets **`## Chain mode`** to **`step`** or the user asks for single-step mode—see **`.cursor/rules/orchestration-auto-chain.mdc`** and **`.claude/skills/team-orchestration-delegation/SKILL.md`**. After **`Task(orchestrator)`**, also chain **`NEXT_TASK_TOOL`** when not `none`. The orchestrator must end with **`NEXT_TASK_TOOL:`** / **`NEXT_TASK_TOOL_SECOND:`** (see **`.claude/agents/orchestrator.md`**); parallel **`SECOND`** only when the skill’s checklist passes. For **`medium`/`high`** **Risk tier**, orchestrator policy includes a **batch `tester`** run at **slice end** and **Suggested manual smoke** when UX changed (see **`test-ledger-runner`** skill). **Run packet:** **`dev-docs/orchestration/RUN_PACKET_TEMPLATE.md`**.
 - **Long-running commands (agents / automation):** When type-checking large trees (`pyright` on all of `src/`), running the full test suite, or similar heavy work, use a **conservative timeout on the order of 10 minutes** (e.g. 600000 ms where the tool measures wait time) so runs are not cut off on slower machines. Shorter limits remain fine for single-file checks or quick smoke steps.
 - Project layout: `src/` (application), `tests/` (tests; run instructions in **`tests/README.md`**), `user-docs/` (user guide hub **`USER_GUIDE.md`**), `dev-docs/` (plans, assessments).
@@ -72,10 +76,15 @@ src/
 │   ├── slice_display_pixels.py        # Intensity projection → PIL pipeline (used by SliceDisplayManager)
 │   ├── direction_labels.py            # Patient LPS direction strings from ImageOrientationPatient (viewer edge labels; tests in tests/test_direction_labels.py)
 │   ├── dicom_parser.py                # Dataset metadata: get_all_tags (iterall + optional export catalog merge)
+│   ├── sr_sop_classes.py              # SR storage SOP class registry; ``is_structured_report_dataset``
+│   ├── sr_document_tree.py            # Generic SR ``ContentSequence`` tree builder + JSON export helper
+│   ├── sr_concept_identity.py         # SR coded-concept normalization (designator fold, LongCodeValue) for dose-event matching
+│   ├── rdsr_dose_sr.py                # Radiation dose SR detection + CT summary walk; uses ``sr_concept_identity`` for concept codes
+│   ├── rdsr_irradiation_events.py     # RDSR irradiation event rows (PS3.16 **113706** / **113819** containers)
 │   ├── tag_export_catalog.py          # Curated standard tags for Export DICOM Tags picker; synthetic_tag_export_tree_entry for preset-only rows missing from the file union
 │   ├── tag_export_union.py            # union_tags_across_datasets (merged tag map); separate from catalog to avoid a dicom_parser ↔ catalog import cycle for static analysis
 │   └── tag_export_writer.py           # Tag export file writers: Excel, CSV, UTF-8 tab-separated text (shared row builder)
-├── gui/                           # All Qt widgets, dialogs, layout; e.g. overlay_items_factory, series_navigator_view (thumbnails), series_navigator_model (labels/instance entries), main_window_*_builder (menus/toolbar); **`dialogs/tag_export_union_worker.py`** — background tag-union for Export DICOM Tags ( **`DICOMViewerApp._schedule_tag_export_union_rebuild`** )
+├── gui/                           # All Qt widgets, dialogs, layout; e.g. overlay_items_factory, series_navigator_view (thumbnails), series_navigator_model (labels/instance entries), main_window_*_builder (menus/toolbar); **`dialogs/tag_export_union_worker.py`** — background tag-union for Export DICOM Tags ( **`DICOMViewerApp._schedule_tag_export_union_rebuild`** ); **`dialogs/structured_report_browser_dialog.py`** — modeless SR tree + dose events + exports (**Tools → Structured Report…**)
 │   ├── metadata_table_model.py    # Metadata panel tree delegate + tag filter/group/value helpers (Phase 5D; `metadata_panel.py` wires UI)
 │   └── dialogs/mri_compare_result_dialog.py  # ACR MRI compare-results table + JSON/PDF actions; `qa_app_facade` wires callbacks (Phase 5E)
 ├── tools/                         # Interactive tools (ROI, measurement, annotation, crosshair)
@@ -89,7 +98,7 @@ src/
         ├── __init__.py
         ├── paths_config.py        # last_path, last_export_path, last_pylinac_output_path, recent_files, normalize_path
         ├── display_config.py      # theme, smooth_image_when_zoomed, privacy_view, scroll_wheel_mode
-        ├── overlay_config.py      # overlay mode/visibility/font/tags, get_all_modalities
+        ├── overlay_config.py      # overlay mode/visibility/font/tags + overlay_tags_detailed_extra (Detailed-only corner tags), get_all_modalities
         ├── layout_config.py       # multi_window_layout, view_slot_order
         ├── roi_config.py          # ROI font/line/default_visible_statistics
         ├── measurement_config.py  # measurement font/line

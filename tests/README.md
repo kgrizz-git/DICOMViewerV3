@@ -46,7 +46,7 @@ python tests/run_tests.py --unittest
 
 | Area | Path | Notes |
 |------|------|--------|
-| Root tests | `tests/test_*.py` | Parser, loader, export, MPR, pylinac extent, etc. |
+| Root tests | `tests/test_*.py` | Parser, loader, export, MPR, pylinac extent, SR document tree (`test_sr_document_tree.py`), etc. |
 | Config mixins | `tests/config/` | Display, layout, ROI, paths, … |
 | Metadata | `tests/metadata/` | Metadata controller |
 | ROI | `tests/roi/` | ROI / measurement controller |

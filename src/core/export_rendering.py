@@ -785,18 +785,42 @@ def render_overlays_and_rois(
                 measurement_font_size_setting, width, height, anno_scale
             )
             measurement_line_thickness = max(2, measurement_line_thickness)
+            from tools.angle_measurement_items import AngleMeasurementItem
+
             for measurement in measurements:
-                start_x = int(measurement.start_point.x() * coordinate_scale)
-                start_y = int(measurement.start_point.y() * coordinate_scale)
-                end_x = int((measurement.start_point.x() + measurement.end_relative.x()) * coordinate_scale)
-                end_y = int((measurement.start_point.y() + measurement.end_relative.y()) * coordinate_scale)
-                draw.line(
-                    [(start_x, start_y), (end_x, end_y)],
-                    fill=measurement_line_color,
-                    width=measurement_line_thickness,
-                )
-                mid_x = int((start_x + end_x) / 2)
-                mid_y = int((start_y + end_y) / 2)
+                if isinstance(measurement, AngleMeasurementItem):
+                    ax1 = int(measurement.p1.x() * coordinate_scale)
+                    ay1 = int(measurement.p1.y() * coordinate_scale)
+                    ax2 = int(measurement.p2.x() * coordinate_scale)
+                    ay2 = int(measurement.p2.y() * coordinate_scale)
+                    ax3 = int(measurement.p3.x() * coordinate_scale)
+                    ay3 = int(measurement.p3.y() * coordinate_scale)
+                    draw.line(
+                        [(ax1, ay1), (ax2, ay2)],
+                        fill=measurement_line_color,
+                        width=measurement_line_thickness,
+                    )
+                    draw.line(
+                        [(ax2, ay2), (ax3, ay3)],
+                        fill=measurement_line_color,
+                        width=measurement_line_thickness,
+                    )
+                    mid_x = int((ax1 + ax2 + ax3) / 3)
+                    mid_y = int((ay1 + ay2 + ay3) / 3)
+                    label = measurement.angle_formatted
+                else:
+                    start_x = int(measurement.start_point.x() * coordinate_scale)
+                    start_y = int(measurement.start_point.y() * coordinate_scale)
+                    end_x = int((measurement.start_point.x() + measurement.end_relative.x()) * coordinate_scale)
+                    end_y = int((measurement.start_point.y() + measurement.end_relative.y()) * coordinate_scale)
+                    draw.line(
+                        [(start_x, start_y), (end_x, end_y)],
+                        fill=measurement_line_color,
+                        width=measurement_line_thickness,
+                    )
+                    mid_x = int((start_x + end_x) / 2)
+                    mid_y = int((start_y + end_y) / 2)
+                    label = measurement.distance_formatted
                 _meas_font_family = config_manager.get_measurement_font_family() if config_manager else "IBM Plex Sans"
                 _meas_font_variant = config_manager.get_measurement_font_variant() if config_manager else "Bold"
                 measurement_font = _load_font_with_fallback(
@@ -807,7 +831,7 @@ def render_overlays_and_rois(
                 if measurement_font:
                     draw.text(
                         (mid_x, mid_y),
-                        measurement.distance_formatted,
+                        label,
                         fill=measurement_font_color,
                         font=measurement_font,
                     )

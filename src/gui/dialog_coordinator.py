@@ -297,9 +297,9 @@ class DialogCoordinator:
         )
         dialog.exec()
 
-    def open_export_screenshots(self, subwindows: List[Any]) -> None:
+    def open_export_screenshots(self, subwindows: List[Any], multi_window_layout: Optional[Any] = None) -> None:
         """
-        Open Export Screenshots dialog. One file per selected subwindow (viewport grab).
+        Open Export Screenshots dialog (per-view, composite grid, or full main window).
         """
         if not subwindows:
             QMessageBox.warning(
@@ -311,6 +311,7 @@ class DialogCoordinator:
         dialog = ScreenshotExportDialog(
             subwindows,
             config_manager=self.config_manager,
+            multi_window_layout=multi_window_layout,
             parent=self.main_window
         )
         dialog.exec()
@@ -453,4 +454,32 @@ class DialogCoordinator:
         """
         if self.about_this_file_dialog is not None and self.about_this_file_dialog.isVisible():
             self.about_this_file_dialog.update_file_info(current_dataset, file_path)
+
+    def open_structured_report_browser(
+        self,
+        dataset: Dataset,
+        *,
+        get_privacy_enabled: Callable[[], bool],
+        open_tag_viewer_callback: Optional[Callable[[Dataset], None]] = None,
+    ) -> None:
+        """
+        Open the modeless Structured Report browser (document tree, dose events, exports).
+
+        Args:
+            dataset: SR DICOM dataset to display.
+            get_privacy_enabled: Callable returning whether privacy mode is on (for masking).
+            open_tag_viewer_callback: Optional ``(ds,)`` to open the full tag viewer from the Raw tags tab.
+        """
+        from gui.dialogs.structured_report_browser_dialog import StructuredReportBrowserDialog
+
+        dlg = StructuredReportBrowserDialog(
+            self.main_window,
+            dataset,
+            get_privacy_enabled=get_privacy_enabled,
+            main_window=self.main_window,
+            open_tag_viewer_callback=open_tag_viewer_callback,
+        )
+        dlg.show()
+        dlg.raise_()
+        dlg.activateWindow()
 

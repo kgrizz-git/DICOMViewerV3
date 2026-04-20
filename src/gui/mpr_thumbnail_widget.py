@@ -11,7 +11,9 @@ Inputs:
     dot_color (str): Hex color for the subwindow digit in the top-right corner.
 
 Outputs:
-    - Visual thumbnail with MPR badge and subwindow number tint.
+    - Visual thumbnail with MPR badge, optional bottom-left slice count (same
+      rules as series thumbnails for View → slice/frame count badge), and
+      subwindow number tint.
     - clicked(int) signal: emitted with subwindow_index on left-click.
     - drag_started(int) signal: emitted when a drag begins.
     - Drag MIME type ``application/x-dv3-mpr-assign`` with source subwindow
@@ -56,6 +58,8 @@ class MprThumbnailWidget(QWidget):
     Displays a preview of the current MPR plane with:
     - A dark background when no preview image is available.
     - An ``MPR`` badge in the top-left corner.
+    - Optional bottom-left slice count when ``set_slice_count`` is used (honours
+      ``set_show_slice_frame_count_badge``, matching ``SeriesThumbnail``).
     - A very small colored window number in the top-right (same colors as
       series navigator slot indicators).
 
@@ -86,6 +90,10 @@ class MprThumbnailWidget(QWidget):
         )
         self._drag_start_pos: Optional[QPoint] = None
         self._img_bytes_ref: Optional[bytes] = None
+        # MPR stack depth for navigator badge (None = unknown / do not paint).
+        self._slice_count: Optional[int] = None
+        # Align with SeriesThumbnail / View → Show Slice/Frame Count on Navigator.
+        self._show_slice_frame_count_badge: bool = True
 
         self.setFixedSize(self.THUMBNAIL_SIZE, self.THUMBNAIL_SIZE)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -181,6 +189,41 @@ class MprThumbnailWidget(QWidget):
 
         self.update()
 
+    def set_slice_count(self, count: Optional[int]) -> None:
+        """
+        Set the number of planes in the MPR stack for the bottom-left badge.
+
+        Args:
+            count: Total MPR slices (``MprResult.n_slices``), or None to hide
+                   the count until a value is provided again.
+        """
+        if count is None:
+            self._slice_count = None
+        else:
+            try:
+                n = int(count)
+            except (TypeError, ValueError):
+                self._slice_count = None
+            else:
+                self._slice_count = n if n > 0 else None
+        self.update()
+
+    def set_show_slice_frame_count_badge(self, show: bool) -> None:
+        """Match series thumbnails: when False, show count only if slices > 1."""
+        self._show_slice_frame_count_badge = bool(show)
+        self.update()
+
+    def _slice_count_badge_text(self) -> str:
+        """Compact slice count string; empty when the badge should not paint."""
+        n = self._slice_count
+        if n is None or n <= 0:
+            return ""
+        if self._show_slice_frame_count_badge:
+            return str(n)
+        if n > 1:
+            return str(n)
+        return ""
+
     def set_dot_color(self, color: str) -> None:
         """
         Update the color used for the subwindow number in the top-right corner.
@@ -225,6 +268,28 @@ class MprThumbnailWidget(QWidget):
 
         painter.setPen(QColor(255, 200, 50))
         painter.drawText(badge_rect, Qt.AlignmentFlag.AlignCenter, badge_text)
+
+        indicator_text = self._slice_count_badge_text()
+        if indicator_text:
+            indicator_font = QFont()
+            indicator_font.setBold(True)
+            indicator_font.setPointSize(7)
+            painter.setFont(indicator_font)
+            fm = painter.fontMetrics()
+            text_w = fm.horizontalAdvance(indicator_text)
+            text_h = fm.height()
+            padding = 3
+            bottom_left = self.rect().bottomLeft()
+            x = int(bottom_left.x()) + padding
+            y_bottom = int(bottom_left.y()) - padding
+            text_rect = QRect(x, y_bottom - text_h, text_w, text_h)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.setPen(QColor(255, 255, 0))
+            painter.drawText(
+                text_rect,
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom,
+                indicator_text,
+            )
 
         # Subwindow number — top-right (detached MPR: no digit).
         if self._subwindow_index >= 0:

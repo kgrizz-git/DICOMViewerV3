@@ -22,6 +22,8 @@ Requirements:
 
 import sys
 import os
+import tempfile
+import threading
 import time
 import inspect
 import warnings
@@ -112,6 +114,13 @@ from core.subwindow_image_viewer_sync import (
 )
 from core.subwindow_manager_factory import build_managers_for_subwindow
 from core.cine_app_facade import CineAppFacade
+from core.cine_video_export import (
+    build_cine_export_frame_indices,
+    cleanup_temp_frame_dir,
+    describe_focused_cine_export_blocker,
+    rasterize_cine_export_frame,
+    safe_remove_partial_output,
+)
 from core.main_app_key_event_filter import dispatch_app_key_event, is_widget_allowed_for_layout_shortcuts
 from core.window_level_preset_handler import apply_window_level_preset
 from gui.dialog_coordinator import DialogCoordinator
@@ -119,6 +128,8 @@ from gui.mouse_mode_handler import MouseModeHandler
 from gui.keyboard_event_handler import KeyboardEventHandler
 from gui.dialogs.tag_export_union_worker import TagExportUnionWorker
 from gui.dialogs.disclaimer_dialog import DisclaimerDialog
+from gui.dialogs.cine_export_dialog import CineExportDialog
+from gui.dialogs.cine_export_encode_thread import CineVideoEncodeThread
 
 # Import fusion components
 from core.fusion_processor import FusionProcessor
@@ -669,6 +680,15 @@ class DICOMViewerApp(QObject):
         if pixel_array is None:
             return
 
+        result = data.get("mpr_result")
+        n_slices: Optional[int] = None
+        if result is not None:
+            try:
+                n_raw = int(getattr(result, "n_slices", 0) or 0)
+                n_slices = n_raw if n_raw > 0 else None
+            except (TypeError, ValueError):
+                n_slices = None
+
         wc: Optional[float] = None
         ww: Optional[float] = None
         wl_controls = getattr(self, "window_level_controls", None)
@@ -688,6 +708,7 @@ class DICOMViewerApp(QObject):
             str(data.get("current_series_uid", "") or ""),
             wc,
             ww,
+            n_slices,
         )
 
     def _clear_mpr_navigator_thumbnail(self, idx: int) -> None:
@@ -725,9 +746,17 @@ class DICOMViewerApp(QObject):
         payload = getattr(self._mpr_controller, "_detached_mpr_payload", None)
         study_uid = ""
         series_uid = ""
+        n_slices: Optional[int] = None
         if isinstance(payload, dict):
             study_uid = str(payload.get("current_study_uid", "") or "")
             series_uid = str(payload.get("current_series_uid", "") or "")
+            res = payload.get("mpr_result")
+            if res is not None:
+                try:
+                    n_raw = int(getattr(res, "n_slices", 0) or 0)
+                    n_slices = n_raw if n_raw > 0 else None
+                except (TypeError, ValueError):
+                    n_slices = None
         wc: Optional[float] = None
         ww: Optional[float] = None
         wl_controls = getattr(self, "window_level_controls", None)
@@ -746,6 +775,7 @@ class DICOMViewerApp(QObject):
             series_uid,
             wc,
             ww,
+            n_slices,
         )
 
     def _on_mpr_detached(self, former_idx: int) -> None:
@@ -1083,6 +1113,8 @@ class DICOMViewerApp(QObject):
             delete_all_rois_callback=self.roi_coordinator.delete_all_rois_current_slice,
             clear_measurements_callback=self.measurement_coordinator.handle_clear_measurements,
             toggle_overlay_callback=self.overlay_coordinator.handle_toggle_overlay,
+            cycle_overlay_detail_callback=self._cycle_overlay_detail_mode,
+            toggle_overlay_visibility_legacy_callback=self.overlay_coordinator.handle_toggle_overlay,
             get_selected_roi=lambda: self.roi_manager.get_selected_roi(),
             delete_roi_callback=self._keyboard_delete_roi,
             delete_measurement_callback=self.measurement_coordinator.handle_measurement_delete_requested,
@@ -1102,6 +1134,7 @@ class DICOMViewerApp(QObject):
                 self, QApplication.focusWidget()
             ),
             open_quick_window_level_callback=self._open_quick_window_level,
+            cancel_angle_draw_callback=self.measurement_coordinator.handle_angle_draw_cancel_requested,
         )
 
     def _keyboard_delete_roi(self, roi: object) -> None:
@@ -2622,6 +2655,287 @@ class DICOMViewerApp(QObject):
         """File → Save MPR as DICOM… — requires focused subwindow in MPR mode."""
         self._mpr_controller.prompt_save_mpr_as_dicom()
 
+    def _open_structured_report_browser(self, subwindow_idx: Optional[int] = None) -> None:
+        """
+        Tools → Structured Report… — open the SR document browser for the focused pane's
+        current dataset when it is a Structured Report (SR storage class or Modality SR).
+        """
+        from core.sr_sop_classes import is_structured_report_dataset
+
+        idx = (
+            subwindow_idx
+            if subwindow_idx is not None
+            else self.get_focused_subwindow_index()
+        )
+        if idx < 0:
+            return
+        data = self.subwindow_data.get(idx, {})
+        if data.get("is_mpr"):
+            QMessageBox.information(
+                self.main_window,
+                "Structured Report",
+                "MPR views do not carry the SR document. Switch to a 2D SR instance.",
+            )
+            return
+        ds = self._get_subwindow_dataset(idx)
+        if ds is None:
+            QMessageBox.information(
+                self.main_window,
+                "Structured Report",
+                "No DICOM file is loaded in this window.",
+            )
+            return
+        if not is_structured_report_dataset(ds):
+            QMessageBox.information(
+                self.main_window,
+                "Structured Report",
+                "The current file is not a Structured Report (SR storage class or Modality SR).",
+            )
+            return
+        self.dialog_coordinator.open_structured_report_browser(
+            ds,
+            get_privacy_enabled=self.config_manager.get_privacy_view,
+            open_tag_viewer_callback=lambda d: self.dialog_coordinator.open_tag_viewer(
+                d, privacy_mode=self.config_manager.get_privacy_view()
+            ),
+        )
+
+    def _on_export_cine_video(self) -> None:
+        """
+        File → Export Cine As… — GIF / AVI / MP4 / MPG for the focused 2D multi-frame pane.
+
+        Renders each frame with the same PIL path as PNG export (not a viewport grab),
+        writes temporary PNGs, then encodes in a ``QThread`` (imageio / FFmpeg, no
+        ``shell=True``). Cancel removes partial output when possible.
+        """
+        blocker = describe_focused_cine_export_blocker(self)
+        if blocker:
+            QMessageBox.information(self.main_window, "Export Cine", blocker)
+            return
+
+        idx = self.get_focused_subwindow_index()
+        data = self.subwindow_data.get(idx, {})
+        study_uid = str(data.get("current_study_uid") or "")
+        series_uid = str(data.get("current_series_uid") or "")
+        studies = self.current_studies
+        if not studies or study_uid not in studies or series_uid not in studies[study_uid]:
+            QMessageBox.warning(self.main_window, "Export Cine", "Series data is not available.")
+            return
+        series_list = studies[study_uid][series_uid]
+        total = len(series_list)
+        if total < 2:
+            QMessageBox.information(self.main_window, "Export Cine", "Not enough frames to export.")
+            return
+
+        fps_default = float(self.cine_player.get_effective_frame_rate())
+        dlg = CineExportDialog(
+            self.main_window,
+            default_fps=fps_default,
+            total_frames=total,
+            loop_start=self.cine_player.loop_start_frame,
+            loop_end=self.cine_player.loop_end_frame,
+        )
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        opts = dlg.build_options()
+        indices = build_cine_export_frame_indices(
+            total,
+            opts.loop_start_frame,
+            opts.loop_end_frame,
+            opts.use_cine_loop_bounds,
+        )
+        if not indices:
+            QMessageBox.warning(self.main_window, "Export Cine", "No frames in the selected range.")
+            return
+
+        ext = "." + opts.video_format.lower()
+        filters = (
+            "GIF Image (*.gif);;AVI Video (*.avi);;MP4 Video (*.mp4);;MPEG Program Stream (*.mpg)"
+        )
+        ds0 = series_list[0]
+        raw_desc = getattr(ds0, "SeriesDescription", None) or "cine_export"
+        stem = str(raw_desc).strip() or "cine_export"
+        for ch in '<>:"/\\|?*':
+            stem = stem.replace(ch, "_")
+        stem = stem[:80]
+        start_dir = self.config_manager.get_last_export_path() or os.getcwd()
+        if os.path.isfile(start_dir):
+            start_dir = os.path.dirname(start_dir)
+        if not start_dir or not os.path.isdir(start_dir):
+            start_dir = os.getcwd()
+        default_path = os.path.join(start_dir, stem + ext)
+        outp = self._export_app_facade.prompt_save_path(
+            "Save Cine Export As",
+            default_path,
+            filters,
+        )
+        if not outp:
+            return
+        base, old_ext = os.path.splitext(outp)
+        if old_ext.lower() != ext:
+            outp = base + ext
+        self.config_manager.set_last_export_path(os.path.dirname(os.path.abspath(outp)))
+
+        managers = self.subwindow_managers.get(idx, {})
+        vsm = managers.get("view_state_manager")
+        sdm = managers.get("slice_display_manager")
+        if (
+            vsm is not None
+            and vsm.current_window_center is not None
+            and vsm.current_window_width is not None
+        ):
+            wl_opt = "current"
+            wc = vsm.current_window_center
+            ww = vsm.current_window_width
+        else:
+            wl_opt = "dataset"
+            wc = None
+            ww = None
+        use_rescaled = bool(getattr(vsm, "use_rescaled_values", False)) if vsm else False
+        proj_en = bool(getattr(sdm, "projection_enabled", False)) if sdm else False
+        proj_ty = str(getattr(sdm, "projection_type", "aip") or "aip") if sdm else "aip"
+        proj_cnt = int(getattr(sdm, "projection_slice_count", 4) or 4) if sdm else 4
+
+        # Match **Export Images**: aggregate annotations from all subwindows when drawing overlays.
+        subwindow_annotation_managers: List[Dict[str, Any]] = []
+        for si in sorted(self.subwindow_managers.keys()):
+            m = self.subwindow_managers[si]
+            subwindow_annotation_managers.append(
+                {
+                    "roi_manager": m.get("roi_manager"),
+                    "measurement_tool": m.get("measurement_tool"),
+                    "text_annotation_tool": m.get("text_annotation_tool"),
+                    "arrow_annotation_tool": m.get("arrow_annotation_tool"),
+                }
+            )
+
+        cancel_event = threading.Event()
+        temp_dir = tempfile.mkdtemp(prefix="dv3_cine_")
+        png_paths: List[Path] = []
+        try:
+            progress = QProgressDialog(
+                "Rendering cine frames…",
+                "Cancel",
+                0,
+                len(indices),
+                self.main_window,
+            )
+            progress.setWindowModality(Qt.WindowModality.WindowModal)
+            progress.setMinimumDuration(0)
+            for step, frame_idx in enumerate(indices):
+                if progress.wasCanceled():
+                    cancel_event.set()
+                    break
+                progress.setValue(step)
+                dataset = series_list[frame_idx]
+                img = rasterize_cine_export_frame(
+                    dataset,
+                    studies,
+                    study_uid,
+                    series_uid,
+                    frame_idx,
+                    total,
+                    wl_opt,
+                    wc,
+                    ww,
+                    opts.include_overlays,
+                    use_rescaled,
+                    managers.get("roi_manager"),
+                    managers.get("overlay_manager"),
+                    managers.get("measurement_tool"),
+                    self.config_manager,
+                    managers.get("text_annotation_tool"),
+                    managers.get("arrow_annotation_tool"),
+                    proj_en,
+                    proj_ty,
+                    proj_cnt,
+                    export_scale=opts.export_scale,
+                    scale_annotations_with_image=False,
+                    subwindow_annotation_managers=subwindow_annotation_managers,
+                )
+                if img is None:
+                    QMessageBox.critical(
+                        self.main_window,
+                        "Export Cine",
+                        f"Failed to rasterize frame {frame_idx + 1} of {total}.",
+                    )
+                    safe_remove_partial_output(outp)
+                    return
+                out_png = Path(temp_dir) / f"f{step:05d}.png"
+                img.save(str(out_png), "PNG")
+                png_paths.append(out_png)
+                QApplication.processEvents()
+
+            progress.setValue(len(indices))
+            progress.close()
+
+            if cancel_event.is_set() or not png_paths:
+                safe_remove_partial_output(outp)
+                return
+
+            progress_enc = QProgressDialog(
+                "Encoding video…",
+                "Cancel",
+                0,
+                0,
+                self.main_window,
+            )
+            progress_enc.setWindowModality(Qt.WindowModality.WindowModal)
+            progress_enc.setMinimumDuration(0)
+            progress_enc.canceled.connect(cancel_event.set)
+            progress_enc.show()
+            QApplication.processEvents()
+
+            enc_thread = CineVideoEncodeThread(
+                png_paths,
+                outp,
+                opts.video_format,
+                opts.fps,
+                cancel_event,
+            )
+            enc_err: List[Optional[str]] = [None]
+
+            def _on_enc_fail(msg: str) -> None:
+                enc_err[0] = msg
+
+            def _on_enc_ok() -> None:
+                if enc_err[0] is None:
+                    enc_err[0] = ""
+
+            enc_loop = QEventLoop()
+            enc_thread.failed.connect(_on_enc_fail)
+            enc_thread.succeeded.connect(_on_enc_ok)
+            enc_thread.finished.connect(enc_loop.quit)
+            enc_thread.start()
+            enc_loop.exec()
+            progress_enc.close()
+            enc_thread.wait(60_000)
+
+            if enc_err[0] is None:
+                QMessageBox.critical(
+                    self.main_window,
+                    "Export Cine",
+                    "Encoding did not complete.",
+                )
+                safe_remove_partial_output(outp)
+            elif enc_err[0] == "":
+                QMessageBox.information(
+                    self.main_window,
+                    "Export Cine",
+                    f"Successfully wrote:\n{outp}",
+                )
+            else:
+                low = enc_err[0].lower()
+                if "cancel" not in low:
+                    QMessageBox.critical(
+                        self.main_window,
+                        "Export Cine",
+                        enc_err[0],
+                    )
+                safe_remove_partial_output(outp)
+        finally:
+            cleanup_temp_frame_dir(temp_dir)
+
     def _resolve_focused_series_ordered_paths(
         self,
     ) -> tuple[str, str, str, list[str], List[Dataset]]:
@@ -2825,8 +3139,41 @@ class DICOMViewerApp(QObject):
         """Handle Import Tag Presets request."""
         self._customization_handlers.import_tag_presets()
 
+    def _sync_all_overlay_managers_from_config(self) -> None:
+        """Apply persisted overlay mode and visibility state to every pane's OverlayManager."""
+        mode = self.config_manager.get_overlay_mode()
+        vis = self.config_manager.get_overlay_visibility_state()
+        for managers in self.subwindow_managers.values():
+            om = managers.get("overlay_manager")
+            if om is not None:
+                om.set_mode(mode)
+                om.set_visibility_state(vis)
+
+    def _cycle_overlay_detail_mode(self) -> None:
+        """
+        Cycle corner overlay detail across all panes: minimal -> detailed -> hidden -> minimal.
+        Persists ``overlay_mode`` and resets legacy visibility state to 0 so measurements stay visible.
+        """
+        order = ("minimal", "detailed", "hidden")
+        cur = self.config_manager.get_overlay_mode()
+        if cur not in order:
+            cur = "minimal"
+        nxt = order[(order.index(cur) + 1) % len(order)]
+        self.config_manager.set_overlay_mode(nxt)
+        self.config_manager.set_overlay_visibility_state(0)
+        for managers in self.subwindow_managers.values():
+            om = managers.get("overlay_manager")
+            if om is not None:
+                om.set_mode(nxt)
+                om.set_visibility_state(0)
+            oc = managers.get("overlay_coordinator")
+            if oc is not None:
+                oc.restore_measurement_and_roi_visibility()
+        self._refresh_overlay_all_subwindows()
+
     def _on_overlay_config_applied(self) -> None:
         """Handle overlay configuration being applied."""
+        self._sync_all_overlay_managers_from_config()
         self._refresh_overlay_all_subwindows()
         self._refresh_slice_sync_group_indicators()
 
@@ -3028,10 +3375,6 @@ class DICOMViewerApp(QObject):
         Handle clear measurements request from toolbar or context menu.
         """
         self.measurement_coordinator.handle_clear_measurements()
-    
-    def _on_toggle_overlay_requested(self) -> None:
-        """Handle toggle overlay request from context menu."""
-        self.overlay_coordinator.handle_toggle_overlay()
     
     def _on_roi_selected(self, roi) -> None:
         """

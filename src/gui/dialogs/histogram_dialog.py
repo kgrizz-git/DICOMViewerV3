@@ -19,7 +19,14 @@ Requirements:
     - DICOMProcessor for pixel array extraction
 """
 
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QHBoxLayout, QPushButton
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QDialog,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+)
 from PySide6.QtCore import Qt, QRect
 from PySide6.QtGui import QResizeEvent, QCloseEvent
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -36,6 +43,9 @@ HistogramSeriesDatasetsFn = Callable[[], Optional[List[Dataset]]]
 HistogramStudiesFn = Callable[[], Optional[Dict[str, Any]]]
 HistogramGeometryFn = Callable[[], Optional[Tuple[int, int, int, int]]]
 HistogramSaveGeometryFn = Callable[[int, int, int, int], None]
+HistogramProjectionPixelsFn = Callable[[], Optional[np.ndarray]]
+HistogramBoolFn = Callable[[], bool]
+HistogramVoidBoolFn = Callable[[bool], None]
 
 
 class HistogramDialog(QDialog):
@@ -64,6 +74,11 @@ class HistogramDialog(QDialog):
         title_suffix: str = "",
         get_restore_geometry: Optional[HistogramGeometryFn] = None,
         save_geometry_callback: Optional[HistogramSaveGeometryFn] = None,
+        get_projection_enabled: Optional[HistogramBoolFn] = None,
+        get_current_pixel_array: Optional[HistogramProjectionPixelsFn] = None,
+        get_projection_pixel_array: Optional[HistogramProjectionPixelsFn] = None,
+        get_histogram_use_projection_pixels: Optional[HistogramBoolFn] = None,
+        set_histogram_use_projection_pixels: Optional[HistogramVoidBoolFn] = None,
     ):
         """
         Initialize the histogram dialog.
@@ -102,6 +117,11 @@ class HistogramDialog(QDialog):
         self.get_series_uid = get_series_uid
         self.get_series_datasets = get_series_datasets
         self.get_all_studies = get_all_studies
+        self.get_projection_enabled = get_projection_enabled
+        self.get_current_pixel_array = get_current_pixel_array
+        self.get_projection_pixel_array = get_projection_pixel_array
+        self.get_histogram_use_projection_pixels = get_histogram_use_projection_pixels
+        self.set_histogram_use_projection_pixels = set_histogram_use_projection_pixels
         self.use_log_scale = False
         self.series_global_frequency_max: Optional[float] = None
         self.series_global_x_min: Optional[float] = None
@@ -223,7 +243,17 @@ class HistogramDialog(QDialog):
         info_layout.addWidget(self.info_label)
         info_layout.addStretch()
         layout.addLayout(info_layout)
-        
+
+        self._projection_checkbox = QCheckBox(
+            "Use intensity projection pixels (matches viewer projection)"
+        )
+        self._projection_checkbox.setToolTip(
+            "When Combine / intensity projection is on for this pane, plot the projected "
+            "pixels instead of the single current slice."
+        )
+        self._projection_checkbox.toggled.connect(self._on_projection_pixels_toggled)
+        layout.addWidget(self._projection_checkbox)
+
         # Histogram widget
         self.histogram_widget = HistogramWidget(self)
         layout.addWidget(self.histogram_widget)
@@ -245,7 +275,12 @@ class HistogramDialog(QDialog):
         controls_layout.addWidget(self.log_scale_button)
         
         layout.addLayout(controls_layout)
-    
+
+    def _on_projection_pixels_toggled(self, checked: bool) -> None:
+        if self.set_histogram_use_projection_pixels is not None:
+            self.set_histogram_use_projection_pixels(bool(checked))
+        self.update_histogram()
+
     def update_histogram(self) -> None:
         """Update the histogram with current image data."""
         if not self.get_current_dataset:
@@ -263,31 +298,67 @@ class HistogramDialog(QDialog):
         if self.get_current_slice_index:
             slice_index = self.get_current_slice_index()
         
-        # Get pixel array for current frame/slice
+        # Get pixel array for current frame/slice (or projection slab when enabled)
         pixel_array = None
-        if is_multiframe(dataset):
-            pixel_array = get_frame_pixel_array(dataset, slice_index)
-        else:
-            pixel_array = DICOMProcessor.get_pixel_array(dataset)
-            # For single-frame, pixel_array might be 2D (height, width) or 3D (frames, height, width)
-            if pixel_array is not None and len(pixel_array.shape) == 3:
-                # Multi-frame but not detected as such, use first frame
-                if slice_index < pixel_array.shape[0]:
-                    pixel_array = pixel_array[slice_index]
-                else:
-                    pixel_array = pixel_array[0]
-        
+        if self.get_current_pixel_array is not None:
+            try:
+                pixel_array = self.get_current_pixel_array()
+            except Exception:
+                pixel_array = None
+        if pixel_array is None:
+            if is_multiframe(dataset):
+                pixel_array = get_frame_pixel_array(dataset, slice_index)
+            else:
+                pixel_array = DICOMProcessor.get_pixel_array(dataset)
+                # For single-frame, pixel_array might be 2D (height, width) or 3D (frames, height, width)
+                if pixel_array is not None and len(pixel_array.shape) == 3:
+                    # Multi-frame but not detected as such, use first frame
+                    if slice_index < pixel_array.shape[0]:
+                        pixel_array = pixel_array[slice_index]
+                    else:
+                        pixel_array = pixel_array[0]
+
+        projection_active = False
+        if self.get_projection_enabled is not None:
+            try:
+                projection_active = bool(self.get_projection_enabled())
+            except Exception:
+                projection_active = False
+        if not projection_active and self._projection_checkbox.isChecked():
+            # Projection is no longer active in the pane; force histogram mode back
+            # to per-slice pixels so UI state stays truthful and persistent config
+            # does not retain an unusable projection-only selection.
+            self._projection_checkbox.blockSignals(True)
+            self._projection_checkbox.setChecked(False)
+            self._projection_checkbox.blockSignals(False)
+            if self.set_histogram_use_projection_pixels is not None:
+                self.set_histogram_use_projection_pixels(False)
+        self._projection_checkbox.setEnabled(projection_active)
+        use_proj_pixels = bool(self._projection_checkbox.isChecked()) and projection_active
+        if (
+            use_proj_pixels
+            and self.get_projection_pixel_array is not None
+        ):
+            try:
+                proj_arr = self.get_projection_pixel_array()
+            except Exception:
+                proj_arr = None
+            if proj_arr is not None:
+                pixel_array = proj_arr
+                if pixel_array.ndim == 3 and pixel_array.shape[-1] > 1:
+                    pixel_array = pixel_array.reshape(-1)
+
         if pixel_array is None:
             self.histogram_widget.set_pixel_array(None)
             self.info_label.setText("Failed to load pixel data")
             self.value_type_label.setText("")
             return
-        
+
         # Apply rescale if needed
         use_rescaled = False
         if self.get_use_rescaled:
             use_rescaled = self.get_use_rescaled()
-        
+
         if use_rescaled:
             # Get rescale parameters
             rescale_slope = 1.0
@@ -298,12 +369,14 @@ class HistogramDialog(QDialog):
                     rescale_slope = slope
                 if intercept is not None:
                     rescale_intercept = intercept
-            
+
             # Apply rescale transformation
             pixel_array = pixel_array.astype(np.float32) * float(rescale_slope) + float(rescale_intercept)
             value_type_text = "Showing rescaled pixel values"
         else:
             value_type_text = "Showing raw pixel values"
+        if use_proj_pixels and projection_active:
+            value_type_text += " (intensity projection)"
         
         # Update series-wide global frequency max and pixel range (for stable axes) and apply to widget
         series_study_uid = self.get_series_study_uid() if self.get_series_study_uid else None
@@ -387,5 +460,14 @@ class HistogramDialog(QDialog):
                 except (TypeError, ValueError):
                     pass
             self._geometry_restored = True
+        if self.get_histogram_use_projection_pixels is not None:
+            self._projection_checkbox.blockSignals(True)
+            try:
+                self._projection_checkbox.setChecked(
+                    bool(self.get_histogram_use_projection_pixels())
+                )
+            except Exception:
+                pass
+            self._projection_checkbox.blockSignals(False)
         self.update_histogram()
 

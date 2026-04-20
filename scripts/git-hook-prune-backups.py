@@ -4,28 +4,38 @@
 This script supports the local ``pre-commit`` hook. Age is **not** raw filesystem
 mtime (checkout/restore refreshes mtime). Instead:
 
-- **Tracked** paths under ``backups/`` (as reported by ``git ls-files``): use the
-  **committer timestamp of the latest Git commit that touched that path** (one
-  ``git log`` over ``backups/``). If a path does not appear in history (e.g. new
-  and not yet committed), **mtime** is used as a fallback.
+- **Tracked** paths under ``backups/`` (as reported by ``git ls-files``):
+  A file is removed if **either**:
+
+  1. **Commit depth:** more than ``--max-commits`` commits have landed on **HEAD**
+     since the **latest commit that touched that path** (``git rev-list
+     <touch_hash>..HEAD``), or
+  2. **Busy-branch time cutoff:** the branch had **more than** ``--velocity-commits``
+     commits in the last ``--days`` days **and** the path's intent instant
+     (committer time of that latest touch, or mtime fallback) is **strictly
+     older** than ``now - days``.
+
+  If the branch is quiet (commit count in the window ≤ ``--velocity-commits``),
+  rule (2) does not apply—only rule (1) can remove tracked backups by age.
+
 - **Untracked** files: use the **newest valid ``YYYYMMDD``** substring found anywhere
   in the path string (relative to repo, POSIX slashes); if none, use **mtime**.
-  For each candidate, ``max(embedded dates, mtime)`` is used so a recent checkout
-  does not immediately delete an obviously old backup named with an old date.
+  When both exist, use the **older** of the two instants — ``min(embedded date,
+  mtime)``. Removed when that intent is **strictly older** than ``now - days``
+  (same as before; no commit-based rule).
 
-Anything strictly older than **now minus N days** (local time) is removed; then
-empty directories under ``backups/`` are removed (deepest first).
-
-**Shallow clones** (``--depth``) may lack full history; Git-derived ages can be
-newer than the true first introduction of a file.
+**Shallow clones** (``--depth``) may lack full history; Git-derived ages and
+counts can be wrong.
 
 The hook then runs ``git add -u -- backups`` so **tracked** paths removed from
 disk are staged for the same commit (see ``.githooks/pre-commit``).
 
 Inputs (CLI):
-    ``--days`` — positive integer: keep backups whose intent-age is within this
-    many days; anything strictly older is removed. If ``--days`` is less than 1,
-    the script exits successfully without doing work.
+    ``--days`` — calendar window for untracked pruning and for tracked rule (2);
+        must be ≥ 1 or the script exits without work.
+    ``--max-commits`` — tracked rule (1); if < 1, commit-depth pruning is disabled.
+    ``--velocity-commits`` — optional; defaults to ``--max-commits``. Branch
+        commit count in the last ``--days`` must exceed this to enable rule (2).
     ``--dry-run`` — list paths that would be removed (no deletes).
 
 Outputs:
@@ -48,6 +58,8 @@ from pathlib import Path
 
 # Eight-digit calendar dates 19xx / 20xx embedded in paths or filenames.
 _YYYYMMDD = re.compile(r"(?:19|20)\d{6}")
+# Full hash + Unix committer time from ``git log --format=%H %ct``.
+_COMMIT_LINE = re.compile(r"^([0-9a-f]{40}) (\d+)$")
 
 
 def newest_embedded_yyyymmdd_datetime(text: str, *, now: datetime | None = None) -> datetime | None:
@@ -67,8 +79,8 @@ def newest_embedded_yyyymmdd_datetime(text: str, *, now: datetime | None = None)
     return best
 
 
-def git_log_latest_commit_datetimes(repo_root: Path) -> dict[str, datetime]:
-    """Map ``backups/...`` path (POSIX, relative to repo) -> latest commit time.
+def git_log_latest_touch_per_path(repo_root: Path) -> dict[str, tuple[str, datetime]]:
+    """Map ``backups/...`` path (POSIX) -> (commit_hash, committer time).
 
     ``git log`` is newest-first; the first time we see a path is its latest
     touching commit.
@@ -79,7 +91,7 @@ def git_log_latest_commit_datetimes(repo_root: Path) -> dict[str, datetime]:
             "-C",
             str(repo_root),
             "log",
-            "--format=%ct",
+            "--format=%H %ct",
             "--name-only",
             "--",
             "backups/",
@@ -92,20 +104,22 @@ def git_log_latest_commit_datetimes(repo_root: Path) -> dict[str, datetime]:
     )
     if proc.returncode != 0:
         return {}
-    latest: dict[str, datetime] = {}
+    latest: dict[str, tuple[str, datetime]] = {}
+    current_hash: str | None = None
     current_ts: int | None = None
     for line in proc.stdout.splitlines():
         s = line.strip()
         if not s:
             continue
-        if s.isdigit() and len(s) >= 9:
-            current_ts = int(s)
+        m = _COMMIT_LINE.match(s)
+        if m:
+            current_hash, current_ts = m.group(1), int(m.group(2))
             continue
-        if current_ts is None:
+        if current_hash is None or current_ts is None:
             continue
         norm = s.replace("\\", "/")
         if norm not in latest:
-            latest[norm] = datetime.fromtimestamp(current_ts)
+            latest[norm] = (current_hash, datetime.fromtimestamp(current_ts))
     return latest
 
 
@@ -126,6 +140,61 @@ def git_tracked_backup_paths(repo_root: Path) -> set[str]:
     return out
 
 
+def git_commit_count_in_last_days(repo_root: Path, *, days: int, now: datetime | None = None) -> int:
+    """Number of commits reachable from HEAD with committer date after ``now - days``."""
+    now = now or datetime.now()
+    since = now - timedelta(days=days)
+    since_s = since.strftime("%Y-%m-%d %H:%M:%S")
+    proc = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo_root),
+            "rev-list",
+            "--count",
+            "--since",
+            since_s,
+            "HEAD",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if proc.returncode != 0:
+        return 0
+    try:
+        return max(0, int(proc.stdout.strip()))
+    except ValueError:
+        return 0
+
+
+def commits_on_branch_after(repo_root: Path, commit_hash: str) -> int | None:
+    """Count commits reachable from HEAD but not from *commit_hash* (exclusive of *commit_hash*)."""
+    proc = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo_root),
+            "rev-list",
+            "--count",
+            f"{commit_hash}..HEAD",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if proc.returncode != 0:
+        return None
+    try:
+        return max(0, int(proc.stdout.strip()))
+    except ValueError:
+        return None
+
+
 def _mtime_datetime(path: Path) -> datetime | None:
     try:
         return datetime.fromtimestamp(path.stat().st_mtime)
@@ -138,35 +207,51 @@ def backup_intent_datetime(
     *,
     rel_posix: str,
     tracked: bool,
-    git_latest: dict[str, datetime],
+    git_touch: dict[str, tuple[str, datetime]],
     now: datetime | None = None,
 ) -> datetime | None:
-    """Single instant used to decide whether *path* is older than the cutoff.
+    """Single instant used for time comparisons and untracked day cutoff.
 
     *now* is optional for tests (embedded dates are not allowed past *now*).
     """
     now = now or datetime.now()
     mt = _mtime_datetime(path)
     if tracked:
-        if rel_posix in git_latest:
-            return git_latest[rel_posix]
+        if rel_posix in git_touch:
+            return git_touch[rel_posix][1]
         return mt
     embedded = newest_embedded_yyyymmdd_datetime(rel_posix, now=now)
     if embedded is None:
         return mt
     if mt is None:
         return embedded
-    return embedded if embedded > mt else mt
+    # Older instant = more conservative pruning (do not let the newer signal hide staleness).
+    return embedded if embedded < mt else mt
 
 
-def _repo_root() -> Path:
-    result = subprocess.run(
-        ["git", "rev-parse", "--show-toplevel"],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    return Path(result.stdout.strip()).resolve()
+def tracked_should_prune(
+    *,
+    commits_since_touch: int | None,
+    intent: datetime | None,
+    cutoff: datetime,
+    commits_in_window: int,
+    max_commits: int,
+    velocity_threshold: int,
+) -> bool:
+    """Whether a **tracked** backup should be removed (pure logic for tests)."""
+    # Require a positive threshold so ``0`` does not mean "always busy" when aligned with --max-commits 0.
+    high_velocity = velocity_threshold > 0 and commits_in_window > velocity_threshold
+    too_old_by_time = high_velocity and intent is not None and intent < cutoff
+
+    if commits_since_touch is None:
+        # No known touch commit: fall back to classic days-only retention.
+        return intent is not None and intent < cutoff
+
+    if max_commits < 1:
+        return too_old_by_time
+
+    too_old_by_commits = commits_since_touch > max_commits
+    return too_old_by_commits or too_old_by_time
 
 
 def _prune_backups(
@@ -174,15 +259,21 @@ def _prune_backups(
     backups_dir: Path,
     *,
     days: int,
+    max_commits: int,
+    velocity_threshold: int,
     dry_run: bool,
+    now: datetime | None = None,
 ) -> int:
     """Return number of files deleted (or that would be deleted if dry_run)."""
     if days < 1 or not backups_dir.is_dir():
         return 0
 
-    cutoff = datetime.now() - timedelta(days=days)
+    now = now or datetime.now()
+    cutoff = now - timedelta(days=days)
     tracked = git_tracked_backup_paths(repo_root)
-    git_latest = git_log_latest_commit_datetimes(repo_root)
+    git_touch = git_log_latest_touch_per_path(repo_root)
+    commits_in_window = git_commit_count_in_last_days(repo_root, days=days, now=now)
+    rev_cache: dict[str, int | None] = {}
     removed = 0
     repo_resolved = repo_root.resolve()
 
@@ -200,12 +291,35 @@ def _prune_backups(
             path,
             rel_posix=rel,
             tracked=is_tracked,
-            git_latest=git_latest,
+            git_touch=git_touch,
+            now=now,
         )
-        if intent is None:
+
+        if is_tracked:
+            touch_hash: str | None = None
+            if rel in git_touch:
+                touch_hash = git_touch[rel][0]
+            commits_since: int | None = None
+            if touch_hash:
+                if touch_hash not in rev_cache:
+                    rev_cache[touch_hash] = commits_on_branch_after(repo_root, touch_hash)
+                commits_since = rev_cache[touch_hash]
+            prune = tracked_should_prune(
+                commits_since_touch=commits_since,
+                intent=intent,
+                cutoff=cutoff,
+                commits_in_window=commits_in_window,
+                max_commits=max_commits,
+                velocity_threshold=velocity_threshold,
+            )
+        else:
+            if intent is None:
+                continue
+            prune = intent < cutoff
+
+        if not prune:
             continue
-        if intent >= cutoff:
-            continue
+
         if dry_run:
             print(f"[backup hook] dry-run would remove: {path}", file=sys.stderr)
             removed += 1
@@ -230,15 +344,41 @@ def _prune_backups(
     return removed
 
 
+def _repo_root() -> Path:
+    result = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return Path(result.stdout.strip()).resolve()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Prune backups/ by Git commit time (tracked) or embedded dates / mtime (untracked).",
+        description=(
+            "Prune backups/: tracked = max-commits depth and optional busy-branch "
+            "time cutoff; untracked = min(embedded date, mtime) vs --days."
+        ),
     )
     parser.add_argument(
         "--days",
         type=int,
         required=True,
-        help="Delete backups whose intent-age is strictly older than this many days.",
+        help="Untracked cutoff age; window for counting branch velocity; tracked time cutoff when busy.",
+    )
+    parser.add_argument(
+        "--max-commits",
+        type=int,
+        default=10,
+        help="Remove tracked backup if more than this many commits since last touch (<1 disables).",
+    )
+    parser.add_argument(
+        "--velocity-commits",
+        type=int,
+        default=None,
+        help="If branch had more than this many commits in the last --days, apply time cutoff to tracked "
+        "files too. Defaults to --max-commits.",
     )
     parser.add_argument(
         "--dry-run",
@@ -246,6 +386,8 @@ def main() -> int:
         help="Print paths that would be removed; do not delete.",
     )
     args = parser.parse_args()
+
+    vel = args.velocity_commits if args.velocity_commits is not None else args.max_commits
 
     try:
         root = _repo_root()
@@ -255,7 +397,14 @@ def main() -> int:
 
     backups = root / "backups"
     try:
-        n = _prune_backups(root, backups, days=args.days, dry_run=args.dry_run)
+        n = _prune_backups(
+            root,
+            backups,
+            days=args.days,
+            max_commits=args.max_commits,
+            velocity_threshold=vel,
+            dry_run=args.dry_run,
+        )
     except OSError as exc:
         print(f"[backup hook] prune failed: {exc}", file=sys.stderr)
         return 1
@@ -264,7 +413,9 @@ def main() -> int:
         verb = "Would remove" if args.dry_run else "Removed"
         print(
             f"[backup hook] {verb} {n} file(s) under backups/ "
-            f"(intent age strictly older than {args.days} day(s)).",
+            f"(tracked: >{args.max_commits} commits since touch and/or "
+            f"time cutoff when branch had >{vel} commit(s) in last {args.days} day(s); "
+            f"untracked: older than {args.days} day(s) by intent).",
             file=sys.stderr,
         )
     return 0

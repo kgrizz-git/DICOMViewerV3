@@ -462,7 +462,7 @@ class TagExportDialog(QDialog):
 
             for tag_str, tag_data in tag_list:
                 tag_item = QTreeWidgetItem(group_item)
-                tag_item.setText(0, tag_data.get("tag", tag_str))
+                tag_item.setText(0, tag_str)
                 tag_item.setText(1, tag_data.get("name", ""))
                 tag_item.setData(0, Qt.ItemDataRole.UserRole, tag_str)
                 tag_item.setFlags(tag_item.flags() | Qt.ItemFlag.ItemIsUserCheckable)

@@ -184,7 +184,10 @@ class SubWindowContainer(QFrame):
         self.normal_border_width = 1
         self.focus_border_color = FOCUS_BORDER_COLOR  # Shared blue highlight
         self.normal_border_color = QColor(128, 128, 128)  # Gray
-        
+        # When True, paint the unfocused (gray) border even if this pane is focused — used
+        # during screenshot export so captures match a neutral multi-pane look.
+        self._suppress_focus_border_for_export: bool = False
+
         # Set size policy to expand
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         
@@ -265,10 +268,18 @@ class SubWindowContainer(QFrame):
         else:
             # print(f"[DEBUG-FOCUS] SubWindowContainer.set_focused: Focus already {focused}, no change needed")
             pass
-    
+
+    def set_suppress_focus_border_for_export(self, suppress: bool) -> None:
+        """Hide the blue focus border temporarily (e.g. while grabbing screenshots)."""
+        suppress = bool(suppress)
+        if self._suppress_focus_border_for_export == suppress:
+            return
+        self._suppress_focus_border_for_export = suppress
+        self._update_border_style()
+
     def _update_border_style(self) -> None:
         """Update the border style based on focus state."""
-        if self.is_focused:
+        if self.is_focused and not self._suppress_focus_border_for_export:
             border_width = self.focus_border_width
             border_color = self.focus_border_color
         else:
@@ -305,9 +316,13 @@ class SubWindowContainer(QFrame):
             from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsEllipseItem
             try:
                 from tools.measurement_tool import MeasurementItem, DraggableMeasurementText
+                from tools.angle_measurement_items import AngleMeasurementItem, DraggableAngleMeasurementText, AngleVertexHandle
             except ImportError:
                 MeasurementItem = type(None)
                 DraggableMeasurementText = type(None)
+                AngleMeasurementItem = type(None)
+                DraggableAngleMeasurementText = type(None)
+                AngleVertexHandle = type(None)
             try:
                 from tools.text_annotation_tool import TextAnnotationItem
             except ImportError:
@@ -322,14 +337,14 @@ class SubWindowContainer(QFrame):
                 CrosshairItem = type(None)
             if isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem)) and item is not view.image_item:
                 return False
-            if isinstance(item, (MeasurementItem, DraggableMeasurementText, TextAnnotationItem, ArrowAnnotationItem)):
+            if isinstance(item, (MeasurementItem, AngleMeasurementItem, DraggableMeasurementText, DraggableAngleMeasurementText, AngleVertexHandle, TextAnnotationItem, ArrowAnnotationItem)):
                 return False
             if CrosshairItem is not type(None) and isinstance(item, CrosshairItem):
                 return False
             # Check parent chain for measurement/text/arrow (e.g. handle or child of annotation)
             parent = item.parentItem()
             while parent is not None:
-                if isinstance(parent, (MeasurementItem, DraggableMeasurementText, TextAnnotationItem, ArrowAnnotationItem)):
+                if isinstance(parent, (MeasurementItem, AngleMeasurementItem, DraggableMeasurementText, DraggableAngleMeasurementText, TextAnnotationItem, ArrowAnnotationItem)):
                     return False
                 if CrosshairItem is not type(None) and isinstance(parent, CrosshairItem):
                     return False
@@ -346,9 +361,9 @@ class SubWindowContainer(QFrame):
             event: Paint event
         """
         super().paintEvent(event)
-        
-        # Draw additional border highlight if focused
-        if self.is_focused:
+
+        # Draw additional border highlight if focused (unless suppressed for export grab)
+        if self.is_focused and not self._suppress_focus_border_for_export:
             painter = QPainter(self)
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
             pen = QPen(self.focus_border_color, self.focus_border_width)

@@ -18,9 +18,9 @@ else
 fi
 
 # Prune local backups/ by branch (non-fatal: never block the commit).
-# Intent age: tracked paths use last Git commit time; untracked use YYYYMMDD + mtime.
-# After deleting stale files, stage index updates under backups/ so tracked
-# removals are included in the commit that triggered this hook.
+# Tracked: drop if >10 commits since last touch, or if >10 commits landed in the
+# last PRUNE_DAYS days and intent is older than PRUNE_DAYS. Untracked: intent
+# older than PRUNE_DAYS (embedded date vs mtime min). Then stage removals.
 BRANCH="$(git branch --show-current 2>/dev/null || true)"
 PRUNE_DAYS=0
 case "$BRANCH" in
@@ -28,7 +28,7 @@ case "$BRANCH" in
   WIP) PRUNE_DAYS=3 ;;
 esac
 if [[ "$PRUNE_DAYS" -gt 0 ]]; then
-  if ! "$PY_BIN" "$REPO_ROOT/scripts/git-hook-prune-backups.py" --days "$PRUNE_DAYS"; then
+  if ! "$PY_BIN" "$REPO_ROOT/scripts/git-hook-prune-backups.py" --days "$PRUNE_DAYS" --max-commits 10; then
     echo "[backup hook] prune script failed (continuing with security gate)." >&2
   fi
   if ! git -C "$REPO_ROOT" add -u -- backups; then

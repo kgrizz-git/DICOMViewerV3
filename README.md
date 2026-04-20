@@ -18,7 +18,7 @@ View DICOM studies with **multi-window layouts**, **window/level**, **cine**, **
 
 ## Technology stack (summary)
 
-- **GUI:** PySide6 · **DICOM:** pydicom · **Arrays / imaging:** NumPy, Pillow · **Histogram:** matplotlib · **Tag export (Excel / CSV / UTF-8 text):** openpyxl (`*.xlsx`); CSV and tab-separated `*.txt` use the standard library · **Fusion 3D resampling:** SimpleITK · **ACR QA:** **pylinac 3.42.0** (exact pin), scipy, scikit-image · **Compare PDF merge:** pypdf  
+- **GUI:** PySide6 · **DICOM:** pydicom · **Arrays / imaging:** NumPy, Pillow · **Histogram:** matplotlib · **Tag export (Excel / CSV / UTF-8 text):** openpyxl (`*.xlsx`); CSV and tab-separated `*.txt` use the standard library · **Fusion 3D resampling:** SimpleITK · **ACR QA:** **pylinac 3.42.0** (exact pin), scipy, scikit-image · **Compare PDF merge:** pypdf · **Cine export (GIF/AVI/MPG):** imageio + imageio-ffmpeg (ships a **FFmpeg** build — **LGPL/GPL** components; review license implications for **redistributed** / **frozen** bundles)  
 - **Optional (compressed DICOM):** pylibjpeg, pyjpegls, pylibjpeg-libjpeg — see `requirements.txt`.
 
 ## Project structure

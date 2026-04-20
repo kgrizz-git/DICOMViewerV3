@@ -1393,6 +1393,8 @@ class ImageViewerViewMixin:
         # Reposition the edge-reveal slider overlay on the right edge
         if hasattr(self, "_slider_overlay"):
             self._reposition_slider_overlay()
+        if hasattr(self, "_no_pixel_placeholder_overlay"):
+            self._reposition_no_pixel_placeholder_overlay()
         # Optionally auto-fit on resize
         # self.fit_to_view()
 
@@ -1408,3 +1410,5 @@ class ImageViewerViewMixin:
         super().scrollContentsBy(dx, dy)
         if hasattr(self, "_slider_overlay"):
             self._reposition_slider_overlay()
+        if hasattr(self, "_no_pixel_placeholder_overlay"):
+            self._reposition_no_pixel_placeholder_overlay()

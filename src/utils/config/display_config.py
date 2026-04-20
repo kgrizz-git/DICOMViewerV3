@@ -320,3 +320,15 @@ class DisplayConfigMixin:
         """
         self._config()["histogram_window_geometry"] = [x, y, width, height]
         self._save_config()
+
+    def get_histogram_use_projection_pixels(self) -> bool:
+        """
+        When True, the histogram dialog may plot **intensity projection** pixels
+        (AIP/MIP/MinIP) instead of the single current slice — only when projection is on.
+        """
+        return bool(self._config().get("histogram_use_projection_pixels", False))
+
+    def set_histogram_use_projection_pixels(self, enabled: bool) -> None:
+        """Persist user preference for histogram vs projection pixels."""
+        self._config()["histogram_use_projection_pixels"] = bool(enabled)
+        self._save_config()

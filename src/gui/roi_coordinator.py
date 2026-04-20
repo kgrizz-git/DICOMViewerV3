@@ -371,6 +371,7 @@ class ROICoordinator:
                             rescale_slope=awl_slope,
                             rescale_intercept=awl_intercept,
                             pixel_spacing=pixel_spacing,
+                            dataset=current_dataset,
                         )
                         min_v = stats.get("min")
                         max_v = stats.get("max")
@@ -776,6 +777,7 @@ class ROICoordinator:
                     rescale_slope=stats_slope,
                     rescale_intercept=stats_intercept,
                     pixel_spacing=pixel_spacing,
+                    dataset=current_dataset,
                 )
                 
                 # print(f"[DEBUG-ROI-STATS] update_roi_statistics: Calculated stats: mean={stats.get('mean', 0):.2f}, "
@@ -920,6 +922,7 @@ class ROICoordinator:
                 rescale_slope=stats_slope,
                 rescale_intercept=stats_intercept,
                 pixel_spacing=pixel_spacing,
+                dataset=current_dataset,
             )
 
             if stats and roi.statistics_overlay_visible:

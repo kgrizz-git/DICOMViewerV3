@@ -6,7 +6,8 @@ Handles bulk export and import of all visual customisation settings
 
 The ``overlay`` object may include **slice sync group strip height** (viewport px)
 alongside font and modality overlay fields; older export files omit it and import
-leaves the current config value unchanged.
+leaves the current config value unchanged. Exports may include ``tags_detailed_extra``
+(Additional tags in Detailed overlay mode); older files omit it.
 
 Mixin contract:
     Expects ``self.config`` (dict) and ``self.save_config()`` to be provided by
@@ -32,6 +33,7 @@ class _CustomizationsHost(Protocol):
     def get_roi_font_size(self) -> int: ...
     def get_roi_line_thickness(self) -> int: ...
     def get_roi_default_visible_statistics(self) -> List[str]: ...
+    def get_roi_show_per_channel_statistics(self) -> bool: ...
     def get_measurement_font_size(self) -> int: ...
     def get_measurement_line_thickness(self) -> int: ...
     def get_text_annotation_font_size(self) -> int: ...
@@ -41,6 +43,7 @@ class _CustomizationsHost(Protocol):
     def set_overlay_visibility_state(self, state: int) -> None: ...
     def set_overlay_custom_fields(self, fields: List[Any]) -> None: ...
     def set_overlay_tags(self, modality: str, corner_tags: Dict[str, List[str]]) -> None: ...
+    def set_overlay_tags_detailed_extra(self, modality: str, corner_tags: Dict[str, List[str]]) -> None: ...
     def set_overlay_font_size(self, size: int) -> None: ...
     def set_overlay_font_color(self, r: int, g: int, b: int) -> None: ...
     def set_slice_sync_group_strip_height_px(self, height_px: int) -> None: ...
@@ -49,6 +52,7 @@ class _CustomizationsHost(Protocol):
     def set_roi_line_thickness(self, thickness: int) -> None: ...
     def set_roi_line_color(self, r: int, g: int, b: int) -> None: ...
     def set_roi_default_visible_statistics(self, statistics: List[str]) -> None: ...
+    def set_roi_show_per_channel_statistics(self, enabled: bool) -> None: ...
     def set_measurement_font_size(self, size: int) -> None: ...
     def set_measurement_font_color(self, r: int, g: int, b: int) -> None: ...
     def set_measurement_line_thickness(self, thickness: int) -> None: ...
@@ -89,6 +93,7 @@ class CustomizationsConfigMixin:
                 "visibility_state": h.get_overlay_visibility_state(),
                 "custom_fields": h.get_overlay_custom_fields(),
                 "tags": cfg.get("overlay_tags", {}),
+                "tags_detailed_extra": cfg.get("overlay_tags_detailed_extra", {}),
                 "font_size": h.get_overlay_font_size(),
                 "font_color": {
                     "r": cfg.get("overlay_font_color_r", 255),
@@ -117,6 +122,7 @@ class CustomizationsConfigMixin:
                         "b": cfg.get("roi_line_color_b", 0),
                     },
                     "default_visible_statistics": h.get_roi_default_visible_statistics(),
+                    "show_per_channel_statistics": h.get_roi_show_per_channel_statistics(),
                 },
                 "measurement": {
                     "font_size": h.get_measurement_font_size(),
@@ -200,6 +206,12 @@ class CustomizationsConfigMixin:
                         for modality, corner_tags in overlay["tags"].items():
                             if isinstance(modality, str) and isinstance(corner_tags, dict):
                                 h.set_overlay_tags(modality, corner_tags)
+                    if "tags_detailed_extra" in overlay and isinstance(
+                        overlay["tags_detailed_extra"], dict
+                    ):
+                        for modality, corner_tags in overlay["tags_detailed_extra"].items():
+                            if isinstance(modality, str) and isinstance(corner_tags, dict):
+                                h.set_overlay_tags_detailed_extra(modality, corner_tags)
                     if "font_size" in overlay and isinstance(overlay["font_size"], int) and overlay["font_size"] > 0:
                         h.set_overlay_font_size(overlay["font_size"])
                     if "font_color" in overlay and isinstance(overlay["font_color"], dict):
@@ -235,6 +247,12 @@ class CustomizationsConfigMixin:
                                 h.set_roi_line_color(r, g, b)
                         if "default_visible_statistics" in roi and isinstance(roi["default_visible_statistics"], list):
                             h.set_roi_default_visible_statistics(roi["default_visible_statistics"])
+                        if "show_per_channel_statistics" in roi and isinstance(
+                            roi["show_per_channel_statistics"], bool
+                        ):
+                            h.set_roi_show_per_channel_statistics(
+                                bool(roi["show_per_channel_statistics"])
+                            )
 
                     if "measurement" in annotation and isinstance(annotation["measurement"], dict):
                         meas = annotation["measurement"]

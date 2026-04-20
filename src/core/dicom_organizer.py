@@ -18,6 +18,7 @@ Requirements:
 """
 
 import os
+import uuid
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Set, Tuple
 from collections import defaultdict
@@ -85,6 +86,58 @@ class DICOMOrganizer:
         self.loaded_file_paths: Set[str] = set()
         self.series_source_dirs: Dict[Tuple[str, str], str] = {}  # (study_uid, series_key) -> source_dir
         self._disambiguation_counters: Dict[Tuple[str, str], int] = {}  # (study_uid, base_series_key) -> next suffix
+
+    @staticmethod
+    def _identity_seed_for_synthetic_uids(
+        dataset: Dataset,
+        idx: int,
+        file_path: Optional[str],
+    ) -> str:
+        """Stable seed for synthetic UIDs when SOPInstanceUID is missing."""
+        sop = getattr(dataset, "SOPInstanceUID", None)
+        if sop:
+            s = str(sop).strip()
+            if s:
+                return s
+        file_meta = getattr(dataset, "file_meta", None)
+        if file_meta is not None:
+            ms_sop = getattr(file_meta, "MediaStorageSOPInstanceUID", None)
+            if ms_sop:
+                s = str(ms_sop).strip()
+                if s:
+                    return s
+        if file_path:
+            return f"path:{os.path.normpath(os.path.abspath(file_path))}"
+        return f"index:{idx}"
+
+    @staticmethod
+    def _synthetic_uid_from_seed(seed: str, role: str) -> str:
+        """Return a valid DICOM UID (``2.25.<integer>``) derived deterministically from *seed*."""
+        n = uuid.uuid5(uuid.NAMESPACE_URL, f"DICOMViewerV3:{role}:{seed}").int
+        return f"2.25.{n}"
+
+    def _ensure_study_and_series_uids(
+        self,
+        dataset: Dataset,
+        idx: int,
+        file_path: Optional[str],
+    ) -> None:
+        """
+        Ensure StudyInstanceUID and SeriesInstanceUID exist on *dataset*.
+
+        Some SR and secondary-capture exports omit one or both UIDs; without them the
+        organizer skips the file (empty navigator) while paths may still be counted as loaded.
+        """
+        seed = self._identity_seed_for_synthetic_uids(dataset, idx, file_path)
+        study_uid = self._get_tag_value(dataset, "StudyInstanceUID", "")
+        if not study_uid or not str(study_uid).strip():
+            dataset.StudyInstanceUID = self._synthetic_uid_from_seed(seed, "StudyInstanceUID")
+        series_uid = self._get_tag_value(dataset, "SeriesInstanceUID", "")
+        if not series_uid or not str(series_uid).strip():
+            dataset.SeriesInstanceUID = self._synthetic_uid_from_seed(
+                f"{seed}:SeriesInstanceUID",
+                "SeriesInstanceUID",
+            )
 
     def organize(self, datasets: List[Dataset], file_paths: Optional[List[str]] = None) -> Dict[str, Dict[str, List[Dataset]]]:
         """
@@ -182,20 +235,19 @@ class DICOMOrganizer:
                     # Mark this image as having embedded annotations
                     # We'll process these when displaying the image
                     pass
-            
+
+            file_path = file_paths_input[idx] if file_paths_input and idx < len(file_paths_input) else None
+            self._ensure_study_and_series_uids(dataset, idx, file_path)
+
             # Get study UID and composite series key for image files
             study_uid = self._get_tag_value(dataset, "StudyInstanceUID", "")
             series_uid = self._get_tag_value(dataset, "SeriesInstanceUID", "")
-            
+
             if not study_uid or not series_uid:
-                # Skip files without proper UIDs
-                # print(f"[ANNOTATIONS] Skipping file {idx}: missing StudyInstanceUID or SeriesInstanceUID (SOP Class: {sop_class_uid_str[:50]}...)")
                 continue
-            
+
             # Generate composite series key (includes SeriesNumber if available)
             composite_series_key = get_composite_series_key(dataset)
-            
-            file_path = file_paths_input[idx] if file_paths_input and idx < len(file_paths_input) else None
 
             if is_multiframe(dataset):
                 num_frames = get_frame_count(dataset)

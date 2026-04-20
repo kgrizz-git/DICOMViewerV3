@@ -68,12 +68,15 @@ class DICOMParser:
 
         Walks the full DICOM hierarchy with :meth:`~pydicom.dataset.Dataset.iterall`
         so elements inside sequences (e.g. functional groups) are included, not only
-        top-level attributes.
+        top-level attributes. For PS3.10 file datasets, **file meta** ``(0002,eeee)``
+        elements are merged first (via ``file_meta.iterall()``) so transfer syntax and
+        media storage tags appear alongside the main dataset attributes.
 
-        Duplicate tag numbers (same group/element from multiple sequence items): the
-        **first** occurrence in iterall order is kept. Multiframe objects where the same
-        tag differs per frame cannot be fully represented in this flat map; typical
-        per-slice instance workflows are unaffected.
+        Duplicate tag numbers (same group/element from multiple sequence items, e.g.
+        SR ``ContentSequence`` leaves): each occurrence is kept under a unique dict key
+        ``(gggg,eeee)``, ``(gggg,eeee)#2``, ``#3``, … in ``iterall`` order. Multiframe
+        objects where the same tag differs per frame cannot be fully represented in this
+        flat map; typical per-slice instance workflows are unaffected.
 
         Args:
             include_private: If True, include private tags
@@ -94,19 +97,24 @@ class DICOMParser:
             return self._tag_cache[cache_key]
 
         tags: Dict[str, Any] = {}
+        occurrence_by_canonical: Dict[str, int] = {}
 
-        for elem in self.dataset.iterall():
+        def _consume_elem(elem) -> None:
             tag = elem.tag
             if tag.group == 0xFFFE:
-                continue
+                return
             if elem.VR == "SQ":
-                continue
+                return
             if not include_private and tag.is_private:
-                continue
+                return
 
-            tag_str = str(tag)
-            if tag_str in tags:
-                continue
+            canonical = str(tag)
+            occ = occurrence_by_canonical.get(canonical, 0) + 1
+            occurrence_by_canonical[canonical] = occ
+            if occ == 1:
+                tag_str = canonical
+            else:
+                tag_str = f"{canonical}#{occ}"
 
             try:
                 value = elem.value
@@ -115,26 +123,38 @@ class DICOMParser:
                 elif not isinstance(value, (str, int, float)):
                     value = str(value)
 
-                if privacy_mode and is_patient_tag(tag_str):
+                if privacy_mode and is_patient_tag(canonical):
                     value = "PRIVACY MODE"
 
                 tags[tag_str] = {
-                    "tag": tag_str,
+                    "tag": canonical,
                     "keyword": elem.keyword if hasattr(elem, "keyword") else "",
                     "VR": elem.VR if hasattr(elem, "VR") else "",
                     "value": value,
                     "is_private": tag.is_private,
-                    "name": elem.name if hasattr(elem, "name") else tag_str,
+                    "name": elem.name if hasattr(elem, "name") else canonical,
                 }
             except Exception as e:
                 tags[tag_str] = {
-                    "tag": tag_str,
+                    "tag": canonical,
                     "keyword": "",
                     "VR": "",
                     "value": f"<Error: {str(e)}>",
                     "is_private": tag.is_private,
-                    "name": tag_str,
+                    "name": canonical,
                 }
+
+        # File meta information group (0002,eeee) is separate from ``Dataset.iterall()`` on PS3.10 files.
+        fm = getattr(self.dataset, "file_meta", None)
+        if fm is not None and hasattr(fm, "iterall"):
+            try:
+                for elem in fm.iterall():
+                    _consume_elem(elem)
+            except Exception:
+                pass
+
+        for elem in self.dataset.iterall():
+            _consume_elem(elem)
 
         if supplement_standard_tags:
             # Deferred import keeps module load free of tag_export_catalog (union

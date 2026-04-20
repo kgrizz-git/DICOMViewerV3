@@ -58,6 +58,7 @@ class SubwindowLifecycleController:
         self._clear_window_slots: Dict[int, Any] = {}  # id(image_viewer) -> callable
         self._cine_toggle_slots: Dict[int, Any] = {}  # id(image_viewer) -> callable
         self._cine_stop_slots: Dict[int, Any] = {}  # id(image_viewer) -> callable
+        self._rdsr_report_slots: Dict[int, Any] = {}  # id(image_viewer) -> callable (dose SR dialog)
         # Single restartable timer for 100ms viewport-resized callback; coalesces rapid layout changes.
         self._viewport_resized_timer: Optional[QTimer] = None
 
@@ -113,9 +114,16 @@ class SubwindowLifecycleController:
         return None
 
     def get_subwindow_slice_index(self, idx: int) -> int:
-        """Get current slice index for a subwindow."""
+        """Get current displayed slice index for a subwindow.
+
+        For MPR panes this is ``mpr_slice_index``; for native panes this is
+        ``current_slice_index``.
+        """
         if idx in self.app.subwindow_data:
-            return self.app.subwindow_data[idx].get('current_slice_index', 0)
+            data = self.app.subwindow_data[idx]
+            if bool(data.get("is_mpr")):
+                return int(data.get("mpr_slice_index", data.get("current_slice_index", 0)) or 0)
+            return int(data.get("current_slice_index", 0) or 0)
         return 0
 
     def get_subwindow_slice_display_manager(self, idx: int):
@@ -187,6 +195,7 @@ class SubwindowLifecycleController:
         vsm = self.app.subwindow_managers[idx].get('view_state_manager')
         if vsm is None:
             return {}
+        sdm = self.app.subwindow_managers[idx].get("slice_display_manager")
         return {
             'get_current_dataset': lambda i=idx: self.get_subwindow_dataset(i),
             'get_current_slice_index': lambda i=idx: self.get_subwindow_slice_index(i),
@@ -202,7 +211,109 @@ class SubwindowLifecycleController:
             'get_series_uid': lambda i=idx: self.get_subwindow_series_uid(i),
             'get_series_datasets': lambda i=idx: self.get_subwindow_datasets(i),
             'get_all_studies': lambda: getattr(self.app, 'current_studies', {}),
+            'get_projection_enabled': lambda i=idx: self._get_histogram_projection_enabled(i),
+            'get_current_pixel_array': lambda i=idx: self._get_histogram_current_pixel_array(i),
+            'get_projection_pixel_array': lambda i=idx: self._get_histogram_projection_pixel_array(
+                i
+            ),
+            'get_histogram_use_projection_pixels': self.app.config_manager.get_histogram_use_projection_pixels,
+            'set_histogram_use_projection_pixels': self.app.config_manager.set_histogram_use_projection_pixels,
         }
+
+    def _get_histogram_projection_enabled(self, idx: int) -> bool:
+        """Return whether projection/combine is active for histogram in subwindow ``idx``."""
+        data = self.app.subwindow_data.get(idx, {})
+        if bool(data.get("is_mpr")):
+            return bool(data.get("mpr_combine_enabled", False))
+        sdm = self.app.subwindow_managers.get(idx, {}).get("slice_display_manager")
+        return bool(getattr(sdm, "projection_enabled", False)) if sdm is not None else False
+
+    def _get_histogram_current_pixel_array(self, idx: int):
+        """
+        Return raw pixels of what the pane is currently showing, without forcing projection mode.
+        For MPR panes this is the uncombined current MPR slice.
+        """
+        import numpy as np
+
+        data = self.app.subwindow_data.get(idx, {})
+        if not bool(data.get("is_mpr")):
+            return None
+        result = data.get("mpr_result")
+        if result is None:
+            return None
+        try:
+            slice_index = int(data.get("mpr_slice_index", data.get("current_slice_index", 0)) or 0)
+        except (TypeError, ValueError):
+            slice_index = 0
+        if slice_index < 0 or slice_index >= int(getattr(result, "n_slices", 0) or 0):
+            return None
+        try:
+            from core.mpr_controller import apply_mpr_stack_combine
+
+            arr = apply_mpr_stack_combine(
+                result.slices,
+                slice_index,
+                enabled=False,
+                mode=str(data.get("mpr_combine_mode", "aip") or "aip"),
+                n_planes=int(data.get("mpr_combine_slice_count", 4) or 4),
+            )
+            return arr if isinstance(arr, np.ndarray) else None
+        except Exception:
+            return None
+
+    def _get_histogram_projection_pixel_array(self, idx: int):
+        """
+        Raw 2D numpy projection for histogram when intensity projection is enabled
+        for subwindow ``idx``. Returns ``None`` if not applicable.
+        """
+        import numpy as np
+
+        data = self.app.subwindow_data.get(idx, {})
+        if bool(data.get("is_mpr")):
+            if not bool(data.get("mpr_combine_enabled", False)):
+                return None
+            result = data.get("mpr_result")
+            if result is None:
+                return None
+            try:
+                slice_index = int(data.get("mpr_slice_index", data.get("current_slice_index", 0)) or 0)
+            except (TypeError, ValueError):
+                return None
+            if slice_index < 0 or slice_index >= int(getattr(result, "n_slices", 0) or 0):
+                return None
+            try:
+                from core.mpr_controller import apply_mpr_stack_combine
+
+                arr = apply_mpr_stack_combine(
+                    result.slices,
+                    slice_index,
+                    enabled=True,
+                    mode=str(data.get("mpr_combine_mode", "aip") or "aip"),
+                    n_planes=int(data.get("mpr_combine_slice_count", 4) or 4),
+                )
+                return arr if isinstance(arr, np.ndarray) else None
+            except Exception:
+                return None
+
+        if idx not in self.app.subwindow_managers:
+            return None
+        sdm = self.app.subwindow_managers[idx].get("slice_display_manager")
+        if sdm is None or not sdm.projection_enabled:
+            return None
+        series = self.get_subwindow_datasets(idx)
+        if not series or len(series) < 2:
+            return None
+        z = self.get_subwindow_slice_index(idx)
+        from core.slice_display_pixels import compute_intensity_projection_raw_array
+
+        arr = compute_intensity_projection_raw_array(
+            self.app.dicom_processor,
+            str(sdm.projection_type),
+            int(sdm.projection_slice_count),
+            list(series),
+            z,
+        )
+        return arr if isinstance(arr, np.ndarray) else None
 
     def get_focused_subwindow(self):
         """
@@ -301,6 +412,9 @@ class SubwindowLifecycleController:
         # Handlers may be unset until _initialize_handlers() (e.g. early init); do not use hasattr alone.
         if app.keyboard_event_handler is not None and app.image_viewer:
             app.keyboard_event_handler.image_viewer = app.image_viewer
+            app.keyboard_event_handler.toggle_overlay_visibility_legacy_callback = (
+                app.overlay_coordinator.handle_toggle_overlay
+            )
         if app.mouse_mode_handler is not None and app.image_viewer:
             app.mouse_mode_handler.image_viewer = app.image_viewer
             if hasattr(app, "_mpr_controller") and app._mpr_controller.is_mpr(focused_idx):
@@ -542,8 +656,16 @@ class SubwindowLifecycleController:
                         image_viewer.about_this_file_requested.disconnect(app._open_about_this_file)
                     except (TypeError, RuntimeError):
                         pass
-                    # histogram_requested uses a lambda; disconnect stored slot if any
                     vid = id(image_viewer)
+                    if vid in self._rdsr_report_slots:
+                        try:
+                            image_viewer.structured_report_browser_requested.disconnect(
+                                self._rdsr_report_slots[vid]
+                            )
+                        except (TypeError, RuntimeError):
+                            pass
+                        del self._rdsr_report_slots[vid]
+                    # histogram_requested uses a lambda; disconnect stored slot if any
                     if vid in self._histogram_slots:
                         try:
                             image_viewer.histogram_requested.disconnect(self._histogram_slots[vid])
@@ -638,6 +760,9 @@ class SubwindowLifecycleController:
                 hist_slot = lambda i=idx: app.dialog_coordinator.open_histogram(i)
                 image_viewer.histogram_requested.connect(hist_slot)
                 self._histogram_slots[vid] = hist_slot
+                sr_slot = lambda i=idx: app._open_structured_report_browser(i)
+                image_viewer.structured_report_browser_requested.connect(sr_slot)
+                self._rdsr_report_slots[vid] = sr_slot
                 image_viewer.get_file_path_callback = lambda i=idx: app._get_current_slice_file_path(i)
                 image_viewer.get_slice_location_lines_visible_callback = (
                     lambda: app.config_manager.get_slice_location_lines_visible()
@@ -734,6 +859,10 @@ class SubwindowLifecycleController:
             except (TypeError, RuntimeError):
                 pass
             try:
+                app.image_viewer.toggle_overlay_requested.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+            try:
                 app.image_viewer.roi_drawing_started.disconnect()
                 app.image_viewer.roi_drawing_updated.disconnect()
                 app.image_viewer.roi_drawing_finished.disconnect()
@@ -743,6 +872,12 @@ class SubwindowLifecycleController:
                 app.image_viewer.measurement_started.disconnect()
                 app.image_viewer.measurement_updated.disconnect()
                 app.image_viewer.measurement_finished.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+            try:
+                app.image_viewer.angle_measurement_clicked.disconnect()
+                app.image_viewer.angle_measurement_preview.disconnect()
+                app.image_viewer.angle_draw_cancel_requested.disconnect()
             except (TypeError, RuntimeError):
                 pass
             try:
@@ -903,6 +1038,15 @@ class SubwindowLifecycleController:
         app.image_viewer.measurement_started.connect(app.measurement_coordinator.handle_measurement_started)
         app.image_viewer.measurement_updated.connect(app.measurement_coordinator.handle_measurement_updated)
         app.image_viewer.measurement_finished.connect(app.measurement_coordinator.handle_measurement_finished)
+        app.image_viewer.angle_measurement_clicked.connect(
+            app.measurement_coordinator.handle_angle_measurement_clicked
+        )
+        app.image_viewer.angle_measurement_preview.connect(
+            app.measurement_coordinator.handle_angle_measurement_preview
+        )
+        app.image_viewer.angle_draw_cancel_requested.connect(
+            app.measurement_coordinator.handle_angle_draw_cancel_requested
+        )
         if hasattr(app, 'text_annotation_coordinator') and app.text_annotation_coordinator is not None:
             app.image_viewer.text_annotation_started.connect(app.text_annotation_coordinator.handle_text_annotation_started)
             app.image_viewer.text_annotation_finished.connect(app.text_annotation_coordinator.handle_text_annotation_finished)
@@ -976,6 +1120,12 @@ class SubwindowLifecycleController:
                 app.measurement_coordinator.handle_clear_measurements
             )
             app.keyboard_event_handler.toggle_overlay_callback = (
+                app.overlay_coordinator.handle_toggle_overlay
+            )
+            app.keyboard_event_handler.cycle_overlay_detail_callback = (
+                app._cycle_overlay_detail_mode
+            )
+            app.keyboard_event_handler.toggle_overlay_visibility_legacy_callback = (
                 app.overlay_coordinator.handle_toggle_overlay
             )
             app.keyboard_event_handler.delete_measurement_callback = (
@@ -1077,7 +1227,7 @@ class SubwindowLifecycleController:
         app.main_window.clear_measurements_requested.connect(app.measurement_coordinator.handle_clear_measurements)
         app.image_viewer.clear_measurements_requested.connect(app.measurement_coordinator.handle_clear_measurements)
         app.image_viewer.histogram_requested.connect(app.dialog_coordinator.open_histogram)
-        app.image_viewer.toggle_overlay_requested.connect(app.overlay_coordinator.handle_toggle_overlay)
+        app.image_viewer.toggle_overlay_requested.connect(app._cycle_overlay_detail_mode)
         app.main_window.viewport_resizing.connect(app.view_state_manager.handle_viewport_resizing)
         app.main_window.viewport_resized.connect(app.view_state_manager.handle_viewport_resized)
         app.slice_navigator.slice_changed.connect(app._update_histogram_for_focused_subwindow)

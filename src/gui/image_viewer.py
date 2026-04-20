@@ -18,6 +18,7 @@ from typing import Optional, Callable, Any, List, Tuple, TYPE_CHECKING
 from gui.image_viewer_input import ImageViewerInputMixin
 from gui.image_viewer_view import ImageViewerViewMixin
 from gui.edge_reveal_slider_overlay import EdgeRevealSliderOverlay
+from gui.no_pixel_placeholder_overlay import NoPixelPlaceholderOverlay
 
 if TYPE_CHECKING:
     from tools.roi_manager import ROIItem
@@ -65,12 +66,16 @@ class ImageViewer(ImageViewerInputMixin, ImageViewerViewMixin, QGraphicsView):
     cine_stop_requested = Signal()  # Emitted when cine stop is requested from context menu
     cine_loop_toggled = Signal(bool)  # Emitted when cine loop is toggled from context menu (True = enabled)
     histogram_requested = Signal()  # Emitted when histogram dialog is requested from context menu
+    structured_report_browser_requested = Signal()  # Context menu: Structured Report browser for SR
     quick_window_level_requested = Signal()  # Emitted when Quick Window/Level dialog is requested (context menu or shortcut Q)
     export_roi_statistics_requested = Signal()  # Emitted when Export ROI Statistics is requested from context menu
     measurement_started = Signal(QPointF)  # Emitted when measurement starts (start position)
     measurement_updated = Signal(QPointF)  # Emitted when measurement is updated (current position)
     measurement_finished = Signal()  # Emitted when measurement is finished
     measurement_delete_requested = Signal(object)  # Emitted when measurement deletion is requested (MeasurementItem)
+    angle_measurement_clicked = Signal(QPointF)  # Placing angle: click P1, P2, then P3
+    angle_measurement_preview = Signal(QPointF)  # Cursor move while placing angle
+    angle_draw_cancel_requested = Signal()  # Leaving angle mode or Esc: cancel rubber-band
     text_annotation_started = Signal(QPointF)  # Emitted when text annotation starts (position)
     text_annotation_finished = Signal()  # Emitted when text annotation is finished
     arrow_annotation_started = Signal(QPointF)  # Emitted when arrow annotation starts (start position)
@@ -336,6 +341,8 @@ class ImageViewer(ImageViewerInputMixin, ImageViewerViewMixin, QGraphicsView):
         self._slider_overlay.slider_value_changed.connect(
             self._on_slider_overlay_value_changed
         )
+        # Bottom hint + optional "Open tag browser…" for SR / no-pixel datasets
+        self._no_pixel_placeholder_overlay = NoPixelPlaceholderOverlay(self.viewport())
         # Global on/off toggle (driven by View menu).  True by default.
         self._slice_slider_enabled: bool = True
         # Called with 0-based slice index when the user drags the overlay slider.
@@ -500,4 +507,39 @@ class ImageViewer(ImageViewerInputMixin, ImageViewerViewMixin, QGraphicsView):
         self._slider_overlay.setGeometry(
             vp.width() - overlay_width, 0, overlay_width, vp_h
         )
+
+    def set_no_pixel_placeholder_bar(
+        self,
+        active: bool,
+        *,
+        open_callback: Optional[Callable[[], None]] = None,
+        show_open_button: bool = True,
+    ) -> None:
+        """
+        Show or hide the bottom bar for structured reports without pixel data.
+
+        When ``active`` and ``show_open_button`` are True and ``open_callback`` is set,
+        the user can open the tag browser without using the main menu.
+        """
+        self._no_pixel_placeholder_overlay.configure(
+            active=active,
+            show_open_button=show_open_button,
+            open_callback=open_callback,
+        )
+        self._reposition_no_pixel_placeholder_overlay()
+        if active:
+            self._no_pixel_placeholder_overlay.raise_()
+
+    def _reposition_no_pixel_placeholder_overlay(self) -> None:
+        """Pin the SR / no-pixel hint bar to the bottom of the viewport."""
+        vp = self.viewport()
+        if vp is None:
+            return
+        bar_h = 88
+        if not self._no_pixel_placeholder_overlay.isVisible():
+            return
+        if vp.height() < bar_h + 40:
+            self._no_pixel_placeholder_overlay.setGeometry(0, 0, vp.width(), min(vp.height(), bar_h + 20))
+            return
+        self._no_pixel_placeholder_overlay.setGeometry(0, vp.height() - bar_h, vp.width(), bar_h)
 

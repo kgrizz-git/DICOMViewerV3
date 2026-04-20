@@ -125,6 +125,7 @@ class ConfigManager(
             "smooth_image_when_zoomed": False,
             "show_instances_separately": False,
             "navigator_show_slice_frame_count": True,
+            "histogram_use_projection_pixels": False,
             # Overlay
             "overlay_mode": "minimal",
             "overlay_visibility_state": 0,
@@ -147,6 +148,7 @@ class ConfigManager(
             "roi_line_color_g": 0,
             "roi_line_color_b": 0,
             "roi_default_visible_statistics": ["mean", "std", "min", "max", "count", "area"],
+            "roi_show_per_channel_statistics": True,
             # Measurement
             "measurement_font_size": 14,
             "measurement_font_color_r": 0,

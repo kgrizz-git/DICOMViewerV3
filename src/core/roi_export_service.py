@@ -1,43 +1,64 @@
 """
 ROI Export Service
 
-Aggregates ROI and crosshair data from all subwindows, recomputes ROI statistics
-per slice, and writes TXT, CSV, or XLSX export files.
+Aggregates ROI, crosshair, and distance/angle measurement data from all subwindows,
+recomputes ROI statistics per slice, and writes TXT, CSV, or XLSX export files.
 
 Inputs:
     - current_studies: {study_uid: {series_uid: [Dataset]}}
-    - subwindow_managers: {idx: {'roi_manager', 'crosshair_manager', ...}}
+    - subwindow_managers: {idx: {'roi_manager', 'crosshair_manager', 'measurement_tool', ...}}
     - selected_series: list of (study_uid, series_uid)
     - use_rescale: whether to use rescale slope/intercept (e.g. HU)
     - file path and format (TXT, CSV, XLSX)
 
 Outputs:
-    - Written files (TXT, CSV, or XLSX) with series → slice → ROI/crosshair hierarchy
+    - Written files (TXT, CSV, or XLSX) with series → slice → ROI/crosshair/measurement hierarchy
 
 Requirements:
     - core.dicom_processor.DICOMProcessor (get_pixel_array, get_rescale_parameters)
     - utils.dicom_utils (get_pixel_spacing, pixel_to_patient_coordinates)
     - tools.roi_manager.ROIManager.calculate_statistics (stateless per call)
+    - tools.measurement_items.MeasurementItem, tools.angle_measurement_items.AngleMeasurementItem
     - openpyxl for XLSX, csv for CSV
 """
 
 from __future__ import annotations
 
 import csv
+import math
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from pydicom.dataset import Dataset
 
+from core.dicom_color import multichannel_axis_labels
 from core.dicom_processor import DICOMProcessor
+from tools.angle_measurement_items import AngleMeasurementItem
+from tools.measurement_items import MeasurementItem
 from utils.dicom_utils import get_pixel_spacing, pixel_to_patient_coordinates
 
 
 # Type aliases for keys and data structures
 SeriesKey = Tuple[str, str]  # (study_uid, series_uid)
-SliceData = Tuple[int, List[Any], List[Any]]  # (z, rois, crosshairs)
+SliceData = Tuple[int, List[Any], List[Any], List[Any]]  # (z, rois, crosshairs, measurements)
 CollectedSeries = List[Tuple[SeriesKey, List[SliceData]]]
+
+# Trailing CSV columns for distance/angle rows (ROI and crosshair rows leave these blank).
+MEASUREMENT_CSV_HEADERS: List[str] = [
+    "Measurement Type",
+    "Measurement Index",
+    "Distance (mm)",
+    "Distance (pixels)",
+    "Angle (degrees)",
+    "Measurement display",
+    "P1 scene X",
+    "P1 scene Y",
+    "P2 scene X",
+    "P2 scene Y",
+    "P3 scene X",
+    "P3 scene Y",
+]
 
 
 def _sanitize_filename(s: str) -> str:
@@ -51,21 +72,21 @@ def collect_roi_data(
     subwindow_managers: Dict[int, Dict[str, Any]],
 ) -> CollectedSeries:
     """
-    Collect ROI and crosshair items for selected series from all subwindow managers.
+    Collect ROI, crosshair, and measurement items for selected series from all subwindow managers.
 
     For each (study_uid, series_uid), for each slice index z in the series,
-    aggregates all ROIItem and CrosshairItem objects from every subwindow's
-    roi_manager and crosshair_manager using key (study_uid, series_uid, z).
-    No deduplication: each subwindow holds separate annotation instances.
+    aggregates all ROIItem, CrosshairItem, and measurement graphics items from every
+    subwindow's roi_manager, crosshair_manager, and measurement_tool using key
+    (study_uid, series_uid, z). No deduplication: each subwindow holds separate instances.
 
     Args:
         selected_series: List of (study_uid, series_uid) to export.
         current_studies: App studies dict {study_uid: {series_uid: [datasets]}}.
-        subwindow_managers: Dict of {idx: {'roi_manager', 'crosshair_manager', ...}}.
+        subwindow_managers: Dict of {idx: {'roi_manager', 'crosshair_manager', 'measurement_tool', ...}}.
 
     Returns:
-        List of ((study_uid, series_uid), [(z, rois, crosshairs), ...]) where each
-        (z, rois, crosshairs) has at least one ROI or crosshair (slices with none are omitted).
+        List of ((study_uid, series_uid), [(z, rois, crosshairs, measurements), ...]) where each
+        slice tuple is kept only if at least one of rois, crosshairs, or measurements is non-empty.
     """
     result: CollectedSeries = []
 
@@ -80,18 +101,24 @@ def collect_roi_data(
             key = (study_uid, series_uid, z)
             rois: List[Any] = []
             crosshairs: List[Any] = []
+            measurements: List[Any] = []
 
             for idx in sorted(subwindow_managers.keys()):
                 managers = subwindow_managers[idx]
                 roi_mgr = managers.get("roi_manager")
                 crosshair_mgr = managers.get("crosshair_manager")
+                meas_tool = managers.get("measurement_tool")
                 if roi_mgr and hasattr(roi_mgr, "rois"):
                     rois.extend(roi_mgr.rois.get(key, []))
                 if crosshair_mgr and hasattr(crosshair_mgr, "crosshairs"):
                     crosshairs.extend(crosshair_mgr.crosshairs.get(key, []))
+                if meas_tool is not None and hasattr(meas_tool, "get_measurements_for_slice"):
+                    measurements.extend(
+                        meas_tool.get_measurements_for_slice(study_uid, series_uid, z)
+                    )
 
-            if rois or crosshairs:
-                slice_data_list.append((z, rois, crosshairs))
+            if rois or crosshairs or measurements:
+                slice_data_list.append((z, rois, crosshairs, measurements))
 
         # Include every selected series (even with no annotations) per plan E14
         result.append(((study_uid, series_uid), slice_data_list))
@@ -150,6 +177,7 @@ def compute_roi_statistics(
         rescale_slope=rescale_slope,
         rescale_intercept=rescale_intercept,
         pixel_spacing=pixel_spacing,
+        dataset=dataset,
     )
     return (stats, rescale_type)
 
@@ -190,10 +218,195 @@ def get_crosshair_export_data(
     }
 
 
+def _empty_measurement_csv_row() -> List[str]:
+    """Blank measurement columns for ROI and crosshair CSV rows."""
+    return [""] * len(MEASUREMENT_CSV_HEADERS)
+
+
+def serialize_measurement_for_export(item: Any, index: int) -> List[str]:
+    """
+    Build trailing measurement columns for CSV (same order as MEASUREMENT_CSV_HEADERS).
+
+    Scene coordinates are QGraphics scene units (image-plane) at export time.
+    """
+    empty = _empty_measurement_csv_row()
+    idx_str = str(index)
+
+    if isinstance(item, AngleMeasurementItem):
+        p1, p2, p3 = item.p1, item.p2, item.p3
+        display = getattr(item, "angle_formatted", "") or ""
+        deg = float(getattr(item, "angle_degrees", 0.0))
+        return [
+            "angle",
+            idx_str,
+            "",
+            "",
+            f"{deg:.4f}",
+            display,
+            f"{p1.x():.4f}",
+            f"{p1.y():.4f}",
+            f"{p2.x():.4f}",
+            f"{p2.y():.4f}",
+            f"{p3.x():.4f}",
+            f"{p3.y():.4f}",
+        ]
+
+    if isinstance(item, MeasurementItem):
+        dx = item.end_point.x() - item.start_point.x()
+        dy = item.end_point.y() - item.start_point.y()
+        dist_px = math.sqrt(dx * dx + dy * dy)
+        spacing = getattr(item, "pixel_spacing", None)
+        dist_mm_str = ""
+        if spacing is not None and len(spacing) >= 2:
+            dx_scaled = dx * float(spacing[1])
+            dy_scaled = dy * float(spacing[0])
+            dist_mm = math.sqrt(dx_scaled * dx_scaled + dy_scaled * dy_scaled)
+            dist_mm_str = f"{dist_mm:.6f}"
+        p1, p2 = item.start_point, item.end_point
+        display = getattr(item, "distance_formatted", "") or ""
+        return [
+            "distance",
+            idx_str,
+            dist_mm_str,
+            f"{dist_px:.6f}",
+            "",
+            display,
+            f"{p1.x():.4f}",
+            f"{p1.y():.4f}",
+            f"{p2.x():.4f}",
+            f"{p2.y():.4f}",
+            "",
+            "",
+        ]
+
+    return empty
+
+
+def measurement_txt_block_lines(item: Any, index: int) -> List[str]:
+    """Human-readable lines for one measurement in TXT export."""
+    lines: List[str] = []
+    lines.append(f"  Measurement {index}")
+    if isinstance(item, AngleMeasurementItem):
+        p1, p2, p3 = item.p1, item.p2, item.p3
+        lines.append("    Type            Angle")
+        lines.append(f"    Display         {getattr(item, 'angle_formatted', '')}")
+        lines.append(f"    Angle (deg)     {float(getattr(item, 'angle_degrees', 0.0)):.4f}")
+        lines.append(
+            f"    P1 scene        ({p1.x():.2f}, {p1.y():.2f})"
+        )
+        lines.append(
+            f"    P2 (vertex)     ({p2.x():.2f}, {p2.y():.2f})"
+        )
+        lines.append(
+            f"    P3 scene        ({p3.x():.2f}, {p3.y():.2f})"
+        )
+    elif isinstance(item, MeasurementItem):
+        dx = item.end_point.x() - item.start_point.x()
+        dy = item.end_point.y() - item.start_point.y()
+        dist_px = math.sqrt(dx * dx + dy * dy)
+        spacing = getattr(item, "pixel_spacing", None)
+        lines.append("    Type            Distance")
+        lines.append(f"    Display         {getattr(item, 'distance_formatted', '')}")
+        if spacing is not None and len(spacing) >= 2:
+            dx_scaled = dx * float(spacing[1])
+            dy_scaled = dy * float(spacing[0])
+            dist_mm = math.sqrt(dx_scaled * dx_scaled + dy_scaled * dy_scaled)
+            lines.append(f"    Distance (mm)   {dist_mm:.4f}")
+        lines.append(f"    Distance (px)   {dist_px:.4f}")
+        lines.append(
+            f"    Start scene     ({item.start_point.x():.2f}, {item.start_point.y():.2f})"
+        )
+        lines.append(
+            f"    End scene       ({item.end_point.x():.2f}, {item.end_point.y():.2f})"
+        )
+    else:
+        lines.append("    Type            (unknown)")
+    lines.append("")
+    return lines
+
+
+def _measurement_xlsx_label_value_pairs(item: Any) -> List[Tuple[str, Any]]:
+    """Key/value rows for one measurement in XLSX export (columns 1–2)."""
+    pairs: List[Tuple[str, Any]] = []
+    if isinstance(item, AngleMeasurementItem):
+        p1, p2, p3 = item.p1, item.p2, item.p3
+        pairs.append(("Type", "Angle"))
+        pairs.append(("Display", getattr(item, "angle_formatted", "")))
+        pairs.append(("Angle (deg)", round(float(getattr(item, "angle_degrees", 0.0)), 4)))
+        pairs.append(("P1 scene X", round(p1.x(), 4)))
+        pairs.append(("P1 scene Y", round(p1.y(), 4)))
+        pairs.append(("P2 vertex X", round(p2.x(), 4)))
+        pairs.append(("P2 vertex Y", round(p2.y(), 4)))
+        pairs.append(("P3 scene X", round(p3.x(), 4)))
+        pairs.append(("P3 scene Y", round(p3.y(), 4)))
+    elif isinstance(item, MeasurementItem):
+        dx = item.end_point.x() - item.start_point.x()
+        dy = item.end_point.y() - item.start_point.y()
+        dist_px = math.sqrt(dx * dx + dy * dy)
+        spacing = getattr(item, "pixel_spacing", None)
+        pairs.append(("Type", "Distance"))
+        pairs.append(("Display", getattr(item, "distance_formatted", "")))
+        if spacing is not None and len(spacing) >= 2:
+            dx_scaled = dx * float(spacing[1])
+            dy_scaled = dy * float(spacing[0])
+            dist_mm = math.sqrt(dx_scaled * dx_scaled + dy_scaled * dy_scaled)
+            pairs.append(("Distance (mm)", round(dist_mm, 4)))
+        pairs.append(("Distance (px)", round(dist_px, 4)))
+        pairs.append(("Start scene X", round(item.start_point.x(), 4)))
+        pairs.append(("Start scene Y", round(item.start_point.y(), 4)))
+        pairs.append(("End scene X", round(item.end_point.x(), 4)))
+        pairs.append(("End scene Y", round(item.end_point.y(), 4)))
+    else:
+        pairs.append(("Type", "unknown"))
+    return pairs
+
+
 def _format_float(v: Optional[float]) -> str:
     if v is None:
         return "N/A"
     return f"{v:.4f}"
+
+
+def _channel_stat_csv_headers_from_labels(labels: Tuple[str, ...]) -> List[str]:
+    """CSV column titles for per-channel columns (mean/std/min/max each), given axis labels."""
+    out: List[str] = []
+    for lab in labels:
+        out.extend(
+            [
+                f"Mean ({lab})",
+                f"Std Dev ({lab})",
+                f"Min ({lab})",
+                f"Max ({lab})",
+            ]
+        )
+    return out
+
+
+def _extract_channel_stats(
+    stats: Dict[str, float | int | None],
+) -> Tuple[int, Dict[str, str]]:
+    """
+    Extract per-channel statistics from ROI stats payload.
+
+    Returns:
+        (channel_count, values) where values maps keys like ``mean_ch0`` to
+        formatted strings for export.
+    """
+    channel_count = int(stats.get("multichannel_count") or 0)
+    values: Dict[str, str] = {}
+    for c in range(channel_count):
+        for metric in ("mean", "std", "min", "max"):
+            k = f"{metric}_ch{c}"
+            v = stats.get(k)
+            values[k] = f"{float(v):.4f}" if v is not None else ""
+    return channel_count, values
+
+
+def _safe_spreadsheet_value(v: Any) -> Any:
+    """Neutralize formula-like cell values for CSV/XLSX exports."""
+    if isinstance(v, str) and v[:1] in ("=", "+", "-", "@"):
+        return "'" + v
+    return v
 
 
 def write_txt(
@@ -234,7 +447,7 @@ def write_txt(
             lines.append("  No annotations")
             lines.append("")
             continue
-        for z, rois, crosshairs in slice_list:
+        for z, rois, crosshairs, measurements in slice_list:
             dataset = series_dict[z] if z < len(series_dict) else None
             lines.append(f"  Slice Index (0-based): {z}")
             lines.append(subsep)
@@ -278,6 +491,22 @@ def write_txt(
                             lines.append(f"    Area       {area_mm2_f:.2f}    mm²")
                     else:
                         lines.append(f"    Area       {area_px_f:.1f}    pixels")
+                    channel_count, channel_values = _extract_channel_stats(stats)
+                    ch_labels = multichannel_axis_labels(dataset, channel_count)
+                    for c in range(channel_count):
+                        lab = ch_labels[c]
+                        lines.append(
+                            f"    {lab} Mean   {channel_values.get(f'mean_ch{c}', '')}    {unit_str}"
+                        )
+                        lines.append(
+                            f"    {lab} Std    {channel_values.get(f'std_ch{c}', '')}    {unit_str}"
+                        )
+                        lines.append(
+                            f"    {lab} Min    {channel_values.get(f'min_ch{c}', '')}    {unit_str}"
+                        )
+                        lines.append(
+                            f"    {lab} Max    {channel_values.get(f'max_ch{c}', '')}    {unit_str}"
+                        )
                 lines.append("")
             cross_idx = 0
             for cross_item in crosshairs:
@@ -293,6 +522,8 @@ def write_txt(
                     lines.append(f"    Patient Y (mm) {_format_float(data['patient_y'])}    ")
                     lines.append(f"    Patient Z (mm) {_format_float(data['patient_z'])}    ")
                 lines.append("")
+            for meas_idx, m_item in enumerate(measurements, start=1):
+                lines.extend(measurement_txt_block_lines(m_item, meas_idx))
         lines.append("")
 
     Path(file_path).write_text("\n".join(lines), encoding="utf-8")
@@ -307,8 +538,9 @@ def write_csv(
     dicom_processor: type,
 ) -> None:
     """
-    Write one data row per ROI or per crosshair. Columns per plan E12.
-    ROI rows fill stat columns and leave coordinate columns blank; crosshair rows do the opposite.
+    Write one data row per ROI, crosshair, or measurement. Base columns per plan E12.
+    ROI rows fill stat columns; crosshair and measurement rows leave ROI stats blank.
+    Trailing columns hold per-channel ROI stats (when present) then distance/angle fields.
     """
     roi_manager = None
     for idx in sorted(subwindow_managers.keys()):
@@ -341,7 +573,11 @@ def write_csv(
         "Patient Y (mm)",
         "Patient Z (mm)",
     ]
-    rows: List[List[str]] = [headers]
+    row_payloads: List[Tuple[List[str], Dict[str, str], List[str]]] = [
+        (headers, {}, _empty_measurement_csv_row())
+    ]
+    max_channel_count = 0
+    label_ref_dataset: Optional[Dataset] = None
 
     for (study_uid, series_uid), slice_list in collected:
         series_dict = current_studies.get(study_uid, {}).get(series_uid, [])
@@ -352,7 +588,7 @@ def write_csv(
         series_num = getattr(first_ds, "SeriesNumber", "")
         series_desc = getattr(first_ds, "SeriesDescription", "Unknown Series")
 
-        for z, rois, crosshairs in slice_list:
+        for z, rois, crosshairs, measurements in slice_list:
             dataset = series_dict[z] if z < len(series_dict) else None
             for roi_idx, roi_item in enumerate(rois, start=1):
                 shape = getattr(roi_item, "shape_type", "ellipse")
@@ -379,6 +615,7 @@ def write_csv(
                     "",
                     "",
                 ]
+                channel_values: Dict[str, str] = {}
                 if dataset and roi_manager:
                     stats, rescale_unit = compute_roi_statistics(
                         roi_item, dataset, use_rescale, roi_manager, dicom_processor
@@ -406,7 +643,11 @@ def write_csv(
                     row[11] = f"{area_px_f:.1f}"
                     row[12] = f"{float(area_mm2_v):.4f}" if area_mm2_v is not None else ""
                     row[13] = rescale_unit or ""
-                rows.append(row)
+                    channel_count, channel_values = _extract_channel_stats(stats)
+                    max_channel_count = max(max_channel_count, channel_count)
+                    if channel_count > 0 and label_ref_dataset is None:
+                        label_ref_dataset = dataset
+                row_payloads.append((row, channel_values, _empty_measurement_csv_row()))
 
             for cross_item in crosshairs:
                 data = get_crosshair_export_data(cross_item, dataset) if dataset else {}
@@ -433,7 +674,61 @@ def write_csv(
                     _format_float(data.get("patient_y")),
                     _format_float(data.get("patient_z")),
                 ]
-                rows.append(row)
+                row_payloads.append((row, {}, _empty_measurement_csv_row()))
+
+            for meas_idx, m_item in enumerate(measurements, start=1):
+                # Same 21 base columns as ROI/crosshair rows (crosshair uses 10 blanks then 7 coords).
+                row = [
+                    study_uid_short,
+                    str(series_num),
+                    series_desc,
+                    str(z),
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                ]
+                row_payloads.append(
+                    (row, {}, serialize_measurement_for_export(m_item, meas_idx))
+                )
+
+    dynamic_headers: List[str] = []
+    if max_channel_count > 0:
+        hdr_labels = multichannel_axis_labels(label_ref_dataset, max_channel_count)
+        dynamic_headers = _channel_stat_csv_headers_from_labels(hdr_labels)
+
+    rows: List[List[str]] = []
+    for base_row, channel_values, meas_part in row_payloads:
+        out_row = list(base_row)
+        if base_row is headers:
+            out_row.extend(dynamic_headers)
+            out_row.extend(MEASUREMENT_CSV_HEADERS)
+            rows.append(out_row)
+            continue
+        for c in range(max_channel_count):
+            out_row.extend(
+                [
+                    channel_values.get(f"mean_ch{c}", ""),
+                    channel_values.get(f"std_ch{c}", ""),
+                    channel_values.get(f"min_ch{c}", ""),
+                    channel_values.get(f"max_ch{c}", ""),
+                ]
+            )
+        out_row.extend(meas_part)
+        rows.append([_safe_spreadsheet_value(cell) for cell in out_row])
 
     with open(file_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
@@ -487,7 +782,11 @@ def write_xlsx(
         study_desc = getattr(first_ds, "StudyDescription", "Study")[:31]
         study_desc = _sanitize_filename(study_desc) or "Study"
 
-        ws.cell(row=row, column=1, value=f"Series {series_num}: {series_desc}")
+        ws.cell(
+            row=row,
+            column=1,
+            value=_safe_spreadsheet_value(f"Series {series_num}: {series_desc}"),
+        )
         ws.cell(row=row, column=1).font = bold_font
         row += 1
 
@@ -496,7 +795,7 @@ def write_xlsx(
             row += 2
             continue
 
-        for z, rois, crosshairs in slice_list:
+        for z, rois, crosshairs, measurements in slice_list:
             dataset = series_dict[z] if z < len(series_dict) else None
             ws.cell(row=row, column=1, value=f"  Slice Index (0-based): {z}")
             row += 1
@@ -528,19 +827,19 @@ def write_xlsx(
 
                     ws.cell(row=row, column=1, value="Mean")
                     ws.cell(row=row, column=2, value=round(mean_f, 2))
-                    ws.cell(row=row, column=3, value=unit_str)
+                    ws.cell(row=row, column=3, value=_safe_spreadsheet_value(unit_str))
                     row += 1
                     ws.cell(row=row, column=1, value="Std Dev")
                     ws.cell(row=row, column=2, value=round(std_f, 2))
-                    ws.cell(row=row, column=3, value=unit_str)
+                    ws.cell(row=row, column=3, value=_safe_spreadsheet_value(unit_str))
                     row += 1
                     ws.cell(row=row, column=1, value="Min")
                     ws.cell(row=row, column=2, value=round(min_f, 2))
-                    ws.cell(row=row, column=3, value=unit_str)
+                    ws.cell(row=row, column=3, value=_safe_spreadsheet_value(unit_str))
                     row += 1
                     ws.cell(row=row, column=1, value="Max")
                     ws.cell(row=row, column=2, value=round(max_f, 2))
-                    ws.cell(row=row, column=3, value=unit_str)
+                    ws.cell(row=row, column=3, value=_safe_spreadsheet_value(unit_str))
                     row += 1
                     ws.cell(row=row, column=1, value="Pixels")
                     ws.cell(row=row, column=2, value=count_i)
@@ -560,6 +859,42 @@ def write_xlsx(
                         ws.cell(row=row, column=2, value=area_px_f)
                         ws.cell(row=row, column=3, value="pixels")
                     row += 1
+                    channel_count, channel_values = _extract_channel_stats(stats)
+                    ch_labels = multichannel_axis_labels(dataset, channel_count)
+                    for c in range(channel_count):
+                        lab = ch_labels[c]
+                        ws.cell(row=row, column=1, value=f"{lab} Mean")
+                        ws.cell(
+                            row=row,
+                            column=2,
+                            value=_safe_spreadsheet_value(channel_values.get(f"mean_ch{c}", "")),
+                        )
+                        ws.cell(row=row, column=3, value=_safe_spreadsheet_value(unit_str))
+                        row += 1
+                        ws.cell(row=row, column=1, value=f"{lab} Std Dev")
+                        ws.cell(
+                            row=row,
+                            column=2,
+                            value=_safe_spreadsheet_value(channel_values.get(f"std_ch{c}", "")),
+                        )
+                        ws.cell(row=row, column=3, value=_safe_spreadsheet_value(unit_str))
+                        row += 1
+                        ws.cell(row=row, column=1, value=f"{lab} Min")
+                        ws.cell(
+                            row=row,
+                            column=2,
+                            value=_safe_spreadsheet_value(channel_values.get(f"min_ch{c}", "")),
+                        )
+                        ws.cell(row=row, column=3, value=_safe_spreadsheet_value(unit_str))
+                        row += 1
+                        ws.cell(row=row, column=1, value=f"{lab} Max")
+                        ws.cell(
+                            row=row,
+                            column=2,
+                            value=_safe_spreadsheet_value(channel_values.get(f"max_ch{c}", "")),
+                        )
+                        ws.cell(row=row, column=3, value=_safe_spreadsheet_value(unit_str))
+                        row += 1
             for cross_idx, cross_item in enumerate(crosshairs, start=1):
                 ws.cell(row=row, column=1, value=f"  Crosshair {cross_idx}")
                 ws.cell(row=row, column=1).font = bold_font
@@ -572,13 +907,22 @@ def write_xlsx(
                     row += 1
                     ws.cell(row=row, column=1, value="Slice Index (0-based)"); ws.cell(row=row, column=2, value=data["slice_index"]); ws.cell(row=row, column=3, value="")
                     row += 1
-                    ws.cell(row=row, column=1, value="Pixel Value"); ws.cell(row=row, column=2, value=data["pixel_value_str"]); ws.cell(row=row, column=3, value="")
+                    ws.cell(row=row, column=1, value="Pixel Value"); ws.cell(row=row, column=2, value=_safe_spreadsheet_value(data["pixel_value_str"])); ws.cell(row=row, column=3, value="")
                     row += 1
                     ws.cell(row=row, column=1, value="Patient X (mm)"); ws.cell(row=row, column=2, value=_format_float(data["patient_x"])); ws.cell(row=row, column=3, value="")
                     row += 1
                     ws.cell(row=row, column=1, value="Patient Y (mm)"); ws.cell(row=row, column=2, value=_format_float(data["patient_y"])); ws.cell(row=row, column=3, value="")
                     row += 1
                     ws.cell(row=row, column=1, value="Patient Z (mm)"); ws.cell(row=row, column=2, value=_format_float(data["patient_z"])); ws.cell(row=row, column=3, value="")
+                    row += 1
+            for meas_idx, m_item in enumerate(measurements, start=1):
+                ws.cell(row=row, column=1, value=f"  Measurement {meas_idx}")
+                ws.cell(row=row, column=1).font = bold_font
+                row += 1
+                for label, value in _measurement_xlsx_label_value_pairs(m_item):
+                    ws.cell(row=row, column=1, value=label)
+                    ws.cell(row=row, column=2, value=_safe_spreadsheet_value(value))
+                    ws.cell(row=row, column=3, value="")
                     row += 1
         row += 1
 

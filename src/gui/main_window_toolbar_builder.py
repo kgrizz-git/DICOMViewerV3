@@ -55,6 +55,17 @@ def build_main_toolbar(main_window) -> None:
     )
     toolbar.addAction(main_window.mouse_mode_measure_action)
 
+    main_window.mouse_mode_measure_angle_action = QAction("Angle", main_window)
+    main_window.mouse_mode_measure_angle_action.setCheckable(True)
+    main_window.mouse_mode_measure_angle_action.setShortcut(QKeySequence("Shift+M"))
+    main_window.mouse_mode_measure_angle_action.setStatusTip(
+        "Three-click angle at middle vertex: first segment, then second (Shift+M)"
+    )
+    main_window.mouse_mode_measure_angle_action.triggered.connect(
+        lambda: main_window._on_mouse_mode_changed("measure_angle")
+    )
+    toolbar.addAction(main_window.mouse_mode_measure_angle_action)
+
     # Text Annotation tool
     main_window.mouse_mode_text_annotation_action = QAction("Text", main_window)
     main_window.mouse_mode_text_annotation_action.setCheckable(True)

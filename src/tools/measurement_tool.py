@@ -23,26 +23,39 @@ Requirements:
 from PySide6.QtWidgets import QGraphicsLineItem, QGraphicsTextItem, QGraphicsItemGroup, QGraphicsItem, QGraphicsEllipseItem, QGraphicsSceneMouseEvent
 from PySide6.QtCore import Qt, QPointF, QLineF, QRectF
 from PySide6.QtGui import QPen, QColor, QFont, QBrush, QPainter, QPainterPath, QPainterPathStroker
-from typing import List, Optional, Tuple, Dict, Callable
+from typing import List, Optional, Tuple, Dict, Callable, Any
 import math
 
 from utils.dicom_utils import format_distance, get_pixel_spacing
 from gui.view_transform_helpers import graphics_view_uniform_zoom
 from utils.debug_flags import DEBUG_MEASUREMENT_SERIES
 from tools.measurement_items import DraggableMeasurementText, MeasurementHandle, MeasurementItem
+from tools.angle_measurement_items import (
+    AngleMeasurementItem,
+    DraggableAngleMeasurementText,
+    interior_angle_at_vertex_degrees,
+    format_angle_label,
+)
 from utils.bundled_fonts import make_qfont
 
 # Re-export for backward compatibility (existing imports from tools.measurement_tool still work)
-__all__ = ["MeasurementTool", "DraggableMeasurementText", "MeasurementHandle", "MeasurementItem"]
+__all__ = [
+    "MeasurementTool",
+    "DraggableMeasurementText",
+    "MeasurementHandle",
+    "MeasurementItem",
+    "AngleMeasurementItem",
+    "DraggableAngleMeasurementText",
+]
 
 
 class MeasurementTool:
     """
-    Manages distance measurements on images.
+    Manages distance and angle measurements on images.
     
     Features:
-    - Draw measurement lines
-    - Calculate distances in pixels, mm, or cm
+    - Draw measurement lines (distance in mm/cm or pixels)
+    - Three-click angle tool (polyline P1–P2–P3, angle at P2)
     - Display measurement labels
     """
     
@@ -55,7 +68,7 @@ class MeasurementTool:
         """
         # Key format: (StudyInstanceUID, SeriesInstanceUID, instance_identifier)
         # instance_identifier can be InstanceNumber from DICOM or slice_index as fallback
-        self.measurements: Dict[Tuple[str, str, int], List[MeasurementItem]] = {}
+        self.measurements: Dict[Tuple[str, str, int], List[Any]] = {}
         self.current_study_uid = ""
         self.current_series_uid = ""
         self.current_instance_identifier = 0
@@ -66,6 +79,13 @@ class MeasurementTool:
         self.current_text_item: Optional[QGraphicsTextItem] = None
         self.pixel_spacing: Optional[Tuple[float, float]] = None
         self.config_manager = config_manager
+        # Angle tool in-progress (Option B: P1, then P2, then P3)
+        self.angle_phase: int = 0  # 0 idle, 1 have P1, 2 have P1+P2 (awaiting P3)
+        self.angle_p1: Optional[QPointF] = None
+        self.angle_p2: Optional[QPointF] = None
+        self.angle_preview_line1: Optional[QGraphicsLineItem] = None
+        self.angle_preview_line2: Optional[QGraphicsLineItem] = None
+        self.angle_preview_text: Optional[QGraphicsTextItem] = None
 
     def get_debug_summary(self, scene=None) -> str:
         """Return a compact summary of stored measurements for diagnostics."""
@@ -115,9 +135,9 @@ class MeasurementTool:
         # Update all existing measurements across all slices
         for measurement_list in self.measurements.values():
             for measurement in measurement_list:
-                measurement.update_distance(pixel_spacing)
-                # Also update stored pixel spacing in measurement
-                measurement.pixel_spacing = pixel_spacing
+                if isinstance(measurement, MeasurementItem):
+                    measurement.update_distance(pixel_spacing)
+                    measurement.pixel_spacing = pixel_spacing
     
     def start_measurement(self, pos: QPointF) -> None:
         """
@@ -366,8 +386,179 @@ class MeasurementTool:
         self.measuring = False
         self.start_point = None
         self.current_end_point = None  # Clear tracked end point
+
+    def _measurement_pen(self) -> QPen:
+        pen_width = 2
+        pen_color = (0, 255, 0)
+        if self.config_manager:
+            pen_width = self.config_manager.get_measurement_line_thickness()
+            pen_color = self.config_manager.get_measurement_line_color()
+        pen = QPen(QColor(*pen_color), pen_width)
+        pen.setCosmetic(True)
+        return pen
+
+    def _clear_angle_preview(self, scene) -> None:
+        for attr in ("angle_preview_line1", "angle_preview_line2", "angle_preview_text"):
+            item = getattr(self, attr, None)
+            if item is not None and item.scene() is not None:
+                scene.removeItem(item)
+            setattr(self, attr, None)
+
+    def cancel_angle_in_progress(self, scene) -> None:
+        """Abort a partially placed angle (Esc or mode switch) and remove rubber-band items."""
+        self._clear_angle_preview(scene)
+        self.angle_phase = 0
+        self.angle_p1 = None
+        self.angle_p2 = None
+
+    def update_angle_preview(self, pos: QPointF, scene) -> None:
+        """Update rubber-band lines while placing an angle (phase 1 or 2)."""
+        if self.angle_phase == 0 or self.angle_p1 is None:
+            return
+        pen = self._measurement_pen()
+        if self.angle_phase == 1:
+            if self.angle_preview_line1 is None:
+                self.angle_preview_line1 = QGraphicsLineItem()
+                self.angle_preview_line1.setPen(pen)
+                self.angle_preview_line1.setZValue(149)
+                scene.addItem(self.angle_preview_line1)
+            else:
+                self.angle_preview_line1.setPen(pen)
+            self.angle_preview_line1.setLine(QLineF(self.angle_p1, pos))
+            if self.angle_preview_line2 is not None and self.angle_preview_line2.scene() is not None:
+                scene.removeItem(self.angle_preview_line2)
+                self.angle_preview_line2 = None
+            if self.angle_preview_text is not None and self.angle_preview_text.scene() is not None:
+                scene.removeItem(self.angle_preview_text)
+                self.angle_preview_text = None
+        elif self.angle_phase == 2 and self.angle_p2 is not None:
+            if self.angle_preview_line1 is None:
+                self.angle_preview_line1 = QGraphicsLineItem()
+                self.angle_preview_line1.setPen(pen)
+                self.angle_preview_line1.setZValue(149)
+                scene.addItem(self.angle_preview_line1)
+            else:
+                self.angle_preview_line1.setPen(pen)
+            self.angle_preview_line1.setLine(QLineF(self.angle_p1, self.angle_p2))
+            if self.angle_preview_line2 is None:
+                self.angle_preview_line2 = QGraphicsLineItem()
+                self.angle_preview_line2.setPen(pen)
+                self.angle_preview_line2.setZValue(149)
+                scene.addItem(self.angle_preview_line2)
+            else:
+                self.angle_preview_line2.setPen(pen)
+            self.angle_preview_line2.setLine(QLineF(self.angle_p2, pos))
+            deg = interior_angle_at_vertex_degrees(self.angle_p1, self.angle_p2, pos)
+            label = format_angle_label(deg)
+            if self.angle_preview_text is None:
+                font_size = 10
+                font_color = (0, 255, 0)
+                if self.config_manager:
+                    font_size = self.config_manager.get_measurement_font_size()
+                    font_color = self.config_manager.get_measurement_font_color()
+                font_family = (
+                    self.config_manager.get_measurement_font_family()
+                    if self.config_manager
+                    else "IBM Plex Sans"
+                )
+                font_variant = (
+                    self.config_manager.get_measurement_font_variant()
+                    if self.config_manager
+                    else "Bold"
+                )
+                self.angle_preview_text = QGraphicsTextItem(label)
+                self.angle_preview_text.setDefaultTextColor(QColor(*font_color))
+                self.angle_preview_text.setFont(make_qfont(font_family, font_variant, font_size))
+                self.angle_preview_text.setFlag(
+                    QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations, True
+                )
+                self.angle_preview_text.setZValue(149)
+                scene.addItem(self.angle_preview_text)
+            else:
+                self.angle_preview_text.setPlainText(label)
+            mid = QPointF(
+                (self.angle_p1.x() + self.angle_p2.x() + pos.x()) / 3.0,
+                (self.angle_p1.y() + self.angle_p2.y() + pos.y()) / 3.0,
+            )
+            self.angle_preview_text.setPos(mid)
+
+    def handle_angle_click(self, scene_pos: QPointF, scene) -> Optional[AngleMeasurementItem]:
+        """
+        Register one click for the angle tool. Returns a new ``AngleMeasurementItem`` when the third point is placed.
+
+        Interaction: P1 (first click), P2 (second), P3 (third, commits). Angle is at P2.
+        """
+        if self.angle_phase == 0:
+            self.angle_p1 = QPointF(scene_pos)
+            self.angle_phase = 1
+            self.angle_p2 = None
+            return None
+        if self.angle_phase == 1:
+            self.angle_p2 = QPointF(scene_pos)
+            self.angle_phase = 2
+            return None
+        if self.angle_phase == 2 and self.angle_p1 is not None and self.angle_p2 is not None:
+            p3 = QPointF(scene_pos)
+            self._clear_angle_preview(scene)
+            self.angle_phase = 0
+
+            pen = self._measurement_pen()
+            line1 = QGraphicsLineItem(QLineF(self.angle_p1 - self.angle_p2, QPointF(0, 0)))
+            line2 = QGraphicsLineItem(QLineF(QPointF(0, 0), p3 - self.angle_p2))
+            line1.setPen(pen)
+            line2.setPen(pen)
+
+            font_size = 10
+            font_color = (0, 255, 0)
+            if self.config_manager:
+                font_size = self.config_manager.get_measurement_font_size()
+                font_color = self.config_manager.get_measurement_font_color()
+            font_family = (
+                self.config_manager.get_measurement_font_family()
+                if self.config_manager
+                else "IBM Plex Sans"
+            )
+            font_variant = (
+                self.config_manager.get_measurement_font_variant()
+                if self.config_manager
+                else "Bold"
+            )
+
+            temp_ref: Dict[str, Optional[AngleMeasurementItem]] = {"item": None}
+
+            def _offset_cb(_off: QPointF) -> None:
+                if temp_ref["item"] is not None:
+                    pass
+
+            draggable = DraggableAngleMeasurementText(None, _offset_cb)
+            draggable.setDefaultTextColor(QColor(*font_color))
+            draggable.setFont(make_qfont(font_family, font_variant, font_size))
+            draggable.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations, True)
+            draggable.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
+            draggable.setFlag(QGraphicsItem.GraphicsItemFlag.ItemSendsGeometryChanges, True)
+
+            angle_item = AngleMeasurementItem(
+                self.angle_p1, self.angle_p2, p3, line1, line2, draggable
+            )
+            draggable.measurement = angle_item
+            temp_ref["item"] = angle_item
+
+            scene.addItem(angle_item)
+            angle_item.setZValue(150)
+            scene.addItem(draggable)
+            draggable.setZValue(151)
+
+            key = (self.current_study_uid, self.current_series_uid, self.current_instance_identifier)
+            if key not in self.measurements:
+                self.measurements[key] = []
+            self.measurements[key].append(angle_item)
+
+            self.angle_p1 = None
+            self.angle_p2 = None
+            return angle_item
+        return None
     
-    def get_measurements_for_slice(self, study_uid: str, series_uid: str, instance_identifier: int) -> List[MeasurementItem]:
+    def get_measurements_for_slice(self, study_uid: str, series_uid: str, instance_identifier: int) -> List[Any]:
         """
         Get all measurements for a slice using composite key.
         
@@ -398,7 +589,7 @@ class MeasurementTool:
         scene_items = list(scene.items())
         for item in scene_items:
             # Check if this is a measurement item
-            if isinstance(item, MeasurementItem):
+            if isinstance(item, (MeasurementItem, AngleMeasurementItem)):
                 # Check if this measurement belongs to a different slice
                 belongs_to_current = False
                 for key, measurement_list in self.measurements.items():
@@ -472,12 +663,12 @@ class MeasurementTool:
                     scene.removeItem(measurement)
             del self.measurements[key]
     
-    def delete_measurement(self, measurement: MeasurementItem, scene) -> None:
+    def delete_measurement(self, measurement: Any, scene) -> None:
         """
         Delete a specific measurement.
         
         Args:
-            measurement: MeasurementItem to delete
+            measurement: Linear ``MeasurementItem`` or ``AngleMeasurementItem`` to delete
             scene: QGraphicsScene to remove item from
         """
         # Remove from scene (handles and text are separate items, so remove them first)
@@ -507,7 +698,9 @@ class MeasurementTool:
             scene: QGraphicsScene to remove items from
         """
         if DEBUG_MEASUREMENT_SERIES:
-            scene_items_before = sum(1 for item in scene.items() if isinstance(item, MeasurementItem))
+            scene_items_before = sum(
+                1 for item in scene.items() if isinstance(item, (MeasurementItem, AngleMeasurementItem))
+            )
             print(
                 "[DEBUG-MEAS-SERIES] clear_measurements: "
                 f"scene_id={id(scene)}, scene_measurement_items_before={scene_items_before}, "
@@ -536,7 +729,9 @@ class MeasurementTool:
                     scene.removeItem(measurement)
         self.measurements.clear()
         if DEBUG_MEASUREMENT_SERIES:
-            scene_items_after = sum(1 for item in scene.items() if isinstance(item, MeasurementItem))
+            scene_items_after = sum(
+                1 for item in scene.items() if isinstance(item, (MeasurementItem, AngleMeasurementItem))
+            )
             print(
                 "[DEBUG-MEAS-SERIES] clear_measurements complete: "
                 f"scene_measurement_items_after={scene_items_after}, summary_after={self.get_debug_summary(scene)}"
@@ -551,7 +746,7 @@ class MeasurementTool:
         """
         for key, measurement_list in self.measurements.items():
             for measurement in measurement_list:
-                if measurement.scene() is not None:
+                if measurement.scene() is not None and hasattr(measurement, "update_text_offset_for_zoom"):
                     measurement.update_text_offset_for_zoom()
     
     def update_all_measurement_styles(self, config_manager) -> None:
@@ -576,23 +771,33 @@ class MeasurementTool:
         pen = QPen(QColor(*pen_color), pen_width)
         pen.setCosmetic(True)  # Makes pen width viewport-relative (independent of zoom)
         
-        # Update all measurements
+        # Update all measurements (linear and angle)
+        handle_color = QColor(*pen_color)
+        handle_color_with_alpha = QColor(handle_color.red(), handle_color.green(), handle_color.blue(), 180)
+        handle_pen = QPen(handle_color, 2)
+        handle_brush = QBrush(handle_color_with_alpha)
+        font = make_qfont(font_family, font_variant, font_size)
+        text_color = QColor(*font_color)
+
         for key, measurement_list in self.measurements.items():
             for measurement in measurement_list:
-                # Update measurement line pen
-                measurement.line_item.setPen(pen)
-                
-                # Update handle colors to match line color
-                handle_color = QColor(*pen_color)
-                handle_color_with_alpha = QColor(handle_color.red(), handle_color.green(), handle_color.blue(), 180)
-                measurement.start_handle.setPen(QPen(handle_color, 2))
-                measurement.start_handle.setBrush(QBrush(handle_color_with_alpha))
-                measurement.end_handle.setPen(QPen(handle_color, 2))
-                measurement.end_handle.setBrush(QBrush(handle_color_with_alpha))
-                
-                # Update text item font and color
-                if measurement.text_item is not None:
-                    measurement.text_item.setDefaultTextColor(QColor(*font_color))
-                    font = make_qfont(font_family, font_variant, font_size)
-                    measurement.text_item.setFont(font)
+                if isinstance(measurement, MeasurementItem):
+                    measurement.line_item.setPen(pen)
+                    measurement.start_handle.setPen(handle_pen)
+                    measurement.start_handle.setBrush(handle_brush)
+                    measurement.end_handle.setPen(handle_pen)
+                    measurement.end_handle.setBrush(handle_brush)
+                    if measurement.text_item is not None:
+                        measurement.text_item.setDefaultTextColor(text_color)
+                        measurement.text_item.setFont(font)
+                elif isinstance(measurement, AngleMeasurementItem):
+                    measurement.line1_item.setPen(pen)
+                    measurement.line2_item.setPen(pen)
+                    for h in (measurement.h0, measurement.h1, measurement.h2):
+                        if h is not None:
+                            h.setPen(handle_pen)
+                            h.setBrush(handle_brush)
+                    if measurement.text_item is not None:
+                        measurement.text_item.setDefaultTextColor(text_color)
+                        measurement.text_item.setFont(font)
 

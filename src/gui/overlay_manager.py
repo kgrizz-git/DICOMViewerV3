@@ -29,7 +29,12 @@ from core.multiframe_handler import is_multiframe, get_frame_count
 from utils.dicom_utils import get_patient_tag_keywords
 
 from utils.bundled_fonts import make_qfont
-from gui.overlay_text_builder import get_corner_text, get_modality, get_overlay_text
+from gui.overlay_text_builder import (
+    get_corner_text,
+    get_modality,
+    get_overlay_text,
+    merge_simple_and_detailed_extra_corner_tags,
+)
 from gui.overlay_items_factory import create_graphics_overlay_text_item
 from gui.view_transform_helpers import graphics_view_uniform_zoom
 from utils.debug_flags import DEBUG_WIDGET_PAN
@@ -395,6 +400,26 @@ class OverlayManager:
         if mode in ["minimal", "detailed", "hidden"]:
             self.mode = mode
 
+    def _corner_tags_for_current_mode(self, modality: str) -> Dict[str, List[str]]:
+        """
+        Resolve per-corner tag keyword lists for the current ``self.mode``.
+
+        Simple (minimal) uses configured ``overlay_tags`` only. Detailed merges
+        ``overlay_tags_detailed_extra`` after simple tags (deduplicated).
+        """
+        if self.config_manager is None:
+            return {
+                "upper_left": list(self.minimal_fields),
+                "upper_right": [],
+                "lower_left": [],
+                "lower_right": [],
+            }
+        simple = self.config_manager.get_overlay_tags(modality)
+        if self.mode != "detailed":
+            return simple
+        extras = self.config_manager.get_overlay_tags_detailed_extra(modality)
+        return merge_simple_and_detailed_extra_corner_tags(simple, extras)
+
     def should_show_text_overlays(self) -> bool:
         """
         Return True when metadata-style text overlays should be visible.
@@ -565,20 +590,9 @@ class OverlayManager:
         if not self.should_show_text_overlays():
             return []
         
-        # Get modality and corner tags
+        # Get modality and corner tags (simple vs simple+detailed extras)
         modality = get_modality(parser)
-        
-        # Get tags for each corner from config manager
-        if self.config_manager is not None:
-            corner_tags = self.config_manager.get_overlay_tags(modality)
-        else:
-            # Fallback to old behavior: use minimal fields in upper-left
-            corner_tags = {
-                "upper_left": self.minimal_fields,
-                "upper_right": [],
-                "lower_left": [],
-                "lower_right": []
-            }
+        corner_tags = self._corner_tags_for_current_mode(modality)
         
         # Get scene dimensions for positioning
         # Try to get from scene rect, or use image item if available
@@ -831,20 +845,9 @@ class OverlayManager:
                 current_geometry.height() != viewport.height()):
                 self.viewport_overlay_widget.setGeometry(0, 0, viewport.width(), viewport.height())
         
-        # Get modality and corner tags
+        # Get modality and corner tags (simple vs simple+detailed extras)
         modality = get_modality(parser)
-        
-        # Get tags for each corner from config manager
-        if self.config_manager is not None:
-            corner_tags = self.config_manager.get_overlay_tags(modality)
-        else:
-            # Fallback to old behavior: use minimal fields in upper-left
-            corner_tags = {
-                "upper_left": self.minimal_fields,
-                "upper_right": [],
-                "lower_left": [],
-                "lower_right": []
-            }
+        corner_tags = self._corner_tags_for_current_mode(modality)
         
         # Generate text for each corner
         corners = [

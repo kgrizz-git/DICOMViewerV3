@@ -1,0 +1,58 @@
+"""Tests for SR document tree builder and RDSR irradiation event extraction."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pydicom
+import pytest
+from pydicom.dataset import Dataset
+
+from core.rdsr_irradiation_events import extract_irradiation_events
+from core.sr_document_tree import build_sr_document_tree, path_to_node_id_map
+from core.sr_sop_classes import is_structured_report_dataset, structured_report_storage_label
+
+_FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "dicom_rdsr"
+
+
+@pytest.fixture(scope="module")
+def xray_rdsr_ds() -> Dataset:
+    path = _FIXTURE_DIR / "synthetic_ct_dose_xray_rdsr.dcm"
+    assert path.is_file()
+    return pydicom.dcmread(path)
+
+
+def test_build_sr_document_tree_xray_rdsr(xray_rdsr_ds: Dataset) -> None:
+    tree = build_sr_document_tree(xray_rdsr_ds)
+    assert tree.total_nodes >= 1
+    assert len(tree.roots) == 1
+    assert not tree.truncated
+    pmap = path_to_node_id_map(tree)
+    assert (0,) in pmap
+
+
+def test_extract_irradiation_events_synthetic_ct(xray_rdsr_ds: Dataset) -> None:
+    ex = extract_irradiation_events(xray_rdsr_ds)
+    # Synthetic fixture uses two CT irradiation event containers (113819) with no nested children.
+    assert len(ex.rows) == 2
+    assert all("113819" in r.event_concept for r in ex.rows)
+
+
+def test_truncation_flag_when_max_nodes_tiny(xray_rdsr_ds: Dataset) -> None:
+    tree = build_sr_document_tree(xray_rdsr_ds, max_nodes=2, max_depth=24)
+    assert tree.truncated is True
+
+
+def test_is_structured_report_dataset_xray_rdsr(xray_rdsr_ds: Dataset) -> None:
+    assert is_structured_report_dataset(xray_rdsr_ds) is True
+    label = structured_report_storage_label(str(xray_rdsr_ds.SOPClassUID))
+    assert "Radiation Dose" in label or "X-Ray" in label
+
+
+def test_empty_dataset_no_crash() -> None:
+    ds = Dataset()
+    ds.is_little_endian = True
+    ds.is_implicit_VR = True
+    tree = build_sr_document_tree(ds)
+    assert tree.roots == []
+    assert tree.warnings

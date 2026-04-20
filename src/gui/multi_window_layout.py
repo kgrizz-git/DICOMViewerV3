@@ -21,7 +21,8 @@ Requirements:
 
 from PySide6.QtWidgets import QWidget, QGridLayout, QVBoxLayout, QHBoxLayout, QSizePolicy
 from PySide6.QtCore import Qt, Signal
-from typing import Optional, List, Literal
+from PySide6.QtGui import QPixmap
+from typing import Optional, List, Literal, Tuple
 from datetime import datetime
 
 from gui.sub_window_container import SubWindowContainer
@@ -524,7 +525,62 @@ class MultiWindowLayout(QWidget):
             List of all SubWindowContainer instances
         """
         return self.subwindows.copy()
-    
+
+    def get_screenshot_grid_cells(self) -> List[Tuple[int, int, int]]:
+        """
+        Describe the on-screen image grid for composite screenshot export.
+
+        Returns:
+            List of (row, col, view_index) for each visible layout cell, in reading
+            order (left-to-right, top-to-bottom). ``view_index`` indexes
+            ``get_all_subwindows()`` (0..3). Layout matches ``_arrange_subwindows``.
+        """
+        mode = self.current_layout
+        stv = self.slot_to_view
+        if mode == "1x1":
+            idx = self._get_focused_view_index()
+            return [(0, 0, idx)]
+        if mode == "1x2":
+            focused_slot = self._get_focused_slot()
+            row = focused_slot // 2
+            v0 = stv[row * 2]
+            v1 = stv[row * 2 + 1]
+            return [(0, 0, v0), (0, 1, v1)]
+        if mode == "2x1":
+            focused_slot = self._get_focused_slot()
+            col = focused_slot % 2
+            v0 = stv[col]
+            v1 = stv[col + 2]
+            return [(0, 0, v0), (1, 0, v1)]
+        if mode == "2x2":
+            out: List[Tuple[int, int, int]] = []
+            for s in range(4):
+                r, c = s // 2, s % 2
+                out.append((r, c, stv[s]))
+            return out
+        idx = self._get_focused_view_index()
+        return [(0, 0, idx)]
+
+    def grab_layout_grid_pixmap(self) -> Optional[QPixmap]:
+        """
+        Capture the visible multi-pane grid exactly as arranged on screen.
+
+        This grabs ``layout_widget`` (the internal QGridLayout host with zero margins
+        and spacing), so exported composites match the app layout without gutters
+        caused by assembling per-viewport grabs with mismatched logical vs device sizes.
+
+        Returns:
+            Non-null pixmap on success, or None if there is nothing to grab.
+        """
+        host = self.layout_widget
+        if host is None or not host.isVisible():
+            return None
+        host.update()
+        pix = host.grab()
+        if pix.isNull() or pix.width() < 1 or pix.height() < 1:
+            return None
+        return pix
+
     def _on_assign_series_requested(self, series_uid: str, slice_index: int, study_uid: str = "") -> None:
         """
         Handle series assignment request from a subwindow.

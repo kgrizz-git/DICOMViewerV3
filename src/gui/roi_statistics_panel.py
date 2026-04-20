@@ -199,36 +199,50 @@ class ROIStatisticsPanel(QWidget):
         # Format values (numbers only in Value column) and units (in Unit column)
         rescale_unit = rescale_type or ""
 
-        # Update table: column 1 = value (number only), column 2 = unit
-        self.stats_table.setItem(0, 1, QTableWidgetItem(f"{statistics.get('mean', 0):.2f}"))
-        self.stats_table.setItem(0, 2, QTableWidgetItem(rescale_unit))
-        self.stats_table.setItem(1, 1, QTableWidgetItem(f"{statistics.get('std', 0):.2f}"))
-        self.stats_table.setItem(1, 2, QTableWidgetItem(rescale_unit))
-        self.stats_table.setItem(2, 1, QTableWidgetItem(f"{statistics.get('min', 0):.2f}"))
-        self.stats_table.setItem(2, 2, QTableWidgetItem(rescale_unit))
-        self.stats_table.setItem(3, 1, QTableWidgetItem(f"{statistics.get('max', 0):.2f}"))
-        self.stats_table.setItem(3, 2, QTableWidgetItem(rescale_unit))
-        self.stats_table.setItem(4, 1, QTableWidgetItem(f"{statistics.get('count', 0)}"))
-        self.stats_table.setItem(4, 2, QTableWidgetItem(""))
-
-        # Area: value and unit in separate columns
-        area_mm2 = statistics.get('area_mm2')
-        area_pixels = statistics.get('area_pixels', 0.0)
+        rows: list[tuple[str, str, str]] = [
+            ("Mean", f"{statistics.get('mean', 0):.2f}", rescale_unit),
+            ("Std Dev", f"{statistics.get('std', 0):.2f}", rescale_unit),
+            ("Min", f"{statistics.get('min', 0):.2f}", rescale_unit),
+            ("Max", f"{statistics.get('max', 0):.2f}", rescale_unit),
+            ("Pixels", f"{statistics.get('count', 0)}", ""),
+        ]
+        area_mm2 = statistics.get("area_mm2")
+        area_pixels = statistics.get("area_pixels", 0.0)
         if area_mm2 is not None:
             if area_mm2 >= 100.0:
-                area_cm2 = area_mm2 / 100.0
-                self.stats_table.setItem(5, 1, QTableWidgetItem(f"{area_cm2:.2f}"))
-                self.stats_table.setItem(5, 2, QTableWidgetItem("cm²"))
+                rows.append(("Area", f"{area_mm2 / 100.0:.2f}", "cm²"))
             else:
-                self.stats_table.setItem(5, 1, QTableWidgetItem(f"{area_mm2:.2f}"))
-                self.stats_table.setItem(5, 2, QTableWidgetItem("mm²"))
+                rows.append(("Area", f"{area_mm2:.2f}", "mm²"))
         else:
-            self.stats_table.setItem(5, 1, QTableWidgetItem(f"{area_pixels:.1f}"))
-            self.stats_table.setItem(5, 2, QTableWidgetItem("pixels"))
+            rows.append(("Area", f"{area_pixels:.1f}", "pixels"))
+
+        mc = int(statistics.get("multichannel_count") or 0)
+        if mc >= 2:
+            raw_lbl = statistics.get("channel_labels")
+            if isinstance(raw_lbl, (list, tuple)) and len(raw_lbl) == mc:
+                labels = tuple(str(x) for x in raw_lbl)
+            else:
+                labels = tuple(f"Ch{i}" for i in range(mc))
+            for c in range(mc):
+                lbl = labels[c] if c < len(labels) else f"Ch{c}"
+                if f"mean_ch{c}" in statistics:
+                    rows.append((f"Mean ({lbl})", f"{statistics[f'mean_ch{c}']:.2f}", rescale_unit))
+                    rows.append((f"Std ({lbl})", f"{statistics.get(f'std_ch{c}', 0):.2f}", rescale_unit))
+                    rows.append((f"Min ({lbl})", f"{statistics.get(f'min_ch{c}', 0):.2f}", rescale_unit))
+                    rows.append((f"Max ({lbl})", f"{statistics.get(f'max_ch{c}', 0):.2f}", rescale_unit))
+
+        self.stats_table.setRowCount(len(rows))
+        for i, (name, val, unit) in enumerate(rows):
+            self.stats_table.setItem(i, 0, QTableWidgetItem(name))
+            self.stats_table.setItem(i, 1, QTableWidgetItem(val))
+            self.stats_table.setItem(i, 2, QTableWidgetItem(unit))
 
     def clear_statistics(self) -> None:
         """Clear displayed statistics."""
-        for i in range(6):
+        self.stats_table.setRowCount(6)
+        base = ["Mean", "Std Dev", "Min", "Max", "Pixels", "Area"]
+        for i, lab in enumerate(base):
+            self.stats_table.setItem(i, 0, QTableWidgetItem(lab))
             self.stats_table.setItem(i, 1, QTableWidgetItem(""))
             self.stats_table.setItem(i, 2, QTableWidgetItem(""))
         self.current_statistics = None

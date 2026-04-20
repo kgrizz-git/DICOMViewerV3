@@ -90,17 +90,32 @@ class AnnotationClipboard:
         """
         serialized = []
         for m in measurements:
-            meas_data = {
-                'start_point': {
-                    'x': m.start_point.x(),
-                    'y': m.start_point.y()
-                },
-                'end_point': {
-                    'x': m.end_point.x(),
-                    'y': m.end_point.y()
-                },
-                'pixel_spacing': m.pixel_spacing
-            }
+            from tools.angle_measurement_items import AngleMeasurementItem
+
+            if isinstance(m, AngleMeasurementItem):
+                meas_data = {
+                    "measurement_kind": "angle",
+                    "p1": {"x": m.p1.x(), "y": m.p1.y()},
+                    "p2": {"x": m.p2.x(), "y": m.p2.y()},
+                    "p3": {"x": m.p3.x(), "y": m.p3.y()},
+                    "text_offset_viewport": {
+                        "x": m.text_offset_viewport.x(),
+                        "y": m.text_offset_viewport.y(),
+                    },
+                }
+            else:
+                meas_data = {
+                    "measurement_kind": "distance",
+                    "start_point": {
+                        "x": m.start_point.x(),
+                        "y": m.start_point.y(),
+                    },
+                    "end_point": {
+                        "x": m.end_point.x(),
+                        "y": m.end_point.y(),
+                    },
+                    "pixel_spacing": m.pixel_spacing,
+                }
             serialized.append(meas_data)
         
         return serialized
