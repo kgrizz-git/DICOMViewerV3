@@ -652,9 +652,8 @@ class MprController(QObject):
         self._tear_down_mpr_at_subwindow(from_idx)
         self.mpr_cleared.emit(from_idx)
 
-        ok = self._install_mpr_payload_at_subwindow(to_idx, payload)
-        if ok:
-            self.mpr_activated.emit(to_idx)
+        self._install_mpr_payload_at_subwindow(to_idx, payload)
+        self.mpr_activated.emit(to_idx)
 
     def attach_floating_mpr(self, to_idx: int) -> None:
         """Assign a detached MPR session to *to_idx*."""
@@ -669,39 +668,12 @@ class MprController(QObject):
         except Exception:
             pass
 
-        dest_backup: Optional[Dict[str, Any]] = None
         if self.is_mpr(to_idx):
-            dest_backup = self._capture_mpr_payload(to_idx)
             self.clear_mpr(to_idx)
 
-        ok = self._install_mpr_payload_at_subwindow(to_idx, payload)
-        if ok:
-            self._detached_mpr_payload = None
-            try:
-                if hasattr(self._app, "series_navigator"):
-                    self._app.series_navigator.clear_mpr_thumbnail(-1)
-            except Exception:
-                pass
-            self.mpr_activated.emit(to_idx)
-        else:
-            if dest_backup is not None:
-                restored = self._install_mpr_payload_at_subwindow(to_idx, dest_backup)
-                if restored:
-                    self.mpr_activated.emit(to_idx)
-            try:
-                QMessageBox.warning(
-                    self._app.main_window,
-                    "MPR",
-                    "Could not attach the detached MPR to this window.\n"
-                    "The detached session is still available in the navigator."
-                    + (
-                        "\nThe previous MPR in this window was restored."
-                        if dest_backup is not None
-                        else ""
-                    ),
-                )
-            except Exception:
-                pass
+        self._detached_mpr_payload = None
+        self._install_mpr_payload_at_subwindow(to_idx, payload)
+        self.mpr_activated.emit(to_idx)
 
     def detach_mpr_from_subwindow(self, idx: int) -> None:
         """
@@ -719,20 +691,15 @@ class MprController(QObject):
         self._tear_down_mpr_at_subwindow(idx)
         self.mpr_detached.emit(idx)
 
-    def _install_mpr_payload_at_subwindow(self, idx: int, payload: Dict[str, Any]) -> bool:
-        """
-        Apply a captured MPR payload to *idx* (same end state as _activate_mpr).
-
-        Returns:
-            True if the MPR view was installed; False on missing data or install error.
-        """
+    def _install_mpr_payload_at_subwindow(self, idx: int, payload: Dict[str, Any]) -> None:
+        """Apply a captured MPR payload to *idx* (same end state as _activate_mpr)."""
         data = self._app.subwindow_data.get(idx)
         if data is None:
-            return False
+            return
 
         result: Optional[MprResult] = payload.get("mpr_result")
         if result is None:
-            return False
+            return
 
         orientation_label = str(payload.get("mpr_orientation", "MPR") or "MPR")
 
@@ -745,20 +712,11 @@ class MprController(QObject):
                 "current_datasets": list(data.get("current_datasets", [])),
             }
 
-        try:
-            source_ds = result.source_volume.source_datasets[0]
-        except Exception:
-            return False
-        n_sl = max(int(getattr(result, "n_slices", 0) or 0), 0)
-        if n_sl < 1:
-            return False
-        si = int(payload.get("mpr_slice_index", 0))
-        si = max(0, min(si, n_sl - 1))
-
+        source_ds = result.source_volume.source_datasets[0]
         data["is_mpr"] = True
         data["mpr_result"] = result
         data["mpr_orientation"] = orientation_label
-        data["mpr_slice_index"] = si
+        data["mpr_slice_index"] = int(payload.get("mpr_slice_index", 0))
         data["mpr_source_dataset"] = payload.get("mpr_source_dataset") or source_ds
         data["current_study_uid"] = str(payload.get("current_study_uid", "") or "")
         data["current_series_uid"] = str(payload.get("current_series_uid", "") or "")
@@ -771,46 +729,41 @@ class MprController(QObject):
         )
 
         try:
+            if hasattr(self._app, "slice_navigator") and idx == getattr(
+                self._app, "focused_subwindow_index", -1
+            ):
+                self._app.slice_navigator.set_total_slices(result.n_slices)
+                self._app.slice_navigator.blockSignals(True)
+                self._app.slice_navigator.current_slice_index = data["mpr_slice_index"]
+                self._app.slice_navigator.blockSignals(False)
+        except Exception:
+            pass
+
+        self._set_tools_enabled(idx, enabled=False)
+        self._reset_window_level_for_mpr(idx, source_ds)
+
+        self.display_mpr_slice(idx, data["mpr_slice_index"])
+        image_viewer = self._get_image_viewer(idx)
+        if image_viewer is not None:
             try:
-                if hasattr(self._app, "slice_navigator") and idx == getattr(
-                    self._app, "focused_subwindow_index", -1
-                ):
-                    self._app.slice_navigator.set_total_slices(result.n_slices)
-                    self._app.slice_navigator.blockSignals(True)
-                    self._app.slice_navigator.current_slice_index = data["mpr_slice_index"]
-                    self._app.slice_navigator.blockSignals(False)
+                image_viewer.fit_to_view(center_image=True)
             except Exception:
                 pass
 
-            self._set_tools_enabled(idx, enabled=False)
-            self._reset_window_level_for_mpr(idx, source_ds)
+        managers = self._app.subwindow_managers.get(idx, {})
+        overlay_manager = managers.get("overlay_manager")
+        if overlay_manager is not None and hasattr(overlay_manager, "set_mpr_banner"):
+            if getattr(overlay_manager, "should_show_text_overlays", lambda: True)():
+                overlay_manager.set_mpr_banner(self._build_mpr_banner_text(data))
+            else:
+                overlay_manager.set_mpr_banner(None)
 
-            self.display_mpr_slice(idx, data["mpr_slice_index"])
-            image_viewer = self._get_image_viewer(idx)
-            if image_viewer is not None:
-                try:
-                    image_viewer.fit_to_view(center_image=True)
-                except Exception:
-                    pass
-
-            managers = self._app.subwindow_managers.get(idx, {})
-            overlay_manager = managers.get("overlay_manager")
-            if overlay_manager is not None and hasattr(overlay_manager, "set_mpr_banner"):
-                if getattr(overlay_manager, "should_show_text_overlays", lambda: True)():
-                    overlay_manager.set_mpr_banner(self._build_mpr_banner_text(data))
-                else:
-                    overlay_manager.set_mpr_banner(None)
-
-            if idx == getattr(self._app, "focused_subwindow_index", -1):
-                sync = getattr(
-                    self._app, "_sync_intensity_projection_widget_from_mpr_data", None
-                )
-                if callable(sync):
-                    sync(data)
-        except Exception as exc:
-            _mpr_log(f"_install_mpr_payload_at_subwindow failed: {exc}")
-            return False
-        return True
+        if idx == getattr(self._app, "focused_subwindow_index", -1):
+            sync = getattr(
+                self._app, "_sync_intensity_projection_widget_from_mpr_data", None
+            )
+            if callable(sync):
+                sync(data)
 
     def display_mpr_slice(self, idx: int, slice_index: int) -> None:
         """

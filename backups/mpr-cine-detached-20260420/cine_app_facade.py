@@ -50,26 +50,11 @@ class CineAppFacade:
             app.cine_player.set_datasets(datasets)
             app.cine_controls_widget.set_loop_bounds(None, None)
 
-        focused_idx = int(getattr(app, "focused_subwindow_index", -1))
-        mpr_data = (
-            app.subwindow_data.get(focused_idx, {})
-            if focused_idx >= 0
-            else {}
-        )
-        mpr_res = mpr_data.get("mpr_result") if mpr_data.get("is_mpr") else None
-        mpr_n = (
-            int(getattr(mpr_res, "n_slices", 0) or 0) if mpr_res is not None else 0
-        )
-        mpr_cine_ok = bool(mpr_data.get("is_mpr")) and mpr_n > 1
-        app.cine_player.set_use_linear_cine_navigation(mpr_cine_ok)
-
         is_cine_capable = app.cine_player.is_cine_capable(
             app.current_studies,
             app.current_study_uid,
             app.current_series_uid,
         )
-        if mpr_cine_ok:
-            is_cine_capable = True
 
         app.cine_controls_widget.set_controls_enabled(is_cine_capable)
         if app.image_viewer is not None:
@@ -107,18 +92,9 @@ class CineAppFacade:
     def on_cine_play(self) -> None:
         """Start playback using frame rate from the current dataset when available."""
         app = self._app
-        ds = app.current_dataset
-        if ds is None and hasattr(app, "_subwindow_lifecycle_controller"):
-            try:
-                fi = app.get_focused_subwindow_index()
-                ds = app._subwindow_lifecycle_controller.get_subwindow_dataset(fi)
-            except Exception:
-                ds = None
-        frame_rate = (
-            app.cine_player.get_frame_rate_from_dicom(ds) if ds is not None else None
-        )
-        started = app.cine_player.start_playback(frame_rate=frame_rate, dataset=ds)
-        if started:
+        if app.current_dataset is not None:
+            frame_rate = app.cine_player.get_frame_rate_from_dicom(app.current_dataset)
+            app.cine_player.start_playback(frame_rate=frame_rate, dataset=app.current_dataset)
             fps = app.cine_player.get_effective_frame_rate()
             app.cine_controls_widget.update_fps_display(fps)
 

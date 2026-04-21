@@ -178,10 +178,19 @@ def _wire_customization_signals(app: DICOMViewerApp) -> None:
 def _wire_subwindow_signals(app: DICOMViewerApp) -> None:
     """Connect signals that apply to all subwindows. Delegates to subwindow lifecycle controller."""
     app._subwindow_lifecycle_controller.connect_subwindow_signals()
-    # MPR controller → navigator thumbnail.
+    # MPR controller → navigator thumbnail and cine (linear MPR stack vs slice groups).
     app._mpr_controller.mpr_activated.connect(app._update_mpr_navigator_thumbnail)
+    app._mpr_controller.mpr_activated.connect(
+        lambda _idx: app.cine_app_facade.update_cine_player_context()
+    )
     app._mpr_controller.mpr_cleared.connect(app._clear_mpr_navigator_thumbnail)
+    app._mpr_controller.mpr_cleared.connect(
+        lambda _idx: app.cine_app_facade.update_cine_player_context()
+    )
     app._mpr_controller.mpr_detached.connect(app._on_mpr_detached)
+    app._mpr_controller.mpr_detached.connect(
+        lambda _idx: app.cine_app_facade.update_cine_player_context()
+    )
 
 
 def _wire_focused_subwindow_signals(app: DICOMViewerApp) -> None:

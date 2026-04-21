@@ -59,7 +59,7 @@ src/
 │   ├── actions/                     # Menu/dialog/view/customization actions: ``dialog_actions``, ``view_actions``, ``customization_actions``; ``dialog_action_handlers`` re-exports for façades/tests
 │   ├── app_handler_bootstrap.py     # After subwindow managers exist: builds coordinators, ``FileOperationsHandler``, ``DialogCoordinator``, cine, keyboard, etc.; ``DICOMViewerApp._initialize_handlers`` delegates
 │   ├── session_reset_controller.py  # Close-all / ROI clear / fusion reset / tag-union schedule / quit drain; ``main`` delegates ``_close_files``, ``_clear_data``, ``_on_app_about_to_quit``
-│   ├── mpr_navigator_thumbnail.py   # MPR pixel-array helpers and series-navigator MPR thumbnail set/clear/floating; ``main`` keeps one-line slots for ``app_signal_wiring``
+│   ├── mpr_navigator_thumbnail.py   # MPR pixel-array helpers and series-navigator MPR thumbnail set/clear/floating (attached vs key ``-1`` detached); ``main`` keeps one-line slots for ``app_signal_wiring``
 │   ├── layout_window_slot_controller.py  # Layout changed handlers, capture/restore, swap/expand 1×1, window-slot map refresh/popup; ``main`` delegates
 │   ├── tag_export_union_host.py     # Tag-export union ``QThread`` worker, generation, merged map; ``tag_export_union_ready`` remains on ``DICOMViewerApp``
 │   ├── study_index/                 # Local encrypted study DB (SQLCipher MVP): store, service, port, study_date_format (UI DA↔US), background threads
@@ -74,7 +74,7 @@ src/
 │   ├── export_app_facade.py           # Focused-series paths, save-as prompt, export/ROI-stats/screenshot entrypoints; DICOMViewerApp delegates (Phase 4c)
 │   ├── subwindow_image_viewer_sync.py # Propagate privacy, slice sync, smoothing, scale/direction markers to all pane ImageViewers (used by main.py)
 │   ├── subwindow_manager_factory.py # build_managers_for_subwindow(app, idx, subwindow) — per-pane ROI/measurement/overlay/slice/fusion graph (used by main.py)
-│   ├── cine_app_facade.py             # Cine player, frame slider, loop bounds; ``app_signal_wiring`` connects slots to this facade (post-assessment Phase 8)
+│   ├── cine_app_facade.py             # Cine player, frame slider, loop bounds; MPR-focused panes enable linear cine over ``n_slices``; ``app_signal_wiring`` connects slots to this facade (post-assessment Phase 8)
 │   ├── window_level_preset_handler.py # Context-menu W/L preset apply with raw/rescaled alignment (post-assessment Phase 7)
 │   ├── main_app_key_event_filter.py   # Layout digit focus gating + key dispatch to ``KeyboardEventHandler`` (post-assessment Phase 9)
 │   ├── slice_display_lut.py           # Window/level raw vs rescaled alignment helpers (used by SliceDisplayManager)

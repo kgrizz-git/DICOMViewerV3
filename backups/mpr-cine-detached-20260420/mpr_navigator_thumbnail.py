@@ -93,6 +93,7 @@ def update_mpr_navigator_thumbnail(app: "DICOMViewerApp", idx: int) -> None:
     """
     if not hasattr(app, "series_navigator"):
         return
+    app.series_navigator.clear_mpr_thumbnail(-1)
     data = app.subwindow_data.get(idx, {})
     if not data.get("is_mpr") or data.get("mpr_result") is None:
         app.series_navigator.clear_mpr_thumbnail(idx)
