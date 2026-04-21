@@ -134,11 +134,13 @@ class _StudyIndexGroupedModel(QAbstractTableModel):
         index: Union[QModelIndex, QPersistentModelIndex],
         role: int = Qt.ItemDataRole.DisplayRole,
     ) -> Any:
-        if not index.isValid() or role != Qt.ItemDataRole.DisplayRole:
+        if not index.isValid():
             return None
         row = self._rows[index.row()]
         cid = self._column_ids[index.column()]
         val = row.get(cid)
+        if role not in (Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.ToolTipRole):
+            return None
         if val is None:
             return ""
         if cid in ("instance_count", "series_count"):
@@ -201,7 +203,7 @@ class StudyIndexSearchDialog(QDialog):
         self._save_columns_timer.setSingleShot(True)
         self._save_columns_timer.timeout.connect(self._persist_column_visual_order)
         self.setWindowTitle("Study Index")
-        self.resize(1024, 560)
+        self.resize(1024, 672)
         col_ids = self._config.get_study_index_browser_column_order()
         self._model = _StudyIndexGroupedModel(col_ids, parent=self)
         self._build_ui()

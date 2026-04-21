@@ -7,6 +7,7 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ## [Unreleased]
 
 ### Changed
+- **Study index dialog:** Hovering any result cell now shows a tooltip with the **full field value** (for example long folder/file paths) instead of only the visually elided table text. Implemented via `Qt.ItemDataRole.ToolTipRole` in `src/gui/dialogs/study_index_search_dialog.py`. **Semantic versioning note: patch** (UI usability).
 - **Study index dialog:** Filter fields (**Patient** through **Study date**) use a **two-column** layout inside **Filters** so the dialog is shorter vertically; **Search all text** / quick search stays **full width** above. **`src/gui/dialogs/study_index_search_dialog.py`**. **Semantic versioning note: patch** (layout only).
 
 ### Added
