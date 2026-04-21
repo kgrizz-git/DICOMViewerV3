@@ -18,6 +18,8 @@ The **Local study index (encrypted)** group stores metadata about studies you op
 | **Database file** | Path to the encrypted SQLite database file. **Browse…** chooses a path; **Use default path** clears the field so the app uses its default (typically next to your app config file). |
 | Hint text in the dialog | The database is encrypted with **SQLCipher**. The encryption key is stored in the **OS credential manager**, not in the JSON config file. |
 
+**Study index browser (File / Tools menu):** **Search all text** runs SQLite **FTS5** over indexed header fields (patient name/ID, accession, study and series description, modality, UIDs). It is combined with the per-field filters using **AND** (leave quick search empty to use only those filters). The first time you open an existing pre-FTS index database after upgrading the app, the index migrates automatically (schema v2).
+
 **Privacy:** Indexed metadata reflects what was read from DICOM files; use **Privacy mode** when presenting the UI to others, and treat the database file as **sensitive**—protect backups accordingly.
 
 **Advanced (design / roadmap):** [Local study database and indexing plan](../dev-docs/plans/supporting/LOCAL_STUDY_DATABASE_AND_INDEXING_PLAN.md) — developer-oriented background; not required for day-to-day use.

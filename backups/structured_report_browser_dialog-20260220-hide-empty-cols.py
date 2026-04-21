@@ -2,9 +2,8 @@
 Structured Report browser — modeless SR document tree, dose event table, exports.
 
 **Purpose:** Full-fidelity ``ContentSequence`` tree (lazy ``QAbstractItemModel``), optional
-per-irradiation-event table for RDSR-style instances (with optional **hide empty columns** in
-the table view only; exports keep all columns), legacy CT dose summary tab when parsing succeeds,
-raw-tags shortcut, and JSON / CSV / XLSX export.
+per-irradiation-event table for RDSR-style instances, legacy CT dose summary tab when parsing
+succeeds, raw-tags shortcut, and JSON / CSV / XLSX export.
 
 **Inputs:** ``pydicom.dataset.Dataset``, privacy flag, optional callbacks.
 
@@ -26,7 +25,6 @@ from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt, QPersistentModel
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QDialog,
-    QCheckBox,
     QDialogButtonBox,
     QFileDialog,
     QHBoxLayout,
@@ -51,13 +49,7 @@ from core.rdsr_dose_sr import (
     is_radiation_dose_sr,
     parse_ct_radiation_dose_summary,
 )
-from core.rdsr_irradiation_events import (
-    IrradiationEventRow,
-    attach_tree_node_ids,
-    extract_irradiation_events,
-    irradiation_event_column_is_empty_for_all_rows,
-    ordered_irradiation_event_column_headers,
-)
+from core.rdsr_irradiation_events import IrradiationEventRow, attach_tree_node_ids, extract_irradiation_events
 from core.sr_document_tree import SrContentNode, SrDocumentTree, build_sr_document_tree, path_to_node_id_map, sr_tree_to_json_dict
 from core.sr_sop_classes import structured_report_storage_label
 
@@ -308,16 +300,6 @@ class StructuredReportBrowserDialog(QDialog):
                 "matching CONTAINER in the Document tab."
             )
         )
-        dose_opts = QHBoxLayout()
-        dose_opts.addWidget(
-            QLabel("Blank column = no non-whitespace value in any row (CSV/XLSX still export all columns).")
-        )
-        dose_opts.addStretch()
-        self._hide_empty_event_columns = QCheckBox("Hide empty columns")
-        self._hide_empty_event_columns.setChecked(True)
-        self._hide_empty_event_columns.toggled.connect(self._apply_event_table_empty_column_visibility)
-        dose_opts.addWidget(self._hide_empty_event_columns)
-        dl.addLayout(dose_opts)
         self._event_table = QTableWidget(0, 0)
         self._event_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._event_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
@@ -417,7 +399,11 @@ class StructuredReportBrowserDialog(QDialog):
 
     def _populate_event_table(self) -> None:
         rows = self._events.rows
-        headers = ordered_irradiation_event_column_headers(rows)
+        headers: list[str] = []
+        for r in rows:
+            for k in r.columns:
+                if k not in headers:
+                    headers.append(k)
         self._event_table.setColumnCount(len(headers))
         self._event_table.setHorizontalHeaderLabels(headers)
         self._event_table.setRowCount(len(rows))
@@ -428,21 +414,6 @@ class StructuredReportBrowserDialog(QDialog):
                 it.setFlags(it.flags() & ~Qt.ItemFlag.ItemIsEditable)
                 it.setData(Qt.ItemDataRole.UserRole, er.node_id_placeholder)
                 self._event_table.setItem(ri, ci, it)
-        self._apply_event_table_empty_column_visibility()
-
-    def _apply_event_table_empty_column_visibility(self) -> None:
-        """
-        When **Hide empty columns** is checked, hide columns where every cell is blank after strip.
-        Export paths are unchanged (full header list).
-        """
-        rows = self._events.rows
-        headers = ordered_irradiation_event_column_headers(rows)
-        if self._event_table.columnCount() != len(headers):
-            return
-        hide_empty = self._hide_empty_event_columns.isChecked()
-        for i, h in enumerate(headers):
-            empty = irradiation_event_column_is_empty_for_all_rows(rows, h)
-            self._event_table.setColumnHidden(i, hide_empty and empty)
 
     def _on_tree_selection(self, *_args: Any) -> None:
         idx = self._tree_view.currentIndex()
@@ -497,7 +468,11 @@ class StructuredReportBrowserDialog(QDialog):
         if not rows:
             QMessageBox.information(self, "Export", "No dose event rows to export.")
             return
-        headers = ordered_irradiation_event_column_headers(rows)
+        headers: list[str] = []
+        for r in rows:
+            for k in r.columns:
+                if k not in headers:
+                    headers.append(k)
         ext = "xlsx" if xlsx else "csv"
         path, _ = QFileDialog.getSaveFileName(
             self,

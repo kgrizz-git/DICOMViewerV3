@@ -2,11 +2,10 @@
 Study index browser dialog (local SQLCipher).
 
 Grouped rows per study and folder root with instance/series counts and modalities.
-**Search all text** uses SQLite FTS5 across indexed fields (combined with per-field
-filters with AND semantics). Filters, **Search** / **Clear** (reset filters and reload
-full index), paginated browse (**Load more**), **Remove from index** (delete grouped
-study from the encrypted DB only), optional folder indexing, and privacy masking for
-patient-related fields. Column order is persisted (movable headers).
+Filters, **Search** / **Clear** (reset filters and reload full index), paginated browse
+(**Load more**), **Remove from index** (delete grouped study from the encrypted DB only),
+optional folder indexing, and privacy masking for patient-related fields. Column order
+is persisted (movable headers).
 """
 
 from __future__ import annotations
@@ -47,7 +46,6 @@ from core.study_index.study_date_format import (
     parse_study_date_filter_field,
 )
 from utils.config_manager import ConfigManager
-from utils.log_sanitizer import sanitize_message
 
 _PAGE_SIZE = 100
 
@@ -211,9 +209,6 @@ class StudyIndexSearchDialog(QDialog):
 
         hint = QLabel(
             "Browse or search the local encrypted index (one row per study per folder). "
-            "<b>Search all text</b> finds words across patient, IDs, accession, study and series "
-            "descriptions, modality, and UIDs (FTS5). The filter fields below narrow results; "
-            "all active filters and quick search combine with <b>AND</b>. "
             "Patient-related columns respect <b>Privacy mode</b> when enabled in View. "
             "Study dates in the table use <b>MM/DD/YYYY</b>; date filters accept the same "
             "or <b>YYYYMMDD</b>. <b>Remove from index</b> deletes only database rows for that "
@@ -223,24 +218,8 @@ class StudyIndexSearchDialog(QDialog):
         hint.setWordWrap(True)
         layout.addWidget(hint)
 
-        quick = QGroupBox("Search all text")
-        quick_row = QHBoxLayout(quick)
-        quick_row.addWidget(QLabel("Quick search:"))
-        self._global_fts = QLineEdit()
-        self._global_fts.setPlaceholderText(
-            "Words match across indexed fields (e.g. series keyword + patient name)"
-        )
-        self._global_fts.setToolTip(
-            "Full-text search (FTS5) across patient name, IDs, accession, study and series "
-            "description, modality, and instance UIDs. Leave empty to use only the filters below."
-        )
-        quick_row.addWidget(self._global_fts, stretch=1)
-        layout.addWidget(quick)
-
         filt = QGroupBox("Filters")
-        filt_columns = QHBoxLayout(filt)
-        form_left = QFormLayout()
-        form_right = QFormLayout()
+        form = QFormLayout(filt)
         self._patient_name = QLineEdit()
         self._patient_id = QLineEdit()
         self._modality = QLineEdit()
@@ -250,16 +229,13 @@ class StudyIndexSearchDialog(QDialog):
         self._date_to = _StudyIndexMdyLineEdit()
         self._date_from.setPlaceholderText("MM/DD/YYYY")
         self._date_to.setPlaceholderText("MM/DD/YYYY")
-        # Two columns to shorten vertical space (global quick search stays full-width above).
-        form_left.addRow("Patient name contains:", self._patient_name)
-        form_left.addRow("Patient ID contains:", self._patient_id)
-        form_left.addRow("Modality contains:", self._modality)
-        form_left.addRow("Accession contains:", self._accession)
-        form_right.addRow("Study description contains:", self._study_desc)
-        form_right.addRow("Study date from (MM/DD/YYYY):", self._date_from)
-        form_right.addRow("Study date to (MM/DD/YYYY):", self._date_to)
-        filt_columns.addLayout(form_left, stretch=1)
-        filt_columns.addLayout(form_right, stretch=1)
+        form.addRow("Patient name contains:", self._patient_name)
+        form.addRow("Patient ID contains:", self._patient_id)
+        form.addRow("Modality contains:", self._modality)
+        form.addRow("Accession contains:", self._accession)
+        form.addRow("Study description contains:", self._study_desc)
+        form.addRow("Study date from (MM/DD/YYYY):", self._date_from)
+        form.addRow("Study date to (MM/DD/YYYY):", self._date_to)
         layout.addWidget(filt)
 
         btn_row = QHBoxLayout()
@@ -358,7 +334,6 @@ class StudyIndexSearchDialog(QDialog):
             "study_description_contains": self._study_desc.text(),
             "study_date_from": study_date_from,
             "study_date_to": study_date_to,
-            "global_fts_query": self._global_fts.text(),
         }
 
     def _backend_ok_or_warn(self) -> bool:
@@ -387,21 +362,8 @@ class StudyIndexSearchDialog(QDialog):
                 offset=self._offset,
                 privacy_mode=self._privacy(),
             )
-        except ValueError as e:
-            safe_details = sanitize_message(str(e), redact_paths=True)
-            QMessageBox.warning(
-                self,
-                "Study index",
-                f"Search parameters are invalid. Please adjust filters.\n\nDetails: {safe_details}",
-            )
-            return
         except Exception as e:
-            safe_details = sanitize_message(str(e), redact_paths=True)
-            QMessageBox.critical(
-                self,
-                "Study index",
-                f"Query failed. Please try again.\n\nDetails: {safe_details}",
-            )
+            QMessageBox.critical(self, "Study index", f"Query failed:\n{e}")
             return
         if reset:
             self._model.set_rows(batch)
@@ -415,7 +377,6 @@ class StudyIndexSearchDialog(QDialog):
 
     def _on_clear_filters_clicked(self) -> None:
         """Reset filter fields and show the entire study index (first page)."""
-        self._global_fts.clear()
         self._patient_name.clear()
         self._patient_id.clear()
         self._modality.clear()

@@ -27,6 +27,8 @@ This hub links topic guides for the application. **In the running app**, use **H
 
 The app can keep a **local encrypted** database of studies you open so they can be listed and searched on your machine (behavior may expand over time). Configure it under **Edit → Settings…** in the **Local study index (encrypted)** section: optional **automatically add** on successful open, and **database file** path (default places the file near your app config). The dialog notes that **SQLCipher** protects the file and the **encryption key is stored in the OS credential manager**, not in plain JSON config.
 
+Open **File → Open study index…** or **Tools → Study index search…** to browse indexed studies. Use **Search all text** (FTS5) for words across patient fields, accession, study and series descriptions, modality, and UIDs; the filter fields below still narrow results, and everything active combines with **AND**.
+
 Treat the database like other clinical metadata: back up and secure appropriately. Field-level descriptions: [CONFIGURATION.md](CONFIGURATION.md).
 
 ## Source and versioning

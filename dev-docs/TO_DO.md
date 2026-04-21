@@ -1,7 +1,7 @@
 # To-Do Checklist
 
 **Last updated:** 2026-04-21  
-**Changes:** **RDSR P0 plan** archived to [`plans/completed/RDSR_XA_DOSE_RP_AND_SR_CLEAR_WINDOW_P0_PLAN.md`](plans/completed/RDSR_XA_DOSE_RP_AND_SR_CLEAR_WINDOW_P0_PLAN.md); `TO_DO` links updated. *(Prior: P0 RDSR lines 40–41 **[x]** — shipped (**0.2.11**): dose-events **DAP / Dose (RP) unit** columns + missing-unit notes; **Clear this window** hides SR no-pixel bar (plan link was under `plans/`). 2026-04-20 — P0 RDSR lines 40–41 add [plan §3.0 completion/sync](plans/completed/RDSR_XA_DOSE_RP_AND_SR_CLEAR_WINDOW_P0_PLAN.md#completion-protocol). Same day — P0 RDSR items link to plan. 2026-04-17 — PySkinDose P1 links to [`plans/supporting/PYSKINDOSE_INTEGRATION_PLAN.md`](plans/supporting/PYSKINDOSE_INTEGRATION_PLAN.md) only; highdicom/SR item points at SR plans directly. 2026-04-16 — moved linked implementation plans into [`plans/supporting/`](plans/supporting/) and refreshed `plans/…` links; unequal pane splitters + cine axes linked to [`plans/supporting/SPLITTER_UNEQUAL_PANES_AND_CINE_PLAYBACK_AXES.md`](plans/supporting/SPLITTER_UNEQUAL_PANES_AND_CINE_PLAYBACK_AXES.md); 2026-04-15: RDSR shipped, ROI per-channel stats shipped, histogram projection pixels shipped, export formula-injection hardening.)*
+**Changes:** **Maintenance:** new [dependency bump verification](plans/DEPENDENCY_BUMP_VERIFICATION_PLAN.md) plan + checklist item under Maintenance. **Maintenance:** [GitHub Actions / CI/CD review](plans/supporting/GITHUB_ACTIONS_CI_CD_REVIEW_AND_STORAGE.md) supporting plan linked from Actions/CI checklist item. **RDSR P0 plan** archived to [`plans/completed/RDSR_XA_DOSE_RP_AND_SR_CLEAR_WINDOW_P0_PLAN.md`](plans/completed/RDSR_XA_DOSE_RP_AND_SR_CLEAR_WINDOW_P0_PLAN.md); `TO_DO` links updated. 
 
 ---
 
@@ -23,7 +23,6 @@ This file tracks active and near-term tasks.
 ## Validation / QA
 
 - [ ] **[P1]** Run assessment templates
-- [ ] **[P0]** RUN SMOKE TESTS for exporting (various export options, magnified, with ROIs/text, without)
 - [ ] **[P1]** See qi-assessment recommendations
 - [ ] **[P1]** Also see to-dos on Unpushed Edits Google Sheet
 
@@ -32,21 +31,18 @@ This file tracks active and near-term tasks.
 
 ## Performance / Packaging
 
-- [ ] **[P0]** **macOS PyInstaller — A/B `du` and safety:** On macOS, from the **same git ref**, build twice: (1) **current** spec with **`MACOS_PYSIDE6_MODULE_EXCLUDES`** applied, (2) a branch or env-gated spec that **does not** apply those darwin-only excludes. Compare **`du -sh dist/DICOMViewerV3.app`** (and top `Frameworks/` contributors); record numbers in **`dev-docs/info/PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md`**. **Smoke both** `.app` builds (launch, open DICOM, histogram, export/QA paths). *Why:* PyInstaller usually **does not** ship modules that never appear in the import graph, so excludes may save **little** until hooks/deps pull extra Qt; but **`excludes` can still cause `ImportError`** if any code path (including a **third-party** lazy import) touches a trimmed module — so **prefer default = include everything PyInstaller collects** and treat aggressive macOS trims as a **build-time opt-in** (e.g. env var or spec flag) only after A/B numbers justify it and smoke passes on the slim build.
 - [ ] **[P1]** Try to make code faster (startup, file loading, fusion, and general responsiveness) ([details](FUTURE_WORK_DETAIL_NOTES.md#performance-initial-load-file-loading-fusion-and-general-responsiveness))
     - [P2] Particularly w/ large dataset (large files or many files) - would loading compressed initially save time? If we make a database, keep compressed cache?
 - [ ] **[P0]** See if executables can be made smaller (especially on macOS) ([details](FUTURE_WORK_DETAIL_NOTES.md#executable-size-especially-on-macos))
 - [ ] **[P1]** Check fusion responsiveness on Parallels with 3D fusion
-- [x] **[P0]** Check dose RP values / order of magnitude / units for XA fluoroscopy RDSRs — [**plan**](plans/completed/RDSR_XA_DOSE_RP_AND_SR_CLEAR_WINDOW_P0_PLAN.md#p0-xa-rdsr-dose-rp-units) · [completion](plans/completed/RDSR_XA_DOSE_RP_AND_SR_CLEAR_WINDOW_P0_PLAN.md#completion-protocol)
-- [x] **[P0]** Doing Clear this window on a window with SR does not clear the message or button — [**plan**](plans/completed/RDSR_XA_DOSE_RP_AND_SR_CLEAR_WINDOW_P0_PLAN.md#p0-sr-clear-window-overlay) · [completion](plans/completed/RDSR_XA_DOSE_RP_AND_SR_CLEAR_WINDOW_P0_PLAN.md#completion-protocol)
-- [x] **[P0]** Playing cine on an MPR stack plays through only as many slices as the original base series, not the MPR. — [**plan**](plans/MPR_CINE_AND_DETACHED_NAVIGATOR_P0_PLAN.md)
-- [x] **[P0]** when I did "clear this window" on a window with an MPR, then tried to drag the MPR from the navigator bar to a different window, the MPR just disappeared (did not appear in window and disappeared from navigator) — [**plan**](plans/MPR_CINE_AND_DETACHED_NAVIGATOR_P0_PLAN.md)
+
 
 ## Maintenance
 
+- [ ] **[P1]** **Post–dependency bump verification:** After updating pinned packages (e.g. `pylinac` in `requirements.txt`, `actions/github-script` in `.github/workflows/`) or other materially risky deps, follow **[Dependency bump verification plan](plans/DEPENDENCY_BUMP_VERIFICATION_PLAN.md)** — check off every applicable checkbox **in that plan file** as you complete each step; when the plan is **fully** complete, mark **this** item `[x]` and add a dated one-line note to the **Changes** line at the top of `TO_DO.md`.
 - [ ] **[P1]** Review what is included in git repo unnecessarily
 - [ ] **[P1]** Regularly run all scan templates and update TO_DO.md
-- [ ] **[P1]** Examine github actions, CI, CD, etc., and look for opportunities to optimize, simplify, or improve, including reducing use of limited storage quota
+- [ ] **[P1]** Examine github actions, CI, CD, etc., and look for opportunities to optimize, simplify, or improve, including reducing use of limited storage quota and reducing overly busy secondary scans (eg, we push a commit, actions run, one tool spawns a PR, all actions run on that) — **supporting plan:** [GitHub Actions, CI/CD, and storage — review and recommendations](plans/supporting/GITHUB_ACTIONS_CI_CD_REVIEW_AND_STORAGE.md)
 - [ ] **[P1]** Check for pyright warnings, errors - run pyright
 
 ## UX / Workflow
@@ -78,12 +74,13 @@ This file tracks active and near-term tasks.
 - [ ] **[P2]** Where is it getting frame rate from?
 - [ ] **[P1]** Should we block showing DICOM tags when an MPR window is selected (show just "MPR")? Or add some kind of warning that it is the underlying series data somehow?
 - [ ] **[P1]** Make spacebar cycle overlay visibility state on all windows?
+- [ ] Allow filtering of columns in study index (some, anyway) and sorting
 
 ## Features (Near-Term)
 
 - [ ] **[P1]** Integrate with PySkinDose? — **Plan:** [PySkinDose integration](plans/supporting/PYSKINDOSE_INTEGRATION_PLAN.md).
 - [ ] **[P1]** Add highdicom and further SR support — **phased rollout:** [normalization & highdicom (Stage 1 → Stage 2)](plans/supporting/SR_DOSE_EVENTS_NORMALIZATION_AND_HIGHDICOM_PLAN.md); umbrella [SR full fidelity plan](plans/supporting/SR_FULL_FIDELITY_BROWSER_PLAN.md#4-dependencies---highdicom-allowed); [research: capabilities & fit](info/HIGHDICOM_OVERVIEW.md)
-- [ ] **[P0]** Add SQLite **FTS5** full-text search for the local study index (e.g. study/series description); see [LOCAL_STUDY_DATABASE_AND_INDEXING_PLAN.md](plans/supporting/LOCAL_STUDY_DATABASE_AND_INDEXING_PLAN.md).
+- [x] **[P0]** Add SQLite **FTS5** full-text search for the local study index (e.g. study/series description) — **shipped in v0.3.0**; **plan / checklist:** [LOCAL_STUDY_DATABASE_AND_INDEXING_PLAN.md § FTS5](plans/supporting/LOCAL_STUDY_DATABASE_AND_INDEXING_PLAN.md#fts5-local-study-index-search-detailed-plan).
 - [ ] **[P1]** Add a "Deep Anonymizer" export option that strips out all tag data that could be used to indentify a scanner, institution, address, etc., as well as patient informaion. Should include institution name, address, station name, device serial number, etc.
 - [ ] **[P1]** Add a simple "DICOM metadata browser" mode that can ingest, browse, and export DICOM metadata, without any image display or processing?(hopefully fast and efficient)
 - [ ] **[P1]** Be able to associate with DICOM extension and add to Open With menus ([details](FUTURE_WORK_DETAIL_NOTES.md#file-association-and-open-with-integration))
@@ -108,9 +105,7 @@ This file tracks active and near-term tasks.
 
 - [ ] **[P1]** Documentation structure, Quick Guide alignment, settings reference, and discoverability ([plan](plans/completed/DOCUMENTATION_STRUCTURE_AND_COMPLETENESS_PLAN.md), [assessment inputs](doc-assessments/doc-assessment-2026-04-20-002224.md)).
 - [ ] **[P1]** Conduct documentation audit to ensure all features are documented and up to date.
-- [x] **[P1]** Introduce Help → Documentation, shorten Quick Start (`resources/help/quick_start_guide.html`), link to full docs in browser — see [DOCUMENTATION_IMPROVEMENT_PLAN_2026-04-03-200500.md](plans/completed/DOCUMENTATION_IMPROVEMENT_PLAN_2026-04-03-200500.md).
-- [x] **[P1]** Add documentation for the pylinac integration and the automated QA analysis tools — [user-docs/USER_GUIDE_QA_PYLINAC.md](../user-docs/USER_GUIDE_QA_PYLINAC.md) (developer depth remains in `dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md`).
-- [ ] **[P2]** implement offline doc bundle + `file://` and policy in `BUILDING_EXECUTABLES.md` / installer notes. 
+- [ ] **[P1]** implement offline doc bundle + `file://` and policy in `BUILDING_EXECUTABLES.md` / installer notes. 
 
 
 ## Data / Platform (Future)

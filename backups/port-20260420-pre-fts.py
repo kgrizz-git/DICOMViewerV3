@@ -23,7 +23,6 @@ class StudyIndexPort(Protocol):
         study_description_contains: str = "",
         study_date_from: str = "",
         study_date_to: str = "",
-        global_fts_query: str = "",
         limit: int = 500,
         privacy_mode: bool = False,
     ) -> list[dict[str, Any]]:
@@ -40,7 +39,6 @@ class StudyIndexPort(Protocol):
         study_description_contains: str = "",
         study_date_from: str = "",
         study_date_to: str = "",
-        global_fts_query: str = "",
         limit: int = 100,
         offset: int = 0,
         privacy_mode: bool = False,

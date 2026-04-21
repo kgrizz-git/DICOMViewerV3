@@ -9,9 +9,7 @@ NUM/CODE/TEXT children into string columns for a ``QTableView``.
 **Inputs:** ``pydicom.dataset.Dataset`` (typically ``Modality`` **SR**, dose-related SOP class).
 
 **Outputs:** :class:`IrradiationEventExtraction` with rows, optional notes, and
-``truncated_subtree`` when flattening caps apply. Table-oriented helpers
-:func:`ordered_irradiation_event_column_headers` and :func:`irradiation_event_column_is_empty_for_all_rows`
-support the SR browser dose-events grid (including hide-empty-column visibility). Per-event columns include **DAP** / **Dose (RP)**
+``truncated_subtree`` when flattening caps apply. Per-event columns include **DAP** / **Dose (RP)**
 numeric values plus parallel **DAP units** / **Dose (RP) units** from
 ``MeasurementUnitsCodeSequence`` when present; missing units on those NUMs may append soft
 warnings to ``notes`` (capped per document).
@@ -759,25 +757,6 @@ class IrradiationEventExtraction:
     rows: list[IrradiationEventRow]
     notes: list[str]
     truncated_subtree: bool = False
-
-
-def ordered_irradiation_event_column_headers(rows: Sequence[IrradiationEventRow]) -> list[str]:
-    """
-    Column titles for the dose-events table: union of keys across rows, preserving first-seen order.
-
-    The SR browser table and CSV/XLSX export use this ordering so columns stay aligned.
-    """
-    headers: list[str] = []
-    for r in rows:
-        for k in r.columns:
-            if k not in headers:
-                headers.append(k)
-    return headers
-
-
-def irradiation_event_column_is_empty_for_all_rows(rows: Sequence[IrradiationEventRow], header: str) -> bool:
-    """True when every row has a blank value for ``header`` after strip (missing key = blank)."""
-    return not any((r.columns.get(header, "") or "").strip() for r in rows)
 
 
 def _build_event_columns(
