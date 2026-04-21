@@ -58,6 +58,76 @@ def test_extract_irradiation_events_enhanced_geometry_columns(enhanced_rdsr_ds: 
     assert row.columns.get("Collimated field area (mm²)") == "1500.0"
 
 
+def test_extract_irradiation_events_dap_and_dose_rp_unit_columns(enhanced_rdsr_ds: Dataset) -> None:
+    """DAP / Dose (RP) numeric columns keep prior behavior; parallel unit columns come from UCUM."""
+    ex = extract_irradiation_events(enhanced_rdsr_ds)
+    assert len(ex.rows) >= 1
+    row = ex.rows[0]
+    assert row.columns.get("DAP") == "22.5"
+    dap_u = (row.columns.get("DAP units") or "").lower()
+    assert "gray" in dap_u or "gy" in dap_u
+    # Synthetic X-ray event omits 113738; column exists and is empty when absent.
+    assert "Dose (RP) units" in row.columns
+
+
+def test_extract_irradiation_events_missing_dap_units_emits_note() -> None:
+    """NUM 122130 with value but no MeasurementUnitsCodeSequence → capped soft note on extraction."""
+
+    def _c(cv: str, scheme: str, meaning: str) -> Dataset:
+        d = Dataset()
+        d.CodeValue = cv
+        d.CodingSchemeDesignator = scheme
+        d.CodeMeaning = meaning
+        return d
+
+    def _dap_num_no_ucum() -> Dataset:
+        d = Dataset()
+        d.ValueType = "NUM"
+        d.ConceptNameCodeSequence = DicomSequence([_c("122130", "DCM", "Dose Area Product Total")])
+        mv = Dataset()
+        mv.NumericValue = "1.0"
+        d.MeasuredValueSequence = DicomSequence([mv])
+        d.RelationshipType = "CONTAINS"
+        return d
+
+    event = Dataset()
+    event.ValueType = "CONTAINER"
+    event.ContinuityOfContent = "SEPARATE"
+    event.ConceptNameCodeSequence = DicomSequence([_c("113706", "DCM", "Irradiation Event X-Ray Data")])
+    event.RelationshipType = "CONTAINS"
+    event.ContentSequence = DicomSequence([_dap_num_no_ucum()])
+
+    root = Dataset()
+    root.ValueType = "CONTAINER"
+    root.ContinuityOfContent = "SEPARATE"
+    root.ConceptNameCodeSequence = DicomSequence([_c("113701", "DCM", "CT Radiation Dose")])
+    root.RelationshipType = "CONTAINS"
+    root.ContentSequence = DicomSequence([event])
+
+    ds = Dataset()
+    ds.SpecificCharacterSet = "ISO_IR 100"
+    ds.Modality = "SR"
+    ds.SOPClassUID = str(EnhancedXRayRadiationDoseSRStorage)
+    ds.SOPInstanceUID = generate_uid()
+    ds.ContentSequence = DicomSequence([root])
+    fm = FileMetaDataset()
+    fm.MediaStorageSOPClassUID = ds.SOPClassUID
+    fm.MediaStorageSOPInstanceUID = ds.SOPInstanceUID
+    fm.TransferSyntaxUID = ExplicitVRLittleEndian
+    fm.ImplementationClassUID = PYDICOM_IMPLEMENTATION_UID
+    ds.file_meta = fm
+    ds.is_implicit_VR = False
+    ds.is_little_endian = True
+
+    ex = extract_irradiation_events(ds)
+    assert len(ex.rows) == 1
+    assert ex.rows[0].columns.get("DAP") == "1.0"
+    assert not (ex.rows[0].columns.get("DAP units") or "").strip()
+    joined = " ".join(ex.notes)
+    assert "DAP (DCM 122130)" in joined
+    assert "MeasurementUnitsCodeSequence" in joined
+
+
 def test_extract_irradiation_events_dynamic_private_numeric_column() -> None:
     """Vendor/private NUM leaves under 113706 become extra table columns (Philips-style)."""
 

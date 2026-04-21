@@ -249,8 +249,6 @@ class SliceDisplayManager:
         
         Called when closing files or opening new folder/files so that refresh_overlays
         and other code do not redisplay from stale cached state in non-focused windows.
-        Also hides the no-pixel SR bottom bar; render paths only toggle it when a dataset
-        is shown, so clears must reset it explicitly.
         """
         self.current_studies = {}
         self.current_study_uid = ""
@@ -258,7 +256,6 @@ class SliceDisplayManager:
         self.current_slice_index = 0
         self.current_dataset = None
         self.reset_projection_state()
-        self.image_viewer.set_no_pixel_placeholder_bar(False)
     
     def set_projection_enabled(self, enabled: bool) -> None:
         """

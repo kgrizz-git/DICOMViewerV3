@@ -85,7 +85,7 @@ src/
 │   ├── sr_document_tree.py            # Generic SR ``ContentSequence`` tree builder + JSON export helper
 │   ├── sr_concept_identity.py         # SR coded-concept normalization (designator fold, LongCodeValue) for dose-event matching
 │   ├── rdsr_dose_sr.py                # Radiation dose SR detection + CT summary walk; uses ``sr_concept_identity`` for concept codes
-│   ├── rdsr_irradiation_events.py     # RDSR irradiation event rows (PS3.16 **113706** / **113819** containers)
+│   ├── rdsr_irradiation_events.py     # RDSR irradiation event rows (PS3.16 **113706** / **113819**); **DAP**/**Dose (RP)** + parallel **DAP units**/**Dose (RP) units** from ``MeasurementUnitsCodeSequence``; capped notes if units missing
 │   ├── tag_export_catalog.py          # Curated standard tags for Export DICOM Tags picker; synthetic_tag_export_tree_entry for preset-only rows missing from the file union
 │   ├── tag_export_union.py            # union_tags_across_datasets (merged tag map); separate from catalog to avoid a dicom_parser ↔ catalog import cycle for static analysis
 │   └── tag_export_writer.py           # Tag export file writers: Excel, CSV, UTF-8 tab-separated text (shared row builder)

@@ -1,7 +1,7 @@
 # To-Do Checklist
 
-**Last updated:** 2026-04-20  
-**Changes:** P0 RDSR lines 40–41 add [plan §3.0 completion/sync](plans/RDSR_XA_DOSE_RP_AND_SR_CLEAR_WINDOW_P0_PLAN.md#completion-protocol) (“mark done + sync”). *(Prior: 2026-04-20 — P0 RDSR items link to [`plans/RDSR_XA_DOSE_RP_AND_SR_CLEAR_WINDOW_P0_PLAN.md`](plans/RDSR_XA_DOSE_RP_AND_SR_CLEAR_WINDOW_P0_PLAN.md). 2026-04-17 — PySkinDose P1 links to [`plans/supporting/PYSKINDOSE_INTEGRATION_PLAN.md`](plans/supporting/PYSKINDOSE_INTEGRATION_PLAN.md) only; highdicom/SR item points at SR plans directly. 2026-04-16 — moved linked implementation plans into [`plans/supporting/`](plans/supporting/) and refreshed `plans/…` links; unequal pane splitters + cine axes linked to [`plans/supporting/SPLITTER_UNEQUAL_PANES_AND_CINE_PLAYBACK_AXES.md`](plans/supporting/SPLITTER_UNEQUAL_PANES_AND_CINE_PLAYBACK_AXES.md); 2026-04-15: RDSR shipped, ROI per-channel stats shipped, histogram projection pixels shipped, export formula-injection hardening.)*
+**Last updated:** 2026-04-21  
+**Changes:** P0 RDSR lines 40–41 **[x]** — shipped (**0.2.11**): dose-events **DAP / Dose (RP) unit** columns + missing-unit notes; **Clear this window** hides SR no-pixel bar ([`plans/RDSR_XA_DOSE_RP_AND_SR_CLEAR_WINDOW_P0_PLAN.md`](plans/RDSR_XA_DOSE_RP_AND_SR_CLEAR_WINDOW_P0_PLAN.md)). *(Prior: 2026-04-20 — P0 RDSR lines 40–41 add [plan §3.0 completion/sync](plans/RDSR_XA_DOSE_RP_AND_SR_CLEAR_WINDOW_P0_PLAN.md#completion-protocol). 2026-04-20 — P0 RDSR items link to plan. 2026-04-17 — PySkinDose P1 links to [`plans/supporting/PYSKINDOSE_INTEGRATION_PLAN.md`](plans/supporting/PYSKINDOSE_INTEGRATION_PLAN.md) only; highdicom/SR item points at SR plans directly. 2026-04-16 — moved linked implementation plans into [`plans/supporting/`](plans/supporting/) and refreshed `plans/…` links; unequal pane splitters + cine axes linked to [`plans/supporting/SPLITTER_UNEQUAL_PANES_AND_CINE_PLAYBACK_AXES.md`](plans/supporting/SPLITTER_UNEQUAL_PANES_AND_CINE_PLAYBACK_AXES.md); 2026-04-15: RDSR shipped, ROI per-channel stats shipped, histogram projection pixels shipped, export formula-injection hardening.)*
 
 ---
 
@@ -37,8 +37,8 @@ This file tracks active and near-term tasks.
     - [P2] Particularly w/ large dataset (large files or many files) - would loading compressed initially save time? If we make a database, keep compressed cache?
 - [ ] **[P0]** See if executables can be made smaller (especially on macOS) ([details](FUTURE_WORK_DETAIL_NOTES.md#executable-size-especially-on-macos))
 - [ ] **[P1]** Check fusion responsiveness on Parallels with 3D fusion
-- [ ] **[P0]** Check dose RP values / order of magnitude / units for XA fluoroscopy RDSRs — [**plan**](plans/RDSR_XA_DOSE_RP_AND_SR_CLEAR_WINDOW_P0_PLAN.md#p0-xa-rdsr-dose-rp-units) · [mark done + sync](plans/RDSR_XA_DOSE_RP_AND_SR_CLEAR_WINDOW_P0_PLAN.md#completion-protocol)
-- [ ] **[P0]** Doing Clear this window on a window with SR does not clear the message or button — [**plan**](plans/RDSR_XA_DOSE_RP_AND_SR_CLEAR_WINDOW_P0_PLAN.md#p0-sr-clear-window-overlay) · [mark done + sync](plans/RDSR_XA_DOSE_RP_AND_SR_CLEAR_WINDOW_P0_PLAN.md#completion-protocol)
+- [x] **[P0]** Check dose RP values / order of magnitude / units for XA fluoroscopy RDSRs — [**plan**](plans/RDSR_XA_DOSE_RP_AND_SR_CLEAR_WINDOW_P0_PLAN.md#p0-xa-rdsr-dose-rp-units) · [completion](plans/RDSR_XA_DOSE_RP_AND_SR_CLEAR_WINDOW_P0_PLAN.md#completion-protocol)
+- [x] **[P0]** Doing Clear this window on a window with SR does not clear the message or button — [**plan**](plans/RDSR_XA_DOSE_RP_AND_SR_CLEAR_WINDOW_P0_PLAN.md#p0-sr-clear-window-overlay) · [completion](plans/RDSR_XA_DOSE_RP_AND_SR_CLEAR_WINDOW_P0_PLAN.md#completion-protocol)
 - [ ] **[P0]** Playing cine on an MPR stack plays through only as many slices as the original base series, not the MPR.
 - [ ] **[P0]** when I did "clear this window" on a window with an MPR, then tried to drag the MPR from the navigator bar to a different window, the MPR just disappeared (did not appear in window and disappeared from navigator)
 

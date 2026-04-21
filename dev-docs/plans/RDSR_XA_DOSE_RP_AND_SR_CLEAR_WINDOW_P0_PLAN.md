@@ -1,6 +1,6 @@
 # P0 plan: XA fluoroscopy RDSR dose (RP) / units + “Clear this window” with SR
 
-**Created:** 2026-04-20 · **§1.3 samples checked:** 2026-04-20 (`test-DICOM-data/pyskindose_samples/`)  
+**Created:** 2026-04-20 · **§1.3 samples checked:** 2026-04-20 (`test-DICOM-data/pyskindose_samples/`) · **Implementation shipped:** 2026-04-21 — app **0.2.11**; [`TO_DO.md`](../TO_DO.md) lines **40–41** `[x]`.  
 **Tracks:** [`dev-docs/TO_DO.md`](../TO_DO.md) — Performance / Packaging P0 items (dose RP validation; SR clear-window UI).  
 **Execution:** follow the **master checklist** in [§3](#master-checklist); implementation detail in [§1.6](#plan-dose-b-c-export) (dose **B** / **C** / export) and [§2.6](#plan-sr-clear-overlay) (SR overlay clear). **When you finish a task:** mark it complete **in this plan first** ([§3.0 — completion protocol](#completion-protocol)), then update [`TO_DO.md`](../TO_DO.md) as described there.
 
@@ -100,19 +100,19 @@ If a reader assumes **DAP** is in **Gy·cm²** (or **mGy·cm²**) because that i
 
 #### 1.6.1 Preconditions
 
-- [ ] Re-read [`src/core/rdsr_irradiation_events.py`](../../src/core/rdsr_irradiation_events.py): `_build_event_columns`, `_best_num_for_concept`, `_num_value_from_item`, `MeasuredValueSequence`.
-- [ ] Re-read [`src/gui/dialogs/structured_report_browser_dialog.py`](../../src/gui/dialogs/structured_report_browser_dialog.py): `_populate_event_table`, `_export_events_csv_xlsx` (headers = union of `row.columns` keys in first-seen order).
+- [x] Re-read [`src/core/rdsr_irradiation_events.py`](../../src/core/rdsr_irradiation_events.py): `_build_event_columns`, `_best_num_for_concept`, `_num_value_from_item`, `MeasuredValueSequence`.
+- [x] Re-read [`src/gui/dialogs/structured_report_browser_dialog.py`](../../src/gui/dialogs/structured_report_browser_dialog.py): `_populate_event_table`, `_export_events_csv_xlsx` (headers = union of `row.columns` keys in first-seen order).
 
 #### 1.6.2 Phase B — Unit columns (core + UI + export)
 
 | Step | Task | Owner / file | Done |
 |------|------|----------------|------|
-| B1 | Add `_measurement_units_display_for_concept(items, code, notes)` (or extend `_best_num_for_concept` to return `(value, units)` with **one** shared selection pass) so **units string** matches the **same** `NUM` item as the numeric column. Format: prefer `CodeMeaning` from `MeasurementUnitsCodeSequence[0]`, else `CodeValue` + scheme; empty if missing. | `rdsr_irradiation_events.py` | [ ] |
-| B2 | In `_build_event_columns`, insert **`DAP units`** immediately after **`DAP`**, and **`Dose (RP) units`** immediately after **`Dose (RP)`**, using the new helper for **122130** / **113738**. | same | [ ] |
-| B3 | If multiple `MeasuredValueSequence` entries exist for the winning `NUM`, join unit strings with **`; `** to mirror numeric `; ` join, or document “first MV only” in code comment — **pick one** and stay consistent. | same | [ ] |
-| B4 | **Tests:** extend [`tests/test_sr_document_tree.py`](../../tests/test_sr_document_tree.py) (fixtures `xray_rdsr_ds` / `enhanced_rdsr_ds` and local `pyskindose_samples` skip-if-missing): assert **DAP** + **DAP units** / **Dose (RP) units** columns; **Gy**, **Gy.m2**, **Gym2** when present. | `tests/` | [ ] |
+| B1 | Add `_measurement_units_display_for_concept(items, code, notes)` (or extend `_best_num_for_concept` to return `(value, units)` with **one** shared selection pass) so **units string** matches the **same** `NUM` item as the numeric column. Format: prefer `CodeMeaning` from `MeasurementUnitsCodeSequence[0]`, else `CodeValue` + scheme; empty if missing. | `rdsr_irradiation_events.py` — shipped as `_best_num_item_for_concept` + `_measurement_units_display_from_num_item` | [x] |
+| B2 | In `_build_event_columns`, insert **`DAP units`** immediately after **`DAP`**, and **`Dose (RP) units`** immediately after **`Dose (RP)`**, using the new helper for **122130** / **113738**. | same | [x] |
+| B3 | If multiple `MeasuredValueSequence` entries exist for the winning `NUM`, join unit strings with **`; `** to mirror numeric `; ` join, or document “first MV only” in code comment — **pick one** and stay consistent. | same — **`; `** join implemented | [x] |
+| B4 | **Tests:** extend [`tests/test_sr_document_tree.py`](../../tests/test_sr_document_tree.py) (fixtures `xray_rdsr_ds` / `enhanced_rdsr_ds` and local `pyskindose_samples` skip-if-missing): assert **DAP** + **DAP units** / **Dose (RP) units** columns; **Gy**, **Gy.m2**, **Gym2** when present. | `tests/` | [x] |
 | B5 | **Manual / local:** open `philips_allura_clarity_u104.dcm` or `siemens_axiom_artis.dcm` → SR browser → Dose events: confirm **DAP units** shows **Gy.m2** / **Gym2** and **Dose (RP) units** shows **Gy**. | human | [ ] |
-| B6 | **Export parity:** export CSV/XLSX from the dialog; confirm new headers appear and unit cells match the table (no separate export path — `er.columns` drives both). | `structured_report_browser_dialog.py` — verify only unless headers need sorting | [ ] |
+| B6 | **Export parity:** export CSV/XLSX from the dialog; confirm new headers appear and unit cells match the table (no separate export path — `er.columns` drives both). | `structured_report_browser_dialog.py` — verify only unless headers need sorting | [x] |
 
 **Acceptance (B):** Table and exported files show **numeric** and **unit** columns for **DAP** and **Dose (RP)**; values unchanged vs today; units match DICOM `MeasurementUnitsCodeSequence` for the selected `NUM`.
 
@@ -120,10 +120,10 @@ If a reader assumes **DAP** is in **Gy·cm²** (or **mGy·cm²**) because that i
 
 | Step | Task | Done |
 |------|------|------|
-| C1 | After resolving **113738** / **122130**, if numeric value is **non-empty** but **units string is empty**, append one note per **concept** per **event** (or dedupe: e.g. `"Event row N: DAP (122130) NUM has no MeasurementUnitsCodeSequence."`) — avoid flooding: cap **e.g. 10** similar notes per document. | [ ] |
-| C2 | **Optional heuristic (defer if noisy):** if units present and numeric **≤ 0** for these codes, append a single soft warning — many zeros are legitimate; **default off** unless product agrees. | [ ] |
-| C3 | **Tests:** one synthetic `NUM` without `MeasuredValueSequence` or without `MeasurementUnitsCodeSequence` triggers a **note** (assert substring in `extraction.notes`). | [ ] |
-| C4 | SR browser already surfaces `IrradiationEventExtraction.notes` — confirm new notes appear in the existing warnings UI (no new widget unless missing). | [ ] |
+| C1 | After resolving **113738** / **122130**, if numeric value is **non-empty** but **units string is empty**, append one note per **concept** per **event** (or dedupe: e.g. `"Event row N: DAP (122130) NUM has no MeasurementUnitsCodeSequence."`) — avoid flooding: cap **e.g. 10** similar notes per document. | [x] |
+| C2 | **Optional heuristic (defer if noisy):** if units present and numeric **≤ 0** for these codes, append a single soft warning — many zeros are legitimate; **default off** unless product agrees. | [ ] *(deferred)* |
+| C3 | **Tests:** one synthetic `NUM` without `MeasuredValueSequence` or without `MeasurementUnitsCodeSequence` triggers a **note** (assert substring in `extraction.notes`). | [x] |
+| C4 | SR browser already surfaces `IrradiationEventExtraction.notes` — confirm new notes appear in the existing warnings UI (no new widget unless missing). | [x] |
 
 **Acceptance (C):** Missing UCUM / units on **113738**/**122130** is visible in **notes**, not silent.
 
@@ -131,17 +131,17 @@ If a reader assumes **DAP** is in **Gy·cm²** (or **mGy·cm²**) because that i
 
 | Step | Task | Done |
 |------|------|------|
-| E1 | Confirm **no** second code path builds dose-event rows for export (only `IrradiationEventRow.columns`). | [ ] |
-| E2 | If column **order** in the UI must match clinical expectation (DAP, DAP units, …), ensure `_build_event_columns` **insertion order** defines first-seen headers in `_populate_event_table`; adjust only if current dynamic-column merge breaks order. | [ ] |
-| E3 | **Regression:** existing RDSR tests + SR browser tests still pass. | [ ] |
+| E1 | Confirm **no** second code path builds dose-event rows for export (only `IrradiationEventRow.columns`). | [x] |
+| E2 | If column **order** in the UI must match clinical expectation (DAP, DAP units, …), ensure `_build_event_columns` **insertion order** defines first-seen headers in `_populate_event_table`; adjust only if current dynamic-column merge breaks order. | [x] |
+| E3 | **Regression:** existing RDSR tests + SR browser tests still pass. | [x] |
 
 **Acceptance (export):** Exported **CSV/XLSX** column set and cell values **match** the on-screen dose-events table for the same dataset.
 
 #### 1.6.5 Documentation and release
 
-- [ ] Follow [§3.0 — completion protocol](#completion-protocol): mark **§1.6** table `Done` cells and **§3** checkboxes when B/C/E ship.
-- [ ] [`CHANGELOG.md`](../../CHANGELOG.md) **Unreleased** — user-visible: dose-events table **unit columns** + any **notes** behavior; reference **P0** RDSR UX.
-- [ ] [`AGENTS.md`](../../AGENTS.md) or dev-docs only if behavior is non-obvious for future agents (optional).
+- [x] Follow [§3.0 — completion protocol](#completion-protocol): mark **§1.6** table `Done` cells and **§3** checkboxes when B/C/E ship.
+- [x] [`CHANGELOG.md`](../../CHANGELOG.md) **Unreleased** — user-visible: dose-events table **unit columns** + any **notes** behavior; reference **P0** RDSR UX.
+- [x] [`AGENTS.md`](../../AGENTS.md) or dev-docs only if behavior is non-obvious for future agents (optional).
 
 ---
 
@@ -160,10 +160,10 @@ After **Clear this window** (context menu), the **no-pixel SR** bottom bar (**hi
 | SR bar widget | [`src/gui/no_pixel_placeholder_overlay.py`](../../src/gui/no_pixel_placeholder_overlay.py) | `configure(active=…)` controls visibility of hint + button. |
 | Show/hide API | [`src/gui/image_viewer.py`](../../src/gui/image_viewer.py) — `set_no_pixel_placeholder_bar` | Delegates to overlay `configure`. |
 | When the bar is shown | [`src/core/slice_display_manager.py`](../../src/core/slice_display_manager.py) — `_render_base_image_pipeline` | If `no_pixel_placeholder` and `Modality == "SR"`, calls `set_no_pixel_placeholder_bar(True, …)`; else **`False`**. |
-| Clear pane | [`src/main.py`](../../src/main.py) — `_clear_subwindow` | Clears scene, managers (including `slice_display_manager.clear_display_state()`), resets `subwindow_data` — **does not** call `set_no_pixel_placeholder_bar(False)`. |
-| `clear_display_state` | [`src/core/slice_display_manager.py`](../../src/core/slice_display_manager.py) (≈246–258) | Clears cached study/series/dataset and projection flags — **does not** reset the SR overlay. |
+| Clear pane | [`src/main.py`](../../src/main.py) — `_clear_subwindow` | Clears scene, managers (including `slice_display_manager.clear_display_state()`), resets `subwindow_data`. |
+| `clear_display_state` | [`src/core/slice_display_manager.py`](../../src/core/slice_display_manager.py) | **Fixed (0.2.11):** after reset, calls `set_no_pixel_placeholder_bar(False)` so the SR no-pixel bar clears with the pane. |
 
-**Root cause:** The overlay is driven only from the **display / render** path when a dataset is present. **Clear** removes the dataset but **does not re-run** `_render_base_image_pipeline` with an empty state, so the overlay **stays in its last configured state** (still visible).
+**Prior root cause (fixed):** The overlay was driven only from the **display / render** path when a dataset was present; **clear** did not reset the bar until `clear_display_state` hid it explicitly.
 
 ### 2.3 Proposed fix
 
@@ -196,18 +196,18 @@ This runs whenever `_clear_subwindow` clears the slice display manager (same pat
 
 #### 2.6.1 Preconditions
 
-- [ ] Confirm **all** callers of `clear_display_state()` are safe to hide the bar (e.g. closing a series on a **non-focused** subwindow should not leave a stale bar — hiding is always correct when there is no active slice render for that manager).
-- [ ] Grep for `clear_display_state` across `src/` and note any path where `image_viewer` might be in a transitional state.
+- [x] Confirm **all** callers of `clear_display_state()` are safe to hide the bar (e.g. closing a series on a **non-focused** subwindow should not leave a stale bar — hiding is always correct when there is no active slice render for that manager).
+- [x] Grep for `clear_display_state` across `src/` and note any path where `image_viewer` might be in a transitional state.
 
 #### 2.6.2 Implementation steps
 
 | Step | Task | File | Done |
 |------|------|------|------|
-| S1 | At end of `clear_display_state()`, call `self.image_viewer.set_no_pixel_placeholder_bar(False)` (guard with `hasattr` / `getattr` only if needed for tests or partial mocks). | `slice_display_manager.py` | [ ] |
-| S2 | One-line comment: **why** (clear pane / close series must reset SR hint bar; render path alone does not run). | same | [ ] |
+| S1 | At end of `clear_display_state()`, call `self.image_viewer.set_no_pixel_placeholder_bar(False)` (guard with `hasattr` / `getattr` only if needed for tests or partial mocks). | `slice_display_manager.py` | [x] |
+| S2 | One-line comment: **why** (clear pane / close series must reset SR hint bar; render path alone does not run). | same | [x] |
 | S3 | **Manual QA:** §2.4 steps 1–4 on Windows (and macOS if available). | human | [ ] |
 | S4 | **Automated (optional):** If the project has a pattern for `QWidget` / `ImageViewer` unit tests, add a test that `clear_display_state()` leaves `NoPixelPlaceholderOverlay` inactive; otherwise document “manual only” in test ledger. | `tests/` or QA notes | [ ] |
-| S5 | **Regression:** run targeted pytest for slice display / subwindow if present (`pytest tests/ -k …` with reasonable timeout). | CI / local | [ ] |
+| S5 | **Regression:** run targeted pytest for slice display / subwindow if present (`pytest tests/ -k …` with reasonable timeout). | CI / local | [x] |
 
 #### 2.6.3 Acceptance
 
@@ -216,8 +216,8 @@ This runs whenever `_clear_subwindow` clears the slice display manager (same pat
 
 #### 2.6.4 Documentation and release
 
-- [ ] [`CHANGELOG.md`](../../CHANGELOG.md) **Unreleased** — fix: SR placeholder bar clears with pane.
-- [ ] Follow [§3.0 — completion protocol](#completion-protocol): mark **§2.6.2** table `Done` cells and **§3.4** / **§3.5**, then [`TO_DO.md`](../TO_DO.md) line 41.
+- [x] [`CHANGELOG.md`](../../CHANGELOG.md) **Unreleased** — fix: SR placeholder bar clears with pane.
+- [x] Follow [§3.0 — completion protocol](#completion-protocol): mark **§2.6.2** table `Done` cells and **§3.4** / **§3.5**, then [`TO_DO.md`](../TO_DO.md) line 41.
 
 ---
 
@@ -260,25 +260,25 @@ Use this list for **tracking**; detailed sub-steps live in **§1.6** ([`#plan-do
 
 ### 3.2 Dose events — **B** (unit columns) + **Export** (§1.6.2, §1.6.4)
 
-- [ ] **B1–B3** — Core extraction: units helper + `_build_event_columns` inserts **DAP units** / **Dose (RP) units**.  
-- [ ] **B4** — Automated tests (`tests/test_sr_document_tree.py` or dedicated `test_rdsr_irradiation_events.py` if split later).  
+- [x] **B1–B3** — Core extraction: units helper + `_build_event_columns` inserts **DAP units** / **Dose (RP) units**.  
+- [x] **B4** — Automated tests (`tests/test_sr_document_tree.py` or dedicated `test_rdsr_irradiation_events.py` if split later).  
 - [ ] **B5** — Manual check on real local **88.67** sample.  
-- [ ] **B6** + **E1–E3** — Export CSV/XLSX matches table; regression suite green.
+- [x] **B6** + **E1–E3** — Export CSV/XLSX matches table; regression suite green. *(Code path verified; optional human CSV export from dialog.)*
 
 ### 3.3 Dose events — **C** (validation notes) (§1.6.3)
 
-- [ ] **C1** — Missing `MeasurementUnitsCodeSequence` when numeric present → capped `notes`.  
+- [x] **C1** — Missing `MeasurementUnitsCodeSequence` when numeric present → capped `notes`.  
 - [ ] **C2** — Optional ≤0 heuristic (**defer** unless approved).  
-- [ ] **C3–C4** — Tests + confirm notes visible in SR browser.
+- [x] **C3–C4** — Tests + confirm notes visible in SR browser.
 
 ### 3.4 SR “Clear this window” overlay (§2.6)
 
-- [ ] **S1–S2** — `clear_display_state()` calls `set_no_pixel_placeholder_bar(False)`.  
+- [x] **S1–S2** — `clear_display_state()` calls `set_no_pixel_placeholder_bar(False)`.  
 - [ ] **S3** — Manual QA §2.4.  
-- [ ] **S4–S5** — Optional automated test + pytest subset.
+- [ ] **S4–S5** — Optional automated test + pytest subset. *(S5: irradiation + RDSR pytest subsets run.)*
 
 ### 3.5 Release hygiene
 
-- [ ] **CHANGELOG** — one or two bullets: dose-events unit columns + SR clear fix (when shipped).  
-- [ ] **`TO_DO.md` lines 40–41** — follow [§3.0](#completion-protocol): set **`[x]`** on line **40** when the dose track is done, line **41** when the SR-clear track is done; update **`Last updated`** / **`Changes`** each time you edit `TO_DO.md`.  
-- [ ] **Semantic version** — typically **patch** for SR clear (**bugfix**); **minor** if dose-events table is treated as user-visible feature enhancement (team choice).
+- [x] **CHANGELOG** — one or two bullets: dose-events unit columns + SR clear fix (when shipped).  
+- [x] **`TO_DO.md` lines 40–41** — follow [§3.0](#completion-protocol): set **`[x]`** on line **40** when the dose track is done, line **41** when the SR-clear track is done; update **`Last updated`** / **`Changes`** each time you edit `TO_DO.md`.  
+- [x] **Semantic version** — typically **patch** for SR clear (**bugfix**); **minor** if dose-events table is treated as user-visible feature enhancement (team choice). *(Shipped as **patch 0.2.11**.)*
