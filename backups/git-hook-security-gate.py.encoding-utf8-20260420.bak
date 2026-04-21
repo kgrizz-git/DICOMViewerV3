@@ -27,7 +27,6 @@ def run_git(*args: str) -> str:
         check=True,
         capture_output=True,
         text=True,
-        encoding="utf-8",
     )
     return result.stdout.strip()
 
@@ -76,7 +75,7 @@ def run_scan(root: Path, python_bin: Path, *, hook_type: str) -> int:
         args = [str(python_bin), str(scan_script), "--all", "--report"]
         label = "full local security scan"
     print(f"[security hook] Running {label}...")
-    proc = subprocess.run(args, text=True, cwd=str(root), encoding="utf-8")
+    proc = subprocess.run(args, text=True, cwd=str(root))
     return proc.returncode
 
 
@@ -97,7 +96,6 @@ def main() -> int:
         [str(py), str(privacy_script)],
         cwd=str(root),
         text=True,
-        encoding="utf-8",
     )
     if proc_priv.returncode != 0:
         return proc_priv.returncode

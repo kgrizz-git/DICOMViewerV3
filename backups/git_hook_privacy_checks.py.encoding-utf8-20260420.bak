@@ -23,8 +23,7 @@ Environment:
 Inputs: git index (staged changes), repo root from git rev-parse.
 Outputs: stderr/stdout messages; exit 0 or 1.
 Requirements: stdlib + git; imports PATIENT_PII_FIELDS from src when running
-checks (sys.path includes repo/src for hook runs from repo root). Git output is
-read as UTF-8 so Windows pre-commit hooks do not mis-decode staged sources.
+checks (sys.path includes repo/src for hook runs from repo root).
 """
 
 from __future__ import annotations
@@ -39,13 +38,7 @@ import sys
 import tokenize
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final, Iterable
-
-# Git emits repository paths and file blobs as UTF-8. On Windows, subprocess
-# ``text=True`` defaults to the ANSI code page (often cp1252), which raises
-# UnicodeDecodeError on UTF-8-only bytes (e.g. curly quotes in docstrings) and
-# makes the hook report a false "git show :path failed".
-_SUBPROCESS_TEXT: Final[dict[str, str]] = {"encoding": "utf-8"}
+from typing import Iterable
 
 
 @dataclass(frozen=True)
@@ -66,7 +59,6 @@ def repo_root() -> Path:
         capture_output=True,
         text=True,
         check=True,
-        **_SUBPROCESS_TEXT,
     )
     return Path(r.stdout.strip())
 
@@ -77,7 +69,6 @@ def staged_python_src_paths(root: Path) -> list[str]:
         capture_output=True,
         text=True,
         check=True,
-        **_SUBPROCESS_TEXT,
     )
     out: list[str] = []
     for line in proc.stdout.splitlines():
@@ -97,7 +88,6 @@ def git_show_staged(root: Path, relpath: str) -> str | None:
         ["git", "-C", str(root), "show", f":{relpath}"],
         capture_output=True,
         text=True,
-        **_SUBPROCESS_TEXT,
     )
     if proc.returncode != 0:
         return None
@@ -110,7 +100,6 @@ def git_diff_cached(root: Path, relpath: str) -> str:
         capture_output=True,
         text=True,
         check=False,
-        **_SUBPROCESS_TEXT,
     )
     return proc.stdout or ""
 
