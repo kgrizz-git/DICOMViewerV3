@@ -22,6 +22,7 @@ Requirements:
 
 import sys
 import os
+import time
 import logging
 import inspect
 import warnings
@@ -40,8 +41,8 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QStyleFactory,
 )
-from PySide6.QtCore import Qt, QPoint, QPointF, QObject, QTimer, QRectF, QSize, Signal
-from PySide6.QtGui import QColor
+from PySide6.QtCore import QEventLoop, Qt, QPoint, QPointF, QObject, QTimer, QRectF, QSize, Signal
+from PySide6.QtGui import QCursor, QColor
 from typing import Any, Callable, Optional, Dict, List, Tuple, cast, Set
 import pydicom
 from pydicom.dataset import Dataset
@@ -96,15 +97,7 @@ from core.study_index import LocalStudyIndexService
 from core.annotation_paste_handler import AnnotationPasteHandler
 from core.file_series_loading_coordinator import FileSeriesLoadingCoordinator
 from core.subwindow_lifecycle_controller import SubwindowLifecycleController
-from core.mpr_controller import MprController
-from core.mpr_navigator_thumbnail import (
-    clear_mpr_navigator_thumbnail as mpr_thumb_clear_navigator,
-    get_subwindow_mpr_pixel_array as mpr_thumb_get_subwindow_pixel_array,
-    get_subwindow_mpr_thumbnail_pixel_array as mpr_thumb_get_subwindow_thumbnail_pixel_array,
-    on_mpr_detached as mpr_thumb_on_mpr_detached,
-    update_floating_mpr_navigator_thumbnail as mpr_thumb_update_floating_navigator,
-    update_mpr_navigator_thumbnail as mpr_thumb_update_navigator,
-)
+from core.mpr_controller import MprController, apply_mpr_stack_combine
 from core.customization_handlers import CustomizationHandlers
 from core.privacy_controller import PrivacyController
 from core.projection_app_facade import ProjectionAppFacade
@@ -121,33 +114,13 @@ from core.window_level_preset_handler import apply_window_level_preset
 from gui.dialog_coordinator import DialogCoordinator
 from gui.mouse_mode_handler import MouseModeHandler
 from gui.keyboard_event_handler import KeyboardEventHandler
-from core.tag_export_union_host import TagExportUnionHost
+from gui.dialogs.tag_export_union_worker import TagExportUnionWorker
 from gui.dialogs.disclaimer_dialog import DisclaimerDialog
 # Import fusion components
 from core.fusion_processor import FusionProcessor
 from gui.fusion_controls_widget import FusionControlsWidget
 from core.app_handler_bootstrap import initialize_handlers as bootstrap_initialize_handlers
 from core.app_signal_wiring import wire_all_signals
-from core.session_reset_controller import (
-    clear_data as session_reset_clear_data,
-    close_all_files as session_reset_close_all_files,
-    finalize_for_application_quit as session_reset_finalize_for_application_quit,
-)
-from core.layout_window_slot_controller import (
-    capture_subwindow_view_states as layout_capture_subwindow_view_states,
-    connect_all_subwindow_context_menu_signals as layout_connect_all_subwindow_context_menu_signals,
-    connect_all_subwindow_transform_signals as layout_connect_all_subwindow_transform_signals,
-    ensure_all_subwindows_have_managers as layout_ensure_all_subwindows_have_managers,
-    on_expand_to_1x1_requested as layout_on_expand_to_1x1_requested,
-    on_layout_change_requested as layout_on_layout_change_requested,
-    on_layout_changed as layout_on_layout_changed,
-    on_main_window_layout_changed as layout_on_main_window_layout_changed,
-    on_swap_view_requested as layout_on_swap_view_requested,
-    on_window_slot_map_cell_clicked as layout_on_window_slot_map_cell_clicked,
-    on_window_slot_map_popup_requested as layout_on_window_slot_map_popup_requested,
-    refresh_window_slot_map_widgets as layout_refresh_window_slot_map_widgets,
-    restore_subwindow_views as layout_restore_subwindow_views,
-)
 from qa.analysis_types import (
     MRIBatchResult,
     MRICompareRequest,
@@ -198,7 +171,6 @@ class DICOMViewerApp(QObject):
     _histogram_wl_update_timer: Optional[QTimer] = None
     _histogram_update_timer: Optional[QTimer] = None
     study_index_service: LocalStudyIndexService
-    tag_export_union_host: TagExportUnionHost
 
     def __init__(self):
         """
@@ -468,7 +440,9 @@ class DICOMViewerApp(QObject):
         self.current_study_uid = ""
         self.current_dataset: Optional[Dataset] = None
 
-        self.tag_export_union_host = TagExportUnionHost(self)
+        self._tag_export_union_generation = 0
+        self._tag_export_union_merged: Optional[Dict[str, Any]] = None
+        self._tag_export_union_worker: Optional[Any] = None
 
         # Initialize handler objects (depends on all manager references above)
         self._initialize_handlers()
@@ -624,12 +598,50 @@ class DICOMViewerApp(QObject):
         return self._subwindow_lifecycle_controller.get_subwindow_slice_display_manager(idx)
 
     def _get_subwindow_mpr_pixel_array(self, idx: int, slice_index: Optional[int] = None):
-        """Return an MPR pixel array for subwindow *idx* (if any). Body in ``core.mpr_navigator_thumbnail``."""
-        return mpr_thumb_get_subwindow_pixel_array(self, idx, slice_index)
+        """Return an MPR pixel array for subwindow *idx* (if any)."""
+        try:
+            data = self.subwindow_data.get(idx, {})
+            if not data.get("is_mpr"):
+                return None
+            result = data.get("mpr_result")
+            if result is None:
+                return None
+            if slice_index is None:
+                slice_index = data.get("mpr_slice_index", 0)
+            if slice_index is None:
+                return None
+            slice_index = int(slice_index)
+            if slice_index < 0 or slice_index >= getattr(result, "n_slices", 0):
+                return None
+            raw = apply_mpr_stack_combine(
+                result.slices,
+                slice_index,
+                enabled=bool(data.get("mpr_combine_enabled", False)),
+                mode=str(data.get("mpr_combine_mode", "aip") or "aip"),
+                n_planes=int(data.get("mpr_combine_slice_count", 4) or 4),
+            )
+            managers = self.subwindow_managers.get(idx, {})
+            view_state_manager = managers.get("view_state_manager")
+            use_rescaled = bool(
+                getattr(view_state_manager, "use_rescaled_values", True)
+            )
+            if use_rescaled:
+                return result.apply_rescale(raw)
+            return raw
+        except Exception:
+            return None
 
     def _get_subwindow_mpr_thumbnail_pixel_array(self, idx: int):
         """Return a representative MPR thumbnail slice, preferring the stack midpoint."""
-        return mpr_thumb_get_subwindow_thumbnail_pixel_array(self, idx)
+        data = self.subwindow_data.get(idx, {})
+        result = data.get("mpr_result")
+        if result is None:
+            return None
+        n_slices = int(getattr(result, "n_slices", 0) or 0)
+        if n_slices <= 0:
+            return None
+        middle_index = n_slices // 2
+        return self._get_subwindow_mpr_pixel_array(idx, middle_index)
 
     def _update_mpr_navigator_thumbnail(self, idx: int) -> None:
         """
@@ -642,7 +654,48 @@ class DICOMViewerApp(QObject):
         Args:
             idx: Zero-based subwindow index hosting the MPR view.
         """
-        mpr_thumb_update_navigator(self, idx)
+        if not hasattr(self, "series_navigator"):
+            return
+        self.series_navigator.clear_mpr_thumbnail(-1)
+        data = self.subwindow_data.get(idx, {})
+        if not data.get("is_mpr") or data.get("mpr_result") is None:
+            self.series_navigator.clear_mpr_thumbnail(idx)
+            return
+
+        pixel_array = self._get_subwindow_mpr_thumbnail_pixel_array(idx)
+        if pixel_array is None:
+            return
+
+        result = data.get("mpr_result")
+        n_slices: Optional[int] = None
+        if result is not None:
+            try:
+                n_raw = int(getattr(result, "n_slices", 0) or 0)
+                n_slices = n_raw if n_raw > 0 else None
+            except (TypeError, ValueError):
+                n_slices = None
+
+        wc: Optional[float] = None
+        ww: Optional[float] = None
+        wl_controls = getattr(self, "window_level_controls", None)
+        if wl_controls is not None:
+            try:
+                wc_val = float(wl_controls.window_center)
+                ww_val = float(wl_controls.window_width)
+                if ww_val > 0:
+                    wc, ww = wc_val, ww_val
+            except (AttributeError, TypeError, ValueError):
+                pass
+
+        self.series_navigator.set_mpr_thumbnail(
+            idx,
+            pixel_array,
+            str(data.get("current_study_uid", "") or ""),
+            str(data.get("current_series_uid", "") or ""),
+            wc,
+            ww,
+            n_slices,
+        )
 
     def _clear_mpr_navigator_thumbnail(self, idx: int) -> None:
         """
@@ -653,7 +706,8 @@ class DICOMViewerApp(QObject):
         Args:
             idx: Zero-based subwindow index whose MPR was cleared.
         """
-        mpr_thumb_clear_navigator(self, idx)
+        if hasattr(self, "series_navigator"):
+            self.series_navigator.clear_mpr_thumbnail(idx)
 
     def _update_floating_mpr_navigator_thumbnail(self) -> None:
         """
@@ -662,11 +716,58 @@ class DICOMViewerApp(QObject):
         Layout matches attached MPR: same study/series keys place the thumbnail
         immediately after the source series row.
         """
-        mpr_thumb_update_floating_navigator(self)
+        if not hasattr(self, "series_navigator"):
+            return
+        if not self._mpr_controller.has_detached_mpr():
+            self.series_navigator.clear_mpr_thumbnail(-1)
+            return
+        focused = getattr(self, "focused_subwindow_index", 0)
+        vsm = self.subwindow_managers.get(focused, {}).get("view_state_manager")
+        use_rescaled = bool(getattr(vsm, "use_rescaled_values", True))
+        pixel_array = self._mpr_controller.get_detached_mpr_thumbnail_pixels(
+            use_rescaled
+        )
+        if pixel_array is None:
+            return
+        payload = getattr(self._mpr_controller, "_detached_mpr_payload", None)
+        study_uid = ""
+        series_uid = ""
+        n_slices: Optional[int] = None
+        if isinstance(payload, dict):
+            study_uid = str(payload.get("current_study_uid", "") or "")
+            series_uid = str(payload.get("current_series_uid", "") or "")
+            res = payload.get("mpr_result")
+            if res is not None:
+                try:
+                    n_raw = int(getattr(res, "n_slices", 0) or 0)
+                    n_slices = n_raw if n_raw > 0 else None
+                except (TypeError, ValueError):
+                    n_slices = None
+        wc: Optional[float] = None
+        ww: Optional[float] = None
+        wl_controls = getattr(self, "window_level_controls", None)
+        if wl_controls is not None:
+            try:
+                wc_val = float(wl_controls.window_center)
+                ww_val = float(wl_controls.window_width)
+                if ww_val > 0:
+                    wc, ww = wc_val, ww_val
+            except (AttributeError, TypeError, ValueError):
+                pass
+        self.series_navigator.set_mpr_thumbnail(
+            -1,
+            pixel_array,
+            study_uid,
+            series_uid,
+            wc,
+            ww,
+            n_slices,
+        )
 
     def _on_mpr_detached(self, former_idx: int) -> None:
         """MPR was detached from a pane; refresh navigator thumbnails."""
-        mpr_thumb_on_mpr_detached(self, former_idx)
+        self._clear_mpr_navigator_thumbnail(former_idx)
+        self._update_floating_mpr_navigator_thumbnail()
 
     def _on_mpr_thumbnail_clicked(self, subwindow_index: int) -> None:
         """
@@ -862,33 +963,250 @@ class DICOMViewerApp(QObject):
         if roi is not None and self.image_viewer is not None:
             self.roi_manager.delete_roi(cast(ROIItem, roi), self.image_viewer.scene)
 
+    def _flatten_studies_for_tag_export_union(self, studies: StudiesNestedDict) -> List[Dataset]:
+        """Stable study → series → instance order for tag-export union."""
+        out: List[Dataset] = []
+        for _, series_dict in studies.items():
+            for _, datasets in series_dict.items():
+                out.extend(datasets)
+        return out
+
     def get_tag_export_union_snapshot(self) -> Tuple[int, Optional[Dict[str, Any]]]:
         """Current load generation and merged tag map, if background union has finished."""
-        return self.tag_export_union_host.get_snapshot()
+        return (self._tag_export_union_generation, self._tag_export_union_merged)
 
     def _drain_tag_export_union_worker(self, timeout_sec: float = 180.0) -> None:
         """
         Stop and join the tag-export union QThread before replacing it.
 
-        Body in ``core.tag_export_union_host.TagExportUnionHost.drain_worker``.
+        Without this, assigning a new ``TagExportUnionWorker`` drops the last
+        reference to a still-running ``QThread``, which triggers Qt's
+        "Destroyed while thread is still running" warning and can crash.
+
+        Uses short ``wait`` slices plus ``processEvents`` so the UI stays
+        responsive while a large multi-frame union unwinds cooperatively.
         """
-        self.tag_export_union_host.drain_worker(timeout_sec)
+        w = self._tag_export_union_worker
+        if w is None:
+            return
+        try:
+            w.finished_ok.disconnect(self._on_tag_export_union_worker_finished)
+        except TypeError:
+            pass
+        try:
+            w.failed.disconnect(self._on_tag_export_union_worker_failed)
+        except TypeError:
+            pass
+        if w.isRunning():
+            w.requestInterruption()
+            app = QApplication.instance()
+            deadline = time.time() + timeout_sec
+            while w.isRunning() and time.time() < deadline:
+                w.wait(50)
+                if app is not None:
+                    app.processEvents(QEventLoop.ProcessEventsFlag.AllEvents, 50)
+            if w.isRunning():
+                print(
+                    "[DICOMViewerApp] TagExportUnionWorker did not finish within "
+                    f"{timeout_sec:.0f}s after interruption; shutdown may still warn.",
+                    file=sys.stderr,
+                )
+        self._tag_export_union_worker = None
 
     def _schedule_tag_export_union_rebuild(self) -> None:
         """Rebuild in-memory tag union off the GUI thread (no disk cache)."""
-        self.tag_export_union_host.schedule_rebuild()
+        self._drain_tag_export_union_worker()
+        self._tag_export_union_generation += 1
+        gen = self._tag_export_union_generation
+        self._tag_export_union_merged = None
+        if not self.current_studies:
+            self.tag_export_union_ready.emit(gen, {})
+            return
+        datasets = self._flatten_studies_for_tag_export_union(self.current_studies)
+        worker = TagExportUnionWorker(
+            gen,
+            datasets,
+            include_private=True,
+            supplement_standard_tags=True,
+        )
+        worker.finished_ok.connect(self._on_tag_export_union_worker_finished)
+        worker.failed.connect(self._on_tag_export_union_worker_failed)
+        self._tag_export_union_worker = worker
+        worker.start()
+
+    def _on_tag_export_union_worker_finished(self, gen: int, merged: object) -> None:
+        if gen != self._tag_export_union_generation:
+            return
+        self._tag_export_union_merged = cast(Dict[str, Any], merged)
+        self.tag_export_union_ready.emit(gen, self._tag_export_union_merged)
+
+    def _on_tag_export_union_worker_failed(self, gen: int, _message: str) -> None:
+        if gen != self._tag_export_union_generation:
+            return
+        self._tag_export_union_merged = None
+        self.tag_export_union_ready.emit(gen, {})
 
     def _clear_data(self) -> None:
         """Clear all ROIs, measurements, and related data for all subwindows."""
-        session_reset_clear_data(self)
-
+        # Clear slice_display_manager state for all subwindows so no stale cached state
+        # is used when opening new folder/files (e.g. by refresh_overlays on privacy toggle).
+        for idx in self.subwindow_managers:
+            managers = self.subwindow_managers[idx]
+            slice_display_manager = managers.get("slice_display_manager")
+            if slice_display_manager and hasattr(slice_display_manager, "clear_display_state"):
+                slice_display_manager.clear_display_state()
+        # Clear data for ALL subwindows, not just focused one
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        for idx, subwindow in enumerate(subwindows):
+            if subwindow and subwindow.image_viewer and subwindow.image_viewer.scene:
+                # Get the managers for this subwindow
+                if idx in self.subwindow_managers:
+                    managers = self.subwindow_managers[idx]
+                    roi_manager = managers.get('roi_manager')
+                    measurement_tool = managers.get('measurement_tool')
+                    text_annotation_tool = managers.get('text_annotation_tool')
+                    arrow_annotation_tool = managers.get('arrow_annotation_tool')
+                    if roi_manager:
+                        roi_manager.clear_all_rois(subwindow.image_viewer.scene)
+                    if measurement_tool:
+                        measurement_tool.clear_measurements(subwindow.image_viewer.scene)
+                    if text_annotation_tool:
+                        text_annotation_tool.clear_annotations(subwindow.image_viewer.scene)
+                    if arrow_annotation_tool:
+                        arrow_annotation_tool.clear_arrows(subwindow.image_viewer.scene)
+        
+        # Update shared panels (these show focused subwindow's data)
+        self.roi_list_panel.update_roi_list("", "", 0)  # Clear list
+        self.roi_statistics_panel.clear_statistics()
+    
     def _close_files(self) -> None:
         """Close currently open files/folder and clear all data."""
-        session_reset_close_all_files(self)
+        # Clear MPR from any subwindow before clearing overlays and data.
+        # This removes the MPR banner and restores or clears the view.
+        if hasattr(self, "_mpr_controller"):
+            for idx in list(self.subwindow_data.keys()):
+                if self.subwindow_data.get(idx, {}).get("is_mpr"):
+                    self._mpr_controller.clear_mpr(idx)
+
+        # Clear all ROIs, measurements, and related data for all subwindows
+        self._clear_data()
+        
+        # Clear image viewers for ALL subwindows
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        for subwindow in subwindows:
+            if subwindow and subwindow.image_viewer:
+                # Clear scene
+                subwindow.image_viewer.scene.clear()
+                subwindow.image_viewer.image_item = None
+                # Force viewport update to ensure cleared scene is visible
+                subwindow.image_viewer.viewport().update()
+        
+        # Clear overlay items for all subwindows (including viewport corner overlays)
+        for idx in self.subwindow_managers:
+            managers = self.subwindow_managers[idx]
+            overlay_manager = managers.get('overlay_manager')
+            if overlay_manager:
+                # Get the scene from the corresponding subwindow to properly clear overlays
+                if idx < len(subwindows) and subwindows[idx] and subwindows[idx].image_viewer:
+                    scene = subwindows[idx].image_viewer.scene
+                    overlay_manager.clear_overlay_items(scene)
+                else:
+                    # Fallback: just clear the items list if scene not available
+                    overlay_manager.overlay_items.clear()
+        
+        # Reset fusion for all subwindows (disable fusion, clear status, clear caches)
+        # This is called when opening new files to ensure fusion is disabled
+        self._reset_fusion_for_all_subwindows()
+        
+        # Clear metadata panel (shared)
+        self.metadata_panel.set_dataset(None)
+        
+        # Reset view state and clear display state for all subwindows
+        for idx in self.subwindow_managers:
+            managers = self.subwindow_managers[idx]
+            view_state_manager = managers.get('view_state_manager')
+            slice_display_manager = managers.get('slice_display_manager')
+            if view_state_manager:
+                view_state_manager.reset_window_level_state()
+                view_state_manager.reset_series_tracking()
+            if slice_display_manager and hasattr(slice_display_manager, "clear_display_state"):
+                slice_display_manager.clear_display_state()
+        
+        # Update shared widget state
+        self.intensity_projection_controls_widget.set_enabled(False)
+        self.intensity_projection_controls_widget.set_projection_type("aip")
+        self.intensity_projection_controls_widget.set_slice_count(4)
+        
+        # Clear all subwindow data structures
+        self.subwindow_data.clear()
+        
+        # Clear cached pixel arrays from datasets to free memory (before clearing studies dict)
+        if self.current_studies:
+            for study_uid, series_dict in self.current_studies.items():
+                for series_uid, datasets in series_dict.items():
+                    for dataset in datasets:
+                        # Remove cached pixel arrays if they exist
+                        if hasattr(dataset, '_cached_pixel_array'):
+                            delattr(dataset, '_cached_pixel_array')
+
+        # Reset organizer state (loaded_file_paths, series_source_dirs, disambiguation_counters, etc.)
+        self.dicom_organizer.clear()
+        # Clear all PS/KO from annotation manager (studies gone)
+        self.annotation_manager.clear_all_ps_ko()
+
+        # Clear current dataset references (legacy, points to focused subwindow)
+        self.current_dataset = None
+        self.current_studies = {}
+        self.current_study_uid = ""
+        self.current_series_uid = ""
+        self.current_slice_index = 0
+
+        self._schedule_tag_export_union_rebuild()
+        
+        # Dissolve slice sync groups (no linked groups when no files loaded)
+        self.config_manager.set_slice_sync_groups([])
+        self._slice_sync_coordinator.set_groups([])
+        self._slice_sync_coordinator.invalidate_cache()
+        self._slice_location_line_coordinator.refresh_all()
+
+        # Reset slice navigator (shared)
+        self.slice_navigator.set_total_slices(0)
+        self.slice_navigator.set_current_slice(0)
+        
+        # Clear series navigator (shared) and dot indicators
+        self.series_navigator.update_series_list({}, "", "")
+        self._refresh_series_navigator_state()
+        self.series_navigator.set_subwindow_assignments({})
+        
+        # Clear tag edit history
+        if hasattr(self, 'metadata_controller') and self.metadata_controller:
+            self.metadata_controller.clear_tag_history()
+        
+        # Reset undo/redo state
+        self._update_undo_redo_state()
+        
+        # Stop cine player if active (prevents timer leaks)
+        if hasattr(self, 'cine_player') and self.cine_player:
+            self.cine_player.stop_playback()
+        
+        # Clear tag viewer filter
+        if self.dialog_coordinator:
+            self.dialog_coordinator.clear_tag_viewer_filter()
+        
+        # Update status
+        self.main_window.update_status("Ready")
+
+        # Reassign views A–D to default windows 1–4 (slot order [0,1,2,3])
+        self.multi_window_layout.reset_slot_to_view_default()
+        self._refresh_window_slot_map_widgets()
 
     def _on_app_about_to_quit(self) -> None:
         """Reset view–slot mapping and dissolve slice sync groups when the application is exiting."""
-        session_reset_finalize_for_application_quit(self)
+        self._drain_tag_export_union_worker(timeout_sec=30.0)
+        self.multi_window_layout.reset_slot_to_view_default()
+        self.config_manager.set_slice_sync_groups([])
+        self._slice_sync_coordinator.set_groups([])
+        self._slice_sync_coordinator.invalidate_cache()
 
     # -------------------------------------------------------------------------
     # Per-series / per-study close helpers (used by navigator right-click menu)
@@ -1445,56 +1763,187 @@ class DICOMViewerApp(QObject):
         )
     
     def _on_layout_changed(self, layout_mode: str) -> None:
-        """Handle layout mode change from multi-window layout. Body in ``core.layout_window_slot_controller``."""
-        layout_on_layout_changed(self, layout_mode)
-
+        """Handle layout mode change from multi-window layout. Delegates to subwindow lifecycle controller."""
+        self._subwindow_lifecycle_controller.on_layout_changed(layout_mode)
+        QTimer.singleShot(0, self._slice_location_line_coordinator.refresh_all)
+        self._refresh_window_slot_map_widgets()
+    
     def _on_main_window_layout_changed(self, layout_mode: str) -> None:
-        """Handle layout mode change from main window menu. Body in ``core.layout_window_slot_controller``."""
-        layout_on_main_window_layout_changed(self, layout_mode)
-
+        """Handle layout mode change from main window menu. Delegates to subwindow lifecycle controller."""
+        self._subwindow_lifecycle_controller.on_main_window_layout_changed(layout_mode)
+        QTimer.singleShot(0, self._slice_location_line_coordinator.refresh_all)
+    
     def _capture_subwindow_view_states(self) -> Dict[int, Dict[str, Any]]:
-        """Capture view state for all subwindows before layout change."""
-        return layout_capture_subwindow_view_states(self)
-
+        """Capture view state for all subwindows before layout change. Delegates to subwindow lifecycle controller."""
+        return self._subwindow_lifecycle_controller.capture_subwindow_view_states()
+    
     def _restore_subwindow_views(self, view_states: Dict[int, Dict[str, Any]]) -> None:
-        """Restore subwindow views after layout change."""
-        layout_restore_subwindow_views(self, view_states)
-
+        """Restore subwindow views after layout change. Delegates to subwindow lifecycle controller."""
+        self._subwindow_lifecycle_controller.restore_subwindow_views(view_states)
+    
     def _ensure_all_subwindows_have_managers(self) -> None:
-        """Ensure all visible subwindows have managers."""
-        layout_ensure_all_subwindows_have_managers(self)
-
+        """Ensure all visible subwindows have managers. Delegates to subwindow lifecycle controller."""
+        self._subwindow_lifecycle_controller.ensure_all_subwindows_have_managers()
+    
     def _connect_all_subwindow_transform_signals(self) -> None:
-        """Connect transform/zoom signals for all subwindows."""
-        layout_connect_all_subwindow_transform_signals(self)
-
+        """Connect transform/zoom signals for all subwindows. Delegates to subwindow lifecycle controller."""
+        self._subwindow_lifecycle_controller.connect_all_subwindow_transform_signals()
+    
     def _connect_all_subwindow_context_menu_signals(self) -> None:
-        """Connect context menu signals for all subwindows."""
-        layout_connect_all_subwindow_context_menu_signals(self)
-
+        """Connect context menu signals for all subwindows. Delegates to subwindow lifecycle controller."""
+        self._subwindow_lifecycle_controller.connect_all_subwindow_context_menu_signals()
+    
     def _on_layout_change_requested(self, layout_mode: str) -> None:
-        """Handle layout change request from image viewer context menu."""
-        layout_on_layout_change_requested(self, layout_mode)
-
+        """Handle layout change request from image viewer context menu. Delegates to subwindow lifecycle controller."""
+        self._subwindow_lifecycle_controller.on_layout_change_requested(layout_mode)
+    
     def _on_expand_to_1x1_requested(self) -> None:
         """Handle double-click: expand to 1x1 or, if already in 1x1, revert to last used layout (or 2x2)."""
-        layout_on_expand_to_1x1_requested(self)
-
+        sender = self.sender()
+        if not isinstance(sender, SubWindowContainer):
+            return
+        if self.multi_window_layout.get_layout_mode() == "1x1":
+            # Already in 1x1: revert to last layout before 1x1 (or 2x2)
+            self.multi_window_layout.set_layout(self.multi_window_layout.get_revert_layout())
+        else:
+            self.multi_window_layout.set_focused_subwindow(sender)
+            self.multi_window_layout.set_layout("1x1")
+    
     def _on_swap_view_requested(self, other_index: int) -> None:
         """Handle Swap with View X from context menu: swap slot positions in all layouts; focus stays unchanged."""
-        layout_on_swap_view_requested(self, other_index)
+        sender = self.sender()
+        if not isinstance(sender, ImageViewer) or sender.subwindow_index is None:
+            return
+        if other_index < 0 or other_index >= 4 or other_index == sender.subwindow_index:
+            return
+        self.multi_window_layout.swap_views(sender.subwindow_index, other_index)
+        # Resize images in visible panes so any view that was last in a smaller
+        # layout (e.g. 2x2) fits the current window.
+        self._subwindow_lifecycle_controller.schedule_viewport_resized()
+        if self.multi_window_layout.get_layout_mode() != "2x2":
+            self.main_window.update_status("Slot order updated; switch to 2x2 to see positions.")
+        # Navigator dots are keyed by grid slot; slot_to_view changed, so refresh assignments.
+        self.series_navigator.set_subwindow_assignments(self._get_subwindow_assignments())
+        self._refresh_window_slot_map_widgets()
 
     def _refresh_window_slot_map_widgets(self) -> None:
         """Refresh the embedded and popup window-slot map widgets, if present."""
-        layout_refresh_window_slot_map_widgets(self)
+        widget = getattr(self.main_window, "window_slot_map_widget", None)
+        if widget is not None:
+            try:
+                widget.cell_clicked.connect(
+                    self._on_window_slot_map_cell_clicked,
+                    Qt.ConnectionType.UniqueConnection,
+                )
+            except Exception:
+                pass
+            try:
+                widget.refresh()
+            except Exception:
+                pass
+        popup_widget = getattr(self, "_window_slot_map_widget_popup", None)
+        if popup_widget is not None:
+            try:
+                popup_widget.cell_clicked.connect(
+                    self._on_window_slot_map_cell_clicked,
+                    Qt.ConnectionType.UniqueConnection,
+                )
+            except Exception:
+                pass
+            try:
+                popup_widget.refresh()
+            except Exception:
+                pass
 
     def _on_window_slot_map_cell_clicked(self, slot: int) -> None:
         """Focus the subwindow in grid slot *slot* (0–3); 1×2 / 2×1 re-arrange via layout."""
-        layout_on_window_slot_map_cell_clicked(self, slot)
+        try:
+            stv = self.multi_window_layout.get_slot_to_view()
+        except Exception:
+            return
+        if slot < 0 or slot >= len(stv):
+            return
+        view_idx = int(stv[slot])
+        subwindows = self.multi_window_layout.get_all_subwindows()
+        if view_idx < 0 or view_idx >= len(subwindows):
+            return
+        sub = subwindows[view_idx]
+        if sub is None:
+            return
+        self.multi_window_layout.set_focused_subwindow(sub)
 
     def _on_window_slot_map_popup_requested(self) -> None:
         """Show or hide a small popup with the window-slot map near the cursor (toggle)."""
-        layout_on_window_slot_map_popup_requested(self)
+        base_widget = getattr(self.main_window, "window_slot_map_widget", None)
+        if base_widget is None:
+            return
+
+        # If dialog already exists and is visible, treat this as a toggle and close it.
+        if hasattr(self, "_window_slot_map_dialog") and self._window_slot_map_dialog is not None:
+            dlg = self._window_slot_map_dialog
+            if dlg.isVisible():
+                dlg.close()
+                return
+
+        # Lazily create draggable popup dialog
+        if not hasattr(self, "_window_slot_map_dialog") or self._window_slot_map_dialog is None:
+
+            def on_position_changed(x: int, y: int) -> None:
+                try:
+                    self.config_manager.set_layout_map_popup_position(x, y)
+                except Exception:
+                    pass
+
+            dlg = WindowSlotMapPopupDialog(
+                self.main_window,
+                boundary_widget=self.main_window,
+                on_position_changed=on_position_changed,
+            )
+            self._window_slot_map_dialog = dlg
+        else:
+            dlg = self._window_slot_map_dialog
+
+        widget = dlg.get_map_widget()
+        if widget is None:
+            return
+        self._window_slot_map_widget_popup = widget
+
+        # Configure callbacks to mirror the main thumbnail (including thumbnails)
+        try:
+            widget.set_callbacks(
+                get_slot_to_view=self.multi_window_layout.get_slot_to_view,
+                get_layout_mode=self.multi_window_layout.get_layout_mode,
+                get_focused_view_index=self.get_focused_subwindow_index,
+                get_thumbnail_for_view=self._get_thumbnail_for_view,
+            )
+        except Exception:
+            pass
+        try:
+            widget.cell_clicked.connect(
+                self._on_window_slot_map_cell_clicked,
+                Qt.ConnectionType.UniqueConnection,
+            )
+        except Exception:
+            pass
+
+        widget.refresh()
+
+        # Restore saved position if valid and within main window; otherwise place near cursor
+        saved = self.config_manager.get_layout_map_popup_position()
+        boundary = self.main_window.frameGeometry()
+        if saved is not None:
+            x, y = saved
+            # Clamp so popup stays within main window
+            w, h = dlg.width(), dlg.height()
+            x = max(boundary.left(), min(x, boundary.right() - w))
+            y = max(boundary.top(), min(y, boundary.bottom() - h))
+            dlg.move(x, y)
+        else:
+            global_pos = QCursor.pos()
+            dlg.move(global_pos + QPoint(16, 16))
+
+        dlg.show()
+        dlg.raise_()
     
     def _on_assign_series_requested(
         self, series_uid: str, slice_index: int, study_uid: str = ""

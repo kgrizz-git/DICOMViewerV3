@@ -57,6 +57,11 @@ src/
 │   └── roi_measurement_controller.py  # Owns ROIManager, MeasurementTool, AnnotationManager, panels
 ├── core/                          # Core processing, loading, and coordination logic
 │   ├── actions/                     # Menu/dialog/view/customization actions: ``dialog_actions``, ``view_actions``, ``customization_actions``; ``dialog_action_handlers`` re-exports for façades/tests
+│   ├── app_handler_bootstrap.py     # After subwindow managers exist: builds coordinators, ``FileOperationsHandler``, ``DialogCoordinator``, cine, keyboard, etc.; ``DICOMViewerApp._initialize_handlers`` delegates
+│   ├── session_reset_controller.py  # Close-all / ROI clear / fusion reset / tag-union schedule / quit drain; ``main`` delegates ``_close_files``, ``_clear_data``, ``_on_app_about_to_quit``
+│   ├── mpr_navigator_thumbnail.py   # MPR pixel-array helpers and series-navigator MPR thumbnail set/clear/floating; ``main`` keeps one-line slots for ``app_signal_wiring``
+│   ├── layout_window_slot_controller.py  # Layout changed handlers, capture/restore, swap/expand 1×1, window-slot map refresh/popup; ``main`` delegates
+│   ├── tag_export_union_host.py     # Tag-export union ``QThread`` worker, generation, merged map; ``tag_export_union_ready`` remains on ``DICOMViewerApp``
 │   ├── study_index/                 # Local encrypted study DB (SQLCipher MVP): store, service, port, study_date_format (UI DA↔US), background threads
 │   ├── loading_progress_manager.py    # Animated loading dots, QProgressDialog, cancellation (used by FileOperationsHandler)
 │   ├── privacy_controller.py          # Privacy-mode propagation and overlay refresh (called from main on privacy toggle)
@@ -84,7 +89,7 @@ src/
 │   ├── tag_export_catalog.py          # Curated standard tags for Export DICOM Tags picker; synthetic_tag_export_tree_entry for preset-only rows missing from the file union
 │   ├── tag_export_union.py            # union_tags_across_datasets (merged tag map); separate from catalog to avoid a dicom_parser ↔ catalog import cycle for static analysis
 │   └── tag_export_writer.py           # Tag export file writers: Excel, CSV, UTF-8 tab-separated text (shared row builder)
-├── gui/                           # All Qt widgets, dialogs, layout; e.g. overlay_items_factory, series_navigator_view (thumbnails), series_navigator_model (labels/instance entries), main_window_*_builder (menus/toolbar); **`dialogs/tag_export_union_worker.py`** — background tag-union for Export DICOM Tags ( **`DICOMViewerApp._schedule_tag_export_union_rebuild`** ); **`dialogs/structured_report_browser_dialog.py`** — modeless SR tree + dose events + exports (**Tools → Structured Report…**)
+├── gui/                           # All Qt widgets, dialogs, layout; e.g. overlay_items_factory, series_navigator_view (thumbnails), series_navigator_model (labels/instance entries), main_window_*_builder (menus/toolbar); **`dialogs/tag_export_union_worker.py`** — tag-union merge thread (orchestrated by **`core/tag_export_union_host.py`** via **`DICOMViewerApp._schedule_tag_export_union_rebuild`** ); **`dialogs/structured_report_browser_dialog.py`** — modeless SR tree + dose events + exports (**Tools → Structured Report…**)
 │   ├── metadata_table_model.py    # Metadata panel tree delegate + tag filter/group/value helpers (Phase 5D; `metadata_panel.py` wires UI)
 │   └── dialogs/mri_compare_result_dialog.py  # ACR MRI compare-results table + JSON/PDF actions; `qa_app_facade` wires callbacks (Phase 5E)
 ├── tools/                         # Interactive tools (ROI, measurement, annotation, crosshair)

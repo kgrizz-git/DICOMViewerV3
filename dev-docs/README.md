@@ -35,7 +35,7 @@ This folder is for **contributors, maintainers, and release engineering**. End-u
 | [`plans/supporting/`](plans/supporting/) | Supporting and dependency plans |
 | [`plans/completed/`](plans/completed/) | Completed plan records |
 | [`TO_DO.md`](TO_DO.md) | Product and engineering backlog |
-| [`implementation-plans.md`](implementation-plans.md) | Plan index / rollup (if maintained) |
+| [`implementation-plans.md`](plans/completed/implementation-plans.md) | Plan index / rollup (if maintained) |
 
 ## Reference and research (`info/`)
 
