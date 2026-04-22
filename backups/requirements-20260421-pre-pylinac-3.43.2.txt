@@ -5,7 +5,6 @@
 # Installation: pip install -r requirements.txt
 #
 # Python version (especially Windows):
-# - pylinac (ACR QA) requires Python >= 3.10.
 # - Prefer 3.11 or 3.12 (same family as CI). Wheels exist for native deps (e.g. pyjpegls).
 # - 3.14+ may have no pyjpegls wheel on Windows yet; pip then builds from source and needs
 #   Microsoft C++ Build Tools (https://visualstudio.microsoft.com/visual-cpp-build-tools/).
@@ -34,8 +33,8 @@ sqlcipher3>=0.5.0
 # Stores the SQLCipher passphrase in the OS credential store (Windows Credential Manager, macOS Keychain, etc.)
 keyring>=24.0.0
 SimpleITK>=2.3.0  # For 3D image resampling in image fusion (Phase 2)
-# Pinned exact version; re-verify ACR CT/MRI after each bump (see dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md, dev-docs/plans/DEPENDENCY_BUMP_VERIFICATION_PLAN.md).
-pylinac==3.43.2  # Automated phantom QA analysis (ACR CT + ACR MRI Large)
+# Pinned: only 3.42.0 has been verified with ACR CT/MRI pylinac integration (see dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md).
+pylinac==3.42.0  # Automated phantom QA analysis (ACR CT + ACR MRI Large)
 scipy>=1.11.0  # pylinac numerical dependency
 scikit-image>=0.22.0  # pylinac image processing dependency
 pypdf>=4.0.0  # PDF merging for compare-mode combined PDF report

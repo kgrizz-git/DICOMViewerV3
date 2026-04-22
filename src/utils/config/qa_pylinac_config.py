@@ -15,7 +15,7 @@ from __future__ import annotations
 import math
 from typing import Any, Callable, cast
 
-# Matches pylinac 3.42 ``ACRMRILarge.analyze(...)`` defaults.
+# Matches pylinac 3.43.x ``ACRMRILarge.analyze(...)`` defaults.
 ACR_MRI_LOW_CONTRAST_METHODS: tuple[str, ...] = (
     "Michelson",
     "Weber",

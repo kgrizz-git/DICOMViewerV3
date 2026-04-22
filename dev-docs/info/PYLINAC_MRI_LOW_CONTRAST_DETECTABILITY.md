@@ -1,6 +1,6 @@
 # Pylinac ACR MRI Large — low-contrast detectability (algorithm & PDF overlays)
 
-**Scope:** Behavior of **`pylinac.acr.ACRMRILarge`** low-contrast detectability for the **ACR MRI Large** phantom, as implemented in **pylinac 3.42.0** (the version pinned in this project’s `requirements.txt`).  
+**Scope:** Behavior of **`pylinac.acr.ACRMRILarge`** low-contrast detectability for the **ACR MRI Large** phantom, as implemented in **pylinac 3.43.2** (the version pinned in this project’s `requirements.txt`).  
 **Sources:** Installed package (`pylinac/acr.py`, `pylinac/core/roi.py`) and pylinac documentation topics [ACR Phantoms](https://pylinac.readthedocs.io/en/latest/acr.html) and [Contrast — Visibility](https://pylinac.readthedocs.io/en/latest/topics/contrast.html#visibility) (RTD “latest” tracks recent releases; confirm against your installed `pylinac.__version__`).
 
 ---
@@ -8,7 +8,7 @@
 ## What the test is doing
 
 - **Slices:** Low-contrast detectability uses **phantom slices 8, 9, 10, and 11** (pylinac’s internal module offsets: **70, 80, 90, 100 mm** from the origin slice along the stack — see `MR_LOW_CONTRAST_MODULE_OFFSETS_MM` in `acr.py`).
-- **Geometry:** On each slice, **10 spokes** are arranged in a circle. Spoke diameters **decrease clockwise** from **7.0 mm (spoke 1)** to **1.5 mm (spoke 10)**. Each spoke has **three low-contrast disks** at **different radial distances** from the phantom center (nominal distances **12.75, 25.50, 38.25 mm** in 3.42.0).
+- **Geometry:** On each slice, **10 spokes** are arranged in a circle. Spoke diameters **decrease clockwise** from **7.0 mm (spoke 1)** to **1.5 mm (spoke 10)**. Each spoke has **three low-contrast disks** at **different radial distances** from the phantom center (nominal distances **12.75, 25.50, 38.25 mm** in 3.43.2).
 - **Scoring (per slice):** A spoke counts as **complete** only if **all three** of its disks are considered **visible** under pylinac’s rules. Counting **starts at spoke 1** and **stops at the first incomplete spoke**; spokes after that are **not** counted even if they would pass.
 - **Total score:** `MRLowContrastMultiSliceModule.score` is the **sum** of the per-slice scores (each slice contributes **0–10**; four slices ⇒ **0–40** maximum).
 
@@ -24,9 +24,9 @@ Each low-contrast disk is sampled with a **`LowContrastDiskROI`**. Pylinac separ
 2. **Visibility** follows a **Rose-model-style** combination of contrast, ROI area, and noise, as documented under **Visibility** in the Contrast topic:
 
    - Conceptually: visibility scales contrast by a factor involving **effective area** and **noise** (std dev of the disk ROI used as a practical surrogate for detective quantum efficiency in the docs).
-   - Implementation (3.42.0): `LowContrastDiskROI.visibility` calls `pylinac.core.contrast.visibility()` with the contrast algorithm, disk **radius**, and ROI **std**.
+   - Implementation (3.43.2): `LowContrastDiskROI.visibility` calls `pylinac.core.contrast.visibility()` with the contrast algorithm, disk **radius**, and ROI **std**.
 
-3. **Threshold pass:** `passed_visibility` is **`visibility > visibility_threshold`**, where `visibility_threshold` comes from **`low_contrast_visibility_threshold`** on **`analyze()`** (default **0.001** in 3.42.0).
+3. **Threshold pass:** `passed_visibility` is **`visibility > visibility_threshold`**, where `visibility_threshold` comes from **`low_contrast_visibility_threshold`** on **`analyze()`** (default **0.001** in 3.43.2).
 
 ---
 
@@ -74,7 +74,7 @@ These values are stored in app config (`QaPylinacConfigMixin`) and passed on
 **each** `analyze()` call (see
 [PYLINAC_CUSTOMIZATION_AND_EXTENSIONS.md](PYLINAC_CUSTOMIZATION_AND_EXTENSIONS.md)).
 
-Relevant keyword arguments (3.42.0):
+Relevant keyword arguments (3.43.2):
 
 - **`low_contrast_method`** — Contrast equation for visibility input (default **`Weber`**). Other options are described under **Low contrast** in the Contrast topic (`Michelson`, `Ratio`, `Difference`, `RMS`, etc.).
 - **`low_contrast_visibility_threshold`** — Threshold on **visibility** for `passed_visibility` (default **0.001**).
@@ -96,7 +96,7 @@ For the original feature checklist and design notes, see **`dev-docs/plans/compl
 
 ---
 
-## References (pylinac 3.42.0–aligned)
+## References (pylinac 3.43.2–aligned)
 
 - Package: `pylinac.acr` — `ACRMRILarge`, `MRLowContrastModule`, `MRLowContrastMultiSliceModule`, `analyze()`, `publish_pdf()`, `results()`.
 - Package: `pylinac.core.roi` — `LowContrastDiskROI` (`visibility`, `passed_visibility`, `as_dict()` for exports).

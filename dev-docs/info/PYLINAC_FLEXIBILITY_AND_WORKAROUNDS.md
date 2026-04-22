@@ -6,7 +6,7 @@ This note is for **DICOM Viewer V3** developers extending the Stage 1 **`src/qa`
 
 **Shipped in the viewer:** Approaches **A** (tolerant extent via `ACRCTRelaxedExtent` / `ACRMRILargeRelaxedExtent`) and **B** (retry after strict extent failure) are wired in **`src/qa`** and **`src/main.py`**, with **`pylinac_analysis_profile`** and JSON **`schema_version` 1.1** — details in **PYLINAC_INTEGRATION_OVERVIEW.md** §2.4.
 
-**Upstream docs (version your install separately; project pins `pylinac==3.42.0` in `requirements.txt`):**
+**Upstream docs (version your install separately; project pins `pylinac==3.43.2` in `requirements.txt`):**
 
 - [ACR phantoms (ACRCT, ACRMRILarge)](https://pylinac.readthedocs.io/en/latest/acr.html)
 - [CatPhan / CBCT module](https://pylinac.readthedocs.io/en/latest/cbct.html)

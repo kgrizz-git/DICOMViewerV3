@@ -26,15 +26,6 @@ from typing import Optional
 from utils.debug_flags import DEBUG_NAV, DEBUG_MAGNIFIER
 
 
-def _normalize_scene_pick_item_for_roi(item):
-    """Map ROI resize handle picks onto the parent ellipse/rect graphics item."""
-    from tools.roi_manager import ROIResizeHandleItem
-
-    if isinstance(item, ROIResizeHandleItem):
-        return item.roi_graphics_shape_item()
-    return item
-
-
 class ImageViewerInputMixin:
     """event(), wheel, cursor/mouse modes, mouse press/move/release, keys, DnD."""
 
@@ -280,12 +271,10 @@ class ImageViewerInputMixin:
             if self.mouse_mode == "select":
                 # Check what item is at the click position
                 scene_pos = self.mapToScene(event.position().toPoint())
-                raw_pick = self.scene.itemAt(scene_pos, self.transform())
-                item = _normalize_scene_pick_item_for_roi(raw_pick)
+                item = self.scene.itemAt(scene_pos, self.transform())
                 
                 # Check if clicking on empty space (image item or None)
                 from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsEllipseItem
-                from tools.roi_manager import ROIResizeHandleItem
                 from tools.measurement_tool import MeasurementItem, MeasurementHandle, DraggableMeasurementText
                 from tools.angle_measurement_items import AngleMeasurementItem, AngleVertexHandle, DraggableAngleMeasurementText
                 
@@ -303,7 +292,7 @@ class ImageViewerInputMixin:
                     is_roi_item = isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem)) and item != self.image_item
                 
                 is_measurement_item = isinstance(item, (MeasurementItem, AngleMeasurementItem))
-                is_handle = isinstance(raw_pick, (MeasurementHandle, AngleVertexHandle, ROIResizeHandleItem))
+                is_handle = isinstance(item, (MeasurementHandle, AngleVertexHandle))
                 is_measurement_text = isinstance(item, (DraggableMeasurementText, DraggableAngleMeasurementText))
                 
                 # Check for text and arrow annotation items
@@ -360,9 +349,7 @@ class ImageViewerInputMixin:
             if self.dragMode() == QGraphicsView.DragMode.ScrollHandDrag:
                 # Check if clicking on ROI item first
                 scene_pos = self.mapToScene(event.position().toPoint())
-                item = _normalize_scene_pick_item_for_roi(
-                    self.scene.itemAt(scene_pos, self.transform())
-                )
+                item = self.scene.itemAt(scene_pos, self.transform())
                 
                 from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsEllipseItem
                 # Check if item is an ROI item (but not the image item)
@@ -397,9 +384,7 @@ class ImageViewerInputMixin:
             # For other modes, handle normally
             # First check if clicking on existing ROI item
             scene_pos = self.mapToScene(event.position().toPoint())
-            item = _normalize_scene_pick_item_for_roi(
-                self.scene.itemAt(scene_pos, self.transform())
-            )
+            item = self.scene.itemAt(scene_pos, self.transform())
             
             # Check if it's a ROI item (QGraphicsRectItem or QGraphicsEllipseItem) but not the image item
             from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsEllipseItem

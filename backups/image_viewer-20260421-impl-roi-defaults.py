@@ -48,7 +48,6 @@ class ImageViewer(ImageViewerInputMixin, ImageViewerViewMixin, QGraphicsView):
     arrow_key_pressed = Signal(int)  # Emitted when arrow key is pressed (1 = up, -1 = down)
     roi_clicked = Signal(object)  # Emitted when ROI is clicked (ROIItem)
     roi_delete_requested = Signal(object)  # Emitted when ROI deletion is requested (QGraphicsItem)
-    roi_geometry_edit_requested = Signal(object)  # Emitted when user requests resize handles (ROIItem)
     roi_statistics_overlay_toggle_requested = Signal(object, bool)  # Emitted when ROI statistics overlay toggle is requested (ROIItem, visible)
     roi_statistics_selection_changed = Signal(object, set)  # Emitted when ROI statistics selection changes (ROIItem, statistics_set)
     reset_view_requested = Signal()  # Emitted when reset view is requested from context menu

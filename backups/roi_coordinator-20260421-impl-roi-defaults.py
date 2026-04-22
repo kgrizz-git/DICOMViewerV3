@@ -21,11 +21,11 @@ Requirements:
     - DICOMProcessor for pixel array operations
 """
 
-from PySide6.QtCore import QPointF, QRectF, QTimer
+from PySide6.QtCore import QPointF, QTimer
 from typing import Any, Optional, Callable, TYPE_CHECKING, Dict, Tuple, Set
 from pydicom.dataset import Dataset
 import numpy as np
-from tools.roi_manager import ROIManager, ROIItem
+from tools.roi_manager import ROIManager
 from gui.roi_list_panel import ROIListPanel
 from gui.roi_statistics_panel import ROIStatisticsPanel
 
@@ -460,7 +460,6 @@ class ROICoordinator:
             self.roi_list_panel.select_roi_in_list(roi_item)
             if current_dataset is not None:
                 self.update_roi_statistics(roi_item)
-            self._auto_show_resize_handles_after_select(roi_item)
     
     def handle_roi_clicked(self, item) -> None:
         """
@@ -474,51 +473,9 @@ class ROICoordinator:
             self.roi_manager.select_roi(roi)
             self.roi_list_panel.select_roi_in_list(roi)
             self.update_roi_statistics(roi)
-            self._auto_show_resize_handles_after_select(roi)
     
-    def _auto_show_resize_handles_after_select(self, roi: Optional[ROIItem]) -> None:
-        """Show corner/edge handles for the selected rectangle or ellipse ROI (no-op for other types)."""
-        if roi is None or self.image_viewer.scene is None:
-            return
-        if roi.shape_type not in ("rectangle", "ellipse"):
-            return
-        self.roi_manager.enter_roi_geometry_edit_mode(
-            roi,
-            self.image_viewer.scene,
-            on_commit=self._on_roi_geometry_resize_committed,
-        )
-
-    def handle_roi_geometry_edit_requested(self, roi: ROIItem) -> None:
-        """Programmatic entry: select ROI and show resize handles (same as auto-select behavior)."""
-        if self.image_viewer.scene is None:
-            return
-        self.roi_manager.select_roi(roi)
-        self._auto_show_resize_handles_after_select(roi)
-
-    def exit_roi_geometry_edit_mode(self) -> bool:
-        """Leave ROI resize-handle mode if active (Escape, slice change, etc.)."""
-        return self.roi_manager.exit_roi_geometry_edit_mode()
-
-    def _on_roi_geometry_resize_committed(
-        self, roi: ROIItem, old_rect: QRectF, new_rect: QRectF
-    ) -> None:
-        """Push undo command and refresh statistics after a completed resize gesture."""
-        if self.undo_redo_manager and self.image_viewer.scene:
-            from utils.undo_redo import ROIGeometryResizeCommand
-
-            command = ROIGeometryResizeCommand(
-                roi, old_rect, new_rect, self.image_viewer.scene
-            )
-            self.undo_redo_manager.execute_command(command)
-            if self.update_undo_redo_state_callback:
-                self.update_undo_redo_state_callback()
-        self.update_roi_statistics(roi)
-        if self.image_viewer.scene is not None:
-            self.roi_manager.update_statistics_overlay_position(roi, self.image_viewer.scene)
-
     def handle_image_clicked_no_roi(self) -> None:
         """Handle image click when not on an ROI - deselect current ROI."""
-        self.roi_manager.exit_roi_geometry_edit_mode()
         # print(f"[DEBUG-DESELECT] handle_image_clicked_no_roi: Called")
         # print(f"[DEBUG-DESELECT]   Current selected ROI: {id(self.roi_manager.get_selected_roi()) if self.roi_manager.get_selected_roi() else None}")
         # print(f"[DEBUG-DESELECT]   Scene: {id(self.image_viewer.scene) if self.image_viewer.scene else None}")
@@ -567,7 +524,6 @@ class ROICoordinator:
                 return
         
         self.update_roi_statistics(roi)
-        self._auto_show_resize_handles_after_select(roi)
     
     def handle_roi_delete_requested(self, item) -> None:
         """
@@ -866,7 +822,6 @@ class ROICoordinator:
                         self.update_roi_statistics(roi)
                         # Update list panel selection
                         self.roi_list_panel.select_roi_in_list(roi)
-                        self._auto_show_resize_handles_after_select(roi)
                         break
             else:
                 # No selection - update overlay positions for all ROIs that might have moved

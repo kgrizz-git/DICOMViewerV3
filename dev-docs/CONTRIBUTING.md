@@ -27,7 +27,7 @@ Activate a virtual environment before installing or running (see **`AGENTS.md`**
 
 ## Pylinac pin and QA documentation
 
-- **`requirements.txt`** pins an exact **`pylinac`** version; that pin is the only upstream release **verified** with the viewer’s ACR CT / MRI integration. When **bumping** the pin, re-verify and update **`info/PYLINAC_INTEGRATION_OVERVIEW.md`** (**Verified pylinac package version**).
+- **`requirements.txt`** pins an exact **`pylinac`** version. When **bumping** the pin, follow **`dev-docs/plans/DEPENDENCY_BUMP_VERIFICATION_PLAN.md`** (install, **`python -m pytest tests/ -v`**, optional manual ACR QA), and update **`info/PYLINAC_INTEGRATION_OVERVIEW.md`** (**Verified pylinac package version**) plus any user-facing version callouts (`README.md`, `user-docs/USER_GUIDE_QA_PYLINAC.md`, etc.).
 - Default Stage‑1 runs use **`src/qa/pylinac_extent_subclasses.py`** (**`ACRCTForViewer`** / **`ACRMRILargeForViewer`**) so origin indices may be **0 … N−1** (stock pylinac is stricter); JSON **`pylinac_analysis_profile`** records **`relaxed_image_extent`**. Users may enable **Vanilla pylinac** in the ACR CT/MRI options dialogs (persisted in **`qa_pylinac_config`**) to run stock **`ACRCT`** / **`ACRMRILarge`** instead.
 
 ## Third-party license inventory

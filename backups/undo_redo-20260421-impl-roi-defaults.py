@@ -19,7 +19,7 @@ Requirements:
 """
 
 from typing import List, Optional, Callable, Any, Tuple, Union
-from PySide6.QtCore import QPointF, QRectF
+from PySide6.QtCore import QPointF
 
 from utils.debug_log import debug_log, annotation_debug
 from utils.debug_flags import DEBUG_ANNOTATION
@@ -240,41 +240,6 @@ class ROICommand(Command):
                 # the flag must be restored (above) before this call.
                 if self.update_statistics_callback:
                     self.update_statistics_callback()
-
-
-class ROIGeometryResizeCommand(Command):
-    """
-    Command for resizing a rectangle or ellipse ROI (scene bounding rect before / after).
-    """
-
-    def __init__(self, roi_item, old_rect: QRectF, new_rect: QRectF, scene) -> None:
-        self.roi_item = roi_item
-        self.old_rect = QRectF(old_rect)
-        self.new_rect = QRectF(new_rect)
-        self.scene = scene
-
-    def execute(self) -> None:
-        if self.roi_item is None or self.scene is None:
-            return
-        it = getattr(self.roi_item, "item", None)
-        if it is None or it.scene() != self.scene:
-            return
-        from tools.roi_manager import apply_roi_scene_bounding_rect
-
-        apply_roi_scene_bounding_rect(self.roi_item, self.new_rect)
-
-    def undo(self) -> None:
-        if self.roi_item is None or self.scene is None:
-            return
-        it = getattr(self.roi_item, "item", None)
-        if it is None or it.scene() != self.scene:
-            return
-        from tools.roi_manager import apply_roi_scene_bounding_rect
-
-        apply_roi_scene_bounding_rect(self.roi_item, self.old_rect)
-
-    def redo(self) -> None:
-        self.execute()
 
 
 class ROIMoveCommand(Command):

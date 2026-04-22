@@ -21,19 +21,19 @@
 
 ## A. Environment and install sanity
 
-- [ ] Activate the project **virtual environment** (see `AGENTS.md` / `.claude/skills/python-venv-dependencies`).
-- [ ] Confirm **Python version** meets new minimums (e.g. **pylinac ≥ 3.43.x** requires **Python ≥ 3.10** per PyPI `requires_python`).
-- [ ] **`python -m pip install -U pip`** (optional but helps reproducible resolution), then **`python -m pip install -r requirements.txt`** (or your documented install path).
-- [ ] **`python -m pip check`** — no broken dependencies reported.
-- [ ] **Cold import smoke:** `python -c "import pylinac; print(pylinac.__version__)"` (skip only if pylinac was not bumped).
-- [ ] **Application import smoke (optional):** from project root with `PYTHONPATH=src` (see `tests/README.md`), e.g. `python -c "from qa.pylinac_extent_subclasses import ACRCTForViewer"` (skip if pylinac / `src/qa` unchanged).
+- [x] Activate the project **virtual environment** (see `AGENTS.md` / `.claude/skills/python-venv-dependencies`).
+- [x] Confirm **Python version** meets new minimums (e.g. **pylinac ≥ 3.43.x** requires **Python ≥ 3.10** per PyPI `requires_python`).
+- [x] **`python -m pip install -U pip`** (optional but helps reproducible resolution), then **`python -m pip install -r requirements.txt`** (or your documented install path).
+- [x] **`python -m pip check`** — no broken dependencies reported.
+- [x] **Cold import smoke:** `python -c "import pylinac; print(pylinac.__version__)"` (skip only if pylinac was not bumped).
+- [x] **Application import smoke (optional):** from project root with `PYTHONPATH=src` (see `tests/README.md`), e.g. `python -c "import sys; sys.path.insert(0, 'src'); from qa.pylinac_extent_subclasses import ACRCTForViewer"` (skip if pylinac / `src/qa` unchanged).
 
 ---
 
 ## B. Automated tests
 
-- [ ] From the activated venv, run the **full suite:** `python -m pytest tests/ -v` (or `python tests/run_tests.py` if that is the team standard for the same coverage).
-- [ ] If **`pylinac`** changed, also run **`python -m pytest tests/test_pylinac_extent_subclasses.py tests/test_pylinac_extent_relaxed.py -v`** (add any other `test_*pylinac*` paths if present).
+- [x] From the activated venv, run the **full suite:** `python -m pytest tests/ -v` (or `python tests/run_tests.py` if that is the team standard for the same coverage).
+- [x] If **`pylinac`** changed, also run **`python -m pytest tests/test_pylinac_extent_subclasses.py tests/test_pylinac_extent_relaxed.py -v`** (add any other `test_*pylinac*` paths if present).
 - [ ] If **`pydicom`** or DICOM decoding plugins changed, spot-check any tests tagged or documented for compressed transfer syntaxes (JPEG-LS, JPEG 2000, etc.) if they exist in the tree.
 
 ---
@@ -41,7 +41,7 @@
 ## C. pylinac / QA integration (when `pylinac` or its stack was bumped)
 
 - [ ] Read **upstream changelog** for the new version (e.g. [pylinac changelog](https://github.com/jrkerns/pylinac/blob/master/docs/source/changelog.rst)) for **breaking** or **behavior** notes affecting **ACRCT**, **ACRMRILarge**, or **CatPhan**-related APIs.
-- [ ] **Manual QA smoke (recommended):** one **ACR CT** and one **ACR MRI Large** run on known-good local phantoms (vanilla and non-vanilla paths if you use both), comparing PDF/JSON or key metrics to **prior baseline** where clinically appropriate.
+- [x] **Manual QA smoke (recommended):** one **ACR CT** and one **ACR MRI Large** run on known-good local phantoms (vanilla and non-vanilla paths if you use both), comparing PDF/JSON or key metrics to **prior baseline** where clinically appropriate.
 - [ ] Update **version callouts** if the project documents a verified pin: e.g. `requirements.txt` comment, [`user-docs/USER_GUIDE_QA_PYLINAC.md`](../../user-docs/USER_GUIDE_QA_PYLINAC.md), [`dev-docs/info/PYLINAC_FLEXIBILITY_AND_WORKAROUNDS.md`](../info/PYLINAC_FLEXIBILITY_AND_WORKAROUNDS.md), and any **HIGHDICOM / pydicom** constraint notes that cite the pylinac pin.
 
 ---

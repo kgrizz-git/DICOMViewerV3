@@ -12,7 +12,7 @@ This document outlines how **pylinac** could be integrated into DICOM Viewer V3 
 
 **Pylinac reference notes (project docs):**
 
-- [PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md](PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md) — ACR MRI Large **low-contrast detectability** (algorithm, scoring, PDF/figure circle colors); aligned with **pylinac 3.42.0** (project pin).
+- [PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md](PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md) — ACR MRI Large **low-contrast detectability** (algorithm, scoring, PDF/figure circle colors); aligned with **pylinac 3.43.2** (project pin).
 - [PYLINAC_CUSTOMIZATION_AND_EXTENSIONS.md](PYLINAC_CUSTOMIZATION_AND_EXTENSIONS.md) — **Living tracker**: how we customize, extend, or wrap pylinac (config, runners, subclasses); persist vs per-run `analyze()` kwargs.
 - [PYLINAC_CATPHAN_AND_NUCLEAR_MODULES.md](PYLINAC_CATPHAN_AND_NUCLEAR_MODULES.md) — **CatPhan / Quart CT** and **`pylinac.nuclear`** (IAEA/NMQC-style NM/SPECT): tests performed, expected DICOM inputs, demo ZIPs / external sample data.
 
@@ -35,7 +35,7 @@ This is a **snapshot** of pylinac usage in **application code** (`src/qa`, Tools
 
 ### Verified pylinac package version
 
-**`requirements.txt`** pins **`pylinac==3.42.0`** and lists **`pypdf>=4.0.0`** as an explicit direct dependency (with a short comment in that file) for merging per-run pylinac PDFs into the combined compare report—see `dev-docs/plans/completed/MRI_COMPARE_COMBINED_PDF_PLAN.md`. The **`pylinac==3.42.0`** pin is the **only** upstream pylinac release **verified end-to-end** with this project’s ACR CT / ACR MRI Large integration so far (constructors, `analyze()`, optional `check_uid`, and the relaxed scan-extent subclasses). Other pylinac versions may work but have **not** been regression-tested here; bump the pin only after explicit verification and update this subsection (and the comment in `requirements.txt`).
+**`requirements.txt`** pins **`pylinac==3.43.2`** and lists **`pypdf>=4.0.0`** as an explicit direct dependency (with a short comment in that file) for merging per-run pylinac PDFs into the combined compare report—see `dev-docs/plans/completed/MRI_COMPARE_COMBINED_PDF_PLAN.md`. The **`pylinac==3.43.2`** pin is the **current** upstream release used with this project’s ACR CT / ACR MRI Large integration (constructors, `analyze()`, optional `check_uid`, and the relaxed scan-extent subclasses); follow **`dev-docs/plans/DEPENDENCY_BUMP_VERIFICATION_PLAN.md`** after each bump. Other pylinac versions may work but should be treated as **unverified** until that plan (and targeted QA) is completed; update this subsection and the comment in `requirements.txt` whenever the pin changes.
 
 `reportlab` (a pylinac transitive dependency) is also used directly by the viewer to build the compare-mode summary page.
 
@@ -57,7 +57,7 @@ This is a **snapshot** of pylinac usage in **application code** (`src/qa`, Tools
 
 ### Pylinac docs coverage snapshot (public docs TOC)
 
-Compared against pylinac’s public docs TOC (wording may vary slightly by release; **runtime is pinned to 3.42.0** — see [Verified pylinac package version](#verified-pylinac-package-version)), the app currently wires **ACR CT** and **ACR MRI Large** only. Additional documented areas not currently exposed in DICOMViewerV3 include:
+Compared against pylinac’s public docs TOC (wording may vary slightly by release; **runtime is pinned to 3.43.2** — see [Verified pylinac package version](#verified-pylinac-package-version)), the app currently wires **ACR CT** and **ACR MRI Large** only. Additional documented areas not currently exposed in DICOMViewerV3 include:
 
 - **Main modules not exposed**: Calibration (TG-51/TRS-398), Starshot, VMAT, CatPhan, "Cheese" phantoms, GE Helios, Quart, Log Analyzer, Picket Fence, Winston-Lutz (single + multi-target), Planar Imaging, Field Profile Analysis, Field Analysis, Nuclear. **Details (tests, inputs, demo data):** [PYLINAC_CATPHAN_AND_NUCLEAR_MODULES.md](PYLINAC_CATPHAN_AND_NUCLEAR_MODULES.md).
 - **ACR-class capabilities not yet exposed in UI/runner surface**: zip-based load paths (`from_zip`), broader `analyze(...)` tuning knobs (e.g. x/y/angle and ROI/scale adjustments where supported), and subimage plotting/saving helpers (e.g. `plot_analyzed_subimage`, `save_analyzed_subimage`) as first-class app features.

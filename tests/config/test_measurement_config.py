@@ -16,7 +16,7 @@ def _cm(tmp_path: Path) -> ConfigManager:
 
 class TestMeasurementFontSize:
     def test_default(self, tmp_path):
-        assert _cm(tmp_path).get_measurement_font_size() == 14
+        assert _cm(tmp_path).get_measurement_font_size() == 12
 
     def test_set_and_get(self, tmp_path):
         cm = _cm(tmp_path)
@@ -26,7 +26,7 @@ class TestMeasurementFontSize:
     def test_zero_ignored(self, tmp_path):
         cm = _cm(tmp_path)
         cm.set_measurement_font_size(0)
-        assert cm.get_measurement_font_size() == 14
+        assert cm.get_measurement_font_size() == 12
 
 
 class TestMeasurementFontColor:
@@ -46,7 +46,7 @@ class TestMeasurementFontColor:
 
 class TestMeasurementLineThickness:
     def test_default(self, tmp_path):
-        assert _cm(tmp_path).get_measurement_line_thickness() == 6
+        assert _cm(tmp_path).get_measurement_line_thickness() == 3
 
     def test_set_and_get(self, tmp_path):
         cm = _cm(tmp_path)
@@ -56,7 +56,7 @@ class TestMeasurementLineThickness:
     def test_zero_ignored(self, tmp_path):
         cm = _cm(tmp_path)
         cm.set_measurement_line_thickness(0)
-        assert cm.get_measurement_line_thickness() == 6
+        assert cm.get_measurement_line_thickness() == 3
 
 
 class TestMeasurementLineColor:

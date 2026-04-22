@@ -994,7 +994,7 @@ def _extract_lc_score(raw: Dict[str, Any]) -> Optional[int]:
             return int(raw["low_contrast_score"])
         except (TypeError, ValueError):
             pass
-    # Pydantic serialized shape from pylinac 3.42.0 (via as_dict=True)
+    # Pydantic serialized shape from pylinac 3.43.2 (via as_dict=True)
     lc_multi = raw.get("low_contrast_multi_slice_module") or raw.get(
         "low_contrast_multi_slice"
     )

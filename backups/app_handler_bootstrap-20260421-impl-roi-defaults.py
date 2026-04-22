@@ -223,5 +223,4 @@ def initialize_handlers(app: "DICOMViewerApp") -> None:
         ),
         open_quick_window_level_callback=app._open_quick_window_level,
         cancel_angle_draw_callback=app.measurement_coordinator.handle_angle_draw_cancel_requested,
-        exit_roi_geometry_edit_callback=app.roi_coordinator.exit_roi_geometry_edit_mode,
     )

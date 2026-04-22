@@ -33,11 +33,6 @@ def handle_mouse_press_right_button(viewer: Any, event: Any) -> bool:
     scene_pos = viewer.mapToScene(event.position().toPoint())
     item = viewer.scene.itemAt(scene_pos, viewer.transform())
 
-    from tools.roi_manager import ROIResizeHandleItem
-
-    if isinstance(item, ROIResizeHandleItem):
-        item = item.roi_graphics_shape_item()
-
     # Check if it's a ROI item or measurement item
     from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsEllipseItem
     from tools.measurement_tool import MeasurementItem
@@ -230,11 +225,6 @@ def show_image_background_context_menu_on_right_release(viewer: Any, event: Any)
     """After short right-click release on image: scene pick + full image context menu."""
     scene_pos = viewer.mapToScene(event.position().toPoint())
     item = viewer.scene.itemAt(scene_pos, viewer.transform())
-
-    from tools.roi_manager import ROIResizeHandleItem
-
-    if isinstance(item, ROIResizeHandleItem):
-        item = item.roi_graphics_shape_item()
 
     from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsEllipseItem
     from tools.measurement_tool import MeasurementItem

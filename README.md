@@ -21,11 +21,11 @@ View DICOM studies with **multi-window layouts**, **window/level**, **cine**, **
 
 ## Requirements
 
-- **Python 3.9+**. On **Windows**, **Python 3.11 or 3.12** is recommended so dependencies such as **pyjpegls** install from pre-built wheels. Very new versions (e.g. **3.14+**) may require building native extensions. Details: **[requirements.txt](requirements.txt)** and **[AGENTS.md](AGENTS.md)**.
+- **Python 3.10+** (required by **pylinac** for ACR QA; the rest of the viewer may run on older interpreters if you omit QA deps). On **Windows**, **Python 3.11 or 3.12** is recommended so dependencies such as **pyjpegls** install from pre-built wheels. Very new versions (e.g. **3.14+**) may require building native extensions. Details: **[requirements.txt](requirements.txt)** and **[AGENTS.md](AGENTS.md)**.
 
 ## Technology stack (summary)
 
-- **GUI:** PySide6 · **DICOM:** pydicom · **Arrays / imaging:** NumPy, Pillow · **Histogram:** matplotlib · **Tag export (Excel / CSV / UTF-8 text):** openpyxl (`*.xlsx`); CSV and tab-separated `*.txt` use the standard library · **Fusion 3D resampling:** SimpleITK · **ACR QA:** **pylinac 3.42.0** (exact pin), scipy, scikit-image · **Compare PDF merge:** pypdf · **Cine export (GIF/AVI/MPG):** imageio + imageio-ffmpeg (ships a **FFmpeg** build — **LGPL/GPL** components; review license implications for **redistributed** / **frozen** bundles)  
+- **GUI:** PySide6 · **DICOM:** pydicom · **Arrays / imaging:** NumPy, Pillow · **Histogram:** matplotlib · **Tag export (Excel / CSV / UTF-8 text):** openpyxl (`*.xlsx`); CSV and tab-separated `*.txt` use the standard library · **Fusion 3D resampling:** SimpleITK · **ACR QA:** **pylinac 3.43.2** (exact pin), scipy, scikit-image · **Compare PDF merge:** pypdf · **Cine export (GIF/AVI/MPG):** imageio + imageio-ffmpeg (ships a **FFmpeg** build — **LGPL/GPL** components; review license implications for **redistributed** / **frozen** bundles)  
 - **Optional (compressed DICOM):** pylibjpeg, pyjpegls, pylibjpeg-libjpeg — see `requirements.txt`.
 
 ## Project structure

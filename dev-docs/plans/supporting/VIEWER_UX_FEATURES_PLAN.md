@@ -21,7 +21,8 @@
 ## 1. ROI Editing (Resize Handles)
 
 **Priority:** P2  
-**TO_DO entry:** "Add ability to edit a drawn ellipse or rectangle ROI"
+**TO_DO entry:** "Add ability to edit a drawn ellipse or rectangle ROI"  
+**Status:** Implemented — see **Shipped behavior** below; the **Step-by-Step Plan** block is the original design sketch (kept for history).
 
 ### Goal
 
@@ -33,6 +34,21 @@ After an ROI has been drawn (and is in the finished state with `ItemIsMovable = 
 - `ROIItem` wraps the graphics item and exposes the shape's bounding rect.
 - `ROIManager` owns all `ROIItem`s and coordinates drawing state (`start_drawing`, `update_drawing`, `finish_drawing`).
 - ROI items are placed in a `QGraphicsScene` managed by `ImageViewer` (`src/gui/image_viewer.py`).
+
+### Shipped behavior (implementation map)
+
+| Concern | Where |
+|--------|--------|
+| Handle type | `ROIResizeHandleItem` in `src/tools/roi_manager.py` (`QGraphicsRectItem`, `ItemIgnoresTransformations`, high `zValue`). |
+| Layout | Eight handles (**tl, tm, tr, ml, mr, bl, bm, br**) on the scene bounding box (ellipse uses the same box as the rect item). |
+| Geometry | `apply_roi_scene_bounding_rect()` + `compute_resized_scene_rect_from_handle()` — `setPos(topLeft)` + `setRect(0,0,w,h)` in scene units. |
+| Session | `ROIManager.enter_roi_geometry_edit_mode` / `exit_roi_geometry_edit_mode`; auto-exit on slice change (`set_current_slice`), `select_roi` to another ROI, ROI delete/clear, and empty image click (`handle_image_clicked_no_roi`). |
+| Selection / menu | Handles appear when a rectangle or ellipse ROI is selected (click, ROI list, scene `selectionChanged`, or right after draw finish). Optional: `ImageViewer.roi_geometry_edit_requested` → `handle_roi_geometry_edit_requested` (select + enter mode; wired in `subwindow_lifecycle_controller.py`). |
+| Escape | `KeyboardEventHandler` optional callback from `app_handler_bootstrap` → `roi_coordinator.exit_roi_geometry_edit_mode()`. |
+| Live stats | Handle drag calls the same `on_moved_callback` path as moving the ROI. |
+| Undo | `ROIGeometryResizeCommand` in `src/utils/undo_redo.py` — one command per handle gesture (press → release). |
+| Hit testing | `image_viewer_input.py` normalizes a pick of `ROIResizeHandleItem` to the parent ROI shape item so ROI tools / deselect logic stay consistent. |
+| Move lock | `ItemIsMovable` disabled on the ROI shape while a handle drag is active. |
 
 ### Approach – Overlay Handle Items
 
@@ -100,7 +116,7 @@ In `src/gui/roi_coordinator.py` (or `image_viewer.py` mouse event handling):
 
 #### Step 5 – Statistics update on resize
 
-After each resize (every `mouseMoveEvent` of a handle), call the existing ROI statistics callback so that the stats panel live-updates. This reuses the existing callback path from `ROIItem._on_move_callback`.
+After each resize (every `mouseMoveEvent` of a handle), call the existing ROI statistics callback so that the stats panel live-updates. This reuses the existing callback path from `ROIItem._on_item_moved` / `on_moved_callback`.
 
 #### Step 6 – Persist geometry
 
@@ -111,6 +127,7 @@ ROI coordinates are stored as bounding rect + shape type. No changes needed here
 - Handles must be hidden when the viewer switches slices (ROI might not belong to the new slice).
 - The `ItemIgnoresTransformations` flag keeps handles screen-size-fixed but also means their scene positions must be manually placed – avoid relying on Qt's transform for layout.
 - Minimum size constraint: prevent negative-area rects (clamp rect dimensions ≥ 2 px).
+- **Context menu:** Right-click must treat a handle like its parent ROI (normalize pick) so delete/statistics actions target the shape item, not the handle widget class alone.
 
 ---
 

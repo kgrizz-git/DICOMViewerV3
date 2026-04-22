@@ -16,7 +16,7 @@ Use this page with [CONTRIBUTING.md](CONTRIBUTING.md) (hooks, CI, releases), [AG
 
 ### Python version and native wheels (Windows)
 
-- **Python 3.9+** is required; on Windows **3.11 or 3.12** is recommended so packages like **pyjpegls** install from pre-built wheels.
+- **Python 3.10+** is required for the full `requirements.txt` stack (including **pylinac**); on Windows **3.11 or 3.12** is recommended so packages like **pyjpegls** install from pre-built wheels.
 - If **`pip install` fails building pyjpegls** with *Microsoft Visual C++ 14.0 or greater is required*, either switch the venv to **Python 3.11/3.12**, or install [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with the C++ workload.
 
 ### Parallels / network home paths (Windows guests)

@@ -139,7 +139,7 @@ class ConfigManager(
             "multi_window_layout": "1x1",
             "view_slot_order": [0, 1, 2, 3],
             # ROI
-            "roi_font_size": 12,
+            "roi_font_size": 14,
             "roi_font_color_r": 255,
             "roi_font_color_g": 255,
             "roi_font_color_b": 0,
@@ -150,11 +150,11 @@ class ConfigManager(
             "roi_default_visible_statistics": ["mean", "std", "min", "max", "count", "area"],
             "roi_show_per_channel_statistics": True,
             # Measurement
-            "measurement_font_size": 12,
+            "measurement_font_size": 14,
             "measurement_font_color_r": 0,
             "measurement_font_color_g": 255,
             "measurement_font_color_b": 0,
-            "measurement_line_thickness": 3,
+            "measurement_line_thickness": 6,
             "measurement_line_color_r": 0,
             "measurement_line_color_g": 255,
             "measurement_line_color_b": 0,

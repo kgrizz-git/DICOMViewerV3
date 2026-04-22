@@ -1,6 +1,6 @@
 # User guide — ACR phantom QA (pylinac)
 
-The viewer can run **automated ACR phantom analysis** using the **pylinac** library (pinned in `requirements.txt`, currently **3.42.0**). This is **optional QA tooling**; the app still runs if pylinac is missing until you use these menus.
+The viewer can run **automated ACR phantom analysis** using the **pylinac** library (pinned in `requirements.txt`, currently **3.43.2**). This is **optional QA tooling**; the app still runs if pylinac is missing until you use these menus.
 
 ## Where to find it
 
