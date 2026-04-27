@@ -35,7 +35,7 @@ keyring>=24.0.0
 SimpleITK>=2.3.0  # For 3D image resampling in image fusion (Phase 2)
 # Pinned: only 3.42.0 has been verified with ACR CT/MRI pylinac integration (see dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md).
 pylinac==3.42.0  # Automated phantom QA analysis (ACR CT + ACR MRI Large)
-scipy>=1.11.0  # pylinac numerical dependency
+scipy>=1.17.1  # pylinac numerical dependency
 scikit-image>=0.22.0  # pylinac image processing dependency
 pypdf>=4.0.0  # PDF merging for compare-mode combined PDF report
 
