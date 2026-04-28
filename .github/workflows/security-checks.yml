@@ -107,7 +107,7 @@ jobs:
       # Pin action + image tag so CI is reproducible; bump with Dependabot or when releasing.
       - name: Run TruffleHog secret scanner
         if: steps.trufflehog_range.outputs.should_scan == 'true'
-        uses: trufflesecurity/trufflehog@v3.94.3
+        uses: trufflesecurity/trufflehog@v3.95.2
         with:
           path: ./
           base: ${{ steps.trufflehog_range.outputs.base_sha }}
