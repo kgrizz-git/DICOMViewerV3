@@ -9,11 +9,16 @@ Verbose YBR conversion diagnostics are gated by ``DEBUG_YBR`` in
 ``utils.debug_flags`` (default off).
 """
 
+import logging
+
 import numpy as np
 from typing import Optional, Tuple
 from pydicom.dataset import Dataset
 
 from utils.debug_flags import DEBUG_YBR
+from utils.log_sanitizer import sanitized_format_exc
+
+_logger = logging.getLogger(__name__)
 
 
 def _log_ybr(message: str) -> None:
@@ -450,8 +455,7 @@ def convert_ybr_to_rgb(ybr_array: np.ndarray,
 
     except Exception as e:
         print(f"Error converting YBR to RGB: {e}")
-        import traceback
-        traceback.print_exc()
+        _logger.debug("%s", sanitized_format_exc())
         # Return original array on error (may cause display issues but prevents crash)
         return ybr_array
 
@@ -522,7 +526,6 @@ def detect_and_fix_rgb_channel_order(pixel_array: np.ndarray,
 
     except Exception as e:
         print(f"[RGB/BGR] Error detecting/fixing channel order: {e}")
-        import traceback
-        traceback.print_exc()
+        _logger.debug("%s", sanitized_format_exc())
         # Return original array on error
         return pixel_array

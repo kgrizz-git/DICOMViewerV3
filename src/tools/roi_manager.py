@@ -21,13 +21,22 @@ Clipboard-oriented JSON dicts for copy/paste are built in ``tools.roi_persistenc
 (Phase 5B); ``utils.annotation_clipboard`` imports that module.
 """
 
+import logging
 import math
 
 from PySide6.QtWidgets import (QGraphicsEllipseItem, QGraphicsRectItem, QGraphicsItem,
                                QGraphicsTextItem, QGraphicsSceneMouseEvent, QGraphicsScene)
 from PySide6.QtCore import Qt, QRectF, QPointF
 from shiboken6 import isValid
-from PySide6.QtGui import QPen, QColor, QTransform, QPainterPath, QPainterPathStroker
+from PySide6.QtGui import (
+    QBrush,
+    QColor,
+    QCursor,
+    QPainterPath,
+    QPainterPathStroker,
+    QPen,
+    QTransform,
+)
 from typing import List, Optional, Tuple, Dict, Set, Callable
 import numpy as np
 from pydicom.dataset import Dataset
@@ -36,6 +45,9 @@ from core.dicom_color import multichannel_axis_labels
 from utils.bundled_fonts import make_qfont
 from utils.config_manager import ConfigManager
 from gui.view_transform_helpers import graphics_view_uniform_zoom
+from utils.log_sanitizer import sanitized_format_exc
+
+_logger = logging.getLogger(__name__)
 
 # Statistics payloads use int for pixel counts and None for optional area in mm².
 RoiStatisticsMap = dict[str, float | int | None]
@@ -157,6 +169,161 @@ class ROIGraphicsRectItem(QGraphicsRectItem):
         return stroker.createStroke(path)
 
 
+ROI_RESIZE_HANDLE_IDS: Tuple[str, ...] = ("tl", "tm", "tr", "mr", "br", "bm", "bl", "ml")
+
+_CURSOR_FOR_RESIZE_HANDLE: Dict[str, Qt.CursorShape] = {
+    "tl": Qt.CursorShape.SizeFDiagCursor,
+    "br": Qt.CursorShape.SizeFDiagCursor,
+    "tr": Qt.CursorShape.SizeBDiagCursor,
+    "bl": Qt.CursorShape.SizeBDiagCursor,
+    "tm": Qt.CursorShape.SizeVerCursor,
+    "bm": Qt.CursorShape.SizeVerCursor,
+    "ml": Qt.CursorShape.SizeHorCursor,
+    "mr": Qt.CursorShape.SizeHorCursor,
+}
+
+
+def compute_resized_scene_rect_from_handle(
+    anchor: QRectF, handle: str, p: QPointF, min_size: float = 2.0
+) -> QRectF:
+    """
+    Compute a new axis-aligned scene rectangle by dragging one handle of ``anchor``
+    toward scene point ``p``. Opposite edges stay fixed per handle semantics.
+    """
+    L, T, R, B = anchor.left(), anchor.top(), anchor.right(), anchor.bottom()
+    x, y = p.x(), p.y()
+    ms = min_size
+
+    def clamp_w(nl: float, nr: float) -> Tuple[float, float]:
+        if nr - nl < ms:
+            c = (nl + nr) * 0.5
+            return c - ms / 2.0, c + ms / 2.0
+        return nl, nr
+
+    def clamp_h(nt: float, nb: float) -> Tuple[float, float]:
+        if nb - nt < ms:
+            c = (nt + nb) * 0.5
+            return c - ms / 2.0, c + ms / 2.0
+        return nt, nb
+
+    if handle == "br":
+        nl, nt = L, T
+        nr, nb = max(x, L + ms), max(y, T + ms)
+        nl, nr = clamp_w(nl, nr)
+        nt, nb = clamp_h(nt, nb)
+        return QRectF(nl, nt, nr - nl, nb - nt).normalized()
+    if handle == "tl":
+        nr, nb = R, B
+        nl, nt = min(x, nr - ms), min(y, nb - ms)
+        nl, nr = clamp_w(nl, nr)
+        nt, nb = clamp_h(nt, nb)
+        return QRectF(nl, nt, nr - nl, nb - nt).normalized()
+    if handle == "tr":
+        nl, nb = L, B
+        nr, nt = max(x, nl + ms), min(y, nb - ms)
+        nl, nr = clamp_w(nl, nr)
+        nt, nb = clamp_h(nt, nb)
+        return QRectF(nl, nt, nr - nl, nb - nt).normalized()
+    if handle == "bl":
+        nr, nt = R, T
+        nl, nb = min(x, nr - ms), max(y, nt + ms)
+        nl, nr = clamp_w(nl, nr)
+        nt, nb = clamp_h(nt, nb)
+        return QRectF(nl, nt, nr - nl, nb - nt).normalized()
+    if handle == "mr":
+        nl, nt, nb = L, T, B
+        nr = max(x, nl + ms)
+        nl, nr = clamp_w(nl, nr)
+        nt, nb = clamp_h(nt, nb)
+        return QRectF(nl, nt, nr - nl, nb - nt).normalized()
+    if handle == "ml":
+        nr, nt, nb = R, T, B
+        nl = min(x, nr - ms)
+        nl, nr = clamp_w(nl, nr)
+        nt, nb = clamp_h(nt, nb)
+        return QRectF(nl, nt, nr - nl, nb - nt).normalized()
+    if handle == "tm":
+        nl, nr, nb = L, R, B
+        nt = min(y, nb - ms)
+        nl, nr = clamp_w(nl, nr)
+        nt, nb = clamp_h(nt, nb)
+        return QRectF(nl, nt, nr - nl, nb - nt).normalized()
+    if handle == "bm":
+        nl, nr, nt = L, R, T
+        nb = max(y, nt + ms)
+        nl, nr = clamp_w(nl, nr)
+        nt, nb = clamp_h(nt, nb)
+        return QRectF(nl, nt, nr - nl, nb - nt).normalized()
+    return anchor.normalized()
+
+
+def apply_roi_scene_bounding_rect(roi: "ROIItem", rect: QRectF) -> None:
+    """Apply a scene-axis-aligned bounding box to the ROI's graphics item (pos + local rect)."""
+    rect = rect.normalized()
+    roi.item.setPos(rect.topLeft())
+    roi.item.setRect(0.0, 0.0, rect.width(), rect.height())
+    handles = getattr(roi, "_resize_handles", None)
+    if handles:
+        roi.update_resize_handle_positions()
+
+
+def roi_scene_bounding_rect(roi: "ROIItem") -> QRectF:
+    """Current scene bounding rect of the ROI shape (same as ``sceneBoundingRect`` of the item)."""
+    return roi.item.mapRectToScene(roi.item.rect())
+
+
+class ROIResizeHandleItem(QGraphicsRectItem):
+    """
+    Small square handle for resizing a finished rectangle or ellipse ROI.
+    Lives in scene coordinates; ignores view zoom so it stays readable.
+    """
+
+    HANDLE_HALF = 4.0
+
+    def __init__(self, roi_item: "ROIItem", handle_id: str) -> None:
+        s = self.HANDLE_HALF * 2.0
+        super().__init__(-self.HANDLE_HALF, -self.HANDLE_HALF, s, s)
+        self._roi_item = roi_item
+        self._handle_id = handle_id
+        self._dragging = False
+        self.setAcceptHoverEvents(True)
+        self.setPen(QPen(QColor(255, 255, 255), 1))
+        self.setBrush(QBrush(QColor(0, 200, 255, 200)))
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations, True)
+        self.setZValue(120)
+        cur = _CURSOR_FOR_RESIZE_HANDLE.get(handle_id, Qt.CursorShape.ArrowCursor)
+        self.setCursor(QCursor(cur))
+
+    def handle_id(self) -> str:
+        return self._handle_id
+
+    def roi_graphics_shape_item(self) -> QGraphicsEllipseItem | QGraphicsRectItem:
+        return self._roi_item.item
+
+    def mousePressEvent(self, event: QGraphicsSceneMouseEvent) -> None:
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._dragging = True
+            self._roi_item.begin_resize_handle_drag(self._handle_id, event.scenePos())
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event: QGraphicsSceneMouseEvent) -> None:
+        if self._dragging and (event.buttons() & Qt.MouseButton.LeftButton):
+            self._roi_item.continue_resize_handle_drag(event.scenePos())
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent) -> None:
+        if self._dragging and event.button() == Qt.MouseButton.LeftButton:
+            self._dragging = False
+            self._roi_item.finish_resize_handle_drag()
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
+
+
 class DraggableStatisticsOverlay(QGraphicsTextItem):
     """
     Custom QGraphicsTextItem for ROI statistics overlays that tracks position changes.
@@ -230,9 +397,8 @@ class DraggableStatisticsOverlay(QGraphicsTextItem):
             except Exception as e:
                 # print(f"[DEBUG-OVERLAY] Error in overlay itemChange: {e}")
                 pass
-                import traceback
-                traceback.print_exc()
-        
+                _logger.debug("%s", sanitized_format_exc())
+
         return super().itemChange(change, value)
     
     def mark_deleted(self) -> None:
@@ -300,6 +466,14 @@ class ROIItem:
         self.statistics_overlay_item: DraggableStatisticsOverlay | None = None
         self.statistics: RoiStatisticsMap | None = None
         self.statistics_overlay_offset: Tuple[float, float] = (5.0, 5.0)  # Offset from ROI bounds (viewport pixels)
+
+        # Resize-handle edit mode (see ROIManager.enter_roi_geometry_edit_mode)
+        self._resize_handles: List[ROIResizeHandleItem] = []
+        self._resize_anchor_scene_rect: Optional[QRectF] = None
+        self._resize_initial_scene_rect: Optional[QRectF] = None
+        self._active_resize_handle: Optional[str] = None
+        self._resize_drag_active: bool = False
+        self._on_resize_gesture_committed: Optional[Callable[[QRectF, QRectF], None]] = None
         
         # Set up movement detection callback on the graphics item
         if isinstance(item, (ROIGraphicsEllipseItem, ROIGraphicsRectItem)):
@@ -307,13 +481,110 @@ class ROIItem:
     
     def _on_item_moved(self) -> None:
         """Handle ROI item movement - call callback if set."""
-        # Store initial position on first movement if not already set
-        if self._move_start_position is None and self.item is not None:
-            self._move_start_position = self.item.pos()
-        self._is_being_moved = True
+        if not self._resize_drag_active:
+            # Store initial position on first movement if not already set
+            if self._move_start_position is None and self.item is not None:
+                self._move_start_position = self.item.pos()
+            self._is_being_moved = True
         
         if self.on_moved_callback:
             self.on_moved_callback()
+        if self._resize_handles:
+            self.update_resize_handle_positions()
+    
+    def show_resize_handles(
+        self,
+        scene: QGraphicsScene,
+        on_commit: Optional[Callable[[QRectF, QRectF], None]] = None,
+    ) -> None:
+        """Show corner/edge resize handles on ``scene`` and optionally report committed resizes."""
+        self.hide_resize_handles(scene)
+        self._on_resize_gesture_committed = on_commit
+        for hid in ROI_RESIZE_HANDLE_IDS:
+            h = ROIResizeHandleItem(self, hid)
+            scene.addItem(h)
+            self._resize_handles.append(h)
+        self.update_resize_handle_positions()
+
+    def hide_resize_handles(self, scene: QGraphicsScene) -> None:
+        """Remove resize handles from ``scene``."""
+        for h in list(self._resize_handles):
+            try:
+                if h.scene() == scene:
+                    scene.removeItem(h)
+            except RuntimeError:
+                pass
+        self._resize_handles.clear()
+        self._on_resize_gesture_committed = None
+        if self._resize_drag_active:
+            self._resize_drag_active = False
+            self._active_resize_handle = None
+            self._resize_anchor_scene_rect = None
+            self._resize_initial_scene_rect = None
+            if self.item is not None and isValid(self.item):
+                self.item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
+
+    def update_resize_handle_positions(self) -> None:
+        """Reposition handles on the current scene bounding rect of this ROI."""
+        if not self._resize_handles or self.item is None or not isValid(self.item):
+            return
+        br = roi_scene_bounding_rect(self)
+        cx = (br.left() + br.right()) * 0.5
+        cy = (br.top() + br.bottom()) * 0.5
+        corners: Dict[str, QPointF] = {
+            "tl": QPointF(br.left(), br.top()),
+            "tm": QPointF(cx, br.top()),
+            "tr": QPointF(br.right(), br.top()),
+            "mr": QPointF(br.right(), cy),
+            "br": QPointF(br.right(), br.bottom()),
+            "bm": QPointF(cx, br.bottom()),
+            "bl": QPointF(br.left(), br.bottom()),
+            "ml": QPointF(br.left(), cy),
+        }
+        for h in self._resize_handles:
+            pt = corners.get(h.handle_id())
+            if pt is not None:
+                h.setPos(pt)
+
+    def begin_resize_handle_drag(self, handle_id: str, scene_pos: QPointF) -> None:
+        """Begin a resize gesture from handle ``handle_id`` (scene coordinates)."""
+        _ = scene_pos
+        self._resize_anchor_scene_rect = QRectF(roi_scene_bounding_rect(self))
+        self._resize_initial_scene_rect = QRectF(self._resize_anchor_scene_rect)
+        self._active_resize_handle = handle_id
+        self._resize_drag_active = True
+        if self.item is not None and isValid(self.item):
+            self.item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, False)
+
+    def continue_resize_handle_drag(self, scene_pos: QPointF) -> None:
+        """Update geometry while dragging a resize handle."""
+        if (
+            not self._resize_drag_active
+            or self._active_resize_handle is None
+            or self._resize_anchor_scene_rect is None
+        ):
+            return
+        new_r = compute_resized_scene_rect_from_handle(
+            self._resize_anchor_scene_rect, self._active_resize_handle, scene_pos
+        )
+        apply_roi_scene_bounding_rect(self, new_r)
+        self.update_resize_handle_positions()
+        if self.on_moved_callback:
+            self.on_moved_callback()
+
+    def finish_resize_handle_drag(self) -> None:
+        """End resize gesture; invoke commit callback if the rect changed."""
+        if self.item is not None and isValid(self.item):
+            self.item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
+        self._resize_drag_active = False
+        self._active_resize_handle = None
+        self._resize_anchor_scene_rect = None
+        initial = self._resize_initial_scene_rect
+        self._resize_initial_scene_rect = None
+        if initial is not None and self._on_resize_gesture_committed is not None:
+            final = QRectF(roi_scene_bounding_rect(self))
+            if initial != final:
+                self._on_resize_gesture_committed(initial, final)
     
     def get_move_start_position(self) -> Optional[QPointF]:
         """Get the position where movement started."""
@@ -418,6 +689,52 @@ class ROIManager:
         self.current_shape_type = "rectangle"  # "rectangle" or "ellipse"
         self.selected_roi: Optional[ROIItem] = None  # Currently selected ROI
         self.config_manager: ConfigManager | None = config_manager
+        # Geometry edit mode (resize handles) — see enter_roi_geometry_edit_mode
+        self._editing_roi: Optional[ROIItem] = None
+        self._geometry_edit_scene: Optional[QGraphicsScene] = None
+
+    def exit_roi_geometry_edit_mode(self) -> bool:
+        """Hide resize handles and leave geometry-edit mode. Returns True if mode was active."""
+        if self._editing_roi is None or self._geometry_edit_scene is None:
+            self._editing_roi = None
+            self._geometry_edit_scene = None
+            return False
+        try:
+            self._editing_roi.hide_resize_handles(self._geometry_edit_scene)
+        except RuntimeError:
+            pass
+        self._editing_roi = None
+        self._geometry_edit_scene = None
+        return True
+
+    def enter_roi_geometry_edit_mode(
+        self,
+        roi: ROIItem,
+        scene: QGraphicsScene,
+        on_commit: Callable[[ROIItem, QRectF, QRectF], None],
+    ) -> None:
+        """
+        Show resize handles for ``roi`` and route committed resizes to ``on_commit(roi, old_rect, new_rect)``.
+        """
+        if roi.shape_type not in ("rectangle", "ellipse"):
+            return
+
+        def _wrapped(old_r: QRectF, new_r: QRectF) -> None:
+            on_commit(roi, old_r, new_r)
+
+        if (
+            self._editing_roi == roi
+            and self._geometry_edit_scene == scene
+            and roi._resize_handles
+        ):
+            roi._on_resize_gesture_committed = _wrapped
+            return
+
+        self.exit_roi_geometry_edit_mode()
+
+        roi.show_resize_handles(scene, on_commit=_wrapped)
+        self._editing_roi = roi
+        self._geometry_edit_scene = scene
     
     def set_current_slice(self, study_uid: str, series_uid: str, instance_identifier: int) -> None:
         """
@@ -429,6 +746,10 @@ class ROIManager:
             instance_identifier: InstanceNumber from DICOM or slice_index as fallback
         """
         # print(f"[ROI DEBUG] set_current_slice called with instance_identifier={instance_identifier}")
+        old_key = (self.current_study_uid, self.current_series_uid, self.current_instance_identifier)
+        new_key = (study_uid, series_uid, instance_identifier)
+        if old_key != new_key:
+            self.exit_roi_geometry_edit_mode()
         self.current_study_uid = study_uid
         self.current_series_uid = series_uid
         self.current_instance_identifier = instance_identifier
@@ -444,6 +765,7 @@ class ROIManager:
             pos: Starting position
             shape_type: "rectangle" or "ellipse"
         """
+        self.exit_roi_geometry_edit_mode()
         self.drawing = True
         self.drawing_start_pos = pos
         self.current_shape_type = shape_type
@@ -542,6 +864,8 @@ class ROIManager:
         Args:
             roi: ROI item to select, or None to deselect
         """
+        if self._editing_roi is not None and self._editing_roi != roi:
+            self.exit_roi_geometry_edit_mode()
         # Deselect previous ROI
         if self.selected_roi is not None:
             prev = self.selected_roi
@@ -609,6 +933,8 @@ class ROIManager:
             True if deleted, False otherwise
         """
         # print(f"[DEBUG-ROI] delete_roi called for ROI {id(roi)}")
+        if self._editing_roi == roi:
+            self.exit_roi_geometry_edit_mode()
         # Find and remove from rois dict
         for roi_list in self.rois.values():
             if roi in roi_list:
@@ -664,6 +990,7 @@ class ROIManager:
         """
         key = (study_uid, series_uid, instance_identifier)
         if key in self.rois:
+            self.exit_roi_geometry_edit_mode()
             if self.selected_roi is not None and self.selected_roi in self.rois[key]:
                 self.selected_roi = None
             for roi in self.rois[key]:
@@ -687,6 +1014,7 @@ class ROIManager:
         Args:
             scene: QGraphicsScene to remove items from
         """
+        self.exit_roi_geometry_edit_mode()
         for slice_index, roi_list in self.rois.items():
             for roi in roi_list:
                 # Remove statistics overlay if present
@@ -753,6 +1081,9 @@ class ROIManager:
                         text_item.setTransform(QTransform())
                     
                     text_item.setFont(font)
+
+                if getattr(roi, "_resize_handles", None):
+                    roi.update_resize_handle_positions()
     
     def calculate_statistics(
         self,

@@ -18,7 +18,9 @@ Requirements:
     - FusionControlsWidget for UI
 """
 
+import logging
 from typing import Any, Optional, Callable, Dict, List, Tuple
+
 import numpy as np
 from PIL import Image
 from pydicom.dataset import Dataset
@@ -30,6 +32,9 @@ from PySide6.QtWidgets import QMessageBox
 from PySide6.QtCore import QTimer
 
 from utils.debug_flags import DEBUG_OFFSET, DEBUG_SPATIAL_ALIGNMENT
+from utils.log_sanitizer import sanitized_format_exc
+
+_logger = logging.getLogger(__name__)
 
 
 class FusionCoordinator:
@@ -761,8 +766,7 @@ class FusionCoordinator:
             
         except Exception as e:
             print(f"Error creating fused image: {e}")
-            import traceback
-            traceback.print_exc()
+            _logger.debug("%s", sanitized_format_exc())
             return None
     
     def _update_spatial_alignment(self) -> None:

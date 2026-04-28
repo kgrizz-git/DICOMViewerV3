@@ -1,8 +1,10 @@
 # Slice Location Line Across Views – Implementation Plan
 
+**Status:** **Shipped and archived** (2026-04). Implementation lives in `src/core/slice_location_line_helper.py`, `src/gui/slice_location_line_manager.py`, `src/core/slice_location_line_coordinator.py`, config on `SliceSyncConfigMixin`, **View → Show Slice Location Lines** and the image **Show Slice Location Lines** submenu, plus **Overlay Settings** (line mode middle/begin–end and line width). See `CHANGELOG.md` for MPR/combine-slice integration and follow-up fixes. *Original plan items not built:* duplicate entry under **Slice & Sync** submenu only (lines live under **View**); per-subwindow-only visibility override; optional checkbox inside **Manage sync groups**; optional viewport legend.
+
 This document describes the implementation plan for the **Slice Location Line Across Views** feature from `dev-docs/TO_DO.md`. It shows, in each view, the line where another view’s current slice plane intersects the current image plane, so users can see anatomic correspondence across linked windows.
 
-The plan reuses the existing Phase 1 geometry from `SLICE_SYNC_AND_MPR_PLAN.md` (`plane_plane_intersection`, `project_line_to_2d`, `SlicePlane`, `SliceStack`) and aligns with slice sync linked groups where applicable.
+The plan reuses the existing Phase 1 geometry from `dev-docs/plans/completed/SLICE_SYNC_AND_MPR_PLAN.md` (`plane_plane_intersection`, `project_line_to_2d`, `SlicePlane`, `SliceStack`) and aligns with slice sync linked groups where applicable.
 
 ---
 
@@ -52,7 +54,7 @@ Confirm existing geometry is sufficient and add a small, testable helper that, f
 ### Prerequisites
 
 - [x] `slice_geometry.plane_plane_intersection`, `project_line_to_2d` available and tested.
-- [ ] Read `SliceSyncCoordinator._get_stack` / `_get_current_plane` (or equivalent) to obtain current `SlicePlane` per subwindow without duplicating cache logic.
+- [x] Read `SliceSyncCoordinator._get_stack` / `_get_current_plane` (or equivalent) to obtain current `SlicePlane` per subwindow without duplicating cache logic.
 
 ### Tasks
 
@@ -64,13 +66,13 @@ Confirm existing geometry is sufficient and add a small, testable helper that, f
   - Input: segment `(col1, row1)`–`(col2, row2)` and image size `width` (columns), `height` (rows).
   - Use Cohen–Sutherland or parametric clipping to the rect `[0, width] x [0, height]`.
   - Return `(c1, r1, c2, r2)` if the segment intersects the rect, else `None`.
-- [ ] Add unit tests: segment fully inside, crossing one edge, crossing two edges, fully outside, degenerate (zero length).
+- [x] Add unit tests: segment fully inside, crossing one edge, crossing two edges, fully outside, degenerate (zero length).
 
 #### 1.2 Batch “lines from other views” for one target
 
 **File**: `src/core/slice_location_line_helper.py` (new) or extend `slice_sync_coordinator` with a read-only helper.
 
-- [ ] Define a function or small class that, given:
+- [x] Define a function or small class that, given:
   - `target_subwindow_idx: int`
   - `subwindow_data: Dict`, `subwindow_managers` (or app reference),
   - Optional: `only_same_group: bool` and `groups: List[List[int]]`,
@@ -84,8 +86,8 @@ Confirm existing geometry is sufficient and add a small, testable helper that, f
     - Clip `seg` to target image size; if no intersection, skip.
     - Append `{ "source_idx": s, "col1", "row1", "col2", "row2" }`.
   - Use existing stack/plane access (e.g. from `SliceSyncCoordinator` or a shared geometry cache) so we don’t duplicate cache logic.
-- [ ] Document behavior when target or source is MPR: use MPR stack’s plane when available (same as slice sync).
-- [ ] Unit tests (mock subwindow_data and stacks): two orthogonal planes give one line; parallel planes give no line; missing geometry gives no line.
+- [x] Document behavior when target or source is MPR: use MPR stack’s plane when available (same as slice sync).
+- [x] Unit tests (mock subwindow_data and stacks): two orthogonal planes give one line; parallel planes give no line; missing geometry gives no line.
 
 ### Potential problems
 
@@ -104,8 +106,8 @@ For each subwindow, maintain a set of `QGraphicsLineItem`(s) representing slice 
 
 ### Prerequisites
 
-- [ ] Phase 1 helper available: given target index and app state, get list of `{ source_idx, col1, row1, col2, row2 }`.
-- [ ] Clear ownership: which component owns the line items (e.g. a new `SliceLocationLineManager` per subwindow, or one coordinator that holds per-subwindow lists of items).
+- [x] Phase 1 helper available: given target index and app state, get list of `{ source_idx, col1, row1, col2, row2 }`.
+- [x] Clear ownership: which component owns the line items (e.g. a new `SliceLocationLineManager` per subwindow, or one coordinator that holds per-subwindow lists of items).
 
 ### Tasks
 
@@ -113,7 +115,7 @@ For each subwindow, maintain a set of `QGraphicsLineItem`(s) representing slice 
 
 **File**: `src/gui/slice_location_line_manager.py` (new) or under `src/core/` if preferred.
 
-- [ ] Class `SliceLocationLineManager`:
+- [x] Class `SliceLocationLineManager`:
   - Holds reference to one subwindow’s **scene** and **image size** (cols, rows) for clipping.
   - Holds a list (or dict keyed by source_idx) of `QGraphicsLineItem` objects.
   - Method `update_lines(segments: List[Dict])`: segments are `{ "source_idx", "col1", "row1", "col2", "row2" }`.
@@ -124,30 +126,30 @@ For each subwindow, maintain a set of `QGraphicsLineItem`(s) representing slice 
     - Add items to the scene.
   - Method `clear()`: remove all line items from the scene and clear the list.
   - Optional: `set_visible(visible: bool)` to show/hide the group without recomputing.
-- [ ] Ensure line items do not accept hover/click (set `ItemIsSelectable`/`ItemIsFocusable` to false) so they don’t steal mouse events from the image.
+- [x] Ensure line items do not accept hover/click (set `ItemIsSelectable`/`ItemIsFocusable` to false) so they don’t steal mouse events from the image.
 
 #### 2.2 Coordinator or app-level update trigger
 
 **File**: `src/core/slice_location_line_coordinator.py` (new) or integrate into `SliceSyncCoordinator` as an optional second responsibility.
 
-- [ ] A **SliceLocationLineCoordinator** (or equivalent) that:
+- [x] A **SliceLocationLineCoordinator** (or equivalent) that:
   - Holds references to app, and to per-subwindow `SliceLocationLineManager` instances (created when subwindows are created; cleared when a subwindow is destroyed or reset).
   - Knows master toggle “show slice location lines” (from config or caller).
   - Optional: per-subwindow “show lines in this view” (default True when master is on).
   - Method `refresh_all()`: for each subwindow that has an image and slice line visibility on, call Phase 1 helper to get segments for that target; call that subwindow’s `SliceLocationLineManager.update_lines(segments)`.
   - Method `refresh_for_subwindow(target_idx: int)`: refresh only one target (e.g. after slice change in that subwindow).
-- [ ] When to call refresh:
+- [x] When to call refresh:
   - After any subwindow’s **slice index** changes (same signal that drives slice sync or display update).
   - When **master toggle** or **per-view toggle** changes.
   - When **layout** or **subwindow content** changes (e.g. series loaded/closed, subwindow closed) so that “other views” or geometry changes.
-- [ ] Ensure refresh is not called in a reentrant way (e.g. guard with a flag if refresh triggers slice change; normally it should not).
+- [x] Ensure refresh is not called in a reentrant way (e.g. guard with a flag if refresh triggers slice change; normally it should not).
 
 #### 2.3 Wiring into app and lifecycle
 
-- [ ] **Creation**: When subwindow managers are created in `subwindow_lifecycle_controller` (or equivalent), create a `SliceLocationLineManager` for that subwindow and register it with the coordinator. Store in `subwindow_managers[idx]['slice_location_line_manager']` or in a dedicated dict on the coordinator.
-- [ ] **Slice change**: From the same place that calls `SliceSyncCoordinator.on_slice_changed(source_idx)`, after that (or regardless of sync), call coordinator’s refresh: e.g. `refresh_all()` or `refresh_for_subwindow(source_idx)` plus refresh for all other subwindows that might show a line from `source_idx`. Simplest: `refresh_all()` on every slice change (bounded by number of subwindows).
-- [ ] **Display update**: When a subwindow’s image is set or its slice display is updated, ensure that subwindow’s slice line manager gets refreshed so lines use the correct current plane and image size.
-- [ ] **Cleanup**: When a subwindow is closed or its content is cleared, call `SliceLocationLineManager.clear()` and remove the manager from the coordinator.
+- [x] **Creation**: When subwindow managers are created in `subwindow_lifecycle_controller` (or equivalent), create a `SliceLocationLineManager` for that subwindow and register it with the coordinator. Store in `subwindow_managers[idx]['slice_location_line_manager']` or in a dedicated dict on the coordinator.
+- [x] **Slice change**: From the same place that calls `SliceSyncCoordinator.on_slice_changed(source_idx)`, after that (or regardless of sync), call coordinator’s refresh: e.g. `refresh_all()` or `refresh_for_subwindow(source_idx)` plus refresh for all other subwindows that might show a line from `source_idx`. Simplest: `refresh_all()` on every slice change (bounded by number of subwindows).
+- [x] **Display update**: When a subwindow’s image is set or its slice display is updated, ensure that subwindow’s slice line manager gets refreshed so lines use the correct current plane and image size.
+- [x] **Cleanup**: When a subwindow is closed or its content is cleared, call `SliceLocationLineManager.clear()` and remove the manager from the coordinator.
 
 ### Potential problems
 
@@ -167,7 +169,7 @@ Expose a master toggle and optional per-view toggle, and persist the setting(s).
 
 ### Prerequisites
 
-- [ ] Phase 2 in place: coordinator and managers update line items when toggles or data change.
+- [x] Phase 2 in place: coordinator and managers update line items when toggles or data change.
 
 ### Tasks
 
@@ -175,20 +177,20 @@ Expose a master toggle and optional per-view toggle, and persist the setting(s).
 
 **File**: `src/utils/config/slice_sync_config.py` (extend) or `display_config.py`.
 
-- [ ] Add config key `slice_location_lines_visible: bool` (default `False`).
-- [ ] Add getter/setter: `get_slice_location_lines_visible()`, `set_slice_location_lines_visible(bool)`.
+- [x] Add config key `slice_location_lines_visible: bool` (default `False`).
+- [x] Add getter/setter: `get_slice_location_lines_visible()`, `set_slice_location_lines_visible(bool)`.
   - When this is toggled, coordinator applies visibility and calls `refresh_all()` if turning on.
-- [ ] Optional: `slice_location_lines_same_group_only: bool` (default `True` when slice sync is enabled, else N/A or `False`). When True, only subwindows in the same linked group as the target show their slice line on the target.
+- [x] Optional: `slice_location_lines_same_group_only: bool` (default `True` when slice sync is enabled, else N/A or `False`). When True, only subwindows in the same linked group as the target show their slice line on the target.
 
 #### 3.2 View menu and context menu
 
-- [ ] Add menu item under **View**: “Show slice location lines” (checkable). Tied to `slice_location_lines_visible`. When toggled, update config and call coordinator `refresh_all()`.
-- [ ] Optional: In the **Slice Sync** submenu, add “Show slice location lines” as a sibling or sub-item so it’s discoverable with sync.
-- [ ] Optional: In the **image viewer context menu** (right-click on image), add “Show slice location lines” for the current view only (per-view override: show lines in this view on/off). If implemented, store per-view override in subwindow data or a small dict keyed by subwindow index.
+- [x] Add menu item under **View**: “Show slice location lines” (checkable). Tied to `slice_location_lines_visible`. When toggled, update config and call coordinator `refresh_all()`.
+- [ ] Optional: In the **Slice Sync** submenu, add “Show slice location lines” as a sibling or sub-item so it’s discoverable with sync. *(Not implemented: feature is under **View → Show Slice Location Lines** next to **Slice & Sync**.)*
+- [ ] Optional: In the **image viewer context menu** (right-click on image), add “Show slice location lines” for the current view only (per-view override: show lines in this view on/off). If implemented, store per-view override in subwindow data or a small dict keyed by subwindow index. *(Not implemented: context menu exposes the same global toggles as the View menu.)*
 
 #### 3.3 Slice Sync dialog (optional)
 
-- [ ] In **Manage sync groups** dialog, optional checkbox “Show slice location lines for this group” or rely on the single global toggle.
+- [ ] In **Manage sync groups** dialog, optional checkbox “Show slice location lines for this group” or rely on the single global toggle. *(Not implemented; global + same-group-only suffice.)*
 
 ### Potential problems
 
@@ -208,22 +210,22 @@ Handle parallel/coincident planes, numerical jitter, and optional legend/tooltip
 
 #### 4.1 Parallel or coincident planes
 
-- [ ] Already handled by `plane_plane_intersection` returning `None`. No extra UI message when a line is not drawn for one pair; only draw when we have a valid segment.
+- [x] Already handled by `plane_plane_intersection` returning `None`. No extra UI message when a line is not drawn for one pair; only draw when we have a valid segment.
 
 #### 4.2 Numerical stability and jitter
 
-- [ ] If a segment’s length (in pixel space) is below a small threshold (e.g. 2 pixels), optionally skip drawing that segment to avoid flickering dots.
-- [ ] Use the same geometry cache as slice sync so stack/plane construction is consistent and not recomputed on every scroll; avoid floating-point variance between sync and line drawing.
+- [x] If a segment’s length (in pixel space) is below a small threshold (e.g. 2 pixels), optionally skip drawing that segment to avoid flickering dots.
+- [x] Use the same geometry cache as slice sync so stack/plane construction is consistent and not recomputed on every scroll; avoid floating-point variance between sync and line drawing.
 
 #### 4.3 Colors and legend
 
-- [ ] Define a small palette of distinct colors (e.g. cyan, magenta, green, orange) for source subwindow indices 0, 1, 2, 3. Map `source_idx` to color consistently.
-- [ ] Optional: Draw a small legend on the viewport (e.g. “W1”, “W2”) with the same colors, or show tooltip on hover over the line (“Slice plane from Window 2”). If implemented, use viewport overlay or non-interactive QGraphicsTextItem at a fixed corner with `ItemIgnoresTransformations` so legend doesn’t zoom.
+- [x] Define a small palette of distinct colors (e.g. cyan, magenta, green, orange) for source subwindow indices 0, 1, 2, 3. Map `source_idx` to color consistently.
+- [ ] Optional: Draw a small legend on the viewport (e.g. “W1”, “W2”) with the same colors, or show tooltip on hover over the line (“Slice plane from Window 2”). If implemented, use viewport overlay or non-interactive QGraphicsTextItem at a fixed corner with `ItemIgnoresTransformations` so legend doesn’t zoom. *(Not implemented.)*
 
 #### 4.4 MPR and non-DICOM views
 
-- [ ] MPR subwindows have a `SliceStack` (from `MprBuilder`); use it for both “current plane” and as a valid “source” or “target” for intersection. Same as slice sync: MPR participates in slice location lines.
-- [ ] Subwindows with no geometry (e.g. no `ImagePositionPatient`/`ImageOrientationPatient`) do not contribute a line and do not receive lines from others; already handled by returning no segment from the helper.
+- [x] MPR subwindows have a `SliceStack` (from `MprBuilder`); use it for both “current plane” and as a valid “source” or “target” for intersection. Same as slice sync: MPR participates in slice location lines.
+- [x] Subwindows with no geometry (e.g. no `ImagePositionPatient`/`ImageOrientationPatient`) do not contribute a line and do not receive lines from others; already handled by returning no segment from the helper.
 
 ### Potential problems
 
@@ -278,7 +280,7 @@ tests/
 ## References
 
 - `dev-docs/TO_DO.md` — “Slice Location Line Across Views” (suggestions, concerns, notes).
-- `dev-docs/plans/SLICE_SYNC_AND_MPR_PLAN.md` — Phase 1 geometry, Phase 2 sync, resolved decisions, file sketch.
+- `dev-docs/plans/completed/SLICE_SYNC_AND_MPR_PLAN.md` — Phase 1 geometry, Phase 2 sync, resolved decisions, file sketch.
 - `src/core/slice_geometry.py` — `plane_plane_intersection`, `project_line_to_2d`, `SlicePlane`, `SliceStack`.
 - `src/core/slice_sync_coordinator.py` — `_get_stack`, geometry cache, `on_slice_changed`.
 - `src/gui/overlay_manager.py` — ViewportOverlayWidget, scene vs viewport; crosshair/measurement use `QGraphicsLineItem`.

@@ -27,6 +27,7 @@ def run_git(*args: str) -> str:
         check=True,
         capture_output=True,
         text=True,
+        encoding="utf-8",
     )
     return result.stdout.strip()
 
@@ -75,7 +76,7 @@ def run_scan(root: Path, python_bin: Path, *, hook_type: str) -> int:
         args = [str(python_bin), str(scan_script), "--all", "--report"]
         label = "full local security scan"
     print(f"[security hook] Running {label}...")
-    proc = subprocess.run(args, text=True, cwd=str(root))
+    proc = subprocess.run(args, text=True, cwd=str(root), encoding="utf-8")
     return proc.returncode
 
 
@@ -85,6 +86,22 @@ def main() -> int:
     args = parser.parse_args()
 
     root = repo_root()
+    py = project_python(root)
+    if py is None:
+        print("[security hook] No project Python found under .venv or venv.", file=sys.stderr)
+        return 1
+
+    # Privacy / logging checks on staged src/*.py — all branches, fast.
+    privacy_script = root / "scripts" / "git_hook_privacy_checks.py"
+    proc_priv = subprocess.run(
+        [str(py), str(privacy_script)],
+        cwd=str(root),
+        text=True,
+        encoding="utf-8",
+    )
+    if proc_priv.returncode != 0:
+        return proc_priv.returncode
+
     should_scan = False
     if args.hook_type == "pre-commit":
         should_scan = should_scan_pre_commit()
@@ -93,11 +110,6 @@ def main() -> int:
 
     if not should_scan:
         return 0
-
-    py = project_python(root)
-    if py is None:
-        print("[security hook] No project Python found under .venv or venv.", file=sys.stderr)
-        return 1
 
     exit_code = run_scan(root, py, hook_type=args.hook_type)
     if exit_code != 0:

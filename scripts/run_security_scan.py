@@ -423,6 +423,8 @@ def main():
             print_fail(f"Failed: {', '.join(failed)}")
         else:
             print_ok("All checks passed!")
+    if failed:
+        sys.exit(1)
 
 if __name__ == "__main__":
     try:

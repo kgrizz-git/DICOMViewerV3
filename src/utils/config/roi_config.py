@@ -23,7 +23,7 @@ class ROIConfigMixin:
 
     def get_roi_font_size(self) -> int:
         """Get ROI statistics overlay font size."""
-        return self._config().get("roi_font_size", 14)
+        return self._config().get("roi_font_size", 12)
 
     def set_roi_font_size(self, size: int) -> None:
         """Set ROI statistics overlay font size."""
@@ -50,7 +50,7 @@ class ROIConfigMixin:
 
     def get_roi_line_thickness(self) -> int:
         """Get ROI line thickness in viewport pixels."""
-        return self._config().get("roi_line_thickness", 6)
+        return self._config().get("roi_line_thickness", 3)
 
     def set_roi_line_thickness(self, thickness: int) -> None:
         """Set ROI line thickness in viewport pixels."""

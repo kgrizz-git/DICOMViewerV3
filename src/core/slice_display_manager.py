@@ -32,6 +32,7 @@ from core.slice_display_lut import apply_window_level_rescale_conversion
 from core.slice_display_pixels import create_slice_projection_pil_image
 from core.dicom_parser import DICOMParser
 from core.dicom_organizer import DICOMOrganizer
+from PySide6.QtWidgets import QMessageBox
 from gui.image_viewer import ImageViewer
 from gui.metadata_panel import MetadataPanel
 from gui.slice_navigator import SliceNavigator
@@ -248,6 +249,8 @@ class SliceDisplayManager:
         
         Called when closing files or opening new folder/files so that refresh_overlays
         and other code do not redisplay from stale cached state in non-focused windows.
+        Also hides the no-pixel SR bottom bar; render paths only toggle it when a dataset
+        is shown, so clears must reset it explicitly.
         """
         self.current_studies = {}
         self.current_study_uid = ""
@@ -255,6 +258,7 @@ class SliceDisplayManager:
         self.current_slice_index = 0
         self.current_dataset = None
         self.reset_projection_state()
+        self.image_viewer.set_no_pixel_placeholder_bar(False)
     
     def set_projection_enabled(self, enabled: bool) -> None:
         """
@@ -330,6 +334,745 @@ class SliceDisplayManager:
             rescale_slope,
             rescale_intercept,
         )
+
+    def _resolve_canonical_dataset_for_slice(
+        self,
+        dataset: Dataset,
+        current_studies: Dict[str, Dict[str, list[Dataset]]],
+        current_study_uid: str,
+        current_series_uid: str,
+        current_slice_index: int,
+    ) -> Dataset:
+        """Resolve stale dataset references to the canonical dataset for the active slice."""
+        return _overlay_metadata_dataset_for_slice(
+            dataset,
+            current_studies,
+            current_study_uid,
+            current_series_uid,
+            current_slice_index,
+        )
+
+    def _update_current_context(
+        self,
+        dataset: Dataset,
+        current_studies: Dict[str, Dict[str, list[Dataset]]],
+        current_study_uid: str,
+        current_series_uid: str,
+        current_slice_index: int,
+    ) -> None:
+        """Update manager context and mirror it to the view-state manager."""
+        self.current_studies = current_studies
+        self.current_study_uid = current_study_uid
+        self.current_series_uid = current_series_uid
+        self.current_slice_index = current_slice_index
+        self.current_dataset = dataset
+        self.view_state_manager.set_current_data_context(
+            dataset, current_studies, current_study_uid, current_series_uid, current_slice_index
+        )
+
+    def _sync_view_state_rescale_context(
+        self, dataset: Dataset
+    ) -> tuple[Optional[float], Optional[float], Optional[str]]:
+        """Extract/infer rescale params and sync them into the view-state manager."""
+        rescale_slope, rescale_intercept, rescale_type = self.dicom_processor.get_rescale_parameters(dataset)
+        rescale_type = self.dicom_processor.infer_rescale_type(
+            dataset, rescale_slope, rescale_intercept, rescale_type
+        )
+        self.view_state_manager.set_rescale_parameters(rescale_slope, rescale_intercept, rescale_type)
+        return rescale_slope, rescale_intercept, rescale_type
+
+    def _compute_series_transition_state(
+        self, dataset: Dataset, current_series_uid: str, current_slice_index: int
+    ) -> tuple[str, bool, bool, str]:
+        """Compute same-series and new-series transition flags for the incoming dataset."""
+        new_series_uid = get_composite_series_key(dataset)
+        is_same_series = new_series_uid == current_series_uid and current_series_uid != ""
+        previous_series_identifier = self.view_state_manager.current_series_identifier
+        is_new_study_series = self.view_state_manager.is_new_study_or_series(dataset)
+        series_identifier = self.view_state_manager.get_series_identifier(dataset)
+        if DEBUG_MEASUREMENT_SERIES:
+            print(
+                "[DEBUG-MEAS-SERIES] display_slice enter: "
+                f"{self._measurement_debug_prefix(dataset, current_slice_index)}, "
+                f"arg_current_series_uid={current_series_uid}, computed_series_uid={new_series_uid}, "
+                f"previous_series_identifier={previous_series_identifier}, "
+                f"incoming_series_identifier={series_identifier}, is_same_series={is_same_series}, "
+                f"is_new_study_series={is_new_study_series}, "
+                f"measurement_summary={self.measurement_tool.get_debug_summary(self.image_viewer.scene)}"
+            )
+        return new_series_uid, is_same_series, is_new_study_series, series_identifier
+
+    def _resolve_window_level_for_series_transition(
+        self,
+        dataset: Dataset,
+        current_studies: Dict[str, Dict[str, list[Dataset]]],
+        current_series_uid: str,
+        new_series_uid: str,
+        is_same_series: bool,
+        is_new_study_series: bool,
+        series_identifier: str,
+        rescale_slope: Optional[float],
+        rescale_intercept: Optional[float],
+    ) -> tuple[Optional[float], Optional[float], bool]:
+        """Resolve window/level and rescale mode across same-series vs new-series transitions."""
+        if is_new_study_series:
+            self.view_state_manager.save_user_window_level()
+            use_rescaled = rescale_slope is not None and rescale_intercept is not None
+            self.view_state_manager.use_rescaled_values = use_rescaled
+            from gui.main_window import MainWindow
+            if hasattr(self.view_state_manager, 'main_window'):
+                self.view_state_manager.main_window.set_rescale_toggle_state(use_rescaled)
+            self.image_viewer.set_rescale_toggle_state(use_rescaled)
+            self.view_state_manager.set_current_series_identifier(series_identifier)
+            self.view_state_manager.current_window_center = None
+            self.view_state_manager.current_window_width = None
+            self.view_state_manager.window_level_user_modified = False
+
+        window_center = self.view_state_manager.current_window_center
+        window_width = self.view_state_manager.current_window_width
+        if is_new_study_series:
+            use_rescaled_values = rescale_slope is not None and rescale_intercept is not None
+        else:
+            use_rescaled_values = self.view_state_manager.use_rescaled_values
+
+        if DEBUG_WL:
+            study_uid = getattr(dataset, 'StudyInstanceUID', '')[:24] if getattr(dataset, 'StudyInstanceUID', '') else ''
+            modality = getattr(dataset, 'Modality', '?')
+            print(
+                f"[DEBUG-WL] display_slice ENTER: study={study_uid}... series={new_series_uid[:24] if new_series_uid else ''}... "
+                f"modality={modality} is_new={is_new_study_series} is_same={is_same_series} | "
+                f"rescale_slope={rescale_slope} rescale_intercept={rescale_intercept} | "
+                f"use_rescaled_values={use_rescaled_values}"
+            )
+
+        if is_new_study_series:
+            window_center = None
+            window_width = None
+            stored_window_center = None
+            stored_window_width = None
+
+            study_uid = getattr(dataset, 'StudyInstanceUID', '')
+            series_in_dict = bool(
+                study_uid and new_series_uid and current_studies
+                and study_uid in current_studies
+                and new_series_uid in current_studies[study_uid]
+            )
+            if DEBUG_WL:
+                print(
+                    f"[DEBUG-WL] new series: series_in_current_studies={series_in_dict} "
+                    f"(study_uid in current_studies={study_uid in current_studies if current_studies else False} "
+                    f"series_uid in study={new_series_uid in current_studies.get(study_uid, {}) if study_uid and current_studies else False})"
+                )
+            if study_uid and new_series_uid and current_studies:
+                if study_uid in current_studies and new_series_uid in current_studies[study_uid]:
+                    series_datasets = current_studies[study_uid][new_series_uid]
+                    try:
+                        series_pixel_min, series_pixel_max = self.dicom_processor.get_series_pixel_value_range(
+                            series_datasets, apply_rescale=use_rescaled_values
+                        )
+                        self.view_state_manager.set_series_pixel_range(series_pixel_min, series_pixel_max)
+                    except Exception as e:
+                        error_type = type(e).__name__
+                        print(f"Error calculating series pixel range ({error_type}): {e}")
+                        series_pixel_min = None
+                        series_pixel_max = None
+                        self.view_state_manager.clear_series_pixel_range()
+                    presets = self.dicom_processor.get_window_level_presets_from_dataset(
+                        dataset,
+                        rescale_slope=rescale_slope,
+                        rescale_intercept=rescale_intercept
+                    )
+                    self.view_state_manager.window_level_presets = presets
+                    self.view_state_manager.current_preset_index = 0
+                    self.view_state_manager.window_level_user_modified = False
+
+                    if presets:
+                        wc, ww, is_rescaled, _ = presets[0]
+                        if DEBUG_WL:
+                            print(f"[DEBUG-WL] embedded from first preset: wc={wc} ww={ww} is_rescaled={is_rescaled}")
+                    else:
+                        wc, ww, is_rescaled = self.dicom_processor.get_window_level_from_dataset(
+                            dataset,
+                            rescale_slope=rescale_slope,
+                            rescale_intercept=rescale_intercept
+                        )
+                        if DEBUG_WL:
+                            print(f"[DEBUG-WL] embedded from get_window_level_from_dataset: wc={wc} ww={ww} is_rescaled={is_rescaled}")
+                    if wc is not None and ww is not None:
+                        orig_wc, orig_ww = wc, ww
+                        wc, ww = apply_window_level_rescale_conversion(
+                            wc,
+                            ww,
+                            is_rescaled=is_rescaled,
+                            use_rescaled_values=use_rescaled_values,
+                            rescale_slope=rescale_slope,
+                            rescale_intercept=rescale_intercept,
+                            dicom_processor=self.dicom_processor,
+                        )
+                        if DEBUG_WL and (wc != orig_wc or ww != orig_ww):
+                            print(
+                                f"[DEBUG-WL] WL rescale conversion: ({orig_wc}, {orig_ww}) -> ({wc}, {ww})"
+                            )
+                        stored_window_center = wc
+                        stored_window_width = ww
+                        if DEBUG_WL:
+                            print(f"[DEBUG-WL] after conversion stored_wc={stored_window_center} stored_ww={stored_window_width}")
+                    elif series_pixel_min is not None and series_pixel_max is not None:
+                        midpoint = (series_pixel_min + series_pixel_max) / 2.0
+                        if series_datasets:
+                            median = self.dicom_processor.get_series_pixel_median(
+                                series_datasets, apply_rescale=use_rescaled_values
+                            )
+                            if median is None:
+                                stored_window_center = midpoint
+                            else:
+                                stored_window_center = max(median, midpoint)
+                        else:
+                            stored_window_center = midpoint
+
+                        stored_window_width = series_pixel_max - series_pixel_min
+                        if stored_window_width <= 0:
+                            stored_window_width = 1.0
+                        if DEBUG_WL:
+                            print(
+                                f"[DEBUG-WL] from series pixel range: min={series_pixel_min} max={series_pixel_max} "
+                                f"stored_wc={stored_window_center} stored_ww={stored_window_width}"
+                            )
+                    else:
+                        try:
+                            pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(
+                                dataset, apply_rescale=use_rescaled_values
+                            )
+                            if pixel_min is not None and pixel_max is not None:
+                                pixel_array = self.dicom_processor.get_pixel_array(dataset)
+                                if pixel_array is not None:
+                                    if use_rescaled_values:
+                                        rescale_slope, rescale_intercept, _ = self.dicom_processor.get_rescale_parameters(dataset)
+                                        if rescale_slope is not None and rescale_intercept is not None:
+                                            pixel_array = pixel_array.astype(np.float32) * float(rescale_slope) + float(rescale_intercept)
+                                    midpoint = (pixel_min + pixel_max) / 2.0
+                                    non_zero_values = pixel_array[pixel_array != 0]
+                                    if len(non_zero_values) > 0:
+                                        median = float(np.median(non_zero_values))
+                                        stored_window_center = max(median, midpoint)
+                                    else:
+                                        stored_window_center = midpoint
+                                else:
+                                    stored_window_center = (pixel_min + pixel_max) / 2.0
+                                stored_window_width = pixel_max - pixel_min
+                                if stored_window_width <= 0:
+                                    stored_window_width = 1.0
+                        except Exception as e:
+                            error_type = type(e).__name__
+                            print(f"Error calculating single slice pixel range ({error_type}): {e}")
+                    self.view_state_manager.window_level_user_modified = False
+
+            if stored_window_center is not None and stored_window_width is not None:
+                if DEBUG_WL:
+                    study_uid = getattr(dataset, 'StudyInstanceUID', '')
+                    print(
+                        f"[DEBUG-WL] New series WL: study_uid={study_uid[:20] if study_uid else ''}... "
+                        f"series_uid={new_series_uid[:20] if new_series_uid else ''}... "
+                        f"use_rescaled={use_rescaled_values} slope={rescale_slope} intercept={rescale_intercept} "
+                        f"stored_wc={stored_window_center} stored_ww={stored_window_width}"
+                    )
+                window_center = stored_window_center
+                window_width = stored_window_width
+                self.view_state_manager.current_window_center = window_center
+                self.view_state_manager.current_window_width = window_width
+
+                current_zoom = self.image_viewer.current_zoom
+                if self.view_state_manager.window_level_presets:
+                    preset_name = "Default" if self.view_state_manager.current_preset_index == 0 else (
+                        self.view_state_manager.window_level_presets[self.view_state_manager.current_preset_index][3] or "Default"
+                    )
+                    self.view_state_manager.main_window.update_zoom_preset_status(current_zoom, preset_name)
+                elif window_center is not None and window_width is not None:
+                    self.view_state_manager.main_window.update_zoom_preset_status(current_zoom, None)
+
+                if series_identifier not in self.view_state_manager.series_defaults:
+                    self.view_state_manager.series_defaults[series_identifier] = {}
+                self.view_state_manager.series_defaults[series_identifier].update({
+                    'window_center': window_center,
+                    'window_width': window_width,
+                    'use_rescaled_values': use_rescaled_values,
+                    'image_inverted': self.image_viewer.image_inverted,
+                    'window_level_defaults_set': True
+                })
+            else:
+                if DEBUG_WL:
+                    study_uid = getattr(dataset, 'StudyInstanceUID', '')
+                    print(
+                        f"[DEBUG-WL] New series WL fallback: study_uid={study_uid[:20] if study_uid else ''}... "
+                        f"series_uid={new_series_uid[:20] if new_series_uid else ''}... "
+                        f"computing from dataset being loaded"
+                    )
+                try:
+                    pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(
+                        dataset, apply_rescale=use_rescaled_values
+                    )
+                    if pixel_min is not None and pixel_max is not None:
+                        self.view_state_manager.set_series_pixel_range(pixel_min, pixel_max)
+                    else:
+                        self.view_state_manager.clear_series_pixel_range()
+                except Exception:
+                    self.view_state_manager.clear_series_pixel_range()
+                presets = self.dicom_processor.get_window_level_presets_from_dataset(
+                    dataset,
+                    rescale_slope=rescale_slope,
+                    rescale_intercept=rescale_intercept
+                )
+                self.view_state_manager.window_level_presets = presets
+                self.view_state_manager.current_preset_index = 0
+                self.view_state_manager.window_level_user_modified = False
+                if presets:
+                    wc, ww, is_rescaled, _ = presets[0]
+                    if DEBUG_WL:
+                        print(f"[DEBUG-WL] fallback from first preset: wc={wc} ww={ww} is_rescaled={is_rescaled}")
+                else:
+                    wc, ww, is_rescaled = self.dicom_processor.get_window_level_from_dataset(
+                        dataset,
+                        rescale_slope=rescale_slope,
+                        rescale_intercept=rescale_intercept
+                    )
+                    if DEBUG_WL:
+                        print(f"[DEBUG-WL] fallback from get_window_level_from_dataset: wc={wc} ww={ww} is_rescaled={is_rescaled}")
+                if wc is not None and ww is not None:
+                    orig_wc, orig_ww = wc, ww
+                    wc, ww = apply_window_level_rescale_conversion(
+                        wc,
+                        ww,
+                        is_rescaled=is_rescaled,
+                        use_rescaled_values=use_rescaled_values,
+                        rescale_slope=rescale_slope,
+                        rescale_intercept=rescale_intercept,
+                        dicom_processor=self.dicom_processor,
+                    )
+                    if DEBUG_WL and (wc != orig_wc or ww != orig_ww):
+                        print(
+                            f"[DEBUG-WL] fallback WL rescale conversion: ({orig_wc}, {orig_ww}) -> ({wc}, {ww})"
+                        )
+                    window_center = wc
+                    window_width = ww
+                    self.view_state_manager.current_window_center = wc
+                    self.view_state_manager.current_window_width = ww
+                    if series_identifier not in self.view_state_manager.series_defaults:
+                        self.view_state_manager.series_defaults[series_identifier] = {}
+                    self.view_state_manager.series_defaults[series_identifier].update({
+                        'window_center': window_center,
+                        'window_width': window_width,
+                        'use_rescaled_values': use_rescaled_values,
+                        'image_inverted': self.image_viewer.image_inverted,
+                        'window_level_defaults_set': True
+                    })
+                else:
+                    if DEBUG_WL:
+                        print("[DEBUG-WL] fallback: no embedded WL (wc/ww None), dataset_to_image will use internal default")
+                    window_center = None
+                    window_width = None
+                    self.view_state_manager.current_window_center = None
+                    self.view_state_manager.current_window_width = None
+
+        if is_new_study_series:
+            cached_wl = self.view_state_manager.get_user_window_level(series_identifier)
+            if cached_wl is not None:
+                window_center = cached_wl["window_center"]
+                window_width = cached_wl["window_width"]
+                self.view_state_manager.current_window_center = window_center
+                self.view_state_manager.current_window_width = window_width
+                self.view_state_manager.window_level_user_modified = True
+
+        return window_center, window_width, use_rescaled_values
+
+    def _render_base_image_pipeline(
+        self,
+        dataset: Dataset,
+        current_studies: Dict[str, Dict[str, list[Dataset]]],
+        current_study_uid: str,
+        current_series_uid: str,
+        current_slice_index: int,
+        window_center: Optional[float],
+        window_width: Optional[float],
+        use_rescaled_values: bool,
+        rescale_slope: Optional[float],
+        rescale_intercept: Optional[float],
+        is_same_series: bool,
+        is_new_study_series: bool,
+        series_identifier: str,
+        preserve_view_override: Optional[bool],
+    ) -> None:
+        """Projection, single-slice render, fusion, viewer image + fit (same order as prior display_slice)."""
+        image = None
+        if self.projection_enabled:
+            try:
+                image = self._create_projection_image(
+                    dataset,
+                    current_studies,
+                    current_study_uid,
+                    current_series_uid,
+                    current_slice_index,
+                    window_center,
+                    window_width,
+                    use_rescaled_values,
+                    rescale_slope,
+                    rescale_intercept,
+                )
+                if image is None:
+                    pass
+            except Exception as e:
+                error_type = type(e).__name__
+                print(f"Error creating projection image ({error_type}): {e}")
+                pass
+
+        no_pixel_placeholder = False
+        if image is None:
+            if DEBUG_WL:
+                print(
+                    f"[DEBUG-WL] dataset_to_image: window_center={window_center} window_width={window_width} "
+                    f"apply_rescale={use_rescaled_values}"
+                )
+            try:
+                if window_center is not None and window_width is not None:
+                    image = self.dicom_processor.dataset_to_image(
+                        dataset,
+                        window_center=window_center,
+                        window_width=window_width,
+                        apply_rescale=use_rescaled_values,
+                    )
+                else:
+                    image = self.dicom_processor.dataset_to_image(
+                        dataset,
+                        apply_rescale=use_rescaled_values,
+                    )
+                if image is None:
+                    image = _make_no_pixel_placeholder_pil()
+                    no_pixel_placeholder = True
+            except (MemoryError, ValueError, AttributeError, RuntimeError) as e:
+                error_type = type(e).__name__
+                error_msg = f"Error converting dataset to image ({error_type}): {str(e)}"
+                raise RuntimeError(error_msg) from e
+            except Exception as e:
+                error_type = type(e).__name__
+                error_msg = f"Unexpected error converting dataset to image ({error_type}): {str(e)}"
+                raise RuntimeError(error_msg) from e
+
+        apply_inversion = None
+        preserve_view = is_same_series and not is_new_study_series
+        force_fit_to_view = False
+        if preserve_view_override is not None:
+            preserve_view = preserve_view_override
+            force_fit_to_view = not preserve_view_override
+        if not preserve_view:
+            if series_identifier and series_identifier in self.view_state_manager.series_defaults:
+                series_inverted = self.view_state_manager.get_series_inversion_state(series_identifier)
+                apply_inversion = series_inverted
+            self.view_state_manager.restore_orientation(series_identifier)
+
+        if (
+            self.fusion_coordinator is not None
+            and image is not None
+            and not no_pixel_placeholder
+        ):
+            try:
+                base_datasets = current_studies.get(current_study_uid, {}).get(current_series_uid, [])
+                if base_datasets:
+                    fused_image = self.fusion_coordinator.get_fused_image(
+                        image,
+                        base_datasets,
+                        current_slice_index,
+                    )
+                    if fused_image is not None:
+                        image = fused_image
+            except Exception as e:
+                print(f"Error applying fusion: {e}")
+
+        modality = getattr(dataset, "Modality", None) or ""
+        show_sr_bar = bool(no_pixel_placeholder and modality == "SR")
+        if show_sr_bar and self.open_structured_report_browser_callback is not None:
+
+            def _open_sr_browser_for_current() -> None:
+                self.open_structured_report_browser_callback(dataset)  # type: ignore[misc]
+
+            self.image_viewer.set_no_pixel_placeholder_bar(
+                True,
+                open_callback=_open_sr_browser_for_current,
+                show_open_button=True,
+            )
+        elif show_sr_bar:
+            self.image_viewer.set_no_pixel_placeholder_bar(
+                True,
+                open_callback=None,
+                show_open_button=False,
+            )
+        else:
+            self.image_viewer.set_no_pixel_placeholder_bar(False)
+
+        self.image_viewer.set_image(image, preserve_view=preserve_view, apply_inversion=apply_inversion)
+
+        if is_new_study_series or force_fit_to_view:
+            self.image_viewer.fit_to_view(center_image=True)
+            if is_new_study_series:
+                stored_zoom = self.image_viewer.current_zoom
+                stored_h_scroll = self.image_viewer.horizontalScrollBar().value()
+                stored_v_scroll = self.image_viewer.verticalScrollBar().value()
+                self.view_state_manager.initial_fit_zoom = stored_zoom
+                if series_identifier in self.view_state_manager.series_defaults:
+                    self.view_state_manager.series_defaults[series_identifier].update(
+                        {
+                            "zoom": stored_zoom,
+                            "h_scroll": stored_h_scroll,
+                            "v_scroll": stored_v_scroll,
+                            "initial_fit_zoom": stored_zoom,
+                        }
+                    )
+
+    def _sync_controls_and_metadata(
+        self,
+        dataset: Dataset,
+        update_metadata: bool,
+        update_controls: bool,
+        use_rescaled_values: bool,
+        is_new_study_series: bool,
+        is_same_series: bool,
+        window_center: Optional[float],
+        window_width: Optional[float],
+        rescale_type: Optional[str],
+        rescale_slope: Optional[float],
+        rescale_intercept: Optional[float],
+    ) -> None:
+        """Apply metadata and W/L control synchronization after image rendering."""
+        if update_metadata:
+            self.metadata_panel.set_dataset(dataset)
+
+        if self.update_tag_viewer_callback:
+            self.update_tag_viewer_callback(dataset)
+
+        pixel_min = None
+        pixel_max = None
+        center_range = None
+        width_range = None
+        try:
+            pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(
+                dataset, apply_rescale=use_rescaled_values
+            )
+            if pixel_min is not None and pixel_max is not None:
+                series_pixel_min, series_pixel_max = self.view_state_manager.get_series_pixel_range()
+                if series_pixel_min is not None and series_pixel_max is not None:
+                    center_range = (series_pixel_min, series_pixel_max)
+                    width_range = (1.0, max(1.0, series_pixel_max - series_pixel_min))
+                else:
+                    center_range = (pixel_min, pixel_max)
+                    width_range = (1.0, max(1.0, pixel_max - pixel_min))
+        except Exception as e:
+            error_type = type(e).__name__
+            print(f"Error calculating pixel value range for window/level controls ({error_type}): {e}")
+
+        unit = rescale_type if (use_rescaled_values and rescale_type) else None
+        if update_controls and is_new_study_series and window_center is not None and window_width is not None:
+            self.window_level_controls.set_window_level(
+                window_center, window_width, block_signals=True, unit=unit
+            )
+        if update_controls and center_range is not None and width_range is not None:
+            self.window_level_controls.set_ranges(center_range, width_range)
+        if update_controls:
+            self.window_level_controls.set_unit(unit)
+
+        if (
+            not is_new_study_series
+            and window_center is not None
+            and window_width is not None
+            and pixel_min is not None
+            and pixel_max is not None
+        ):
+            series_pixel_min, series_pixel_max = self.view_state_manager.get_series_pixel_range()
+            if series_pixel_min is not None and series_pixel_max is not None:
+                valid_min = series_pixel_min
+                valid_max = series_pixel_max
+            else:
+                valid_min = pixel_min
+                valid_max = pixel_max
+            if (
+                window_center < valid_min
+                or window_center > valid_max
+                or window_width < 1.0
+                or window_width > (valid_max - valid_min)
+            ):
+                if valid_min is not None and valid_max is not None:
+                    window_center = (valid_min + valid_max) / 2.0
+                    window_width = valid_max - valid_min
+                    if window_width <= 0:
+                        window_width = 1.0
+                    self.view_state_manager.current_window_center = window_center
+                    self.view_state_manager.current_window_width = window_width
+
+        if is_new_study_series and window_center is not None and window_width is not None:
+            pass
+        elif is_same_series and window_center is not None and window_width is not None:
+            if update_controls:
+                self.window_level_controls.set_window_level(
+                    window_center, window_width, block_signals=True, unit=unit
+                )
+        else:
+            if not is_same_series or (window_center is None or window_width is None):
+                wc, ww, is_rescaled = self.dicom_processor.get_window_level_from_dataset(
+                    dataset,
+                    rescale_slope=rescale_slope,
+                    rescale_intercept=rescale_intercept,
+                )
+                if wc is not None and ww is not None:
+                    wc, ww = apply_window_level_rescale_conversion(
+                        wc,
+                        ww,
+                        is_rescaled=is_rescaled,
+                        use_rescaled_values=use_rescaled_values,
+                        rescale_slope=rescale_slope,
+                        rescale_intercept=rescale_intercept,
+                        dicom_processor=self.dicom_processor,
+                    )
+                    if update_controls:
+                        self.window_level_controls.set_window_level(wc, ww, block_signals=True, unit=unit)
+                    self.view_state_manager.current_window_center = wc
+                    self.view_state_manager.current_window_width = ww
+                elif pixel_min is not None and pixel_max is not None:
+                    default_center = (pixel_min + pixel_max) / 2.0
+                    default_width = pixel_max - pixel_min
+                    if default_width <= 0:
+                        default_width = 1.0
+                    if update_controls:
+                        self.window_level_controls.set_window_level(
+                            default_center, default_width, block_signals=True, unit=unit
+                        )
+                    self.view_state_manager.current_window_center = default_center
+                    self.view_state_manager.current_window_width = default_width
+                self.view_state_manager.window_level_user_modified = False
+
+    def _render_scene_overlays_annotations(
+        self,
+        dataset: Dataset,
+        current_studies: Dict[str, Dict[str, list[Dataset]]],
+        current_study_uid: str,
+        current_series_uid: str,
+        current_slice_index: int,
+        is_new_study_series: bool,
+    ) -> None:
+        """Render overlay, ROI/measurement, and annotation scene items for the active slice."""
+        parser = DICOMParser(dataset)
+        total_slices = 0
+        if current_studies and current_study_uid and current_series_uid:
+            if (
+                current_study_uid in current_studies
+                and current_series_uid in current_studies[current_study_uid]
+            ):
+                total_slices = len(current_studies[current_study_uid][current_series_uid])
+
+        projection_start_slice = None
+        projection_end_slice = None
+        projection_total_thickness = None
+        if self.projection_enabled and total_slices > 0:
+            projection_start_slice = max(0, current_slice_index)
+            projection_end_slice = min(total_slices - 1, current_slice_index + self.projection_slice_count - 1)
+            if (
+                current_study_uid in current_studies
+                and current_series_uid in current_studies[current_study_uid]
+            ):
+                series_datasets = current_studies[current_study_uid][current_series_uid]
+                total_thickness = 0.0
+                thickness_count = 0
+                for i in range(projection_start_slice, projection_end_slice + 1):
+                    if 0 <= i < len(series_datasets):
+                        slice_dataset = series_datasets[i]
+                        thickness = get_slice_thickness(slice_dataset)
+                        if thickness is not None:
+                            total_thickness += thickness
+                            thickness_count += 1
+                if thickness_count > 0:
+                    projection_total_thickness = total_thickness
+
+        self.overlay_manager.create_overlay_items(
+            self.image_viewer.scene,
+            parser,
+            total_slices=total_slices if total_slices > 0 else None,
+            projection_enabled=self.projection_enabled,
+            projection_start_slice=projection_start_slice,
+            projection_end_slice=projection_end_slice,
+            projection_total_thickness=projection_total_thickness,
+            projection_type=self.projection_type if self.projection_enabled else None,
+            multiframe_context=self.get_multiframe_overlay_context(
+                dataset=dataset,
+                study_uid=current_study_uid,
+                series_uid=current_series_uid,
+            ),
+        )
+
+        pixel_spacing = get_pixel_spacing(dataset)
+        self.measurement_tool.set_pixel_spacing(pixel_spacing)
+
+        study_uid = getattr(dataset, "StudyInstanceUID", "")
+        series_uid = get_composite_series_key(dataset)
+        instance_identifier = current_slice_index
+        self.roi_manager.set_current_slice(study_uid, series_uid, instance_identifier)
+        self.measurement_tool.set_current_slice(study_uid, series_uid, instance_identifier)
+        if self.text_annotation_tool:
+            self.text_annotation_tool.set_current_slice(study_uid, series_uid, instance_identifier)
+        if self.arrow_annotation_tool:
+            self.arrow_annotation_tool.set_current_slice(study_uid, series_uid, instance_identifier)
+
+        if is_new_study_series:
+            if DEBUG_MEASUREMENT_SERIES:
+                print(
+                    "[DEBUG-MEAS-SERIES] display_slice new series: clearing measurement/annotation scene items. "
+                    f"scene_id={id(self.image_viewer.scene)}, measurement_summary_before_clear="
+                    f"{self.measurement_tool.get_debug_summary(self.image_viewer.scene)}"
+                )
+            self.measurement_tool.clear_measurements_from_other_slices(
+                study_uid,
+                series_uid,
+                instance_identifier,
+                self.image_viewer.scene,
+            )
+            if self.text_annotation_tool:
+                self.text_annotation_tool.clear_annotations(self.image_viewer.scene)
+            if self.arrow_annotation_tool:
+                self.arrow_annotation_tool.clear_arrows(self.image_viewer.scene)
+        elif DEBUG_MEASUREMENT_SERIES:
+            print(
+                "[DEBUG-MEAS-SERIES] display_slice same series path: skipping clear_measurements. "
+                f"measurement_summary={self.measurement_tool.get_debug_summary(self.image_viewer.scene)}"
+            )
+
+        if self.display_rois_callback:
+            self.display_rois_callback(dataset)
+        else:
+            self.display_rois_for_slice(dataset)
+
+        if self.display_measurements_callback:
+            self.display_measurements_callback(dataset)
+        else:
+            self.display_measurements_for_slice(dataset)
+
+        if self.text_annotation_tool:
+            self.display_text_annotations_for_slice(dataset)
+        if self.arrow_annotation_tool:
+            self.display_arrow_annotations_for_slice(dataset)
+
+        if self.annotation_manager and self.dicom_organizer:
+            try:
+                self.annotation_manager.clear_annotations(self.image_viewer.scene)
+                annotations = self.annotation_manager.get_annotations_for_image(dataset, current_study_uid)
+                if annotations:
+                    image_width = 512.0
+                    image_height = 512.0
+                    if hasattr(dataset, "Columns") and hasattr(dataset, "Rows"):
+                        image_width = float(dataset.Columns)
+                        image_height = float(dataset.Rows)
+                    self.annotation_manager.create_presentation_state_items(
+                        self.image_viewer.scene,
+                        annotations,
+                        image_width,
+                        image_height,
+                    )
+            except Exception:
+                pass
     
     def display_slice(  # pyright: ignore[reportGeneralTypeIssues]
         self,
@@ -365,57 +1108,24 @@ class SliceDisplayManager:
                            Default is True for backward compatibility.
         """
         try:
-            # Some paths pass a stale *dataset* (SOP differs from the study list at
-            # *current_slice_index*). Align to the canonical row so pixmap, W/L, overlays,
-            # and direction-label callbacks stay consistent.
-            dataset = _overlay_metadata_dataset_for_slice(
+            dataset = self._resolve_canonical_dataset_for_slice(
                 dataset,
                 current_studies,
                 current_study_uid,
                 current_series_uid,
                 current_slice_index,
             )
-
-            # Update current context
-            self.current_studies = current_studies
-            self.current_study_uid = current_study_uid
-            self.current_series_uid = current_series_uid
-            self.current_slice_index = current_slice_index
-            self.current_dataset = dataset
-            
-            # Update view state manager context
-            self.view_state_manager.set_current_data_context(
-                dataset, current_studies, current_study_uid, current_series_uid, current_slice_index
+            self._update_current_context(
+                dataset,
+                current_studies,
+                current_study_uid,
+                current_series_uid,
+                current_slice_index,
             )
-            
-            # Extract and store rescale parameters from dataset
-            rescale_slope, rescale_intercept, rescale_type = self.dicom_processor.get_rescale_parameters(dataset)
-            # Infer rescale_type if None (e.g., for CT images)
-            rescale_type = self.dicom_processor.infer_rescale_type(
-                dataset, rescale_slope, rescale_intercept, rescale_type
+            rescale_slope, rescale_intercept, rescale_type = self._sync_view_state_rescale_context(dataset)
+            new_series_uid, is_same_series, is_new_study_series, series_identifier = (
+                self._compute_series_transition_state(dataset, current_series_uid, current_slice_index)
             )
-            self.view_state_manager.set_rescale_parameters(rescale_slope, rescale_intercept, rescale_type)
-            # DEBUG: Log rescale_type after setting
-            # print(f"[WL UNIT DEBUG] display_slice: After set_rescale_parameters, rescale_type: {self.view_state_manager.rescale_type}")
-            
-            # Get composite series key from dataset to check if we're in the same series
-            new_series_uid = get_composite_series_key(dataset)
-            is_same_series = (new_series_uid == current_series_uid and current_series_uid != "")
-            
-            # Detect if this is a new study/series
-            previous_series_identifier = self.view_state_manager.current_series_identifier
-            is_new_study_series = self.view_state_manager.is_new_study_or_series(dataset)
-            series_identifier = self.view_state_manager.get_series_identifier(dataset)
-            if DEBUG_MEASUREMENT_SERIES:
-                print(
-                    "[DEBUG-MEAS-SERIES] display_slice enter: "
-                    f"{self._measurement_debug_prefix(dataset, current_slice_index)}, "
-                    f"arg_current_series_uid={current_series_uid}, computed_series_uid={new_series_uid}, "
-                    f"previous_series_identifier={previous_series_identifier}, "
-                    f"incoming_series_identifier={series_identifier}, is_same_series={is_same_series}, "
-                    f"is_new_study_series={is_new_study_series}, "
-                    f"measurement_summary={self.measurement_tool.get_debug_summary(self.image_viewer.scene)}"
-                )
             
             # Check for JPEGLS transfer syntax and show warning only for new series
             if is_new_study_series:
@@ -426,7 +1136,6 @@ class SliceDisplayManager:
                 if hasattr(dataset, 'file_meta') and hasattr(dataset.file_meta, 'TransferSyntaxUID'):
                     transfer_syntax = str(dataset.file_meta.TransferSyntaxUID)
                     if transfer_syntax in jpegls_syntaxes:
-                        from PySide6.QtWidgets import QMessageBox
                         QMessageBox.warning(
                             self.image_viewer,
                             "JPEG-LS Image Warning",
@@ -439,813 +1148,56 @@ class SliceDisplayManager:
             modality = getattr(dataset, 'Modality', 'Unknown')
             # print(f"[DEBUG-WL] display_slice: modality={modality}, is_new_study_series={is_new_study_series}, series_id={series_identifier[:20]}...")
             
-            # Set default use_rescaled_values based on whether parameters exist
-            # Default to True if parameters exist, False otherwise
-            if is_new_study_series:
-                # Save user W/L for the series we are leaving (identifier still old).
-                self.view_state_manager.save_user_window_level()
-                use_rescaled = (rescale_slope is not None and rescale_intercept is not None)
-                self.view_state_manager.use_rescaled_values = use_rescaled
-                # print(f"[DEBUG-WL] NEW SERIES: Setting use_rescaled_values={use_rescaled} (slope={rescale_slope}, intercept={rescale_intercept})")
-                # Update UI toggle state
-                from gui.main_window import MainWindow
-                if hasattr(self.view_state_manager, 'main_window'):
-                    self.view_state_manager.main_window.set_rescale_toggle_state(use_rescaled)
-                self.image_viewer.set_rescale_toggle_state(use_rescaled)
-                # Update current series identifier
-                self.view_state_manager.set_current_series_identifier(series_identifier)
-                # Clear window/level state for new study/series to prevent stale values from previous study
-                # This must be done before any recalculation to ensure we don't use old values
-                self.view_state_manager.current_window_center = None
-                self.view_state_manager.current_window_width = None
-                self.view_state_manager.window_level_user_modified = False
-            
-            # Get window/level values from view state manager
-            # For new series, these should be None (we just cleared them above)
-            window_center = self.view_state_manager.current_window_center
-            window_width = self.view_state_manager.current_window_width
-            # print(f"[DEBUG-WL] display_slice: Using window_center={window_center}, window_width={window_width}")
-            # print(f"[DEBUG-WL]   is_new_study_series={is_new_study_series}, is_same_series={is_same_series}")
-            # For new series, use the rescale state we just set; for same series, use existing state
-            if is_new_study_series:
-                use_rescaled_values = (rescale_slope is not None and rescale_intercept is not None)
-            else:
-                use_rescaled_values = self.view_state_manager.use_rescaled_values
-            
-            if DEBUG_WL:
-                study_uid = getattr(dataset, 'StudyInstanceUID', '')[:24] if getattr(dataset, 'StudyInstanceUID', '') else ''
-                modality = getattr(dataset, 'Modality', '?')
-                print(
-                    f"[DEBUG-WL] display_slice ENTER: study={study_uid}... series={new_series_uid[:24] if new_series_uid else ''}... "
-                    f"modality={modality} is_new={is_new_study_series} is_same={is_same_series} | "
-                    f"rescale_slope={rescale_slope} rescale_intercept={rescale_intercept} | "
-                    f"use_rescaled_values={use_rescaled_values}"
-                )
-            
-            # For new series, always recalculate window/level defaults from the current dataset
-            # Never use stored defaults for new datasets - this ensures CT gets CT defaults, not MR defaults
-            if is_new_study_series:
-                # Ensure window/level values are None before recalculation
-                # This prevents using any stale values from previous datasets
-                window_center = None
-                window_width = None
-                stored_window_center = None
-                stored_window_width = None
-                
-                # Calculate window/level from series or dataset using the correct rescale state
-                # use_rescaled_values was set above based on current dataset's rescale parameters
-                study_uid = getattr(dataset, 'StudyInstanceUID', '')
-                series_in_dict = bool(
-                    study_uid and new_series_uid and current_studies
-                    and study_uid in current_studies
-                    and new_series_uid in current_studies[study_uid]
-                )
-                if DEBUG_WL:
-                    print(
-                        f"[DEBUG-WL] new series: series_in_current_studies={series_in_dict} "
-                        f"(study_uid in current_studies={study_uid in current_studies if current_studies else False} "
-                        f"series_uid in study={new_series_uid in current_studies.get(study_uid, {}) if study_uid and current_studies else False})"
-                    )
-                if study_uid and new_series_uid and current_studies:
-                    if study_uid in current_studies and new_series_uid in current_studies[study_uid]:
-                        series_datasets = current_studies[study_uid][new_series_uid]
-                        # Calculate pixel range for entire series
-                        # Wrap in try-except to handle any errors from pixel array access
-                        try:
-                            series_pixel_min, series_pixel_max = self.dicom_processor.get_series_pixel_value_range(
-                                series_datasets, apply_rescale=use_rescaled_values
-                            )
-                            # Store series pixel range in ViewStateManager for window width slider maximum
-                            self.view_state_manager.set_series_pixel_range(series_pixel_min, series_pixel_max)
-                        except Exception as e:
-                            # If series pixel range calculation fails, log and continue with single slice
-                            error_type = type(e).__name__
-                            print(f"Error calculating series pixel range ({error_type}): {e}")
-                            series_pixel_min = None
-                            series_pixel_max = None
-                            # Clear stored series pixel range on error
-                            self.view_state_manager.clear_series_pixel_range()
-                        # Check for window/level presets in DICOM metadata
-                        presets = self.dicom_processor.get_window_level_presets_from_dataset(
-                            dataset,
-                            rescale_slope=rescale_slope,
-                            rescale_intercept=rescale_intercept
-                        )
-                        
-                        # print(f"[DEBUG-WL-PRESETS] SliceDisplayManager: Extracted {len(presets)} preset(s)")
-                        # if presets:
-                        #     for idx, (wc, ww, is_rescaled, name) in enumerate(presets):
-                        #         print(f"[DEBUG-WL-PRESETS]   Preset {idx}: center={wc}, width={ww}, is_rescaled={is_rescaled}, name={name}")
-                        
-                        # Store presets in view state manager BEFORE setting window/level
-                        # This ensures that handle_window_changed can match values to presets
-                        # Rescale parameters were already set at line 153, so they're available for comparison
-                        # print(f"[DEBUG-PRESET-MATCH] Storing {len(presets)} preset(s) in view_state_manager")
-                        # print(f"[DEBUG-PRESET-MATCH] Current rescale state: use_rescaled={use_rescaled_values}, slope={rescale_slope}, intercept={rescale_intercept}")
-                        # for idx, (wc, ww, is_rescaled, name) in enumerate(presets):
-                        #     print(f"[DEBUG-PRESET-MATCH]   Preset {idx}: wc={wc:.2f}, ww={ww:.2f}, is_rescaled={is_rescaled}, name={name}")
-                        self.view_state_manager.window_level_presets = presets
-                        self.view_state_manager.current_preset_index = 0  # Use first preset by default
-                        # Reset user-modified flag since we're loading presets
-                        self.view_state_manager.window_level_user_modified = False
-                        # print(f"[DEBUG-WL-PRESETS] SliceDisplayManager: Stored {len(presets)} preset(s) in view_state_manager")
-                        
-                        # Get window/level from first preset if available, otherwise use single value method
-                        if presets:
-                            # Use first preset (index 0)
-                            wc, ww, is_rescaled, _ = presets[0]
-                            if DEBUG_WL:
-                                print(f"[DEBUG-WL] embedded from first preset: wc={wc} ww={ww} is_rescaled={is_rescaled}")
-                        else:
-                            # Fall back to single value extraction
-                            wc, ww, is_rescaled = self.dicom_processor.get_window_level_from_dataset(
-                                dataset,
-                                rescale_slope=rescale_slope,
-                                rescale_intercept=rescale_intercept
-                            )
-                            if DEBUG_WL:
-                                print(f"[DEBUG-WL] embedded from get_window_level_from_dataset: wc={wc} ww={ww} is_rescaled={is_rescaled}")
-                        if wc is not None and ww is not None:
-                            orig_wc, orig_ww = wc, ww
-                            wc, ww = apply_window_level_rescale_conversion(
-                                wc,
-                                ww,
-                                is_rescaled=is_rescaled,
-                                use_rescaled_values=use_rescaled_values,
-                                rescale_slope=rescale_slope,
-                                rescale_intercept=rescale_intercept,
-                                dicom_processor=self.dicom_processor,
-                            )
-                            if DEBUG_WL and (wc != orig_wc or ww != orig_ww):
-                                print(
-                                    f"[DEBUG-WL] WL rescale conversion: ({orig_wc}, {orig_ww}) -> ({wc}, {ww})"
-                                )
-                            stored_window_center = wc
-                            stored_window_width = ww
-                            if DEBUG_WL:
-                                print(f"[DEBUG-WL] after conversion stored_wc={stored_window_center} stored_ww={stored_window_width}")
-                        elif series_pixel_min is not None and series_pixel_max is not None:
-                            # Calculate median from series for window center
-                            # Get series datasets for median calculation (already have series_datasets from above)
-                            midpoint = (series_pixel_min + series_pixel_max) / 2.0
-                            if series_datasets:
-                                median = self.dicom_processor.get_series_pixel_median(
-                                    series_datasets, apply_rescale=use_rescaled_values
-                                )
-                                # If median calculation failed, use midpoint
-                                if median is None:
-                                    stored_window_center = midpoint
-                                else:
-                                    # Use the greater of median or midpoint
-                                    stored_window_center = max(median, midpoint)
-                            else:
-                                stored_window_center = midpoint
-                            
-                            stored_window_width = series_pixel_max - series_pixel_min
-                            if stored_window_width <= 0:
-                                stored_window_width = 1.0
-                            if DEBUG_WL:
-                                print(
-                                    f"[DEBUG-WL] from series pixel range: min={series_pixel_min} max={series_pixel_max} "
-                                    f"stored_wc={stored_window_center} stored_ww={stored_window_width}"
-                                )
-                        else:
-                            # Fallback to single slice
-                            try:
-                                pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(
-                                    dataset, apply_rescale=use_rescaled_values
-                                )
-                                if pixel_min is not None and pixel_max is not None:
-                                    # Calculate median from single slice pixel array
-                                    pixel_array = self.dicom_processor.get_pixel_array(dataset)
-                                    if pixel_array is not None:
-                                        # Apply rescale if needed
-                                        if use_rescaled_values:
-                                            rescale_slope, rescale_intercept, _ = self.dicom_processor.get_rescale_parameters(dataset)
-                                            if rescale_slope is not None and rescale_intercept is not None:
-                                                pixel_array = pixel_array.astype(np.float32) * float(rescale_slope) + float(rescale_intercept)
-                                        # Calculate both median (excluding zeros) and midpoint, use the greater value
-                                        midpoint = (pixel_min + pixel_max) / 2.0
-                                        non_zero_values = pixel_array[pixel_array != 0]
-                                        if len(non_zero_values) > 0:
-                                            median = float(np.median(non_zero_values))
-                                            stored_window_center = max(median, midpoint)
-                                        else:
-                                            # Fallback to midpoint if all values are zero
-                                            stored_window_center = midpoint
-                                    else:
-                                        # Fall back to midpoint if pixel array unavailable
-                                        stored_window_center = (pixel_min + pixel_max) / 2.0
-                                    stored_window_width = pixel_max - pixel_min
-                                    if stored_window_width <= 0:
-                                        stored_window_width = 1.0
-                            except Exception as e:
-                                # If single slice pixel range calculation fails, use defaults
-                                error_type = type(e).__name__
-                                print(f"Error calculating single slice pixel range ({error_type}): {e}")
-                                # Will fall through to use window/level from DICOM tags or defaults
-                        self.view_state_manager.window_level_user_modified = False
-                
-                # Set window/level values - ensure we only use newly calculated values
-                # stored_window_center and stored_window_width are calculated above with correct rescale state
-                if stored_window_center is not None and stored_window_width is not None:
-                    if DEBUG_WL:
-                        study_uid = getattr(dataset, 'StudyInstanceUID', '')
-                        print(
-                            f"[DEBUG-WL] New series WL: study_uid={study_uid[:20] if study_uid else ''}... "
-                            f"series_uid={new_series_uid[:20] if new_series_uid else ''}... "
-                            f"use_rescaled={use_rescaled_values} slope={rescale_slope} intercept={rescale_intercept} "
-                            f"stored_wc={stored_window_center} stored_ww={stored_window_width}"
-                        )
-                    window_center = stored_window_center
-                    window_width = stored_window_width
-                    # print(f"[DEBUG-WL] Storing in view_state_manager: wc={window_center}, ww={window_width}, use_rescaled={use_rescaled_values}")
-                    # Store in view state manager - these are the correct defaults for this dataset
-                    self.view_state_manager.current_window_center = window_center
-                    self.view_state_manager.current_window_width = window_width
-                    
-                    # Update status bar widget with zoom and preset info
-                    current_zoom = self.image_viewer.current_zoom
-                    if self.view_state_manager.window_level_presets:
-                        preset_name = "Default" if self.view_state_manager.current_preset_index == 0 else (
-                            self.view_state_manager.window_level_presets[self.view_state_manager.current_preset_index][3] or "Default"
-                        )
-                        # print(f"[DEBUG-PRESET-MATCH] Updating status bar with preset: {preset_name} (index={self.view_state_manager.current_preset_index})")
-                        self.view_state_manager.main_window.update_zoom_preset_status(current_zoom, preset_name)
-                    elif window_center is not None and window_width is not None:
-                        # No presets found, using calculated values
-                        # print(f"[DEBUG-PRESET-MATCH] Updating status bar with Auto-Calculated (no presets found)")
-                        self.view_state_manager.main_window.update_zoom_preset_status(current_zoom, None)
-                    
-                    # Store defaults for this series (will be updated with zoom/pan after fit_to_view)
-                    # Store with the rescale state that was used to calculate them
-                    # Mark window/level as "initial defaults set" so store_initial_view_state doesn't overwrite
-                    if series_identifier not in self.view_state_manager.series_defaults:
-                        self.view_state_manager.series_defaults[series_identifier] = {}
-                    self.view_state_manager.series_defaults[series_identifier].update({
-                        'window_center': window_center,
-                        'window_width': window_width,
-                        'use_rescaled_values': use_rescaled_values,  # Store the rescale state used for calculation
-                        'image_inverted': self.image_viewer.image_inverted,  # Store current inversion state
-                        'window_level_defaults_set': True  # Flag to prevent overwriting by store_initial_view_state
-                    })
-                    # print(f"[DEBUG-WL] Stored INITIAL defaults in series_defaults with flag")
-                else:
-                    # New series but we didn't get WL from the series lookup (e.g. study/series not in
-                    # current_studies, or lookup failed). Fallback: compute embedded WL from the dataset
-                    # being loaded so the image and controls use the correct default for this series.
-                    if DEBUG_WL:
-                        study_uid = getattr(dataset, 'StudyInstanceUID', '')
-                        print(
-                            f"[DEBUG-WL] New series WL fallback: study_uid={study_uid[:20] if study_uid else ''}... "
-                            f"series_uid={new_series_uid[:20] if new_series_uid else ''}... "
-                            f"computing from dataset being loaded"
-                        )
-                    # Set series pixel range from current slice so WL control ranges are not stale
-                    try:
-                        pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(
-                            dataset, apply_rescale=use_rescaled_values
-                        )
-                        if pixel_min is not None and pixel_max is not None:
-                            self.view_state_manager.set_series_pixel_range(pixel_min, pixel_max)
-                        else:
-                            self.view_state_manager.clear_series_pixel_range()
-                    except Exception:
-                        self.view_state_manager.clear_series_pixel_range()
-                    # Get embedded WL from the dataset being loaded (presets or single tags)
-                    presets = self.dicom_processor.get_window_level_presets_from_dataset(
-                        dataset,
-                        rescale_slope=rescale_slope,
-                        rescale_intercept=rescale_intercept
-                    )
-                    self.view_state_manager.window_level_presets = presets
-                    self.view_state_manager.current_preset_index = 0
-                    self.view_state_manager.window_level_user_modified = False
-                    if presets:
-                        wc, ww, is_rescaled, _ = presets[0]
-                        if DEBUG_WL:
-                            print(f"[DEBUG-WL] fallback from first preset: wc={wc} ww={ww} is_rescaled={is_rescaled}")
-                    else:
-                        wc, ww, is_rescaled = self.dicom_processor.get_window_level_from_dataset(
-                            dataset,
-                            rescale_slope=rescale_slope,
-                            rescale_intercept=rescale_intercept
-                        )
-                        if DEBUG_WL:
-                            print(f"[DEBUG-WL] fallback from get_window_level_from_dataset: wc={wc} ww={ww} is_rescaled={is_rescaled}")
-                    if wc is not None and ww is not None:
-                        orig_wc, orig_ww = wc, ww
-                        wc, ww = apply_window_level_rescale_conversion(
-                            wc,
-                            ww,
-                            is_rescaled=is_rescaled,
-                            use_rescaled_values=use_rescaled_values,
-                            rescale_slope=rescale_slope,
-                            rescale_intercept=rescale_intercept,
-                            dicom_processor=self.dicom_processor,
-                        )
-                        if DEBUG_WL and (wc != orig_wc or ww != orig_ww):
-                            print(
-                                f"[DEBUG-WL] fallback WL rescale conversion: ({orig_wc}, {orig_ww}) -> ({wc}, {ww})"
-                            )
-                        window_center = wc
-                        window_width = ww
-                        self.view_state_manager.current_window_center = wc
-                        self.view_state_manager.current_window_width = ww
-                        if series_identifier not in self.view_state_manager.series_defaults:
-                            self.view_state_manager.series_defaults[series_identifier] = {}
-                        self.view_state_manager.series_defaults[series_identifier].update({
-                            'window_center': window_center,
-                            'window_width': window_width,
-                            'use_rescaled_values': use_rescaled_values,
-                            'image_inverted': self.image_viewer.image_inverted,
-                            'window_level_defaults_set': True
-                        })
-                    else:
-                        # Still no WL from dataset; leave None so dataset_to_image will use its internal default
-                        if DEBUG_WL:
-                            print("[DEBUG-WL] fallback: no embedded WL (wc/ww None), dataset_to_image will use internal default")
-                        window_center = None
-                        window_width = None
-                        self.view_state_manager.current_window_center = None
-                        self.view_state_manager.current_window_width = None
-            
-            # For same series, preserve existing window/level values (already set above)
-
-            if is_new_study_series:
-                cached_wl = self.view_state_manager.get_user_window_level(series_identifier)
-                if cached_wl is not None:
-                    window_center = cached_wl["window_center"]
-                    window_width = cached_wl["window_width"]
-                    self.view_state_manager.current_window_center = window_center
-                    self.view_state_manager.current_window_width = window_width
-                    self.view_state_manager.window_level_user_modified = True
-            
-            # Convert to image
-            image = None
-            # Check if projection mode is enabled
-            if self.projection_enabled:
-                # Projection mode: gather slices and calculate projection
-                try:
-                    image = self._create_projection_image(
-                        dataset,
-                        current_studies,
-                        current_study_uid,
-                        current_series_uid,
-                        current_slice_index,
-                        window_center,
-                        window_width,
-                        use_rescaled_values,
-                        rescale_slope,
-                        rescale_intercept
-                    )
-                    if image is None:
-                        # Projection failed (e.g., not enough slices available near end of dataset)
-                        # Fall back to normal display but keep projection enabled
-                        # so it works again when scrolling to a valid position
-                        # Continue with normal dataset conversion below
-                        pass
-                except Exception as e:
-                    # Projection error - fall back to normal display
-                    # Only disable on actual errors, not just insufficient slices
-                    error_type = type(e).__name__
-                    print(f"Error creating projection image ({error_type}): {e}")
-                    # Don't disable projection mode for insufficient slices - only for actual errors
-                    # Keep projection enabled so user can scroll back and it will work again
-                    # Continue with normal dataset conversion below
-                    pass
-            
-            # Normal mode or projection fallback: convert single dataset to image
-            # If projection failed (image is None) or projection is disabled, convert normally
-            # Always pass window_center/window_width when we have them so the image uses the same
-            # (correctly rescaled-converted) values we store and show in the controls. For new series
-            # we computed and converted WL above; passing them here ensures one consistent application.
-            no_pixel_placeholder = False
-            if image is None:
-                if DEBUG_WL:
-                    print(
-                        f"[DEBUG-WL] dataset_to_image: window_center={window_center} window_width={window_width} "
-                        f"apply_rescale={use_rescaled_values}"
-                    )
-                try:
-                    if window_center is not None and window_width is not None:
-                        image = self.dicom_processor.dataset_to_image(
-                            dataset,
-                            window_center=window_center,
-                            window_width=window_width,
-                            apply_rescale=use_rescaled_values
-                        )
-                    else:
-                        image = self.dicom_processor.dataset_to_image(
-                            dataset,
-                            apply_rescale=use_rescaled_values
-                        )
-                    # print(f"[DISPLAY] Image conversion complete: {image is not None}")
-                    if image is None:
-                        # No pixel data (e.g. SR): use a neutral placeholder and continue so metadata /
-                        # tag viewer and overlays still refresh (do not return early).
-                        image = _make_no_pixel_placeholder_pil()
-                        no_pixel_placeholder = True
-                except (MemoryError, ValueError, AttributeError, RuntimeError) as e:
-                    # Pixel array access errors during image conversion
-                    error_type = type(e).__name__
-                    error_msg = f"Error converting dataset to image ({error_type}): {str(e)}"
-                    # print(error_msg)
-                    # Re-raise to be caught by outer exception handler
-                    raise RuntimeError(error_msg) from e
-                except Exception as e:
-                    # Other unexpected errors
-                    error_type = type(e).__name__
-                    error_msg = f"Unexpected error converting dataset to image ({error_type}): {str(e)}"
-                    # print(error_msg)
-                    raise RuntimeError(error_msg) from e
-            
-            # Restore inversion state for this series if it exists
-            # Only pass apply_inversion when preserve_view=False (new slice)
-            # When preserve_view=True (scrolling), pass None so set_image() knows it's a new slice
-            apply_inversion = None
-            preserve_view = is_same_series and not is_new_study_series
-            force_fit_to_view = False
-            if preserve_view_override is not None:
-                preserve_view = preserve_view_override
-                force_fit_to_view = not preserve_view_override
-            if not preserve_view:
-                # New slice - apply stored inversion state if it exists
-                if series_identifier and series_identifier in self.view_state_manager.series_defaults:
-                    # Series has stored state - get inversion value
-                    series_inverted = self.view_state_manager.get_series_inversion_state(series_identifier)
-                    # Pass inversion state for new slice
-                    apply_inversion = series_inverted
-                # Restore per-series flip/rotation orientation (or reset to default)
-                self.view_state_manager.restore_orientation(series_identifier)
-            # When preserve_view=True (scrolling), apply_inversion stays None
-            # This allows set_image() to detect it's a new slice and store new original_image
-            
-            # Apply fusion if enabled (skip synthetic no-pixel placeholders)
-            if (
-                self.fusion_coordinator is not None
-                and image is not None
-                and not no_pixel_placeholder
-            ):
-                try:
-                    # Get base datasets for current series
-                    base_datasets = current_studies.get(current_study_uid, {}).get(current_series_uid, [])
-                    if base_datasets:
-                        fused_image = self.fusion_coordinator.get_fused_image(
-                            image,
-                            base_datasets,
-                            current_slice_index
-                        )
-                        if fused_image is not None:
-                            image = fused_image
-                except Exception as e:
-                    print(f"Error applying fusion: {e}")
-                    # Continue with non-fused image
-            
-            # Set image in viewer - preserve zoom/pan if same series
-            # print(f"[DISPLAY] About to set image in viewer...")
-            # print(f"[DISPLAY] Slice index: {current_slice_index}, Preserve view: {preserve_view}")
-            # print(f"[DISPLAY] Image size: {image.size if image else 'None'}, mode: {image.mode if image else 'None'}")
-            # print(f"[DISPLAY] Image id: {id(image) if image else 'None'}")
-            # print(f"[DISPLAY] Apply inversion: {apply_inversion}")
-
-            modality = getattr(dataset, "Modality", None) or ""
-            show_sr_bar = bool(
-                no_pixel_placeholder
-                and modality == "SR"
-            )
-            if show_sr_bar and self.open_structured_report_browser_callback is not None:
-
-                def _open_sr_browser_for_current() -> None:
-                    self.open_structured_report_browser_callback(dataset)  # type: ignore[misc]
-
-                self.image_viewer.set_no_pixel_placeholder_bar(
-                    True,
-                    open_callback=_open_sr_browser_for_current,
-                    show_open_button=True,
-                )
-            elif show_sr_bar:
-                self.image_viewer.set_no_pixel_placeholder_bar(
-                    True,
-                    open_callback=None,
-                    show_open_button=False,
-                )
-            else:
-                self.image_viewer.set_no_pixel_placeholder_bar(False)
-
-            self.image_viewer.set_image(image, preserve_view=preserve_view, apply_inversion=apply_inversion)
-
-            # print(f"[DISPLAY] Image set in viewer successfully")
-            
-            # If new study/series or explicitly requested, fit to view and center
-            if is_new_study_series or force_fit_to_view:
-                self.image_viewer.fit_to_view(center_image=True)
-                if is_new_study_series:
-                    # Store zoom and scroll positions after fit_to_view
-                    stored_zoom = self.image_viewer.current_zoom
-                    stored_h_scroll = self.image_viewer.horizontalScrollBar().value()
-                    stored_v_scroll = self.image_viewer.verticalScrollBar().value()
-                    
-                    # Store the initial fit zoom in view state manager
-                    self.view_state_manager.initial_fit_zoom = stored_zoom
-                    
-                    # Update series defaults with zoom/pan info if we have window/level already stored
-                    if series_identifier in self.view_state_manager.series_defaults:
-                        self.view_state_manager.series_defaults[series_identifier].update({
-                            'zoom': stored_zoom,
-                            'h_scroll': stored_h_scroll,
-                            'v_scroll': stored_v_scroll,
-                            'initial_fit_zoom': stored_zoom  # Store for export font scaling
-                        })
-
-            # Update metadata panel (only for focused subwindow)
-            if update_metadata:
-                self.metadata_panel.set_dataset(dataset)
-            
-            # Update tag viewer if open
-            if self.update_tag_viewer_callback:
-                self.update_tag_viewer_callback(dataset)
-            
-            # Calculate pixel value range for window/level controls
-            pixel_min = None
-            pixel_max = None
-            center_range = None
-            width_range = None
-            try:
-                pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(
-                    dataset, apply_rescale=use_rescaled_values
-                )
-                if pixel_min is not None and pixel_max is not None:
-                    # Get series pixel range for both center and width ranges
-                    series_pixel_min, series_pixel_max = self.view_state_manager.get_series_pixel_range()
-                    
-                    if series_pixel_min is not None and series_pixel_max is not None:
-                        # Use series range for both center and width ranges
-                        center_range = (series_pixel_min, series_pixel_max)
-                        width_range = (1.0, max(1.0, series_pixel_max - series_pixel_min))
-                    else:
-                        # Fallback to current slice range if series range not available
-                        center_range = (pixel_min, pixel_max)
-                        width_range = (1.0, max(1.0, pixel_max - pixel_min))
-            except Exception as e:
-                # If pixel value range calculation fails, use default ranges
-                error_type = type(e).__name__
-                print(f"Error calculating pixel value range for window/level controls ({error_type}): {e}")
-                # Continue without setting ranges - controls will use defaults
-            
-            # Update window/level controls unit label
-            # Use inferred rescale_type (already inferred above and stored in view_state_manager)
-            unit = rescale_type if (use_rescaled_values and rescale_type) else None
-            # For new series: set WL control values before set_ranges so that when ranges change
-            # the spinboxes already hold the correct values; otherwise Qt clamps previous series'
-            # values (e.g. PET 35121/63217) to the new range and emits valueChanged, which
-            # overwrites view state before we can set 30/100.
-            if update_controls and is_new_study_series and window_center is not None and window_width is not None:
-                self.window_level_controls.set_window_level(
-                    window_center, window_width, block_signals=True, unit=unit
-                )
-            if update_controls and center_range is not None and width_range is not None:
-                self.window_level_controls.set_ranges(center_range, width_range)
-            if update_controls:
-                self.window_level_controls.set_unit(unit)  # unit may be None to clear display
-            
-            # Update window/level controls with current values
-            # Validate window/level values are within current dataset's pixel range
-            # This ensures correct values when switching between different modalities
-            # For new series, we've already calculated correct defaults above, so skip validation
-            if not is_new_study_series and window_center is not None and window_width is not None and pixel_min is not None and pixel_max is not None:
-                # Get current pixel range to validate window/level values
-                series_pixel_min, series_pixel_max = self.view_state_manager.get_series_pixel_range()
-                
-                # Use series range if available, otherwise use current slice range
-                if series_pixel_min is not None and series_pixel_max is not None:
-                    valid_min = series_pixel_min
-                    valid_max = series_pixel_max
-                else:
-                    valid_min = pixel_min
-                    valid_max = pixel_max
-                
-                # Check if window/level values are within valid range
-                # If not, recalculate defaults (this handles cases where values are from a different dataset)
-                if (window_center < valid_min or window_center > valid_max or 
-                    window_width < 1.0 or window_width > (valid_max - valid_min)):
-                    # Values are outside valid range - recalculate defaults for same series
-                    if valid_min is not None and valid_max is not None:
-                        window_center = (valid_min + valid_max) / 2.0
-                        window_width = valid_max - valid_min
-                        if window_width <= 0:
-                            window_width = 1.0
-                        self.view_state_manager.current_window_center = window_center
-                        self.view_state_manager.current_window_width = window_width
-            
-            if is_new_study_series and window_center is not None and window_width is not None:
-                # New series - WL controls already updated above (before set_ranges) to avoid clamp/emit
-                pass
-            elif is_same_series and window_center is not None and window_width is not None:
-                # Same series - preserve existing window/level values (if valid)
-                # print(f"[DEBUG-PRESET-MATCH] Setting window/level for same series: wc={window_center:.2f}, ww={window_width:.2f}, block_signals=True")
-                if update_controls:
-                    self.window_level_controls.set_window_level(
-                        window_center, window_width, block_signals=True, unit=unit
-                    )
-            else:
-                # Only recalculate if values are truly missing (not for same series with valid values)
-                if not is_same_series or (window_center is None or window_width is None):
-                    # First time or no existing values - try to get from dataset or use defaults
-                    wc, ww, is_rescaled = self.dicom_processor.get_window_level_from_dataset(
-                        dataset,
-                        rescale_slope=rescale_slope,
-                        rescale_intercept=rescale_intercept
-                    )
-                    if wc is not None and ww is not None:
-                        wc, ww = apply_window_level_rescale_conversion(
-                            wc,
-                            ww,
-                            is_rescaled=is_rescaled,
-                            use_rescaled_values=use_rescaled_values,
-                            rescale_slope=rescale_slope,
-                            rescale_intercept=rescale_intercept,
-                            dicom_processor=self.dicom_processor,
-                        )
-                        # print(f"[DEBUG-PRESET-MATCH] Setting window/level from dataset: wc={wc:.2f}, ww={ww:.2f}, block_signals=True")
-                        if update_controls:
-                            self.window_level_controls.set_window_level(wc, ww, block_signals=True, unit=unit)
-                        self.view_state_manager.current_window_center = wc
-                        self.view_state_manager.current_window_width = ww
-                    elif pixel_min is not None and pixel_max is not None:
-                        # Use default window/level based on pixel range
-                        default_center = (pixel_min + pixel_max) / 2.0
-                        default_width = pixel_max - pixel_min
-                        if default_width <= 0:
-                            default_width = 1.0
-                        # print(f"[DEBUG-PRESET-MATCH] Setting window/level from pixel range: wc={default_center:.2f}, ww={default_width:.2f}, block_signals=True")
-                        if update_controls:
-                            self.window_level_controls.set_window_level(default_center, default_width, block_signals=True, unit=unit)
-                        self.view_state_manager.current_window_center = default_center
-                        self.view_state_manager.current_window_width = default_width
-                    self.view_state_manager.window_level_user_modified = False
-            
-            # Update overlay
-            parser = DICOMParser(dataset)
-            # Get total slice count for current series
-            total_slices = 0
-            if current_studies and current_study_uid and current_series_uid:
-                if (current_study_uid in current_studies and 
-                    current_series_uid in current_studies[current_study_uid]):
-                    total_slices = len(current_studies[current_study_uid][current_series_uid])
-            
-            # Calculate projection information if enabled
-            projection_start_slice = None
-            projection_end_slice = None
-            projection_total_thickness = None
-            
-            if self.projection_enabled and total_slices > 0:
-                # Calculate projection slice range using the same logic as _create_projection_image()
-                projection_start_slice = max(0, current_slice_index)
-                projection_end_slice = min(total_slices - 1, current_slice_index + self.projection_slice_count - 1)
-                
-                # Calculate total slice thickness by summing thickness from all slices in the range
-                if (current_study_uid in current_studies and 
-                    current_series_uid in current_studies[current_study_uid]):
-                    series_datasets = current_studies[current_study_uid][current_series_uid]
-                    
-                    total_thickness = 0.0
-                    thickness_count = 0
-                    for i in range(projection_start_slice, projection_end_slice + 1):
-                        if 0 <= i < len(series_datasets):
-                            # series_datasets is a list of datasets (tuples were unpacked during organization)
-                            slice_dataset = series_datasets[i]
-                            thickness = get_slice_thickness(slice_dataset)
-                            if thickness is not None:
-                                total_thickness += thickness
-                                thickness_count += 1
-                    
-                    # Only set total thickness if we found at least one valid thickness value
-                    if thickness_count > 0:
-                        projection_total_thickness = total_thickness
-            
-            self.overlay_manager.create_overlay_items(
-                self.image_viewer.scene,
-                parser,
-                total_slices=total_slices if total_slices > 0 else None,
-                projection_enabled=self.projection_enabled,
-                projection_start_slice=projection_start_slice,
-                projection_end_slice=projection_end_slice,
-                projection_total_thickness=projection_total_thickness,
-                projection_type=self.projection_type if self.projection_enabled else None,
-                multiframe_context=self.get_multiframe_overlay_context(
-                    dataset=dataset,
-                    study_uid=current_study_uid,
-                    series_uid=current_series_uid,
-                ),
+            window_center, window_width, use_rescaled_values = self._resolve_window_level_for_series_transition(
+                dataset=dataset,
+                current_studies=current_studies,
+                current_series_uid=current_series_uid,
+                new_series_uid=new_series_uid,
+                is_same_series=is_same_series,
+                is_new_study_series=is_new_study_series,
+                series_identifier=series_identifier,
+                rescale_slope=rescale_slope,
+                rescale_intercept=rescale_intercept,
             )
 
-            # Extract pixel spacing and set on measurement tool
-            pixel_spacing = get_pixel_spacing(dataset)
-            self.measurement_tool.set_pixel_spacing(pixel_spacing)
-            
-            # Set current slice context for ROI manager and measurements
-            study_uid = getattr(dataset, 'StudyInstanceUID', '')
-            series_uid = get_composite_series_key(dataset)
-            # Use current_slice_index as instance identifier (array position)
-            instance_identifier = current_slice_index
-            # Update ROI manager's current slice context
-            self.roi_manager.set_current_slice(study_uid, series_uid, instance_identifier)
-            self.measurement_tool.set_current_slice(study_uid, series_uid, instance_identifier)
-            if self.text_annotation_tool:
-                self.text_annotation_tool.set_current_slice(study_uid, series_uid, instance_identifier)
-            if self.arrow_annotation_tool:
-                self.arrow_annotation_tool.set_current_slice(study_uid, series_uid, instance_identifier)
-            
-            # Remove measurements from the current scene when switching series, but keep
-            # per-series storage so they reappear when navigating back.
-            if is_new_study_series:
-                if DEBUG_MEASUREMENT_SERIES:
-                    print(
-                        "[DEBUG-MEAS-SERIES] display_slice new series: clearing measurement/annotation scene items. "
-                        f"scene_id={id(self.image_viewer.scene)}, measurement_summary_before_clear="
-                        f"{self.measurement_tool.get_debug_summary(self.image_viewer.scene)}"
-                    )
-                self.measurement_tool.clear_measurements_from_other_slices(
-                    study_uid,
-                    series_uid,
-                    instance_identifier,
-                    self.image_viewer.scene,
-                )
-                if self.text_annotation_tool:
-                    self.text_annotation_tool.clear_annotations(self.image_viewer.scene)
-                if self.arrow_annotation_tool:
-                    self.arrow_annotation_tool.clear_arrows(self.image_viewer.scene)
-            elif DEBUG_MEASUREMENT_SERIES:
-                print(
-                    "[DEBUG-MEAS-SERIES] display_slice same series path: skipping clear_measurements. "
-                    f"measurement_summary={self.measurement_tool.get_debug_summary(self.image_viewer.scene)}"
-                )
-            
-            # Display ROIs for current slice
-            if self.display_rois_callback:
-                self.display_rois_callback(dataset)
-            else:
-                self.display_rois_for_slice(dataset)
-            
-            # Display measurements for current slice
-            if self.display_measurements_callback:
-                self.display_measurements_callback(dataset)
-            else:
-                self.display_measurements_for_slice(dataset)
-            
-            # Display text annotations for current slice
-            if self.text_annotation_tool:
-                self.display_text_annotations_for_slice(dataset)
-            
-            # Display arrow annotations for current slice
-            if self.arrow_annotation_tool:
-                self.display_arrow_annotations_for_slice(dataset)
-            
-            # Display Presentation State and Key Object annotations
-            if self.annotation_manager and self.dicom_organizer:
-                try:
-                    # Clear existing annotations first
-                    self.annotation_manager.clear_annotations(self.image_viewer.scene)
-                    
-                    # Get annotations for this image
-                    image_uid = getattr(dataset, 'SOPInstanceUID', 'unknown')
-                    annotations = self.annotation_manager.get_annotations_for_image(
-                        dataset, current_study_uid
-                    )
-                    
-                    # DEBUG: Print what we found
-                    # print(f"[ANNOTATIONS] Found {len(annotations)} annotation(s) for image {str(image_uid)[:30]}...")
-                    # if annotations:
-                    #     for i, ann in enumerate(annotations):
-                    #         print(f"  Annotation {i}: type={ann.get('type')}, coords={ann.get('coordinates')}, text={ann.get('text', '')[:50]}, units={ann.get('units', 'N/A')}")
-                    
-                    if annotations:
-                        # Get image dimensions for coordinate scaling
-                        # Try to get actual image dimensions from dataset
-                        image_width = 512  # Default
-                        image_height = 512  # Default
-                        
-                        if hasattr(dataset, 'Columns') and hasattr(dataset, 'Rows'):
-                            image_width = float(dataset.Columns)
-                            image_height = float(dataset.Rows)
-                        
-                        # print(f"[ANNOTATIONS] Creating items with image size: {image_width}x{image_height}")
-                        
-                        # Create annotation graphics items
-                        items = self.annotation_manager.create_presentation_state_items(
-                            self.image_viewer.scene,
-                            annotations,
-                            image_width,
-                            image_height
-                        )
-                        # print(f"[ANNOTATIONS] Created {len(items)} graphics item(s)")
-                except Exception as e:
-                    # Don't fail slice display if annotation display fails
-                    import traceback
-                    # print(f"[ANNOTATIONS] Error displaying annotations: {e}")
-                    # traceback.print_exc()
-                    pass
+            self._render_base_image_pipeline(
+                dataset=dataset,
+                current_studies=current_studies,
+                current_study_uid=current_study_uid,
+                current_series_uid=current_series_uid,
+                current_slice_index=current_slice_index,
+                window_center=window_center,
+                window_width=window_width,
+                use_rescaled_values=use_rescaled_values,
+                rescale_slope=rescale_slope,
+                rescale_intercept=rescale_intercept,
+                is_same_series=is_same_series,
+                is_new_study_series=is_new_study_series,
+                series_identifier=series_identifier,
+                preserve_view_override=preserve_view_override,
+            )
+
+            self._sync_controls_and_metadata(
+                dataset=dataset,
+                update_metadata=update_metadata,
+                update_controls=update_controls,
+                use_rescaled_values=use_rescaled_values,
+                is_new_study_series=is_new_study_series,
+                is_same_series=is_same_series,
+                window_center=window_center,
+                window_width=window_width,
+                rescale_type=rescale_type,
+                rescale_slope=rescale_slope,
+                rescale_intercept=rescale_intercept,
+            )
+            self._render_scene_overlays_annotations(
+                dataset=dataset,
+                current_studies=current_studies,
+                current_study_uid=current_study_uid,
+                current_series_uid=current_series_uid,
+                current_slice_index=current_slice_index,
+                is_new_study_series=is_new_study_series,
+            )
         
         except MemoryError as e:
             # Re-raise MemoryError with context for caller to handle

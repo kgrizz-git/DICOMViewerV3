@@ -1,0 +1,56 @@
+# DICOM Viewer V3 Requirements
+# 
+# This file lists all Python package dependencies required for the DICOM viewer application.
+# 
+# Installation: pip install -r requirements.txt
+#
+# Python version (especially Windows):
+# - Prefer 3.11 or 3.12 (same family as CI). Wheels exist for native deps (e.g. pyjpegls).
+# - 3.14+ may have no pyjpegls wheel on Windows yet; pip then builds from source and needs
+#   Microsoft C++ Build Tools (https://visualstudio.microsoft.com/visual-cpp-build-tools/).
+# - Parallels + UNC paths (\\Mac\Home\...) can confuse venv/pip; a local clone under C:\ is
+#   often more reliable if you see odd path or pip self-upgrade issues.
+#
+# Requirements:
+# - PySide6: Cross-platform GUI framework for the application interface
+# - pydicom: Library for reading, writing, and working with DICOM files
+# - numpy: Numerical computing library for image array operations
+# - Pillow: Image processing library for image format conversions
+# - matplotlib: Plotting library for histogram display
+# - openpyxl: Library for reading and writing Excel files (for tag export)
+
+PySide6>=6.6.0
+pydicom>=2.4.0
+numpy>=1.24.0
+Pillow>=10.0.0
+# Cine export (GIF / AVI / MPG): imageio + bundled FFmpeg via imageio-ffmpeg (LGPL/GPL components — see CHANGELOG [Unreleased] and README).
+imageio==2.37.3
+imageio-ffmpeg==0.6.0
+matplotlib>=3.8.0
+openpyxl>=3.1.0
+# Local encrypted study index (SQLCipher-compatible Python binding; wheels on Windows/macOS/Linux for supported Python versions)
+sqlcipher3>=0.5.0
+# Stores the SQLCipher passphrase in the OS credential store (Windows Credential Manager, macOS Keychain, etc.)
+keyring>=24.0.0
+SimpleITK>=2.3.0  # For 3D image resampling in image fusion (Phase 2)
+# Pinned: only 3.42.0 has been verified with ACR CT/MRI pylinac integration (see dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md).
+pylinac==3.42.0  # Automated phantom QA analysis (ACR CT + ACR MRI Large)
+scipy>=1.11.0  # pylinac numerical dependency
+scikit-image>=0.22.0  # pylinac image processing dependency
+pypdf>=4.0.0  # PDF merging for compare-mode combined PDF report
+
+# Optional dependencies for compressed DICOM support
+# These are recommended for decoding JPEG-compressed DICOM files (JPEG, JPEG-LS, JPEG 2000)
+# Required for lossyJPEG-YBR_FULL_422 and other compressed transfer syntaxes
+# Note: GDCM support may require additional system libraries and is not included here
+pylibjpeg>=1.4.0  # For JPEG 2000 and other compressed formats
+pylibjpeg-libjpeg>=1.3.0  # JPEG decoder plugin for pylibjpeg (required for JPEG Baseline/Extended)
+pylibjpeg-openjpeg>=1.3.0  # JPEG 2000 decoder plugin for pylibjpeg
+pylibjpeg-rle>=1.3.0  # RLE decoder plugin for pylibjpeg
+pyjpegls>=0.3.0  # For JPEG-LS compression
+
+# Testing (recommended for project venv; run: pip install -r requirements.txt)
+pytest>=7.0.0  # Test runner; supports tests/ and unittest-style tests
+# Minimum version addresses AdlLexer security issue in pygments<2.20.0 (transitive via pytest, rich).
+Pygments>=2.20.0
+

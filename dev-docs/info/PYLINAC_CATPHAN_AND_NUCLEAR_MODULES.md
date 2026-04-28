@@ -8,7 +8,7 @@
 - [Nuclear module](https://pylinac.readthedocs.io/en/latest/nuclear.html) (`pylinac.nuclear`)
 - [Quart DVT](https://pylinac.readthedocs.io/en/latest/quart.html) (`pylinac.quart`)
 
-**Version note:** This repository pins **`pylinac==3.42.0`** in `requirements.txt` (see [PYLINAC_INTEGRATION_OVERVIEW.md](PYLINAC_INTEGRATION_OVERVIEW.md)). Public ReadTheDocs pages may show a slightly newer release; confirm constructor and `analyze()` signatures against the installed package when implementing.
+**Version note:** This repository pins **`pylinac==3.43.2`** in `requirements.txt` (see [PYLINAC_INTEGRATION_OVERVIEW.md](PYLINAC_INTEGRATION_OVERVIEW.md)). Public ReadTheDocs pages may show a slightly newer release; confirm constructor and `analyze()` signatures against the installed package when implementing.
 
 ---
 

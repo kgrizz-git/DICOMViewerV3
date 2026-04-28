@@ -23,6 +23,8 @@ Requirements:
     - PIL/Pillow for image handling
 """
 
+import logging
+
 import numpy as np
 from typing import Optional, List, Tuple
 from PIL import Image
@@ -47,6 +49,9 @@ from core import dicom_pixel_array
 from core import dicom_window_level
 from core import dicom_projections
 from core import dicom_pixel_stats
+from utils.log_sanitizer import sanitized_format_exc
+
+_logger = logging.getLogger(__name__)
 
 
 class DICOMProcessor:
@@ -411,8 +416,7 @@ class DICOMProcessor:
                         is_color = True
                 except Exception as e:
                     print(f"[PROCESSOR] Error applying palette color lookup: {e}")
-                    import traceback
-                    traceback.print_exc()
+                    _logger.debug("%s", sanitized_format_exc())
                     # Fallback: treat as grayscale if palette lookup fails
                     pass
         
@@ -492,8 +496,7 @@ class DICOMProcessor:
                     return image
             except Exception as e:
                 print(f"[PROCESSOR] Error converting color image to PIL Image: {e}")
-                import traceback
-                traceback.print_exc()
+                _logger.debug("%s", sanitized_format_exc())
                 return None
         else:
             # Grayscale image processing (existing logic)
@@ -540,10 +543,9 @@ class DICOMProcessor:
                     return image
             except Exception as e:
                 # print(f"[PROCESSOR] Error converting to PIL Image: {e}")
-                import traceback
-                traceback.print_exc()
+                _logger.debug("%s", sanitized_format_exc())
                 return None
-    
+
     @staticmethod
     def average_intensity_projection(slices: List[Dataset]) -> Optional[np.ndarray]:
         """Create Average Intensity Projection from multiple slices. Delegates to core.dicom_projections."""

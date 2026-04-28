@@ -9,7 +9,12 @@ NUM/CODE/TEXT children into string columns for a ``QTableView``.
 **Inputs:** ``pydicom.dataset.Dataset`` (typically ``Modality`` **SR**, dose-related SOP class).
 
 **Outputs:** :class:`IrradiationEventExtraction` with rows, optional notes, and
-``truncated_subtree`` when flattening caps apply.
+``truncated_subtree`` when flattening caps apply. Table-oriented helpers
+:func:`ordered_irradiation_event_column_headers` and :func:`irradiation_event_column_is_empty_for_all_rows`
+support the SR browser dose-events grid (including hide-empty-column visibility). Per-event columns include **DAP** / **Dose (RP)**
+numeric values plus parallel **DAP units** / **Dose (RP) units** from
+``MeasurementUnitsCodeSequence`` when present; missing units on those NUMs may append soft
+warnings to ``notes`` (capped per document).
 
 **Requirements:** ``pydicom`` only. Concept identity matching uses :mod:`core.sr_concept_identity`
 (normalized designators, ``LongCodeValue`` fallback).
@@ -265,15 +270,15 @@ def _format_item_value(it: Dataset) -> str:
     return ""
 
 
-def _best_num_for_concept(
+def _best_num_item_for_concept(
     items: DescWalk,
     code: tuple[str, str],
     *,
     label: str,
     notes: list[str],
-) -> str:
-    """Shallowest-first NUM for a normalized concept; note when min-depth candidates disagree."""
-    matches: list[tuple[int, int, str]] = []
+) -> Dataset | None:
+    """Shallowest-first NUM *item* for a normalized concept; note when min-depth candidates disagree."""
+    matches: list[tuple[int, int, Dataset]] = []
     for walk_idx, (it, depth) in enumerate(items):
         if str(getattr(it, "ValueType", "") or "").strip().upper() != "NUM":
             continue
@@ -282,20 +287,83 @@ def _best_num_for_concept(
         val = _num_value_from_item(it)
         if not val:
             continue
-        matches.append((depth, walk_idx, val))
+        matches.append((depth, walk_idx, it))
     if not matches:
-        return ""
+        return None
     matches.sort(key=lambda t: (t[0], t[1]))
     min_depth = matches[0][0]
     at_min = [m for m in matches if m[0] == min_depth]
-    vals = {m[2] for m in at_min}
+    vals = {_num_value_from_item(m[2]) for m in at_min}
     if len(vals) > 1:
         joined = ", ".join(sorted(vals))
         notes.append(
             f"Ambiguous NUM for {label} ({code[0]}, {code[1]}): {joined}; "
-            f"using shallowest/earliest in walk ({matches[0][2]})."
+            f"using shallowest/earliest in walk ({_num_value_from_item(matches[0][2])})."
         )
     return matches[0][2]
+
+
+def _best_num_for_concept(
+    items: DescWalk,
+    code: tuple[str, str],
+    *,
+    label: str,
+    notes: list[str],
+) -> str:
+    """Shallowest-first NUM for a normalized concept; note when min-depth candidates disagree."""
+    it = _best_num_item_for_concept(items, code, label=label, notes=notes)
+    return _num_value_from_item(it) if it is not None else ""
+
+
+def _measurement_units_display_from_num_item(it: Dataset) -> str:
+    """
+    Join ``CodeMeaning`` (else ``CodeValue``) from each ``MeasuredValueSequence`` row’s
+    ``MeasurementUnitsCodeSequence``, mirroring multi-segment numeric joins.
+    """
+    if str(getattr(it, "ValueType", "") or "").strip().upper() != "NUM":
+        return ""
+    mseq = getattr(it, "MeasuredValueSequence", None)
+    if not mseq or len(cast(DicomSequence, mseq)) == 0:
+        return ""
+    parts: list[str] = []
+    for mv in cast(DicomSequence, mseq):
+        uc = getattr(mv, "MeasurementUnitsCodeSequence", None)
+        if uc and len(cast(DicomSequence, uc)) > 0:
+            u0 = cast(DicomSequence, uc)[0]
+            um = getattr(u0, "CodeMeaning", None) or getattr(u0, "CodeValue", None)
+            if um:
+                parts.append(str(um).strip())
+    if not parts:
+        return ""
+    if len(parts) == 1:
+        return parts[0]
+    return "; ".join(parts)
+
+
+_MISSING_UCUM_NOTE_KEYS: Final[tuple[tuple[str, str, str], ...]] = (
+    ("DAP", "DAP units", "122130"),
+    ("Dose (RP)", "Dose (RP) units", "113738"),
+)
+
+
+def _append_missing_measurement_units_notes(
+    cols: dict[str, str],
+    notes: list[str],
+    budget: list[int],
+) -> None:
+    """Soft warnings when DAP / Dose (RP) have a numeric value but no units on the winning NUM."""
+    for value_key, units_key, dcm_code in _MISSING_UCUM_NOTE_KEYS:
+        if budget[0] <= 0:
+            return
+        val = (cols.get(value_key) or "").strip()
+        units = (cols.get(units_key) or "").strip()
+        if not val or units:
+            continue
+        notes.append(
+            f"{value_key} (DCM {dcm_code}) has a numeric value but no MeasurementUnitsCodeSequence "
+            "on the selected NUM item."
+        )
+        budget[0] -= 1
 
 
 def _best_code_display_for_concept(items: DescWalk, code: tuple[str, str], *, label: str, notes: list[str]) -> str:
@@ -693,14 +761,47 @@ class IrradiationEventExtraction:
     truncated_subtree: bool = False
 
 
-def _build_event_columns(desc: FlattenedSubtree, notes: list[str]) -> dict[str, str]:
+def ordered_irradiation_event_column_headers(rows: Sequence[IrradiationEventRow]) -> list[str]:
+    """
+    Column titles for the dose-events table: union of keys across rows, preserving first-seen order.
+
+    The SR browser table and CSV/XLSX export use this ordering so columns stay aligned.
+    """
+    headers: list[str] = []
+    for r in rows:
+        for k in r.columns:
+            if k not in headers:
+                headers.append(k)
+    return headers
+
+
+def irradiation_event_column_is_empty_for_all_rows(rows: Sequence[IrradiationEventRow], header: str) -> bool:
+    """True when every row has a blank value for ``header`` after strip (missing key = blank)."""
+    return not any((r.columns.get(header, "") or "").strip() for r in rows)
+
+
+def _build_event_columns(
+    desc: FlattenedSubtree,
+    notes: list[str],
+    *,
+    missing_units_note_budget: list[int] | None = None,
+) -> dict[str, str]:
     """Ordered standard columns + sorted dynamic vendor/private columns."""
     items = desc.items
+    _dap_it = _best_num_item_for_concept(items, _COL_DAP, label="DAP (122130)", notes=notes)
+    _dap_val = _num_value_from_item(_dap_it) if _dap_it is not None else ""
+    _dap_u = _measurement_units_display_from_num_item(_dap_it) if _dap_it is not None else ""
+    _drp_it = _best_num_item_for_concept(items, _COL_DOSE_RP, label="Dose (RP) (113738)", notes=notes)
+    _drp_val = _num_value_from_item(_drp_it) if _drp_it is not None else ""
+    _drp_u = _measurement_units_display_from_num_item(_drp_it) if _drp_it is not None else ""
+
     fixed: list[tuple[str, str]] = [
         ("CTDIvol (mGy)", _num_value_by_concept(items, _COL_CTDI, notes)),
         ("DLP (mGy·cm)", _num_value_by_concept(items, _COL_DLP, notes)),
-        ("DAP", _num_value_by_concept(items, _COL_DAP, notes)),
-        ("Dose (RP)", _num_value_by_concept(items, _COL_DOSE_RP, notes)),
+        ("DAP", _dap_val),
+        ("DAP units", _dap_u),
+        ("Dose (RP)", _drp_val),
+        ("Dose (RP) units", _drp_u),
         ("kVp", _num_value_by_concept(items, _COL_KVP, notes)),
         ("Acquisition plane", _code_meaning_by_concept(items, _COL_ACQUISITION_PLANE, notes)),
         ("DateTime started", _datetime_started_display(items, notes)),
@@ -737,6 +838,8 @@ def _build_event_columns(desc: FlattenedSubtree, notes: list[str]) -> dict[str, 
     for title in sorted(dyn.keys()):
         if title not in cols:
             cols[title] = dyn[title]
+    if missing_units_note_budget is not None:
+        _append_missing_measurement_units_notes(cols, notes, missing_units_note_budget)
     return cols
 
 
@@ -759,6 +862,7 @@ def extract_irradiation_events(
     notes: list[str] = []
     rows: list[IrradiationEventRow] = []
     truncated_any = False
+    missing_units_budget = [10]
     if not is_radiation_dose_sr(ds):
         notes.append("Not a recognized radiation dose SR; per-event table may be empty.")
     root_seq = getattr(ds, "ContentSequence", None)
@@ -783,7 +887,9 @@ def extract_irradiation_events(
             row_notes: list[str] = []
             kind = f"{match[0]} ({match[1]})"
             cols: dict[str, str] = {"Event concept": kind}
-            cols.update(_build_event_columns(flat, row_notes))
+            cols.update(
+                _build_event_columns(flat, row_notes, missing_units_note_budget=missing_units_budget)
+            )
             path_label = " → ".join(str(i) for i in path)
             for msg in row_notes:
                 notes.append(f"Dose event path {path_label}: {msg}")

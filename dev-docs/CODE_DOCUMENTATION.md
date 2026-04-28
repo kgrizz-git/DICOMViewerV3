@@ -10,8 +10,10 @@ This file lists documentation that explains how the application works or serves 
 
 | Document | Description |
 |----------|-------------|
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Contributor workflows: Git hooks, CI, versioning, pylinac pin policy, license inventory. |
 | [README.md](../README.md) | Project overview, install, run, and pointers to in-app help and `user-docs/`. |
 | [USER_GUIDE.md](../user-docs/USER_GUIDE.md) | User guide hub (links to MPR, pylinac QA, fusion, etc.). |
+| [CONFIGURATION.md](../user-docs/CONFIGURATION.md) | User-facing summary of dialogs and JSON preference domains. |
 | [IMAGE_FUSION_TECHNICAL_DOCUMENTATION.md](../user-docs/IMAGE_FUSION_TECHNICAL_DOCUMENTATION.md) | Technical and user-facing documentation for the image fusion feature (PET/SPECT on CT/MR). |
 
 ### Developer and technical (dev-docs)
@@ -46,11 +48,17 @@ Text shown in the running application for **Quick Start Guide** and **About** is
 - **Loader / UI:** [src/gui/dialogs/quick_start_guide_dialog.py](../src/gui/dialogs/quick_start_guide_dialog.py) — reads the HTML file, applies theme placeholders, and displays it in a `QTextBrowser`.  
 - **Maintenance:** Edit the HTML when workflows or menu paths change; keep GitHub URLs in that file aligned with `main` branch paths under `user-docs/`.
 
+### Fusion Technical Documentation (in-app HTML)
+
+- **Menu:** Help → **Fusion Technical Documentation**  
+- **Content file:** [resources/help/fusion_technical_doc.html](../resources/help/fusion_technical_doc.html) — themed HTML shown in a dialog; keep in sync with **[IMAGE_FUSION_TECHNICAL_DOCUMENTATION.md](../user-docs/IMAGE_FUSION_TECHNICAL_DOCUMENTATION.md)** for overlapping facts.  
+- **Loader / UI:** [src/gui/dialogs/fusion_technical_doc_dialog.py](../src/gui/dialogs/fusion_technical_doc_dialog.py); entry from [src/gui/dialog_coordinator.py](../src/gui/dialog_coordinator.py) (`open_fusion_technical_doc`).
+
 ### User documentation (browser)
 
 - **Menu:** Help → Documentation (browser)…  
 - **Behavior:** Opens the user guide hub on GitHub via `QDesktopServices` from [src/gui/dialog_coordinator.py](../src/gui/dialog_coordinator.py) (`open_user_documentation_in_browser`).  
-- **Configurable URL:** Edit **`USER_DOCS_GITHUB_PREFIX`** in [src/utils/doc_urls.py](../src/utils/doc_urls.py) (forks / different branch). Quick Start HTML uses placeholders `{doc_*}` filled in [src/gui/dialogs/quick_start_guide_dialog.py](../src/gui/dialogs/quick_start_guide_dialog.py).
+- **Configurable URL:** Edit **`USER_DOCS_GITHUB_PREFIX`** in [src/utils/doc_urls.py](../src/utils/doc_urls.py) (forks / different branch). Quick Start HTML uses placeholders `{doc_*}` (including `{doc_CONFIGURATION}`) filled in [src/gui/dialogs/quick_start_guide_dialog.py](../src/gui/dialogs/quick_start_guide_dialog.py); keep placeholders in sync when adding new `user-docs/*.md` links.
 
 ### About dialog
 

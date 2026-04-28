@@ -1,5 +1,7 @@
 # Navigator Tooltips + Duplicate-Skip Toast Plan
 
+**Status:** **Shipped and archived** (see `CHANGELOG.md`: series navigator hover tooltips with privacy masking; duplicate-skip toast placement and opacity).
+
 **Created:** 2026-03-21  
 **Covers TO_DO items:**
 
@@ -185,4 +187,4 @@
 - `src/gui/main_window.py`
 - `src/core/file_series_loading_coordinator.py`
 
-(Plan-only change in this task; no source implementation edits yet.)
+Implementation completed in the files above; this document is kept for design history.

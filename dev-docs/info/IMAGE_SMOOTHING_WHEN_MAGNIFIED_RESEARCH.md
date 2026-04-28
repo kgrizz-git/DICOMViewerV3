@@ -152,7 +152,7 @@ The approach recommended in this document has been implemented. Implementation c
 - **Magnifier**: Uses the same setting when scaling the extracted region (smooth vs fast).
 - **Tests and docs**: Config tests and documentation updates.
 
-See the implementation plan: `dev-docs/plans/IMAGE_SMOOTHING_IMPLEMENTATION_PLAN.md`.
+See the implementation plan: `dev-docs/plans/completed/IMAGE_SMOOTHING_IMPLEMENTATION_PLAN.md`.
 
 ---
 

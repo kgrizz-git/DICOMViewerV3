@@ -22,7 +22,7 @@
 
 | Milestone | Scope | Out of scope (later) |
 |-----------|--------|----------------------|
-| **MVP (ship first)** | **Encrypted** SQLite (mandatory—e.g. SQLCipher); schema; background worker; index-in-place only; header-level read (pydicom `stop_before_pixels=True` or equivalent); simple search dialog with facets (patient, modality, date range, accession, study description); setting: auto-add on open; manual “index this folder”; **user-configurable DB file path** (persisted in app config, sensible default); key/passphrase handling per R1 | Managed copy mode, FTS tuning, folder watchers, cloud sync |
+| **MVP (ship first)** | **Encrypted** SQLite (mandatory—e.g. SQLCipher); schema; background worker; index-in-place only; header-level read (pydicom `stop_before_pixels=True` or equivalent); simple search dialog with facets (patient, modality, date range, accession, study description); setting: auto-add on open; manual “index this folder”; **user-configurable DB file path** (persisted in app config, sensible default); key/passphrase handling per R1; **FTS5 quick search** (v0.3.0) per [FTS5 plan](#fts5-local-study-index-search-detailed-plan) | Managed copy mode, advanced FTS (BM25, path toggle), folder watchers, cloud sync |
 | **M2** | Managed copy storage policy + UI; conflict rules; disk quota hints | PACS network |
 | **M3** | PACS adapter behind same port (separate plan) | — |
 
@@ -114,7 +114,7 @@ All menu/drag-drop/recent opens flow through **`FileSeriesLoadingCoordinator.ope
 
 ## Deferred follow-ups
 
-- **FTS5** (full-text on description fields): **Deferred** past MVP — see [TO_DO.md § Features (Near-Term)](../TO_DO.md).
+- **FTS5** (full-text on description and related text fields): **Shipped** in app **v0.3.0** (was deferred past the original MVP ship order). **Spec / checklist:** [FTS5 — local study index search (detailed plan)](#fts5-local-study-index-search-detailed-plan); tracking closed in [TO_DO.md](../TO_DO.md).
 
 ## Grouped study query and index browser (requirements sketch) — 2026-04-13
 
@@ -174,7 +174,7 @@ Flat `LIMIT` is insufficient for “whole database” browse. Pick one (planner 
 - Persist **logical column order** (and optional widths) in config JSON: store an ordered list of **stable column ids**, not visual indices alone — on restore, call `moveSection` / `swapSections` to match saved **logicalIndex** order.
 - On schema changes, merge unknown columns with defaults.
 
-**Gate:** **SD6 signed off (2026-04-13):** checklist below (**SD7**) is implementation-ready. **FTS** remains **deferred** per [Deferred follow-ups](#deferred-follow-ups).
+**Gate:** **SD6 signed off (2026-04-13):** checklist below (**SD7**) is implementation-ready. **FTS5** follow-up work is **shipped** (see [Deferred follow-ups](#deferred-follow-ups) and [FTS5 — local study index search (detailed plan)](#fts5-local-study-index-search-detailed-plan)).
 
 ## SD7 — Signed-off implementation checklist (Stream H, 2026-04-13)
 
@@ -276,6 +276,183 @@ Verification gate (definition of done):
 
 - **Tools menu label:** keep **“Study index search…”** vs shorten to **“Study index…”** — defer to **ux** or user preference.
 - **Alternate DB file from File menu:** not in SD7 scope; remains documented limitation (Settings path + keyring) unless a follow-up adds “Browse for index file…”.
+
+<a id="fts5-local-study-index-search-detailed-plan"></a>
+
+## FTS5: local study index search (detailed plan)
+
+**Purpose:** Add SQLite [FTS5](https://www.sqlite.org/fts5.html) so the study index browser can (1) use **one** primary text box to find studies whose indexed metadata matches **any** of several text fields, while (2) keeping today’s **per-field filters** (patient name, patient ID, modality, accession, study description, study date range) for precise narrowing — combined with **AND** semantics between the global box and each active field filter.
+
+**Linked from:** [TO_DO.md § Features (Near-Term) — P0 FTS](../TO_DO.md).
+
+<a id="fts5-progress-and-todo-closeout"></a>
+
+### Progress tracking and closing the TO_DO item
+
+This section is **part of the definition of done** for the P0 FTS work tracked in [TO_DO.md](../TO_DO.md).
+
+1. **Check off plan boxes as work completes**  
+   In the [Task checklist](#task-checklist-implementation-order) below, turn **`- [ ]`** into **`- [x]`** for **F1–F6** only when that item is **fully** implemented, reviewed, and verified (not for partial or “good enough” progress). Prefer updating the checkboxes in the **same commit** as the completing change, or in the merge commit that lands the slice—avoid leaving the plan out of sync with `main`/`develop`.
+
+2. **Verification gate before final close-out**  
+   Do not treat the feature as finished until the **[Verification gate](#task-checklist-implementation-order)** at the end of the checklist is satisfied (`pytest` green per project norms; manual smoke for global-only, filter-only, combined, and **Load more** with FTS).
+
+3. **Update TO_DO.md when everything is done**  
+   After **all** of **F1–F6** are **`[x]`** in this file **and** the verification gate is met, edit **`dev-docs/TO_DO.md`**: change the P0 FTS bullet from **`- [ ]`** to **`- [x]`** (and optionally add a one-line note with release version or merge date if helpful—keep it short). That TO_DO line is the product-facing tracker; the plan file is the engineering checklist.
+
+### Product goals and UX
+
+1. **Global search box (new)**  
+   - Single line edit, placed **above** the existing “Filters” group (or as the first row inside it) with a clear label, e.g. **“Search all text”** or **“Quick search”**.  
+   - Placeholder text should set expectations, e.g. *“Words match patient, IDs, accession, descriptions, modality, series…”* (exact copy via **ux**).  
+   - **Semantics (recommended default):** treat the input as **FTS5 prefix/token search** across a **document** built from multiple columns (see [Indexed text surface](#indexed-text-surface)). Consecutive tokens are **AND**ed (each token must appear somewhere in the combined document unless advanced syntax is explicitly supported later).  
+   - **Empty** global query: **no** FTS predicate — behavior matches **current** browse/search (filters and pagination only).
+
+2. **Per-field filters (existing)**  
+   - Keep the current `QLineEdit` / date controls in `StudyIndexSearchDialog` (`patient_name_contains`, `patient_id_contains`, `modality`, `accession_contains`, `study_description_contains`, `study_date_from` / `study_date_to`) as today.  
+   - They continue to use the **same** SQL semantics as now (**LIKE** substrings with escape, date bounds on `study_date`) via `_search_filter_clauses` in `StudyIndexStore` — **unless** a later sub-phase replaces individual text fields with FTS column filters for consistency (optional; not required for the first ship).
+
+3. **Combining global + field filters**  
+   - **AND** only: a row (or grouped study) is shown only if it satisfies **both** the FTS global match (when non-empty) **and** every active legacy filter.  
+   - Document in user-facing help that the global box is “broad” and field filters “narrow.”
+
+4. **Grouped browse unchanged in shape**  
+   - Results remain **one row per** `(study_uid, study_root_path)` with the same aggregates as `search_grouped_studies` today; FTS only changes **which** instance rows participate in the `GROUP BY` (see [Query integration](#query-integration-with-search_grouped_studies)).
+
+<a id="indexed-text-surface"></a>
+
+### Indexed text surface
+
+**Today** (`study_index_entry`, `metadata_extract.dataset_to_index_row`): `patient_name`, `patient_id`, `accession_number`, `study_date`, `study_description`, `modality`, UIDs and paths as stored.
+
+**Gap for “study/series description” in TO_DO:** the flat row does **not** yet include **series** description. **Planner/coder decision (recommended):** add a nullable **`series_description`** column (and indexer mapping from `SeriesDescription`) so series-level phrases are first-class in the index and in FTS. Optionally add **`series_number`** or **`body_part_examined`** later — out of scope unless product asks.
+
+**Global “search anywhere” document (recommended):** one FTS **virtual column** (or a single real column mirrored into FTS) that concatenates **normalized** text from, at minimum:
+
+| Source column | Notes |
+|---------------|--------|
+| `patient_name` | PN decoding already handled in indexer |
+| `patient_id` | |
+| `accession_number` | |
+| `study_description` | |
+| `series_description` | **new** |
+| `modality` | short token; still useful for “MR” style queries |
+| `study_uid`, `series_uid`, `sop_instance_uid` | optional; helps power-user UID fragment search |
+
+Use a **stable, rare delimiter** between parts (e.g. a space or `|` + space) so token boundaries stay sensible. **Do not** inject user-controlled delimiter sequences from data without normalizing.
+
+**Path fields (`file_path`, `study_root_path`):** including them improves “find folder” workflows but can dominate token counts; **recommendation:** omit from the default global document for v1, or gate behind a **“Include paths”** checkbox in a follow-up — planner signs off.
+
+### Storage design (SQLCipher + FTS5)
+
+**Requirement:** Ship FTS on the **same** encrypted DB as today (`sqlcipher3`); FTS5 is part of standard SQLite builds used by SQLCipher — **verify** in CI and packaged app that `FTS5` is available (`sqlite_compileoption_used('ENABLE_FTS5')` or a trivial `CREATE VIRTUAL TABLE … fts5` smoke test).
+
+**Recommended pattern: [external content](https://www.sqlite.org/fts5.html#external_content_and_contentless_tables) FTS5 table**
+
+- Content table remains **`study_index_entry`** (source of truth for typed columns and `GROUP BY`).  
+- Add e.g. **`study_index_entry_fts`** as `CREATE VIRTUAL TABLE study_index_entry_fts USING fts5( … , content='study_index_entry', content_rowid='id')`.  
+- Columns in the FTS table: at least the **`document`** column (all-in-one text) plus **UNINDEXED** copies of `id` if useful for debugging; simplest is one indexed `doc` column only + `content_rowid='id'`.
+
+**Synchronization**
+
+- **Triggers** on `study_index_entry`: `AFTER INSERT`, `AFTER UPDATE`, `AFTER DELETE` → `INSERT INTO study_index_entry_fts(rowid, doc) …` / `DELETE` / `UPDATE` per [FTS5 external content docs](https://www.sqlite.org/fts5.html#external_content_and_contentless_tables).  
+- **Migration:** for existing DBs, after creating the FTS table and triggers, run a **one-time** `INSERT INTO study_index_entry_fts(rowid, doc) SELECT id, <computed doc> FROM study_index_entry;` (or rebuild) inside the same migration transaction as `PRAGMA user_version` bump.
+
+**Schema version**
+
+- Bump **`StudyIndexStore.SCHEMA_VERSION`** (new migration block in `init_schema`): add `series_description` column if missing; create FTS table + triggers; backfill.
+
+**Rebuild / repair**
+
+- Expose a **developer or advanced** action (optional for v1): “Rebuild full-text index” = `INSERT INTO study_index_entry_fts(study_index_entry_fts) VALUES('rebuild')` or drop/recreate + backfill — document in `AGENTS.md` / user docs if user-visible.
+
+<a id="query-integration-with-search_grouped_studies"></a>
+
+### Query integration with `search_grouped_studies`
+
+**Goal:** preserve the existing grouped `SELECT` shape while restricting to rows that match FTS when the global query is non-empty.
+
+**Pattern (conceptual):**
+
+```sql
+SELECT …aggregates…
+FROM study_index_entry AS e
+WHERE <existing _search_filter_clauses predicates on e>
+  AND (
+    :global_fts IS NULL OR :global_fts = ''
+    OR e.id IN (
+      SELECT rowid FROM study_index_entry_fts WHERE study_index_entry_fts MATCH ?
+    )
+  )
+GROUP BY e.study_uid, e.study_root_path
+ORDER BY …
+LIMIT ? OFFSET ?;
+```
+
+- **Parameterization:** bind the user’s global query as a single parameter where SQLite allows `MATCH ?` on the FTS table (confirm on the project’s SQLite/SQLCipher version; if not, use validated/sanitized literal with **strict** escaping rules — see [Safety and FTS query syntax](#safety-and-fts-query-syntax)).  
+- **Empty global:** omit the `IN (SELECT rowid …)` clause entirely (no FTS scan).
+
+**Alternative:** `EXISTS (SELECT 1 FROM study_index_entry_fts f WHERE f.rowid = e.id AND f MATCH ?)` — equivalent; pick one style for readability.
+
+### Per-field “as done now” vs FTS column match (optional later)
+
+- **Phase FTS-A (recommended first ship):** global box → FTS on **`doc`** only; field filters stay **LIKE** on `study_index_entry` columns (current behavior).  
+- **Phase FTS-B (optional):** allow power users or future UI to target a single column via FTS `column : query` syntax for specific fields — only if product needs stricter token semantics than `LIKE`.
+
+<a id="safety-and-fts-query-syntax"></a>
+
+### Safety and FTS query syntax
+
+- FTS5 **`MATCH`** uses a **query syntax** (`AND` / `OR` / `"phrase"` / `*` prefix). Malformed queries can error at runtime.  
+- **Mitigation:** catch `sqlite3.OperationalError` around FTS queries and show a friendly message (“Invalid search syntax”) without crashing.  
+- **Document** supported shortcuts for users who paste special characters (quotes, `*`).  
+- Optionally implement a **“Simple mode”** preprocessor: strip or escape characters that break the parser before `MATCH`, while preserving alphanumeric tokens — **ux + security** review (denial-of-service via huge query strings: cap length, e.g. 256 chars).
+
+### Privacy and encryption
+
+- **At rest:** FTS segments live inside the **encrypted** DB file — same threat model as cleartext columns in the main table (see [Locked product decisions](#locked-product-decisions-2026-04-13)).  
+- **On screen:** no change to **`privacy_mode`** masking in `LocalStudyIndexService.search` / `search_grouped_studies`; global search must not display hidden PHI in new UI elements.
+
+### API / port layer
+
+- Extend **`StudyIndexStore._search_filter_clauses`** (or a parallel helper) to accept an optional **`global_fts_query: str`**, returning extra `AND` / `EXISTS` fragments and parameters.  
+- Extend **`LocalStudyIndexService.search`** and **`search_grouped_studies`** and **`StudyIndexPort`** with the same optional parameter name for consistency.  
+- **PACS adapter** (future): may implement global query as a no-op or map to C-FIND description fields — document in port docstrings.
+
+### UI implementation notes (`study_index_search_dialog.py`)
+
+- New **`QLineEdit`** + label; wire into `_service_query_kwargs` (add key) and `_on_clear_filters_clicked` (clear the field).  
+- **Search** / **Load more:** pass the global string through; **Load more** must repeat the **same** global + filter snapshot as the first page (store last-used kwargs on the dialog instance — already implied by reading widgets each time).  
+- **Hint label:** one line explaining AND of quick search + filters.
+
+### Testing (`tests/`)
+
+- **importorskip** `sqlcipher3` as existing study index tests.  
+- **Migration test:** v0 DB file → open with new code → FTS table exists and `MATCH` returns expected rowids.  
+- **Functional:** fixtures with tokens present only in `series_description` vs only in `patient_name` — global box finds both; adding a conflicting field filter excludes rows.  
+- **Grouped:** two instances, same study/folder, match on different instance rows → **one** grouped row, correct counts.  
+- **Error path:** invalid `MATCH` syntax → user-visible error, no traceback to console in release builds.
+
+<a id="task-checklist-implementation-order"></a>
+
+### Task checklist (implementation order)
+
+- [x] **F1 — Schema:** Add `series_description` to `study_index_entry`; migration from `SCHEMA_VERSION` N → N+1; update `dataset_to_index_row` and `upsert_rows` column lists.  
+- [x] **F2 — FTS objects:** `CREATE VIRTUAL TABLE … fts5` with `content=` + `content_rowid=`; sync triggers; backfill job in migration.  
+- [x] **F3 — Store:** `global_fts_query` on `search` / `search_grouped_studies`; `_search_filter_clauses` composition + tests in `tests/test_study_index_store.py` (or sibling).  
+- [x] **F4 — Service + port:** pass-through + docstrings.  
+- [x] **F5 — UI:** global line edit, clear, tooltips, error handling.  
+- [x] **F6 — Docs:** `CHANGELOG.md`, user-facing blurb for index search, `AGENTS.md` pointer if module layout shifts.
+
+**Verification gate:** `python -m pytest tests/ -v` green from activated `.venv`; manual smoke: global-only, filter-only, combined, Load more with FTS active. **Met for v0.3.0:** full `pytest tests/` (555 passed, 2026-04-20); manual smoke left to maintainer before release if desired. **TO_DO** P0 line checked off per [Progress tracking and closing the TO_DO item](#fts5-progress-and-todo-closeout).
+
+### Open questions (planner / product)
+
+- **Tokenizer:** default FTS5 tokenizer vs `unicode61` / `porter` — affects international text and medical abbreviations; spike on sample data.  
+- **Ranking:** v1 can keep **date/name `ORDER BY`** only; optional **BM25** (`fts5_bm25` / `bm25()`) as FTS-B for “best match first.”  
+- **Include UIDs / paths** in `doc` column for v1 or defer.
+
+---
 
 ## Relation to P2 PACS
 

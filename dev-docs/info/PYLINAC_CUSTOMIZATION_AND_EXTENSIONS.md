@@ -2,9 +2,9 @@
 
 **Purpose:** Single place to record **how DICOM Viewer V3** adapts **pylinac**—without forking upstream—so physicists and developers can see what is stock vs viewer-assisted. Update this file when adding knobs, subclasses, or workarounds.
 
-**Related:** [PYLINAC_INTEGRATION_OVERVIEW.md](PYLINAC_INTEGRATION_OVERVIEW.md) (product scope), [PYLINAC_FLEXIBILITY_AND_WORKAROUNDS.md](PYLINAC_FLEXIBILITY_AND_WORKAROUNDS.md) (gates & workarounds), [PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md](PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md) (MRI LC algorithm & PDF overlays, **pylinac 3.42.0**).
+**Related:** [PYLINAC_INTEGRATION_OVERVIEW.md](PYLINAC_INTEGRATION_OVERVIEW.md) (product scope), [PYLINAC_FLEXIBILITY_AND_WORKAROUNDS.md](PYLINAC_FLEXIBILITY_AND_WORKAROUNDS.md) (gates & workarounds), [PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md](PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md) (MRI LC algorithm & PDF overlays, **pylinac 3.43.2**).
 
-**Upstream pin:** `requirements.txt` uses **`pylinac==3.42.0`** (see **Verified pylinac package version** in the integration overview).
+**Upstream pin:** `requirements.txt` uses **`pylinac==3.43.2`** (see **Verified pylinac package version** in the integration overview).
 
 ---
 
@@ -39,7 +39,7 @@ Every run is therefore **explicit** in **`QAResult.pylinac_analysis_profile`**, 
 
 | Idea | Notes |
 |------|--------|
-| **MRI / CT MTF rMTF percentile grid** | **Console warnings:** `pylinac.core.mtf.MTF.relative_resolution(x)` warns when the requested **rMTF %** (`x`, 0–100) needs **extrapolation** past the finest sampled line-pair/mm region (`mtf > max(self.spacings)` after interpolation). **Not a fallback chain:** upstream does **not** try 10% then 20%. **ACR MRI** (`ACRMRILarge`) builds `row_mtf_lp_mm` / `col_mtf_lp_mm` by calling `relative_resolution(p)` for **`p in range(10, 91, 10)`** inside `_generate_results_data` (same 10% step grid is used for **CatPhan** CTP528 `mtf_lp_mm` in `ct.py`). The **`analyze()`** API in **pylinac 3.42.0** does **not** expose this grid; only the per-call argument to `relative_resolution` is configurable if we **subclass** or **reimplement** result assembly, or if **upstream** adds parameters. Optional viewer work: document-only, filter warnings, or wrap result generation with a smaller percentile set to avoid extrapolation noise. |
+| **MRI / CT MTF rMTF percentile grid** | **Console warnings:** `pylinac.core.mtf.MTF.relative_resolution(x)` warns when the requested **rMTF %** (`x`, 0–100) needs **extrapolation** past the finest sampled line-pair/mm region (`mtf > max(self.spacings)` after interpolation). **Not a fallback chain:** upstream does **not** try 10% then 20%. **ACR MRI** (`ACRMRILarge`) builds `row_mtf_lp_mm` / `col_mtf_lp_mm` by calling `relative_resolution(p)` for **`p in range(10, 91, 10)`** inside `_generate_results_data` (same 10% step grid is used for **CatPhan** CTP528 `mtf_lp_mm` in `ct.py`). The **`analyze()`** API in **pylinac 3.43.2** does **not** expose this grid; only the per-call argument to `relative_resolution` is configurable if we **subclass** or **reimplement** result assembly, or if **upstream** adds parameters. Optional viewer work: document-only, filter warnings, or wrap result generation with a smaller percentile set to avoid extrapolation noise. |
 | **CT low-contrast** | Different module (`ACRCT`); separate UX if we expose more than today. |
 | **Dedicated `Pylinac Configuration...` dialog/menu item** | Consider once more persisted pylinac/site-level defaults accumulate across MRI, CT, or future analyzers. |
 | **Subclass for other protected hooks** | Prefer upstream PR or narrow override; document here if added. |
@@ -50,7 +50,7 @@ Every run is therefore **explicit** in **`QAResult.pylinac_analysis_profile`**, 
 
 | Date (approx.) | Change |
 |----------------|--------|
-| 2026-04 | **Candidates:** Documented upstream **MTF `relative_resolution` extrapolation warnings** and the fixed **10–90% rMTF grid** used for ACR MRI / CatPhan CTP528 results (`analyze()` does not expose it in pylinac 3.42.0). |
+| 2026-04 | **Candidates:** Documented upstream **MTF `relative_resolution` extrapolation warnings** and the fixed **10–90% rMTF grid** used for ACR MRI / CatPhan CTP528 results (`analyze()` does not expose it in pylinac 3.43.2). |
 | 2026-04 | Added MRI **combined PDF** for compare mode: viewer-authored summary page + per-run pylinac PDFs merged via `pypdf`; full interpretation notes (unconstrained). `combined_pdf_path` added to schema 1.2 JSON. |
 | 2026-04 | Added MRI **compare mode** (up to 3 low-contrast runs with multiplier combos) and always-on **PDF interpretation notes** (MTF, LC scoring, circle colors, pylinac doc links). Schema bumped to 1.2 for compare exports. |
 | 2026-04 | Added persisted MRI **`low_contrast_method`** and **`low_contrast_visibility_sanity_multiplier`** alongside the visibility threshold; all are passed per-run through `QARequest` / `analyze()` and recorded in reproducibility metadata. |

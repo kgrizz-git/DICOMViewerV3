@@ -1,5 +1,7 @@
 # Swap in All Layouts + 2×2 Window-Assignment Thumbnail – Implementation Plan
 
+**Status:** **Shipped and archived** (`MultiWindowLayout.swap_views` in all layouts; window-slot map widget + popup; see `CHANGELOG.md`).
+
 This plan covers two TO_DO items:
 
 1. **Swap in all layouts with focus unchanged** – Make swap available in 1x1, 1x2, and 2x1 (not only 2x2), and ensure focus does not follow the swapped view; panels (ROI list/statistics, frame slider, tag browser) stay tied to the focused window and may need updates.
@@ -7,7 +9,7 @@ This plan covers two TO_DO items:
 
 **References:**
 - TO_DO: `dev-docs/TO_DO.md` (lines 21–22)
-- Existing plan: `dev-docs/plans/VIEW_SLOT_LAYOUT_AND_SWAP_PLAN.md`
+- Existing plan: `dev-docs/plans/completed/VIEW_SLOT_LAYOUT_AND_SWAP_PLAN.md`
 - Layout/slot state: `src/gui/multi_window_layout.py` (`slot_to_view`, `swap_views`, `_arrange_subwindows`)
 - Swap handler: `src/main.py` (`_on_swap_view_requested` – currently no-ops when not 2x2)
 - Focus-driven panels: `src/core/subwindow_lifecycle_controller.py` (`update_right_panel_for_focused_subwindow`, `update_left_panel_for_focused_subwindow`)
@@ -45,7 +47,7 @@ This plan covers two TO_DO items:
 - [x] **A.3.2** In `MultiWindowLayout.swap_views`: after updating `slot_to_view` and (if 2x2) calling `_arrange_subwindows("2x2")`, add: if `self.current_layout == "1x2"` or `self.current_layout == "2x1"`, call `self._arrange_subwindows(self.current_layout)` so the two visible cells reflect the new slot-to-view mapping. Leave 1x1 as-is (no re-arrange).
 - [x] **A.3.3** In `main.py`, change `_on_swap_view_requested` so it **does not** return early when layout is not 2x2. Always call `multi_window_layout.swap_views(source_index, other_index)` when the sender is an ImageViewer with a valid `subwindow_index` (and other_index is valid). Optionally show a short status message when not in 2x2, e.g. “Slot order updated; switch to 2x2 to see positions,” to avoid confusion.
 - [x] **A.3.4** **Audit “focus vs slot” usage:** Search for any code that uses “first visible” container, “slot 0,” or layout position to decide which subwindow’s data to show (ROI list, ROI statistics, slice navigator, metadata/tag panel, cine/frame slider). Ensure they all use `get_focused_subwindow()` or `focused_subwindow_index` (or equivalent from lifecycle controller). Document any findings and fix any misuse so that after a swap in 1x2/2x1 the panels still show the focused view’s data. **Done:** Audit completed; see **Appendix: Focus vs Slot Audit** below. No misuse found; no code changes required for the audit.
-- [ ] **A.3.5** Manual testing: (1) In 2x2, swap two views – positions and data unchanged for focus. (2) In 1x2, focus one pane, open Swap from the other pane’s context menu and swap – slot_to_view updates, layout re-arranges, focus unchanged, ROI/slider/metadata still for the originally focused pane. (3) Same in 2x1. (4) In 1x1, perform a swap (e.g. swap current view with another); then switch to 2x2 and confirm the two views have swapped positions.
+- [x] **A.3.5** Manual testing: (1) In 2x2, swap two views – positions and data unchanged for focus. (2) In 1x2, focus one pane, open Swap from the other pane’s context menu and swap – slot_to_view updates, layout re-arranges, focus unchanged, ROI/slider/metadata still for the originally focused pane. (3) Same in 2x1. (4) In 1x1, perform a swap (e.g. swap current view with another); then switch to 2x2 and confirm the two views have swapped positions.
 
 ### A.4 Possible Difficulties and Error-Prone Areas
 
@@ -114,21 +116,21 @@ Two placement options from TO_DO:
 
 ### B.5 Implementation Tasks (Option 1)
 
-- [ ] **B.5.1** Back up `src/gui/main_window.py` and any new files.
-- [ ] **B.5.2** Create `WindowSlotMapWidget` (or similar) in `src/gui/` (new file). It should:
+- [x] **B.5.1** Back up `src/gui/main_window.py` and any new files.
+- [x] **B.5.2** Create `WindowSlotMapWidget` (or similar) in `src/gui/` (new file). It should:
   - Take a callback `get_slot_to_view() -> List[int]`, optionally `get_focused_view_index() -> int`, and `get_layout_mode() -> str` (and optionally `get_focused_slot() -> int` for 1x2/2x1).
   - Draw a 2×2 grid with labels (e.g. “1:A”, “2:B”, … meaning Window 1 shows View A). Highlight the cell for the focused view if desired.
   - **Displayed-slot overlay:** When layout is 1x1, 1x2, or 2x1, draw an overlay (e.g. border, tint, or check) on the cell(s) that are currently displayed (1x1: one cell; 1x2: one row; 2x1: one column). Omit overlay in 2x2.
   - Expose a method `refresh()` and connect it to layout/slot changes (see B.5.4).
-- [ ] **B.5.3** In `MainWindow.set_series_navigator`: instead of `main_layout.addWidget(navigator_widget)`, create a container widget with an `QHBoxLayout`, add `navigator_widget` with stretch 1, add a thin vertical separator (e.g. `QFrame` with `StyledPanel` or `VLine`), add the new `WindowSlotMapWidget` with fixed maximum width. Add the container to the main layout. Store a reference to the slot map widget so it can be passed the callback and updated. When the navigator is toggled visible/hidden, show/hide the same container so the thumbnail is shown/hidden with the navigator (or define different behavior and document it).
-- [ ] **B.5.4** In `main.py` (or wherever the main window and layout are wired): pass `multi_window_layout.get_slot_to_view` (or a wrapper) and `get_focused_subwindow_index` to the slot map widget; connect `multi_window_layout.layout_changed` and a new signal/callback from `swap_views` (e.g. `slot_to_view_changed`) to the widget’s `refresh()`. If adding a signal from `MultiWindowLayout` for “slot_to_view changed,” add it and emit it at the end of `swap_views` and when restoring from config.
-- [ ] **B.5.5** Theming: ensure the small 2×2 widget respects theme (background, text color) so it doesn’t look out of place in light/dark mode.
-- [ ] **B.5.6** Manual testing: toggle navigator, swap in 2x2 and in 1x2, change layout; confirm the thumbnail always shows the current slot_to_view, (if implemented) focused highlight, and displayed-slot overlay (1x1 = one cell, 1x2 = one row, 2x1 = one column, 2x2 = no overlay).
+- [x] **B.5.3** In `MainWindow.set_series_navigator`: instead of `main_layout.addWidget(navigator_widget)`, create a container widget with an `QHBoxLayout`, add `navigator_widget` with stretch 1, add a thin vertical separator (e.g. `QFrame` with `StyledPanel` or `VLine`), add the new `WindowSlotMapWidget` with fixed maximum width. Add the container to the main layout. Store a reference to the slot map widget so it can be passed the callback and updated. When the navigator is toggled visible/hidden, show/hide the same container so the thumbnail is shown/hidden with the navigator (or define different behavior and document it).
+- [x] **B.5.4** In `main.py` (or wherever the main window and layout are wired): pass `multi_window_layout.get_slot_to_view` (or a wrapper) and `get_focused_subwindow_index` to the slot map widget; connect `multi_window_layout.layout_changed` and a new signal/callback from `swap_views` (e.g. `slot_to_view_changed`) to the widget’s `refresh()`. If adding a signal from `MultiWindowLayout` for “slot_to_view changed,” add it and emit it at the end of `swap_views` and when restoring from config.
+- [x] **B.5.5** Theming: ensure the small 2×2 widget respects theme (background, text color) so it doesn’t look out of place in light/dark mode.
+- [x] **B.5.6** Manual testing: toggle navigator, swap in 2x2 and in 1x2, change layout; confirm the thumbnail always shows the current slot_to_view, (if implemented) focused highlight, and displayed-slot overlay (1x1 = one cell, 1x2 = one row, 2x1 = one column, 2x2 = no overlay).
 
 ### B.6 Implementation Tasks (Option 2 – minimal)
 
-- [ ] **B.6.1** Add a “Slot map” or “Window positions” small popover/dialog that shows the 2×2 (Window 1–4 → View A/B/C/D). Trigger it when the Swap submenu is about to be shown (e.g. from ImageViewer context menu code, or from a custom menu that wraps the Swap actions). Show it near the menu; dismiss on menu close or click outside.
-- [ ] **B.6.2** Alternatively, add a non-interactive label or tiny grid inside the Swap submenu (if the Qt style supports it) so the user sees the map without a separate window.
+- [x] **B.6.1** Add a “Slot map” or “Window positions” small popover/dialog that shows the 2×2 (Window 1–4 → View A/B/C/D). Trigger it when the Swap submenu is about to be shown (e.g. from ImageViewer context menu code, or from a custom menu that wraps the Swap actions). Show it near the menu; dismiss on menu close or click outside.
+- [ ] **B.6.2** Alternatively, add a non-interactive label or tiny grid inside the Swap submenu (if the Qt style supports it) so the user sees the map without a separate window. *(Not implemented; `WindowSlotMapPopupDialog` + **Show window map** action from the Swap menu cover this instead.)*
 
 ### B.7 Possible Difficulties and Error-Prone Areas
 

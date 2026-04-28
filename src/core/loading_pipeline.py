@@ -27,9 +27,9 @@ Optional:
 """
 
 import gc
+import logging
 import os
 import time
-import traceback
 from typing import Any, Callable, Optional
 
 from PySide6.QtWidgets import QApplication
@@ -37,6 +37,9 @@ from PySide6.QtWidgets import QApplication
 from core.dicom_loader import DICOMLoader
 from core.dicom_organizer import DICOMOrganizer, MergeResult
 from core.loading_progress_manager import LoadingProgressManager
+from utils.log_sanitizer import sanitized_format_exc
+
+_logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -381,7 +384,7 @@ def run_load_pipeline(
                     merge_paths,
                 )
             except Exception:
-                traceback.print_exc()
+                _logger.debug("%s", sanitized_format_exc())
         return datasets, organizer.studies
 
     except (SystemExit, KeyboardInterrupt):
@@ -407,7 +410,7 @@ def run_load_pipeline(
         loading_manager.close_progress_dialog()
         loader.reset_cancellation()
         error_type = type(e).__name__
-        traceback.print_exc()
+        _logger.debug("%s", sanitized_format_exc())
         file_dialog.show_error(
             main_window,
             "Critical Error",

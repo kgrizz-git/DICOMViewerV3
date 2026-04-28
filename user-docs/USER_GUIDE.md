@@ -1,11 +1,14 @@
 # DICOM Viewer V3 — User guide
 
+**Quick orientation:** **Help → Quick Start Guide** (in the app) | **this hub** | [Configuration / Settings](CONFIGURATION.md) | [CHANGELOG](../CHANGELOG.md) | [Report issues](https://github.com/kgrizz-git/DICOMViewerV3/issues) (GitHub).
+
 This hub links topic guides for the application. **In the running app**, use **Help → Quick Start Guide** for a short overview (with a table of contents and links that open these pages in your browser when you are online).
 
 ## Topics
 
 | Guide | Contents |
 |-------|-----------|
+| [CONFIGURATION.md](CONFIGURATION.md) | **Edit → Settings…**, local study index, where other preferences live (View menu, etc.) |
 | [USER_GUIDE_MPR.md](USER_GUIDE_MPR.md) | Multi-planar reformation (MPR): creating and clearing MPR views |
 | [USER_GUIDE_QA_PYLINAC.md](USER_GUIDE_QA_PYLINAC.md) | ACR CT / ACR MRI phantom analysis (pylinac), JSON/PDF, compare mode |
 | [IMAGE_FUSION_TECHNICAL_DOCUMENTATION.md](IMAGE_FUSION_TECHNICAL_DOCUMENTATION.md) | Image fusion (PET/SPECT on CT/MR): options, accuracy, algorithms |
@@ -20,9 +23,17 @@ This hub links topic guides for the application. **In the running app**, use **H
 - **Export Screenshots:** **File → Export Screenshots…** saves what you see in each image pane (PNG or JPG). Choose **separate file per view** (use the view checkboxes to pick panes), a **single composite** that is one **grab of the multi-pane grid** (same layout as on screen, no extra gutters between panes), or **entire main window** to include toolbars and side panes (the save dialog hides briefly so it is not in the capture). **Resolution (Native, 1.5×, 2×, 4×)** matches **Export Images**: larger exports are limited so the longest side stays at or under **8192 px**, and you may see a short note in the completion dialog if a lower magnification was used. For composite export, the view checkboxes are not used.
 - **Corner overlays:** **Space** cycles **Simple → Detailed → Hidden** metadata overlays on **all** panes (and saves the choice). **Shift+Space** still runs the older **focused-pane-only** cycle that can hide corner text first, then measurement/ROI text. Under **View → Overlay Tags Configuration**, set the default density at the top of the dialog. For each corner tab, **Simple** and **Detailed only** tag lists appear side by side; use **→ Detailed** / **← Simple** to move selected tags between them, or **Add to Simple** / **Add to Detailed** from the catalog. Double-click a catalog tag adds it to Simple. Detailed-only tags appear after Simple tags in Detailed mode (duplicates are ignored when drawing). The image **right-click** menu includes the same **cycle overlay detail** action as **Space**. **Import / export visual customizations** includes these detailed extras in the overlay section when present.
 
+## Local study index (encrypted)
+
+The app can keep a **local encrypted** database of studies you open so they can be listed and searched on your machine (behavior may expand over time). Configure it under **Edit → Settings…** in the **Local study index (encrypted)** section: optional **automatically add** on successful open, and **database file** path (default places the file near your app config). The dialog notes that **SQLCipher** protects the file and the **encryption key is stored in the OS credential manager**, not in plain JSON config.
+
+Open **File → Open study index…** or **Tools → Study index search…** to browse indexed studies. Use **Search all text** (FTS5) for words across patient fields, accession, study and series descriptions, modality, and UIDs; the filter fields below still narrow results, and everything active combines with **AND**.
+
+Treat the database like other clinical metadata: back up and secure appropriately. Field-level descriptions: [CONFIGURATION.md](CONFIGURATION.md).
+
 ## Source and versioning
 
-These files live in the repository under `user-docs/` and match the **main** branch on [GitHub](https://github.com/kgrizz-git/DICOMViewerV3). For release-specific behavior, check [CHANGELOG.md](../CHANGELOG.md).
+These files live in the repository under `user-docs/` and track the **main** branch on [GitHub](https://github.com/kgrizz-git/DICOMViewerV3) for online **Help → Documentation** links. **Compiled releases** may correspond to an **older** tag than `main`; for behavior tied to a specific build, read **[CHANGELOG.md](../CHANGELOG.md)** and the **release notes** for that version on GitHub.
 
 ## Further reading (developers / deep dives)
 

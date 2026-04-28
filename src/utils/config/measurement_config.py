@@ -24,7 +24,7 @@ class MeasurementConfigMixin:
 
     def get_measurement_font_size(self) -> int:
         """Get measurement text font size."""
-        return self._config().get("measurement_font_size", 14)
+        return self._config().get("measurement_font_size", 12)
 
     def set_measurement_font_size(self, size: int) -> None:
         """Set measurement text font size."""
@@ -49,7 +49,7 @@ class MeasurementConfigMixin:
 
     def get_measurement_line_thickness(self) -> int:
         """Get measurement line thickness in viewport pixels."""
-        return self._config().get("measurement_line_thickness", 6)
+        return self._config().get("measurement_line_thickness", 3)
 
     def set_measurement_line_thickness(self, thickness: int) -> None:
         """Set measurement line thickness in viewport pixels."""

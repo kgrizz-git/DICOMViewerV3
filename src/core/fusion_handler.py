@@ -19,6 +19,8 @@ Requirements:
     - SimpleITK for 3D resampling (Phase 2)
 """
 
+import logging
+
 import numpy as np
 from typing import Any, Optional, List, Tuple, Dict
 from pydicom.dataset import Dataset
@@ -28,6 +30,9 @@ from core.image_resampler import ImageResampler
 from core.dicom_processor import DICOMProcessor
 
 from utils.debug_flags import DEBUG_OFFSET
+from utils.log_sanitizer import sanitized_format_exc
+
+_logger = logging.getLogger(__name__)
 
 
 class FusionHandler:
@@ -421,8 +426,7 @@ class FusionHandler:
                 else:
                     self._resampling_failure_reason = f"3D resampling error: {error_msg[:100]}"
                 print(f"Error in 3D resampling: {e}, falling back to 2D")
-                import traceback
-                traceback.print_exc()
+                _logger.debug("%s", sanitized_format_exc())
         else:
             # 2D mode was selected/predicted, so actual mode is 2D
             self._actual_resampling_mode_used = False

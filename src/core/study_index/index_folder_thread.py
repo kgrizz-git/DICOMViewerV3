@@ -4,8 +4,8 @@ Background thread: crawl a folder tree and index DICOM headers into the study in
 
 from __future__ import annotations
 
+import logging
 import os
-import traceback
 from typing import Any, Callable
 
 import pydicom
@@ -13,6 +13,9 @@ from PySide6.QtCore import QThread, Signal
 
 from core.study_index.metadata_extract import dataset_to_index_row
 from core.study_index.sqlcipher_store import StudyIndexStore
+from utils.log_sanitizer import sanitized_format_exc
+
+_logger = logging.getLogger(__name__)
 
 
 class StudyIndexFolderThread(QThread):
@@ -68,5 +71,5 @@ class StudyIndexFolderThread(QThread):
             store.upsert_rows(rows)
             self.finished_ok.emit(len(rows))
         except Exception as e:
-            traceback.print_exc()
+            _logger.debug("%s", sanitized_format_exc())
             self.failed.emit(f"{type(e).__name__}: {e}")

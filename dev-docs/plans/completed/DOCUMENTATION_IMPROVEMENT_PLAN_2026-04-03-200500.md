@@ -107,7 +107,7 @@ Reuse patterns from any existing “open URL” flows in the app (About, pylinac
 | File | Purpose |
 |------|---------|
 | `user-docs/USER_GUIDE.md` | **Hub**: TOC linking to topic docs; how to use Help; version note |
-| `user-docs/USER_GUIDE_MPR.md` | End-user MPR: how to open, navigate, limitations; link to `dev-docs/plans/SLICE_SYNC_AND_MPR_PLAN.md` only as “implementation detail” if needed |
+| `user-docs/USER_GUIDE_MPR.md` | End-user MPR: how to open, navigate, limitations; link to `dev-docs/plans/completed/SLICE_SYNC_AND_MPR_PLAN.md` only as “implementation detail” if needed |
 | `user-docs/USER_GUIDE_QA_PYLINAC.md` | End-user: Tools → ACR CT / ACR MRI, inputs, JSON/PDF, compare mode, scan-extent tolerance — distill from `PYLINAC_INTEGRATION_OVERVIEW.md` |
 | `tests/README.md` | How to run tests (`run_tests.py`, pytest, `PYTHONPATH`), layout of suites, no DICOM requirement where true |
 | `dev-docs/DEVELOPER_SETUP.md` (optional) | Troubleshooting pip/venv/Windows wheels; Parallels path note — moved from README |

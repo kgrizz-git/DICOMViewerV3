@@ -887,6 +887,7 @@ class SubwindowLifecycleController:
                 pass
             try:
                 app.image_viewer.roi_delete_requested.disconnect()
+                app.image_viewer.roi_geometry_edit_requested.disconnect()
                 app.image_viewer.measurement_delete_requested.disconnect()
             except (TypeError, RuntimeError):
                 pass
@@ -1059,6 +1060,9 @@ class SubwindowLifecycleController:
         app.image_viewer.roi_clicked.connect(app.roi_coordinator.handle_roi_clicked)
         app.image_viewer.image_clicked_no_roi.connect(app.roi_coordinator.handle_image_clicked_no_roi)
         app.image_viewer.roi_delete_requested.connect(app.roi_coordinator.handle_roi_delete_requested)
+        app.image_viewer.roi_geometry_edit_requested.connect(
+            app.roi_coordinator.handle_roi_geometry_edit_requested
+        )
         app.image_viewer.measurement_delete_requested.connect(app.measurement_coordinator.handle_measurement_delete_requested)
         if hasattr(app, 'text_annotation_coordinator') and app.text_annotation_coordinator is not None:
             app.image_viewer.text_annotation_delete_requested.connect(app.text_annotation_coordinator.handle_text_annotation_delete_requested)

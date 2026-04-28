@@ -8,7 +8,7 @@ This document implements three related items from `dev-docs/TO_DO.md` (**Feature
 
 **Related context**
 
-- Multi-window layout and swap: `src/main.py` (`MultiWindowLayout`), [VIEW_SLOT_LAYOUT_AND_SWAP_PLAN.md](../VIEW_SLOT_LAYOUT_AND_SWAP_PLAN.md), [WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md](WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md).
+- Multi-window layout and swap: `src/main.py` (`MultiWindowLayout`), [VIEW_SLOT_LAYOUT_AND_SWAP_PLAN.md](../completed/VIEW_SLOT_LAYOUT_AND_SWAP_PLAN.md), [WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md](WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md).
 - File loading and study/series model: file operations handlers, `dicom_organizer`, navigator thumbnails.
 - Future indexing / database notes: [FUTURE_WORK_DETAIL_NOTES.md](../FUTURE_WORK_DETAIL_NOTES.md#local-study-database-and-indexing), TO_DO **Data / Platform** → local study database item.
 - DICOM I/O: `pydicom` usage elsewhere in `src/`; SR templates use `RawDataElement` / sequences as needed.

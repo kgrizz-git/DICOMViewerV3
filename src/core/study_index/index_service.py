@@ -63,6 +63,7 @@ class LocalStudyIndexService:
         study_description_contains: str = "",
         study_date_from: str = "",
         study_date_to: str = "",
+        global_fts_query: str = "",
         limit: int = 500,
         privacy_mode: bool = False,
     ) -> list[dict[str, Any]]:
@@ -76,6 +77,7 @@ class LocalStudyIndexService:
             study_description_contains=study_description_contains,
             study_date_from=study_date_from,
             study_date_to=study_date_to,
+            global_fts_query=global_fts_query,
             limit=limit,
         )
         if not privacy_mode:
@@ -99,6 +101,7 @@ class LocalStudyIndexService:
         study_description_contains: str = "",
         study_date_from: str = "",
         study_date_to: str = "",
+        global_fts_query: str = "",
         limit: int = 100,
         offset: int = 0,
         privacy_mode: bool = False,
@@ -113,6 +116,7 @@ class LocalStudyIndexService:
             study_description_contains=study_description_contains,
             study_date_from=study_date_from,
             study_date_to=study_date_to,
+            global_fts_query=global_fts_query,
             limit=limit,
             offset=offset,
         )

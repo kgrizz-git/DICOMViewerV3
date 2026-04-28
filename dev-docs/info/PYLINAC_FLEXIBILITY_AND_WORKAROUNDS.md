@@ -2,11 +2,11 @@
 
 This note is for **DICOM Viewer V3** developers extending the Stage 1 **`src/qa`** pylinac path. It summarizes where stock pylinac is strict, what is already tunable via **public API**, and how we can **relax gates responsibly** (wrapper logic, monkey-patches, small forks, or site-specific constants).
 
-**Related:** [PYLINAC_INTEGRATION_OVERVIEW.md](PYLINAC_INTEGRATION_OVERVIEW.md) (integration scope + reproducibility guidance §2.4), [AUTOMATED_QA_ADDITIONAL_ANALYSIS.md](AUTOMATED_QA_ADDITIONAL_ANALYSIS.md) (physics gaps), [plans/completed/PYLINAC_AND_AUTOMATED_QA_STAGE1_PLAN.md](../plans/completed/PYLINAC_AND_AUTOMATED_QA_STAGE1_PLAN.md) (Stage 1 checklist), [plans/PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md](../plans/PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md) (vanilla default + optional extent tolerance + JSON profile).
+**Related:** [PYLINAC_INTEGRATION_OVERVIEW.md](PYLINAC_INTEGRATION_OVERVIEW.md) (integration scope + reproducibility guidance §2.4), [AUTOMATED_QA_ADDITIONAL_ANALYSIS.md](AUTOMATED_QA_ADDITIONAL_ANALYSIS.md) (physics gaps), [plans/completed/PYLINAC_AND_AUTOMATED_QA_STAGE1_PLAN.md](../plans/completed/PYLINAC_AND_AUTOMATED_QA_STAGE1_PLAN.md) (Stage 1 checklist), [plans/completed/PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md](../plans/completed/PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md) (vanilla default + optional extent tolerance + JSON profile).
 
 **Shipped in the viewer:** Approaches **A** (tolerant extent via `ACRCTRelaxedExtent` / `ACRMRILargeRelaxedExtent`) and **B** (retry after strict extent failure) are wired in **`src/qa`** and **`src/main.py`**, with **`pylinac_analysis_profile`** and JSON **`schema_version` 1.1** — details in **PYLINAC_INTEGRATION_OVERVIEW.md** §2.4.
 
-**Upstream docs (version your install separately; project pins `pylinac==3.42.0` in `requirements.txt`):**
+**Upstream docs (version your install separately; project pins `pylinac==3.43.2` in `requirements.txt`):**
 
 - [ACR phantoms (ACRCT, ACRMRILarge)](https://pylinac.readthedocs.io/en/latest/acr.html)
 - [CatPhan / CBCT module](https://pylinac.readthedocs.io/en/latest/cbct.html)
@@ -43,7 +43,7 @@ The docstring in source references **RAM-2897**: small discrepancies between DIC
 
 **Recommendation:** Prefer **A + B** for the “99.5 mm vs 100 mm” class of failures tied to rounding; prefer **C** only with physicist-facing warnings and config; reserve **D** for explicit “subset QA” workflows.
 
-**Implementation plan (productized path):** [PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md](../plans/PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md).
+**Implementation plan (productized path):** [PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md](../plans/completed/PYLINAC_SCAN_EXTENT_TOLERANCE_AND_REPRODUCIBILITY_PLAN.md).
 
 ---
 

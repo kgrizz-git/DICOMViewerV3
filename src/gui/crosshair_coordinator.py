@@ -16,6 +16,8 @@ Requirements:
     - ImageViewer for scene access
 """
 
+import logging
+
 from PySide6.QtCore import QPointF, QTimer
 from typing import Any, Optional, Callable, TYPE_CHECKING, Dict
 from pydicom.dataset import Dataset
@@ -23,9 +25,12 @@ from pydicom.dataset import Dataset
 from tools.crosshair_manager import CrosshairManager
 from gui.image_viewer import ImageViewer
 from utils.dicom_utils import get_composite_series_key
+from utils.log_sanitizer import sanitized_format_exc
 
 if TYPE_CHECKING:
     from utils.undo_redo import UndoRedoManager
+
+_logger = logging.getLogger(__name__)
 
 
 class CrosshairCoordinator:
@@ -295,9 +300,8 @@ class CrosshairCoordinator:
             self._move_batch_timer.timeout.connect(lambda: self._finalize_crosshair_move(crosshair_item))
             self._move_batch_timer.start(200)  # 200ms delay
         except Exception as e:
-            import traceback
-            traceback.print_exc()
-    
+            _logger.debug("%s", sanitized_format_exc())
+
     def _finalize_crosshair_move(self, crosshair_item) -> None:
         """
         Finalize crosshair move by creating undo/redo command and updating pixel values.
@@ -365,6 +369,5 @@ class CrosshairCoordinator:
             # Update crosshair item's stored values and text display
             crosshair_item.update_pixel_values(pixel_value_str, x, y, z)
         except Exception as e:
-            import traceback
-            traceback.print_exc()
+            _logger.debug("%s", sanitized_format_exc())
 

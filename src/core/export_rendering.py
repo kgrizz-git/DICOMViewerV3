@@ -8,6 +8,7 @@ Requirements: PIL, numpy, pydicom, ``core.dicom_processor``, ``gui.overlay_text_
 """
 
 import copy
+import logging
 import os
 import sys
 from pathlib import Path
@@ -22,6 +23,9 @@ from core.dicom_parser import DICOMParser
 from core.dicom_processor import DICOMProcessor
 from utils.dicom_utils import get_slice_thickness, get_composite_series_key
 from gui.overlay_text_builder import get_modality, get_corner_text
+from utils.log_sanitizer import sanitized_format_exc
+
+_logger = logging.getLogger(__name__)
 
 
 def _get_bundled_font_path(filename: str) -> str:
@@ -276,8 +280,7 @@ def process_image_by_photometric_interpretation(image: Image.Image, dataset: Dat
         
     except Exception as e:
         print(f"[EXPORT] Error processing image by PhotometricInterpretation: {e}")
-        import traceback
-        traceback.print_exc()
+        _logger.debug("%s", sanitized_format_exc())
         # Return original image on error
         return image
 
@@ -390,8 +393,7 @@ def create_projection_for_export(
         return image
     except Exception as e:
         print(f"Error creating projection for export: {e}")
-        import traceback
-        traceback.print_exc()
+        _logger.debug("%s", sanitized_format_exc())
         return None
 
 def create_projection_dataset(
@@ -622,8 +624,7 @@ def create_projection_dataset(
         return projection_dataset
     except Exception as e:
         print(f"Error creating projection dataset: {e}")
-        import traceback
-        traceback.print_exc()
+        _logger.debug("%s", sanitized_format_exc())
         return None
 
 def render_overlays_and_rois(

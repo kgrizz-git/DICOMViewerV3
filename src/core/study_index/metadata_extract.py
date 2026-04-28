@@ -96,5 +96,6 @@ def dataset_to_index_row(
         "accession_number": _elem_to_str(getattr(ds, "AccessionNumber", None)),
         "study_date": _elem_to_str(getattr(ds, "StudyDate", None)),
         "study_description": _elem_to_str(getattr(ds, "StudyDescription", None)),
+        "series_description": _elem_to_str(getattr(ds, "SeriesDescription", None)),
         "modality": _elem_to_str(getattr(ds, "Modality", None)),
     }

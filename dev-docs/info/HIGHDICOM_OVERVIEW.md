@@ -112,7 +112,7 @@ A short install probe was run in the project **`.venv`** (Windows, Python 3.13) 
 | Observation | Detail |
 |---------------|--------|
 | **highdicom 0.27.x (PyPI)** | Declares **`pydicom >= 3.0.1`**. |
-| **Viewer pin** | **`pylinac == 3.42.0`** requires **`pydicom < 3, >= 2.0`** (see `requirements.txt` and `dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md`). |
+| **Viewer pin** | **`pylinac == 3.43.2`** requires **`pydicom < 3, >= 2.0`** (see `requirements.txt` and `dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md`). |
 | **Result** | **highdicom 0.27 cannot coexist** with the current production venv constraints without dropping or re-verifying the pylinac pin on **pydicom 3**. |
 | **Cold `import highdicom`** (measured once while pydicom 3 was temporarily present) | ≈ **2.4 s** on one workstation — not a benchmark; order-of-magnitude for “lazy import” discussions and PyInstaller cold start. |
 | **Cleanup** | **highdicom was uninstalled** and **pydicom restored to 2.4.x** so the default venv matches the shipped stack. |

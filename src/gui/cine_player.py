@@ -88,6 +88,11 @@ class CinePlayer(QObject):
         
         # Datasets for slice-aware navigation
         self.current_datasets: Optional[List[Dataset]] = None
+
+        # When True, _advance_frame uses linear indices vs slice_navigator only
+        # (e.g. MPR plane stack). Slice-grouping on current_datasets is skipped so
+        # playback length matches navigator total_slices (MprResult.n_slices).
+        self._use_linear_cine_navigation: bool = False
         
         # Loop bounds (None means use full range)
         self.loop_start_frame: Optional[int] = None
@@ -133,6 +138,16 @@ class CinePlayer(QObject):
             datasets: List of DICOM datasets in the series
         """
         self.current_datasets = datasets
+
+    def set_use_linear_cine_navigation(self, use_linear: bool) -> None:
+        """
+        When True, cine advances one navigator index at a time using
+        get_total_slices / get_current_slice only (no multi-frame slice grouping).
+
+        Used for MPR stacks where navigator range is MPR plane count while
+        current_datasets still describe the source series.
+        """
+        self._use_linear_cine_navigation = bool(use_linear)
     
     def get_slice_groups(self) -> Dict[int, List[Dataset]]:
         """
@@ -206,8 +221,13 @@ class CinePlayer(QObject):
         Returns:
             True if playback started successfully, False otherwise
         """
-        # Check if series is cine-capable
-        if not self.is_cine_capable(self.current_studies, self.current_study_uid, self.current_series_uid):
+        native_ok = self.is_cine_capable(
+            self.current_studies, self.current_study_uid, self.current_series_uid
+        )
+        linear_ok = (
+            self._use_linear_cine_navigation and int(self.get_total_slices() or 0) > 1
+        )
+        if not native_ok and not linear_ok:
             return False
         
         # Determine frame rate
@@ -303,7 +323,13 @@ class CinePlayer(QObject):
         loop_end = max(0, min(loop_end, total_slices - 1))
         
         # If we have datasets and slice grouping info, use slice-aware navigation
-        if self.current_datasets and len(self.current_datasets) > 0:
+        # (skip when showing an MPR stack: indices are plane indices, not
+        # positions in the source series list).
+        if (
+            not self._use_linear_cine_navigation
+            and self.current_datasets
+            and len(self.current_datasets) > 0
+        ):
             # Get current slice group
             current_slice_index = get_slice_index_for_dataset(self.current_datasets, current_index)
             current_frame_in_slice = get_frame_index_in_slice(self.current_datasets, current_index)

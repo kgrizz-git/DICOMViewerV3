@@ -46,7 +46,7 @@ python tests/run_tests.py --unittest
 
 | Area | Path | Notes |
 |------|------|--------|
-| Root tests | `tests/test_*.py` | Parser, loader, export, MPR, pylinac extent, SR document tree (`test_sr_document_tree.py`), etc. |
+| Root tests | `tests/test_*.py` | Parser, loader, export, MPR, pylinac extent, SR document tree (`test_sr_document_tree.py`), user-docs relative links (`test_user_docs_links.py`), etc. |
 | Config mixins | `tests/config/` | Display, layout, ROI, paths, … |
 | Metadata | `tests/metadata/` | Metadata controller |
 | ROI | `tests/roi/` | ROI / measurement controller |
@@ -57,4 +57,4 @@ Most tests **do not require DICOM files** on disk; they use synthetic data or mo
 
 ## CI
 
-GitHub Actions workflows under `.github/workflows/` run the test and quality checks configured for this repository.
+GitHub Actions workflows under `.github/workflows/` run the test and quality checks configured for this repository. **`user-docs-links`** runs `scripts/check_user_docs_links.py` (same assertion as `tests/test_user_docs_links.py`).

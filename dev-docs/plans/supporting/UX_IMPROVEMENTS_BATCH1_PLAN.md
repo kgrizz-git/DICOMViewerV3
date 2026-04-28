@@ -356,47 +356,41 @@ overlay_config_requested = Signal()     # → open OverlayConfigDialog (tag conf
 ## 6. Reduce Default Line Thicknesses and Font Sizes
 
 **Priority:** P2  
+**Status:** Implemented (defaults + shipped `default_config` merge values); see verification below.  
 **Key files:**
-- [src/utils/config/roi_config.py](../src/utils/config/roi_config.py) — `get_roi_line_thickness` (default 6), `get_roi_font_size` (default 14)
-- [src/utils/config/measurement_config.py](../src/utils/config/measurement_config.py) — `get_measurement_line_thickness` (default 6), `get_measurement_font_size` (default 14)
-- [src/utils/config/annotation_config.py](../src/utils/config/annotation_config.py) — `get_text_annotation_font_size` (default 12, already at target)
+- [src/utils/config/roi_config.py](../src/utils/config/roi_config.py) — `get_roi_line_thickness` / `get_roi_font_size` **fallback** defaults when keys are absent from merged config
+- [src/utils/config/measurement_config.py](../src/utils/config/measurement_config.py) — measurement line / font **fallback** defaults
+- [src/utils/config_manager.py](../src/utils/config_manager.py) — `default_config` dict used when creating a **new** config file and when merging loaded JSON over defaults (keys present in `default_config` seed first-time values)
+- [src/utils/config/annotation_config.py](../src/utils/config/annotation_config.py) — `get_text_annotation_font_size` (default 12, already at target; no change)
+- Tests: [tests/config/test_roi_config.py](../tests/config/test_roi_config.py), [tests/config/test_measurement_config.py](../tests/config/test_measurement_config.py)
 
 ### Proposed default changes
 
-| Setting | Current default | Proposed default | File |
+| Setting | Previous default | Target default | Where updated |
 |---|---|---|---|
-| ROI line thickness | 6 | 3 | `roi_config.py` |
-| ROI font size | 14 | 12 | `roi_config.py` |
-| Measurement line thickness | 6 | 3 | `measurement_config.py` |
-| Measurement font size | 14 | 12 | `measurement_config.py` |
-| Text annotation font size | 12 | 12 | (already correct) |
+| ROI line thickness | 6 | 3 | `roi_config.py` `.get(..., 3)` + `default_config["roi_line_thickness"]` |
+| ROI font size | 14 | 12 | `roi_config.py` `.get(..., 12)` + `default_config["roi_font_size"]` |
+| Measurement line thickness | 6 | 3 | `measurement_config.py` + `default_config` |
+| Measurement font size | 14 | 12 | `measurement_config.py` + `default_config` |
+| Text annotation font size | 12 | 12 | (unchanged) |
 
-### Steps
+### Implementation detail (read this before changing defaults again)
 
-1. In `roi_config.py`, change:
-   - `self.config.get("roi_font_size", 14)` → `14` becomes `12`
-   - `self.config.get("roi_line_thickness", 6)` → `6` becomes `3`
-2. In `measurement_config.py`, change:
-   - `self.config.get("measurement_font_size", 14)` → `14` becomes `12`
-   - `self.config.get("measurement_line_thickness", 6)` → `6` becomes `3`
-3. Run the application briefly and draw an ROI and a measurement to verify the new defaults look correct.
+1. **Mixin fallbacks** (`roi_config.py`, `measurement_config.py`): `dict.get("key", default)` applies when the key is missing from `self.config` after `_load_config()` merge.
+2. **Seeded defaults** (`config_manager.py` → `default_config`): ensures **brand-new** installs get 3/12 even if merge logic evolves; keeps documentation aligned with actual first-run JSON.
+3. **Existing users:** If `roi_line_thickness` / `roi_font_size` (or measurement equivalents) are already persisted from an older run, **this change does not overwrite them**. Users can adjust values in **Annotation Options** or clear those keys in their config JSON if they want the new shipped defaults without losing other preferences.
 
-### Important caveat: existing user config files
+### Verification checklist
 
-Python `dict.get(key, default)` only returns the default if the key is **absent** from the stored config. Any user who has already launched the app will have the old values (`6` and `14`) persisted in their config JSON, so changing the Python defaults will have no effect for them.
-
-**Options to handle existing users:**
-- Do nothing (new installs get the smaller defaults; existing users can reset via Annotation Options dialog). **Recommended for now.**
-- Add a one-time migration in `ConfigManager._load_config()` that rewrites old defaults to new ones if the user has never touched these settings (requires version tracking per setting, which is complex).
-- Provide a "Reset to defaults" button in `AnnotationOptionsDialog` that calls e.g. `config_manager.reset_roi_defaults()`.
-
-**Recommendation:** implement "Reset to defaults" button in `AnnotationOptionsDialog` as a clean UX solution that also helps for future default changes — and change the Python defaults for new installs.
+- [ ] Delete or rename `%APPDATA%\DICOMViewerV3\dicom_viewer_config.json` (Windows) or start on a clean profile; confirm Annotation Options show **12** / **3** for ROI and measurement spinboxes.
+- [ ] Draw a new rectangle ROI and a distance measurement; confirm thinner stroke and smaller label at default zoom.
+- [ ] Run `pytest tests/config/test_roi_config.py tests/config/test_measurement_config.py -q`.
 
 ### Risks / complications
 
 - Very low risk to the code itself.
 - May surprise long-term users if they reset to defaults expecting the old thick lines.
-- No other files are affected; the tool/manager code reads these values dynamically at ROI creation time.
+- ROI/measurement tools read settings at creation/update time via `ConfigManager`; no scene refactor required.
 
 ---
 

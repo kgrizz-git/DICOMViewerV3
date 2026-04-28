@@ -67,6 +67,7 @@ class KeyboardEventHandler:
         is_focus_ok_for_reset_view: Optional[Callable[[], bool]] = None,
         open_quick_window_level_callback: Optional[Callable[[], None]] = None,
         cancel_angle_draw_callback: Optional[Callable[[], None]] = None,
+        exit_roi_geometry_edit_callback: Optional[Callable[[], bool]] = None,
     ):
         """
         Initialize the keyboard event handler.
@@ -99,6 +100,7 @@ class KeyboardEventHandler:
             is_focus_ok_for_reset_view: Optional callback returning True if focus is in a widget where V should trigger Reset View (e.g. image viewer, navigator)
             open_quick_window_level_callback: Optional callback to open Quick Window/Level dialog for the focused subwindow (shortcut Q)
             cancel_angle_draw_callback: Optional callback to cancel in-progress angle placement (Esc in measure_angle mode)
+            exit_roi_geometry_edit_callback: Optional callback to leave ROI resize-handle mode (Esc); return True if handled
         """
         self.roi_manager = roi_manager
         self.measurement_tool = measurement_tool
@@ -129,6 +131,7 @@ class KeyboardEventHandler:
         self.is_focus_ok_for_reset_view = is_focus_ok_for_reset_view
         self.open_quick_window_level_callback = open_quick_window_level_callback
         self.cancel_angle_draw_callback = cancel_angle_draw_callback
+        self.exit_roi_geometry_edit_callback = exit_roi_geometry_edit_callback
     
     def handle_key_event(self, event: QKeyEvent) -> bool:
         """
@@ -147,6 +150,9 @@ class KeyboardEventHandler:
             if getattr(self.image_viewer, "mouse_mode", "") == "measure_angle":
                 if self.cancel_angle_draw_callback:
                     self.cancel_angle_draw_callback()
+                return True
+            ex_roi = self.exit_roi_geometry_edit_callback
+            if ex_roi is not None and ex_roi():
                 return True
         
         # Delete key to delete selected ROI or measurement

@@ -88,7 +88,7 @@
 
 ### Phase 2.0 — Spike and dependency decision (owner: researcher | coder, timebox: 1–2 sessions)
 
-- [x] **(S1)** Spike: `pip install highdicom` in venv — **blocked for default app venv:** highdicom **0.27.x** requires **pydicom ≥ 3.0.1**; **pylinac 3.42.0** requires **pydicom < 3**. Fixture `srread` exercises deferred to an isolated **pydicom 3** env or optional CI (see `dev-docs/info/HIGHDICOM_OVERVIEW.md` §4a).
+- [x] **(S1)** Spike: `pip install highdicom` in venv — **blocked for default app venv:** highdicom **0.27.x** requires **pydicom ≥ 3.0.1**; **pylinac 3.43.2** requires **pydicom < 3**. Fixture `srread` exercises deferred to an isolated **pydicom 3** env or optional CI (see `dev-docs/info/HIGHDICOM_OVERVIEW.md` §4a).
 - [x] **(S2)** Record: **License** still MIT per PyPI (unchanged). **Import time:** one cold `import highdicom` sample ≈ **2.4 s** (Windows dev box, not a benchmark). **RDSR TID materialization:** prior doc review stands — no first-class TID-10003 row API like TID-1500 `MeasurementReport`; generic `ContentSequence` path expected. **PyInstaller:** still TBD in a pydicom-3 + highdicom build job.
 - [x] **(S3)** **Gate S (2026-04-16):** **(C) defer** wiring highdicom into the **default** runtime until the **pydicom major** split is resolved (pylinac re-verify on pydicom 3, or optional highdicom-only CI/venv). **Stage 1** pydicom flatten remains the supported dose-events path. Revisit **(A)/(B)** after a green **pydicom 3 + highdicom** contract-test lane exists.
 
