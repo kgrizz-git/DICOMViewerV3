@@ -46,15 +46,21 @@ jobs:
 
       - name: Prune stale non-protected-branch caches
         env:
-          # Explicit token: implicit GITHUB_TOKEN in env is not guaranteed in all runner contexts;
-          # github.token is always the job token for this workflow (matches permissions: above).
-          GITHUB_TOKEN: ${{ github.token }}
+          # Use the standard workflow token name/path used elsewhere in this repo.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          INPUT_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
           MIN_AGE_DAYS: ${{ github.event.inputs.min_age_days || '7' }}
           EXTRA_PROTECTED_REFS: ${{ github.event.inputs.extra_protected_refs || '' }}
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            export DRY_RUN="${{ github.event.inputs.dry_run }}"
+          if [ -z "${GITHUB_TOKEN:-}" ] && [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::No GitHub token was injected into the prune job. Check workflow token availability and permissions."
+            exit 1
+          fi
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            export DRY_RUN="${INPUT_DRY_RUN}"
           else
             export DRY_RUN="false"
           fi

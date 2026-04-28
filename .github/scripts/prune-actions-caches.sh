@@ -3,7 +3,8 @@
 #
 # Inputs (environment):
 #   GITHUB_REPOSITORY  owner/name (set by Actions)
-#   GITHUB_TOKEN       token with actions:write (set by Actions)
+#   GITHUB_TOKEN       token with actions:write (preferred; set by Actions/workflow env)
+#   GH_TOKEN           fallback token name if GITHUB_TOKEN is not provided
 #   MIN_AGE_DAYS       delete only if last_accessed_at (or created_at) is older than this many days
 #   DRY_RUN            if 1/true/yes, print candidates but do not call DELETE
 #   EXTRA_PROTECTED_REFS  optional space-separated full refs to never delete
@@ -15,7 +16,8 @@
 set -euo pipefail
 
 : "${GITHUB_REPOSITORY:?}"
-: "${GITHUB_TOKEN:?}"
+AUTH_TOKEN="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
+: "${AUTH_TOKEN:?Set GITHUB_TOKEN or GH_TOKEN with a token that has actions:write for this repository.}"
 MIN_AGE_DAYS="${MIN_AGE_DAYS:-7}"
 DRY_RUN="${DRY_RUN:-0}"
 EXTRA_PROTECTED_REFS="${EXTRA_PROTECTED_REFS:-}"
@@ -24,7 +26,7 @@ OWNER="${GITHUB_REPOSITORY%%/*}"
 REPO="${GITHUB_REPOSITORY##*/}"
 API_ROOT="https://api.github.com/repos/${OWNER}/${REPO}"
 CURL_AUTH=(
-  -H "Authorization: Bearer ${GITHUB_TOKEN}"
+  -H "Authorization: Bearer ${AUTH_TOKEN}"
   -H "Accept: application/vnd.github+json"
   -H "X-GitHub-Api-Version: 2022-11-28"
 )
