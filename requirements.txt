@@ -31,7 +31,7 @@ openpyxl>=3.1.0
 # Local encrypted study index (SQLCipher-compatible Python binding; wheels on Windows/macOS/Linux for supported Python versions)
 sqlcipher3>=0.5.0
 # Stores the SQLCipher passphrase in the OS credential store (Windows Credential Manager, macOS Keychain, etc.)
-keyring>=24.0.0
+keyring>=25.7.0
 SimpleITK>=2.3.0  # For 3D image resampling in image fusion (Phase 2)
 # Pinned: only 3.42.0 has been verified with ACR CT/MRI pylinac integration (see dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md).
 pylinac==3.42.0  # Automated phantom QA analysis (ACR CT + ACR MRI Large)
