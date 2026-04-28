@@ -235,3 +235,6 @@ dev-docs/security/dependabot-*.json
 dev-docs/security/dependabot-*.csv
 
 .DS_Store
+
+# Claude Code — local per-user permission grants (machine-specific, not for shared history)
+.claude/settings.local.json
