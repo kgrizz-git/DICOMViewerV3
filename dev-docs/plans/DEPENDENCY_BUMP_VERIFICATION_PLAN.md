@@ -42,16 +42,16 @@
 
 - [ ] Read **upstream changelog** for the new version (e.g. [pylinac changelog](https://github.com/jrkerns/pylinac/blob/master/docs/source/changelog.rst)) for **breaking** or **behavior** notes affecting **ACRCT**, **ACRMRILarge**, or **CatPhan**-related APIs.
 - [x] **Manual QA smoke (recommended):** one **ACR CT** and one **ACR MRI Large** run on known-good local phantoms (vanilla and non-vanilla paths if you use both), comparing PDF/JSON or key metrics to **prior baseline** where clinically appropriate.
-- [ ] Update **version callouts** if the project documents a verified pin: e.g. `requirements.txt` comment, [`user-docs/USER_GUIDE_QA_PYLINAC.md`](../../user-docs/USER_GUIDE_QA_PYLINAC.md), [`dev-docs/info/PYLINAC_FLEXIBILITY_AND_WORKAROUNDS.md`](../info/PYLINAC_FLEXIBILITY_AND_WORKAROUNDS.md), and any **HIGHDICOM / pydicom** constraint notes that cite the pylinac pin.
+- [x] Update **version callouts** if the project documents a verified pin: e.g. `requirements.txt` comment, [`user-docs/USER_GUIDE_QA_PYLINAC.md`](../../user-docs/USER_GUIDE_QA_PYLINAC.md), [`dev-docs/info/PYLINAC_FLEXIBILITY_AND_WORKAROUNDS.md`](../info/PYLINAC_FLEXIBILITY_AND_WORKAROUNDS.md), and any **HIGHDICOM / pydicom** constraint notes that cite the pylinac pin.
 
 ---
 
 ## D. GitHub Actions and `actions/github-script` (when that action or workflow logic changed)
 
-- [ ] Re-read **release breaking changes** for the new major (e.g. [github-script v9](https://github.com/actions/github-script/releases)): no `require('@actions/github')`; do not **`const`/`let` redeclare** injected `getOctokit`.
-- [ ] **Grep** `.github/workflows/` for `github-script` and confirm each `script:` block only uses supported patterns (`github`, `context`, `core`, injected `getOctokit`, Node built-ins like `fs`).
-- [ ] Open a **draft PR** (or push to a branch) and confirm workflows that use **`actions/github-script`** still **complete** (comment-on-PR steps may only run on `pull_request`; use a test PR if needed).
-- [ ] Confirm **Semgrep / Grype / security-checks** jobs still upload SARIF or post comments as expected when those paths are exercised.
+- [x] Re-read **release breaking changes** for the new major (e.g. [github-script v9](https://github.com/actions/github-script/releases)): no `require('@actions/github')`; do not **`const`/`let` redeclare** injected `getOctokit`.
+- [x] **Grep** `.github/workflows/` for `github-script` and confirm each `script:` block only uses supported patterns (`github`, `context`, `core`, injected `getOctokit`, Node built-ins like `fs`).
+- [ ] Open a **draft PR** (or push to a branch) and confirm workflows that use **`actions/github-script`** still **complete** (comment-on-PR steps may only run on `pull_request`; use a test PR if needed). `N/A in this local agent session:` no branch push / PR execution was performed here.
+- [ ] Confirm **Semgrep / Grype / security-checks** jobs still upload SARIF or post comments as expected when those paths are exercised. `Blocked pending actual workflow run:` local YAML review found the expected upload/comment steps, but this session did not exercise GitHub Actions.
 
 ---
 

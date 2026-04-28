@@ -29,6 +29,8 @@ This file tracks active and near-term tasks.
 
 ## Bugs / Correctness
 
+- [ ] **[P1]** Fix MPR rescale units so exported MPR DICOMs do not write misleading `RescaleType` values like `UNSPECIFIED`/`US`, and ROI statistics do not display DICOM defined terms as user-facing units when the rescale type is unknown or export-generated. **Plan:** [MPR rescale units and display correctness](plans/supporting/MPR_RESCALE_UNITS_AND_DISPLAY_CORRECTNESS_PLAN.md)
+
 ## Performance / Packaging
 
 - [ ] **[P1]** Try to make code faster (startup, file loading, fusion, and general responsiveness) ([details](FUTURE_WORK_DETAIL_NOTES.md#performance-initial-load-file-loading-fusion-and-general-responsiveness))
