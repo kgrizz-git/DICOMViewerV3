@@ -149,10 +149,12 @@ jobs:
 
       - name: Build AppImage
         if: matrix.os == 'ubuntu-latest'
+        env:
+          GH_REF: ${{ github.ref }}
         run: |
           # Extract version from tag if available, otherwise use "latest"
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            VERSION=$(echo "${{ github.ref }}" | sed 's/refs\/tags\/v//')
+          if [[ "$GH_REF" == refs/tags/* ]]; then
+            VERSION=$(echo "$GH_REF" | sed 's/refs\/tags\/v//')
           else
             VERSION="latest"
           fi
@@ -162,9 +164,11 @@ jobs:
 
       - name: Verify AppImage exists
         if: matrix.os == 'ubuntu-latest'
+        env:
+          GH_REF: ${{ github.ref }}
         run: |
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            VERSION=$(echo "${{ github.ref }}" | sed 's/refs\/tags\/v//')
+          if [[ "$GH_REF" == refs/tags/* ]]; then
+            VERSION=$(echo "$GH_REF" | sed 's/refs\/tags\/v//')
           else
             VERSION="latest"
           fi
@@ -200,9 +204,11 @@ jobs:
       - name: Create DMG (macOS)
         if: matrix.os == 'macos-latest'
         shell: bash
+        env:
+          GH_REF: ${{ github.ref }}
         run: |
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            VERSION=$(echo "${{ github.ref }}" | sed 's/refs\/tags\/v//')
+          if [[ "$GH_REF" == refs/tags/* ]]; then
+            VERSION=$(echo "$GH_REF" | sed 's/refs\/tags\/v//')
           else
             VERSION="latest"
           fi
@@ -216,9 +222,11 @@ jobs:
       - name: Verify DMG contents (macOS)
         if: matrix.os == 'macos-latest'
         shell: bash
+        env:
+          GH_REF: ${{ github.ref }}
         run: |
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            VERSION=$(echo "${{ github.ref }}" | sed 's/refs\/tags\/v//')
+          if [[ "$GH_REF" == refs/tags/* ]]; then
+            VERSION=$(echo "$GH_REF" | sed 's/refs\/tags\/v//')
           else
             VERSION="latest"
           fi
@@ -397,9 +405,11 @@ jobs:
 
       - name: Create DMG (macOS slim)
         shell: bash
+        env:
+          GH_REF: ${{ github.ref }}
         run: |
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            VERSION=$(echo "${{ github.ref }}" | sed 's/refs\/tags\/v//')
+          if [[ "$GH_REF" == refs/tags/* ]]; then
+            VERSION=$(echo "$GH_REF" | sed 's/refs\/tags\/v//')
           else
             VERSION="latest"
           fi
@@ -412,9 +422,11 @@ jobs:
 
       - name: Verify DMG contents (macOS slim)
         shell: bash
+        env:
+          GH_REF: ${{ github.ref }}
         run: |
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            VERSION=$(echo "${{ github.ref }}" | sed 's/refs\/tags\/v//')
+          if [[ "$GH_REF" == refs/tags/* ]]; then
+            VERSION=$(echo "$GH_REF" | sed 's/refs\/tags\/v//')
           else
             VERSION="latest"
           fi
