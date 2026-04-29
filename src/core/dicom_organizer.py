@@ -656,7 +656,8 @@ class DICOMOrganizer:
         """
         try:
             if hasattr(dataset, tag_name):
-                return getattr(dataset, tag_name)
+                val = getattr(dataset, tag_name)
+                return val if val is not None else default
             return default
         except Exception:
             return default

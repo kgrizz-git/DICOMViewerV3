@@ -33,6 +33,7 @@ This file tracks active and near-term tasks.
 - [ ] **[P1]** Fix MPR rescale units so exported MPR DICOMs do not write misleading `RescaleType` values like `UNSPECIFIED`/`US`, and ROI statistics do not display DICOM defined terms as user-facing units when the rescale type is unknown or export-generated. **Plan:** [MPR rescale units and display correctness](plans/supporting/MPR_RESCALE_UNITS_AND_DISPLAY_CORRECTNESS_PLAN.md)
 - [ ] **[P0]** pylinac run on MRI has 'Sagittal Distortions: {}' - check what is happening there
 - [ ] **[P1]** Check what happens at ends of fused stacks when slice thicknesses are different, eg for qcctwhasc2026 (20260327-UNKNOWN)
+- [ ] **[P1]** 'About this file' dialog updates when you select a new window but not when you change what is in the focused window (at least via clicking on thumbnail in navigator)
 
 ## Performance / Packaging
 
@@ -40,6 +41,7 @@ This file tracks active and near-term tasks.
     - [P2] Particularly w/ large dataset (large files or many files) - would loading compressed initially save time? If we make a database, keep compressed cache?
 - [ ] **[P0]** See if executables can be made smaller (especially on macOS) ([details](FUTURE_WORK_DETAIL_NOTES.md#executable-size-especially-on-macos))
 - [ ] **[P1]** Check fusion responsiveness on Parallels with 3D fusion
+- [ ] **[P2]** See if https://github.com/DCMTK/dcmtk has anything useful (looks like it is C++) or https://github.com/fo-dicom/fo-dicom (C#)
 
 
 ## Maintenance
@@ -52,6 +54,7 @@ This file tracks active and near-term tasks.
 
 ## UX / Workflow
 
+- [ ] **[P1]** Make separators, borders, etc thinner to reclaim real estate
 - [ ] **[P1]** Allow a search bar in study index that searches all fields for the term/string
 - [ ] **[P1]** **Confirmed:** Ctrl+X does not cut ROIs/measurements/annotations like Ctrl+C / Ctrl+V—Edit only wires `StandardKey.Copy` / `StandardKey.Paste` to `AnnotationPasteHandler` (`main_window_menu_builder.py`, `app_signal_wiring.py`); there is no Cut shortcut or handler. **Implement:** add Edit → Cut with `QKeySequence.StandardKey.Cut`, call the same clipboard path as copy, then delete the same selected items using the existing per-type delete APIs already used elsewhere.
 - [ ] **[P2]** Give option (on by default) to suppress certain tag names (not values) on overlay - StudyDescription, SeriesDescription, InstitutionName, PatientName; abbreviate ImagePositionPatient as IPP and ImageOrientationPatient as IOP.
