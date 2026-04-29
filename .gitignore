@@ -238,3 +238,10 @@ dev-docs/security/dependabot-*.csv
 
 # Claude Code — local per-user permission grants (machine-specific, not for shared history)
 .claude/settings.local.json
+
+# Codex local test environments and temp artifacts
+.venv-codex/
+.venv-codex313/
+.codex-tmp/
+.codex-pytest/
+.codex-pytest-full/

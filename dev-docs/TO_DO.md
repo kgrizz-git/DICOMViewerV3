@@ -29,6 +29,7 @@ This file tracks active and near-term tasks.
 
 ## Bugs / Correctness
 
+- [ ] **[P0]** Loading studies from the study index is now only loading one instance/image/file
 - [ ] **[P0]** Opening an MR study with privacy mode off, then enabling privacy mode, then turning it back off caused the window width and center to change to very different values, causing the image to appear nearly solid black - it seemed to apply the values from another loaded series, which was last loaded
 - [ ] **[P1]** Fix MPR rescale units so exported MPR DICOMs do not write misleading `RescaleType` values like `UNSPECIFIED`/`US`, and ROI statistics do not display DICOM defined terms as user-facing units when the rescale type is unknown or export-generated. **Plan:** [MPR rescale units and display correctness](plans/supporting/MPR_RESCALE_UNITS_AND_DISPLAY_CORRECTNESS_PLAN.md)
 - [ ] **[P0]** pylinac run on MRI has 'Sagittal Distortions: {}' - check what is happening there
