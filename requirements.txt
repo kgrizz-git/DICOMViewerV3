@@ -22,7 +22,7 @@
 
 PySide6>=6.11.0
 pydicom>=2.4.0
-numpy>=1.24.0
+numpy>=2.4.4
 Pillow>=10.0.0
 # Cine export (GIF / AVI / MPG): imageio + bundled FFmpeg via imageio-ffmpeg (LGPL/GPL components — see CHANGELOG [Unreleased] and README).
 imageio==2.37.3
