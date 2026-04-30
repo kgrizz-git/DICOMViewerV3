@@ -38,7 +38,7 @@ SimpleITK>=2.5.4  # For 3D image resampling in image fusion (Phase 2)
 pylinac==3.43.2  # Automated phantom QA analysis (ACR CT + ACR MRI Large)
 scipy>=1.17.1  # pylinac numerical dependency
 scikit-image>=0.22.0  # pylinac image processing dependency
-pypdf>=4.0.0  # PDF merging for compare-mode combined PDF report
+pypdf>=6.10.2  # PDF merging for compare-mode combined PDF report
 
 # Optional dependencies for compressed DICOM support
 # These are recommended for decoding JPEG-compressed DICOM files (JPEG, JPEG-LS, JPEG 2000)
