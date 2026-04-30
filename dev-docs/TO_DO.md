@@ -29,8 +29,8 @@ This file tracks active and near-term tasks.
 
 ## Bugs / Correctness
 
-- [ ] **[P0]** Loading studies from the study index is only loading one instance/image/file — **Plan:** [Study index load single instance bug](plans/supporting/STUDY_INDEX_LOAD_SINGLE_INSTANCE_BUG_PLAN.md)
-- [ ] **[P0]** Opening an MR study with privacy mode off, then enabling privacy mode, then turning it back off caused the window width and center to change to very different values, causing the image to appear nearly solid black - it seemed to apply the values from another loaded series, which was last loaded
+- [x] **[P0]** Loading studies from the study index is only loading one instance/image/file — **Plan:** [Study index load single instance bug](plans/supporting/STUDY_INDEX_LOAD_SINGLE_INSTANCE_BUG_PLAN.md)
+- [x] **[P0]** Opening an MR study with privacy mode off, then enabling privacy mode, then turning it back off caused the window width and center to change to very different values, causing the image to appear nearly solid black - it seemed to apply the values from another loaded series, which was last loaded — **Plan:** [Privacy mode window level bug fix](plans/supporting/PRIVACY_MODE_WINDOW_LEVEL_BUG_FIX.md)
 - [x] **[P1]** Fix MPR rescale units so exported MPR DICOMs do not write misleading `RescaleType` values like `UNSPECIFIED`/`US`, and ROI statistics do not display DICOM defined terms as user-facing units when the rescale type is unknown or export-generated. **Plan:** [MPR rescale units and display correctness](plans/supporting/MPR_RESCALE_UNITS_AND_DISPLAY_CORRECTNESS_PLAN.md)
 - [ ] **[P0]** pylinac run on MRI has 'Sagittal Distortions: {}' - check what is happening there
 - [ ] **[P1]** Check what happens at ends of fused stacks when slice thicknesses are different, eg for qcctwhasc2026 (20260327-UNKNOWN)

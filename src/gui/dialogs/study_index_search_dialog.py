@@ -499,6 +499,19 @@ class StudyIndexSearchDialog(QDialog):
             )
             return
 
+        missing_count = len(paths) - len(existing)
+        if missing_count > 0:
+            QMessageBox.warning(
+                self,
+                "Study index",
+                (
+                    f"{missing_count} of {len(paths)} indexed file(s) were not found "
+                    "on disk and will be skipped.\n"
+                    "The study may have been partially moved or modified.\n\n"
+                    f"Study folder: {study_root}"
+                ),
+            )
+
         self._open_paths(existing)
         self.accept()
 
