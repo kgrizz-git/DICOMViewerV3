@@ -51,3 +51,9 @@ class StudyIndexPort(Protocol):
     def delete_grouped_study(self, study_uid: str, study_root_path: str) -> int:
         """Remove all index rows for one study in one folder; return rows deleted."""
         ...
+
+    def get_file_paths_for_study(
+        self, study_uid: str, study_root_path: str
+    ) -> list[str]:
+        """Return every indexed file path for one (study UID, study folder) pair."""
+        ...

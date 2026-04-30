@@ -236,6 +236,29 @@ class StudyIndexStore:
             conn.commit()
         return n
 
+    def get_file_paths_for_study(
+        self, study_uid: str, study_root_path: str
+    ) -> list[str]:
+        """
+        Return every indexed ``file_path`` for one logical study
+        (``study_uid`` + ``study_root_path``).
+
+        Uses the existing ``idx_study_uid_root`` index; fast even for large studies.
+        Paths are normalised identically to :meth:`delete_study_group`.
+        """
+        su = (study_uid or "").strip()
+        sr = os.path.normpath(os.path.abspath((study_root_path or "").strip()))
+        if not su or not sr:
+            return []
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT file_path FROM study_index_entry "
+                "WHERE study_uid = ? AND study_root_path = ?",
+                (su, sr),
+            )
+            return [row[0] for row in cur.fetchall()]
+
     @staticmethod
     def _col(alias: str | None, name: str) -> str:
         return f"{alias}.{name}" if alias else name
