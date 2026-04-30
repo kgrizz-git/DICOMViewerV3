@@ -110,8 +110,25 @@ def test_write_mpr_series_round_trip_ct(tmp_path) -> None:
         arr = ds.pixel_array
         assert arr.shape == (4, 4)
         assert hasattr(ds, "RescaleSlope") and hasattr(ds, "RescaleIntercept")
+        assert ds.RescaleType == "HU"
     assert len(series_uids) == 1
     assert paths[0].parent == paths[1].parent == paths[2].parent
+
+
+def test_write_mpr_series_raw_ct_omits_rescale_type(tmp_path) -> None:
+    template = _synthetic_ct_template()
+    mpr = _synthetic_mpr_result(template)
+    paths = write_mpr_series(
+        tmp_path,
+        mpr,
+        template,
+        MprDicomExportOptions(
+            orientation_label="Axial",
+            use_rescaled_pixel_values=False,
+        ),
+    )
+    ds0 = pydicom.dcmread(str(paths[0]), force=True)
+    assert "RescaleType" not in ds0
 
 
 def test_write_mpr_series_empty_raises(tmp_path) -> None:
@@ -146,6 +163,7 @@ def test_write_mpr_series_secondary_capture_nm(tmp_path) -> None:
     ds0 = pydicom.dcmread(str(paths[0]), force=True)
     assert str(ds0.SOPClassUID) == str(SecondaryCaptureImageStorage)
     assert ds0.Modality == "OT"
+    assert "RescaleType" not in ds0
 
 
 def test_write_mpr_series_cancel_mid_run(tmp_path) -> None:

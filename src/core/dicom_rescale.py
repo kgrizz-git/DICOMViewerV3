@@ -19,6 +19,27 @@ from typing import Optional, Tuple
 from pydicom.dataset import Dataset
 
 
+_DISPLAY_NONE_RESCALE_TYPES = {"UNSPECIFIED", "US"}
+
+
+def _normalize_explicit_rescale_type(rescale_type: Optional[str]) -> Optional[str]:
+    """
+    Normalize an explicit RescaleType value for viewer/display semantics.
+
+    DICOM-defined placeholders such as ``UNSPECIFIED`` / ``US`` should not be
+    surfaced as user-facing units, so treat them as missing and let inference
+    decide whether a meaningful unit like ``HU`` applies.
+    """
+    if rescale_type is None:
+        return None
+    normalized = str(rescale_type).strip()
+    if not normalized:
+        return None
+    if normalized.upper() in _DISPLAY_NONE_RESCALE_TYPES:
+        return None
+    return normalized
+
+
 def get_rescale_parameters(dataset: Dataset) -> Tuple[Optional[float], Optional[float], Optional[str]]:
     """
     Extract rescale parameters from DICOM dataset.
@@ -82,8 +103,9 @@ def infer_rescale_type(
     Returns:
         Inferred rescale type (e.g., "HU") or original rescale_type
     """
-    if rescale_type:
-        return rescale_type
+    normalized_rescale_type = _normalize_explicit_rescale_type(rescale_type)
+    if normalized_rescale_type:
+        return normalized_rescale_type
 
     modality = getattr(dataset, "Modality", None)
     if modality and str(modality).upper() == "CT":

@@ -29,7 +29,22 @@ class TestInferRescaleType(unittest.TestCase):
         ds.Modality = "CT"
         self.assertEqual(
             infer_rescale_type(ds, 1.0, 0.0, "US"),
-            "US",
+            "HU",
+        )
+
+    def test_unspecified_rescale_type_is_hidden_for_non_ct(self):
+        ds = Dataset()
+        ds.Modality = "MR"
+        self.assertIsNone(
+            infer_rescale_type(ds, 1.0, 0.0, "UNSPECIFIED"),
+        )
+
+    def test_meaningful_rescale_type_is_preserved(self):
+        ds = Dataset()
+        ds.Modality = "PT"
+        self.assertEqual(
+            infer_rescale_type(ds, 1.0, 0.0, "BQML"),
+            "BQML",
         )
 
 
