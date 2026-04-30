@@ -12,5 +12,5 @@
 #   2. Build executable: pyinstaller DICOMViewerV3.spec
 #   3. See docs/BUILDING_EXECUTABLES.md for detailed instructions
 
-pyinstaller>=6.0.0
+pyinstaller>=6.20.0
 
