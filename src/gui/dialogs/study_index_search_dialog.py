@@ -94,7 +94,7 @@ _COLUMN_LABELS: dict[str, str] = {
     "instance_count": "# Instances",
     "series_count": "# Series",
     "modalities": "Modalities",
-    "open_file_path": "Open file",
+    "open_file_path": "Sample file",
     "study_uid": "Study UID",
 }
 
@@ -299,7 +299,10 @@ class StudyIndexSearchDialog(QDialog):
         self._apply_hidden_columns()
 
         bottom = QHBoxLayout()
-        open_btn = QPushButton("Open selected file")
+        open_btn = QPushButton("Open selected study")
+        open_btn.setToolTip(
+            "Load all indexed DICOM files for this study into the viewer"
+        )
         open_btn.clicked.connect(self._open_selected_file)
         remove_btn = QPushButton("Remove from index…")
         remove_btn.setToolTip(
@@ -448,14 +451,68 @@ class StudyIndexSearchDialog(QDialog):
         self._open_row(row)
 
     def _open_row(self, row: int) -> None:
-        path = self._model.open_path_for_row(row)
-        if not path:
-            QMessageBox.information(self, "Study index", "No file path for this row.")
+        snap = self._model.group_row_snapshot(row)
+        study_uid = (snap.get("study_uid") or "").strip()
+        study_root = (snap.get("study_root_path") or "").strip()
+        fallback = (snap.get("open_file_path") or "").strip()
+
+        if not study_uid or not study_root:
+            QMessageBox.warning(self, "Study index", "Row is missing study UID or folder path.")
             return
-        if not os.path.isfile(path):
-            QMessageBox.warning(self, "Study index", f"File not found:\n{path}")
+
+        try:
+            paths = self._service.get_file_paths_for_study(study_uid, study_root)
+        except Exception as e:
+            safe_details = sanitize_message(str(e), redact_paths=True)
+            QMessageBox.critical(
+                self,
+                "Study index",
+                f"Failed to retrieve file list from index.\n\nDetails: {safe_details}",
+            )
             return
-        self._open_paths([path])
+
+        existing = [p for p in paths if os.path.isfile(p)]
+
+        if not existing:
+            # All indexed paths are gone — files may have been moved or deleted.
+            if fallback and os.path.isfile(fallback):
+                QMessageBox.information(
+                    self,
+                    "Study index",
+                    (
+                        "None of the indexed file paths were found at their recorded locations.\n"
+                        "Loading only the sample file as a fallback.\n\n"
+                        f"Study folder: {study_root}"
+                    ),
+                )
+                self._open_paths([fallback])
+                self.accept()
+                return
+            QMessageBox.warning(
+                self,
+                "Study index",
+                (
+                    "None of the indexed files were found on disk.\n"
+                    "The study may have been moved or deleted.\n\n"
+                    f"Study folder: {study_root}"
+                ),
+            )
+            return
+
+        missing_count = len(paths) - len(existing)
+        if missing_count > 0:
+            QMessageBox.warning(
+                self,
+                "Study index",
+                (
+                    f"{missing_count} of {len(paths)} indexed file(s) were not found "
+                    "on disk and will be skipped.\n"
+                    "The study may have been partially moved or modified.\n\n"
+                    f"Study folder: {study_root}"
+                ),
+            )
+
+        self._open_paths(existing)
         self.accept()
 
     def _on_table_context_menu(self, pos) -> None:

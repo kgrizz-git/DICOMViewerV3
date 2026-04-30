@@ -71,6 +71,7 @@ from pydicom.uid import (
     UID,
 )
 
+from core.dicom_rescale import get_rescale_parameters, infer_rescale_type
 from core.mpr_builder import MprResult
 
 
@@ -168,6 +169,22 @@ def _series_description_default(
     return desc[:64]
 
 
+def _export_rescale_type(
+    template: Dataset, *, use_rescaled_pixel_values: bool
+) -> Optional[str]:
+    """
+    Return the meaningful RescaleType to preserve on exported MPR slices.
+
+    Only propagate/infer a unit when the exported pixels represent rescaled
+    source semantics. For raw-value exports, the new output rescale tags are
+    storage mechanics only and should not claim a user-facing unit.
+    """
+    if not use_rescaled_pixel_values:
+        return None
+    slope, intercept, rescale_type = get_rescale_parameters(template)
+    return infer_rescale_type(template, slope, intercept, rescale_type)
+
+
 def write_mpr_series(
     output_dir: str | Path,
     mpr_result: MprResult,
@@ -214,6 +231,10 @@ def write_mpr_series(
     template = copy.deepcopy(template_dataset)
     modality = str(getattr(template, "Modality", "") or "")
     sop_class = _choose_sop_class_uid(modality)
+    export_rescale_type = _export_rescale_type(
+        template,
+        use_rescaled_pixel_values=bool(opts.use_rescaled_pixel_values),
+    )
 
     if opts.anonymize:
         from utils.dicom_anonymizer import DICOMAnonymizer
@@ -342,10 +363,11 @@ def write_mpr_series(
         ds[0x7FE00010] = DataElement(0x7FE00010, "OW", pixel_bytes)
         ds.RescaleSlope = rs
         ds.RescaleIntercept = ri
-        try:
-            ds.RescaleType = "US" if modality.upper() == "CT" else "UNSPECIFIED"
-        except Exception:
-            pass
+        if export_rescale_type:
+            try:
+                ds.RescaleType = export_rescale_type
+            except Exception:
+                pass
 
         try:
             ds.WindowCenter = wc

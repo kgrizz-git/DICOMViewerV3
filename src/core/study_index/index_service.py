@@ -143,6 +143,21 @@ class LocalStudyIndexService:
         store.init_schema()
         return store.delete_study_group(study_uid, study_root_path)
 
+    def get_file_paths_for_study(
+        self, study_uid: str, study_root_path: str
+    ) -> list[str]:
+        """
+        Return every indexed file path for one (study UID, study folder) pair.
+
+        Uses the existing ``idx_study_uid_root`` index — fast regardless of study size.
+        Returns an empty list when the backend is unavailable or inputs are blank.
+        """
+        if not self.is_backend_available():
+            return []
+        store = StudyIndexStore(self._db_path(), self._passphrase())
+        store.init_schema()
+        return store.get_file_paths_for_study(study_uid, study_root_path)
+
     def schedule_index_after_load(
         self,
         datasets: list[Dataset],

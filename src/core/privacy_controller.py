@@ -128,6 +128,8 @@ class PrivacyController:
                     slice_display_manager.current_study_uid,
                     slice_display_manager.current_series_uid,
                     slice_display_manager.current_slice_index,
+                    preserve_view_override=True,
+                    update_controls=False,
                     update_metadata=(idx == focused_idx),
                 )
             except Exception:

@@ -143,7 +143,7 @@ class ConfigManager(
             "roi_font_color_r": 255,
             "roi_font_color_g": 255,
             "roi_font_color_b": 0,
-            "roi_line_thickness": 6,
+            "roi_line_thickness": 3,
             "roi_line_color_r": 255,
             "roi_line_color_g": 0,
             "roi_line_color_b": 0,

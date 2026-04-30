@@ -12,9 +12,8 @@ updates:
       - "GitHub-Copilot"
     labels:
       - "dependencies"
-      - "python"
     commit-message:
-      prefix: "ci(deps):"
+      prefix: "ci"
       include: "scope"
     pull-request-branch-name:
       separator: "/"

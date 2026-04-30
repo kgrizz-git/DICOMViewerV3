@@ -29,8 +29,9 @@ This file tracks active and near-term tasks.
 
 ## Bugs / Correctness
 
-- [ ] **[P0]** Opening an MR study with privacy mode off, then enabling privacy mode, then turning it back off caused the window width and center to change to very different values, causing the image to appear nearly solid black - it seemed to apply the values from another loaded series, which was last loaded
-- [ ] **[P1]** Fix MPR rescale units so exported MPR DICOMs do not write misleading `RescaleType` values like `UNSPECIFIED`/`US`, and ROI statistics do not display DICOM defined terms as user-facing units when the rescale type is unknown or export-generated. **Plan:** [MPR rescale units and display correctness](plans/supporting/MPR_RESCALE_UNITS_AND_DISPLAY_CORRECTNESS_PLAN.md)
+- [x] **[P0]** Loading studies from the study index is only loading one instance/image/file — **Plan:** [Study index load single instance bug](plans/supporting/STUDY_INDEX_LOAD_SINGLE_INSTANCE_BUG_PLAN.md)
+- [x] **[P0]** Opening an MR study with privacy mode off, then enabling privacy mode, then turning it back off caused the window width and center to change to very different values, causing the image to appear nearly solid black - it seemed to apply the values from another loaded series, which was last loaded — **Plan:** [Privacy mode window level bug fix](plans/supporting/PRIVACY_MODE_WINDOW_LEVEL_BUG_FIX.md)
+- [x] **[P1]** Fix MPR rescale units so exported MPR DICOMs do not write misleading `RescaleType` values like `UNSPECIFIED`/`US`, and ROI statistics do not display DICOM defined terms as user-facing units when the rescale type is unknown or export-generated. **Plan:** [MPR rescale units and display correctness](plans/supporting/MPR_RESCALE_UNITS_AND_DISPLAY_CORRECTNESS_PLAN.md)
 - [ ] **[P0]** pylinac run on MRI has 'Sagittal Distortions: {}' - check what is happening there
 - [ ] **[P1]** Check what happens at ends of fused stacks when slice thicknesses are different, eg for qcctwhasc2026 (20260327-UNKNOWN)
 - [ ] **[P1]** 'About this file' dialog updates when you select a new window but not when you change what is in the focused window (at least via clicking on thumbnail in navigator)
@@ -54,8 +55,9 @@ This file tracks active and near-term tasks.
 
 ## UX / Workflow
 
+- [ ] **[P1]** Allow a button in study index that checks all indexed studies still exist at indexed path and if not asks the user if they want to update the location or remove them (what happens currently if a user tries to load a study from index and files aren't found?)
 - [ ] **[P1]** Make separators, borders, etc thinner to reclaim real estate
-- [ ] **[P1]** Allow a search bar in study index that searches all fields for the term/string
+- [x] **[P1]** Allow a search bar in study index that searches all fields for the term/string
 - [ ] **[P1]** **Confirmed:** Ctrl+X does not cut ROIs/measurements/annotations like Ctrl+C / Ctrl+V—Edit only wires `StandardKey.Copy` / `StandardKey.Paste` to `AnnotationPasteHandler` (`main_window_menu_builder.py`, `app_signal_wiring.py`); there is no Cut shortcut or handler. **Implement:** add Edit → Cut with `QKeySequence.StandardKey.Cut`, call the same clipboard path as copy, then delete the same selected items using the existing per-type delete APIs already used elsewhere.
 - [ ] **[P2]** Give option (on by default) to suppress certain tag names (not values) on overlay - StudyDescription, SeriesDescription, InstitutionName, PatientName; abbreviate ImagePositionPatient as IPP and ImageOrientationPatient as IOP.
 - [ ] **[P0]** Full-fidelity Structured Report browsing: dynamic `ContentSequence` tree (all value types), template-aware **RDSR** views with **per-event** rows (fluoroscopy / TID 10003 family), registry for major **SR SOP classes**, not only the fixed dose-summary table or flat tags. *Prior (2026-04-16): file meta merged into `get_all_tags`; no-pixel `display_slice` path refreshes metadata/tag list—covers **tags**, not SR document semantics.* **Plan:** [SR full fidelity browser](plans/supporting/SR_FULL_FIDELITY_BROWSER_PLAN.md).

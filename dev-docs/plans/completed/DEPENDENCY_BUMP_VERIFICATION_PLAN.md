@@ -27,6 +27,7 @@
 - [x] **`python -m pip check`** — no broken dependencies reported.
 - [x] **Cold import smoke:** `python -c "import pylinac; print(pylinac.__version__)"` (skip only if pylinac was not bumped).
 - [x] **Application import smoke (optional):** from project root with `PYTHONPATH=src` (see `tests/README.md`), e.g. `python -c "import sys; sys.path.insert(0, 'src'); from qa.pylinac_extent_subclasses import ACRCTForViewer"` (skip if pylinac / `src/qa` unchanged).
+- [ ] If **`PySide6`** changed, run a **Qt import smoke:** `python -c "import PySide6; from PySide6 import QtCore, QtGui, QtWidgets; print(PySide6.__version__, QtCore.qVersion())"`.
 
 ---
 
@@ -34,35 +35,43 @@
 
 - [x] From the activated venv, run the **full suite:** `python -m pytest tests/ -v` (or `python tests/run_tests.py` if that is the team standard for the same coverage).
 - [x] If **`pylinac`** changed, also run **`python -m pytest tests/test_pylinac_extent_subclasses.py tests/test_pylinac_extent_relaxed.py -v`** (add any other `test_*pylinac*` paths if present).
+- [ ] If **`PySide6`** changed, also run a **Qt-focused regression subset:** `python -m pytest tests/test_main_signals_view.py tests/test_main_window_theme.py tests/test_main_window_fullscreen.py tests/core/test_loading_progress_manager.py tests/core/test_subwindow_viewport_capture.py tests/core/test_subwindow_roi_focus.py tests/metadata/test_metadata_controller.py tests/roi/test_roi_measurement_controller.py tests/test_pyinstaller_exclude_audit.py -v`.
 - [ ] If **`pydicom`** or DICOM decoding plugins changed, spot-check any tests tagged or documented for compressed transfer syntaxes (JPEG-LS, JPEG 2000, etc.) if they exist in the tree.
 
 ---
 
 ## C. pylinac / QA integration (when `pylinac` or its stack was bumped)
 
-- [ ] Read **upstream changelog** for the new version (e.g. [pylinac changelog](https://github.com/jrkerns/pylinac/blob/master/docs/source/changelog.rst)) for **breaking** or **behavior** notes affecting **ACRCT**, **ACRMRILarge**, or **CatPhan**-related APIs.
+- [x] Read **upstream changelog** for the new version (e.g. [pylinac changelog](https://github.com/jrkerns/pylinac/blob/master/docs/source/changelog.rst)) for **breaking** or **behavior** notes affecting **ACRCT**, **ACRMRILarge**, or **CatPhan**-related APIs.
 - [x] **Manual QA smoke (recommended):** one **ACR CT** and one **ACR MRI Large** run on known-good local phantoms (vanilla and non-vanilla paths if you use both), comparing PDF/JSON or key metrics to **prior baseline** where clinically appropriate.
 - [x] Update **version callouts** if the project documents a verified pin: e.g. `requirements.txt` comment, [`user-docs/USER_GUIDE_QA_PYLINAC.md`](../../user-docs/USER_GUIDE_QA_PYLINAC.md), [`dev-docs/info/PYLINAC_FLEXIBILITY_AND_WORKAROUNDS.md`](../info/PYLINAC_FLEXIBILITY_AND_WORKAROUNDS.md), and any **HIGHDICOM / pydicom** constraint notes that cite the pylinac pin.
 
 ---
 
-## D. GitHub Actions and `actions/github-script` (when that action or workflow logic changed)
+## D. Dependabot configuration (when `.github/dependabot.yml` changed)
 
-- [x] Re-read **release breaking changes** for the new major (e.g. [github-script v9](https://github.com/actions/github-script/releases)): no `require('@actions/github')`; do not **`const`/`let` redeclare** injected `getOctokit`.
+- [ ] If **`labels:`** are configured, confirm each listed label already exists on the repo (for example `dependencies`, `github-actions`) or remove/replace missing labels before merge.
+- [ ] If **`commit-message.include: scope`** is enabled, confirm `prefix` does not already embed the same scope (for example use `ci` rather than `ci(deps):`) so generated PR titles stay clean.
+
+---
+
+## E. GitHub Actions and `actions/github-script` (when that action or workflow logic changed)
+
+- [ ] Re-read **release breaking changes** for the new major (e.g. [github-script v9](https://github.com/actions/github-script/releases)): no `require('@actions/github')`; do not **`const`/`let` redeclare** injected `getOctokit`.
 - [x] **Grep** `.github/workflows/` for `github-script` and confirm each `script:` block only uses supported patterns (`github`, `context`, `core`, injected `getOctokit`, Node built-ins like `fs`).
 - [ ] Open a **draft PR** (or push to a branch) and confirm workflows that use **`actions/github-script`** still **complete** (comment-on-PR steps may only run on `pull_request`; use a test PR if needed). `N/A in this local agent session:` no branch push / PR execution was performed here.
 - [ ] Confirm **Semgrep / Grype / security-checks** jobs still upload SARIF or post comments as expected when those paths are exercised. `Blocked pending actual workflow run:` local YAML review found the expected upload/comment steps, but this session did not exercise GitHub Actions.
 
 ---
 
-## E. Release hygiene (when the bump is part of a user-visible release)
+## F. Release hygiene (when the bump is part of a user-visible release)
 
 - [ ] **`CHANGELOG.md`:** add an entry under the correct section (e.g. **Dependencies** / **Changed**) describing the bump and any user-visible impact (Python floor, QA behavior caution, CI-only change).
 - [ ] **`src/version.py`** (and any packaging metadata): align with your semver policy if this bump ships in a tagged release.
 
 ---
 
-## F. Completion record (fill in when done)
+## G. Completion record (fill in when done)
 
 | Field | Value |
 |--------|--------|
