@@ -245,3 +245,6 @@ dev-docs/security/dependabot-*.csv
 .codex-tmp/
 .codex-pytest/
 .codex-pytest-full/
+
+# Gemini
+.gemini/antigravity/brain/
