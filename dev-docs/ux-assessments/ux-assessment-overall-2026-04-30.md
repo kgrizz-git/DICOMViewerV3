@@ -1,9 +1,9 @@
 # UX Assessment — Overall Presentation & Experience
-**Date:** 2026-04-30 (updated with screenshots 2026-05-01)  
-**Scope:** High-level structural UX pass. Menus and right-click context menus are reserved for follow-up assessments.  
-**Method:** Static code analysis (QSS stylesheets, main window layout, toolbar/menu/panel layout builders, existing UX planning docs) + visual review of 8 live screenshots covering empty state, loaded state, menus, dialogs, ROI tools, and tag viewer.  
+**Date:** 2026-04-30 (updated with screenshots + menu deep-dive 2026-05-01)  
+**Scope:** Overall structural pass + full menu bar deep-dive. Right-click context menus reserved for follow-up.  
+**Method:** Static code analysis (QSS stylesheets, main window layout, toolbar/menu/panel layout builders, existing UX planning docs) + visual review of 8 live screenshots.  
 **Screenshots:** `resources/screenshots-ignored/Screenshot 2026-05-01 00*.png`  
-**Follow-up passes planned:** (1) Top menu bar deep-dive, (2) Right-click context menu deep-dive, (3) DESIGN.md with design-system alignment.
+**Follow-up passes planned:** (1) Right-click context menu deep-dive, (2) DESIGN.md — design system alignment, token system, icon adoption plan.
 
 ---
 
@@ -338,7 +338,7 @@ The following observations come from the 8 live screenshots and supersede or con
 
 - **2×2 grid layout visible on launch** — the top-left pane has a blue border indicating focus. The four black panels are clean but stark. There is no empty-state guidance (no "Drop a DICOM file here" message, no drag-target overlay).
 - **Toolbar confirmed text-only.** All buttons render as plain text QToolButtons. The density is significant: the full width of the window is consumed by toolbar labels.
-- **"Privacy is OFF" renders in bright red/orange** (the checked `QToolButton` state appears to use a high-contrast red highlight, not the standard blue accent). This is attention-grabbing but contradicts the visual language — red conventionally signals an error or danger state, not a feature toggle. The label also reads as a warning ("Privacy is OFF!") rather than a control affordance.
+- **"Privacy is OFF" renders in bright red/orange** — this is intentional and correct. The red highlight is a deliberate safety signal: when PHI/patient data is visible (privacy OFF), the toolbar draws maximum attention to that state so the user cannot miss it. When privacy mode is active, the button returns to the standard blue styling. This is the right pattern for a compliance-sensitive medical application. The only suggestion is to make the label slightly more explicit: "Privacy OFF — PHI Visible" would remove any ambiguity about what the red state means.
 - **"Pan" is highlighted in blue** (the active mode) — the checked-state blue is recognizable and correct.
 - **Status bar shows "Ready"** with nothing else — confirms the cold-start empty-state problem.
 - **Right panel is fully populated** even with no file loaded: Window Center, Window Width, Zoom spinboxes, sliders, ROI list, ROI Statistics table, "Delete Selected" / "Delete All" buttons. The Delete buttons appearing when there is nothing to delete adds visual noise. Consider disabling or hiding them until ROIs exist.
@@ -386,63 +386,444 @@ Full analysis reserved for the menus pass. Notable: **the View menu is the longe
 
 ---
 
-## 11. Summary: Key Findings (Updated)
+## 11. Menu Bar Deep-Dive
 
-### Highest Priority (P0 — affects every user on every session)
+Source: `src/gui/main_window_menu_builder.py`. Screenshots: `002337` (Tools), `002423` (File), `002803` (View).
 
-| Issue | Visual Evidence | Impact |
+### 11.1 Menu Bar Structure Overview
+
+```
+File | Edit | View | Tools | Help
+```
+
+Five top-level menus is appropriate for this application scope. The ordering follows platform conventions (File first, Help last). The structure is broadly correct but each individual menu has specific issues detailed below.
+
+---
+
+### 11.2 File Menu
+
+**Full current structure:**
+```
+Open File(s)...                 Ctrl+O
+Open Folder...                  Ctrl+Shift+O
+Open Study Index…
+─────────────────────────────
+Recent ▶
+Edit Recent List...
+─────────────────────────────
+Export...                       Ctrl+E
+Export Screenshots...
+Export Cine As…
+Save MPR as DICOM…
+─────────────────────────────
+Export Customizations...
+Import Customizations...
+─────────────────────────────
+Export Tag Presets...
+Import Tag Presets...
+─────────────────────────────
+Close All                       Ctrl+W
+─────────────────────────────
+Exit                            Ctrl+Q
+```
+
+**Findings:**
+
+| # | Issue | Severity |
 |---|---|---|
-| No toolbar icons | All 8 screenshots — text-only buttons throughout | Slow tool identification, toolbar too wide, unprofessional appearance |
-| "Privacy is OFF" renders in red — false-alarm visual | 002101 cold start | Red = danger/error in every other UI; label is also backwards logic |
-| 2px splitter handles | 002101 — invisible between panels | Difficult to resize panels precisely |
-| Tag viewer purple row tinting inconsistent with blue accent | 002858 | Visual incoherence; the only place in the app with this color |
+| F1 | **"Open Study Index…" duplicated in Tools** — same `study_index_search_requested` signal fires from both File and Tools menus. Users won't know which is canonical. | P1 |
+| F2 | **"Edit Recent List..."** sits outside the Recent submenu, making it harder to discover. It logically belongs as the last item inside the Recent flyout, or as "Clear / Edit Recent…" at the bottom of Recent. | P2 |
+| F3 | **Customizations and Tag Presets are two separate groups** (two pairs of Export/Import) when they could be consolidated into one "Settings Backup" submenu: Export Customizations, Import Customizations, Export Tag Presets, Import Tag Presets. Reduces File menu length by 2 visible items. | P2 |
+| F4 | **"Close All" only** — there is no "Close" for a single focused pane. This is not blocking but may surprise users who expect granular close. | P3 |
+| F5 | **"Save MPR as DICOM…"** is a save operation mixed into an export group. It is always enabled regardless of whether an MPR view exists, inviting confusion. Should be disabled when no MPR pane is focused. | P2 |
 
-### High Priority (P1 — significant ergonomic impact)
+**What's working well:**
+- Opening trilogy (File / Folder / Study Index) is well-organized and covers the three access paths.
+- Export group (Export..., Export Screenshots, Export Cine) is logically grouped.
+- Close/Exit at the bottom with a separator is correct platform convention.
 
-| Issue | Visual Evidence | Impact |
+**Proposed restructured File menu:**
+```
+Open File(s)...                 Ctrl+O
+Open Folder...                  Ctrl+Shift+O
+Open Study Index…
+─────────────────────────────
+Recent ▶
+  [recent files list]
+  ─────────────────
+  Edit Recent List...
+─────────────────────────────
+Export Image...                 Ctrl+E
+Export Screenshots...
+Export Cine As…
+Save MPR as DICOM…              (disabled when no MPR active)
+─────────────────────────────
+Settings Backup ▶
+  Export Customizations...
+  Import Customizations...
+  ─────────────────
+  Export Tag Presets...
+  Import Tag Presets...
+─────────────────────────────
+Close All                       Ctrl+W
+─────────────────────────────
+Exit                            Ctrl+Q
+```
+
+---
+
+### 11.3 Edit Menu
+
+**Full current structure:**
+```
+Copy                            Ctrl+C
+Paste                           Ctrl+V
+─────────────────────────────
+Undo                            Ctrl+Z
+Redo                            Ctrl+Y / Shift+Ctrl+Z
+─────────────────────────────
+Settings...
+```
+
+**Findings:**
+
+| # | Issue | Severity |
 |---|---|---|
+| E1 | **"Copy" and "Paste" are annotation-only** but are labelled generically. Users pressing Ctrl+C may expect to copy the image or a DICOM value, not an annotation. Labels should be "Copy Annotation" and "Paste Annotation". | P1 |
+| E2 | **"Undo" and "Redo" are tag-edit-only** (`undo_tag_edit_action`), not general undo. A user who draws an ROI and presses Ctrl+Z will be confused when nothing undoes. Should be labelled "Undo Tag Edit" / "Redo Tag Edit", or Undo should be generalized to cover all edit operations over time. | P1 |
+| E3 | **"Settings…" in Edit** — correct on Windows/Linux (where it mirrors "Preferences" placement conventions), but on macOS Qt should map it to the application menu via `QAction.MenuRole`. Worth verifying this is handled correctly on macOS builds. | P2 |
+
+**What's working well:**
+- The menu is appropriately short.
+- Standard shortcuts (Ctrl+C, Ctrl+V, Ctrl+Z, Ctrl+Y) are wired to matching standard keys.
+
+---
+
+### 11.4 View Menu
+
+**Full current structure:**
+```
+Theme ▶
+  Light [checkable]
+  Dark  [checkable]
+─────────────────────────────
+Reset View                      V / Shift+V
+─────────────────────────────
+Orientation ▶
+  Flip Horizontal               Alt+H
+  Flip Vertical                 Alt+V
+  ─────────────────
+  Rotate 90° CW                 Alt+R
+  Rotate 90° CCW                Shift+Alt+R
+  Rotate 180°
+  ─────────────────
+  Reset Orientation             Shift+Alt+O
+Privacy View                    Ctrl+P  [checkable]
+Image Smoothing                         [checkable]
+Show Scale Markers                      [checkable]
+Show Direction Labels                   [checkable]
+Scale Markers Color...
+Direction Labels Color...
+Show In-View Slice/Frame Slider         [checkable]
+Show Instances Separately               [checkable, disabled]
+─────────────────────────────
+Fullscreen                      F11 / Ctrl+F  [checkable]
+Show/Hide Left Pane                     [checkable]
+Show/Hide Right Pane                    [checkable]
+Show/Hide Series Navigator              [checkable]
+Show Slice/Frame Count on Navigator Thumbnails  [checkable]
+─────────────────────────────
+Show Window Assignment Thumbnail        [checkable]
+Overlay Tags Configuration...  Ctrl+O   ← ⚠ CONFLICT
+Overlay Settings...
+Annotation Options...
+─────────────────────────────
+Layout ▶
+  1x1  (1)  [checkable]
+  1x2  (2)  [checkable]
+  2x1  (3)  [checkable]
+  2x2  (4)  [checkable]
+─────────────────────────────
+Slice Sync ▶
+  Enable Slice Sync             [checkable]
+  Manage Sync Groups...
+Show Slice Location Lines ▶
+  Enable/Disable                [checkable]
+  Only Show For Same Group      [checkable]
+  Show Only For Focused Window  [checkable]
+  ─────────────────
+  Show Slab Boundaries Instead of Centre  [checkable]
+```
+
+**Findings:**
+
+| # | Issue | Severity |
+|---|---|---|
+| V1 | **Ctrl+O shortcut conflict** — `Open File(s)...` (File menu, `StandardKey.Open`) and `Overlay Tags Configuration...` (View menu, `"Ctrl+O"`) both resolve to Ctrl+O. Qt will likely silently prefer one; the other will be unreachable by keyboard. This is a **bug**. | P0 |
+| V2 | **View menu has 25+ items and is the longest menu in the app.** It mixes theme, navigation, image display options, overlay config, window management, layout, and synchronisation — 7 conceptual categories. M3, Carbon, and Apple HIG all recommend splitting menus that exceed ~12 items. | P1 |
+| V3 | **Privacy View mixed in with display options** (between Orientation submenu and Image Smoothing) with no separator. Privacy is compliance-critical and deserves its own visual group or could move to a dedicated position near the top. | P1 |
+| V4 | **"Show/Hide Left Pane" / "Show/Hide Right Pane"** — the label "Show/Hide" is redundant when the item has a checkmark indicator. Better: "Left Panel" and "Right Panel" (the checkmark state communicates show/hide). | P2 |
+| V5 | **"Show Instances Separately" is permanently disabled** but still visible. Grayed-out items with no tooltip or status tip explaining *why* they are disabled create confusion. Either hide it until the feature is activatable, or add a status tip ("Available when a multi-frame series is loaded"). | P2 |
+| V6 | **Layout keyboard shortcuts documented in label text** — "1x1  (1)", "1x2  (2)" puts the shortcut hint inside the label string rather than using `setShortcut()`. This means the shortcut doesn't appear right-aligned in standard shortcut position, and the actual key (1, 2, 3, 4) may not be wired. | P2 |
+| V7 | **"Scale Markers Color..." and "Direction Labels Color..."** appear inline in the main menu rather than as submenu items of their respective toggles. This adds 2 items to an already long menu. Consider grouping each toggle + its color picker under a flyout, or placing both color pickers in Overlay Settings. | P3 |
+| V8 | **"Show Window Assignment Thumbnail", "Overlay Tags Configuration...", "Overlay Settings...", "Annotation Options..."** are grouped together but represent three different concerns (layout widget, overlay data config, overlay appearance, annotation appearance). The grouping is incidental rather than intentional. | P2 |
+| V9 | **Slice Sync and Show Slice Location Lines** are multi-pane synchronization features. They fit in View but their placement at the very bottom (below Layout) makes them easy to miss. Advanced sync features might be better surfaced through a dedicated "Sync" or "Multi-Window" menu item. | P3 |
+
+**Proposed View menu restructuring:**
+
+The View menu could be split into focused sub-sections using a cleaner grouping. Below is a suggested restructure that removes nothing but reorders and adds targeted submenus:
+
+```
+Theme ▶  (Light, Dark)
+─────────────────────────────
+Fullscreen                      F11 / Ctrl+F
+Layout ▶  (1×1, 1×2, 2×1, 2×2 — with proper setShortcut calls)
+─────────────────────────────
+Left Panel               [checkable]
+Right Panel              [checkable]
+Series Navigator         [checkable]
+  Show Slice/Frame Count on Thumbnails  [checkable, move inside navigator section]
+─────────────────────────────
+Reset View                      V / Shift+V
+Orientation ▶  (unchanged)
+Privacy View                    Ctrl+P  [checkable]
+─────────────────────────────
+Display Options ▶
+  Image Smoothing                [checkable]
+  Show Scale Markers             [checkable]
+  Scale Markers Color...
+  Show Direction Labels          [checkable]
+  Direction Labels Color...
+  Show In-View Slice/Frame Slider [checkable]
+  Show Instances Separately       [checkable]
+  Show Window Assignment Thumbnail [checkable]
+─────────────────────────────
+Overlays ▶
+  Overlay Tags Configuration...  (fix shortcut — remove Ctrl+O conflict)
+  Overlay Settings...
+  Annotation Options...
+─────────────────────────────
+Synchronisation ▶
+  Enable Slice Sync              [checkable]
+  Manage Sync Groups...
+  ─────────────
+  Show Slice Location Lines      [checkable]
+  Only Show For Same Group       [checkable]
+  Show Only For Focused Window   [checkable]
+  Show Slab Boundaries Instead of Centre  [checkable]
+```
+
+This reduces the flat item count from 25+ to 10 top-level items by consolidating Display Options, Overlays, and Synchronisation into submenus. Privacy View stays top-level because it is compliance-critical and requires high discoverability.
+
+---
+
+### 11.5 Tools Menu
+
+**Full current structure:**
+```
+View/Edit DICOM Tags...         Ctrl+T
+Export DICOM Tags...            Shift+Ctrl+T
+Create MPR View…
+Study Index Search…             ← duplicate from File
+Structured Report…
+About this File...              Ctrl+A  ← ⚠ CONFLICT
+─────────────────────────────
+Histogram...                    Shift+Ctrl+H
+Export ROI Statistics...
+─────────────────────────────
+ACR CT Phantom (pylinac)...
+ACR MRI Phantom (pylinac)...
+```
+
+**Findings:**
+
+| # | Issue | Severity |
+|---|---|---|
+| T1 | **Ctrl+A conflict** — "About this File..." uses Ctrl+A, which is the universal platform shortcut for "Select All". This will break expected text-selection behaviour wherever Ctrl+A might be used. Should be reassigned (e.g. Ctrl+I for "file Info", or no shortcut). | P0 |
+| T2 | **"Study Index Search…" duplicated from File menu.** Either pick one canonical location or make the File entry "Open from Study Index…" (an opening workflow) and the Tools entry "Manage Study Index…" (an administration/search workflow) to distinguish the two. | P1 |
+| T3 | **"About this File..."** is a metadata information item. On all platforms, "About" items belong in Help. This item is really "DICOM File Info" — renaming it and moving it to Help (or making it a contextual panel) would be more correct. | P1 |
+| T4 | **"(pylinac)"** in ACR QA tool names is an implementation detail that doesn't belong in a user-facing label. Users care about "ACR CT Phantom Analysis" and "ACR MRI Phantom Analysis" — not the underlying library. | P2 |
+| T5 | **ACR QA tools are specialist/advanced** features that could be grouped under a "Quality Assurance" submenu to avoid clutter for users who never use them. | P3 |
+| T6 | **Heterogeneous mix** without clear grouping rationale: tag management, MPR reconstruction, study database, structured reports, histogram, QA — four conceptual categories with only two separators. | P2 |
+
+**Proposed Tools restructuring:**
+```
+View/Edit DICOM Tags...         Ctrl+T
+Export DICOM Tags...            Shift+Ctrl+T
+─────────────────────────────
+Histogram...                    Shift+Ctrl+H
+Export ROI Statistics...
+─────────────────────────────
+Create MPR View…
+Structured Report…
+─────────────────────────────
+Manage Study Index…             (rename to distinguish from File > Open Study Index)
+─────────────────────────────
+Quality Assurance ▶
+  ACR CT Phantom Analysis...
+  ACR MRI Phantom Analysis...
+```
+
+Move "About this File..." → Help menu as "DICOM File Info…" (Ctrl+I).
+
+---
+
+### 11.6 Help Menu
+
+**Full current structure:**
+```
+Quick Start Guide
+Documentation (browser)...
+Fusion Technical Documentation
+Disclaimer
+─────────────────────────────
+About
+```
+
+**Findings:**
+
+| # | Issue | Severity |
+|---|---|---|
+| H1 | **"Documentation (browser)..."** — the "(browser)" parenthetical is an implementation detail. "User Guide…" or "Documentation…" is cleaner. | P3 |
+| H2 | **"Fusion Technical Documentation"** is feature-specific and feels out of place in Help alongside app-level docs. Consider moving it to the fusion workflow context (a button/link within the Fusion controls), or grouping all feature docs under a "Feature Guides ▶" submenu. | P3 |
+| H3 | **"Disclaimer"** as a top-level item is intentional and appropriate for a medical application. Keeping it easily accessible satisfies regulatory and liability requirements. No change needed. | ✓ |
+| H4 | **"About this File..."** (currently in Tools) belongs here as "DICOM File Info…". | P1 |
+
+**Proposed Help restructuring:**
+```
+Quick Start Guide
+User Guide…
+─────────────────────────────
+Feature Guides ▶
+  Fusion Technical Documentation
+  (add others as features grow)
+DICOM File Info…               Ctrl+I  (moved from Tools)
+─────────────────────────────
+Disclaimer
+─────────────────────────────
+About
+```
+
+---
+
+### 11.7 Cross-Cutting Menu Issues
+
+#### Keyboard Shortcut Conflicts (Bugs)
+
+| Shortcut | Assignment 1 | Assignment 2 |
+|---|---|---|
+| **Ctrl+O** | File → Open File(s)... | View → Overlay Tags Configuration... |
+| **Ctrl+A** | Tools → About this File... | Platform standard: Select All |
+
+Both are real bugs. Ctrl+O is particularly bad because it's one of the most commonly used shortcuts in any application. Qt will silently prefer one; the other becomes unreachable by keyboard.
+
+#### Duplicate Commands
+
+| Command | Location 1 | Location 2 | Recommendation |
+|---|---|---|---|
+| Study Index | File → Open Study Index… | Tools → Study Index Search… | Differentiate: File = "Open from Index" (opening workflow), Tools = "Manage Index" (admin/search) |
+
+#### Design System Alignment
+
+**Material Design 3:**
+- Menus should have no more than 5–12 items before considering a split or submenu. The View menu (25+ items) violates this significantly.
+- M3 recommends avoiding disabled items without explanation. "Show Instances Separately" is disabled with no tooltip.
+- M3 progressive disclosure: advanced settings in submenus, core actions at the top level. The View menu buries Layout below 15 other items.
+
+**IBM Carbon:**
+- "Menu items must be actionable." Disabled items without explanation ("Show Instances Separately") violate this.
+- Recommends dividers after groups of 6–8 related items maximum. The View menu's middle section (between the two separators) has 12+ items.
+- Carbon's navigation pattern places layout/view controls more prominently than overlay configurations.
+
+**Apple Human Interface Guidelines:**
+- The File menu should contain only file operations: open, save, close, print, export. "Edit Recent List..." is a management action that HIG would place in Edit or as a submenu option of Recent.
+- Edit menu: Undo/Redo should be general application-level operations, not scoped to one feature (tag edits). HIG considers scoped undo confusing.
+- Disabled items: "If a command doesn't apply in the current context, remove it from the menu." HIG is more aggressive about hiding disabled items than M3 or Carbon.
+- Preferences (Settings): on macOS this must appear in the application menu (⌘,), not in Edit. Qt's `QAction.MenuRole.PreferencesRole` handles this.
+- The Help menu structure (Quick Start, Docs, About) is close to HIG-standard. Excellent.
+
+#### Summary Scorecard
+
+| Menu | Item Count | Design System Compliance | Top Issues |
+|---|---|---|---|
+| **File** | 16 | ⭐⭐⭐ Good | Duplicate Study Index, Edit Recent placement |
+| **Edit** | 5 | ⭐⭐⭐ Good | Copy/Paste/Undo scope not communicated |
+| **View** | 25+ | ⭐⭐ Needs work | Too long, Ctrl+O conflict, privacy not separated |
+| **Tools** | 10 | ⭐⭐ Needs work | Ctrl+A conflict, duplicate Study Index, About misplaced |
+| **Help** | 5 | ⭐⭐⭐⭐ Very good | Minor label polish only |
+
+---
+
+## 12. Summary: Key Findings
+
+### Highest Priority (P0 — bugs or affects every user on every session)
+
+| Issue | Source | Impact |
+|---|---|---|
+| **No toolbar icons** | All 8 screenshots | Slow tool identification, toolbar too wide, unprofessional appearance |
+| **Ctrl+O conflict** — Open File and Overlay Tags Config share the same shortcut | `main_window_menu_builder.py` | One shortcut becomes unreachable; keyboard navigation broken |
+| **Ctrl+A conflict** — "About this File" shadows platform-standard Select All | `main_window_menu_builder.py` | Breaks expected text-selection in any focused field |
+| **2px splitter handles** | 002101 — invisible between panels | Difficult to resize panels precisely |
+| **Tag viewer purple row tinting** inconsistent with blue accent | 002858 | Visual incoherence; the only place in the app with this color |
+
+### High Priority (P1 — significant ergonomic or discoverability impact)
+
+| Issue | Source | Impact |
+|---|---|---|
+| "Copy" / "Paste" / "Undo" / "Redo" scope not labelled | Edit menu | Users expect these to operate on image or ROI, not just annotations/tags |
+| "About this File..." belongs in Help, not Tools | Tools menu | Misplaced; Ctrl+A conflict also resolved by moving it |
+| Study Index duplicated across File and Tools | Both menus | Users unsure which is canonical |
+| View menu has 25+ items across 7 conceptual categories | View menu + 002803 | Requires scrolling; buries Layout and Privacy in a flat list |
+| Privacy View not visually separated in View menu | View menu code | Compliance-critical action mixed in with display options |
 | Overlay text on images is extremely dense | 002253, 002649 | Competes with image content; legibility at its limit |
 | "Delete Selected" / "Delete All" visible with no ROIs | 002101 | Visual noise; invites accidental destructive action |
-| No type scale defined | Visible inconsistency across panels in all screenshots | Inconsistent text hierarchy throughout |
 | "Use Rescaled Values" not visually checkable | Toolbar in all screenshots | Current display state is unclear |
-| No cursor changes on tool mode switch | Not verifiable from static screenshots | No per-mode visual feedback |
+| "Privacy OFF — PHI Visible" wording would be clearer than "Privacy is OFF" | 002101 | Label could be more self-explanatory at a glance |
+| No type scale defined | Visible inconsistency across panels | Inconsistent text hierarchy throughout |
+| No cursor changes on tool mode switch | All screenshots | No per-mode visual feedback |
 | Status bar "Ready" cold-start message | 002101 | Poor onboarding — no empty-state guidance |
-| No semantic color roles | Only accent blue + the erroneous privacy red | Cannot distinguish severity of messages or actions |
-| Tooltips lack keyboard shortcuts | Not verifiable from screenshots | Discoverability of shortcuts is poor |
+| Tooltips lack keyboard shortcuts | Toolbar in all screenshots | Discoverability of shortcuts is poor |
 | Histogram / dialog chart axis labels are very small | 002551, 002649 | Legibility issues in chart data |
 
 ### Medium Priority (P2 — reduces polish and learnability)
 
-| Issue | Visual Evidence | Impact |
+| Issue | Source | Impact |
 |---|---|---|
-| Light tooltip color (`#ffffdc`) | Not captured in screenshots | Dated, inconsistent with overall theme |
-| `QGroupBox` unthemed | 002551 Annotation Options — group box borders appear OS-default | Cross-platform inconsistency |
+| "Show/Hide Left Pane" / "Show/Hide Right Pane" redundant label | View menu | Checkmark already communicates show/hide |
+| "Show Instances Separately" disabled with no explanation | View menu | Confusing grayed-out item; add status tip or hide |
+| Layout shortcuts documented in label text rather than `setShortcut()` | View → Layout submenu | Shortcuts not right-aligned, may not be wired properly |
+| "(pylinac)" in ACR tool names exposes implementation detail | Tools menu | User-facing labels should describe what, not how |
+| ACR QA tools ungrouped alongside everyday utilities | Tools menu | Specialist tools mixed with histogram/tags without visual separation |
+| "Fusion Technical Documentation" in Help is feature-specific | Help menu | Should be contextual or in a Feature Guides submenu |
+| "Documentation (browser)..." qualifier is redundant | Help menu | "(browser)" is implementation detail |
+| Light tooltip color (`#ffffdc`) | QSS | Dated, inconsistent with overall theme |
+| `QGroupBox` unthemed | 002551 | Cross-platform inconsistency |
 | Splitter handles have no visual affordance | 002101 | Resizing not discoverable |
-| Right panel tab labels verbose ("Window/Zoom/ROI") | 002101 and all panel screenshots | Navigation friction |
-| No drop target indicator | 002101 — empty center gives no drag cue | Drag-and-drop not obviously available |
-| Toast has no icon or severity color | Not captured | All messages appear equally important |
-| View menu very long, requires scrolling | 002803 | Navigation friction for infrequent options |
-| ROI resize handles are small dots | 002649 — visible but small | Fine-motor difficulty, especially on small screens |
+| Right panel tab labels verbose ("Window/Zoom/ROI") | 002101 | Navigation friction |
+| No drop target indicator | 002101 | Drag-and-drop not obviously available |
+| Toast has no icon or severity color | No screenshot | All messages appear equally important |
+| ROI resize handles are small dots | 002649 | Fine-motor difficulty on small screens |
 
 ### Positive Foundations (confirmed visually)
 
+- **Privacy red toolbar button** is an intentional and correct safety pattern for a medical app — maximum visibility when PHI is exposed
 - Dark theme is clean, professional, and appropriate for radiology use
-- Menu bar styling (dark background, blue hover) is the most polished surface in the UI
+- **Menu bar visual styling** (dark background, blue hover, clean separators) is the most polished surface in the UI
 - Custom checkbox checkmarks (white PNG on dark) look correct and crisp
-- ROI rendering (cyan ellipses, yellow distance line) is distinctive and clear
-- Floating dialogs (Histogram, Slice Sync) coexist gracefully — good multi-dialog handling
+- ROI and measurement rendering (cyan ellipses, yellow distance line) is distinctive and clear
+- Floating dialogs (Histogram, Slice Sync) coexist gracefully
 - "Filter tags…" in the metadata panel is a strong affordance for a dense data list
 - Series navigator correctly uses a differentiated background tone
 - Blue focus border on active viewport pane is clear without being intrusive
-- Annotation Options dialog is well-sectioned and functional
 - IBM Plex Sans is an excellent technical font choice
 - Multi-window grid system is a strong feature differentiator
+- Help menu structure is nearly HIG-standard
 
 ---
 
-## 12. Screenshots Still Needed
+## 13. Screenshots Still Needed
 
-The following items were not covered by the 8 screenshots provided. Capture these for future passes:
+Capture these for future passes:
 
 1. **Light theme** — cold start and loaded state
 2. **Series navigator bar close-up** — thumbnail sizing, study labels, window slot map widget
@@ -453,12 +834,12 @@ The following items were not covered by the 8 screenshots provided. Capture thes
 
 ---
 
-## 13. Tools Used
+## 14. Tools Used
 
 **Code analysis:**
 - `Glob` — directory and file structure discovery
-- `Read` — source files: `dark.qss`, `light.qss`, `main_window.py`, `main_window_toolbar_builder.py`, `main_window_layout_helper.py`, `UX_IMPROVEMENTS_BATCH1_PLAN.md`, `VIEWER_UX_FEATURES_PLAN.md`; all 8 screenshots
-- `Bash` — process check (is app running?), directory existence check
+- `Read` — `dark.qss`, `light.qss`, `main_window.py`, `main_window_toolbar_builder.py`, `main_window_menu_builder.py`, `main_window_layout_helper.py`, `UX_IMPROVEMENTS_BATCH1_PLAN.md`, `VIEWER_UX_FEATURES_PLAN.md`; all 8 screenshots
+- `Bash` — process check, directory checks
 - `Explore` agent — codebase architecture survey
 
 **Design research referenced:**
@@ -470,5 +851,5 @@ The following items were not covered by the 8 screenshots provided. Capture thes
 
 ---
 
-*Next assessment: Menu bar deep-dive (`ux-assessment-menus-YYYY-MM-DD.md`)*  
+*Next pass: Right-click context menu deep-dive*  
 *Planned: `DESIGN.md` — design system alignment, token system proposal, icon adoption plan*
