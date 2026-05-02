@@ -6,6 +6,33 @@
 **Screenshots (batch 2):** `resources/screenshots-ignored/screenshots-more/Screenshot 2026-05-01 23*.png`  
 **Follow-up passes planned:** (1) DESIGN.md — design system alignment, token system, icon adoption plan.
 
+**Quick reference (priority tables + section map):** [ux-summary.md](ux-summary.md)
+
+---
+
+## Contents
+
+1. [Application Architecture Overview](#1-application-architecture-overview)
+2. [Visual Design](#2-visual-design)
+   - [2.1 Theming](#21-theming) · [2.2 Typography](#22-typography) · [2.3 Iconography](#23-iconography)
+3. [Layout & Structural UX](#3-layout--structural-ux)
+   - [3.1 Splitter](#31-three-panel-splitter-layout) · [3.2 Center Panel](#32-center-panel--multi-window-layout) · [3.3 Left Panel](#33-left-panel--metadata--cine-controls) · [3.4 Right Panel](#34-right-panel--tabbed-controls) · [3.5 Series Navigator](#35-series-navigator)
+4. [Toolbar Assessment](#4-toolbar-assessment)
+5. [Status Bar](#5-status-bar)
+6. [Interaction Design](#6-interaction-design)
+7. [Accessibility](#7-accessibility)
+8. [Design System Comparison](#8-design-system-comparison-preview)
+9. [Icon Resources](#9-icon-resources)
+10. [Visual Findings — Batch 1](#10-visual-findings-from-screenshots)
+    - [10.1 Cold Start](#101-empty--cold-start-state-002101) · [10.2 Loaded State](#102-loaded-state--dual-pane-with-ct--photo-002253) · [10.3 Menus](#103-tools-menu-002337--file-menu-002423) · [10.4 Annotation + Histogram](#104-annotation-options-dialog--histogram-002551) · [10.5 ROIs + Slice Sync](#105-rois-drawn--slice-sync-dialog-002649) · [10.6 View Menu](#106-view-menu-open-002803) · [10.7 Tag Viewer](#107-dicom-tag-viewer-dialog-002858)
+11. [Menu Bar Deep-Dive](#11-menu-bar-deep-dive)
+    - [11.2 File](#112-file-menu) · [11.3 Edit](#113-edit-menu) · [11.4 View](#114-view-menu) · [11.5 Tools](#115-tools-menu) · [11.6 Help](#116-help-menu) · [11.7 Cross-Cutting Issues](#117-cross-cutting-menu-issues)
+12. [Visual Findings — Batches 2–5](#12-visual-findings-from-new-screenshots-batches-2-3--4--2026-05-02)
+    - [12.1 Light Theme Cold Start](#121-light-theme--cold-start-232107) · [12.2 Tag Viewer + Navigator](#122-dicom-tag-viewer-dialog-and-series-navigator-232501) · [12.3 Series Navigator](#123-series-navigator-close-up-233854) · [12.4 Combine/Fuse + Cine](#124-combinefuse-tab-and-cine-playback-233936-234016) · [12.5 Right-Click Menu](#125-right-click-context-menu-deep-dive-234100) · [12.6 Overlay Settings](#126-overlay-settings-dialog-234825) · [12.7 Annotation Options](#127-annotation-options--font-inconsistency-234902) · [12.8 Toolbar Overflow](#128-toolbar-overflow--two-rows-confirmed-235112) · [12.9 Overlay Tags Config](#129-overlay-tags-configuration-dialog-235159) · [12.10 Settings Dialog](#1210-settings-dialog-001155) · [12.11 Edit Recent List](#1211-edit-recent-list-dialog-001345-001359) · [12.12 Light Theme Loaded](#1212-light-theme--loaded-state-with-ct-image-and-rois-001542) · [12.13 Fullscreen](#1213-fullscreen-mode-001636) · [12.14 ACR MRI Options](#1214-acr-mri-options-dialog-001718) · [12.15 ACR CT Options](#1215-acr-ct-options-dialog-001744) · [12.16 Quick Start Guide](#1216-quick-start-guide-dialog-001806) · [12.17 About Dialog](#1217-about-dialog-001835) · [12.18 Tag Panel + VR Column](#1218-main-window-with-dicom-tags--vr-column-visible-001941) · [12.19 SR Document Tab](#1219-structured-report-dialog--document-tab-004749) · [12.20 SR Dose Events](#1220-structured-report-dialog--dose-events-tab-004848) · [12.21 SR Dose Summary](#1221-structured-report-dialog--dose-summary-tab-004914) · [12.22 MPR Single-Pane](#1222-mpr-view--sagittal-single-pane-012434-mpr) · [12.23 MPR + Axial](#1223-mpr-view--sagittal--axial-side-by-side-012652-mpr2)
+13. [Summary: Key Findings](#13-summary-key-findings)
+14. [Screenshots Still Needed](#14-screenshots-still-needed)
+15. [Tools Used](#15-tools-used)
+
 ---
 
 ## 1. Application Architecture Overview
@@ -1084,21 +1111,21 @@ This reduces the flat item count from ~40 to ~12 top-level items with logical su
 | **2px splitter handles** | `232107`, `002101` | Difficult to resize panels precisely; no visual affordance |
 | **"Overlay mode_modality" raw identifier in dialog UI** | `235159` | Internal Python variable name exposed directly to users; display bug |
 | **Light theme has undocumented purple/violet slider accent** | `232107` | Second undocumented accent color; inconsistent with the blue token used in the dark theme |
-| **Settings dialog ignores app QSS — renders with OS light theme** | `001155` | Jarring white dialog interior in a dark-themed app; inconsistent with every other dialog |
+| **Settings dialog ignores app QSS — renders with OS light theme** | `001155` | White dialog interior inconsistent with other dialogs; screenshot may have been in light theme mode — needs verification in dark theme |
 | **App has two different names** — "DICOM Viewer V3" (title bar) vs "Medical Physics DICOM Viewer / MPDV" (About dialog, icon) | `001835`, title bar | Documentation, support, and users cannot agree on what to call the app |
 
 ### High Priority (P1 — significant ergonomic or discoverability impact)
 
 | Issue | Source | Impact |
 |---|---|---|
-| "Copy" / "Paste" / "Undo" / "Redo" scope not labelled | Edit menu | Users expect these to operate on image or ROI, not just annotations/tags |
-| "About this File..." belongs in Help, not Tools | Tools menu | Misplaced; resolves Ctrl+A conflict when moved |
+| "Copy" / "Paste" / "Undo" / "Redo" scope not labelled | Edit menu | Applies to annotations, ROIs, and tags; labels give no hint which objects are affected — scope ambiguity reduces discoverability |
+| "About this File…" Ctrl+A conflict | Tools menu | Shadows platform Select All; rename to "DICOM File Info…" or add qualifier to remove ambiguity |
 | Study Index duplicated across File and Tools | Both menus | Users unsure which is canonical |
 | View menu has 25+ items across 7 conceptual categories | View menu + `002803` | Requires scrolling; buries Layout and Privacy |
 | Privacy View not visually separated in View menu | View menu code | Compliance-critical action mixed with display options |
 | Right-click context menu has ~40 items | `234100` | Defeats purpose of context menu; requires scrolling |
-| Tool modes duplicated in both toolbar and right-click menu | `234100`, toolbar | 13 tool buttons redundantly in the context menu flat list |
-| Overlay text on images is extremely dense | `002253`, `002649` | Competes with image content at limit of legibility |
+| 13 tool modes listed flat in right-click menu — group into "Tools ▶" submenu | `234100`, toolbar | Having tool modes accessible from both toolbar and context menu is intentional; flat listing at root level is what creates the clutter |
+| Overlay text default density | `002253`, `002649` | Size and content are user-configurable (Overlay Settings); default configuration may overwhelm new users — consider lighter out-of-box defaults |
 | "Delete Selected" / "Delete All" visible with no ROIs | `232107`, `002101` | Visual noise; invites accidental destructive action |
 | "Use Rescaled Values" not visually checkable; overflows to second toolbar row | `235112` | Current display state unclear; discoverable only when window is narrow |
 | "Font Color" on second toolbar row | `235112` | Low-frequency control taking prime toolbar real estate; candidate for Overlay Settings |
