@@ -29,6 +29,11 @@ This file tracks active and near-term tasks.
 
 ## Bugs / Correctness
 
+- [ ] **[P0]** Spacebar does not cycle overlay on MPR
+- [ ] **[P0]** When loading a folder, files like "VERSION" and "DICOMDIR" and "LOCKFILE" should be skipped / not shown in the navigator bar unless they contain real data (not just a tag or two); some of them gave error message in terminal "Error extracting pixel array: 'FileMetaDataset' object has no attribute 'TransferSyntaxUID' "
+    - or only enable loading via some toggle, off by default, just for browsing tags
+- [ ] **[ ]** In light theme, in the tag browser dialog, the purple background with black text is nearly unreadable
+- [ ] **[ ]** When I did right click on a thumbnail for test-DICOM-data\us_valid_pixel_aspect.dcm and selected open location or whatever its called, it kept spawning window after window in that folder until I closed the code
 - [x] **[P0]** Loading studies from the study index is only loading one instance/image/file — **Plan:** [Study index load single instance bug](plans/supporting/STUDY_INDEX_LOAD_SINGLE_INSTANCE_BUG_PLAN.md)
 - [x] **[P0]** Opening an MR study with privacy mode off, then enabling privacy mode, then turning it back off caused the window width and center to change to very different values, causing the image to appear nearly solid black - it seemed to apply the values from another loaded series, which was last loaded — **Plan:** [Privacy mode window level bug fix](plans/supporting/PRIVACY_MODE_WINDOW_LEVEL_BUG_FIX.md)
 - [x] **[P1]** Fix MPR rescale units so exported MPR DICOMs do not write misleading `RescaleType` values like `UNSPECIFIED`/`US`, and ROI statistics do not display DICOM defined terms as user-facing units when the rescale type is unknown or export-generated. **Plan:** [MPR rescale units and display correctness](plans/supporting/MPR_RESCALE_UNITS_AND_DISPLAY_CORRECTNESS_PLAN.md)
@@ -55,6 +60,8 @@ This file tracks active and near-term tasks.
 
 ## UX / Workflow
 
+- [ ] **[P1]** See ux assessment
+- [ ] **[P2]** Make an "ultra-dark" or "black" theme as a new option - similar to current dark there but all greys get darker
 - [ ] **[P1]** Allow a button in study index that checks all indexed studies still exist at indexed path and if not asks the user if they want to update the location or remove them (what happens currently if a user tries to load a study from index and files aren't found?)
 - [ ] **[P1]** Make separators, borders, etc thinner to reclaim real estate
 - [x] **[P1]** Allow a search bar in study index that searches all fields for the term/string

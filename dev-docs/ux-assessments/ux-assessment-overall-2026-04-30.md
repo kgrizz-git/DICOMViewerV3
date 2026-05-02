@@ -1,9 +1,10 @@
 # UX Assessment — Overall Presentation & Experience
-**Date:** 2026-04-30 (updated with screenshots + menu deep-dive 2026-05-01)  
-**Scope:** Overall structural pass + full menu bar deep-dive. Right-click context menus reserved for follow-up.  
-**Method:** Static code analysis (QSS stylesheets, main window layout, toolbar/menu/panel layout builders, existing UX planning docs) + visual review of 8 live screenshots.  
-**Screenshots:** `resources/screenshots-ignored/Screenshot 2026-05-01 00*.png`  
-**Follow-up passes planned:** (1) Right-click context menu deep-dive, (2) DESIGN.md — design system alignment, token system, icon adoption plan.
+**Date:** 2026-04-30 (updated with screenshots + menu deep-dive 2026-05-01; second screenshot batch + right-click context menu deep-dive 2026-05-02)  
+**Scope:** Overall structural pass + full menu bar deep-dive + right-click context menu deep-dive.  
+**Method:** Static code analysis (QSS stylesheets, main window layout, toolbar/menu/panel layout builders, existing UX planning docs) + visual review of 18 live screenshots.  
+**Screenshots (batch 1):** `resources/screenshots-ignored/Screenshot 2026-05-01 00*.png`  
+**Screenshots (batch 2):** `resources/screenshots-ignored/screenshots-more/Screenshot 2026-05-01 23*.png`  
+**Follow-up passes planned:** (1) DESIGN.md — design system alignment, token system, icon adoption plan.
 
 ---
 
@@ -754,36 +755,369 @@ Both are real bugs. Ctrl+O is particularly bad because it's one of the most comm
 
 ---
 
-## 12. Summary: Key Findings
+## 12. Visual Findings from New Screenshots (batches 2, 3 & 4 — 2026-05-02)
+
+Screenshots reviewed: `232107`, `232501`, `233854`, `233936`, `234016`, `234100`, `234825`, `234902`, `235112`, `235159`.
+
+### 12.1 Light Theme — Cold Start (`232107`)
+
+- **Light theme confirmed visually.** White window background, gray panels, black text — clean and professional.
+- **Slider accent color is purple/violet in the light theme.** Window Center, Window Width, and Zoom sliders in the right panel render in a purple/magenta color — not the blue (`#4285da`) that appears in the dark theme. This is a second undocumented accent color that appears nowhere in the design token table. The light theme has a different slider track color than the dark theme, and this purple also matches the tag viewer alternating row tint noted in 10.7 — confirming these are both light-theme-specific palette choices not covered by the stated token set.
+- **"Privacy is ON" button renders in standard blue** — correct, no file loaded so privacy mode is on by default.
+- **"Delete Selected" / "Delete All"** confirmed visible with no ROIs — same noise issue as dark theme.
+- **Status bar "Ready"** confirmed across both themes.
+
+### 12.2 DICOM Tag Viewer Dialog and Series Navigator (`232501`)
+
+- **Series navigator clearly visible** at the bottom with thumbnails; the selected series has a yellow highlighted border and others are dark. Thumbnail sizes are consistent and identifiable at a glance.
+- **Window Slot Map** (mini 2×2 grid, bottom-right) is visible with pane 1 highlighted — correctly tracks the active pane.
+- **Status bar fully populated on file load:** left section shows study/file count ("9 studies, 12 series, 51 files loaded from exam (45 non-DICOM skipped)"); center shows Zoom and W/L Preset; right shows pixel coordinates. All three sections working as designed. The "(45 non-DICOM skipped)" detail is useful for technical users but may be confusing for clinical users who don't know what DICOM skipping means.
+- **DICOM Tag Viewer dialog** includes a VR (Value Representation) column not present in the inline left-panel tag table — an inconsistency between the two tag views. Users familiar with the dialog will be confused by the absence of the VR column in the panel, and vice versa.
+- **"Edit Selected Tag" button** is present at the bottom — confirms in-place tag editing capability, which is a powerful but potentially dangerous feature (modifying DICOM tags). No visible write-protection or confirmation prompt is shown in the dialog view; worth verifying whether a confirmation step exists.
+
+### 12.3 Series Navigator Close-Up (`233854`)
+
+- **Series labels are truncated UIDs**, not human-readable descriptions. Every series except "OB Image" shows a partial UID string (e.g., "1.3.6.1.4.1", "1.2.826.0") as its label. Clinically, users identify series by modality and description — not UID. The navigator should display series description as the primary label and show the UID only on hover or in a details panel.
+- **Frame count badges** ("2f", "28f") correctly distinguish multi-frame series. Good affordance.
+- **Thumbnail borders** correctly highlight the active series in cyan/blue.
+- **Window slot map quadrants** (1–4) are visible; confirming that the map is non-clickable (per UX plan) remains a missing affordance.
+- **Status bar left section** shows a very long study description string that likely requires text elision. The full UID-style study name fills the status bar edge-to-edge; series descriptions this long should be truncated with a tooltip showing the full text.
+
+### 12.4 Combine/Fuse Tab and Cine Playback (`233936`, `234016`)
+
+- **Combine/Fuse tab confirmed.** Controls visible: Enable Combine Slices (checkbox), Projection (combobox: Average AP), Slices (spinbox: 4), Enable Fusion (checkbox), Base Series selector, Overlay Series selector, Color Map, Fusion Status, Opacity, Threshold, Resampling Mode (Fast Mode / High Accuracy radio buttons), Interpolation, Overlay Window/Level.
+- **"(INFO) Please select overlay series"** status message is clear inline guidance — a good pattern.
+- **Resampling Mode** uses radio buttons (Fast Mode / High Accuracy) — appropriate for a binary choice between distinct modes.
+- **The tab covers two distinct feature domains** (slab combination ≠ image fusion). As the panel grows, consider separate sub-tabs: "Slab" and "Fusion".
+- **Cine playback controls confirmed** (`234016`): Play, Stop, Loop buttons; Speed (1x), FPS (10.0), Frame (1/25). Loop button highlights in blue when active — correct visual state. Speed and FPS are shown on the same row with a Frame counter — readable and compact.
+- **"Privacy is OFF" (red)** visible in both screenshots with patient data in overlays — working as intended for loaded data.
+
+### 12.5 Right-Click Context Menu Deep-Dive (`234100`)
+
+The full right-click context menu is now captured. It is the most comprehensive context menu in the application.
+
+**Full reconstructed structure:**
+
+```
+Angle (Shift+M)                              ← top items cut off; appear above visible area
+Arrow Annotation (A)
+Text Annotation (T)
+Window/Level ROI (W)
+Delete all ROIs (D)
+Clear Measurements (C)
+Histogram (Ctrl+Shift+H)
+Scroll Wheel Mode ▶
+────────────────────────────────────────────
+Reset View (V, Shift+V)
+Reset All Views
+Orientation ▶
+Cycle overlay detail (Space) / legacy toggle (Shift+Space)
+Overlay Configuration
+Privacy View (Cmd+P)
+✓ Image Smoothing
+  Show Scale Markers
+✓ Show Direction Labels
+  Slice Sync ▶
+  Show Slice Location Lines ▶              → [submenu]:
+    ✓ Enable/Disable
+      Only Show For Same Group
+      Only Show For Focused Window
+    ✓ Show Slab Boundaries (Begin/End) Instead of Centre
+  Show/Hide Left Pane
+  Show/Hide Right Pane
+  Show/Hide Series Navigator
+  Prev Series (—)
+  Next Series (—)
+  Assign Series to Focused Window
+  Layout ▶
+  Swap
+  Clear This Window
+  Create MPR View…
+  Annotation Options…
+  Export ROI Statistics…
+  Quick Window/Level (Q)
+  Select (S)
+  Zoom (Z)
+  Pan (P)
+  Magnifier (G)
+  Ellipse ROI (E)
+  Rectangle ROI (R)
+  Crosshair ROI (H)
+  Measure (M)
+```
+
+**Findings:**
+
+| # | Issue | Severity |
+|---|---|---|
+| RC1 | **~40-item context menu** — by far the longest context menu in the application. At this length it defeats the purpose of a context menu (fast access to contextual actions) and effectively becomes a second menu bar. On 1080p displays it may require scrolling. | P1 |
+| RC2 | **Tool mode shortcuts duplicated at the bottom** (Quick W/L, Select, Zoom, Pan, Magnifier, Ellipse ROI, Rectangle ROI, Crosshair ROI, Measure, Angle, Arrow, Text, W/L ROI) — 13 of the 22 toolbar items appear in the context menu. While useful as a mouse-only shortcut, the duplication inflates the length severely. Consider a "Tools ▶" submenu for these. | P1 |
+| RC3 | **"Cycle overlay detail (Space) / legacy toggle (Shift+Space)"** is too long and exposes "legacy toggle" as an implementation term. Better: "Toggle Overlay Detail (Space)". | P2 |
+| RC4 | **"Overlay Configuration"** (standalone item, no ellipsis) is ambiguous — it likely opens the Overlay Tags Configuration dialog, in which case it should be "Overlay Tags Configuration…" to match the menu bar label. | P2 |
+| RC5 | **"Assign Series to Focused Window"** could be grouped with Prev/Next Series and Swap under a "Series" submenu. | P3 |
+| RC6 | **Checkmarks on Image Smoothing and Show Direction Labels** are correctly shown — confirming state-aware context menu behavior. | ✓ |
+| RC7 | **"Clear This Window"** is appropriately context-menu-only (pane-level action, not applicable globally) — good use of context menu to expose a pane-scoped action. | ✓ |
+
+**Suggested right-click restructuring:**
+
+```
+── View ─────────────────────────────────
+Reset View (V)   |  Reset All Views
+Orientation ▶
+Layout ▶   |   Swap   |   Clear This Window
+────────────────────────────────────────────
+── Display ──────────────────────────────
+Toggle Overlay Detail (Space)
+✓ Image Smoothing
+✓ Show Direction Labels   |   Show Scale Markers
+Privacy View (Cmd+P)
+────────────────────────────────────────────
+── Series ───────────────────────────────
+Prev Series   |   Next Series
+Assign Series to Focused Window
+Show/Hide Left Pane   |   Right Pane   |   Navigator
+────────────────────────────────────────────
+── Sync ─────────────────────────────────
+Slice Sync ▶
+Show Slice Location Lines ▶
+────────────────────────────────────────────
+── Tools ────────────────────────────────
+Pan (P)   |   Zoom (Z)   |   Select (S)   |   Magnifier (G)
+Quick Window/Level (Q)   |   W/L ROI (W)
+Ellipse ROI (E)   |   Rectangle ROI (R)   |   Crosshair ROI (H)
+Measure (M)   |   Angle (Shift+M)
+Arrow (A)   |   Text (T)
+────────────────────────────────────────────
+── Data ─────────────────────────────────
+Overlay Tags Configuration…
+Annotation Options…
+Export ROI Statistics…
+Delete all ROIs (D)   |   Clear Measurements (C)
+Histogram (Ctrl+Shift+H)
+Create MPR View…
+```
+
+This reduces the flat item count from ~40 to ~12 top-level items with logical subgrouping using section headers (Qt supports `addSection()` for labeled separators).
+
+### 12.6 Overlay Settings Dialog (`234825`)
+
+- **Well-structured dialog** with three clearly labeled sections (Overlay Settings, Viewer Overlay Elements, Slice Position Lines). The layout is clean and navigable.
+- **Liberation Sans** is the currently selected overlay font — not IBM Plex Sans. The app ships IBM Plex Sans as its primary UI font but the overlay system defaults to a different family. Defaulting to IBM Plex Sans would improve visual cohesion.
+- **Lime green overlay font color** is a user setting, but the default should be a more clinically neutral color (white, `#ffffff`, or light gray) rather than lime green, which may be confused with color-coded clinical indicators on some modalities.
+- **Three color swatches** (lime green, cyan, red) demonstrate that per-element color customization is fully supported — a strong power-user feature.
+- **Explanatory footnote text** ("Major ticks are longer; minor ticks are shorter", "Middle: one line at the centre plane...") is present and appropriately concise. Good pattern.
+- **Slice sync group strip height (px)** is a very technical parameter that most users will never need. Consider moving it to an "Advanced" section or collapsible area.
+
+### 12.7 Annotation Options — Font Inconsistency (`234902`)
+
+- **Three different bundled font families across one dialog:** IBM Plex Sans (ROI Settings), Open Sans (Measurement Settings), Noto Sans (Text Annotation Settings). Open Sans and Noto Sans do not appear in the documented bundled font resources (`resources/fonts/`). If these fonts are not bundled, Qt will silently fall back to the OS default, potentially looking different on different platforms.
+- **The four-quadrant layout** (ROI top-left, Measurement top-right, ROI Statistics Visibility bottom-left, Text/Arrow bottom-right) is logically organized. The two-column structure makes good use of dialog space.
+- **Arrow Annotation Settings** (Color + Size only) has no Font field — correct, arrows have no label text. Consistent with feature scope.
+- **Minus/Plus buttons** for font size and line thickness are larger here than in the toolbar context — adequate for dialog use.
+- **Color swatches are large and easy to target** — good touch target sizing for this class of control.
+- **"Show per-channel statistics when image is multi-channel (e.g. RGB)"** — long but clear label. The parenthetical example "(e.g. RGB)" is a helpful hint.
+
+### 12.8 Toolbar Overflow — Two Rows Confirmed (`235112`)
+
+- **CONFIRMED: the toolbar wraps to a second row.** "Font Color" and "Use Rescaled Values" render on a separate row below the main toolbar. This occurs because the combined width of all toolbar buttons exceeds the window width. Two toolbar rows:
+  - Consume extra vertical space (the image viewport shrinks by one toolbar height, ~30px).
+  - Make the second-row items harder to discover — users may not realize "Font Color" exists if the window is maximized or at a wider size where it fits on one row (the overflow breakpoint is layout-dependent).
+- **"Use Rescaled Values"** on the second row is further evidence this should be a checkable action with a clear on/off state rather than a text-only toggle.
+- **"Font Color"** on the second row is a low-frequency control (set once, rarely changed) — a strong candidate for moving to Overlay Settings dialog rather than the toolbar.
+- **"Privacy is OFF" (red)** is the most visually prominent element — correct priority.
+
+### 12.9 Overlay Tags Configuration Dialog (`235159`)
+
+- **"Overlay mode_modality"** appears as a label/subtitle in the dialog — this is an internal Python identifier (likely a config key name) that has leaked directly into the UI. It should be reformatted as a readable label ("Modality-specific mode" or simply removed — the two dropdowns below (Default and Modality) are self-explanatory).
+- **Dual-list transfer widget** (Catalog → Simple / Catalog → Detailed) is a sophisticated and appropriate pattern for this level of configuration. The "→ Detailed" / "← Simple" labeled arrow buttons are clear.
+- **Four corner tabs** (Upper Left, Upper Right, Lower Left, Lower Right) map directly to the four overlay corners of the image viewport — intuitive spatial labeling.
+- **Catalog shows CamelCase DICOM keyword names** (PatientName, PatientID, etc.) rather than hex codes — the right choice for a configuration interface where users need to recognize attributes by name.
+- **"Default (Space)"** label on the first combobox is cryptic — it means "the mode toggled by pressing Space", but a user unfamiliar with the Space shortcut will not understand. Better: "Space Bar Mode" or "Default Toggle Mode (Space)".
+- **Instructions text** ("Corner tabs: catalog at left; Simple and Detailed-only lists share one row. → Detailed / ← Simple move selection. Double-click catalog → Simple.") is helpful but dense. Consider a collapsible "?" tooltip or breaking it into a short bulleted help block.
+- **"Add to Simple" / "Add to Detailed" buttons** at the bottom of the catalog are redundant with the arrow buttons in the center — two ways to do the same action. Recommend removing the bottom buttons and relying on the center arrow buttons plus a double-click shortcut (already documented in the instructions).
+
+---
+
+*Batch 3 — screenshots `001155`–`001941` (2026-05-02):*
+
+### 12.10 Settings Dialog (`001155`)
+
+- **The Settings dialog interior uses the system (OS) light theme instead of the app's dark QSS.** The content area renders with a white/light-gray background and native-styled controls while the main window behind it is dark `#2b2b2b`. Every other dialog in the app (Tag Viewer, Annotation Options, Overlay Settings, etc.) correctly applies the dark theme. Settings is the only exception — likely because the dialog class isn't receiving the QSS. This is a theme break that makes the dialog visually jarring to open.
+- **The dialog is nearly empty as a Settings dialog.** Its only actual setting is "Automatically add files to the study index when opened successfully." The top of the dialog is occupied by three lines of instructional prose redirecting the user to the View menu for overlay preferences, annotation options, and privacy mode. This is the opposite of what a Settings dialog should do — it should centralize preferences, not scatter them and provide directions to find them elsewhere.
+- **Encryption security note is good but buried.** The text "The index database is encrypted (SQLCipher). The encryption key is stored in your OS credential manager, not in this JSON config file." is exactly the right information to surface to users, but it is rendered as small secondary text. For a medical app, this security transparency deserves more prominence.
+- **"Use default path" button** next to the database path field is a sensible recovery affordance.
+
+### 12.11 Edit Recent List Dialog (`001345`, `001359`)
+
+- **Full file paths are displayed without truncation** in the list. On the user's machine, several paths are long enough to overflow the dialog width horizontally. Truncating from the left (showing `…\DICOMViewerV3\test-data\file.dcm`) would preserve the most useful part (filename and immediate parent) while fitting the column.
+- **"Move Up" and "Move Down" buttons** allow reordering the recent files list. This is an unusual feature — most applications order recent files strictly by recency and do not expose manual reordering. If the intent is to let users "pin" frequently used files to the top, a dedicated "Pin" concept would be clearer than an order that can drift from actual recency.
+- **"Remove All" and "Remove Selected"** are appropriately paired destructive actions with no confirmation prompt visible — the consequence (clearing recent history) is mild enough that a confirmation is optional, but "Remove All" in particular would benefit from one.
+- **Dialog is dark-themed correctly** — consistent with the rest of the application (unlike the Settings dialog).
+
+### 12.12 Light Theme — Loaded State with CT Image and ROIs (`001542`)
+
+*Correction: this screenshot shows the light theme with a study loaded — not the dark theme as previously described. The CT image center is always dark (that is the image content, not the theme), but the surrounding UI chrome is light.*
+
+- **Light theme confirmed in loaded state.** The left tag panel has a white/light-gray background with dark text — matching the light-theme tokens. The right panel sliders are purple/violet, **confirming the undocumented purple accent color from §12.1 persists in the loaded state**, not just cold-start. Two ROIs are visible on the CT phantom.
+- **VR column IS present in the inline left-panel tag table** — all four columns (Tag, Name, Value, VR) visible. The earlier finding (§12.2) that VR was absent was incorrect; the panel was simply too narrow in that screenshot. That finding is retracted.
+- **Tag group headers** (Group 0002, Group 0008, Group 0010, etc.) with expand/collapse behavior are a clean organizing pattern for dense DICOM data.
+- **Two simultaneous ROIs (rectangle + ellipse)** each display six lines of statistics on the image — twelve total floating text lines. This is the practical ceiling: a third ROI would make the image unreadable. Consider a per-ROI text toggle (show/hide label on image, with stats still in the right-panel table) for multi-ROI workflows.
+- **ROI type annotation** in the right-panel list — "ROI 1 (ellipse)" and "ROI 2 (rectangle)" — is a good affordance.
+- **Cyan ROI annotations remain clearly legible** against the dark CT image background even in the light theme — good contrast choice.
+
+### 12.13 Fullscreen Mode (`001636`)
+
+- **Fullscreen mode hides both side panels and expands the image viewport**, leaving only the toolbar at top and status bar at bottom. The CT phantom with both ROIs fills the full center area cleanly — excellent for focused clinical reading.
+- **The window title bar remains visible** in this fullscreen implementation. This is likely the app's internal fullscreen (hiding panels + maximizing the viewport area) rather than OS-level F11 fullscreen which would suppress the title bar entirely. Either behavior is acceptable; the OS-level variant recovers a few more pixels.
+- **Corner overlays persist correctly** in fullscreen — they belong to the viewport, not the panels, so their visibility is unaffected.
+- **ROI annotations and statistics render correctly** with panels hidden — no layout artifacts or text clipping visible.
+- **Toolbar and status bar remain full-width** — consistent with the non-fullscreen layout. This means the user retains access to all toolbar tools in fullscreen, which is the right tradeoff for a clinical tool (mode switching should always be reachable).
+
+### 12.14 ACR MRI Options Dialog (`001718`)
+
+- **Dialog title still contains "(pylinac)"** — as noted in §12.5. The implementation library name should be removed from the user-facing title.
+- **"Sanity multiplier"** is a raw internal/algorithmic term. "Maximum allowed contrast ratio" or simply "Contrast limit multiplier" would be more interpretable to a medical physicist who may not know the pylinac source code.
+- **Advanced section is well-separated** with a clear "Low-contrast detectability — single run" header and distinct field grouping. The "Reset to pylinac defaults" button is a useful escape hatch.
+- **"Compare to up to 3 parameter sets" multi-run feature** is disabled (greyed "Enable next run" button) in this state — it is not explained why it's disabled. A status tip ("Load a study to enable") would reduce confusion.
+- **Dark-themed correctly** throughout.
+
+### 12.15 ACR CT Options Dialog (`001744`)
+
+- **"Vanilla pylinac (stock ACRCT)"** is developer jargon. A clinical user sees "vanilla" and either doesn't know what it means or finds it unprofessional in a medical context. Better: "Standard mode (strict slice index rules, matches pylinac CLI)" with a separate parenthetical for the class name if needed at all.
+- **Explanatory paragraph is long but the information is necessary** for a medical physicist who needs to understand the difference between viewer integration mode and vanilla pylinac. Consider a collapsed "?" or "Learn more" expander to keep the dialog compact by default and reveal the explanation on demand.
+- **Dialog is well-structured** given its complexity: vanilla toggle → HU module section → scan extent section. The `QGroupBox`-style section frames provide clear visual separation.
+- **Dark-themed correctly** throughout.
+
+### 12.16 Quick Start Guide Dialog (`001806`)
+
+- **Excellent in-app help implementation.** The Quick Start Guide is a full rich-text viewer with: search field (with Prev/Next match navigation), section navigation (Table of Contents, Prev Section, Next Section), inline links to browser-based documentation, and a proper table of contents with clickable bullet links. For a desktop medical application, this is a strong onboarding asset.
+- **Search field placeholder** "Search in guide to enable Prev/Next..." is clear and communicates the interaction model upfront.
+- **Links to feature-specific documentation** (MPR, ACR phantom QA, image fusion) are well-organized within the guide — this directly answers the concern raised about "Fusion Technical Documentation" in the Help menu (§11.6 H2). With in-app links, a top-level Help menu entry for it is less necessary.
+- **"Close" button** is correctly placed bottom-right. The guide is modal (no interaction with the main window while open), which is acceptable for a Help dialog.
+- **Dark-themed correctly** throughout.
+
+### 12.17 About Dialog (`001835`)
+
+- **App has two names: "DICOM Viewer V3" (window title bar) and "Medical Physics DICOM Viewer" / "MPDV" (About dialog and app icon).** The title bar, taskbar tooltip, and window title all say "DICOM Viewer V3" while the About dialog, app icon, and GitHub repo appear to use "Medical Physics DICOM Viewer" / "MPDV". Users, support requests, and documentation cannot agree on what the app is called. One canonical name should be chosen and used everywhere. "MPDV — Medical Physics DICOM Viewer" with "v0.3.0" in the title bar would be clean.
+- **App icon quality confirmed:** The brain+heart graphic with "MPDV" text on a dark blue rounded-square background is professional, recognizable, and should render clearly at small sizes (32×32 taskbar). The earlier concern about the icon being low quality (§2.3) is resolved — the icon is good. The concern about the filename was the actual problem.
+- **About dialog is well-structured:** icon + name + version + author + GitHub link + horizontal divider + feature bulleted list. The scrollable feature list is a nice touch for a v0.3 app with broad functionality.
+- **Dark-themed correctly** throughout.
+
+### 12.18 Main Window with DICOM Tags + VR Column Visible (`001941`)
+
+- **VR column visible in both the left tag panel and confirmed correct.** All four columns (Tag, Name, Value, VR) are visible when the panel is at adequate width. The earlier inconsistency finding is hereby retracted.
+- **Full DICOM tag listing** with expanded groups (0002, 0008, 0010, 0018, etc.) and a scrolled view is clear and well-organized. The Group row headers (e.g., "Group {0008}") function as section headers — appropriate.
+- **"Select" tool is active** (toolbar highlight) with a rectangle ROI and ellipse ROI drawn — confirming the Select mode's visual state is correctly communicated via the blue highlight.
+- **Privacy is OFF** (red) — patient data visible in overlays. Working as designed.
+
+---
+
+*Batch 4 — screenshots `004749`–`004914` from `more2/` (2026-05-02):*
+
+### 12.19 Structured Report Dialog — Document Tab (`004749`)
+
+- **Dialog title is long but accurate:** "Structured Report — X-Ray Radiation Dose SR — Radiation Dose Information." The three-part format (dialog type — SR SOP class — SR concept name) is precise but may exceed the title bar width on smaller screens. Consider truncating to "Structured Report — Radiation Dose Information" with the full name in a subtitle label inside the dialog.
+- **Four tabs** (Document, Dose events, Dose summary, Raw tags) cover the SR information from four complementary perspectives — an excellent structure for a complex DICOM object with layered data.
+- **Document tab** renders the full SR ContentSequence as an expandable tree: Concept (with DCM code), Relationship, Value type, Value columns. The right sidebar shows selected-item detail. This is the correct approach for a complex nested DICOM SR — a flat table would not represent the hierarchy.
+- **"Export document tree JSON..." button** at bottom-left is a strong power-user feature.
+- **Alternating row colors** in the Document tree appear to use a blue tint on highlighted rows (selected) and default dark rows — no purple anomaly visible. Dark-themed correctly.
+- **The tree depth** (indentation levels visible) is appropriate; CONTAINS relationships are correctly subordinated under their parent nodes.
+
+### 12.20 Structured Report Dialog — Dose Events Tab (`004848`)
+
+- **Row-to-Document-tab highlighting** is an excellent cross-tab affordance: selecting a dose event row highlights the matching CONTAINER in the Document tree. This directly aids debugging and verification workflows.
+- **"Hide empty columns" checkbox** (checked by default) is a smart density control — most SR files will have many sparsely populated columns. Well-conceived.
+- **Export buttons** — "Export dose events CSV..." and "Export dose events XLSX..." — are appropriately placed at the bottom left, paired clearly with the active tab's data. XLSX support is a strong feature for medical physics reporting workflows.
+- **Column header truncation is a significant readability issue.** Several headers appear cut off or corrupted: "tcquisition plan" (likely "Acquisition plan" with leading character(s) clipped), "DateTime starter" (likely "DateTime started"), "radiation event t" (truncated). These truncations suggest the table columns have fixed widths too narrow for their headers. Default column widths should be set to at least accommodate the full header text, with horizontal scroll available for overflow.
+- **Row 4 selected and highlighted in blue** — correct visual feedback that links to the Document tab.
+- **kVp values visible** (57.5, 55.74, 60.07, 61.82, 72.71, 68.13, 65.13, 64.73, 57.93, 59.8, 60.42, 60.79, 66.96) — meaningful radiation dose data displaying correctly.
+
+### 12.21 Structured Report Dialog — Dose Summary Tab (`004914`)
+
+- **Two-column table** (Field | Value) for the summary is clean and readable.
+- **Field column truncation** — several field names are cut off: "Study Instance ...", "Series Instance ...", "Manufacturer ...", "Device Serial ...", "Irradiation even...", "Parse hit node ..." — the Field column is too narrow. Unlike the Dose events tab (where columns can be resized), this appears to be a fixed-width layout. The Field column should be wide enough to show full field names without truncation, or field names should wrap to two lines.
+- **CTDIvol (mGy), DLP (mGy·cm), SSDE (mGy) are all empty** — expected for a fluoroscopy X-Ray SR (not CT), but the empty rows add visual noise. A "Hide empty rows" toggle (mirroring the Dose events tab's "Hide empty columns") would improve this.
+- **"Parse hit node ... | No"** is raw internal implementation language — "Dose summary parsed: No" or "Dose metrics extracted: No" would be more meaningful to a clinical user who doesn't know what a "parse hit node" is.
+- **"Irradiation even... | 0"** — truncated to the point where it reads ambiguously. "Irradiation events" = 0 is meaningful clinical information that deserves to be legible.
+- **The "Raw tags" tab** is not captured but its existence is appropriate — raw DICOM tag access within the SR viewer is correct for a medical physics tool.
+- **Dark-themed correctly** throughout all three tabs.
+
+---
+
+*Batch 5 — screenshots `012434-mpr.png`, `012652-mpr2.png` from `more2/` (2026-05-02):*
+
+### 12.22 MPR View — Sagittal Single-Pane (`012434-mpr`)
+
+- **MPR is integrated into the main multi-window viewport grid, not a separate dialog or mode.** The sagittal reconstruction replaces the content of a standard viewport slot — the correct UX approach. Users get MPR as a first-class view alongside any other pane type.
+- **"MPR - Sagittal" is shown in the corner overlay** (top-center position, alongside orientation markers A/P/S). This clearly identifies the reconstructed plane. The direction labels (Anterior, Posterior, Superior) are correctly oriented for the sagittal plane — the orientation system works correctly across reconstructed planes, not just the source axial.
+- **The MPR view participates in cine playback.** Frame counter shows 10/42 — the user is scrolling through sagittal MPR slices via cine. This is the correct behavior; MPR frames are navigable the same way as source slices.
+- **Window/Level applies correctly** to the MPR pane — Window Center 40.0, Width 500.0 (soft-tissue windowing) renders the sagittal reconstruction with appropriate contrast.
+- **No MPR-specific controls are visible in the right panel** — the standard Window/Zoom/ROI panel is shown. There is no plane-angle control, slab-thickness spinbox, or source-link indicator visible in this state. If such controls exist elsewhere, their location is not surfaced in this view.
+- **Privacy is OFF (red)** — patient data visible in overlays, working correctly.
+
+### 12.23 MPR View — Sagittal + Axial Side-by-Side (`012652-mpr2`)
+
+- **MPR coexists with the original axial source view** in a 2-pane layout (axial top, sagittal MPR bottom). This is the primary clinical MPR workflow — the reconstructed plane and the source data visible simultaneously. The implementation handles this correctly.
+- **No reference lines (crosshairs) are visible** between the axial pane and the sagittal MPR pane. In clinical MPR workflows, a reference line on the axial view shows the position of the sagittal cut plane, and vice versa. Without this, the user cannot visually correlate which axial position the sagittal slice represents. The "Show Slice Location Lines" feature (seen in the View menu and context menu) may provide this, but it is not active in this screenshot — its discoverability and applicability to MPR cross-pane linking is worth verifying.
+- **The active pane (MPR, bottom) has the correct blue focus border** — consistent with other multi-pane layouts.
+- **Cine plays within each pane independently** — frame counter shows 20/42 in the cine controls, consistent with navigating MPR slices.
+- **The two-pane layout is the natural entry point for MPR work**, and the app supports it correctly via the existing multi-window grid system. No special MPR layout mode is required.
+
+| # | Issue | Severity |
+|---|---|---|
+| M1 | **No reference/crosshair lines between MPR and source panes** — the intersection of the sagittal cut plane on the axial view (and vice versa) is not shown. This is the primary spatial orientation tool in clinical MPR workflows. | P1 |
+| M2 | **No MPR-specific controls visible in the right panel** — plane angle, slab thickness, and source-link controls (if they exist) are not surfaced when an MPR pane is focused. | P2 |
+| M3 | **MPR creation is only accessible via "Create MPR View…"** in the right-click context menu and the Tools menu — a new user reading the toolbar would not find it. A toolbar button or a View → Layout-level affordance would improve discoverability. | P2 |
+
+---
+
+## 13. Summary: Key Findings
 
 ### Highest Priority (P0 — bugs or affects every user on every session)
 
 | Issue | Source | Impact |
 |---|---|---|
-| **No toolbar icons** | All 8 screenshots | Slow tool identification, toolbar too wide, unprofessional appearance |
-| **Ctrl+O conflict** — Open File and Overlay Tags Config share the same shortcut | `main_window_menu_builder.py` | One shortcut becomes unreachable; keyboard navigation broken |
-| **Ctrl+A conflict** — "About this File" shadows platform-standard Select All | `main_window_menu_builder.py` | Breaks expected text-selection in any focused field |
-| **2px splitter handles** | 002101 — invisible between panels | Difficult to resize panels precisely |
-| **Tag viewer purple row tinting** inconsistent with blue accent | 002858 | Visual incoherence; the only place in the app with this color |
+| **No toolbar icons** | All screenshots | Slow tool identification, toolbar too wide, unprofessional appearance |
+| **Toolbar wraps to two rows** | `235112` | Viewport height loss; second-row items harder to discover |
+| **Ctrl+O conflict** — Open File and Overlay Tags Config share the same shortcut | `main_window_menu_builder.py` | One shortcut unreachable; keyboard navigation broken |
+| **Ctrl+A conflict** — "About this File" shadows platform-standard Select All | `main_window_menu_builder.py` | Breaks text-selection in any focused field |
+| **2px splitter handles** | `232107`, `002101` | Difficult to resize panels precisely; no visual affordance |
+| **"Overlay mode_modality" raw identifier in dialog UI** | `235159` | Internal Python variable name exposed directly to users; display bug |
+| **Light theme has undocumented purple/violet slider accent** | `232107` | Second undocumented accent color; inconsistent with the blue token used in the dark theme |
+| **Settings dialog ignores app QSS — renders with OS light theme** | `001155` | Jarring white dialog interior in a dark-themed app; inconsistent with every other dialog |
+| **App has two different names** — "DICOM Viewer V3" (title bar) vs "Medical Physics DICOM Viewer / MPDV" (About dialog, icon) | `001835`, title bar | Documentation, support, and users cannot agree on what to call the app |
 
 ### High Priority (P1 — significant ergonomic or discoverability impact)
 
 | Issue | Source | Impact |
 |---|---|---|
 | "Copy" / "Paste" / "Undo" / "Redo" scope not labelled | Edit menu | Users expect these to operate on image or ROI, not just annotations/tags |
-| "About this File..." belongs in Help, not Tools | Tools menu | Misplaced; Ctrl+A conflict also resolved by moving it |
+| "About this File..." belongs in Help, not Tools | Tools menu | Misplaced; resolves Ctrl+A conflict when moved |
 | Study Index duplicated across File and Tools | Both menus | Users unsure which is canonical |
-| View menu has 25+ items across 7 conceptual categories | View menu + 002803 | Requires scrolling; buries Layout and Privacy in a flat list |
-| Privacy View not visually separated in View menu | View menu code | Compliance-critical action mixed in with display options |
-| Overlay text on images is extremely dense | 002253, 002649 | Competes with image content; legibility at its limit |
-| "Delete Selected" / "Delete All" visible with no ROIs | 002101 | Visual noise; invites accidental destructive action |
-| "Use Rescaled Values" not visually checkable | Toolbar in all screenshots | Current display state is unclear |
-| "Privacy OFF — PHI Visible" wording would be clearer than "Privacy is OFF" | 002101 | Label could be more self-explanatory at a glance |
+| View menu has 25+ items across 7 conceptual categories | View menu + `002803` | Requires scrolling; buries Layout and Privacy |
+| Privacy View not visually separated in View menu | View menu code | Compliance-critical action mixed with display options |
+| Right-click context menu has ~40 items | `234100` | Defeats purpose of context menu; requires scrolling |
+| Tool modes duplicated in both toolbar and right-click menu | `234100`, toolbar | 13 tool buttons redundantly in the context menu flat list |
+| Overlay text on images is extremely dense | `002253`, `002649` | Competes with image content at limit of legibility |
+| "Delete Selected" / "Delete All" visible with no ROIs | `232107`, `002101` | Visual noise; invites accidental destructive action |
+| "Use Rescaled Values" not visually checkable; overflows to second toolbar row | `235112` | Current display state unclear; discoverable only when window is narrow |
+| "Font Color" on second toolbar row | `235112` | Low-frequency control taking prime toolbar real estate; candidate for Overlay Settings |
+| Series navigator labels are truncated UIDs not series descriptions | `233854` | Clinical users identify series by description, not UID |
+| Three different font families in Annotation Options dialog | `234902` | IBM Plex Sans, Open Sans, Noto Sans in one dialog; Open Sans and Noto Sans may not be bundled |
+| ~~VR column present in Tag Viewer dialog but absent from inline tag panel~~ | *Retracted — VR column confirmed present in inline panel (`001941`); was a viewport-width artifact in `232501`* | — |
+| "Default (Space)" combobox label in Overlay Tags Configuration is cryptic | `235159` | Space shortcut undocumented and label unintuitive |
+| Settings dialog contains only 1 setting; redirects to menus for all others | `001155` | Anti-pattern — Settings should centralize preferences, not give directions elsewhere |
+| "Move Up" / "Move Down" in Edit Recent List reorders by user drag rather than recency | `001345`, `001359` | Unusual; intent is unclear without explanation; may confuse users expecting auto-recency ordering |
+| **No reference/crosshair lines between MPR and source panes** — sagittal cut position not shown on axial, and vice versa | `012652-mpr2` | Primary spatial orientation tool for clinical MPR workflows is absent |
+| SR Dose events tab column headers truncated — "tcquisition plan", "DateTime starter", "radiation event t" | `004848` | Headers clipped by fixed column widths; data is unreadable without context |
+| SR Dose summary "Field" column too narrow — truncates every field name | `004914` | "Study Instance ...", "Irradiation even..." lose meaning when cut off |
+| SR Dose summary "Parse hit node ... \| No" is raw internal implementation language | `004914` | Should read "Dose summary parsed: No" or similar plain-language equivalent |
+| "Privacy OFF — PHI Visible" wording would be clearer than "Privacy is OFF" | `002101`, `233936` | Label could be more explicit at a glance |
 | No type scale defined | Visible inconsistency across panels | Inconsistent text hierarchy throughout |
 | No cursor changes on tool mode switch | All screenshots | No per-mode visual feedback |
-| Status bar "Ready" cold-start message | 002101 | Poor onboarding — no empty-state guidance |
-| Tooltips lack keyboard shortcuts | Toolbar in all screenshots | Discoverability of shortcuts is poor |
-| Histogram / dialog chart axis labels are very small | 002551, 002649 | Legibility issues in chart data |
+| Status bar "Ready" cold-start message | `232107`, `002101` | Poor onboarding — no empty-state guidance in either theme |
+| Tooltips lack keyboard shortcuts | Toolbar across all screenshots | Discoverability of shortcuts is poor |
+| Histogram / chart axis labels are very small | `002551`, `002649` | Legibility issues in chart data |
 
 ### Medium Priority (P2 — reduces polish and learnability)
 
@@ -791,54 +1125,94 @@ Both are real bugs. Ctrl+O is particularly bad because it's one of the most comm
 |---|---|---|
 | "Show/Hide Left Pane" / "Show/Hide Right Pane" redundant label | View menu | Checkmark already communicates show/hide |
 | "Show Instances Separately" disabled with no explanation | View menu | Confusing grayed-out item; add status tip or hide |
-| Layout shortcuts documented in label text rather than `setShortcut()` | View → Layout submenu | Shortcuts not right-aligned, may not be wired properly |
-| "(pylinac)" in ACR tool names exposes implementation detail | Tools menu | User-facing labels should describe what, not how |
-| ACR QA tools ungrouped alongside everyday utilities | Tools menu | Specialist tools mixed with histogram/tags without visual separation |
-| "Fusion Technical Documentation" in Help is feature-specific | Help menu | Should be contextual or in a Feature Guides submenu |
+| Layout shortcuts in label text rather than `setShortcut()` | View → Layout submenu | Shortcuts not right-aligned, may not be wired |
+| "(pylinac)" in ACR tool names and dialog titles exposes implementation detail | Tools menu, `001718`, `001744` | User-facing labels should describe what, not how |
+| "Vanilla pylinac" and "Sanity multiplier" in ACR dialogs are developer jargon | `001718`, `001744` | Unintelligible to clinical users; need plain-language replacements |
+| ACR QA tools ungrouped alongside everyday utilities | Tools menu | Specialist tools mixed with histogram/tags |
+| "Fusion Technical Documentation" in Help is feature-specific | Help menu | Should be contextual or in Feature Guides submenu |
 | "Documentation (browser)..." qualifier is redundant | Help menu | "(browser)" is implementation detail |
-| Light tooltip color (`#ffffdc`) | QSS | Dated, inconsistent with overall theme |
-| `QGroupBox` unthemed | 002551 | Cross-platform inconsistency |
-| Splitter handles have no visual affordance | 002101 | Resizing not discoverable |
-| Right panel tab labels verbose ("Window/Zoom/ROI") | 002101 | Navigation friction |
-| No drop target indicator | 002101 | Drag-and-drop not obviously available |
-| Toast has no icon or severity color | No screenshot | All messages appear equally important |
-| ROI resize handles are small dots | 002649 | Fine-motor difficulty on small screens |
+| Light tooltip color (`#ffffdc`) | QSS | Dated; inconsistent with overall theme |
+| `QGroupBox` unthemed | `002551` | Cross-platform inconsistency |
+| Splitter handles have no visual affordance | `232107`, `002101` | Resizing not discoverable |
+| Right panel tab label "Window/Zoom/ROI" is verbose | `232107`, `002101` | Navigation friction |
+| No drop target indicator | `232107`, `002101` | Drag-and-drop availability not visible |
+| Toast has no icon or severity color | Code only | All toasts appear equally important |
+| ROI resize handles are small dots | `002649` | Fine-motor difficulty on small screens |
+| "Cycle overlay detail / legacy toggle" label too long and exposes internals | `234100` | Simpler: "Toggle Overlay Detail (Space)" |
+| "Overlay Configuration" in context menu label differs from menu bar label | `234100` | Should be "Overlay Tags Configuration…" for consistency |
+| "(45 non-DICOM skipped)" in status bar is jargon for clinical users | `232501` | Technical detail inappropriate for non-expert audience |
+| Overlay font defaults to Liberation Sans, not IBM Plex Sans | `234825` | Inconsistency with primary UI font; cohesion opportunity |
+| Lime green as default overlay font color | `234825` | Aggressive default; white or light gray would be more clinically neutral |
+| "Add to Simple" / "Add to Detailed" buttons redundant with arrow buttons | `235159` | Two ways to do the same action; prefer arrow buttons only |
+| Combine/Fuse tab covers two distinct feature domains | `233936`, `234016` | As panel grows, consider "Slab" and "Fusion" sub-tabs |
+| "Slice sync group strip height (px)" is too advanced for top-level exposure | `234825` | Move to collapsed "Advanced" section |
+| SR Dose summary has no "Hide empty rows" toggle | `004914` | CTDIvol/DLP/SSDE empty rows add noise; mirrors the Dose events "Hide empty columns" pattern |
+| SR dialog title is very long and may clip on smaller screens | `004749` | "Structured Report — X-Ray Radiation Dose SR — Radiation Dose Information" — consider shorter display title |
+| No MPR-specific controls in right panel when MPR pane is focused | `012434-mpr` | Plane angle, slab thickness, source-link controls (if they exist) not surfaced |
+| MPR creation only discoverable via right-click and Tools menu | `012652-mpr2` | Not on toolbar; new users reading the toolbar will not find it |
 
-### Positive Foundations (confirmed visually)
+### Positive Foundations (confirmed visually — batch 1 + batch 2)
 
-- **Privacy red toolbar button** is an intentional and correct safety pattern for a medical app — maximum visibility when PHI is exposed
+- **Privacy red toolbar button** is an intentional and correct safety pattern — maximum visibility when PHI is exposed, both themes
 - Dark theme is clean, professional, and appropriate for radiology use
+- Light theme is clean and professional; a viable alternative to the dark theme
 - **Menu bar visual styling** (dark background, blue hover, clean separators) is the most polished surface in the UI
 - Custom checkbox checkmarks (white PNG on dark) look correct and crisp
 - ROI and measurement rendering (cyan ellipses, yellow distance line) is distinctive and clear
-- Floating dialogs (Histogram, Slice Sync) coexist gracefully
+- Floating dialogs (Histogram, Slice Sync) coexist gracefully without covering critical content
 - "Filter tags…" in the metadata panel is a strong affordance for a dense data list
+- **Cine playback controls** (Play / Stop / Loop) with active-state highlighting are clean and functional
+- **Overlay Tags Configuration** dual-list widget is a sophisticated and correct pattern for overlay customization
 - Series navigator correctly uses a differentiated background tone
 - Blue focus border on active viewport pane is clear without being intrusive
-- IBM Plex Sans is an excellent technical font choice
-- Multi-window grid system is a strong feature differentiator
+- IBM Plex Sans is an excellent technical font choice for the primary UI
+- Multi-window grid system (1×1 to 2×2) is a strong clinical workflow differentiator
 - Help menu structure is nearly HIG-standard
+- Frame-count badges on navigator thumbnails ("2f", "28f") are a good at-a-glance differentiator
+- Overlay Settings dialog is well-structured with clear section groupings
+- Annotation Options dialog layout (four-quadrant) is logical and compact
+- "(INFO) Please select overlay series" inline guidance in Fusion panel is the right pattern for progressive disclosure
+- **Quick Start Guide** (`001806`) is an excellent in-app help implementation — rich-text viewer with search, Prev/Next match navigation, section navigation, and browser-doc links; one of the strongest in-app help systems for a desktop tool of this scope
+- **About dialog** (`001835`) is well-structured: icon + product name + version + author + GitHub link + scrollable feature list
+- **App icon (MPDV)** (`001835`) — brain+heart graphic on dark rounded square is professional, clear, and readable at small sizes; earlier filename concern is resolved
+- **Hidden-panel mode** (`001636`) — when both side panels are collapsed, the image fills the viewport cleanly with no layout artifacts; a good focused-reading mode
+- **Encryption transparency note** in Settings (`001155`) — surfacing "key stored in OS credential manager, not JSON config" is exactly the right security communication for a medical app
+- **Tag group expand/collapse structure** in the left panel (`001542`) — Group headers (Group 0002, 0008, etc.) as collapsible sections is the right pattern for dense DICOM data
+- **Edit Recent List dialog** (`001345`) — dark-themed correctly; "Remove All" and "Remove Selected" are appropriately scoped actions
+- **Structured Report dialog** (`004749`–`004914`) — four-tab structure (Document tree, Dose events, Dose summary, Raw tags) is exactly the right information architecture for a complex DICOM SR; row↔Document-tab cross-linking is an excellent affordance; CSV/XLSX export is a strong medical physics workflow feature; "Hide empty columns" checkbox is a well-conceived density control; dark-themed correctly throughout
+- **Fullscreen mode** (`001636`) — image expands to fill the viewport cleanly with toolbar and status bar intact; all tools remain accessible; ROI annotations persist without artifacts
+- **MPR integrated into multi-window grid** (`012434-mpr`, `012652-mpr2`) — sagittal reconstruction is a first-class viewport, not a separate dialog; direction labels correctly orient for the reconstructed plane; cine navigation works within MPR panes; MPR + axial side-by-side layout works cleanly
+- **Light-theme loaded state** (`001542`) — cyan ROI annotations remain clearly legible against the dark CT image background in the light theme; purple/violet slider accent color confirmed in loaded state as well as cold-start
 
 ---
 
-## 13. Screenshots Still Needed
+## 14. Screenshots Still Needed
 
-Capture these for future passes:
+Covered in batches 1–4 (can be removed from backlog):
+- ~~Light theme cold-start~~ — covered (`232107`)
+- ~~Light theme loaded state~~ — covered (`001542`)
+- ~~Series navigator bar close-up~~ — covered (`233854`)
+- ~~Right panel Combine/Fuse tab~~ — covered (`233936`, `234016`)
+- ~~Right-click context menu~~ — covered (`234100`)
+- ~~Toolbar close-up~~ — covered (`235112`)
+- ~~Settings dialog~~ — covered (`001155`)
+- ~~ACR Phantom QA dialogs~~ — covered (`001718`, `001744`)
+- ~~Quick Start Guide~~ — covered (`001806`)
+- ~~About dialog~~ — covered (`001835`)
+- ~~Structured Report dialog~~ — covered (`004749`, `004848`, `004914`)
+- ~~Fullscreen mode~~ — covered (`001636`)
 
-1. **Light theme** — cold start and loaded state
-2. **Series navigator bar close-up** — thumbnail sizing, study labels, window slot map widget
-3. **Right panel "Combine/Fuse" tab** — intensity projection and fusion controls
-4. **Right-click context menu on image** — reserved for the context menu deep-dive pass
-5. **Settings dialog** — assess dialog styling and completeness
-6. **Toolbar close-up** — cropped to show individual button sizes and spacing
+- ~~MPR view~~ — covered (`012434-mpr`, `012652-mpr2`)
+
+All planned screenshot passes complete. No further screenshots outstanding.
 
 ---
 
-## 14. Tools Used
+## 15. Tools Used
 
 **Code analysis:**
 - `Glob` — directory and file structure discovery
-- `Read` — `dark.qss`, `light.qss`, `main_window.py`, `main_window_toolbar_builder.py`, `main_window_menu_builder.py`, `main_window_layout_helper.py`, `UX_IMPROVEMENTS_BATCH1_PLAN.md`, `VIEWER_UX_FEATURES_PLAN.md`; all 8 screenshots
+- `Read` — `dark.qss`, `light.qss`, `main_window.py`, `main_window_toolbar_builder.py`, `main_window_menu_builder.py`, `main_window_layout_helper.py`, `UX_IMPROVEMENTS_BATCH1_PLAN.md`, `VIEWER_UX_FEATURES_PLAN.md`; all 33 screenshots
 - `Bash` — process check, directory checks
 - `Explore` agent — codebase architecture survey
 
@@ -847,9 +1221,13 @@ Capture these for future passes:
 - IBM Carbon Design System: https://carbondesignsystem.com/
 - Apple HIG: https://developer.apple.com/design/
 
-**Screenshots reviewed:** 8 live screenshots in `resources/screenshots-ignored/` (2026-05-01)
+**Screenshots reviewed:**
+- Batch 1: 8 screenshots in `resources/screenshots-ignored/` (2026-05-01)
+- Batch 2: 10 screenshots in `resources/screenshots-ignored/screenshots-more/` (2026-05-02)
+- Batch 3: 10 screenshots in `resources/screenshots-ignored/screenshots-more/` (2026-05-02)
+- Batch 4: 3 SR screenshots in `resources/screenshots-ignored/more2/` (2026-05-02)
+- Batch 5: 2 MPR screenshots in `resources/screenshots-ignored/more2/` (2026-05-02)
 
 ---
 
-*Next pass: Right-click context menu deep-dive*  
-*Planned: `DESIGN.md` — design system alignment, token system proposal, icon adoption plan*
+*Next pass: DESIGN.md — design system alignment, token system proposal, icon adoption plan*
