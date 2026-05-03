@@ -238,6 +238,8 @@ dev-docs/security/dependabot-*.csv
 
 # Claude Code — local per-user permission grants (machine-specific, not for shared history)
 .claude/settings.local.json
+# Claude Code — temporary agent worktrees (ephemeral full-repo copies, never commit)
+.claude/worktrees/
 
 # Codex local test environments and temp artifacts
 .venv-codex/
