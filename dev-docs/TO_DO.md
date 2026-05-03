@@ -1,7 +1,7 @@
 # To-Do Checklist
 
-**Last updated:** 2026-04-21  
-**Changes:** **Maintenance:** new [dependency bump verification](plans/DEPENDENCY_BUMP_VERIFICATION_PLAN.md) plan + checklist item under Maintenance. **Maintenance:** [GitHub Actions / CI/CD review](plans/supporting/GITHUB_ACTIONS_CI_CD_REVIEW_AND_STORAGE.md) supporting plan linked from Actions/CI checklist item. **RDSR P0 plan** archived to [`plans/completed/RDSR_XA_DOSE_RP_AND_SR_CLEAR_WINDOW_P0_PLAN.md`](plans/completed/RDSR_XA_DOSE_RP_AND_SR_CLEAR_WINDOW_P0_PLAN.md); `TO_DO` links updated. 
+**Last updated:** 2026-05-03  
+**Changes:** **UX:** expanded "See ux assessment" into a full linked item (plan + DESIGN.md + summary); added [UX Assessment Remediation & Design System Plan](plans/supporting/UX_ASSESSMENT_REMEDIATION_AND_DESIGN_SYSTEM_PLAN.md) and [DESIGN.md](../DESIGN.md). **Maintenance:** new [dependency bump verification](plans/DEPENDENCY_BUMP_VERIFICATION_PLAN.md) plan + checklist item under Maintenance. **Maintenance:** [GitHub Actions / CI/CD review](plans/supporting/GITHUB_ACTIONS_CI_CD_REVIEW_AND_STORAGE.md) supporting plan linked from Actions/CI checklist item. **RDSR P0 plan** archived to [`plans/completed/RDSR_XA_DOSE_RP_AND_SR_CLEAR_WINDOW_P0_PLAN.md`](plans/completed/RDSR_XA_DOSE_RP_AND_SR_CLEAR_WINDOW_P0_PLAN.md); `TO_DO` links updated. 
 
 ---
 
@@ -60,7 +60,7 @@ This file tracks active and near-term tasks.
 
 ## UX / Workflow
 
-- [ ] **[P1]** See ux assessment
+- [ ] **[P0/P1/P2]** Address UX assessment findings (icons, toolbar overflow, shortcut conflicts, splitter handles, menu reorganization, design system) — **Plan:** [UX Assessment Remediation & Design System Plan](plans/supporting/UX_ASSESSMENT_REMEDIATION_AND_DESIGN_SYSTEM_PLAN.md); **Design spec:** [DESIGN.md](../DESIGN.md); **Assessment summary:** [ux-summary.md](ux-assessments/ux-summary.md). Start with Part A (design system / DESIGN.md) before implementing any visual fixes.
 - [ ] **[P2]** Make an "ultra-dark" or "black" theme as a new option - similar to current dark there but all greys get darker
 - [ ] **[P1]** Allow a button in study index that checks all indexed studies still exist at indexed path and if not asks the user if they want to update the location or remove them (what happens currently if a user tries to load a study from index and files aren't found?)
 - [ ] **[P1]** Make separators, borders, etc thinner to reclaim real estate
