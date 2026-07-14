@@ -42,7 +42,7 @@ vtk>=9.6.2  # GPU-accelerated 3D volume rendering (vtkSmartVolumeMapper + QVTKRe
 # Pinned exact version; 3.43.2 is the current verified ACR CT/MRI integration pin. Re-verify after each bump (see dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md, dev-docs/plans/DEPENDENCY_BUMP_VERIFICATION_PLAN.md).
 pylinac==3.43.2  # Automated phantom QA analysis (ACR CT + ACR MRI Large)
 scipy>=1.17.1  # pylinac numerical dependency
-scikit-image>=0.22.0  # pylinac image processing dependency
+scikit-image>=0.26.0  # pylinac image processing dependency
 pypdf>=6.14.2  # PDF merging for compare-mode combined PDF report
 
 # Optional dependencies for compressed DICOM support
