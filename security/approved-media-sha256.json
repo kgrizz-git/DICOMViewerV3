@@ -1,0 +1,28 @@
+{
+  "purpose": "Reviewed binary, extensionless, and DICOM assets. Any new or changed entry requires PHI and burned-in-text review before its SHA-256 is added.",
+  "files": {
+    ".coveragerc": "abe5fd38133765617cdcb5a66842622a016535479dfbb2f7c22dd55053019685",
+    ".githooks/pre-commit": "bc5b06d99fd6d83cfd317d99783825567a87aa73c52221bd49dbd36b21430327",
+    ".githooks/pre-push": "6453fea57aa16202706647391b3adb70d90febc630a68165648eb8798e4d142a",
+    ".python-version": "5b703ca38d3fd391f3e889f7ba893f94b921ff9e7b7e5d8d6622d5f7daca7049",
+    "AppDir/DICOMViewerV3.png": "fa8c775adafddafdcd9194a6904bd1d15cd2def16550203cdf609f0933254c27",
+    "data/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "dev-docs/perf-baselines/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "resources/cursors/magnifier.png": "648cf28945e62a725046bf0477372e5a5b92509596511482fec71c3d5bd8313a",
+    "resources/fonts/liberation_sans/AUTHORS": "1983698d88ce9de3ba41c62d4d1b6d4d11b3162da5ab283c84d6ac11b65aa1b0",
+    "resources/fonts/liberation_sans/COPYING": "32b1062f7da84967e7019d01ab805935caa7ab7321a7ced0e30ebe75e5df1670",
+    "resources/fonts/liberation_sans/ChangeLog": "1382055439d1dd72cae12cc1a5f0cd7a63f898c07cc25d6c2bd03cd99ad1bdbb",
+    "resources/fonts/liberation_sans/README": "1625b42cd6ed728f4156a5c1a9e863defbb659b148e8a7710e333fabd8966256",
+    "resources/icons/alternate/luk40iluk40iluk4-removebg-preview.png": "503867f3f9eace80a6520efa965f9f9fd9b5d2e1dd3f3de4e906e80be57bbee5",
+    "resources/icons/alternate/ozh26rozh26rozh2-removebg-preview.png": "bf5ab66bbeeb4f37b539eec26c8e82c43c95507a15177e2568eff101568f9be2",
+    "resources/icons/dvv6ldvv6ldvv6ld_edit-removebg-preview.png": "349a79b11bfb295ce03cac82660ea03871cd0a306d07d4cb1f48b41568567f84",
+    "resources/images/Gemini_Generated_Image_dvv6ldvv6ldvv6ld_edit-removebg-preview.png": "349a79b11bfb295ce03cac82660ea03871cd0a306d07d4cb1f48b41568567f84",
+    "resources/images/checkbox_checkmark_black.png": "5dcb676944d1938aeb0a556499c2936c47b2d70c7483859204a39a019d2445b4",
+    "resources/images/checkbox_checkmark_white.png": "8ac918c18d03d8aa6de91079e87eea59e24eaf641f8371c0988b826d55b8d8e9",
+    "src/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tests/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tests/fixtures/dicom_rdsr/synthetic_ct_dose_comprehensive_sr.dcm": "6b3b33946aa1a2e2d0e2123e86b8ee278d3ca8866d3a0e7e69e335e7f5951385",
+    "tests/fixtures/dicom_rdsr/synthetic_ct_dose_xray_rdsr.dcm": "749e7b1a407278ef5fc8554acf942a077d866c824d11d9ceb11f81e878f174d3",
+    "tests/fixtures/dicom_rdsr/synthetic_enhanced_xray_rdsr.dcm": "a5c9685c62523c2f2930f607500f29e69a88c612aa8b483d9ed172798fa0dec1"
+  }
+}
