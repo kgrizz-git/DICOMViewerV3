@@ -15,6 +15,7 @@ on:
       - "requirements.txt"
       - "requirements-dev.txt"
       - "requirements-build.txt"
+      - "requirements-phi-tools.txt"
   push:
     branches:
       - main
@@ -23,6 +24,7 @@ on:
       - "requirements.txt"
       - "requirements-dev.txt"
       - "requirements-build.txt"
+      - "requirements-phi-tools.txt"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -48,4 +50,16 @@ jobs:
         run: pip install "pip-audit>=2.10.1"
 
       - name: Run pip-audit
-        run: pip-audit --requirement requirements.txt --requirement requirements-dev.txt --requirement requirements-build.txt
+        # Temporary exceptions are documented with removal criteria in
+        # security/pip-audit-exceptions.md. Do not add or broaden exceptions
+        # without an explicit security review.
+        run: >-
+          pip-audit --requirement requirements.txt --requirement requirements-dev.txt
+          --requirement requirements-build.txt --ignore-vuln PYSEC-2026-2266
+          --ignore-vuln PYSEC-2026-2132
+
+      # PhiScan's Click constraint conflicts with Semgrep and Presidio currently
+      # requires NumPy <2.5 while the application requires NumPy >=2.5.1. Audit
+      # the intentionally isolated PHI-tools environment independently.
+      - name: Run pip-audit for isolated PHI tooling
+        run: pip-audit --requirement requirements-phi-tools.txt

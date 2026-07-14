@@ -1,0 +1,13 @@
+# Optional PHI/PII scanning environment.
+#
+# Do not install alongside requirements.txt or requirements-dev.txt:
+# - PhiScan's Click constraint conflicts with Semgrep.
+# - Presidio Analyzer currently pins NumPy <2.5, while the application requires
+#   NumPy >=2.5.1.
+#
+# Create a dedicated virtual environment and install this file there. Presidio
+# image redaction additionally requires a locally installed OCR engine and an
+# appropriate spaCy model.
+phi-scan>=0.7,<0.8; python_version >= "3.12"
+presidio-analyzer>=2.2.363,<2.3
+presidio-image-redactor>=0.0.59,<0.1

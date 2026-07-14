@@ -135,6 +135,29 @@ def test_blocks_unapproved_image_file(repo):
     assert _run(repo) == 1
 
 
+@pytest.mark.parametrize("path", [
+    "resources/new-image.svg",
+    "resources/new-image.ico",
+    "resources/new-image.icns",
+])
+def test_blocks_unapproved_vector_and_icon_image_files(repo, path):
+    _stage(repo, path, "not a reviewed image")
+    assert _run(repo) == 1
+
+
+def test_blocks_an_added_image_in_an_approved_image_tree(repo):
+    _stage(repo, "resources/icons/approved.svg", "<svg />")
+    digest = phi._image_tree_sha256(repo, "resources/icons")
+    manifest = repo / phi.APPROVED_MEDIA_MANIFEST
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text(json.dumps({"image_trees": {"resources/icons": digest}}), encoding="utf-8")
+
+    assert _run(repo) == 0
+
+    _stage(repo, "resources/icons/unreviewed.svg", "<svg />")
+    assert _run(repo) == 1
+
+
 def test_recursively_blocks_dicom_identifier(repo):
     import pydicom
     from pydicom.dataset import Dataset, FileMetaDataset
