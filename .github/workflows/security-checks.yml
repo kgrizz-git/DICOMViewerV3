@@ -153,6 +153,12 @@ jobs:
         with:
           python-version: "3.12"
 
+      # The scanner parses tracked DICOM and Excel files rather than merely
+      # matching their names. Keep these parser-only dependencies narrow so this
+      # security job does not install the full GUI/application stack.
+      - name: Install PHI artifact scan parsers
+        run: python -m pip install "pydicom>=2.4.0,<3" "openpyxl>=3.1.5"
+
       - name: Scan tracked files for PHI and runtime artifacts
         run: python scripts/check_no_phi_artifacts.py
 

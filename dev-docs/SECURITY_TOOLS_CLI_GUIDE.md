@@ -18,6 +18,11 @@ pip install -r requirements-dev.txt
 
 This installs `requirements.txt` plus **semgrep** and **detect-secrets**.
 
+PhiScan and Microsoft Presidio run in a separate environment because PhiScan's
+Click constraint conflicts with Semgrep and Presidio conflicts with the
+application's NumPy requirement; see
+[`requirements-phi-tools.txt`](../requirements-phi-tools.txt).
+
 Install dependency CVE scanner (`pip-audit`) in the same venv:
 
 ```bash

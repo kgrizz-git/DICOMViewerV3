@@ -63,13 +63,15 @@ jobs:
 
       - name: Upload Grype SARIF to GitHub Security
         uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4
-        if: always() && steps.grype_sarif.outputs.upload == 'true'
+        # Dependabot pull_request tokens are read-only for code-scanning APIs.
+        # The scan still runs; only its unavailable Security-tab upload is skipped.
+        if: always() && steps.grype_sarif.outputs.upload == 'true' && github.actor != 'dependabot[bot]'
         with:
           sarif_file: grype-upload.sarif
           category: grype
 
       - name: Comment on PR with CVE results
-        if: github.event_name == 'pull_request' && steps.grype_sarif.outputs.upload == 'true'
+        if: github.event_name == 'pull_request' && steps.grype_sarif.outputs.upload == 'true' && github.actor != 'dependabot[bot]'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |

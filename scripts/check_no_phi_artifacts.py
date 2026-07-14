@@ -50,11 +50,16 @@ FORBIDDEN_PATH_PATTERNS: list[tuple[str, str]] = [
 # --- Rule 2: PHI/PII indicators inside data files ---------------------------
 DATA_SUFFIXES = {
     ".json", ".csv", ".txt", ".log", ".yaml", ".yml", ".ini", ".cfg", ".xml",
-    ".html", ".htm", ".md", ".rst", ".tsv",
+    ".html", ".htm", ".md", ".rst", ".svg", ".tsv",
 }
 SPREADSHEET_SUFFIXES = {".xlsx", ".xlsm"}
 DICOM_SUFFIXES = {".dcm", ".dicom", ".ima"}
-IMAGE_SUFFIXES = {".bmp", ".gif", ".heic", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"}
+# SVG is text-readable and is also content-scanned above.  The other formats are
+# opaque containers, so they need an explicit hash review before admission.
+IMAGE_SUFFIXES = {
+    ".avif", ".bmp", ".gif", ".heic", ".ico", ".icns", ".jpeg", ".jpg",
+    ".jp2", ".jxl", ".png", ".svg", ".tif", ".tiff", ".webp",
+}
 APPROVED_MEDIA_MANIFEST = "security/approved-media-sha256.json"
 
 # A file without a suffix can hide a binary export or clinical data.  Existing
@@ -167,6 +172,45 @@ def _is_approved_media(path: str, root: Path, approved: dict[str, str]) -> bool:
     return isinstance(expected, str) and (root / path).is_file() and _sha256(root / path) == expected
 
 
+def _image_tree_sha256(root: Path, directory: str) -> str:
+    """Hash the paths and bytes of all tracked reviewable images in a directory."""
+    prefix = f"{directory.rstrip('/')}/"
+    digest = hashlib.sha256()
+    for path in tracked_files(root):
+        if not path.startswith(prefix) or Path(path).suffix.lower() not in IMAGE_SUFFIXES:
+            continue
+        full = root / path
+        if not full.is_file():
+            continue
+        digest.update(path.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(bytes.fromhex(_sha256(full)))
+    return digest.hexdigest()
+
+
+def _approved_image_trees(manifest: dict[str, object]) -> dict[str, str]:
+    """Return approved image-directory hashes from the review manifest."""
+    trees = manifest.get("image_trees", {})
+    if not isinstance(trees, dict):
+        return {}
+    return {
+        directory.rstrip("/"): expected
+        for directory, expected in trees.items()
+        if isinstance(directory, str) and isinstance(expected, str)
+    }
+
+
+def _is_approved_image_tree(
+    path: str, root: Path, approved_trees: dict[str, str], tree_digests: dict[str, str]
+) -> bool:
+    """Allow an image only when its entire reviewed directory is unchanged."""
+    for directory, expected in approved_trees.items():
+        if path.startswith(f"{directory}/"):
+            actual = tree_digests.setdefault(directory, _image_tree_sha256(root, directory))
+            return actual == expected
+    return False
+
+
 def _check_spreadsheet(path: str, root: Path) -> list[str]:
     try:
         from openpyxl import load_workbook
@@ -212,7 +256,16 @@ def _check_dicom(path: str, root: Path) -> list[str]:
 def check_reviewable_files(paths: list[str], root: Path) -> list[str]:
     """Fail closed for clinical/binary assets that require a human PHI review."""
     problems: list[str] = []
+    manifest = root / APPROVED_MEDIA_MANIFEST
+    try:
+        manifest_payload = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        manifest_payload = {}
+    if not isinstance(manifest_payload, dict):
+        manifest_payload = {}
     approved = _approved_media(root)
+    approved_trees = _approved_image_trees(manifest_payload)
+    tree_digests: dict[str, str] = {}
     for path in paths:
         suffix = Path(path).suffix.lower()
         is_extensionless = not suffix and path not in EXTENSIONLESS_EXEMPT
@@ -222,7 +275,10 @@ def check_reviewable_files(paths: list[str], root: Path) -> list[str]:
             requires_review = True
         elif suffix in SPREADSHEET_SUFFIXES:
             problems.extend(_check_spreadsheet(path, root))
-        if requires_review and not _is_approved_media(path, root, approved):
+        image_tree_approved = suffix in IMAGE_SUFFIXES and _is_approved_image_tree(
+            path, root, approved_trees, tree_digests
+        )
+        if requires_review and not image_tree_approved and not _is_approved_media(path, root, approved):
             problems.append(
                 f"{path}: unapproved {'DICOM' if suffix in DICOM_SUFFIXES else 'image/extensionless'} asset; "
                 f"perform PHI/burned-in-text review and add its SHA-256 to {APPROVED_MEDIA_MANIFEST}"

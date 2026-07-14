@@ -1,5 +1,8 @@
 {
-  "purpose": "Reviewed binary, extensionless, and DICOM assets. Any new or changed entry requires PHI and burned-in-text review before its SHA-256 is added.",
+  "purpose": "Reviewed binary, extensionless, DICOM, and image assets. Any new or changed entry requires PHI and burned-in-text review before its SHA-256 or image-tree hash is added.",
+  "image_trees": {
+    "resources/icons": "bf7a76920150fa903c4b53288e8c47af55ddaa80b4d6c31527e440bca1f99884"
+  },
   "files": {
     ".coveragerc": "abe5fd38133765617cdcb5a66842622a016535479dfbb2f7c22dd55053019685",
     ".githooks/pre-commit": "bc5b06d99fd6d83cfd317d99783825567a87aa73c52221bd49dbd36b21430327",
