@@ -25,7 +25,7 @@ PySide6>=6.11.0
 # imagecodecs (BSD) decoder plugin and highdicom, which need pydicom 3.x. Moving to
 # pydicom 3 requires a coordinated pylinac bump + ACR QA re-verify. See
 # dev-docs/info/HIGHDICOM_OVERVIEW.md and PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md.
-pydicom>=2.4.0,<3
+pydicom>=3.0.2,<4
 numpy>=2.5.1
 Pillow>=12.3.0
 # Cine export (GIF / AVI / MPG): imageio + bundled FFmpeg via imageio-ffmpeg (LGPL/GPL components — see CHANGELOG [Unreleased] and README).
