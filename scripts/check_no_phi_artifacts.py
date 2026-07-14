@@ -28,6 +28,8 @@ Exit code: 0 clean, 1 if anything is flagged.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import re
 import subprocess
 import sys
@@ -46,7 +48,29 @@ FORBIDDEN_PATH_PATTERNS: list[tuple[str, str]] = [
 ]
 
 # --- Rule 2: PHI/PII indicators inside data files ---------------------------
-DATA_SUFFIXES = {".json", ".csv", ".txt", ".log", ".yaml", ".yml", ".ini", ".cfg", ".xml"}
+DATA_SUFFIXES = {
+    ".json", ".csv", ".txt", ".log", ".yaml", ".yml", ".ini", ".cfg", ".xml",
+    ".html", ".htm", ".md", ".rst", ".tsv",
+}
+SPREADSHEET_SUFFIXES = {".xlsx", ".xlsm"}
+DICOM_SUFFIXES = {".dcm", ".dicom", ".ima"}
+IMAGE_SUFFIXES = {".bmp", ".gif", ".heic", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"}
+APPROVED_MEDIA_MANIFEST = "security/approved-media-sha256.json"
+
+# A file without a suffix can hide a binary export or clinical data.  Existing
+# reviewed assets live in the hash manifest; every new one blocks until reviewed.
+EXTENSIONLESS_EXEMPT = {".gitignore", ".gitattributes"}
+
+# These DICOM attributes must never hold a real value in a tracked fixture,
+# including when nested in a sequence.  ``Dataset.iterall()`` visits sequence
+# items recursively.
+DICOM_IDENTIFIER_KEYWORDS = {
+    "AccessionNumber", "InstitutionAddress", "InstitutionName", "IssuerOfPatientID",
+    "OperatorsName", "OtherPatientIDs", "OtherPatientNames", "PatientAddress",
+    "PatientBirthDate", "PatientBirthTime", "PatientComments", "PatientID",
+    "PatientName", "PatientSex", "PatientTelephoneNumbers", "PerformingPhysicianName",
+    "ReferringPhysicianName", "StudyID",
+}
 
 # Paths whose contents are exempt: synthetic fixtures, dependency manifests, CI config.
 CONTENT_SCAN_EXEMPT = (
@@ -120,6 +144,92 @@ def check_contents(paths: list[str], root: Path) -> list[str]:
     return problems
 
 
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _approved_media(root: Path) -> dict[str, str]:
+    manifest = root / APPROVED_MEDIA_MANIFEST
+    try:
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    files = payload.get("files", {})
+    return files if isinstance(files, dict) else {}
+
+
+def _is_approved_media(path: str, root: Path, approved: dict[str, str]) -> bool:
+    expected = approved.get(path)
+    return isinstance(expected, str) and (root / path).is_file() and _sha256(root / path) == expected
+
+
+def _check_spreadsheet(path: str, root: Path) -> list[str]:
+    try:
+        from openpyxl import load_workbook
+        workbook = load_workbook(root / path, read_only=True, data_only=False)
+    except Exception as exc:
+        return [f"{path}: spreadsheet could not be inspected ({type(exc).__name__})"]
+    problems: list[str] = []
+    try:
+        for sheet in workbook.worksheets:
+            for row in sheet.iter_rows(values_only=True):
+                for value in row:
+                    if not isinstance(value, str):
+                        continue
+                    for pattern, why in CONTENT_RULES:
+                        if pattern.search(value):
+                            problems.append(f"{path}: worksheet {sheet.title!r}: possible PHI/PII ({why})")
+                            break
+    finally:
+        workbook.close()
+    return problems
+
+
+def _check_dicom(path: str, root: Path) -> list[str]:
+    try:
+        import pydicom
+        dataset = pydicom.dcmread(root / path, stop_before_pixels=True, force=False)
+    except Exception as exc:
+        return [f"{path}: DICOM could not be inspected ({type(exc).__name__})"]
+    problems: list[str] = []
+    for element in dataset.iterall():
+        if element.keyword not in DICOM_IDENTIFIER_KEYWORDS:
+            continue
+        value = str(element.value).strip()
+        synthetic_fixture = (
+            path.startswith("tests/fixtures/dicom_rdsr/")
+            and value in {"Synthetic^RDSR", "SYN-RDSR-001"}
+        )
+        if value and not synthetic_fixture:
+            problems.append(f"{path}: populated nested DICOM identifier {element.keyword}")
+    return problems
+
+
+def check_reviewable_files(paths: list[str], root: Path) -> list[str]:
+    """Fail closed for clinical/binary assets that require a human PHI review."""
+    problems: list[str] = []
+    approved = _approved_media(root)
+    for path in paths:
+        suffix = Path(path).suffix.lower()
+        is_extensionless = not suffix and path not in EXTENSIONLESS_EXEMPT
+        requires_review = suffix in IMAGE_SUFFIXES or is_extensionless
+        if suffix in DICOM_SUFFIXES:
+            problems.extend(_check_dicom(path, root))
+            requires_review = True
+        elif suffix in SPREADSHEET_SUFFIXES:
+            problems.extend(_check_spreadsheet(path, root))
+        if requires_review and not _is_approved_media(path, root, approved):
+            problems.append(
+                f"{path}: unapproved {'DICOM' if suffix in DICOM_SUFFIXES else 'image/extensionless'} asset; "
+                f"perform PHI/burned-in-text review and add its SHA-256 to {APPROVED_MEDIA_MANIFEST}"
+            )
+    return problems
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--staged", action="store_true",
@@ -134,7 +244,7 @@ def main() -> int:
     paths = staged_files(root) if args.staged else tracked_files(root)
     scope = "staged" if args.staged else "tracked"
 
-    problems = check_paths(paths) + check_contents(paths, root)
+    problems = check_paths(paths) + check_contents(paths, root) + check_reviewable_files(paths, root)
 
     if problems:
         print(f"BLOCKED: {len(problems)} PHI/artifact issue(s) in {scope} files:\n",

@@ -125,6 +125,36 @@ def test_synthetic_fixtures_are_exempt(repo):
     assert _run(repo) == 0
 
 
+def test_blocks_unapproved_extensionless_file(repo):
+    _stage(repo, "clinical-export", "opaque export")
+    assert _run(repo) == 1
+
+
+def test_blocks_unapproved_image_file(repo):
+    _stage(repo, "resources/new-image.png", "not a reviewed image")
+    assert _run(repo) == 1
+
+
+def test_recursively_blocks_dicom_identifier(repo):
+    import pydicom
+    from pydicom.dataset import Dataset, FileMetaDataset
+    from pydicom.sequence import Sequence
+
+    path = repo / "data" / "study.dcm"
+    path.parent.mkdir(parents=True)
+    dataset = Dataset()
+    dataset.file_meta = FileMetaDataset()
+    dataset.is_little_endian = True
+    dataset.is_implicit_VR = True
+    nested = Dataset()
+    nested.PatientName = "Doe^Jane"
+    dataset.RequestAttributesSequence = Sequence([nested])
+    pydicom.dcmwrite(path, dataset)
+    subprocess.run(["git", "add", "-f", str(path.relative_to(repo))], cwd=repo, check=True)
+
+    assert _run(repo) == 1
+
+
 def test_empty_repo_passes(repo):
     assert _run(repo) == 0
 
