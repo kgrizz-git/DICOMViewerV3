@@ -66,8 +66,12 @@ jobs:
       - name: Upload Grype SARIF to GitHub Security
         uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4
         # Dependabot pull_request tokens are read-only for code-scanning APIs.
-        # The scan still runs; only its unavailable Security-tab upload is skipped.
+        # This private repository currently has Code Scanning disabled. Keep the
+        # vulnerability scan mandatory, but do not fail CI solely because the
+        # optional Security-tab upload is unavailable. Restore a blocking upload
+        # when Code Scanning is enabled; see dev-docs/TO_DO.md.
         if: always() && steps.grype_sarif.outputs.upload == 'true' && github.actor != 'dependabot[bot]'
+        continue-on-error: true
         with:
           sarif_file: grype-upload.sarif
           category: grype

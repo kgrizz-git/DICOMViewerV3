@@ -1,6 +1,6 @@
 # To-Do Checklist
 
-**Last updated:** 2026-07-12
+**Last updated:** 2026-07-14
 
 ---
 
@@ -56,6 +56,7 @@ This file tracks active and near-term tasks.
 
 ## Maintenance
 
+- [ ] **[P2]** **Restore blocking Grype SARIF upload when GitHub Code Scanning is available.** The current private repository has Code Scanning disabled, so `.github/workflows/grype.yml` keeps the actual Grype vulnerability scan mandatory but makes its optional Security-tab upload nonblocking. When the repository becomes public **or** Code Scanning is explicitly enabled for the private repository, remove `continue-on-error: true`, manually run the workflow, and confirm that the SARIF results appear in the GitHub Security tab. **Added 2026-07-14.**
 - [ ] **[P2]** **Work through SonarQube, DeepSource, and Semgrep (web UI) findings.** Review and triage all open findings from SonarQube, DeepSource, and Semgrep (web UI); decide which are actionable bugs/technical debt vs false positives; file issues or address them directly; close out resolved findings. Coordinate with the pre-push hook and cognitive-complexity gate items below (both aim to catch similar issues locally before PR). **Note (2026-07-10):** SonarCloud Automatic Analysis scope is set in [`.sonarcloud.properties`](../.sonarcloud.properties) (`src/` sources, `tests/` tests) so test-fixture noise does not fail PR Security/Reliability ratings; remaining UI triage of open findings is still open.
 - [ ] **[P2]** **Add a `pre-push` git hook running `basedpyright` locally.** Currently `basedpyright` only runs in CI (`.github/workflows/pyright.yml`), gated on `errorCount > 0` (warnings don't block). A local pre-push hook would catch errors before they reach GitHub instead of only surfacing after a push/PR. Note: investigated 2026-07-09 after a DeepSource PR comment flagged a reused-loop-variable type mismatch in `export_manager.py` (PR #81) — confirmed `basedpyright` itself does **not** flag that particular pattern (it flow-narrows the reassigned variable per-statement), so a pre-push hook running `basedpyright` would not have caught that specific case; DeepSource's own analyzer is stricter there. Still worth adding for the errors basedpyright *does* catch, to shorten the feedback loop vs. waiting on CI.
 - [ ] **[P2]** **Add a local code-complexity gate to flag high-cognitive-complexity functions.** Evaluate a free/open-source tool such as **`lizard`** (pip-installable; reports cognitive complexity + cyclomatic complexity across C/C++, Java, Python, JS/TS, C#, Go, etc.) or **SonarQube Community Edition** (local Docker; native cognitive-complexity metric), and wire it into a `scripts/` check + CI step with a max-complexity threshold. Goal: catch over-nested/long functions before they grow (complements the existing pyright + unused-import sweeps in Maintenance). Decide whether to fail the build on violations or report-only initially.
