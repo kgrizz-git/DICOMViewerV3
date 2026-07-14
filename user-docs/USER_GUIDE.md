@@ -1,0 +1,50 @@
+# DICOM Viewer V3 — User guide
+
+**Last updated:** 2026-06-16
+
+**Quick orientation:** **Help → Quick Start Guide** (in the app) | **this hub** | [Configuration / Settings](CONFIGURATION.md) | [CHANGELOG](../CHANGELOG.md) | [Report issues](https://github.com/kgrizz-git/DICOMViewerV3/issues) (GitHub).
+
+This hub links topic guides for the application. **In the running app**, use **Help → Quick Start Guide** for a short overview (with a table of contents and links that open these pages in your browser when you are online).
+
+## Topics
+
+| Guide | Contents |
+|-------|-----------|
+| [CONFIGURATION.md](CONFIGURATION.md) | **Edit → Settings…**, local study index, where other preferences live (View menu, etc.) |
+| [USER_GUIDE_MPR.md](USER_GUIDE_MPR.md) | Multi-planar reformation (MPR): creating and clearing MPR views |
+| [USER_GUIDE_3D.md](USER_GUIDE_3D.md) | 3D volume rendering (VTK): toolbar **3D View**, transfer-function presets |
+| [USER_GUIDE_LAYOUTS.md](USER_GUIDE_LAYOUTS.md) | Multi-window layouts & navigation: pane layouts (1/2/3/4 keys), assigning series, focus/expand/swap, slice & cine navigation |
+| [USER_GUIDE_ANNOTATIONS.md](USER_GUIDE_ANNOTATIONS.md) | Measurements & annotations: ROI/measure/text/arrow tools + shortcuts, editing, copy/cut/paste, ROI statistics |
+| [USER_GUIDE_EXPORT.md](USER_GUIDE_EXPORT.md) | Exporting images & data: **File → Export…** (DICOM / PNG / JPG), selection tree, W/L & overlay & resolution options, de-identify; other export paths |
+| [USER_GUIDE_TAGS.md](USER_GUIDE_TAGS.md) | DICOM tag viewer & editor: **Tools → View/Edit DICOM Tags…** (Ctrl+T) — search, copy, edit with undo/redo, Privacy Mode masking |
+| [USER_GUIDE_SHORTCUTS.md](USER_GUIDE_SHORTCUTS.md) | Consolidated keyboard-shortcut reference (also in-app via Help → Keyboard Shortcuts / F1) |
+| [USER_GUIDE_ANONYMIZATION.md](USER_GUIDE_ANONYMIZATION.md) | De-identified DICOM export (PS3.15 Basic Profile): presets, options, what is recorded, limits |
+| [USER_GUIDE_QA_PYLINAC.md](USER_GUIDE_QA_PYLINAC.md) | ACR CT / ACR MRI phantom analysis (pylinac), JSON/PDF, compare mode |
+| [IMAGE_FUSION_TECHNICAL_DOCUMENTATION.md](IMAGE_FUSION_TECHNICAL_DOCUMENTATION.md) | Image fusion (PET/SPECT on CT/MR): options, accuracy, algorithms |
+
+## General viewing (2D)
+
+- **Window / Level presets:** Built-in presets are grouped by modality (CT, MR, PET, and others) in the **toolbar W/L button menu** (arrow on the auto window/level tool), **View → Window/Level Presets**, the right-pane **Presets…** control under the W/L sliders, **Presets…** on **Quick Window/Level (Q)**, and under **Window/Level Presets** on the image **right-click** menu. Labels show whether values are stored in **HU / calibrated** units or **raw** stored pixels; tooltips list center, width, and whether the viewer will convert when your **Raw / Rescaled** mode differs. **DICOM** presets from the series tags appear first when present. **Manage W/L Presets…** (same menus or **Edit → Settings… → Manage W/L Presets…**) adds, edits, or deletes **custom** presets (name, modality filter, center, width, and storage space). Adjust W/L with the right pane controls, **right-drag** on the image, **Quick Window/Level (Q)**, or the auto W/L ROI mode (**W**).
+- **Cine:** In the left pane **Cine Playback** group, use the **Play / Pause** toggle, **Stop**, and **Loop** (plus speed and frame slider). On multi-frame series, the image **right-click** menu offers the same play/pause toggle, stop, and loop when cine is available. **File → Export Cine As…** saves the loop as **GIF**, **AVI**, **MP4** (MPEG-4 Part 2, not H.264), or **MPEG program stream** (``.mpg``). On **Windows 11 Media Player**, **MP4** or **AVI** usually plays without extra codecs; **.mpg** is treated as MPEG-1/2 and often needs the free **MPEG-2 Video Extension** from the Microsoft Store.
+- **Clear This Window:** **Right-click** the image background (not on an ROI) → **Clear This Window** removes the series from **that pane only**; loaded studies and series remain in the navigator.
+- **Structured Report browser:** For DICOM **Structured Report** instances (**SR** modality or SR storage SOP classes), open **Tools → Structured Report…** (or image right-click **Structured Report…** when available) to browse the full **ContentSequence** tree, a **Dose events** table (irradiation event containers **113706** / **113819** per PS3.16 where present, with standard fluoroscopy/geometry columns plus extra columns for vendor-specific **NUM** / **CODE** / **TEXT** / **DATETIME** / **UIDREF** leaves under each event). Vendor **source-to-detector** distances that use alternate concept names (for example *Final Distance Source to Detector*) are folded into the main distance column when standard **113750** is absent, and exposure time accepts common DCM codes (**113735** / **113824**). **Patient orientation** and **orientation modifier** map standard **113743** / **113744** codes when present. A **Dose summary** tab shows the legacy CT-style metrics when parsing succeeds, and **exports** include document tree JSON and dose events CSV/XLSX. Use **Raw tags → Open DICOM Tag Viewer** for flat tags with search. Privacy Mode masks free text and UIDs in the tree; the dose summary tab follows the same masking rules as before. **Dose events** is template-guided and heuristic (not a full TID validator); orange **warnings** may note ambiguous values, subtree flatten limits, or vendor-specific duplicates—use the **Document** tab when you need the full SR tree.
+- **ROI statistics (multichannel) and export:** For multi-channel slices, ROI statistics can include per-channel mean/std/min/max in the **right-hand statistics panel** and in file exports when enabled under **Annotation options → ROI statistics**. The **on-image ROI statistics overlay** shows compact per-channel lines for each of those metrics that you have toggled on (same toggles as the aggregate mean/std/min/max lines). **Tools → Export ROI Statistics** writes ROIs, crosshairs, and **distance** / **angle** measurements per slice (TXT and XLSX sections; CSV includes trailing **Measurement** columns). For **three** channels, per-channel titles follow **PhotometricInterpretation** (for example **R / G / B** for RGB, **Y / Cb / Cr** for YBR family photometrics, aligned with the raw pixel planes); palette or unknown photometrics use **Ch0**, **Ch1**, **Ch2**. Other channel counts use **Ch0**, **Ch1**, … .
+- **Histogram and projection:** In the histogram dialog, use **Use intensity projection pixels** to match histogram bins to the active AIP/MIP/MinIP slab instead of the single current slice.
+- **Export Screenshots:** **File → Export Screenshots…** saves what you see in each image pane (PNG or JPG). Choose **separate file per view** (use the view checkboxes to pick panes), a **single composite** that is one **grab of the multi-pane grid** (same layout as on screen, no extra gutters between panes), or **entire main window** to include toolbars and side panes (the save dialog hides briefly so it is not in the capture). **Resolution (Native, 1.5×, 2×, 4×)** matches **Export Images**: larger exports are limited so the longest side stays at or under **8192 px**, and you may see a short note in the completion dialog if a lower magnification was used. For composite export, the view checkboxes are not used.
+- **Corner overlays:** **Space** cycles **Simple → Detailed → Hidden** metadata overlays on **all** panes (and saves the choice). **Shift+Space** still runs the older **focused-pane-only** cycle that can hide corner text first, then measurement/ROI text. Under **View → Overlay Tags Configuration**, set the default density at the top of the dialog. For each corner tab, **Simple** and **Detailed only** tag lists appear side by side; use **→ Detailed** / **← Simple** to move selected tags between them, or **Add to Simple** / **Add to Detailed** from the catalog. Double-click a catalog tag adds it to Simple. Detailed-only tags appear after Simple tags in Detailed mode (duplicates are ignored when drawing). The image **right-click** menu includes the same **cycle overlay detail** action as **Space**. **Import / export visual customizations** includes these detailed extras in the overlay section when present.
+
+## Local study index (encrypted)
+
+The app can keep a **local encrypted** database of studies you open so they can be listed and searched on your machine (behavior may expand over time). Configure it under **Edit → Settings…** in the **Local study index (encrypted)** section: optional **automatically add** on successful open, and **database file** path (default places the file near your app config). The dialog notes that **SQLCipher** protects the file and the **encryption key is stored in the OS credential manager**, not in plain JSON config.
+
+Open **File → Open Study Index…** or click toolbar **Index** to browse indexed studies. Use **Search all text** (FTS5) for words across patient fields, accession, study and series descriptions, modality, and UIDs; the filter fields below still narrow results, and everything active combines with **AND**. Double-click a row (or use **Open**) to load **all instances** for that study from its indexed folder.
+
+Treat the database like other clinical metadata: back up and secure appropriately. Field-level descriptions: [CONFIGURATION.md](CONFIGURATION.md).
+
+## Source and versioning
+
+These files live in the repository under `user-docs/` and track the **main** branch on [GitHub](https://github.com/kgrizz-git/DICOMViewerV3) for online **Help → Documentation** links. **Compiled releases** may correspond to an **older** tag than `main`; for behavior tied to a specific build, read **[CHANGELOG.md](../CHANGELOG.md)** and the **release notes** for that version on GitHub.
+
+## Further reading (developers / deep dives)
+
+Implementation notes, research, and plans are under `dev-docs/` (for example [PYLINAC_INTEGRATION_OVERVIEW.md](../dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md)).

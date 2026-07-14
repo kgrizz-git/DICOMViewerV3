@@ -1,0 +1,121 @@
+name: Grype Vulnerability Scan
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+  schedule:
+    # Run Grype at 3 AM UTC every Tuesday
+    - cron: '0 3 * * 2'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: write
+
+jobs:
+  grype:
+    name: Grype CVE Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Run Grype scan
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7
+        id: grype
+        with:
+          path: "."
+          fail-build: false  # Do not fail the job on CVE findings; still write SARIF
+          severity-cutoff: high
+
+      # scan-action can leave an empty or non-JSON file in edge cases; upload-sarif then
+      # fails with "Invalid SARIF. JSON syntax error: Unexpected end of JSON input".
+      - name: Validate Grype SARIF for upload
+        id: grype_sarif
+        if: always()
+        shell: bash
+        run: |
+          report="${{ steps.grype.outputs.sarif }}"
+          rm -f grype-upload.sarif
+          if [ -z "$report" ] || [ ! -f "$report" ] || [ ! -s "$report" ]; then
+            echo "upload=false" >> "$GITHUB_OUTPUT"
+            echo "Grype SARIF missing or empty; skipping Security tab upload."
+            exit 0
+          fi
+          if ! python3 -c "import json,sys; json.load(open(sys.argv[1],encoding='utf-8'))" "$report"; then
+            echo "upload=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Grype output is not valid JSON; skipping SARIF upload."
+            exit 0
+          fi
+          cp "$report" grype-upload.sarif
+          echo "upload=true" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Grype SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4
+        if: always() && steps.grype_sarif.outputs.upload == 'true'
+        with:
+          sarif_file: grype-upload.sarif
+          category: grype
+
+      - name: Comment on PR with CVE results
+        if: github.event_name == 'pull_request' && steps.grype_sarif.outputs.upload == 'true'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const fs = require('fs');
+            const sarifPath = 'grype-upload.sarif';
+            const sarif = JSON.parse(fs.readFileSync(sarifPath, 'utf8'));
+            const run0 = (sarif.runs && sarif.runs[0]) || {};
+            const findings = run0.results || [];
+            
+            // Filter by severity
+            const critical = findings.filter(f => f.level === 'error');
+            const high = findings.filter(f => f.level === 'warning');
+            
+            if (findings.length === 0) {
+              console.log('✅ No known vulnerabilities found');
+              return;
+            }
+            
+            let comment = '## 🛡️ Dependency Vulnerability Scan\n\n';
+            comment += `**Summary**: ${critical.length} CRITICAL, ${high.length} HIGH, ${findings.length - critical.length - high.length} other\n\n`;
+            
+            if (critical.length > 0) {
+              comment += '### 🚨 Critical Issues\n';
+              critical.slice(0, 5).forEach(issue => {
+                const pkg = issue.properties?.package || 'unknown';
+                const vuln = issue.properties?.cve || 'CVE-UNKNOWN';
+                comment += `- **${pkg}**: ${vuln}\n`;
+              });
+            }
+            
+            if (high.length > 0) {
+              comment += '\n### ⚠️ High Issues\n';
+              high.slice(0, 5).forEach(issue => {
+                const pkg = issue.properties?.package || 'unknown';
+                const vuln = issue.properties?.cve || 'CVE-UNKNOWN';
+                comment += `- **${pkg}**: ${vuln}\n`;
+              });
+            }
+            
+            if (findings.length > 10) {
+              comment += `\n... and ${findings.length - 10} more vulnerabilities (see GitHub Security tab)`;
+            }
+            
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });

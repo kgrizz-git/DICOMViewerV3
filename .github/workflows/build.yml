@@ -1,0 +1,458 @@
+name: Build Executables
+
+# This workflow builds executables for Windows, macOS, and Linux
+# It runs when you push a version tag (e.g., v1.0.0) or manually trigger it
+
+on:
+  push:
+    tags:
+      - 'v*'  # Triggers on version tags like v1.0.0, v2.1.3, etc.
+  workflow_dispatch:
+    inputs:
+      build_macos_slim:
+        description: 'Also run a second macOS build with PYINSTALLER_MACOS_SLIM=1 (smaller .app; compare du in logs)'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+        include:
+          - os: windows-latest
+            artifact_name: DICOMViewerV3-Windows
+            executable_path: dist/DICOMViewerV3.exe
+            pyinstaller_macos_slim: ''
+          - os: macos-latest
+            artifact_name: DICOMViewerV3-macOS
+            executable_path: dist/DICOMViewerV3.app
+            pyinstaller_macos_slim: 'false'
+          - os: ubuntu-latest
+            artifact_name: DICOMViewerV3-Linux
+            executable_path: dist/DICOMViewerV3
+            pyinstaller_macos_slim: ''
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          # Single pip cache key across build + PyInstaller deps (reduces orphan caches).
+          cache-dependency-path: |
+            requirements.txt
+            requirements-build.txt
+
+      - name: Install system dependencies (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgl1 libegl1 libxrandr2 libxss1 libxcursor1 libxcomposite1 \
+            libasound2t64 libxi6 libxtst6 libfuse2
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-build.txt
+
+      - name: Remove typing package if present (PyInstaller compatibility)
+        run: |
+          python -m pip uninstall -y typing || true
+
+      - name: Build executable
+        shell: bash
+        env:
+          PYINSTALLER_MACOS_SLIM: ${{ matrix.pyinstaller_macos_slim }}
+        run: |
+          echo "PYINSTALLER_MACOS_SLIM=${PYINSTALLER_MACOS_SLIM:-}"
+          pyinstaller DICOMViewerV3.spec --clean --noconfirm
+
+      - name: Download AppImageTool
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool-x86_64.AppImage
+          sudo mv appimagetool-x86_64.AppImage /usr/local/bin/appimagetool
+
+      - name: Create AppDir structure
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/share/applications
+          mkdir -p AppDir/usr/share/icons/hicolor/128x128/apps
+          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+          mkdir -p AppDir/usr/share/icons/hicolor/512x512/apps
+          mkdir -p AppDir/usr/share/icons/hicolor/scalable/apps
+
+      - name: Copy PyInstaller build to AppDir
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          cp -r dist/DICOMViewerV3/* AppDir/usr/bin/
+          chmod +x AppDir/usr/bin/DICOMViewerV3
+
+      - name: Create desktop entry
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          cat > AppDir/usr/share/applications/DICOMViewerV3.desktop << 'EOF'
+          [Desktop Entry]
+          Type=Application
+          Name=DICOM Viewer V3
+          Comment=Medical imaging DICOM viewer application
+          Exec=DICOMViewerV3
+          Icon=DICOMViewerV3
+          Categories=Graphics;MedicalSoftware;Viewer;
+          Terminal=false
+          StartupNotify=true
+          MimeType=application/dicom;
+          EOF
+
+      - name: Copy .desktop file to AppDir root
+        if: matrix.os == 'ubuntu-latest'
+        run: cp AppDir/usr/share/applications/DICOMViewerV3.desktop AppDir/DICOMViewerV3.desktop
+
+      - name: Copy icon
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          # Copy icon to multiple sizes for better desktop environment compatibility
+          # Desktop environments will use the appropriate size
+          cp resources/icons/dvv6ldvv6ldvv6ld_edit-removebg-preview.png \
+             AppDir/usr/share/icons/hicolor/128x128/apps/DICOMViewerV3.png
+          cp resources/icons/dvv6ldvv6ldvv6ld_edit-removebg-preview.png \
+             AppDir/usr/share/icons/hicolor/256x256/apps/DICOMViewerV3.png
+          cp resources/icons/dvv6ldvv6ldvv6ld_edit-removebg-preview.png \
+             AppDir/usr/share/icons/hicolor/512x512/apps/DICOMViewerV3.png
+          # Also add to scalable directory (desktop environments can scale as needed)
+          cp resources/icons/dvv6ldvv6ldvv6ld_edit-removebg-preview.png \
+             AppDir/usr/share/icons/hicolor/scalable/apps/DICOMViewerV3.png
+
+      - name: Create AppRun script
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          cat > AppDir/AppRun << 'EOF'
+          #!/bin/bash
+          HERE="$(dirname "$(readlink -f "${0}")")"
+          exec "${HERE}/usr/bin/DICOMViewerV3" "$@"
+          EOF
+          chmod +x AppDir/AppRun
+
+      - name: Build AppImage
+        if: matrix.os == 'ubuntu-latest'
+        env:
+          GH_REF: ${{ github.ref }}
+        run: |
+          # Extract version from tag if available, otherwise use "latest"
+          if [[ "$GH_REF" == refs/tags/* ]]; then
+            VERSION=$(echo "$GH_REF" | sed 's/refs\/tags\/v//')
+          else
+            VERSION="latest"
+          fi
+          appimagetool AppDir DICOMViewerV3-${VERSION}-x86_64.AppImage
+          chmod +x DICOMViewerV3-${VERSION}-x86_64.AppImage
+          ls -lh DICOMViewerV3-${VERSION}-x86_64.AppImage
+
+      - name: Verify AppImage exists
+        if: matrix.os == 'ubuntu-latest'
+        env:
+          GH_REF: ${{ github.ref }}
+        run: |
+          if [[ "$GH_REF" == refs/tags/* ]]; then
+            VERSION=$(echo "$GH_REF" | sed 's/refs\/tags\/v//')
+          else
+            VERSION="latest"
+          fi
+          if [ ! -f "DICOMViewerV3-${VERSION}-x86_64.AppImage" ]; then
+            echo "Error: AppImage not created"
+            exit 1
+          fi
+          file DICOMViewerV3-${VERSION}-x86_64.AppImage
+
+      - name: Verify executable exists
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" == "windows-latest" ]; then
+            if [ ! -f "dist/DICOMViewerV3/DICOMViewerV3.exe" ]; then
+              echo "Error: DICOMViewerV3.exe not found"
+              exit 1
+            fi
+            ls -lh dist/DICOMViewerV3/DICOMViewerV3.exe
+          elif [ "${{ matrix.os }}" == "macos-latest" ]; then
+            if [ ! -d "dist/DICOMViewerV3.app" ]; then
+              echo "Error: DICOMViewerV3.app not found"
+              exit 1
+            fi
+            ls -lh dist/DICOMViewerV3.app
+          else
+            if [ ! -f "dist/DICOMViewerV3/DICOMViewerV3" ]; then
+              echo "Error: DICOMViewerV3 executable not found"
+              exit 1
+            fi
+            ls -lh dist/DICOMViewerV3/DICOMViewerV3
+          fi
+
+      - name: Create DMG (macOS)
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        env:
+          GH_REF: ${{ github.ref }}
+        run: |
+          if [[ "$GH_REF" == refs/tags/* ]]; then
+            VERSION=$(echo "$GH_REF" | sed 's/refs\/tags\/v//')
+          else
+            VERSION="latest"
+          fi
+          DMG_NAME="DICOMViewerV3-${VERSION}-macOS.dmg"
+          rm -rf packaging/macos
+          mkdir -p packaging/macos
+          cp -R dist/DICOMViewerV3.app packaging/macos/
+          hdiutil create -volname "DICOMViewerV3" -srcfolder packaging/macos -ov -format UDZO "${DMG_NAME}"
+          ls -lh "${DMG_NAME}"
+
+      - name: Verify DMG contents (macOS)
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        env:
+          GH_REF: ${{ github.ref }}
+        run: |
+          if [[ "$GH_REF" == refs/tags/* ]]; then
+            VERSION=$(echo "$GH_REF" | sed 's/refs\/tags\/v//')
+          else
+            VERSION="latest"
+          fi
+          DMG_NAME="DICOMViewerV3-${VERSION}-macOS.dmg"
+          MOUNT_POINT=$(mktemp -d /tmp/dvv3-dmg.XXXXXX)
+          hdiutil attach "${DMG_NAME}" -mountpoint "${MOUNT_POINT}" -nobrowse -readonly
+          if [ ! -d "${MOUNT_POINT}/DICOMViewerV3.app" ]; then
+            echo "Error: DICOMViewerV3.app not found in DMG"
+            hdiutil detach "${MOUNT_POINT}" -quiet || true
+            exit 1
+          fi
+          EXTRA_ITEMS=$(ls -A "${MOUNT_POINT}" | rg -v '^DICOMViewerV3\.app$' || true)
+          if [ -n "${EXTRA_ITEMS}" ]; then
+            echo "Error: unexpected items found in DMG root:"
+            echo "${EXTRA_ITEMS}"
+            hdiutil detach "${MOUNT_POINT}" -quiet || true
+            exit 1
+          fi
+          hdiutil detach "${MOUNT_POINT}" -quiet
+          rm -rf "${MOUNT_POINT}"
+
+      - name: Log distribution sizes
+        shell: bash
+        run: |
+          set -e
+          echo "=== PyInstaller dist output sizes (du) ==="
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            du -sh dist/DICOMViewerV3 2>/dev/null || true
+            du -sh dist/DICOMViewerV3/DICOMViewerV3.exe 2>/dev/null || true
+          elif [ "${{ matrix.os }}" = "macos-latest" ]; then
+            du -sh dist/DICOMViewerV3.app 2>/dev/null || true
+            du -sh dist/DICOMViewerV3* 2>/dev/null || true
+            echo "=== macOS .app bundle drill-down (best-effort; paths may vary) ==="
+            if [ -d "dist/DICOMViewerV3.app/Contents" ]; then
+              du -sh dist/DICOMViewerV3.app/Contents/* 2>/dev/null | sort -h || true
+            fi
+            if [ -d "dist/DICOMViewerV3.app/Contents/MacOS" ]; then
+              du -sh dist/DICOMViewerV3.app/Contents/MacOS/* 2>/dev/null | sort -h || true
+            fi
+            if [ -d "dist/DICOMViewerV3.app/Contents/Frameworks" ]; then
+              du -sh dist/DICOMViewerV3.app/Contents/Frameworks/* 2>/dev/null | sort -h || true
+              echo "=== macOS: top 10 largest under Frameworks/ (descending) ==="
+              du -sh dist/DICOMViewerV3.app/Contents/Frameworks/* 2>/dev/null | sort -hr | head -10 || true
+            fi
+            if [ -d "dist/DICOMViewerV3.app/Contents/Resources" ]; then
+              echo "=== macOS: top 10 largest under Resources/ (descending) ==="
+              du -sh dist/DICOMViewerV3.app/Contents/Resources/* 2>/dev/null | sort -hr | head -10 || true
+            fi
+          else
+            du -sh dist/DICOMViewerV3 2>/dev/null || true
+            du -sh dist/DICOMViewerV3/DICOMViewerV3 2>/dev/null || true
+          fi
+
+      # Windows artifact: one-folder PyInstaller output
+      - name: Upload build artifacts (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: |
+            dist/DICOMViewerV3*
+          # Releases remain canonical via softprops/action-gh-release; shorter retention limits GB-hours.
+          retention-days: 30
+
+      # macOS artifact: DMG containing only DICOMViewerV3.app
+      - name: Upload build artifacts (macOS)
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: |
+            DICOMViewerV3-*-macOS.dmg
+          retention-days: 30
+
+      # Linux artifact: AppImage only
+      - name: Upload build artifacts (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: |
+            DICOMViewerV3-*-x86_64.AppImage
+          retention-days: 30
+
+      - name: Create Release (Windows, on tag push)
+        if: startsWith(github.ref, 'refs/tags/') && matrix.os == 'windows-latest'
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3
+        with:
+          files: |
+            dist/DICOMViewerV3*
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Release (macOS DMG, on tag push)
+        if: startsWith(github.ref, 'refs/tags/') && matrix.os == 'macos-latest'
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3
+        with:
+          files: |
+            DICOMViewerV3-*-macOS.dmg
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Release (Linux AppImage, on tag push)
+        if: startsWith(github.ref, 'refs/tags/') && matrix.os == 'ubuntu-latest'
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3
+        with:
+          files: |
+            DICOMViewerV3-*-x86_64.AppImage
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Optional second macOS leg: same spec with PYINSTALLER_MACOS_SLIM=1 (off by default; enable in Run workflow UI).
+  build_macos_slim:
+    name: macOS slim (PYINSTALLER_MACOS_SLIM=1)
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.build_macos_slim == 'true'
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          # Single pip cache key across build + PyInstaller deps (reduces orphan caches).
+          cache-dependency-path: |
+            requirements.txt
+            requirements-build.txt
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-build.txt
+
+      - name: Remove typing package if present (PyInstaller compatibility)
+        run: |
+          python -m pip uninstall -y typing || true
+
+      - name: Build executable (macOS slim)
+        env:
+          PYINSTALLER_MACOS_SLIM: 'true'
+        run: |
+          pyinstaller DICOMViewerV3.spec --clean --noconfirm
+
+      - name: Verify executable exists
+        shell: bash
+        run: |
+          if [ ! -d "dist/DICOMViewerV3.app" ]; then
+            echo "Error: DICOMViewerV3.app not found"
+            exit 1
+          fi
+          ls -lh dist/DICOMViewerV3.app
+
+      - name: Log distribution sizes
+        shell: bash
+        run: |
+          echo "=== macOS SLIM (PYINSTALLER_MACOS_SLIM=1) ==="
+          du -sh dist/DICOMViewerV3.app 2>/dev/null || true
+          if [ -d "dist/DICOMViewerV3.app/Contents/Frameworks" ]; then
+            echo "=== top 10 under Frameworks/ ==="
+            du -sh dist/DICOMViewerV3.app/Contents/Frameworks/* 2>/dev/null | sort -hr | head -10 || true
+          fi
+
+      - name: Create DMG (macOS slim)
+        shell: bash
+        env:
+          GH_REF: ${{ github.ref }}
+        run: |
+          if [[ "$GH_REF" == refs/tags/* ]]; then
+            VERSION=$(echo "$GH_REF" | sed 's/refs\/tags\/v//')
+          else
+            VERSION="latest"
+          fi
+          DMG_NAME="DICOMViewerV3-${VERSION}-macOS-slim.dmg"
+          rm -rf packaging/macos
+          mkdir -p packaging/macos
+          cp -R dist/DICOMViewerV3.app packaging/macos/
+          hdiutil create -volname "DICOMViewerV3" -srcfolder packaging/macos -ov -format UDZO "${DMG_NAME}"
+          ls -lh "${DMG_NAME}"
+
+      - name: Verify DMG contents (macOS slim)
+        shell: bash
+        env:
+          GH_REF: ${{ github.ref }}
+        run: |
+          if [[ "$GH_REF" == refs/tags/* ]]; then
+            VERSION=$(echo "$GH_REF" | sed 's/refs\/tags\/v//')
+          else
+            VERSION="latest"
+          fi
+          DMG_NAME="DICOMViewerV3-${VERSION}-macOS-slim.dmg"
+          MOUNT_POINT=$(mktemp -d /tmp/dvv3-dmg.XXXXXX)
+          hdiutil attach "${DMG_NAME}" -mountpoint "${MOUNT_POINT}" -nobrowse -readonly
+          if [ ! -d "${MOUNT_POINT}/DICOMViewerV3.app" ]; then
+            echo "Error: DICOMViewerV3.app not found in DMG"
+            hdiutil detach "${MOUNT_POINT}" -quiet || true
+            exit 1
+          fi
+          EXTRA_ITEMS=$(ls -A "${MOUNT_POINT}" | rg -v '^DICOMViewerV3\.app$' || true)
+          if [ -n "${EXTRA_ITEMS}" ]; then
+            echo "Error: unexpected items found in DMG root:"
+            echo "${EXTRA_ITEMS}"
+            hdiutil detach "${MOUNT_POINT}" -quiet || true
+            exit 1
+          fi
+          hdiutil detach "${MOUNT_POINT}" -quiet
+          rm -rf "${MOUNT_POINT}"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: DICOMViewerV3-macOS-slim
+          path: |
+            DICOMViewerV3-*-macOS-slim.dmg
+          retention-days: 30
+

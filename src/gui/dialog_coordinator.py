@@ -1,0 +1,508 @@
+"""
+Dialog Coordinator
+
+This module manages all dialog operations.
+
+Inputs:
+    - Dialog open requests
+    - Settings changes
+    
+Outputs:
+    - Dialog displays
+    - Settings updates
+    
+Requirements:
+    - Various dialog classes
+    - ConfigManager for configuration
+"""
+
+from collections.abc import Callable
+from typing import Any
+
+from pydicom.dataset import Dataset
+from PySide6.QtCore import QUrl
+from PySide6.QtGui import QDesktopServices
+from PySide6.QtWidgets import QMessageBox
+
+from gui.dialogs.about_this_file_dialog import AboutThisFileDialog
+from gui.dialogs.annotation_options_dialog import AnnotationOptionsDialog
+from gui.dialogs.deep_anonymizer_export_dialog import DeepAnonymizerExportDialog
+from gui.dialogs.export_dialog import ExportDialog
+from gui.dialogs.export_roi_statistics_dialog import ExportROIStatisticsDialog
+from gui.dialogs.fusion_technical_doc_dialog import FusionTechnicalDocDialog
+from gui.dialogs.histogram_dialog import HistogramDialog
+from gui.dialogs.overlay_config_dialog import OverlayConfigDialog
+from gui.dialogs.overlay_settings_dialog import OverlaySettingsDialog
+from gui.dialogs.quick_start_guide_dialog import QuickStartGuideDialog
+from gui.dialogs.screenshot_export_dialog import ScreenshotExportDialog
+from gui.dialogs.settings_dialog import SettingsDialog
+from gui.dialogs.tag_export_dialog import TagExportDialog
+from gui.dialogs.tag_viewer_dialog import TagViewerDialog
+from gui.main_window import MainWindow
+from utils.config_manager import ConfigManager
+from utils.doc_urls import user_guide_hub_url
+
+
+class DialogCoordinator:
+    """
+    Manages all dialog operations.
+    
+    Responsibilities:
+    - Open settings dialog
+    - Open tag viewer dialog
+    - Open overlay config dialog
+    - Open quick start guide dialog
+    - Open tag export dialog
+    - Open export dialog
+    - Handle settings applied
+    """
+
+    def __init__(
+        self,
+        config_manager: ConfigManager,
+        main_window: MainWindow,
+        get_current_studies: Callable[[], dict[str, Any]],
+        settings_applied_callback: Callable[[], None] | None = None,
+        overlay_config_applied_callback: Callable[[], None] | None = None,
+        tag_edit_history: Any | None = None,
+        get_histogram_callbacks_for_subwindow: Callable[[int], dict[str, Any]] | None = None,
+        get_focused_subwindow_index: Callable[[], int] | None = None,
+        undo_redo_manager: Any | None = None,
+        ui_refresh_callback: Callable[[], None] | None = None,
+        tag_export_union_host: Any | None = None,
+        manage_wl_presets_callback: Callable[[], None] | None = None,
+    ):
+        """
+        Initialize the dialog coordinator.
+        
+        Args:
+            config_manager: Configuration manager
+            main_window: Main window for dialogs
+            get_current_studies: Callback to get current studies
+            settings_applied_callback: Optional callback when settings are applied
+            overlay_config_applied_callback: Optional callback when overlay config is applied
+            tag_edit_history: Optional TagEditHistoryManager for tag editing undo/redo
+            get_histogram_callbacks_for_subwindow: Callback (idx) -> dict of callbacks for that subwindow's histogram
+            get_focused_subwindow_index: Callback to get currently focused subwindow index (0-3)
+        """
+        self.config_manager = config_manager
+        self.main_window = main_window
+        self.get_current_studies = get_current_studies
+        self.settings_applied_callback = settings_applied_callback
+        self.undo_redo_manager = undo_redo_manager
+        self.ui_refresh_callback = ui_refresh_callback
+        self.tag_export_union_host = tag_export_union_host
+        self.overlay_config_applied_callback = overlay_config_applied_callback
+        self.annotation_options_applied_callback: Callable[[], None] | None = None
+        self.tag_edit_history = tag_edit_history
+        self.tag_edited_callback: Callable[[str, Any], None] | None = None
+        self.undo_redo_callbacks: tuple[Callable[[], None], Callable[[], None], Callable[[], bool], Callable[[], bool]] | None = None
+
+        # Per-subwindow histogram dialogs (up to 4, keyed by subwindow index)
+        self.get_histogram_callbacks_for_subwindow = get_histogram_callbacks_for_subwindow
+        self.get_focused_subwindow_index = get_focused_subwindow_index
+        self.histogram_dialogs: dict[int, HistogramDialog | None] = {}
+        self.manage_wl_presets_callback = manage_wl_presets_callback
+
+        # Tag viewer dialog (persistent)
+        self.tag_viewer_dialog: TagViewerDialog | None = None
+        # About this File dialog (persistent)
+        self.about_this_file_dialog: AboutThisFileDialog | None = None
+
+    def open_settings(self) -> None:
+        """Handle settings dialog request."""
+        dialog = SettingsDialog(
+            self.config_manager,
+            self.main_window,
+            manage_wl_presets_callback=self.manage_wl_presets_callback,
+        )
+        if self.settings_applied_callback:
+            dialog.settings_applied.connect(self.settings_applied_callback)
+        dialog.exec()
+
+    def open_overlay_settings(self) -> None:
+        """Handle overlay settings dialog request."""
+        from utils.debug_flags import DEBUG_FONT_VARIANT
+        from utils.debug_log import debug_log
+        if DEBUG_FONT_VARIANT:
+            debug_log(
+                "dialog_coordinator.py:open_overlay_settings",
+                "Opening overlay settings dialog",
+                {
+                    "main_window_present": self.main_window is not None,
+                    "has_settings_applied_callback": self.settings_applied_callback is not None,
+                },
+                hypothesis_id="FONTVAR",
+            )
+        dialog = OverlaySettingsDialog(self.config_manager, self.main_window)
+        if self.settings_applied_callback:
+            # Both signals trigger the same overlay-refresh pipeline:
+            # settings_changed fires on every live adjustment; settings_applied
+            # fires once on OK (after which the dialog closes).
+            dialog.settings_changed.connect(self.settings_applied_callback)
+            dialog.settings_applied.connect(self.settings_applied_callback)
+        dialog.exec()
+
+    def open_tag_viewer(self, current_dataset=None, privacy_mode: bool = False) -> None:
+        """
+        Handle tag viewer dialog request.
+        
+        Args:
+            current_dataset: Optional current dataset to display
+            privacy_mode: Whether privacy mode is enabled
+        """
+        if self.tag_viewer_dialog is None:
+            self.tag_viewer_dialog = TagViewerDialog(self.main_window,
+                                                      undo_redo_manager=self.undo_redo_manager)
+            # Set history manager if available (for tracking edited tags)
+            if self.tag_edit_history is not None:
+                self.tag_viewer_dialog.set_history_manager(self.tag_edit_history)
+            # Set UI refresh callback
+            if self.ui_refresh_callback is not None:
+                self.tag_viewer_dialog.ui_refresh_callback = self.ui_refresh_callback
+            # Connect tag_edited signal if callback is available
+            if self.tag_edited_callback is not None:
+                self.tag_viewer_dialog.tag_edited.connect(self.tag_edited_callback)
+            # Set undo/redo callbacks if callback is available
+            if hasattr(self, 'undo_redo_callbacks') and self.undo_redo_callbacks is not None:
+                undo_cb, redo_cb, can_undo_cb, can_redo_cb = self.undo_redo_callbacks
+                self.tag_viewer_dialog.set_undo_redo_callbacks(undo_cb, redo_cb, can_undo_cb, can_redo_cb)
+
+        # Set privacy mode
+        self.tag_viewer_dialog.set_privacy_mode(privacy_mode)
+
+        # Update with current dataset if available
+        if current_dataset is not None:
+            self.tag_viewer_dialog.set_dataset(current_dataset)
+
+        # Show dialog (brings to front if already open)
+        self.tag_viewer_dialog.show()
+        self.tag_viewer_dialog.raise_()
+        self.tag_viewer_dialog.activateWindow()
+
+    def open_overlay_config(self, current_modality: str | None = None) -> None:
+        """
+        Handle overlay configuration dialog request.
+        
+        Args:
+            current_modality: Optional current modality from loaded DICOM image.
+                             If provided, the dialog will open to this modality.
+                             If None or invalid, defaults to "default"
+        """
+        dialog = OverlayConfigDialog(self.config_manager, self.main_window, initial_modality=current_modality)
+        if self.overlay_config_applied_callback:
+            # config_changed fires on every live adjustment; config_applied fires
+            # once on OK after all modalities are saved to ConfigManager.
+            dialog.config_changed.connect(self.overlay_config_applied_callback)
+            dialog.config_applied.connect(self.overlay_config_applied_callback)
+        dialog.exec()
+
+    def open_annotation_options(self) -> None:
+        """Handle annotation options dialog request."""
+        from utils.debug_flags import DEBUG_FONT_VARIANT
+        from utils.debug_log import debug_log
+        if DEBUG_FONT_VARIANT:
+            debug_log(
+                "dialog_coordinator.py:open_annotation_options",
+                "Opening annotation options dialog",
+                {
+                    "main_window_present": self.main_window is not None,
+                    "has_annotation_options_applied_callback": self.annotation_options_applied_callback is not None,
+                },
+                hypothesis_id="FONTVAR",
+            )
+        dialog = AnnotationOptionsDialog(self.config_manager, self.main_window)
+        if self.annotation_options_applied_callback:
+            dialog.settings_changed.connect(self.annotation_options_applied_callback)
+            dialog.settings_applied.connect(self.annotation_options_applied_callback)
+        dialog.exec()
+
+    def open_quick_start_guide(self) -> None:
+        """Handle Quick Start Guide dialog request."""
+        dialog = QuickStartGuideDialog(self.config_manager, self.main_window)
+        dialog.exec()
+
+    def open_user_documentation_in_browser(self) -> None:
+        """Open the user guide hub in the system default web browser (https only)."""
+        QDesktopServices.openUrl(QUrl(user_guide_hub_url()))
+
+    def open_fusion_technical_doc(self) -> None:
+        """Handle Fusion Technical Documentation dialog request."""
+        dialog = FusionTechnicalDocDialog(self.config_manager, self.main_window)
+        dialog.exec()
+
+    def open_tag_export(self) -> None:
+        """Handle Tag Export dialog request."""
+        # Check if any studies are loaded
+        current_studies = self.get_current_studies()
+        if not current_studies:
+            QMessageBox.warning(
+                self.main_window,
+                "No Data Loaded",
+                "Please load DICOM files before exporting tags."
+            )
+            return
+
+        dialog = TagExportDialog(
+            current_studies,
+            self.config_manager,
+            self.main_window,
+            tag_export_union_host=self.tag_export_union_host,
+        )
+        dialog.exec()
+
+    def open_export(
+        self,
+        current_window_center: float | None = None,
+        current_window_width: float | None = None,
+        focused_subwindow_index: int | None = None,
+        use_rescaled_values: bool = False,
+        roi_manager=None,
+        overlay_manager=None,
+        measurement_tool=None,
+        text_annotation_tool=None,
+        arrow_annotation_tool=None,
+        projection_enabled: bool = False,
+        projection_type: str = "aip",
+        projection_slice_count: int = 4,
+        subwindow_annotation_managers: list[Any] | None = None
+    ) -> None:
+        """
+        Handle Export dialog request. Resolution (Native / 1.5× / 2× / 4×) is chosen in the dialog.
+        """
+        # Check if any studies are loaded
+        current_studies = self.get_current_studies()
+        if not current_studies:
+            QMessageBox.warning(
+                self.main_window,
+                "No Data Loaded",
+                "Please load DICOM files before exporting images."
+            )
+            return
+
+        dialog = ExportDialog(
+            current_studies,
+            current_window_center=current_window_center,
+            current_window_width=current_window_width,
+            focused_subwindow_index=focused_subwindow_index,
+            use_rescaled_values=use_rescaled_values,
+            roi_manager=roi_manager,
+            overlay_manager=overlay_manager,
+            measurement_tool=measurement_tool,
+            config_manager=self.config_manager,
+            text_annotation_tool=text_annotation_tool,
+            arrow_annotation_tool=arrow_annotation_tool,
+            projection_enabled=projection_enabled,
+            projection_type=projection_type,
+            projection_slice_count=projection_slice_count,
+            subwindow_annotation_managers=subwindow_annotation_managers,
+            parent=self.main_window
+        )
+        dialog.exec()
+
+    def open_deep_anonymizer_export(self) -> None:
+        """Open deep anonymization DICOM export dialog."""
+        current_studies = self.get_current_studies()
+        if not current_studies:
+            QMessageBox.warning(
+                self.main_window,
+                "No Data Loaded",
+                "Please load DICOM files before exporting with deep anonymization.",
+            )
+            return
+
+        dialog = DeepAnonymizerExportDialog(
+            current_studies,
+            config_manager=self.config_manager,
+            parent=self.main_window,
+        )
+        dialog.exec()
+
+    def open_export_screenshots(self, subwindows: list[Any], multi_window_layout: Any | None = None) -> None:
+        """
+        Open Export Screenshots dialog (per-view, composite grid, or full main window).
+        """
+        if not subwindows:
+            QMessageBox.warning(
+                self.main_window,
+                "No Views",
+                "No subwindows available for screenshot export."
+            )
+            return
+        dialog = ScreenshotExportDialog(
+            subwindows,
+            config_manager=self.config_manager,
+            multi_window_layout=multi_window_layout,
+            parent=self.main_window
+        )
+        dialog.exec()
+
+    def handle_settings_applied(self) -> None:
+        """Handle settings being applied."""
+        # This will be handled by the callback if provided
+        pass
+
+    def update_tag_viewer(self, dataset) -> None:
+        """
+        Update tag viewer with new dataset.
+        
+        Args:
+            dataset: DICOM dataset to display
+        """
+        if self.tag_viewer_dialog is not None and self.tag_viewer_dialog.isVisible():
+            self.tag_viewer_dialog.set_dataset(dataset)
+
+    def clear_tag_viewer_filter(self) -> None:
+        """
+        Clear the filter in the tag viewer dialog.
+        Called when files are closed or new files are opened.
+        """
+        if self.tag_viewer_dialog is not None:
+            self.tag_viewer_dialog.clear_filter()
+
+    def apply_privacy_mode(self, enabled: bool) -> None:
+        """
+        Propagate privacy mode updates to open dialog state.
+
+        Args:
+            enabled: True to enable privacy mode, False to disable.
+        """
+        if self.tag_viewer_dialog is not None:
+            self.tag_viewer_dialog.set_privacy_mode(enabled)
+
+    def open_histogram(self, subwindow_index: int | None = None) -> None:
+        """
+        Open or show histogram dialog for a subwindow.
+        If subwindow_index is None, uses the currently focused subwindow.
+        Supports up to 4 histograms (one per subwindow index 0-3).
+        """
+        if self.get_focused_subwindow_index is None or self.get_histogram_callbacks_for_subwindow is None:
+            return
+        idx = subwindow_index if subwindow_index is not None else self.get_focused_subwindow_index()
+        # Guard: only indices 0-3 are valid for histogram dialogs
+        if idx < 0 or idx > 3:
+            return
+        if self.histogram_dialogs.get(idx) is None:
+            callbacks = dict(self.get_histogram_callbacks_for_subwindow(idx)) if self.get_histogram_callbacks_for_subwindow else {}
+            if not callbacks:
+                return
+            callbacks["get_restore_geometry"] = self.config_manager.get_histogram_window_geometry
+            callbacks["save_geometry_callback"] = self.config_manager.set_histogram_window_geometry
+            self.histogram_dialogs[idx] = HistogramDialog(
+                self.main_window,
+                title_suffix=f" (View {idx + 1})",
+                **callbacks
+            )
+        dialog = self.histogram_dialogs[idx]
+        if dialog is None:
+            return
+        dialog.update_histogram()
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
+
+    def update_histogram_for_subwindow(self, idx: int) -> None:
+        """Update the histogram dialog for the given subwindow index if it exists and is visible."""
+        if idx < 0 or idx > 3:
+            return
+        dialog = self.histogram_dialogs.get(idx)
+        if dialog is not None and dialog.isVisible():
+            dialog.update_histogram()
+
+    def update_histogram_window_level_only_for_subwindow(self, idx: int) -> None:
+        """Update only the W/L overlay in the histogram (no pixel refetch). Keeps W/L drag responsive."""
+        if idx < 0 or idx > 3:
+            return
+        dialog = self.histogram_dialogs.get(idx)
+        if dialog is not None and dialog.isVisible():
+            dialog.update_window_level_only()
+
+    def open_export_roi_statistics(self, subwindow_managers: dict[int, Any]) -> None:
+        """
+        Open the Export ROI Statistics dialog.
+
+        Guards on empty studies (shows a message and returns early), otherwise
+        instantiates ExportROIStatisticsDialog and runs it modally.
+
+        Args:
+            subwindow_managers: Dict of {idx: managers_dict} from main app,
+                each entry has 'roi_manager' and 'crosshair_manager' keys.
+        """
+        current_studies = self.get_current_studies()
+        if not current_studies:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(
+                self.main_window,
+                "No Data Loaded",
+                "Please load DICOM files before exporting ROI statistics."
+            )
+            return
+
+        dialog = ExportROIStatisticsDialog(
+            current_studies=current_studies,
+            subwindow_managers=subwindow_managers,
+            config_manager=self.config_manager,
+            parent=self.main_window
+        )
+        dialog.exec()
+
+    def open_about_this_file(self, current_dataset: Dataset | None = None, file_path: str | None = None) -> None:
+        """
+        Handle About This File dialog request.
+        
+        Args:
+            current_dataset: Optional current DICOM dataset
+            file_path: Optional path to the DICOM file
+        """
+        if self.about_this_file_dialog is None:
+            self.about_this_file_dialog = AboutThisFileDialog(self.main_window)
+
+        # Update dialog with current information
+        self.about_this_file_dialog.update_file_info(current_dataset, file_path)
+
+        # Show dialog
+        self.about_this_file_dialog.show()
+        self.about_this_file_dialog.raise_()
+        self.about_this_file_dialog.activateWindow()
+
+    def update_about_this_file(self, current_dataset: Dataset | None = None, file_path: str | None = None) -> None:
+        """
+        Update About This File dialog with new dataset/file path.
+        
+        Args:
+            current_dataset: Optional current DICOM dataset
+            file_path: Optional path to the DICOM file
+        """
+        if self.about_this_file_dialog is not None and self.about_this_file_dialog.isVisible():
+            self.about_this_file_dialog.update_file_info(current_dataset, file_path)
+
+    def open_structured_report_browser(
+        self,
+        dataset: Dataset,
+        *,
+        get_privacy_enabled: Callable[[], bool],
+        open_tag_viewer_callback: Callable[[Dataset], None] | None = None,
+    ) -> None:
+        """
+        Open the modeless Structured Report browser (document tree, dose events, exports).
+
+        Args:
+            dataset: SR DICOM dataset to display.
+            get_privacy_enabled: Callable returning whether privacy mode is on (for masking).
+            open_tag_viewer_callback: Optional ``(ds,)`` to open the full tag viewer from the Raw tags tab.
+        """
+        from gui.dialogs.structured_report_browser_dialog import (
+            StructuredReportBrowserDialog,
+        )
+
+        dlg = StructuredReportBrowserDialog(
+            self.main_window,
+            dataset,
+            get_privacy_enabled=get_privacy_enabled,
+            main_window=self.main_window,
+            open_tag_viewer_callback=open_tag_viewer_callback,
+        )
+        dlg.show()
+        dlg.raise_()
+        dlg.activateWindow()
+

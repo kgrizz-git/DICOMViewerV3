@@ -1,0 +1,54 @@
+version: 2
+updates:
+  # Python dependencies (pip)
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "03:00"
+    open-pull-requests-limit: 10
+    cooldown:
+      default-days: 7
+    reviewers:
+      - "GitHub-Copilot"
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    pull-request-branch-name:
+      separator: "/"
+    groups:
+      # Bundle routine patch/minor bumps into one weekly PR; majors (e.g. a
+      # pydicom 2->3 jump) still open individually since they need review.
+      python-patch-minor:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "05:00"
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci(actions):"
+    groups:
+      actions-patch-minor:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
+  # Docker: add a `docker` package-ecosystem block here only after a Dockerfile
+  # exists at the repo root (or set directory to the folder that contains it).
+  # Dependabot errors if `docker` is enabled without a matching Dockerfile.

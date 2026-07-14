@@ -1,0 +1,14 @@
+{
+  "_comment": "Machine-readable dependency-license policy. Documentation: dev-docs/info/DEPENDENCY_LICENSE_POLICY.md. Enforced by scripts/check_dependency_licenses.py. Edit accepted_exceptions/overrides here; keep the .md in sync.",
+  "forbidden_categories": ["FORBIDDEN"],
+  "fail_on_unknown": false,
+  "accepted_exceptions": {
+    "pylibjpeg-libjpeg": {
+      "license": "GPL-3.0",
+      "reason": "Unresolved Phase 0a blocker for closed-source commercial release. Provides DICOM JPEG Baseline/Extended decoding. Must be removed or replaced (Pillow-only or GDCM/LGPL) before commercial distribution.",
+      "tracked_in": "dev-docs/plans/supporting/LICENSE_AND_COMPLIANCE_PLAN.md (Phase 0a)",
+      "review_by": "before first commercial release"
+    }
+  },
+  "overrides": {}
+}

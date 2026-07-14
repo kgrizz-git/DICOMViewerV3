@@ -1,0 +1,261 @@
+"""
+ROI Statistics Panel
+
+This module provides a panel for displaying ROI statistics including
+mean, standard deviation, min, max, and pixel count.
+
+Inputs:
+    - ROI statistics data
+
+Outputs:
+    - Displayed statistics in a formatted panel
+    - Clipboard text on Copy
+
+Requirements:
+    - PySide6 for GUI components
+"""
+
+
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QKeySequence
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QApplication,
+    QHeaderView,
+    QLabel,
+    QMenu,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
+
+from tools.roi_manager import RoiStatisticsMap
+
+
+class ROIStatisticsPanel(QWidget):
+    """
+    Panel for displaying ROI statistics.
+
+    Features:
+    - Display mean, std dev, min, max, count, area
+    - Update dynamically when ROI is selected
+    - Select rows and copy to clipboard (Ctrl+C or right-click Copy)
+    """
+
+    def __init__(self, parent=None):
+        """
+        Initialize the ROI statistics panel.
+
+        Args:
+            parent: Parent widget
+        """
+        super().__init__(parent)
+
+        self._create_ui()
+        self.current_statistics: RoiStatisticsMap | None = None
+
+    def _create_ui(self) -> None:
+        """Create the UI components."""
+        from PySide6.QtWidgets import QSizePolicy
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(3, 4, 4, 4)
+
+        # Title (will be updated with ROI identifier)
+        self.title_label = QLabel("ROI Statistics")
+        self.title_label.setStyleSheet("font-weight: bold; font-size: 12pt;")
+        layout.addWidget(self.title_label)
+
+        # Statistics table: Statistic | Value (numbers only) | Unit
+        self.stats_table = QTableWidget()
+        self.stats_table.setColumnCount(3)
+        self.stats_table.setHorizontalHeaderLabels(["Statistic", "Value", "Unit"])
+        self.stats_table.setRowCount(6)
+        self.stats_table.verticalHeader().setVisible(False)
+        self.stats_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+
+        # Allow multi-row selection (row-oriented so all columns copy together)
+        self.stats_table.setSelectionBehavior(
+            QAbstractItemView.SelectionBehavior.SelectRows
+        )
+        self.stats_table.setSelectionMode(
+            QAbstractItemView.SelectionMode.ExtendedSelection
+        )
+
+        # Set columns to stretch mode so they expand/contract with widget width
+        header = self.stats_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+
+        # Set row labels
+        self.stats_table.setItem(0, 0, QTableWidgetItem("Mean"))
+        self.stats_table.setItem(1, 0, QTableWidgetItem("Std Dev"))
+        self.stats_table.setItem(2, 0, QTableWidgetItem("Min"))
+        self.stats_table.setItem(3, 0, QTableWidgetItem("Max"))
+        self.stats_table.setItem(4, 0, QTableWidgetItem("Pixels"))
+        self.stats_table.setItem(5, 0, QTableWidgetItem("Area"))
+
+        # Initialize with empty values and units
+        for i in range(6):
+            self.stats_table.setItem(i, 1, QTableWidgetItem(""))
+            self.stats_table.setItem(i, 2, QTableWidgetItem(""))
+
+        # Calculate minimum height to show all 6 rows without scrolling
+        # Header height + (row height * 6 rows) + some padding
+        header_height = self.stats_table.horizontalHeader().height()
+        row_height = self.stats_table.rowHeight(0) if self.stats_table.rowHeight(0) > 0 else 25
+        min_table_height = header_height + (row_height * 6) + 10
+
+        self.stats_table.setMinimumHeight(min_table_height)
+        self.stats_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+        # Right-click context menu
+        self.stats_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.stats_table.customContextMenuRequested.connect(self._show_context_menu)
+
+        # stretch=1 lets the table grow to fill the panel when the window is tall
+        layout.addWidget(self.stats_table, 1)
+
+    # ------------------------------------------------------------------
+    # Copy helpers
+    # ------------------------------------------------------------------
+
+    def _copy_stats_to_clipboard(self) -> None:
+        """
+        Copy selected rows (or all rows when nothing is selected) to the
+        system clipboard as tab-separated plain text.
+
+        If the panel is empty (no ROI selected), does nothing.
+        Format: Statistic, Value (numbers only), Unit in three columns.
+        """
+        # Do nothing when panel is empty
+        if self.current_statistics is None:
+            return
+
+        # Determine which rows to copy
+        selected_ranges = self.stats_table.selectedRanges()
+        if selected_ranges:
+            # Collect unique selected row indices preserving order
+            selected_rows: list[int] = []
+            seen: set[int] = set()
+            for r in selected_ranges:
+                for row in range(r.topRow(), r.bottomRow() + 1):
+                    if row not in seen:
+                        seen.add(row)
+                        selected_rows.append(row)
+            selected_rows.sort()
+        else:
+            # No selection – copy entire table, prepend ROI identifier line
+            selected_rows = list(range(self.stats_table.rowCount()))
+
+        lines: list[str] = []
+
+        # Prepend header if copying the full table
+        if not selected_ranges:
+            title = self.title_label.text()
+            lines.append(title)
+
+        for row in selected_rows:
+            col0_item = self.stats_table.item(row, 0)
+            col1_item = self.stats_table.item(row, 1)
+            col2_item = self.stats_table.item(row, 2)
+            col0 = col0_item.text() if col0_item else ""
+            col1 = col1_item.text() if col1_item else ""
+            col2 = col2_item.text() if col2_item else ""
+            lines.append(f"{col0}\t{col1}\t{col2}")
+
+        text = "\n".join(lines)
+        QApplication.clipboard().setText(text)
+
+    def _show_context_menu(self, pos) -> None:
+        """Show right-click context menu on the statistics table."""
+        menu = QMenu(self)
+        copy_action = menu.addAction("Copy")
+        copy_action.setEnabled(self.current_statistics is not None)
+        copy_action.triggered.connect(self._copy_stats_to_clipboard)
+        menu.exec(self.stats_table.viewport().mapToGlobal(pos))
+
+    def keyPressEvent(self, event) -> None:
+        """Intercept Ctrl+C / Cmd+C when the panel has keyboard focus."""
+        if event.matches(QKeySequence.StandardKey.Copy):
+            self._copy_stats_to_clipboard()
+            event.accept()
+        else:
+            super().keyPressEvent(event)
+
+    # ------------------------------------------------------------------
+    # Data update helpers
+    # ------------------------------------------------------------------
+
+    def update_statistics(self, statistics: RoiStatisticsMap, roi_identifier: str | None = None,
+                          rescale_type: str | None = None) -> None:
+        """
+        Update displayed statistics.
+
+        Args:
+            statistics: Dictionary with statistics (mean, std, min, max, count)
+            roi_identifier: Optional ROI identifier string (e.g., "ROI 1 (rectangle)")
+            rescale_type: Optional rescale type (e.g., "HU") to append to values
+        """
+        self.current_statistics = statistics
+
+        # Update title with ROI identifier
+        if roi_identifier:
+            self.title_label.setText(f"ROI Statistics - {roi_identifier}")
+        else:
+            self.title_label.setText("ROI Statistics")
+
+        # Format values (numbers only in Value column) and units (in Unit column)
+        rescale_unit = rescale_type or ""
+
+        rows: list[tuple[str, str, str]] = [
+            ("Mean", f"{statistics.get('mean', 0):.2f}", rescale_unit),
+            ("Std Dev", f"{statistics.get('std', 0):.2f}", rescale_unit),
+            ("Min", f"{statistics.get('min', 0):.2f}", rescale_unit),
+            ("Max", f"{statistics.get('max', 0):.2f}", rescale_unit),
+            ("Pixels", f"{statistics.get('count', 0)}", ""),
+        ]
+        area_mm2 = statistics.get("area_mm2")
+        area_pixels = statistics.get("area_pixels", 0.0)
+        if area_mm2 is not None:
+            if area_mm2 >= 100.0:
+                rows.append(("Area", f"{area_mm2 / 100.0:.2f}", "cm²"))
+            else:
+                rows.append(("Area", f"{area_mm2:.2f}", "mm²"))
+        else:
+            rows.append(("Area", f"{area_pixels:.1f}", "pixels"))
+
+        mc = int(statistics.get("multichannel_count") or 0)
+        if mc >= 2:
+            raw_lbl = statistics.get("channel_labels")
+            if isinstance(raw_lbl, (list, tuple)) and len(raw_lbl) == mc:
+                labels = tuple(str(x) for x in raw_lbl)
+            else:
+                labels = tuple(f"Ch{i}" for i in range(mc))
+            for c in range(mc):
+                lbl = labels[c] if c < len(labels) else f"Ch{c}"
+                if f"mean_ch{c}" in statistics:
+                    rows.append((f"Mean ({lbl})", f"{statistics[f'mean_ch{c}']:.2f}", rescale_unit))
+                    rows.append((f"Std ({lbl})", f"{statistics.get(f'std_ch{c}', 0):.2f}", rescale_unit))
+                    rows.append((f"Min ({lbl})", f"{statistics.get(f'min_ch{c}', 0):.2f}", rescale_unit))
+                    rows.append((f"Max ({lbl})", f"{statistics.get(f'max_ch{c}', 0):.2f}", rescale_unit))
+
+        self.stats_table.setRowCount(len(rows))
+        for i, (name, val, unit) in enumerate(rows):
+            self.stats_table.setItem(i, 0, QTableWidgetItem(name))
+            self.stats_table.setItem(i, 1, QTableWidgetItem(val))
+            self.stats_table.setItem(i, 2, QTableWidgetItem(unit))
+
+    def clear_statistics(self) -> None:
+        """Clear displayed statistics."""
+        self.stats_table.setRowCount(6)
+        base = ["Mean", "Std Dev", "Min", "Max", "Pixels", "Area"]
+        for i, lab in enumerate(base):
+            self.stats_table.setItem(i, 0, QTableWidgetItem(lab))
+            self.stats_table.setItem(i, 1, QTableWidgetItem(""))
+            self.stats_table.setItem(i, 2, QTableWidgetItem(""))
+        self.current_statistics = None
+        self.title_label.setText("ROI Statistics")

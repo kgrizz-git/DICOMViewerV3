@@ -1,0 +1,72 @@
+name: Pyright
+
+# Static type-check gate: basedpyright must report 0 errors across src/ + scripts/.
+# (tests/ is intentionally not gated — same scope the project tracks in dev-docs/TO_DO.md.)
+#
+# The analysis platform + Python version are pinned in pyrightconfig.json
+# (pythonPlatform: Windows, pythonVersion: 3.12 — the primary dev target), so this
+# ubuntu runner reproduces the local result regardless of the host OS.
+#
+# basedpyright's own exit code is non-zero whenever any warning exists, so the gate
+# parses the JSON summary and fails only on errorCount > 0.
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths-ignore:
+      # Docs-only commits cannot change these results. repo-harness and
+      # user-docs-links still run on docs, so docs are not left unchecked.
+      - '**/*.md'
+      - 'user-docs/**'
+      - 'dev-docs/**'
+      - 'plans/**'
+      - 'logs/**'
+      - 'LICENSE'
+  push:
+    branches:
+      - main
+      - develop
+    paths-ignore:
+      # Docs-only commits cannot change these results. repo-harness and
+      # user-docs-links still run on docs, so docs are not left unchecked.
+      - '**/*.md'
+      - 'user-docs/**'
+      - 'dev-docs/**'
+      - 'plans/**'
+      - 'logs/**'
+      - 'LICENSE'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  pyright:
+    name: basedpyright (src + scripts, 0 errors)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      - name: Create virtual environment and install dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/pip install -r requirements.txt
+          .venv/bin/pip install "basedpyright>=1.39.3"
+
+      - name: Run basedpyright (errors must be 0)
+        run: |
+          .venv/bin/python scripts/check_basedpyright_errors.py

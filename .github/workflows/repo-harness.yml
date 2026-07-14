@@ -1,0 +1,42 @@
+name: Repo harness
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  harness-docs-and-smoke:
+    name: Harness docs and agent smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+
+      - name: Install runtime dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check repo harness documentation
+        run: python scripts/check_repo_harness.py --root "${{ github.workspace }}"
+
+      - name: Check architecture boundaries
+        run: python scripts/check_architecture_boundaries.py --root "${{ github.workspace }}"
+
+      - name: Agent smoke (imports and fixture)
+        run: python scripts/agent_smoke_harness.py --root "${{ github.workspace }}"

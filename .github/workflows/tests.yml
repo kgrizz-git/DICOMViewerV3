@@ -1,0 +1,97 @@
+name: Tests + Codecov
+
+# Runs the full pytest suite on every push/PR to main/develop, collects coverage
+# via pytest-cov, and uploads coverage.xml to Codecov with codecov-action@v5.
+#
+# The Codecov GitHub App should already be installed for the org (Step 1 of
+# Codecov's quick-start). The repo is public, so tokenless uploads are enabled
+# by default — no CODECOV_TOKEN secret is needed unless an org admin has set
+# tokens to "Required" under Settings → Global Upload Token.
+#
+# Qt tests run headless via QT_QPA_PLATFORM=offscreen (PySide6).
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths-ignore:
+      # Docs-only commits cannot change these results. repo-harness and
+      # user-docs-links still run on docs, so docs are not left unchecked.
+      - '**/*.md'
+      - 'user-docs/**'
+      - 'dev-docs/**'
+      - 'plans/**'
+      - 'logs/**'
+      - 'LICENSE'
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths-ignore:
+      # Docs-only commits cannot change these results. repo-harness and
+      # user-docs-links still run on docs, so docs are not left unchecked.
+      - '**/*.md'
+      - 'user-docs/**'
+      - 'dev-docs/**'
+      - 'plans/**'
+      - 'logs/**'
+      - 'LICENSE'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  test:
+    name: pytest (py3.12, ubuntu)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install system dependencies (Qt offscreen)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgl1 libegl1 libxrandr2 libxss1 libxcursor1 libxcomposite1 \
+            libasound2t64 libxi6 libxtst6 libdbus-1-3 libfontconfig1
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest-cov
+
+      - name: Run tests with coverage
+        env:
+          PYTHONPATH: src
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          python -m pytest tests \
+            --cov=src \
+            --cov-report=xml \
+            --cov-report=term \
+            -v --tb=short
+
+      - name: Upload coverage to Codecov
+        if: always() && hashFiles('coverage.xml') != ''
+        uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5.5.5
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+          verbose: true

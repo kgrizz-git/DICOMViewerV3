@@ -1,0 +1,61 @@
+# DICOM Viewer V3 Requirements
+# 
+# This file lists all Python package dependencies required for the DICOM viewer application.
+# 
+# Installation: pip install -r requirements.txt
+#
+# Python version (especially Windows):
+# - pylinac (ACR QA) requires Python >= 3.10.
+# - Prefer 3.11 or 3.12 (same family as CI). Wheels exist for native deps (e.g. pyjpegls).
+# - 3.14+ may have no pyjpegls wheel on Windows yet; pip then builds from source and needs
+#   Microsoft C++ Build Tools (https://visualstudio.microsoft.com/visual-cpp-build-tools/).
+# - Shared-folder paths can confuse venv/pip; a local clone is often more reliable if you see
+#   odd path or pip self-upgrade issues.
+#
+# Requirements:
+# - PySide6: Cross-platform GUI framework for the application interface
+# - pydicom: Library for reading, writing, and working with DICOM files
+# - numpy: Numerical computing library for image array operations
+# - Pillow: Image processing library for image format conversions
+# - matplotlib: Plotting library for histogram display
+# - openpyxl: Library for reading and writing Excel files (for tag export)
+
+PySide6>=6.11.0
+# Stays on pydicom 2.x: pylinac 3.43.2 caps it at `pydicom<3`. This also blocks the
+# imagecodecs (BSD) decoder plugin and highdicom, which need pydicom 3.x. Moving to
+# pydicom 3 requires a coordinated pylinac bump + ACR QA re-verify. See
+# dev-docs/info/HIGHDICOM_OVERVIEW.md and PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md.
+pydicom>=2.4.0,<3
+numpy>=2.5.1
+Pillow>=12.3.0
+# Cine export (GIF / AVI / MPG): imageio + bundled FFmpeg via imageio-ffmpeg (LGPL/GPL components — see CHANGELOG [Unreleased] and README).
+imageio==2.37.3
+imageio-ffmpeg==0.6.0
+matplotlib>=3.11.0
+openpyxl>=3.1.5
+# Local encrypted study index (SQLCipher-compatible Python binding; wheels on Windows/macOS/Linux for supported Python versions)
+sqlcipher3>=0.6.2
+# Stores the SQLCipher passphrase in the OS credential store (Windows Credential Manager, macOS Keychain, etc.)
+keyring>=25.7.0
+SimpleITK>=2.5.4  # For 3D image resampling in image fusion (Phase 2)
+vtk>=9.6.2  # GPU-accelerated 3D volume rendering (vtkSmartVolumeMapper + QVTKRenderWindowInteractor)
+# Pinned exact version; 3.43.2 is the current verified ACR CT/MRI integration pin. Re-verify after each bump (see dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md, dev-docs/plans/DEPENDENCY_BUMP_VERIFICATION_PLAN.md).
+pylinac==3.43.2  # Automated phantom QA analysis (ACR CT + ACR MRI Large)
+scipy>=1.17.1  # pylinac numerical dependency
+scikit-image>=0.22.0  # pylinac image processing dependency
+pypdf>=6.14.2  # PDF merging for compare-mode combined PDF report
+
+# Optional dependencies for compressed DICOM support
+# These are recommended for decoding JPEG-compressed DICOM files (JPEG, JPEG-LS, JPEG 2000)
+# Required for lossyJPEG-YBR_FULL_422 and other compressed transfer syntaxes
+# Note: GDCM support may require additional system libraries and is not included here
+pylibjpeg>=2.1.0  # For JPEG 2000 and other compressed formats
+pylibjpeg-libjpeg>=2.4.0  # JPEG decoder plugin for pylibjpeg (required for JPEG Baseline/Extended)
+pylibjpeg-openjpeg>=2.5.0  # JPEG 2000 decoder plugin for pylibjpeg
+pylibjpeg-rle>=2.2.0  # RLE decoder plugin for pylibjpeg
+pyjpegls>=1.5.1  # For JPEG-LS compression
+
+# Testing (recommended for project venv; run: pip install -r requirements.txt)
+pytest>=9.1.1  # Test runner; supports tests/ and unittest-style tests
+# Minimum version addresses AdlLexer security issue in pygments<2.20.0 (transitive via pytest, rich).
+Pygments>=2.20.0

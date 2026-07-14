@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+PY_BIN=""
+
+if [[ -x "$REPO_ROOT/.venv/bin/python" ]]; then
+  PY_BIN="$REPO_ROOT/.venv/bin/python"
+elif [[ -x "$REPO_ROOT/.venv/Scripts/python.exe" ]]; then
+  PY_BIN="$REPO_ROOT/.venv/Scripts/python.exe"
+elif [[ -x "$REPO_ROOT/venv/bin/python" ]]; then
+  PY_BIN="$REPO_ROOT/venv/bin/python"
+elif [[ -x "$REPO_ROOT/venv/Scripts/python.exe" ]]; then
+  PY_BIN="$REPO_ROOT/venv/Scripts/python.exe"
+else
+  echo "[security hook] No project Python found under .venv or venv." >&2
+  exit 1
+fi
+
+# Prune local backups/ by branch (non-fatal: never block the commit).
+# Tracked: drop if >10 commits since last touch, or if >10 commits landed in the
+# last PRUNE_DAYS days and intent is older than PRUNE_DAYS. Untracked: intent
+# older than PRUNE_DAYS (embedded date vs mtime min). Then stage removals.
+BRANCH="$(git branch --show-current 2>/dev/null || true)"
+PRUNE_DAYS=0
+case "$BRANCH" in
+  main) PRUNE_DAYS=3 ;;
+  WIP) PRUNE_DAYS=3 ;;
+esac
+if [[ "$PRUNE_DAYS" -gt 0 ]]; then
+  if ! "$PY_BIN" "$REPO_ROOT/scripts/git-hook-prune-backups.py" --days "$PRUNE_DAYS" --max-commits 10; then
+    echo "[backup hook] prune script failed (continuing with security gate)." >&2
+  fi
+  if ! git -C "$REPO_ROOT" add -u -- backups; then
+    echo "[backup hook] git add -u backups/ failed (continuing with security gate)." >&2
+  fi
+fi
+
+# PHI / runtime-artifact gate: never commit captured app config, pytest temp dirs,
+# or data files carrying patient tags or local user paths. Runs first and hard-fails:
+# this is the one class of mistake that must not reach a public repo.
+echo "[phi] Checking staged files for PHI and runtime artifacts..."
+"$PY_BIN" "$REPO_ROOT/scripts/check_no_phi_artifacts.py" --staged --root "$REPO_ROOT" || exit 1
+
+# Repo harness checks (mirrors the GitHub Action)
+echo "[harness] Running repo harness checks..."
+"$PY_BIN" "$REPO_ROOT/scripts/check_repo_harness.py" --root "$REPO_ROOT" || exit 1
+"$PY_BIN" "$REPO_ROOT/scripts/check_architecture_boundaries.py" --root "$REPO_ROOT" || exit 1
+"$PY_BIN" "$REPO_ROOT/scripts/agent_smoke_harness.py" --root "$REPO_ROOT" || exit 1
+
+# Lint staged Python files with ruff (fast — mirrors CI ruff.yml).
+echo "[ruff] Linting staged Python files..."
+STAGED_PY=$(git diff --cached --name-only --diff-filter=ACM -- "*.py" 2>/dev/null || true)
+if [[ -n "$STAGED_PY" ]]; then
+  "$PY_BIN" -m ruff check $STAGED_PY || {
+    echo "::error::ruff found issues in staged files (see above). Fix with: ruff check --fix" >&2
+    exit 1
+  }
+  echo "[ruff] OK"
+else
+  echo "[ruff] No staged Python files to lint."
+fi
+
+# Dependency license gate: fail on a new strong-copyleft (GPL/AGPL) dependency.
+# Policy + docs: dev-docs/info/DEPENDENCY_LICENSE_POLICY.md
+echo "[license] Checking dependency licenses..."
+"$PY_BIN" "$REPO_ROOT/scripts/check_dependency_licenses.py" --root "$REPO_ROOT" || exit 1
+
+exec "$PY_BIN" "$REPO_ROOT/scripts/git-hook-security-gate.py" --hook-type pre-commit

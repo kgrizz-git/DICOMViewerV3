@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+PY_BIN=""
+
+if [[ -x "$REPO_ROOT/.venv/bin/python" ]]; then
+  PY_BIN="$REPO_ROOT/.venv/bin/python"
+elif [[ -x "$REPO_ROOT/.venv/Scripts/python.exe" ]]; then
+  PY_BIN="$REPO_ROOT/.venv/Scripts/python.exe"
+elif [[ -x "$REPO_ROOT/venv/bin/python" ]]; then
+  PY_BIN="$REPO_ROOT/venv/bin/python"
+elif [[ -x "$REPO_ROOT/venv/Scripts/python.exe" ]]; then
+  PY_BIN="$REPO_ROOT/venv/Scripts/python.exe"
+else
+  echo "[security hook] No project Python found under .venv or venv." >&2
+  exit 1
+fi
+
+# Static type gate: fail on basedpyright errors, matching CI. Warnings are
+# reported but do not block pushes until the repo warning baseline is cleared.
+echo "[pyright] Running basedpyright error gate..."
+"$PY_BIN" "$REPO_ROOT/scripts/check_basedpyright_errors.py" || exit 1
+
+# Coverage gate (warn only — does not block push).
+# Threshold: 50 % (see codecov.yml). Run pytest-cov; parse TOTAL %.
+# This mirrors the CI coverage upload in .github/workflows/tests.yml.
+echo "[coverage] Running pytest --cov=src..."
+COV_OUTPUT="$("$PY_BIN" -m pytest tests --cov=src --cov-report=term -q --no-header 2>&1)" || true
+TOTAL_PCT=$(echo "$COV_OUTPUT" | awk '/^TOTAL/{gsub(/%/,""); print $NF}')
+if [[ -n "$TOTAL_PCT" ]]; then
+  echo "[coverage] Total coverage: ${TOTAL_PCT}%"
+  if (( $(echo "$TOTAL_PCT < 50" | bc -l 2>/dev/null || echo 0) )); then
+    echo "[coverage] ⚠  Coverage ${TOTAL_PCT}% is below the 50 % threshold — push allowed, but please improve coverage." >&2
+  else
+    echo "[coverage] Coverage meets the 50 % threshold."
+  fi
+else
+  echo "[coverage] Could not determine coverage percentage (continuing)." >&2
+fi
+
+# Complexity gate (warn only — does not block push).
+# Mirrors CI lizard.yml. Flags functions with CCN >= 15 or NLOC >= 200.
+echo "[complexity] Running lizard..."
+LIZARD_OUT="$("$PY_BIN" -m lizard src/ --CCN 15 --length 200 -w 2>&1)" || true
+WARN_COUNT=$(echo "$LIZARD_OUT" | grep -c "warning:" 2>/dev/null || echo 0)
+if [[ "$WARN_COUNT" -gt 0 ]]; then
+  echo "[complexity] ${WARN_COUNT} high-complexity function(s) — top 5:"
+  echo "$LIZARD_OUT" | grep "warning:" | head -5 | while read -r line; do echo "  $line"; done
+else
+  echo "[complexity] No high-complexity functions found."
+fi
+
+exec "$PY_BIN" "$REPO_ROOT/scripts/git-hook-security-gate.py" --hook-type pre-push

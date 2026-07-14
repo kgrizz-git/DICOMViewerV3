@@ -1,0 +1,191 @@
+name: Debug Flags & Security Checks
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+  push:
+    branches:
+      - main
+      - develop
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  debug-flags-check:
+    name: Check Debug Flags
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0  # Full history for proper PR checking
+
+      - name: Check for debug flags set to True
+        id: check_flags
+        run: |
+          set +e  # Don't exit on grep failure
+          
+          echo "Checking src/utils/debug_flags.py for debug flags set to True..."
+          
+          FLAGGED=$(grep -E "^\s*DEBUG_.*\s*:\s*bool\s*=\s*True" src/utils/debug_flags.py || true)
+          
+          if [ -z "$FLAGGED" ]; then
+              echo "✅ All debug flags are False"
+              echo "status=pass" >> $GITHUB_OUTPUT
+              exit 0
+          else
+              echo "❌ Found debug flags set to True:"
+              echo "$FLAGGED"
+              echo "status=fail" >> $GITHUB_OUTPUT
+              exit 1
+          fi
+
+      - name: Comment on PR if flags found
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '❌ **Debug Flags Check Failed**\n\nThis PR contains debug flags set to `True`. Please review `src/utils/debug_flags.py` and ensure:\n\n- All `DEBUG_*` flags are set to `False`\n- No sensitive code paths are left in debug mode\n- This is not a release build attempt with debugging enabled\n\nAfter fixing, push again to re-run the check.'
+            });
+
+  no-secrets-scan:
+    name: Detect Secrets
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Resolve commit range for TruffleHog
+        id: trufflehog_range
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BASE_SHA=""
+          HEAD_SHA="${{ github.sha }}"
+          SKIP_REASON=""
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            BASE_SHA="${{ github.event.before }}"
+          else
+            SKIP_REASON="Unsupported event '${{ github.event_name }}' for TruffleHog range scan"
+          fi
+
+          ZERO_SHA="0000000000000000000000000000000000000000"
+          if [ -z "$SKIP_REASON" ] && { [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "$ZERO_SHA" ]; }; then
+            SKIP_REASON="Missing usable base commit (new branch, force-push edge case, or initial commit)"
+          fi
+
+          if [ -z "$SKIP_REASON" ] && [ "$BASE_SHA" = "$HEAD_SHA" ]; then
+            SKIP_REASON="No new commits between base and head"
+          fi
+
+          if [ -n "$SKIP_REASON" ]; then
+            echo "should_scan=false" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=$SKIP_REASON" >> "$GITHUB_OUTPUT"
+            echo "TruffleHog scan skipped: $SKIP_REASON"
+          else
+            echo "should_scan=true" >> "$GITHUB_OUTPUT"
+            echo "base_sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
+            echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+            echo "TruffleHog range: $BASE_SHA..$HEAD_SHA"
+          fi
+
+      # Pin action + image tag so CI is reproducible; bump with Dependabot or when releasing.
+      - name: Run TruffleHog secret scanner
+        if: steps.trufflehog_range.outputs.should_scan == 'true'
+        uses: trufflesecurity/trufflehog@00155c9dc586f34d189adc83d3ac2698c2ec551f # v3.95.8
+        with:
+          path: ./
+          base: ${{ steps.trufflehog_range.outputs.base_sha }}
+          head: ${{ steps.trufflehog_range.outputs.head_sha }}
+          version: "3.95.8"
+          extra_args: --only-verified
+
+      - name: TruffleHog skipped
+        if: steps.trufflehog_range.outputs.should_scan != 'true'
+        run: |
+          echo "TruffleHog was skipped: ${{ steps.trufflehog_range.outputs.skip_reason }}"
+          
+      - name: Run detect-secrets informational scan
+        continue-on-error: true
+        run: |
+          pip install detect-secrets
+          detect-secrets scan --all-files --force-use-all-plugins > detect-secrets-baseline.json
+          echo "detect-secrets completed in informational mode; TruffleHog remains the blocking secret scanner."
+
+  phi-artifact-scan:
+    name: No PHI artifacts tracked
+    runs-on: ubuntu-latest
+
+    # Blocking. The pre-commit hook runs the same check, but a hook can be skipped
+    # with --no-verify (and is not installed on every clone), so the server-side
+    # gate is the one that actually holds. Scans every tracked file, not just the
+    # diff: that catches artifacts committed before a .gitignore rule existed --
+    # exactly how three pytest temp dirs holding a real recent_files list survived.
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+
+      - name: Scan tracked files for PHI and runtime artifacts
+        run: python scripts/check_no_phi_artifacts.py
+
+  pii-in-debug-scan:
+    name: Check Debug Logs for PII
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Scan for patient PII in debug output
+        run: |
+          echo "Scanning for potential PII exposure in debug/logging code..."
+          
+          set +e
+          
+          # Check debug log writes that might include PII
+          ISSUES=$(grep -r "PatientName\|PatientID\|PatientBirthDate" src/ \
+            | grep -E "(print|debug|log)" \
+            | grep -v "overlay_manager\|overlay_config\|export_dialog" || true)
+          
+          if [ -n "$ISSUES" ]; then
+              echo "⚠️ Potential PII in debug output:"
+              echo "$ISSUES"
+          else
+              echo "✅ No obvious patient data in debug output found"
+          fi
+          
+          # Check for unredacted paths in exception handling
+          UNREDACTED=$(grep -r "traceback.print_exc\|exc_info=True" src/ | wc -l)
+          if [ "$UNREDACTED" -gt 0 ]; then
+              echo "⚠️ Warning: Found $UNREDACTED unredacted traceback prints (consider using log_sanitizer)"
+          fi
