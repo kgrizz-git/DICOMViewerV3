@@ -3,7 +3,7 @@
   "files": {
     ".coveragerc": "abe5fd38133765617cdcb5a66842622a016535479dfbb2f7c22dd55053019685",
     ".githooks/pre-commit": "bc5b06d99fd6d83cfd317d99783825567a87aa73c52221bd49dbd36b21430327",
-    ".githooks/pre-push": "6453fea57aa16202706647391b3adb70d90febc630a68165648eb8798e4d142a",
+    ".githooks/pre-push": "eb6978fa36481fd910c2754ee902fda544d177b682530023dd4c43c9f415e72d",
     ".python-version": "5b703ca38d3fd391f3e889f7ba893f94b921ff9e7b7e5d8d6622d5f7daca7049",
     "AppDir/DICOMViewerV3.png": "fa8c775adafddafdcd9194a6904bd1d15cd2def16550203cdf609f0933254c27",
     "data/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
