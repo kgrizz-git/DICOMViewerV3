@@ -1,0 +1,61 @@
+name: Ruff
+
+# Fast Python linting via ruff (replaces flake8 + isort + pyupgrade).
+# Runs on push/PR to main/develop. Annotations only — non-blocking (`|| true`
+# on the check step below). The pre-commit hook is the blocking gate for ruff;
+# this workflow exists to surface findings on PRs (e.g. from pushes that skip
+# hooks) without failing the build.
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths-ignore:
+      # Docs-only commits cannot change these results. repo-harness and
+      # user-docs-links still run on docs, so docs are not left unchecked.
+      - '**/*.md'
+      - 'user-docs/**'
+      - 'dev-docs/**'
+      - 'plans/**'
+      - 'logs/**'
+      - 'LICENSE'
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths-ignore:
+      # Docs-only commits cannot change these results. repo-harness and
+      # user-docs-links still run on docs, so docs are not left unchecked.
+      - '**/*.md'
+      - 'user-docs/**'
+      - 'dev-docs/**'
+      - 'plans/**'
+      - 'logs/**'
+      - 'LICENSE'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ruff:
+    name: ruff (src + tests + scripts, 0 findings)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+
+      - name: Install ruff
+        run: pip install "ruff>=0.12.0"
+
+      - name: Run ruff (must be clean)
+        run: ruff check src/ tests/ scripts/ --output-format=github

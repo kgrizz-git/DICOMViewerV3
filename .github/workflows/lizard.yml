@@ -1,0 +1,90 @@
+name: Lizard
+
+# Cyclomatic complexity analysis via lizard. Flags functions with CCN >= 15
+# or length >= 200 lines (excluding comments). Annotations only — non-blocking.
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths-ignore:
+      # Docs-only commits cannot change these results. repo-harness and
+      # user-docs-links still run on docs, so docs are not left unchecked.
+      - '**/*.md'
+      - 'user-docs/**'
+      - 'dev-docs/**'
+      - 'plans/**'
+      - 'logs/**'
+      - 'LICENSE'
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths-ignore:
+      # Docs-only commits cannot change these results. repo-harness and
+      # user-docs-links still run on docs, so docs are not left unchecked.
+      - '**/*.md'
+      - 'user-docs/**'
+      - 'dev-docs/**'
+      - 'plans/**'
+      - 'logs/**'
+      - 'LICENSE'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lizard:
+    name: lizard (CCN >= 15 or NLOC >= 200)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+
+      - name: Install lizard
+        run: pip install "lizard>=1.23.0"
+
+      - name: Run lizard + annotations
+        run: |
+          # Write the parser to a file rather than piping into `python3 - <<PY`:
+          # a heredoc attached to the same command as an incoming pipe wins the
+          # race for stdin, so the piped lizard output never reached the parser
+          # and this step silently reported "no warnings" every time.
+          cat > /tmp/lizard_report.py <<'PY'
+          import sys
+          import re
+
+          count = 0
+          pattern = re.compile(
+              r"^(.+?):(\d+):\s+warning:\s+(.+)$"
+          )
+          for line in sys.stdin:
+              m = pattern.match(line.rstrip("\n"))
+              if not m:
+                  continue
+              filepath, lineno, message = m.group(1), m.group(2), m.group(3)
+              print(
+                  f"::warning file={filepath},line={lineno}"
+                  f"::[lizard] {message}"
+              )
+              count += 1
+          if count == 0:
+              print("::notice::lizard: no high-complexity functions found")
+          else:
+              print(f"::notice::lizard: {count} high-complexity warning(s)")
+          PY
+
+          # `-w` makes lizard exit non-zero when it finds warnings, and GitHub's
+          # default runner shell has pipefail on — without `|| true` here, any
+          # complexity warning would fail this "non-blocking" job (it did).
+          (lizard src/ --CCN 15 --length 200 -w 2>&1 || true) | python3 /tmp/lizard_report.py

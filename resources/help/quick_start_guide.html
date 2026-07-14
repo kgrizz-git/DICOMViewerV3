@@ -1,0 +1,97 @@
+        <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; line-height: 1.6; background-color: {bg_color}; color: {text_color}; }
+                h1 { color: {h1_color}; font-size: 18px; margin-top: 20px; margin-bottom: 10px; }
+                h2 { color: {h2_color}; font-size: 16px; margin-top: 15px; margin-bottom: 8px; }
+                p { margin: 8px 0; }
+                ul { margin: 8px 0; padding-left: 25px; }
+                li { margin: 4px 0; }
+                strong { color: {strong_color}; }
+                code { background-color: {code_bg}; color: {code_text}; padding: 2px 4px; border-radius: 3px; }
+            </style>
+        </head>
+        <body>
+            <h1>DICOM Viewer V3 - Quick Start Guide</h1>
+
+            <h2 id="full-documentation">Full documentation (opens in browser)</h2>
+            <p><strong>Click a link below</strong> to open the full user guide on GitHub in your default web browser (requires internet).</p>
+            <ul>
+                <li><a href="{doc_USER_GUIDE}">User guide hub</a> &mdash; table of topics and long-form 2D topics</li>
+                <li><a href="{doc_CONFIGURATION}">Configuration and settings</a> &mdash; Edit &rarr; Settings, local study index</li>
+                <li><a href="{doc_USER_GUIDE_MPR}">MPR (multi-planar views)</a></li>
+                <li><a href="{doc_USER_GUIDE_3D}">3D volume rendering (VTK)</a></li>
+                <li><a href="{doc_USER_GUIDE_QA_PYLINAC}">ACR phantom QA (pylinac)</a></li>
+                <li><a href="{doc_IMAGE_FUSION}">Image fusion (technical)</a></li>
+            </ul>
+            <p>You can also use <strong>Help &rarr; Documentation</strong> in the menu to open the user guide hub.</p>
+
+            <h2 id="table-of-contents">Table of Contents</h2>
+            <ul>
+                <li><a href="#full-documentation">Full documentation (browser)</a></li>
+                <li><a href="#opening-studies">Opening studies</a></li>
+                <li><a href="#layouts-and-navigation">Layouts and navigation</a></li>
+                <li><a href="#window-level-and-privacy">Window/level and privacy</a></li>
+                <li><a href="#corner-overlays">Corner overlays (metadata on image)</a></li>
+                <li><a href="#tools-and-more">Tools and more features</a></li>
+                <li><a href="#export-and-reports">Export, cine, and structured reports</a></li>
+                <li><a href="#settings-and-study-index">Settings and local study index</a></li>
+                <li><a href="#keyboard-shortcuts">Common keyboard shortcuts</a></li>
+            </ul>
+
+            <h2 id="opening-studies">Opening studies</h2>
+            <ul>
+                <li><strong>File &rarr; Open</strong> (or toolbar): open files, folders, or volumes. Folders can be searched recursively for DICOM.</li>
+                <li>Use the <strong>series navigator</strong> at the bottom to switch series; <strong>N</strong> toggles its visibility.</li>
+            </ul>
+
+            <h2 id="layouts-and-navigation">Layouts and navigation</h2>
+            <ul>
+                <li><strong>Layouts:</strong> keys <code>1</code>&ndash;<code>4</code>, or <strong>View &rarr; Layout</strong>, or right-click the image. <strong>1x1</strong> shows the focused pane only. <strong>1x2</strong> / <strong>2x1</strong> show the row or column containing the focused window. <strong>Double-click</strong> a pane to expand to 1x1; double-click again to revert.</li>
+                <li><strong>2x2 Swap:</strong> right-click &rarr; <strong>Swap</strong> &rarr; swap grid positions (data stays with each view).</li>
+                <li><strong>Slices:</strong> <code>&uarr;</code> / <code>&darr;</code> (or mouse wheel in slice mode). <strong>Series:</strong> <code>&larr;</code> / <code>&rarr;</code>.</li>
+            </ul>
+
+            <h2 id="window-level-and-privacy">Window/level and privacy</h2>
+            <ul>
+                <li>Adjust W/L with the controls under the image, presets from the <strong>context menu</strong>, or right-drag where enabled.</li>
+                <li><strong>Privacy view</strong> masks patient-related tags in the UI only (display). Toggle via <strong>View</strong>, context menu, or <strong>Ctrl+P</strong> / <strong>Cmd+P</strong>.</li>
+            </ul>
+
+            <h2 id="corner-overlays">Corner overlays (metadata on image)</h2>
+            <ul>
+                <li><strong>Space</strong> cycles corner overlay density <strong>Simple &rarr; Detailed &rarr; Hidden</strong> on <strong>all</strong> panes (same as the user guide hub). <strong>Shift+Space</strong> uses the older <strong>focused-pane-only</strong> cycle (corner text first, then measurement/ROI text).</li>
+                <li>Fine-tune tags under <strong>View &rarr; Overlay Tags Configuration</strong>; other overlay options under <strong>View &rarr; Overlay Settings</strong>. See the <a href="{doc_USER_GUIDE}">user guide hub</a> for full detail.</li>
+            </ul>
+
+            <h2 id="tools-and-more">Tools and more features</h2>
+            <ul>
+                <li><strong>ROIs / measure / annotations:</strong> toolbar modes or keys <strong>H R E M S T A</strong> (<strong>H</strong> = crosshair for pixel values and coordinates; <strong>R E M S T A</strong> = rectangle, ellipse, measure, select, text, arrow). Crosshairs behave as a ROI type.</li>
+                <li><strong>MPR:</strong> right-click &rarr; <strong>Create MPR View&hellip;</strong> (see user guide link above).</li>
+                <li><strong>3D volume:</strong> toolbar <strong>3D View</strong> or <strong>Tools &rarr; 3D Volume Render&hellip;</strong> for the focused multi-slice series (requires VTK).</li>
+                <li><strong>Fusion:</strong> right panel <strong>Image Fusion</strong>; full detail in the fusion doc link above.</li>
+                <li><strong>ACR QA:</strong> <strong>Tools</strong> menu &rarr; ACR CT / ACR MRI (pylinac). See QA guide link above.</li>
+                <li><strong>Histogram:</strong> <strong>Ctrl+Shift+H</strong> / <strong>Cmd+Shift+H</strong>.</li>
+                <li><strong>Structured Report:</strong> for SR instances, <strong>Tools &rarr; Structured Report&hellip;</strong> (or image context menu when available). See the user guide hub for dose events and exports.</li>
+            </ul>
+
+            <h2 id="export-and-reports">Export, cine, and structured reports</h2>
+            <ul>
+                <li><strong>File &rarr; Export</strong> for images; <strong>File &rarr; Export Cine As&hellip;</strong> for GIF / AVI / MP4 / MPG; <strong>File &rarr; Export Screenshots&hellip;</strong>; tag export and customizations also under <strong>File</strong>.</li>
+                <li><strong>Tools &rarr; Export ROI Statistics</strong> for ROI/measurement/crosshair tables per slice.</li>
+            </ul>
+
+            <h2 id="settings-and-study-index">Settings and local study index</h2>
+            <ul>
+                <li><strong>Edit &rarr; Settings&hellip;</strong> opens preferences including the <strong>Local study index (encrypted)</strong> (optional auto-add, database path). Open the index with <strong>File &rarr; Open Study Index&hellip;</strong> or toolbar <strong>Index</strong>. Overlay and annotation defaults are pointed to from that dialog under the <strong>View</strong> menu&mdash;see <a href="{doc_CONFIGURATION}">Configuration and settings</a> on GitHub.</li>
+            </ul>
+
+            <h2 id="keyboard-shortcuts">Common keyboard shortcuts</h2>
+            <ul>
+                <li><strong>P / Z</strong> &mdash; pan / zoom mode &nbsp; <strong>V</strong> &mdash; reset view &nbsp; <strong>Shift+A</strong> &mdash; reset all views</li>
+                <li><strong>I</strong> &mdash; invert image &nbsp; <strong>Space</strong> &mdash; cycle overlay <strong>Simple / Detailed / Hidden</strong> (all panes); <strong>Shift+Space</strong> &mdash; focused-pane overlay cycle</li>
+                <li><strong>Ctrl+T</strong> &mdash; tag viewer &nbsp; <strong>Ctrl+Z / Ctrl+Shift+Z</strong> &mdash; undo / redo</li>
+            </ul>
+            <p>For the full shortcut list and feature details, use the <strong>browser links</strong> at the top or the <strong>README</strong> in the repository.</p>
+        </body>
+        </html>

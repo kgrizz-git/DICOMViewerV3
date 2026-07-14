@@ -1,0 +1,51 @@
+name: pip-audit
+
+# Scans Python dependencies for known vulnerabilities (CVE/GHSA) via pip-audit.
+# Complements Grype (binary/system-level CVE scanning) with PyPI-level checks.
+# Runs weekly + on PRs that touch requirements files.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"   # 6 AM UTC every Monday
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - "requirements.txt"
+      - "requirements-dev.txt"
+      - "requirements-build.txt"
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - "requirements.txt"
+      - "requirements-dev.txt"
+      - "requirements-build.txt"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  pip-audit:
+    name: pip-audit (dependency CVEs)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+
+      - name: Install pip-audit
+        run: pip install "pip-audit>=2.10.1"
+
+      - name: Run pip-audit
+        run: pip-audit --requirement requirements.txt --requirement requirements-dev.txt --requirement requirements-build.txt

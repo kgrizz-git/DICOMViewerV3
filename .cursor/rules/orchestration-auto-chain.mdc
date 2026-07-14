@@ -1,0 +1,57 @@
+---
+description: After orchestrator subagent completes, auto-invoke the next Task subagent when safe (no user prompt for /planner etc.).
+alwaysApply: true
+---
+
+# Orchestration: auto-chain the next subagent (parent session)
+
+Cursor does not schedule subagents automatically. **You** (the primary agent with the **Task** tool) must chain work when appropriate.
+
+## Default chain mode: **`autonomous`**
+
+Treat **`plans/orchestration-state.md`** **`## Chain mode`** as **`autonomous`** if the section is **missing**, empty, or not **`step`**. Use **`step`** only when the user or run packet explicitly sets **`CHAIN_MODE: step`** (or equivalent: “one step”, “stop after each specialist”).
+
+- **`autonomous` (default):** after **any** non-orchestrator specialist **`Task`** completes (unless **`HANDOFF`** is **`needs_user`** / **`blocked`**), **immediately** invoke **`Task(orchestrator, …)`** again—do not wait for the user to type `/planner` / `/coder`.
+- **`step`:** after a specialist completes, **do not** auto-invoke orchestrator; summarize for the user unless they ask to continue.
+
+## When to auto-chain
+
+After **`Task(subagent_type="orchestrator", …)`** returns successfully:
+
+1. Read **`plans/orchestration-state.md`** (or rely on the orchestrator’s summary if the file was just updated on disk).
+2. Parse the orchestrator’s closing lines (**required**):
+   - **`NEXT_TASK_TOOL:`** — must be exactly one of: `none`, `planner`, `researcher`, `coder`, `reviewer`, `tester`, `debugger`, `secops`, `ux`, `docwriter`, `docreviewer`, `orchestrator`, `explore`, `generalPurpose`, `shell`, or other valid **`Task`** `subagent_type` values your environment exposes.
+   - **`NEXT_TASK_TOOL_SECOND:`** — optional parallel follow-up: same allowed values, or `none`. Use **only** when orchestrator emitted a non-`none` second tool **and** the checklist in **`.claude/skills/team-orchestration-delegation/SKILL.md`** § **`NEXT_TASK_TOOL_SECOND` — orchestrator checklist** is satisfied (disjoint streams/paths, no ordering conflict, git-safe).
+
+## When **not** to auto-chain
+
+- User said **orchestrator only**, **stop after orchestrate**, or **do not delegate further**.
+- **`NEXT_TASK_TOOL: none`**, or **Blockers** / **Phase** indicates **`blocked`**, or any HANDOFF in the latest log is **`needs_user`**.
+- **`CHAIN_MODE: step`** (or state **`## Chain mode`** is **`step`**) **and** you would otherwise auto-call orchestrator after a specialist—**stop** after that specialist instead.
+- You lack enough context to build a **Task** prompt—then ask the user one focused question instead.
+
+## What to do when chaining
+
+1. Build a **Task** `prompt` that includes: goal from state **Goal**, relevant **Assignments** rows, **Next action** bullets, paths to plans (`dev-docs/plans/…`), repo root, and constraints (venv per **AGENTS.md**, do not push unless user asked).
+2. Call **`Task(subagent_type=<NEXT_TASK_TOOL>, prompt=…)`** in the **same turn** when possible after orchestrator returns.
+3. If **`NEXT_TASK_TOOL_SECOND`** is not `none`, call a **second** **`Task`** in **parallel** **only** when the orchestrator checklist in **`team-orchestration-delegation`** passes (disjoint work, no shared mutable state, no ordering dependency). Otherwise run the second specialist **after** the first completes, or omit parallel dispatch if unsafe.
+4. **After a non-orchestrator specialist completes:** if chain mode is **`autonomous`** (including default), follow **Autonomous loop — post-specialist** below. If **`step`**, return control to the user unless they asked to continue.
+5. **Batch tester (`medium` / `high`):** When the orchestrator closes a multi-**coder** slice with **`NEXT_TASK_TOOL: tester`** (or state **Next action** says so), the parent should run **`Task(tester)`** once before treating the slice as verified. Orchestrator may follow with **`ux`** or require smoke bullets in the tester HANDOFF when UI changed (see **`.claude/agents/orchestrator.md`**).
+
+## Autonomous loop — post-specialist (default)
+
+When **`## Chain mode`** is **`autonomous`** (or missing):
+
+1. If the specialist’s **`HANDOFF`** includes **`Status: needs_user`** or **`Status: blocked`**, **stop** chaining and surface the question or blocker to the user.
+2. Otherwise **immediately** invoke **`Task(orchestrator, …)`** with a short prompt such as: *Autonomous chain: specialist `<name>` just finished—read `plans/orchestration-state.md`, merge their **Handoff log** entry / Assignments, **increment Specialist completions (this run)** in **Global orchestration guard** if that row exists, update **Next action** / **Phase**, enforce hop limits, run **`NEXT_TASK_TOOL_SECOND`** checklist before parallel second dispatch, and end with **NEXT_TASK_TOOL** / **NEXT_TASK_TOOL_SECOND**.*
+3. **Do not** ask the user to type `/planner` or `/coder` between steps.
+
+**Repeat** after each orchestrator completion until **`NEXT_TASK_TOOL: none`**, **Phase** is **`blocked`** or **`complete`**, **Blockers** mention the **Global orchestration guard** hop limit, or the user cancels.
+
+## Context limits
+
+If the conversation is near capacity, rely on **`plans/orchestration-state.md`** (**Session checkpoint**, **Handoff log**) and a fresh **`Task(orchestrator)`** prompt: *Resume autonomous run from state file only.* Specialists are instructed to re-read state + newest **8** Handoff log entries when context is thin (**`team-orchestration-delegation`** § **Specialist start-of-turn**).
+
+## Slash-command mapping
+
+If prose says “invoke `/planner`” but **`NEXT_TASK_TOOL`** is missing, map: `/planner` → `planner`, `/researcher` → `researcher`, `/coder` → `coder`, `/tester` → `tester`, `/reviewer` → `reviewer`, `/debugger` → `debugger`, `/secops` → `secops`, `/ux` → `ux`, `/docwriter` → `docwriter`, `/docreviewer` → `docreviewer`, `/orchestrator` → `orchestrator`.

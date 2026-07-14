@@ -1,0 +1,497 @@
+"""
+DICOM Metadata Parser
+
+This module extracts and organizes DICOM metadata (tags) from pydicom datasets.
+Handles both standard and private tags.
+
+Inputs:
+    - pydicom.Dataset objects
+    
+Outputs:
+    - Organized metadata dictionaries
+    - Tag value lookups
+    - Formatted tag information
+    
+Requirements:
+    - pydicom library
+    - typing for type hints
+"""
+
+from typing import Any
+
+import numpy as np
+from pydicom.dataset import Dataset
+from pydicom.tag import Tag
+
+from utils.dicom_utils import is_patient_tag
+
+# Depth-first sequence recursion is capped so a malformed dataset (e.g. a sequence
+# item that references itself) cannot blow the stack.
+_MAX_SEQUENCE_DEPTH = 16
+
+
+def _format_code_sequence_summary(value: Any) -> str:
+    """Render CID-style code sequence items (CodeValue/CodeMeaning) compactly.
+
+    Applies to any sequence whose items carry coded-concept attributes, not just
+    DeidentificationMethodCodeSequence — e.g. ProcedureCodeSequence, SR content items.
+    """
+    try:
+        parts: list[str] = []
+        for item in value:
+            code_value = str(getattr(item, "CodeValue", "") or "").strip()
+            scheme = str(getattr(item, "CodingSchemeDesignator", "") or "").strip()
+            meaning = str(getattr(item, "CodeMeaning", "") or "").strip()
+            if code_value or scheme or meaning:
+                prefix = code_value
+                if scheme:
+                    prefix = f"{prefix} {scheme}".strip()
+                parts.append(f"{prefix}: {meaning}" if meaning else prefix)
+        return "; ".join(parts)
+    except Exception:
+        return str(value)
+
+
+def _is_code_sequence(value: Any) -> bool:
+    """True if every item of a Sequence carries CodeValue or CodeMeaning."""
+    try:
+        items = list(value)
+    except Exception:
+        return False
+    if not items:
+        return False
+    return all(hasattr(item, "CodeValue") or hasattr(item, "CodeMeaning") for item in items)
+
+
+class DICOMParser:
+    """
+    Parses and organizes DICOM metadata from datasets.
+    
+    Provides methods to:
+    - Extract all tags (standard and private)
+    - Get specific tag values
+    - Format tag information for display
+    - Organize tags by group/element
+    """
+
+    def __init__(self, dataset: Dataset | None = None):
+        """
+        Initialize the parser with an optional dataset.
+        
+        Args:
+            dataset: pydicom Dataset to parse
+        """
+        self.dataset = dataset
+        self._tag_cache: dict[str, Any] = {}
+
+    def set_dataset(self, dataset: Dataset) -> None:
+        """
+        Set the dataset to parse.
+        
+        Args:
+            dataset: pydicom Dataset
+        """
+        self.dataset = dataset
+        self._tag_cache.clear()
+
+    def get_all_tags(
+        self,
+        include_private: bool = True,
+        privacy_mode: bool = False,
+        supplement_standard_tags: bool = False,
+        include_sequences: bool = False,
+    ) -> dict[str, Any]:
+        """
+        Get all tags from the dataset with caching.
+
+        Walks the full DICOM hierarchy with an explicit recursive descent (not
+        :meth:`~pydicom.dataset.Dataset.iterall`, which erases parentage) so elements
+        inside sequences (e.g. functional groups) are included, not only top-level
+        attributes. For PS3.10 file datasets, **file meta** ``(0002,eeee)`` elements
+        are merged first so transfer syntax and media storage tags appear alongside
+        the main dataset attributes.
+
+        There is ONE key scheme: every row is keyed by its full path, so a row is
+        unambiguous about where it lives. A sequence parent is always emitted, valued
+        with a summary (``"N item(s)"``, or its code for a code sequence)::
+
+            (0012, 0064)                  SQ parent   depth 0
+            (0012, 0064)[0]               item node   depth 1
+            (0012, 0064)[0].(0008, 0104)  leaf        depth 2
+
+        ``include_sequences`` controls only whether a sequence's *contents* (item nodes
+        and their leaves) are emitted — never whether the sequence itself appears. With
+        it off, a sequence is a single childless summary row.
+
+        Every row carries ``depth``, ``parent_key``, ``item_index``, and ``row_kind``
+        (``"element"``, ``"sequence"``, or ``"item"``) so a consumer can rebuild the
+        tree without a second walk.
+
+        Args:
+            include_private: If True, include private tags
+            privacy_mode: If True, replace patient-related tag values with "PRIVACY MODE" for display
+            supplement_standard_tags: If True, merge standard catalog entries that are
+                missing from the dataset (empty value) for tag-export UI discoverability
+            include_sequences: If True, descend into sequences and emit their item nodes
+                and nested leaves. If False (default), sequences appear as childless
+                summary rows.
+
+        Returns:
+            Dictionary mapping path keys to metadata dicts.
+        """
+        if self.dataset is None:
+            return {}
+
+        cache_key = (
+            f"{id(self.dataset)}_{include_private}_{privacy_mode}_"
+            f"{supplement_standard_tags}_{include_sequences}"
+        )
+        if cache_key in self._tag_cache:
+            return self._tag_cache[cache_key]
+
+        tags: dict[str, Any] = {}
+
+        def _base_row(tag, keyword, vr, value, name) -> dict[str, Any]:
+            return {
+                "tag": str(tag),
+                "keyword": keyword,
+                "VR": vr,
+                "value": value,
+                "is_private": tag.is_private,
+                "name": name,
+            }
+
+        def _consume_elem(elem, depth: int, parent_key: str | None, path_key: str | None) -> None:
+            tag = elem.tag
+            if tag.group == 0xFFFE:
+                return
+            if not include_private and tag.is_private:
+                return
+
+            canonical = str(tag)
+            is_sequence = elem.VR == "SQ" if hasattr(elem, "VR") else False
+            tag_str = f"{path_key}.{canonical}" if path_key else canonical
+
+            try:
+                value = elem.value
+                if is_sequence:
+                    if _is_code_sequence(value):
+                        value = _format_code_sequence_summary(value)
+                    else:
+                        count = len(value) if hasattr(value, "__len__") else 0
+                        value = f"{count} item(s)"
+                elif isinstance(value, (list, tuple)):
+                    value = [str(v) for v in value]
+                elif not isinstance(value, (str, int, float)):
+                    value = str(value)
+
+                if privacy_mode and is_patient_tag(canonical):
+                    value = "PRIVACY MODE"
+
+                row = _base_row(
+                    tag,
+                    elem.keyword if hasattr(elem, "keyword") else "",
+                    elem.VR if hasattr(elem, "VR") else "",
+                    value,
+                    elem.name if hasattr(elem, "name") else canonical,
+                )
+            except Exception as e:
+                row = _base_row(tag, "", "", f"<Error: {e!s}>", canonical)
+
+            row["depth"] = depth
+            row["parent_key"] = parent_key
+            row["item_index"] = None
+            row["row_kind"] = "sequence" if is_sequence else "element"
+
+            tags[tag_str] = row
+
+            if is_sequence and include_sequences:
+                if depth + 1 > _MAX_SEQUENCE_DEPTH:
+                    trunc_key = f"{tag_str}.<truncated>"
+                    tags[trunc_key] = {
+                        "tag": "",
+                        "keyword": "",
+                        "VR": "",
+                        "value": "",
+                        "is_private": False,
+                        "name": "<truncated: max depth reached>",
+                        "depth": depth + 1,
+                        "parent_key": tag_str,
+                        "item_index": None,
+                        "row_kind": "element",
+                    }
+                    return
+                try:
+                    for item_index, item_ds in enumerate(elem.value):
+                        item_key = f"{tag_str}[{item_index}]"
+                        tags[item_key] = {
+                            "tag": "",
+                            "keyword": "",
+                            "VR": "",
+                            "value": "",
+                            "is_private": False,
+                            "name": f"Item {item_index + 1}",
+                            "depth": depth + 1,
+                            "parent_key": tag_str,
+                            "item_index": item_index,
+                            "row_kind": "item",
+                        }
+                        _walk_container(item_ds, depth + 2, item_key, item_key)
+                except Exception:
+                    pass
+
+        def _walk_container(
+            ds: Dataset, depth: int, parent_key: str | None, path_key: str | None
+        ) -> None:
+            for elem in ds:
+                _consume_elem(elem, depth, parent_key, path_key)
+
+        # File meta information group (0002,eeee) is separate from the main dataset walk.
+        fm = getattr(self.dataset, "file_meta", None)
+        if fm is not None:
+            try:
+                _walk_container(fm, 0, None, None)
+            except Exception:
+                pass
+
+        _walk_container(self.dataset, 0, None, None)
+
+        if supplement_standard_tags:
+            # Deferred import keeps module load free of tag_export_catalog (union
+            # lives in tag_export_union.py; catalog has no dicom_parser import).
+            from core.tag_export_catalog import supplement_export_tags_dict
+
+            supplement_export_tags_dict(tags)
+
+        self._tag_cache[cache_key] = tags
+        return tags
+
+    def get_tag_value(self, tag: tuple[int, int], default: Any = None) -> Any:
+        """
+        Get the value of a specific tag.
+        
+        Args:
+            tag: Tag as (group, element) tuple or Tag object
+            default: Default value if tag not found
+            
+        Returns:
+            Tag value or default
+        """
+        if self.dataset is None:
+            return default
+
+        try:
+            if isinstance(tag, tuple):
+                tag_obj = Tag(tag[0], tag[1])
+            else:
+                tag_obj = tag
+
+            if tag_obj in self.dataset:
+                return self.dataset[tag_obj].value
+            return default
+        except Exception:
+            return default
+
+    def get_tag_by_keyword(self, keyword: str, default: Any = None) -> Any:
+        """
+        Get tag value by keyword.
+        
+        Args:
+            keyword: DICOM tag keyword (e.g., "PatientName", "StudyDate")
+            default: Default value if tag not found
+            
+        Returns:
+            Tag value or default
+        """
+        if self.dataset is None:
+            return default
+
+        try:
+            if hasattr(self.dataset, keyword):
+                return getattr(self.dataset, keyword)
+            return default
+        except Exception:
+            return default
+
+    def get_patient_info(self) -> dict[str, Any]:
+        """
+        Get patient-related information.
+        
+        Returns:
+            Dictionary with patient information
+        """
+        return {
+            "PatientName": self.get_tag_by_keyword("PatientName", ""),
+            "PatientID": self.get_tag_by_keyword("PatientID", ""),
+            "PatientBirthDate": self.get_tag_by_keyword("PatientBirthDate", ""),
+            "PatientSex": self.get_tag_by_keyword("PatientSex", ""),
+            "PatientAge": self.get_tag_by_keyword("PatientAge", ""),
+        }
+
+    def get_study_info(self) -> dict[str, Any]:
+        """
+        Get study-related information.
+        
+        Returns:
+            Dictionary with study information
+        """
+        return {
+            "StudyInstanceUID": self.get_tag_by_keyword("StudyInstanceUID", ""),
+            "StudyDate": self.get_tag_by_keyword("StudyDate", ""),
+            "StudyTime": self.get_tag_by_keyword("StudyTime", ""),
+            "StudyDescription": self.get_tag_by_keyword("StudyDescription", ""),
+            "AccessionNumber": self.get_tag_by_keyword("AccessionNumber", ""),
+        }
+
+    def get_series_info(self) -> dict[str, Any]:
+        """
+        Get series-related information.
+        
+        Returns:
+            Dictionary with series information
+        """
+        return {
+            "SeriesInstanceUID": self.get_tag_by_keyword("SeriesInstanceUID", ""),
+            "SeriesNumber": self.get_tag_by_keyword("SeriesNumber", ""),
+            "SeriesDate": self.get_tag_by_keyword("SeriesDate", ""),
+            "SeriesTime": self.get_tag_by_keyword("SeriesTime", ""),
+            "SeriesDescription": self.get_tag_by_keyword("SeriesDescription", ""),
+            "Modality": self.get_tag_by_keyword("Modality", ""),
+        }
+
+    def get_image_info(self) -> dict[str, Any]:
+        """
+        Get image-related information.
+        
+        Returns:
+            Dictionary with image information
+        """
+        return {
+            "SOPInstanceUID": self.get_tag_by_keyword("SOPInstanceUID", ""),
+            "InstanceNumber": self.get_tag_by_keyword("InstanceNumber", ""),
+            "ImagePositionPatient": self.get_tag_by_keyword("ImagePositionPatient", ""),
+            "ImageOrientationPatient": self.get_tag_by_keyword("ImageOrientationPatient", ""),
+            "SliceThickness": self.get_tag_by_keyword("SliceThickness", ""),
+            "SliceLocation": self.get_tag_by_keyword("SliceLocation", ""),
+            "Rows": self.get_tag_by_keyword("Rows", ""),
+            "Columns": self.get_tag_by_keyword("Columns", ""),
+            "PixelSpacing": self.get_tag_by_keyword("PixelSpacing", ""),
+            "WindowCenter": self.get_tag_by_keyword("WindowCenter", ""),
+            "WindowWidth": self.get_tag_by_keyword("WindowWidth", ""),
+        }
+
+    def update_tag(self, tag: tuple[int, int], value: Any) -> bool:
+        """
+        Update a tag value in the dataset.
+        
+        Args:
+            tag: Tag as (group, element) tuple
+            value: New value for the tag
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if self.dataset is None:
+            return False
+
+        try:
+            if isinstance(tag, tuple):
+                tag_obj = Tag(tag[0], tag[1])
+            else:
+                tag_obj = tag
+
+            self.dataset[tag_obj].value = value
+            # Clear cache
+            self._tag_cache.clear()
+            return True
+        except Exception:
+            return False
+
+    def get_private_tags(self) -> dict[str, Any]:
+        """
+        Get all private tags.
+        
+        Returns:
+            Dictionary of private tags
+        """
+        all_tags = self.get_all_tags(include_private=True)
+        return {k: v for k, v in all_tags.items() if v.get("is_private", False)}
+
+
+def get_frame_rate_from_dicom(dataset: Dataset) -> float | None:
+    """
+    Extract frame rate (FPS) from DICOM dataset.
+    
+    Checks multiple DICOM tags in priority order:
+    1. RecommendedDisplayFrameRate (0008,2144) - Direct FPS value
+    2. CineRate (0018,0040) - Cine rate in FPS
+    3. FrameTime (0018,1063) - Time per frame in ms, convert to FPS
+    4. FrameTimeVector (0018,1065) - Array of frame times, calculate average
+    
+    Args:
+        dataset: pydicom Dataset
+        
+    Returns:
+        Frame rate in FPS (frames per second), or None if no timing information found
+    """
+    try:
+        # 1. Check RecommendedDisplayFrameRate (0008,2144)
+        if hasattr(dataset, 'RecommendedDisplayFrameRate'):
+            rate = dataset.RecommendedDisplayFrameRate
+            if rate:
+                try:
+                    fps = float(rate)
+                    if fps > 0:
+                        return fps
+                except (ValueError, TypeError):
+                    pass
+
+        # 2. Check CineRate (0018,0040)
+        if hasattr(dataset, 'CineRate'):
+            rate = dataset.CineRate
+            if rate:
+                try:
+                    fps = float(rate)
+                    if fps > 0:
+                        return fps
+                except (ValueError, TypeError):
+                    pass
+
+        # 3. Check FrameTime (0018,1063) - time per frame in milliseconds
+        if hasattr(dataset, 'FrameTime'):
+            frame_time_ms = dataset.FrameTime
+            if frame_time_ms:
+                try:
+                    frame_time = float(frame_time_ms)
+                    if frame_time > 0:
+                        # Convert ms to FPS: 1000 ms / frame_time_ms = FPS
+                        fps = 1000.0 / frame_time
+                        if fps > 0:
+                            return fps
+                except (ValueError, TypeError):
+                    pass
+
+        # 4. Check FrameTimeVector (0018,1065) - array of frame times
+        if hasattr(dataset, 'FrameTimeVector'):
+            frame_times = dataset.FrameTimeVector
+            if frame_times and len(frame_times) > 0:
+                try:
+                    # Convert to numpy array if not already
+                    if not isinstance(frame_times, np.ndarray):
+                        frame_times = np.array(frame_times)
+                    # Calculate average frame time in milliseconds
+                    avg_frame_time_ms = np.mean(frame_times)
+                    if avg_frame_time_ms > 0:
+                        # Convert to FPS
+                        fps = 1000.0 / avg_frame_time_ms
+                        if fps > 0:
+                            # numpy scalar -> plain float for typing consistency
+                            return float(fps)
+                except (ValueError, TypeError, AttributeError):
+                    pass
+
+        # No timing information found
+        return None
+
+    except Exception:
+        return None

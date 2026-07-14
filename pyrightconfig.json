@@ -1,0 +1,33 @@
+{
+  "include": [
+    "src",
+    "tests",
+    "scripts"
+  ],
+  "exclude": [
+    "dist",
+    "build",
+    ".claude"
+  ],
+  "extraPaths": [
+    "src"
+  ],
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.12",
+  "pythonPlatform": "Windows",
+
+  // basedpyright defaults are very strict. The rules below are silenced because they are driven almost entirely by untyped third-party stubs (PySide6 / VTK / numpy / pydicom) and produce ~20k low-signal warnings. Higher-signal rules are deliberately kept on (e.g. reportUnnecessaryComparison, which caught a real Flag-vs-int bug; reportUnused*, reportDeprecated). The CI gate fails only on errors, so this affects warning noise, not the gate.
+  "reportAny": "none",
+  "reportExplicitAny": "none",
+  "reportUnknownMemberType": "none",
+  "reportUnknownArgumentType": "none",
+  "reportUnknownVariableType": "none",
+  "reportUnknownParameterType": "none",
+  "reportUnknownLambdaType": "none",
+  "reportMissingParameterType": "none",
+  "reportUnannotatedClassAttribute": "none",
+  "reportUnusedCallResult": "none",
+  "reportImplicitStringConcatenation": "none",
+  "reportImplicitOverride": "none"
+}

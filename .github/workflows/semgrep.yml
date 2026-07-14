@@ -1,0 +1,120 @@
+# Semgrep static analysis: runs community rulesets, writes semgrep.sarif, uploads to
+# GitHub code scanning. Uses pip-installed Semgrep (returntocorp/semgrep-action is
+# deprecated and does not support generateSarif / modern inputs).
+
+name: Semgrep SAST Scan
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+  schedule:
+    # Run Semgrep at 1 AM UTC every Sunday
+    - cron: '0 1 * * 0'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: write
+
+jobs:
+  semgrep:
+    name: Semgrep Security Audit
+    runs-on: ubuntu-latest
+    # Semgrep docs: skip Dependabot PRs to avoid permission/token issues
+    if: github.actor != 'dependabot[bot]'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+
+      - name: Install Semgrep
+        run: pip install --upgrade semgrep
+
+      - name: Run Semgrep
+        run: |
+          set +e
+          semgrep scan \
+            --config p/security-audit \
+            --config p/owasp-top-ten \
+            --config p/secrets \
+            --config p/python \
+            --sarif-output semgrep.sarif \
+            .
+          exit_code=$?
+          set -e
+          if [ ! -f semgrep.sarif ]; then
+            echo "::error::Semgrep did not write semgrep.sarif (exit ${exit_code})."
+            exit 1
+          fi
+          if [ "${exit_code}" -eq 2 ]; then
+            echo "::error::Semgrep exited with a fatal error."
+            exit 2
+          fi
+          exit "${exit_code}"
+
+      - name: Upload SARIF results to GitHub Security
+        uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4
+        if: always() && hashFiles('semgrep.sarif') != ''
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+      - name: Comment on PR with results
+        if: github.event_name == 'pull_request' && hashFiles('semgrep.sarif') != ''
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const fs = require('fs');
+            const sarif = JSON.parse(fs.readFileSync('semgrep.sarif', 'utf8'));
+            const run = (sarif.runs && sarif.runs[0]) || {};
+            const issues = run.results || [];
+
+            if (issues.length === 0) {
+              console.log('✅ No security issues found by Semgrep');
+              return;
+            }
+
+            let comment = '## 🔒 Security Scan Results\n\n';
+            comment += `Found ${issues.length} potential issue(s) from Semgrep:\n\n`;
+
+            const severity_map = {
+              'warning': '⚠️',
+              'error': '❌',
+              'note': 'ℹ️'
+            };
+
+            issues.slice(0, 10).forEach(issue => {
+              const severity = issue.level || 'note';
+              const icon = severity_map[severity] || 'ℹ️';
+              const msg = issue.message?.text || 'Unknown issue';
+              const rule = issue.ruleId || 'unknown';
+              comment += `${icon} **${rule}**: ${msg}\n`;
+            });
+
+            if (issues.length > 10) {
+              comment += `\n... and ${issues.length - 10} more (see GitHub Security tab for full list)\n`;
+            }
+
+            comment += '\nPlease review and address security findings before merging.';
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });

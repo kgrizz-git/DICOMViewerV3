@@ -1,0 +1,116 @@
+# ruff configuration for DICOM Viewer V3.
+# Run: ruff check src/ tests/ scripts/
+# Auto-fix: ruff check --fix src/ tests/ scripts/
+
+target-version = "py312"
+
+exclude = [
+    ".git",
+    ".venv",
+    ".pytest_cache",
+    ".ruff_cache",
+    "build",
+    "dist",
+    "__pycache__",
+]
+
+lint.select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # Pyflakes (unused imports, undefined names, etc.)
+    "I",    # isort (import ordering)
+    "N",    # pep8-naming
+    "UP",   # pyupgrade (modernize syntax)
+    "B",    # flake8-bugbear (common bugs)
+    "C4",   # flake8-comprehensions
+    "SIM",  # flake8-simplify
+    "RUF",  # ruff-specific rules
+]
+
+lint.ignore = [
+    # --- Line-length / whitespace ---
+    "E501",   # line too long — handled by formatter awareness
+    "W293",   # blank-line-with-whitespace — cosmetic, noisy
+
+    # --- Qt / PySide6 camelCase overrides ---
+    "N802",   # function name should be lowercase
+    "N803",   # argument name should be lowercase
+    "N806",   # variable in function should be lowercase
+    "N818",   # exception name should end with "Error"
+    # QAbstractItemModel overrides are *required* to declare
+    # `parent: QModelIndex = QModelIndex()`. QModelIndex() is an immutable null
+    # index, so this is safe. B006 (mutable default, e.g. `=[]`) stays enabled.
+    "B008",   # function-call-in-default-argument
+
+    # --- Deliberate import aliases ---
+    # `import SimpleITK as sitk` is the universal convention; `Tag as make_tag`
+    # and `__version__ as APP_VERSION` are intentional readability renames.
+    # Renaming to satisfy these would make the code worse, not better.
+    "N811",   # constant imported as non-constant
+    "N812",   # lowercase imported as non-lowercase
+    "N813",   # camelcase imported as lowercase
+
+    # --- Intentional patterns ---
+    "B028",   # suppressible "exception within except"
+    "E402",   # module import not at top — intentional in scripts + TYPE_CHECKING blocks
+
+    # --- Stylistic preference (not bugs) ---
+    "SIM102", # collapsible-if
+    "SIM105", # use contextlib.suppress
+    "SIM108", # use ternary operator
+
+    # --- Unicode characters (×, μ, ° are intentional in medical/dicom context) ---
+    "RUF001", # ambiguous unicode in string
+    "RUF002", # ambiguous unicode in docstring
+    "RUF003", # ambiguous unicode in comment
+
+    # --- Low-signal, high-noise ---
+    "RUF046", # unnecessary-cast-to-int — often defensive
+    "RUF059", # unused-unpacked-variable — often intentional tuple unpacking
+]
+
+[lint.pep8-naming]
+# PySide6/Qt override methods are camelCase by convention
+ignore-names = [
+    "eventFilter",
+    "sizeHint",
+    "minimumSizeHint",
+    "itemChange",
+    "boundingRect",
+    "mousePressEvent",
+    "mouseMoveEvent",
+    "mouseReleaseEvent",
+    "wheelEvent",
+    "keyPressEvent",
+    "keyReleaseEvent",
+    "paintEvent",
+    "resizeEvent",
+    "closeEvent",
+    "enterEvent",
+    "leaveEvent",
+    "dropEvent",
+    "dragEnterEvent",
+    "dragLeaveEvent",
+    "dragMoveEvent",
+    "focusInEvent",
+    "focusOutEvent",
+    "showEvent",
+    "hideEvent",
+    "contextMenuEvent",
+]
+
+[lint.per-file-ignores]
+# The config mixins deliberately reach for `self.config` / `self.save_config`
+# via getattr: those attributes are supplied by the concrete ConfigManager that
+# inherits the mixin, not by the mixin itself (see each module's "Mixin
+# contract" docstring). B009's rewrite to direct attribute access breaks the
+# basedpyright gate, which is the stricter of the two checks.
+"src/utils/config/*.py" = ["B009"]
+
+[lint.isort]
+known-first-party = ["src"]
+
+[format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"

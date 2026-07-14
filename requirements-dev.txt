@@ -1,0 +1,32 @@
+# Development and local security scanning (optional)
+#
+# Install everything needed to run the app, tests, and the CLI tools documented in
+# dev-docs/SECURITY_TOOLS_CLI_GUIDE.md:
+#   pip install -r requirements-dev.txt
+#
+# This pulls in application + test dependencies from requirements.txt, then adds
+# Python-based security scanners. End users who only run the viewer can use
+# requirements.txt alone.
+#
+# TruffleHog v3 is installed as an official binary (not from PyPI):
+#   powershell -ExecutionPolicy Bypass -File .\scripts\install-trufflehog-v3.ps1
+# See dev-docs/SECURITY_TOOLS_CLI_GUIDE.md for details.
+
+-r requirements.txt
+
+semgrep>=1.168.0
+detect-secrets>=1.5.0
+pip-audit>=2.10.1
+# Generates the third-party attribution SBOM (THIRD_PARTY_LICENSES.md) with full
+# license texts. Used by scripts/generate_third_party_licenses.py — NOT by the
+# pre-commit license gate (that is stdlib-only). See dev-docs/info/DEPENDENCY_LICENSE_POLICY.md.
+pip-licenses>=5.0.0
+# Type checker CLI (matches common IDE Pyright/Based Pyright settings); run from repo root:
+#   basedpyright [files...]
+basedpyright>=1.39.9
+# Coverage for local + CI (pytest plugin); CI uploads to Codecov via codecov-action.
+pytest-cov>=5.0.0
+# Linter (fast, drop-in replacement for flake8 + isort + pyupgrade)
+ruff>=0.12.0
+# Complexity analysis (cyclomatic complexity, NLOC, etc.)
+lizard>=1.23.0
