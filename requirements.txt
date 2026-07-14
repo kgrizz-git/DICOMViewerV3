@@ -20,7 +20,7 @@
 # - matplotlib: Plotting library for histogram display
 # - openpyxl: Library for reading and writing Excel files (for tag export)
 
-PySide6>=6.11.0
+PySide6>=6.11.1
 # Stays on pydicom 2.x: pylinac 3.43.2 caps it at `pydicom<3`. This also blocks the
 # imagecodecs (BSD) decoder plugin and highdicom, which need pydicom 3.x. Moving to
 # pydicom 3 requires a coordinated pylinac bump + ACR QA re-verify. See
