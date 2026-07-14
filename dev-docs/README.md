@@ -1,6 +1,6 @@
 # Developer documentation index
 
-**Last updated:** 2026-07-12
+**Last updated:** 2026-07-14
 
 This folder is for **contributors, maintainers, and release engineering**. End-user guides live under **`user-docs/`** (start at [`USER_GUIDE.md`](../user-docs/USER_GUIDE.md)); repository orientation for everyone is in the root **[`README.md`](../README.md)**.
 
@@ -56,6 +56,7 @@ Deep dives on pylinac, DICOM behavior, GitHub Actions billing, fusion, SR, etc.:
 | GSPS, KO, Secondary Capture (read/export/app status) | [`info/DICOM_GSPS_KO_SECONDARY_CAPTURE.md`](info/DICOM_GSPS_KO_SECONDARY_CAPTURE.md) |
 | KO/PR objects and embedded overlays | [`info/KO_PR_OVERLAYS_EXPLANATION.md`](info/KO_PR_OVERLAYS_EXPLANATION.md) |
 | Competitive feature gaps (vs RadiAnt, Horos, OHIF, etc.) | [`info/DICOM_VIEWER_COMPETITIVE_FEATURE_GAP_ANALYSIS.md`](info/DICOM_VIEWER_COMPETITIVE_FEATURE_GAP_ANALYSIS.md) |
+| Optional local PII/PHI text-detection models and Presidio integration | [`info/LOCAL_PHI_PII_DETECTION_MODEL_OPTIONS.md`](info/LOCAL_PHI_PII_DETECTION_MODEL_OPTIONS.md) |
 
 ## Assessments and templates
 
