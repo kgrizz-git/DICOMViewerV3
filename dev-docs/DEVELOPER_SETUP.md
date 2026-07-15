@@ -63,7 +63,7 @@ macOS/Linux equivalent:
 bash ./scripts/setup-hooks.sh
 ```
 
-This sets `core.hooksPath` to `.githooks/`, so Git runs hooks directly from the
+This sets `core.hooksPath` to `.githooks/`, so Git runs the `pre-commit`, `commit-msg`, and `pre-push` hooks directly from the
 version-controlled directory. No file copying — edits to `.githooks/` take effect
 immediately without re-running the installer.
 

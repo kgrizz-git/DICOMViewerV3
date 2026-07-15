@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import ipaddress
 import json
 import re
 import subprocess
@@ -41,26 +42,60 @@ FORBIDDEN_PATH_PATTERNS: list[tuple[str, str]] = [
     (r"^\.pytest-tmp", "pytest temp dir: captures live app config (recent_files)"),
     (r"^pytest-of-", "pytest temp dir"),
     (r"(^|/)\.pytest_cache/", "pytest cache"),
-    (r"(^|/)dicom_viewer_config.*\.json$", "app config: contains recent_files / local paths"),
+    (
+        r"(^|/)dicom_viewer_config.*\.json$",
+        "app config: contains recent_files / local paths",
+    ),
     (r"^pyright-report\.txt$", "generated type-check report (absolute local paths)"),
     (r"^backups/", "local source backups: not for version control"),
     (r"(^|/)\.DS_Store$", "macOS metadata"),
+    (r"(^|/)\.cache/", "cache directory"),
 ]
+FORBIDDEN_ARTIFACT_SUFFIXES = {".cache", ".err", ".log", ".out", ".pkl", ".trace"}
 
 # --- Rule 2: PHI/PII indicators inside data files ---------------------------
 DATA_SUFFIXES = {
-    ".json", ".csv", ".txt", ".log", ".yaml", ".yml", ".ini", ".cfg", ".xml",
-    ".html", ".htm", ".md", ".rst", ".svg", ".tsv",
+    ".json",
+    ".csv",
+    ".txt",
+    ".log",
+    ".yaml",
+    ".yml",
+    ".ini",
+    ".cfg",
+    ".xml",
+    ".html",
+    ".htm",
+    ".ipynb",
+    ".md",
+    ".rst",
+    ".svg",
+    ".tsv",
 }
 SPREADSHEET_SUFFIXES = {".xlsx", ".xlsm"}
 DICOM_SUFFIXES = {".dcm", ".dicom", ".ima"}
+NOTEBOOK_SUFFIXES = {".ipynb"}
 # SVG is text-readable and is also content-scanned above.  The other formats are
 # opaque containers, so they need an explicit hash review before admission.
 IMAGE_SUFFIXES = {
-    ".avif", ".bmp", ".gif", ".heic", ".ico", ".icns", ".jpeg", ".jpg",
-    ".jp2", ".jxl", ".png", ".svg", ".tif", ".tiff", ".webp",
+    ".avif",
+    ".bmp",
+    ".gif",
+    ".heic",
+    ".ico",
+    ".icns",
+    ".jpeg",
+    ".jpg",
+    ".jp2",
+    ".jxl",
+    ".png",
+    ".svg",
+    ".tif",
+    ".tiff",
+    ".webp",
 }
 APPROVED_MEDIA_MANIFEST = "security/approved-media-sha256.json"
+APPROVED_TEXT_EXCEPTIONS_MANIFEST = "security/approved-phi-text-exceptions.json"
 
 # A file without a suffix can hide a binary export or clinical data.  Existing
 # reviewed assets live in the hash manifest; every new one blocks until reviewed.
@@ -70,32 +105,62 @@ EXTENSIONLESS_EXEMPT = {".gitignore", ".gitattributes"}
 # including when nested in a sequence.  ``Dataset.iterall()`` visits sequence
 # items recursively.
 DICOM_IDENTIFIER_KEYWORDS = {
-    "AccessionNumber", "InstitutionAddress", "InstitutionName", "IssuerOfPatientID",
-    "OperatorsName", "OtherPatientIDs", "OtherPatientNames", "PatientAddress",
-    "PatientBirthDate", "PatientBirthTime", "PatientComments", "PatientID",
-    "PatientName", "PatientSex", "PatientTelephoneNumbers", "PerformingPhysicianName",
-    "ReferringPhysicianName", "StudyID",
+    "AccessionNumber",
+    "InstitutionAddress",
+    "InstitutionName",
+    "IssuerOfPatientID",
+    "OperatorsName",
+    "OtherPatientIDs",
+    "OtherPatientNames",
+    "PatientAddress",
+    "PatientBirthDate",
+    "PatientBirthTime",
+    "PatientComments",
+    "PatientID",
+    "PatientName",
+    "PatientSex",
+    "PatientTelephoneNumbers",
+    "PerformingPhysicianName",
+    "ReferringPhysicianName",
+    "StationName",
+    "StudyID",
 }
 
-# Paths whose contents are exempt: synthetic fixtures, dependency manifests, CI config.
-CONTENT_SCAN_EXEMPT = (
-    "tests/fixtures/",
-    "requirements",
-    ".github/",
-    "scripts/check_no_phi_artifacts.py",
-    "dev-docs/architecture_boundary_baseline.txt",
-)
-
 CONTENT_RULES: list[tuple[re.Pattern[str], str]] = [
-    (re.compile(r'"(recent_files|last_path|last_export_path|last_pylinac_output_path)"'),
-     "app config key that records user file paths"),
-    (re.compile(r"[A-Za-z]:\\+Users\\+|[A-Za-z]:\\+To\b", re.I),
-     "Windows absolute user path"),
-    (re.compile(r"/(Users|home)/(?!runner\b|user\b)[A-Za-z0-9._-]+/"),
-     "POSIX absolute home path"),
-    (re.compile(r'"Patient(Name|ID|BirthDate)"\s*:\s*"(?!\s*")[^"]+'),
-     "populated DICOM patient tag"),
+    (
+        re.compile(
+            r'"(recent_files|last_path|last_export_path|last_pylinac_output_path)"'
+        ),
+        "app config key that records user file paths",
+    ),
+    (
+        re.compile(r"[A-Za-z]:\\+Users\\+|[A-Za-z]:\\+To\b", re.I),
+        "Windows absolute user path",
+    ),
+    (
+        re.compile(r"/(Users|home)/(?!runner\b|user\b)[A-Za-z0-9._-]+/"),
+        "POSIX absolute home path",
+    ),
+    (
+        re.compile(r'"Patient(Name|ID|BirthDate)"\s*:\s*"(?!\s*")[^"]+'),
+        "populated DICOM patient tag",
+    ),
+    (re.compile(r"\b(?:dicom|pacs)://[^\s/]+", re.I), "DICOM/PACS endpoint"),
+    (
+        re.compile(r"\b[a-z0-9][a-z0-9.-]*\.(?:corp|internal|lan|local)\b", re.I),
+        "internal hostname",
+    ),
 ]
+PRIVATE_NETWORKS = (
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("fc00::/7"),
+)
+IP_ADDRESS_TOKEN = re.compile(
+    r"(?<![0-9A-Fa-f:.])(?:[0-9]{1,3}(?:\.[0-9]{1,3}){3}|[0-9A-Fa-f]{0,4}:[0-9A-Fa-f:.]+)(?![0-9A-Fa-f:.])"
+)
+SAFE_INTERNAL_HOSTNAMES = frozenset({"host.docker.internal"})
 
 
 def _run(args: list[str], root: Path) -> str:
@@ -109,9 +174,7 @@ def tracked_files(root: Path) -> list[str]:
 
 
 def staged_files(root: Path) -> list[str]:
-    out = _run(
-        ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"], root
-    )
+    out = _run(["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"], root)
     return [p for p in out.splitlines() if p]
 
 
@@ -119,6 +182,9 @@ def check_paths(paths: list[str]) -> list[str]:
     """Rule 1: forbidden paths, regardless of content."""
     problems = []
     for path in paths:
+        if Path(path).suffix.lower() in FORBIDDEN_ARTIFACT_SUFFIXES:
+            problems.append(f"{path}: forbidden runtime artifact")
+            continue
         for pattern, why in FORBIDDEN_PATH_PATTERNS:
             if re.search(pattern, path):
                 problems.append(f"{path}: forbidden artifact ({why})")
@@ -126,12 +192,34 @@ def check_paths(paths: list[str]) -> list[str]:
     return problems
 
 
+def _content_reasons(text: str) -> list[str]:
+    """Return PHI/PII rule categories found in one text value, never the value."""
+    reasons: list[str] = []
+    for pattern, why in CONTENT_RULES:
+        match = pattern.search(text)
+        if match is None:
+            continue
+        if (
+            why == "internal hostname"
+            and match.group().lower() in SAFE_INTERNAL_HOSTNAMES
+        ):
+            continue
+        reasons.append(why)
+    for match in IP_ADDRESS_TOKEN.finditer(text):
+        try:
+            address = ipaddress.ip_address(match.group())
+        except ValueError:
+            continue
+        if any(address in network for network in PRIVATE_NETWORKS):
+            reasons.append("private-network address")
+    return list(dict.fromkeys(reasons))
+
+
 def check_contents(paths: list[str], root: Path) -> list[str]:
     """Rule 2: PHI/PII indicators inside data files."""
     problems = []
+    approved = _approved_text_exceptions(root)
     for path in paths:
-        if any(path.startswith(x) or x in path for x in CONTENT_SCAN_EXEMPT):
-            continue
         if Path(path).suffix.lower() not in DATA_SUFFIXES:
             continue
         full = root / path
@@ -142,10 +230,9 @@ def check_contents(paths: list[str], root: Path) -> list[str]:
         except OSError:
             continue
         for lineno, line in enumerate(text.splitlines(), start=1):
-            for pattern, why in CONTENT_RULES:
-                if pattern.search(line):
-                    problems.append(f"{path}:{lineno}: possible PHI/PII ({why})")
-                    break
+            for reason in _content_reasons(line):
+                if not _is_approved_text_exception(path, reason, root, approved):
+                    problems.append(f"{path}:{lineno}: possible PHI/PII ({reason})")
     return problems
 
 
@@ -155,6 +242,38 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _approved_text_exceptions(root: Path) -> dict[str, object]:
+    """Load reviewed, hash-bound synthetic-text exceptions by repository path."""
+    try:
+        payload = json.loads(
+            (root / APPROVED_TEXT_EXCEPTIONS_MANIFEST).read_text(encoding="utf-8")
+        )
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    files = payload.get("files", {})
+    return files if isinstance(files, dict) else {}
+
+
+def _is_approved_text_exception(
+    path: str, reason: str, root: Path, approved: dict[str, object]
+) -> bool:
+    """Allow only a reviewed rule in an unchanged synthetic text fixture."""
+    entry = approved.get(path)
+    if not isinstance(entry, dict):
+        return False
+    expected_hash = entry.get("sha256")
+    allowed_rules = entry.get("allowed_rules")
+    return (
+        isinstance(expected_hash, str)
+        and isinstance(allowed_rules, list)
+        and reason in allowed_rules
+        and (root / path).is_file()
+        and _sha256(root / path) == expected_hash
+    )
 
 
 def _approved_media(root: Path) -> dict[str, str]:
@@ -169,7 +288,11 @@ def _approved_media(root: Path) -> dict[str, str]:
 
 def _is_approved_media(path: str, root: Path, approved: dict[str, str]) -> bool:
     expected = approved.get(path)
-    return isinstance(expected, str) and (root / path).is_file() and _sha256(root / path) == expected
+    return (
+        isinstance(expected, str)
+        and (root / path).is_file()
+        and _sha256(root / path) == expected
+    )
 
 
 def _image_tree_sha256(root: Path, directory: str) -> str:
@@ -177,7 +300,10 @@ def _image_tree_sha256(root: Path, directory: str) -> str:
     prefix = f"{directory.rstrip('/')}/"
     digest = hashlib.sha256()
     for path in tracked_files(root):
-        if not path.startswith(prefix) or Path(path).suffix.lower() not in IMAGE_SUFFIXES:
+        if (
+            not path.startswith(prefix)
+            or Path(path).suffix.lower() not in IMAGE_SUFFIXES
+        ):
             continue
         full = root / path
         if not full.is_file():
@@ -206,7 +332,9 @@ def _is_approved_image_tree(
     """Allow an image only when its entire reviewed directory is unchanged."""
     for directory, expected in approved_trees.items():
         if path.startswith(f"{directory}/"):
-            actual = tree_digests.setdefault(directory, _image_tree_sha256(root, directory))
+            actual = tree_digests.setdefault(
+                directory, _image_tree_sha256(root, directory)
+            )
             return actual == expected
     return False
 
@@ -214,20 +342,25 @@ def _is_approved_image_tree(
 def _check_spreadsheet(path: str, root: Path) -> list[str]:
     try:
         from openpyxl import load_workbook
+
         workbook = load_workbook(root / path, read_only=True, data_only=False)
     except Exception as exc:
         return [f"{path}: spreadsheet could not be inspected ({type(exc).__name__})"]
     problems: list[str] = []
+    approved = _approved_text_exceptions(root)
     try:
         for sheet in workbook.worksheets:
             for row in sheet.iter_rows(values_only=True):
                 for value in row:
                     if not isinstance(value, str):
                         continue
-                    for pattern, why in CONTENT_RULES:
-                        if pattern.search(value):
-                            problems.append(f"{path}: worksheet {sheet.title!r}: possible PHI/PII ({why})")
-                            break
+                    for reason in _content_reasons(value):
+                        if not _is_approved_text_exception(
+                            path, reason, root, approved
+                        ):
+                            problems.append(
+                                f"{path}: worksheet {sheet.title!r}: possible PHI/PII ({reason})"
+                            )
     finally:
         workbook.close()
     return problems
@@ -236,21 +369,49 @@ def _check_spreadsheet(path: str, root: Path) -> list[str]:
 def _check_dicom(path: str, root: Path) -> list[str]:
     try:
         import pydicom
+
         dataset = pydicom.dcmread(root / path, stop_before_pixels=True, force=False)
     except Exception as exc:
         return [f"{path}: DICOM could not be inspected ({type(exc).__name__})"]
     problems: list[str] = []
     for element in dataset.iterall():
+        value = str(element.value).strip()
+        if element.tag.is_private and value:
+            problems.append(f"{path}: populated private DICOM tag {element.tag}")
         if element.keyword not in DICOM_IDENTIFIER_KEYWORDS:
             continue
-        value = str(element.value).strip()
-        synthetic_fixture = (
-            path.startswith("tests/fixtures/dicom_rdsr/")
-            and value in {"Synthetic^RDSR", "SYN-RDSR-001"}
-        )
+        synthetic_fixture = path.startswith("tests/fixtures/dicom_rdsr/") and value in {
+            "Synthetic^RDSR",
+            "SYN-RDSR-001",
+        }
         if value and not synthetic_fixture:
-            problems.append(f"{path}: populated nested DICOM identifier {element.keyword}")
+            problems.append(
+                f"{path}: populated nested DICOM identifier {element.keyword}"
+            )
     return problems
+
+
+def _has_dicom_preamble(path: Path) -> bool:
+    """Recognize standard DICOM files even when their filename hides the type."""
+    try:
+        with path.open("rb") as stream:
+            return stream.read(132)[128:132] == b"DICM"
+    except OSError:
+        return False
+
+
+def _check_notebook(path: str, root: Path) -> list[str]:
+    """Require notebook outputs to be stripped before a reviewed notebook is admitted."""
+    try:
+        payload = json.loads((root / path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return [f"{path}: notebook could not be inspected"]
+    cells = payload.get("cells", []) if isinstance(payload, dict) else []
+    if not isinstance(cells, list):
+        return [f"{path}: notebook has invalid cell structure"]
+    if any(isinstance(cell, dict) and cell.get("outputs") for cell in cells):
+        return [f"{path}: notebook outputs must be stripped before review"]
+    return []
 
 
 def check_reviewable_files(paths: list[str], root: Path) -> list[str]:
@@ -269,18 +430,35 @@ def check_reviewable_files(paths: list[str], root: Path) -> list[str]:
     for path in paths:
         suffix = Path(path).suffix.lower()
         is_extensionless = not suffix and path not in EXTENSIONLESS_EXEMPT
-        requires_review = suffix in IMAGE_SUFFIXES or is_extensionless
-        if suffix in DICOM_SUFFIXES:
+        has_dicom_preamble = _has_dicom_preamble(root / path)
+        is_dicom = suffix in DICOM_SUFFIXES or has_dicom_preamble
+        requires_review = (
+            suffix in IMAGE_SUFFIXES or suffix in NOTEBOOK_SUFFIXES or is_extensionless
+        )
+        if is_dicom:
             problems.extend(_check_dicom(path, root))
             requires_review = True
         elif suffix in SPREADSHEET_SUFFIXES:
             problems.extend(_check_spreadsheet(path, root))
+        elif suffix in NOTEBOOK_SUFFIXES:
+            problems.extend(_check_notebook(path, root))
         image_tree_approved = suffix in IMAGE_SUFFIXES and _is_approved_image_tree(
             path, root, approved_trees, tree_digests
         )
-        if requires_review and not image_tree_approved and not _is_approved_media(path, root, approved):
+        if (
+            requires_review
+            and not image_tree_approved
+            and not _is_approved_media(path, root, approved)
+        ):
+            asset_kind = (
+                "DICOM"
+                if is_dicom
+                else "notebook"
+                if suffix in NOTEBOOK_SUFFIXES
+                else "image/extensionless"
+            )
             problems.append(
-                f"{path}: unapproved {'DICOM' if suffix in DICOM_SUFFIXES else 'image/extensionless'} asset; "
+                f"{path}: unapproved {asset_kind} asset; "
                 f"perform PHI/burned-in-text review and add its SHA-256 to {APPROVED_MEDIA_MANIFEST}"
             )
     return problems
@@ -288,23 +466,32 @@ def check_reviewable_files(paths: list[str], root: Path) -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--staged", action="store_true",
-                        help="scan staged files only (pre-commit hook)")
+    parser.add_argument(
+        "--staged", action="store_true", help="scan staged files only (pre-commit hook)"
+    )
     parser.add_argument("--root", default=None, help="repository root")
     args = parser.parse_args()
 
-    root = Path(args.root) if args.root else Path(
-        _run(["git", "rev-parse", "--show-toplevel"], Path.cwd()).strip()
+    root = (
+        Path(args.root)
+        if args.root
+        else Path(_run(["git", "rev-parse", "--show-toplevel"], Path.cwd()).strip())
     )
 
     paths = staged_files(root) if args.staged else tracked_files(root)
     scope = "staged" if args.staged else "tracked"
 
-    problems = check_paths(paths) + check_contents(paths, root) + check_reviewable_files(paths, root)
+    problems = (
+        check_paths(paths)
+        + check_contents(paths, root)
+        + check_reviewable_files(paths, root)
+    )
 
     if problems:
-        print(f"BLOCKED: {len(problems)} PHI/artifact issue(s) in {scope} files:\n",
-              file=sys.stderr)
+        print(
+            f"BLOCKED: {len(problems)} PHI/artifact issue(s) in {scope} files:\n",
+            file=sys.stderr,
+        )
         for p in problems:
             print(f"  {p}", file=sys.stderr)
         print(

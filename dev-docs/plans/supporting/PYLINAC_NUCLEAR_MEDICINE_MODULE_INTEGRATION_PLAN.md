@@ -222,7 +222,7 @@ Optional local integration:
 
 ### Real-data validation (2026-06-11, IAEA NMQC `Simulated_images.zip`, pylinac 3.43.2)
 
-- IAEA `Simulated_images.zip` downloaded to `sample-DICOM-gitignored/nmqc/` (gitignored, untracked, not redistributed; see local `PROVENANCE.local.md` for source, SHA-256, and terms). pylinac's own nuclear test DICOMs are in a private GCP bucket (403 without credentials), so the IAEA set is the public origin.
+- IAEA `Simulated_images.zip` downloaded to `sample-DICOM-gitignored/nmqc/` (gitignored, untracked, not redistributed; source, SHA-256, and terms are retained only in local untracked research notes). pylinac's own nuclear test DICOMs are in a private GCP bucket (403 without credentials), so the IAEA set is the public origin.
 - `run_planar_uniformity_analysis` validated end-to-end through the real runner:
   - `Uniformity/UNIFORMIDAD_1_Ok.dcm` — Modality NM, 1 frame → success, UFOV integral uniformity ≈ 2.38%.
   - `Uniformity/Point_Source.dcm` — Modality NM, 2 frames → success, `frame_count=2`, distinct per-frame metrics (confirms frame-keyed normalization).
