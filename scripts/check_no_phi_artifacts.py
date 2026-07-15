@@ -28,13 +28,21 @@ Exit code: 0 clean, 1 if anything is flagged.
 from __future__ import annotations
 
 import argparse
+import bz2
+import gzip
 import hashlib
+import io
 import ipaddress
 import json
+import lzma
 import re
 import subprocess
 import sys
+import tarfile
+import zipfile
+from contextlib import ExitStack
 from pathlib import Path
+from typing import Any, BinaryIO, Protocol
 
 # --- Rule 1: paths that must never be tracked -------------------------------
 # Matched with Path.match / prefix semantics against the repo-relative posix path.
@@ -80,6 +88,38 @@ DICOM_SUFFIXES = {".dcm", ".dicom", ".ima"}
 NOTEBOOK_SUFFIXES = {".ipynb"}
 PDF_SUFFIXES = {".pdf"}
 POSTSCRIPT_SUFFIXES = {".eps", ".ps"}
+# Archives and document packages can contain DICOM, private exports, and images.
+# They are inspected in memory only and still require a hash-bound human review.
+ARCHIVE_SUFFIXES = {
+    ".7z",
+    ".bz2",
+    ".gz",
+    ".rar",
+    ".tar",
+    ".xz",
+    ".zip",
+    ".zst",
+}
+OFFICE_DOCUMENT_SUFFIXES = {
+    ".docm",
+    ".docx",
+    ".odp",
+    ".ods",
+    ".odt",
+    ".potm",
+    ".potx",
+    ".ppsm",
+    ".ppsx",
+    ".pptm",
+    ".pptx",
+}
+CONTAINER_SUFFIXES = ARCHIVE_SUFFIXES | OFFICE_DOCUMENT_SUFFIXES | SPREADSHEET_SUFFIXES
+SUPPORTED_SINGLE_FILE_COMPRESSION_SUFFIXES = {".bz2", ".gz", ".xz"}
+UNSUPPORTED_ARCHIVE_SUFFIXES = {".7z", ".rar", ".zst"}
+MAX_CONTAINER_DEPTH = 3
+MAX_CONTAINER_MEMBERS = 500
+MAX_CONTAINER_MEMBER_BYTES = 32 * 1024 * 1024
+MAX_CONTAINER_TOTAL_BYTES = 96 * 1024 * 1024
 # SVG is text-readable and is also content-scanned above.  The other formats are
 # opaque containers, so they need an explicit hash review before admission.
 IMAGE_SUFFIXES = {
@@ -346,9 +386,17 @@ def _is_approved_image_tree(
 
 def _check_spreadsheet(path: str, root: Path) -> list[str]:
     try:
+        with (root / path).open("rb") as stream:
+            return _check_spreadsheet_stream(path, stream, root)
+    except OSError as exc:
+        return [f"{path}: spreadsheet could not be inspected ({type(exc).__name__})"]
+
+
+def _check_spreadsheet_stream(path: str, stream: BinaryIO, root: Path) -> list[str]:
+    try:
         from openpyxl import load_workbook
 
-        workbook = load_workbook(root / path, read_only=True, data_only=False)
+        workbook = load_workbook(stream, read_only=True, data_only=False)
     except Exception as exc:
         return [f"{path}: spreadsheet could not be inspected ({type(exc).__name__})"]
     problems: list[str] = []
@@ -378,6 +426,22 @@ def _check_dicom(path: str, root: Path) -> list[str]:
         dataset = pydicom.dcmread(root / path, stop_before_pixels=True, force=False)
     except Exception as exc:
         return [f"{path}: DICOM could not be inspected ({type(exc).__name__})"]
+    return _check_dicom_dataset(path, dataset)
+
+
+def _check_dicom_bytes(path: str, payload: bytes) -> list[str]:
+    try:
+        import pydicom
+
+        dataset = pydicom.dcmread(
+            io.BytesIO(payload), stop_before_pixels=True, force=False
+        )
+    except Exception as exc:
+        return [f"{path}: archived DICOM could not be inspected ({type(exc).__name__})"]
+    return _check_dicom_dataset(path, dataset)
+
+
+def _check_dicom_dataset(path: str, dataset: Any) -> list[str]:
     problems: list[str] = []
     for element in dataset.iterall():
         value = str(element.value).strip()
@@ -405,6 +469,10 @@ def _has_dicom_preamble(path: Path) -> bool:
         return False
 
 
+def _has_dicom_preamble_bytes(payload: bytes) -> bool:
+    return len(payload) >= 132 and payload[128:132] == b"DICM"
+
+
 def _check_notebook(path: str, root: Path) -> list[str]:
     """Require notebook outputs to be stripped before a reviewed notebook is admitted."""
     try:
@@ -422,9 +490,17 @@ def _check_notebook(path: str, root: Path) -> list[str]:
 def _check_pdf(path: str, root: Path) -> list[str]:
     """Extract text from every PDF page; encrypted or unreadable files fail closed."""
     try:
+        with (root / path).open("rb") as stream:
+            return _check_pdf_stream(path, stream, root)
+    except Exception as exc:
+        return [f"{path}: PDF could not be inspected ({type(exc).__name__})"]
+
+
+def _check_pdf_stream(path: str, stream: BinaryIO, root: Path) -> list[str]:
+    try:
         from pypdf import PdfReader
 
-        reader = PdfReader(root / path)
+        reader = PdfReader(stream)
         if reader.is_encrypted:
             return [f"{path}: encrypted PDF cannot be inspected"]
     except Exception as exc:
@@ -441,6 +517,171 @@ def _check_pdf(path: str, root: Path) -> list[str]:
                     )
     except Exception as exc:
         return [f"{path}: PDF text extraction failed ({type(exc).__name__})"]
+    return problems
+
+
+class ReadableBinary(Protocol):
+    """The minimal binary stream interface shared by archive readers."""
+
+    def read(self, size: int = -1, /) -> bytes: ...
+
+
+def _read_limited(stream: ReadableBinary, limit: int) -> bytes | None:
+    """Read one untrusted member without permitting unbounded expansion."""
+    payload = stream.read(limit + 1)
+    return None if len(payload) > limit else payload
+
+
+def _zip_members(payload: bytes) -> tuple[list[tuple[str, bytes]], str | None]:
+    try:
+        with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+            members = [info for info in archive.infolist() if not info.is_dir()]
+            if len(members) > MAX_CONTAINER_MEMBERS:
+                return [], "too many archive members"
+            if any(info.flag_bits & 0x1 for info in members):
+                return [], "encrypted archive member cannot be inspected"
+            if sum(info.file_size for info in members) > MAX_CONTAINER_TOTAL_BYTES:
+                return [], "archive expands beyond the inspection limit"
+            result: list[tuple[str, bytes]] = []
+            for info in members:
+                if info.file_size > MAX_CONTAINER_MEMBER_BYTES:
+                    return [], "archive member exceeds the inspection limit"
+                with archive.open(info) as stream:
+                    member = _read_limited(stream, MAX_CONTAINER_MEMBER_BYTES)
+                if member is None:
+                    return [], "archive member exceeds the inspection limit"
+                result.append((info.filename, member))
+            return result, None
+    except (OSError, zipfile.BadZipFile, RuntimeError):
+        return [], "archive could not be inspected"
+
+
+def _tar_members(payload: bytes) -> tuple[list[tuple[str, bytes]], str | None]:
+    try:
+        with tarfile.open(fileobj=io.BytesIO(payload), mode="r:") as archive:
+            members = [member for member in archive.getmembers() if member.isfile()]
+            if len(members) > MAX_CONTAINER_MEMBERS:
+                return [], "too many archive members"
+            if sum(member.size for member in members) > MAX_CONTAINER_TOTAL_BYTES:
+                return [], "archive expands beyond the inspection limit"
+            result: list[tuple[str, bytes]] = []
+            for member_info in members:
+                if member_info.size > MAX_CONTAINER_MEMBER_BYTES:
+                    return [], "archive member exceeds the inspection limit"
+                stream = archive.extractfile(member_info)
+                if stream is None:
+                    return [], "archive member could not be inspected"
+                with stream:
+                    member = _read_limited(stream, MAX_CONTAINER_MEMBER_BYTES)
+                if member is None:
+                    return [], "archive member exceeds the inspection limit"
+                result.append((member_info.name, member))
+            return result, None
+    except (OSError, tarfile.TarError):
+        return [], "archive could not be inspected"
+
+
+def _compressed_member(
+    path: str, payload: bytes
+) -> tuple[list[tuple[str, bytes]], str | None]:
+    suffix = Path(path).suffix.lower()
+    try:
+        with ExitStack() as stack:
+            if suffix == ".gz":
+                stream = stack.enter_context(
+                    gzip.GzipFile(fileobj=io.BytesIO(payload), mode="rb")
+                )
+            elif suffix == ".bz2":
+                stream = stack.enter_context(
+                    bz2.BZ2File(io.BytesIO(payload), mode="rb")
+                )
+            elif suffix == ".xz":
+                stream = stack.enter_context(
+                    lzma.LZMAFile(io.BytesIO(payload), mode="rb")
+                )
+            else:
+                return [], "unsupported archive type"
+            member = _read_limited(stream, MAX_CONTAINER_TOTAL_BYTES)
+    except (OSError, EOFError, lzma.LZMAError):
+        return [], "archive could not be inspected"
+    if member is None:
+        return [], "archive expands beyond the inspection limit"
+    return [(path.removesuffix(suffix), member)], None
+
+
+def _container_members(
+    path: str, payload: bytes
+) -> tuple[list[tuple[str, bytes]], str | None]:
+    """Return bounded in-memory members; unsupported containers fail closed."""
+    suffix = Path(path).suffix.lower()
+    if suffix in UNSUPPORTED_ARCHIVE_SUFFIXES:
+        return [], "unsupported archive type"
+    if zipfile.is_zipfile(io.BytesIO(payload)):
+        return _zip_members(payload)
+    if suffix in SUPPORTED_SINGLE_FILE_COMPRESSION_SUFFIXES:
+        return _compressed_member(path, payload)
+    if suffix == ".tar" or payload[257:262] == b"ustar":
+        return _tar_members(payload)
+    return [], "archive could not be inspected"
+
+
+def _check_archived_text(path: str, payload: bytes, root: Path) -> list[str]:
+    approved = _approved_text_exceptions(root)
+    text = payload.decode("utf-8", errors="ignore")
+    return [
+        f"{path}: archived text: possible PHI/PII ({reason})"
+        for reason in _content_reasons(text)
+        if not _is_approved_text_exception(path, reason, root, approved)
+    ]
+
+
+def _looks_like_container(path: str, payload: bytes) -> bool:
+    suffix = Path(path).suffix.lower()
+    return (
+        suffix in CONTAINER_SUFFIXES
+        or zipfile.is_zipfile(io.BytesIO(payload))
+        or payload[257:262] == b"ustar"
+    )
+
+
+def _check_container(
+    path: str,
+    root: Path,
+    payload: bytes | None = None,
+    depth: int = 0,
+    container_name: str | None = None,
+) -> list[str]:
+    """Inspect nested archive/document contents without extracting them to disk."""
+    if depth >= MAX_CONTAINER_DEPTH:
+        return [f"{path}: archive nesting exceeds the inspection limit"]
+    try:
+        data = payload if payload is not None else (root / path).read_bytes()
+    except OSError as exc:
+        return [f"{path}: archive could not be inspected ({type(exc).__name__})"]
+    if len(data) > MAX_CONTAINER_TOTAL_BYTES:
+        return [f"{path}: archive exceeds the compressed inspection limit"]
+    members, error = _container_members(container_name or path, data)
+    if error:
+        return [f"{path}: {error}"]
+
+    problems: list[str] = []
+    for member_name, member in members:
+        suffix = Path(member_name).suffix.lower()
+        if suffix in FORBIDDEN_ARTIFACT_SUFFIXES:
+            problems.append(f"{path}: archive contains a forbidden runtime artifact")
+        if suffix in DATA_SUFFIXES:
+            problems.extend(_check_archived_text(path, member, root))
+        is_dicom = suffix in DICOM_SUFFIXES or _has_dicom_preamble_bytes(member)
+        if is_dicom:
+            problems.extend(_check_dicom_bytes(path, member))
+        elif suffix in SPREADSHEET_SUFFIXES:
+            problems.extend(_check_spreadsheet_stream(path, io.BytesIO(member), root))
+        elif suffix in PDF_SUFFIXES:
+            problems.extend(_check_pdf_stream(path, io.BytesIO(member), root))
+        if _looks_like_container(member_name, member):
+            problems.extend(
+                _check_container(path, root, member, depth + 1, member_name)
+            )
     return problems
 
 
@@ -462,11 +703,13 @@ def check_reviewable_files(paths: list[str], root: Path) -> list[str]:
         is_extensionless = not suffix and path not in EXTENSIONLESS_EXEMPT
         has_dicom_preamble = _has_dicom_preamble(root / path)
         is_dicom = suffix in DICOM_SUFFIXES or has_dicom_preamble
+        is_container = suffix in CONTAINER_SUFFIXES
         requires_review = (
             suffix in IMAGE_SUFFIXES
             or suffix in NOTEBOOK_SUFFIXES
             or suffix in PDF_SUFFIXES
             or suffix in POSTSCRIPT_SUFFIXES
+            or is_container
             or is_extensionless
         )
         if is_dicom:
@@ -478,6 +721,8 @@ def check_reviewable_files(paths: list[str], root: Path) -> list[str]:
             problems.extend(_check_notebook(path, root))
         elif suffix in PDF_SUFFIXES:
             problems.extend(_check_pdf(path, root))
+        if is_container:
+            problems.extend(_check_container(path, root))
         image_tree_approved = suffix in IMAGE_SUFFIXES and _is_approved_image_tree(
             path, root, approved_trees, tree_digests
         )
@@ -493,6 +738,8 @@ def check_reviewable_files(paths: list[str], root: Path) -> list[str]:
                 if suffix in NOTEBOOK_SUFFIXES
                 else "PDF/PostScript"
                 if suffix in PDF_SUFFIXES or suffix in POSTSCRIPT_SUFFIXES
+                else "archive/document package"
+                if is_container
                 else "image/extensionless"
             )
             problems.append(

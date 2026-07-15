@@ -19,14 +19,15 @@ This application processes clinical imaging. Treat every study, export, screensh
 
 - Denies runtime artifacts such as pytest captures, application config files, backups, `.DS_Store`, and diagnostic `.log`, `.trace`, `.err`, `.out`, `.pkl`, and `.cache` files—even if force-added.
 - Scans tracked text data, including JSON, CSV/TSV, YAML, INI, XML, HTML, Markdown, TeX, PostScript/EPS, notebooks, and SVG, for local-path, patient-tag, private-network, and internal-endpoint indicators.
-- Reads XLSX/XLSM cells for the same indicators.
+- Reads XLSX/XLSM cells for the same indicators. XLSX/XLSM and Office/OpenDocument packages (`.docx`, `.docm`, `.pptx`, `.pptm`, `.odt`, `.ods`, `.odp`, and templates/slideshows) also require manual review because they can embed images and other opaque content.
 - Extracts text from every unencrypted PDF page and fails closed when a PDF cannot be read. PDFs, PostScript/EPS, and notebooks require hash-bound manual review because they can contain rendered or embedded images that text extraction cannot prove safe.
 - Recursively reads DICOM metadata, including sequence items, private tags, and station names; it recognizes a standard `DICM` preamble even when a filename has no DICOM extension.
+- Inspects ZIP, TAR, GZip, BZip2, and XZ containers in memory, including nested containers up to a bounded depth. It scans text/PDF/Excel payloads and detects DICOM by extension or preamble inside them. Archives and document packages always require hash-bound manual review. Encrypted, malformed, oversized, deeply nested, and unsupported archive formats (currently 7z, RAR, and Zstandard) fail closed rather than being waived by the hash manifest.
 - Fails closed for extensionless assets and image formats: AVIF, BMP, GIF, HEIC, ICO, ICNS, JPEG, JPEG 2000, JXL, PNG, SVG, TIFF, and WebP.
 
 Notebook outputs must be stripped before review. Text or spreadsheet fixtures that legitimately need a synthetic identifier require an exact hash and permitted rule category in [`approved-phi-text-exceptions.json`](../security/approved-phi-text-exceptions.json); broad fixture-directory exemptions are not permitted.
 
-Existing reviewed assets are pinned in [`security/approved-media-sha256.json`](../security/approved-media-sha256.json). A new or modified image, DICOM, or extensionless asset must be reviewed for PHI, including burned-in text, before its individual hash or reviewed image-tree hash is updated. The existing `resources/icons/` tree is approved as a unit; additions or modifications invalidate that approval.
+Existing reviewed assets are pinned in [`security/approved-media-sha256.json`](../security/approved-media-sha256.json). A new or modified image, DICOM, archive, document package, or extensionless asset must be reviewed for PHI, including burned-in text, before its individual hash or reviewed image-tree hash is updated. The existing `resources/icons/` tree is approved as a unit; additions or modifications invalidate that approval.
 
 The repository gate does **not** perform OCR or prove that a bitmap, PDF, or PostScript file has no burned-in text. The hash manifest is admission control, not an automated de-identification claim. A human visual review (and OCR where appropriate) remains required before allowing any non-trivial image or document asset.
 
@@ -48,6 +49,7 @@ The installed pre-commit hook invokes the staged artifact gate, the repository h
 ## Optional defense-in-depth tools
 
 - `phi-scan` and Microsoft Presidio are isolated in `requirements-phi-tools.txt`: PhiScan's Click constraint conflicts with Semgrep, and Presidio's current NumPy constraint conflicts with the application's NumPy requirement. Use a dedicated environment; Presidio image redaction also requires OCR and a spaCy model.
+- **Hounddog is local-only and non-blocking until further user direction.** Do not create an account, connect a repository, upload code or findings, enable cloud/hosted processing, add it to CI, or make it a required hook. Any future evaluation is restricted to an isolated working copy, source/configuration only, wholly synthetic findings, and safe local-only reports.
 - For secrets and dependency scanning, follow the [Security Tools CLI Guide](SECURITY_TOOLS_CLI_GUIDE.md).
 
 When a scanner flags possible PHI/PII, do not paste the suspected value into a chat, commit message, issue, or documentation. Report only the affected path and rule category until the material has been safely reviewed.

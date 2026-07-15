@@ -91,9 +91,11 @@ exists. Treat those as vendor claims to verify in a constrained trial, not as a
 substitute for the project's PHI gate, security review, or legal/compliance
 assessment.
 
-The first trial should use an isolated working copy and only the source/config
-scope, avoid account/repository/CI integration, keep every output local, and
-inspect the generated report using synthetic findings only. Establish whether it
+**Current repository policy: Hounddog is local-only, non-blocking, and disconnected
+from accounts, repositories, uploads, hosted processing, and CI until the user
+explicitly changes that policy.** The first trial should use an isolated working
+copy and only the source/config scope, keep every output local, and inspect the
+generated report using synthetic findings only. Establish whether it
 offers a reliable no-upload mode, what diagnostic data it records, whether it
 supports the project's Python version, and whether the licence/EULA is acceptable
 before considering a non-blocking local developer command. Do not scan DICOM or
