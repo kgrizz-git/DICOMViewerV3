@@ -18,8 +18,9 @@ This application processes clinical imaging. Treat every study, export, screensh
 `scripts/check_no_phi_artifacts.py` is run by the pre-commit hook and in the **No PHI artifacts tracked** GitHub Actions job.
 
 - Denies runtime artifacts such as pytest captures, application config files, backups, `.DS_Store`, and diagnostic `.log`, `.trace`, `.err`, `.out`, `.pkl`, and `.cache` files—even if force-added.
-- Scans tracked text data, including JSON, CSV/TSV, YAML, INI, XML, HTML, Markdown, notebooks, and SVG, for local-path, patient-tag, private-network, and internal-endpoint indicators.
+- Scans tracked text data, including JSON, CSV/TSV, YAML, INI, XML, HTML, Markdown, TeX, PostScript/EPS, notebooks, and SVG, for local-path, patient-tag, private-network, and internal-endpoint indicators.
 - Reads XLSX/XLSM cells for the same indicators.
+- Extracts text from every unencrypted PDF page and fails closed when a PDF cannot be read. PDFs, PostScript/EPS, and notebooks require hash-bound manual review because they can contain rendered or embedded images that text extraction cannot prove safe.
 - Recursively reads DICOM metadata, including sequence items, private tags, and station names; it recognizes a standard `DICM` preamble even when a filename has no DICOM extension.
 - Fails closed for extensionless assets and image formats: AVIF, BMP, GIF, HEIC, ICO, ICNS, JPEG, JPEG 2000, JXL, PNG, SVG, TIFF, and WebP.
 
@@ -27,7 +28,7 @@ Notebook outputs must be stripped before review. Text or spreadsheet fixtures th
 
 Existing reviewed assets are pinned in [`security/approved-media-sha256.json`](../security/approved-media-sha256.json). A new or modified image, DICOM, or extensionless asset must be reviewed for PHI, including burned-in text, before its individual hash or reviewed image-tree hash is updated. The existing `resources/icons/` tree is approved as a unit; additions or modifications invalidate that approval.
 
-The repository gate does **not** perform OCR or prove that a bitmap has no burned-in text. The hash manifest is admission control, not an automated de-identification claim. A human visual review (and OCR where appropriate) remains required before allowing any non-trivial image asset.
+The repository gate does **not** perform OCR or prove that a bitmap, PDF, or PostScript file has no burned-in text. The hash manifest is admission control, not an automated de-identification claim. A human visual review (and OCR where appropriate) remains required before allowing any non-trivial image or document asset.
 
 ## Code and logging guard
 
