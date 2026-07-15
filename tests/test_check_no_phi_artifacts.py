@@ -8,10 +8,14 @@ config capture that was committed in May 2026 and had to be scrubbed from histor
 
 from __future__ import annotations
 
+import gzip
 import importlib.util
+import io
 import json
 import subprocess
 import sys
+import tarfile
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -35,6 +39,13 @@ def _stage(repo: Path, relpath: str, content: str) -> None:
     p = repo / relpath
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(content, encoding="utf-8")
+    subprocess.run(["git", "add", "-f", relpath], cwd=repo, check=True)
+
+
+def _stage_bytes(repo: Path, relpath: str, content: bytes) -> None:
+    path = repo / relpath
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(content)
     subprocess.run(["git", "add", "-f", relpath], cwd=repo, check=True)
 
 
@@ -358,6 +369,99 @@ def test_pdf_text_is_scanned_for_private_network_values(repo):
 )
 def test_tex_and_postscript_text_are_scanned(repo, path):
     _stage(repo, path, "endpoint=192.168.1.20")
+    assert _run(repo) == 1
+
+
+def test_gzip_payload_is_scanned_for_phi_indicators(repo):
+    _stage_bytes(repo, "exports/study.txt.gz", gzip.compress(b"endpoint=192.168.1.20"))
+
+    assert _run(repo) == 1
+    assert any(
+        "private-network address" in item
+        for item in phi._check_container("exports/study.txt.gz", repo)
+    )
+
+
+def test_tar_gz_payload_is_recursively_inspected(repo):
+    tar_payload = io.BytesIO()
+    contents = b"endpoint=192.168.1.20"
+    with tarfile.open(fileobj=tar_payload, mode="w") as archive:
+        member = tarfile.TarInfo("study.txt")
+        member.size = len(contents)
+        archive.addfile(member, io.BytesIO(contents))
+    _stage_bytes(repo, "exports/study.tar.gz", gzip.compress(tar_payload.getvalue()))
+
+    assert any(
+        "private-network address" in item
+        for item in phi._check_container("exports/study.tar.gz", repo)
+    )
+    assert _run(repo) == 1
+
+
+def test_archive_recursively_inspects_nested_dicom(repo):
+    import pydicom
+    from pydicom.dataset import FileDataset, FileMetaDataset
+    from pydicom.uid import (
+        ExplicitVRLittleEndian,
+        SecondaryCaptureImageStorage,
+        generate_uid,
+    )
+
+    file_meta = FileMetaDataset()
+    file_meta.MediaStorageSOPClassUID = SecondaryCaptureImageStorage
+    file_meta.MediaStorageSOPInstanceUID = generate_uid()
+    file_meta.TransferSyntaxUID = ExplicitVRLittleEndian
+    dataset = FileDataset(
+        "synthetic.dcm", {}, file_meta=file_meta, preamble=b"\0" * 128
+    )
+    dataset.is_little_endian = True
+    dataset.is_implicit_VR = False
+    dataset.PatientName = "Doe^Jane"
+    dicom = io.BytesIO()
+    pydicom.dcmwrite(dicom, dataset)
+
+    inner = io.BytesIO()
+    with zipfile.ZipFile(inner, "w") as archive:
+        archive.writestr("study.dcm", dicom.getvalue())
+    outer = io.BytesIO()
+    with zipfile.ZipFile(outer, "w") as archive:
+        archive.writestr("nested.zip", inner.getvalue())
+    _stage_bytes(repo, "imports/study.zip", outer.getvalue())
+
+    problems = phi._check_container("imports/study.zip", repo)
+    assert any("nested DICOM identifier PatientName" in item for item in problems)
+    assert _run(repo) == 1
+
+
+@pytest.mark.parametrize("extension", [".docx", ".odt"])
+def test_document_package_scans_text_and_requires_hash_bound_review(repo, extension):
+    package = io.BytesIO()
+    with zipfile.ZipFile(package, "w") as archive:
+        archive.writestr("word/document.xml", "endpoint=192.168.1.20")
+        archive.writestr("word/media/image1.png", b"review-me")
+    path = f"reports/review{extension}"
+    _stage_bytes(repo, path, package.getvalue())
+
+    assert any(
+        "private-network address" in item for item in phi._check_container(path, repo)
+    )
+    assert _run(repo) == 1
+
+    clean = io.BytesIO()
+    with zipfile.ZipFile(clean, "w") as archive:
+        archive.writestr("word/document.xml", "synthetic report")
+        archive.writestr("word/media/image1.png", b"review-me")
+    _stage_bytes(repo, path, clean.getvalue())
+    assert _run(repo) == 1  # Embedded images mean a human must approve the package.
+
+    _approve_reviewable_asset(repo, path)
+    assert _run(repo) == 0
+
+
+def test_unsupported_archives_fail_closed_even_when_hash_approved(repo):
+    _stage_bytes(repo, "imports/study.7z", b"not-an-inspectable-archive")
+    _approve_reviewable_asset(repo, "imports/study.7z")
+
     assert _run(repo) == 1
 
 

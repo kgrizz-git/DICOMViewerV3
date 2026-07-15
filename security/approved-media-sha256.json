@@ -1,5 +1,5 @@
 {
-  "purpose": "Reviewed binary, extensionless, DICOM, image, PDF, and PostScript assets. Any new or changed entry requires PHI and burned-in-text review before its SHA-256 or image-tree hash is added.",
+  "purpose": "Reviewed binary, extensionless, DICOM, image, PDF, PostScript, archive, and document-package assets. Any new or changed entry requires PHI and burned-in-text review before its SHA-256 or image-tree hash is added.",
   "image_trees": {
     "resources/icons": "bf7a76920150fa903c4b53288e8c47af55ddaa80b4d6c31527e440bca1f99884"
   },
