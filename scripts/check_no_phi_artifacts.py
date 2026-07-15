@@ -70,11 +70,16 @@ DATA_SUFFIXES = {
     ".md",
     ".rst",
     ".svg",
+    ".tex",
     ".tsv",
+    ".ps",
+    ".eps",
 }
 SPREADSHEET_SUFFIXES = {".xlsx", ".xlsm"}
 DICOM_SUFFIXES = {".dcm", ".dicom", ".ima"}
 NOTEBOOK_SUFFIXES = {".ipynb"}
+PDF_SUFFIXES = {".pdf"}
+POSTSCRIPT_SUFFIXES = {".eps", ".ps"}
 # SVG is text-readable and is also content-scanned above.  The other formats are
 # opaque containers, so they need an explicit hash review before admission.
 IMAGE_SUFFIXES = {
@@ -414,6 +419,31 @@ def _check_notebook(path: str, root: Path) -> list[str]:
     return []
 
 
+def _check_pdf(path: str, root: Path) -> list[str]:
+    """Extract text from every PDF page; encrypted or unreadable files fail closed."""
+    try:
+        from pypdf import PdfReader
+
+        reader = PdfReader(root / path)
+        if reader.is_encrypted:
+            return [f"{path}: encrypted PDF cannot be inspected"]
+    except Exception as exc:
+        return [f"{path}: PDF could not be inspected ({type(exc).__name__})"]
+
+    problems: list[str] = []
+    approved = _approved_text_exceptions(root)
+    try:
+        for page_number, page in enumerate(reader.pages, start=1):
+            for reason in _content_reasons(page.extract_text() or ""):
+                if not _is_approved_text_exception(path, reason, root, approved):
+                    problems.append(
+                        f"{path}: page {page_number}: possible PHI/PII ({reason})"
+                    )
+    except Exception as exc:
+        return [f"{path}: PDF text extraction failed ({type(exc).__name__})"]
+    return problems
+
+
 def check_reviewable_files(paths: list[str], root: Path) -> list[str]:
     """Fail closed for clinical/binary assets that require a human PHI review."""
     problems: list[str] = []
@@ -433,7 +463,11 @@ def check_reviewable_files(paths: list[str], root: Path) -> list[str]:
         has_dicom_preamble = _has_dicom_preamble(root / path)
         is_dicom = suffix in DICOM_SUFFIXES or has_dicom_preamble
         requires_review = (
-            suffix in IMAGE_SUFFIXES or suffix in NOTEBOOK_SUFFIXES or is_extensionless
+            suffix in IMAGE_SUFFIXES
+            or suffix in NOTEBOOK_SUFFIXES
+            or suffix in PDF_SUFFIXES
+            or suffix in POSTSCRIPT_SUFFIXES
+            or is_extensionless
         )
         if is_dicom:
             problems.extend(_check_dicom(path, root))
@@ -442,6 +476,8 @@ def check_reviewable_files(paths: list[str], root: Path) -> list[str]:
             problems.extend(_check_spreadsheet(path, root))
         elif suffix in NOTEBOOK_SUFFIXES:
             problems.extend(_check_notebook(path, root))
+        elif suffix in PDF_SUFFIXES:
+            problems.extend(_check_pdf(path, root))
         image_tree_approved = suffix in IMAGE_SUFFIXES and _is_approved_image_tree(
             path, root, approved_trees, tree_digests
         )
@@ -455,6 +491,8 @@ def check_reviewable_files(paths: list[str], root: Path) -> list[str]:
                 if is_dicom
                 else "notebook"
                 if suffix in NOTEBOOK_SUFFIXES
+                else "PDF/PostScript"
+                if suffix in PDF_SUFFIXES or suffix in POSTSCRIPT_SUFFIXES
                 else "image/extensionless"
             )
             problems.append(

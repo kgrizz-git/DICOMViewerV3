@@ -62,6 +62,14 @@ def _approve_synthetic_text_rule(repo: Path, path: str, rule: str) -> None:
     )
 
 
+def _approve_reviewable_asset(repo: Path, path: str) -> None:
+    manifest = repo / phi.APPROVED_MEDIA_MANIFEST
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text(
+        json.dumps({"files": {path: phi._sha256(repo / path)}}), encoding="utf-8"
+    )
+
+
 # --- the actual historical leak ---------------------------------------------
 
 # Shaped like the real dicom_viewer_config_test_signals.json that was committed, but
@@ -291,6 +299,65 @@ def test_blocks_notebook_outputs(repo):
     )
 
     assert phi._check_notebook(path, repo)
+    assert _run(repo) == 1
+
+
+def test_pdf_requires_hash_bound_manual_review(repo):
+    from pypdf import PdfWriter
+
+    path = "reports/synthetic.pdf"
+    full_path = repo / path
+    full_path.parent.mkdir(parents=True)
+    writer = PdfWriter()
+    writer.add_blank_page(width=72, height=72)
+    with full_path.open("wb") as stream:
+        writer.write(stream)
+    subprocess.run(["git", "add", "-f", path], cwd=repo, check=True)
+
+    assert _run(repo) == 1
+
+    _approve_reviewable_asset(repo, path)
+    assert _run(repo) == 0
+
+
+def test_pdf_text_is_scanned_for_private_network_values(repo):
+    from pypdf import PdfWriter
+    from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
+
+    path = "reports/endpoint.pdf"
+    full_path = repo / path
+    full_path.parent.mkdir(parents=True)
+    writer = PdfWriter()
+    page = writer.add_blank_page(width=612, height=792)
+    font = DictionaryObject(
+        {
+            NameObject("/Type"): NameObject("/Font"),
+            NameObject("/Subtype"): NameObject("/Type1"),
+            NameObject("/BaseFont"): NameObject("/Helvetica"),
+        }
+    )
+    font_ref = writer._add_object(font)  # pyright: ignore[reportPrivateUsage]
+    page[NameObject("/Resources")] = DictionaryObject(
+        {NameObject("/Font"): DictionaryObject({NameObject("/F1"): font_ref})}
+    )
+    stream = DecodedStreamObject()
+    stream.set_data(b"BT /F1 12 Tf 72 720 Td (endpoint=192.168.1.20) Tj ET")
+    page[NameObject("/Contents")] = writer._add_object(stream)  # pyright: ignore[reportPrivateUsage]
+    with full_path.open("wb") as output:
+        writer.write(output)
+    subprocess.run(["git", "add", "-f", path], cwd=repo, check=True)
+
+    assert any(
+        "private-network address" in problem for problem in phi._check_pdf(path, repo)
+    )
+    assert _run(repo) == 1
+
+
+@pytest.mark.parametrize(
+    "path", ["notes/study.tex", "notes/study.ps", "notes/study.eps"]
+)
+def test_tex_and_postscript_text_are_scanned(repo, path):
+    _stage(repo, path, "endpoint=192.168.1.20")
     assert _run(repo) == 1
 
 
