@@ -24,7 +24,7 @@ if (-not (Test-Path (Join-Path $repoRoot ".githooks"))) {
 
 $chmod = Get-Command chmod -ErrorAction SilentlyContinue
 if ($null -ne $chmod) {
-    & $chmod +x (Join-Path $repoRoot ".githooks/pre-commit") (Join-Path $repoRoot ".githooks/pre-push")
+    & $chmod +x (Join-Path $repoRoot ".githooks/pre-commit") (Join-Path $repoRoot ".githooks/pre-push") (Join-Path $repoRoot ".githooks/commit-msg")
 }
 
 git -C $repoRoot config core.hooksPath .githooks

@@ -60,6 +60,11 @@ cover/
 
 # Django stuff:
 *.log
+*.trace
+*.err
+*.out
+*.pkl
+*.cache
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
