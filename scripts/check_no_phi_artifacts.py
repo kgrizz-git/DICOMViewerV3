@@ -103,9 +103,12 @@ ARCHIVE_SUFFIXES = {
 OFFICE_DOCUMENT_SUFFIXES = {
     ".docm",
     ".docx",
+    ".key",
+    ".numbers",
     ".odp",
     ".ods",
     ".odt",
+    ".pages",
     ".potm",
     ".potx",
     ".ppsm",
