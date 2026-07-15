@@ -51,6 +51,9 @@ coverage.xml
 .pytest_cache/
 cover/
 
+# Local SonarQube Community Build scanner state (cache, coverage XML, last run).
+.sonar-local/
+
 # Translations
 *.mo
 *.pot
