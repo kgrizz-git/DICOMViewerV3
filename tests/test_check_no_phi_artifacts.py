@@ -433,7 +433,7 @@ def test_archive_recursively_inspects_nested_dicom(repo):
     assert _run(repo) == 1
 
 
-@pytest.mark.parametrize("extension", [".docx", ".odt"])
+@pytest.mark.parametrize("extension", [".docx", ".odt", ".key", ".numbers", ".pages"])
 def test_document_package_scans_text_and_requires_hash_bound_review(repo, extension):
     package = io.BytesIO()
     with zipfile.ZipFile(package, "w") as archive:
