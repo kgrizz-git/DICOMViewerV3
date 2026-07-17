@@ -216,8 +216,6 @@ cython_debug/
 #  Cursor is an AI-powered code editor. `.cursorignore` specifies files/directories to
 #  exclude from AI features like autocomplete and code analysis. Recommended for sensitive data
 #  refer to https://docs.cursor.com/context/ignore-files
-.cursorignore
-.cursorindexingignore
 # Ignore local Cursor state (plans, debug logs, etc.) but track shared project rules.
 .cursor/*
 !.cursor/rules/
@@ -234,6 +232,12 @@ tmp/
 config.ini
 settings.json
 backups/
+
+# Privacy-critical local-only roots. The staged artifact gate requires these
+# exact rules and independently rejects force-added files under these paths.
+data/*
+!data/.gitkeep
+logs/
 
 # Local subtree / linked notes (not part of application source)
 .subtree/

@@ -62,6 +62,10 @@ a = Analysis(
     binaries=[],
     datas=[
         ('resources', 'resources'),  # Include resources directory (images, etc.)
+        (
+            'src/utils/privacy/structural_event_schema_v1.json',
+            'utils/privacy',
+        ),
     ],
     hiddenimports=[
         # Application modules - explicitly include all submodules

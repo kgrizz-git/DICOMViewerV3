@@ -18,16 +18,14 @@ from collections.abc import Callable
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
-    QFileDialog,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QVBoxLayout,
@@ -35,7 +33,9 @@ from PySide6.QtWidgets import (
 )
 
 from gui.accent_presets import ACCENT_PRESETS, get_preset
+from gui.privacy_storage_settings import PrivacyStorageSettingsPanel
 from utils.config_manager import ConfigManager
+from utils.privacy.safe_storage import DeletionResult
 
 
 class SettingsDialog(QDialog):
@@ -53,11 +53,15 @@ class SettingsDialog(QDialog):
         config_manager: ConfigManager,
         parent=None,
         manage_wl_presets_callback: Callable[[], None] | None = None,
+        clear_study_index_callback: Callable[[], DeletionResult] | None = None,
+        clear_mpr_cache_callback: Callable[[], DeletionResult] | None = None,
     ):
         super().__init__(parent)
 
         self.config_manager = config_manager
         self._manage_wl_presets_callback = manage_wl_presets_callback
+        self._clear_study_index_callback = clear_study_index_callback
+        self._clear_mpr_cache_callback = clear_mpr_cache_callback
         self.setWindowTitle("Settings")
         self.setModal(True)
         self.resize(520, 420)
@@ -155,42 +159,12 @@ class SettingsDialog(QDialog):
         wl_layout.addWidget(wl_manage_btn)
         layout.addWidget(wl_group)
 
-        # ── Local study index ──────────────────────────────────────────────
-        idx_group = QGroupBox("Local study index (encrypted)")
-        idx_form = QFormLayout(idx_group)
-        self._study_index_auto_add = QCheckBox(
-            "Automatically add files to the study index when opened successfully"
+        self._privacy_storage_panel = PrivacyStorageSettingsPanel(
+            self.config_manager,
+            clear_study_index_callback=self._clear_study_index_callback,
+            clear_mpr_cache_callback=self._clear_mpr_cache_callback,
         )
-        self._study_index_auto_add.setChecked(
-            self.config_manager.get_study_index_auto_add_on_open()
-        )
-        idx_form.addRow(self._study_index_auto_add)
-
-        path_row = QHBoxLayout()
-        self._study_index_db_path = QLineEdit()
-        self._study_index_db_path.setText(
-            self.config_manager.config.get("study_index_db_path", "") or ""
-        )
-        self._study_index_db_path.setPlaceholderText(
-            "(default: next to your app config file)"
-        )
-        browse_btn = QPushButton("Browse…")
-        browse_btn.clicked.connect(self._browse_study_index_db)
-        default_btn = QPushButton("Use default path")
-        default_btn.clicked.connect(self._clear_study_index_db_path)
-        path_row.addWidget(self._study_index_db_path, stretch=1)
-        path_row.addWidget(browse_btn)
-        path_row.addWidget(default_btn)
-        path_wrap = QVBoxLayout()
-        path_wrap.addLayout(path_row)
-        hint = QLabel(
-            "The index database is encrypted (SQLCipher). The encryption key is stored in "
-            "your OS credential manager, not in this JSON config file."
-        )
-        hint.setWordWrap(True)
-        path_wrap.addWidget(hint)
-        idx_form.addRow("Database file:", path_wrap)
-        layout.addWidget(idx_group)
+        layout.addWidget(self._privacy_storage_panel)
 
         layout.addStretch()
         scroll.setWidget(inner)
@@ -216,28 +190,6 @@ class SettingsDialog(QDialog):
                 "border-radius: 3px;"
             )
 
-    def _browse_study_index_db(self) -> None:
-        start = (
-            self._study_index_db_path.text().strip()
-            or self.config_manager.get_default_study_index_db_path()
-        )
-        parent_dir = start
-        import os
-
-        if parent_dir and not os.path.isdir(parent_dir):
-            parent_dir = os.path.dirname(parent_dir) or start
-        path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Study index database file",
-            start or self.config_manager.get_default_study_index_db_path(),
-            "SQLite database (*.sqlite *.db);;All files (*.*)",
-        )
-        if path:
-            self._study_index_db_path.setText(path)
-
-    def _clear_study_index_db_path(self) -> None:
-        self._study_index_db_path.setText("")
-
     def _on_accept(self) -> None:
         accent_key = self._accent_combo.currentData()
         if accent_key:
@@ -245,10 +197,14 @@ class SettingsDialog(QDialog):
         toolbar_style = self._toolbar_label_combo.currentData()
         if toolbar_style:
             self.config_manager.set_toolbar_label_style(toolbar_style)
-        self.config_manager.set_study_index_auto_add_on_open(
-            self._study_index_auto_add.isChecked()
-        )
-        self.config_manager.set_study_index_db_path(self._study_index_db_path.text())
-        self.config_manager.save_config()
+        if not self._privacy_storage_panel.apply():
+            return
+        if not self.config_manager.save_config():
+            QMessageBox.warning(
+                self,
+                "Settings Not Saved",
+                "The settings file could not be updated. Your changes were not confirmed.",
+            )
+            return
         self.settings_applied.emit()
         self.accept()

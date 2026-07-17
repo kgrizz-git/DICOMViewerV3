@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Agent instructions – DICOM Viewer V3
 
-**Last updated:** 2026-07-14
+**Last updated:** 2026-07-16
 
 **Table of contents** for agents: operational facts here; architecture, module tree, and harness checks linked below (progressive disclosure per [harness engineering](https://openai.com/index/harness-engineering/)).
 
@@ -50,7 +50,6 @@ If no venv exists: `python -m venv .venv`, activate, `pip install -r requirement
 | Developer doc index | [`dev-docs/README.md`](dev-docs/README.md) |
 | UI design spec | [`DESIGN.md`](DESIGN.md) |
 | Manual agent smoke steps | [`dev-docs/orchestration/AGENT_SMOKE.md`](dev-docs/orchestration/AGENT_SMOKE.md) |
-| Multi-agent state | [`plans/orchestration-state.md`](plans/orchestration-state.md) |
 | **Debug / diagnostic prints** | [`src/utils/debug_flags.py`](src/utils/debug_flags.py) — all `DEBUG_*` toggles (default `False`) |
 
 ## Conventions (short)
@@ -63,13 +62,28 @@ If no venv exists: `python -m venv .venv`, activate, `pip install -r requirement
 - **Tracking split / plan archive:** [`dev-docs/TO_DO.md`](dev-docs/TO_DO.md) is the active backlog, not a completion log. Remove fully completed items once captured in [`CHANGELOG.md`](CHANGELOG.md), [`dev-docs/MAINTENANCE_LOG.md`](dev-docs/MAINTENANCE_LOG.md), or a durable plan/investigation record. Move finished implementation plans to [`dev-docs/plans/completed/`](dev-docs/plans/completed/); keep only ongoing dependency/reference plans in [`dev-docs/plans/supporting/`](dev-docs/plans/supporting/). Use `CHANGELOG.md` for user-visible release changes and `MAINTENANCE_LOG.md` for CI, harness, static-analysis, dependency-verification, and repo-maintenance history.
 - **Doc dates:** when editing a document that already has a `**Last updated:**` line, update the date if the edit changes policy, workflow, user-facing behavior, or canonical guidance. Do not bump dates for typo-only edits.
 - **PHI / PII guardrails:** Before adding studies, DICOM, spreadsheets, screenshots, archives, document packages, or binary assets, read [`PHI_PII_REPOSITORY_GUARDRAILS.md`](dev-docs/PHI_PII_REPOSITORY_GUARDRAILS.md). The blocking artifact gate is `scripts/check_no_phi_artifacts.py`; its reviewed-asset manifest is `security/approved-media-sha256.json`. **Hounddog is local-only, non-blocking, and disconnected from accounts, repository integrations, uploads, and CI until the user explicitly changes that policy.**
-- **Privacy hooks:** `scripts/git_hook_privacy_checks.py` on staged `src/*.py` — [`SECURITY_TOOLS_CLI_GUIDE.md`](dev-docs/SECURITY_TOOLS_CLI_GUIDE.md).
+- **Protected local data roots:** Never stage files under `data/` (except `.gitkeep`), `test-DICOM-data/`, `sample-DICOM-gitignored/`, `decoder-spike-artifacts/`, `resources/screenshots-ignored/`, `logs/`, `.sonar-local/`, `tmp/`, or `backups/`. Do not remove their privacy-critical `.gitignore` rules. The staged artifact gate blocks both actions even when `git add -f` is used. Relevant staged fixture/data, raster-media, and DICOM changes automatically invoke the available local advisory PhiScan/OCR/Presidio/DICOM wrappers; a `main` push invokes local-only Hounddog after blocking gates pass. Never treat an advisory clean result as permission to update the reviewed-asset manifest without the required human review.
+- **Privacy checks:** run `scripts/git_hook_privacy_checks.py --staged` before
+  committing output/logging/dialog/debug changes, `--all` for the complete
+  advisory debt inventory, and `--all --critical` before push. Before
+  adding data/media/DICOM, run the artifact gate plus the relevant isolated
+  `scripts/privacy_tool_review.py` lane. Hounddog remains local-only,
+  no-account/no-SCM, advisory. Scanner `SKIP` is not a pass. Never paste matched
+  values into chat, commits, issues, or reports — see
+  [`SECURITY_TOOLS_CLI_GUIDE.md`](dev-docs/SECURITY_TOOLS_CLI_GUIDE.md).
 - **Debug flags:** Before adding `print` tracing, read [`src/utils/debug_flags.py`](src/utils/debug_flags.py) and gate behind an existing or new `DEBUG_*` constant (default **`False`**). Each flag documents which modules it affects. Revert flags to **`False`** before commit — CI **debug-flags-check** fails on any `True`. Do not use `DEBUG_AGENT_LOG` in release builds (writes `debug-088dbc.log`).
 - **Long-running commands:** use ~10 minute timeouts for full `pytest` or `pyright src/`.
 
-## Multi-agent orchestration
+## Optional delegation
 
-Subagents (`/orchestrator`, `/planner`, `/coder`, …) use the **Task** tool. Default **`CHAIN_MODE` is `autonomous`:** primary agent chains **`Task(orchestrator)`** after each specialist until **complete** / **blocked** / **`needs_user`**, unless [`plans/orchestration-state.md`](plans/orchestration-state.md) sets **`## Chain mode`** to **`step`**. See **`.cursor/rules/orchestration-auto-chain.mdc`** and **`.claude/skills/team-orchestration-delegation/SKILL.md`**. Orchestrator must end with **`NEXT_TASK_TOOL:`** / **`NEXT_TASK_TOOL_SECOND:`**. **`medium`/`high`** risk: batch **`tester`** at slice end; UX changes → manual smoke in [`AGENT_SMOKE.md`](dev-docs/orchestration/AGENT_SMOKE.md). Run packet: [`dev-docs/orchestration/RUN_PACKET_TEMPLATE.md`](dev-docs/orchestration/RUN_PACKET_TEMPLATE.md).
+Default to one agent implementing and verifying the requested change. Use
+subagents only when the user asks for them, two tasks are genuinely independent,
+or a single independent review materially reduces risk. Do not auto-chain
+planner/coder/tester/reviewer roles or maintain orchestration counters for normal
+work. For a high-risk privacy, security, persistence, or release change, prefer
+one focused independent review and one full test-suite run at the end of the
+completed batch. Do not create orchestration state, role handoff logs, or test
+ledgers for ordinary work.
 
 ## Verification before claiming done
 
@@ -85,7 +99,7 @@ After editing `user-docs/` or `dev-docs/README.md`, run the link checker (CI: **
 
 ## CI (summary)
 
-Workflows on **main** / **develop**: tests, Semgrep, Grype, debug flags, user-docs links, repo harness. **SonarCloud** Automatic Analysis scope: [`.sonarcloud.properties`](.sonarcloud.properties) (`src/` sources, `tests/` tests). Details: [`dev-docs/CONTRIBUTING.md`](dev-docs/CONTRIBUTING.md). Storage/CI review: [`GITHUB_ACTIONS_CI_CD_REVIEW_AND_STORAGE.md`](dev-docs/plans/supporting/GITHUB_ACTIONS_CI_CD_REVIEW_AND_STORAGE.md).
+Workflows on **main** / **develop**: tests, Semgrep, Grype, debug flags, user-docs links, repo harness. Coverage remains in local/CI console output and is not uploaded to external analysis services. Details: [`dev-docs/CONTRIBUTING.md`](dev-docs/CONTRIBUTING.md). Storage/CI review: [`GITHUB_ACTIONS_CI_CD_REVIEW_AND_STORAGE.md`](dev-docs/plans/supporting/GITHUB_ACTIONS_CI_CD_REVIEW_AND_STORAGE.md).
 
 ## View and display (agent-relevant defaults)
 

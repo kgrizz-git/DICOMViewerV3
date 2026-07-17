@@ -11,11 +11,13 @@ Usage (from the repository root, with the project venv active):
     python scripts/run_local_sonarqube.py
     python scripts/run_local_sonarqube.py --with-coverage
     python scripts/run_local_sonarqube.py --status
+    python scripts/run_local_sonarqube.py --check-freshness-days 30
 """
 
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import os
 import shutil
@@ -28,6 +30,11 @@ from urllib.error import URLError
 from urllib.parse import quote, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
+try:
+    from scripts.privacy_console import print_redacted
+except ModuleNotFoundError:
+    print_redacted = importlib.import_module("privacy_console").print_redacted
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PROJECT_SETTINGS = Path("tools/sonarqube/sonar-project.properties")
 DEFAULT_HOST_URL = "http://localhost:9000"
@@ -36,6 +43,7 @@ SCANNER_IMAGE = "sonarsource/sonar-scanner-cli:latest"
 SCANNER_CACHE_VOLUME = "dicom-viewer-v3-sonar-scanner-cache"
 STATE_DIRECTORY = Path(".sonar-local")
 STATE_FILE_NAME = "last-analysis.json"
+DEFAULT_FRESHNESS_DAYS = 30
 
 
 def normalize_host_url(value: str) -> str:
@@ -75,7 +83,7 @@ def read_last_submission(repo_root: Path) -> dict[str, Any] | None:
     except FileNotFoundError:
         return None
     except json.JSONDecodeError:
-        print(f"Ignoring malformed local SonarQube record: {path.relative_to(repo_root)}", file=sys.stderr)
+        print_redacted(f"Ignoring malformed local SonarQube record: {path.relative_to(repo_root)}", file=sys.stderr)
         return None
     return data if isinstance(data, dict) else None
 
@@ -118,6 +126,59 @@ def print_last_submission(repo_root: Path) -> int:
     print(f"Scanner: {record.get('scanner', 'unknown')}")
     print(f"Coverage included: {record.get('included_coverage', False)}")
     print(f"Dashboard: {record.get('dashboard_url', 'unknown')}")
+    return 0
+
+
+def parse_submission_time(record: dict[str, Any]) -> datetime | None:
+    """Return a timezone-aware successful-submission time when valid."""
+    value = record.get("submitted_at_utc")
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
+def check_submission_freshness(
+    repo_root: Path,
+    *,
+    max_age_days: int = DEFAULT_FRESHNESS_DAYS,
+    now: datetime | None = None,
+) -> int:
+    """Check the ignored local record without contacting SonarQube."""
+    record = read_last_submission(repo_root)
+    submitted = parse_submission_time(record) if record is not None else None
+    current = (now or datetime.now(UTC)).astimezone(UTC)
+    if submitted is None:
+        print(
+            "No valid local SonarQube analysis is recorded. "
+            "Run: python scripts/run_local_sonarqube.py --with-coverage"
+        )
+        return 3
+
+    age_seconds = (current - submitted).total_seconds()
+    if age_seconds < 0:
+        print("The local SonarQube record is future-dated; run a fresh analysis.")
+        return 3
+    age_days = int(age_seconds // 86_400)
+    if age_days > max_age_days:
+        age_label = "day" if age_days == 1 else "days"
+        print(
+            f"Local SonarQube analysis is stale ({age_days} {age_label}; "
+            f"target <= {max_age_days}). Run: "
+            "python scripts/run_local_sonarqube.py --with-coverage"
+        )
+        return 3
+
+    age_label = "day" if age_days == 1 else "days"
+    print(
+        f"Local SonarQube analysis is fresh ({age_days} {age_label}; "
+        f"target <= {max_age_days})."
+    )
     return 0
 
 
@@ -213,10 +274,17 @@ def run_coverage(repo_root: Path) -> int:
 def parse_args() -> argparse.Namespace:
     """Parse the narrow local-analysis command line."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
+    record_mode = parser.add_mutually_exclusive_group()
+    record_mode.add_argument(
         "--status",
         action="store_true",
         help="Show the last successful local scanner submission without contacting SonarQube.",
+    )
+    record_mode.add_argument(
+        "--check-freshness-days",
+        type=int,
+        metavar="DAYS",
+        help="Check the ignored local submission record without contacting SonarQube.",
     )
     parser.add_argument(
         "--with-coverage",
@@ -258,13 +326,20 @@ def main() -> int:
     repo_root = REPO_ROOT
     if args.status:
         return print_last_submission(repo_root)
+    if args.check_freshness_days is not None:
+        if args.check_freshness_days < 1:
+            print("--check-freshness-days must be at least 1", file=sys.stderr)
+            return 2
+        return check_submission_freshness(
+            repo_root, max_age_days=args.check_freshness_days
+        )
 
     try:
         host_url = normalize_host_url(args.host_url)
         docker_url = docker_host_url(host_url, args.docker_host_url)
         mode = scanner_mode(args.scanner)
     except (RuntimeError, ValueError) as exc:
-        print(f"SonarQube setup error: {exc}", file=sys.stderr)
+        print_redacted(f"SonarQube setup error: {exc}", file=sys.stderr)
         return 2
 
     if not os.environ.get("SONAR_TOKEN"):
@@ -279,10 +354,10 @@ def main() -> int:
         try:
             status = get_server_status(host_url)
         except RuntimeError as exc:
-            print(f"SonarQube is not ready: {exc}", file=sys.stderr)
+            print_redacted(f"SonarQube is not ready: {exc}", file=sys.stderr)
             return 2
         if status != "UP":
-            print(f"SonarQube is not ready: {host_url} reported status {status!r}.", file=sys.stderr)
+            print_redacted(f"SonarQube is not ready: {host_url} reported status {status!r}.", file=sys.stderr)
             return 2
 
     if args.with_coverage and run_coverage(repo_root) != 0:
@@ -315,7 +390,7 @@ def main() -> int:
     )
     record = read_last_submission(repo_root)
     dashboard_url = record.get("dashboard_url") if record else f"{host_url}/dashboard?id={args.project_key}"
-    print(f"Analysis submitted. Recorded at {record_path.relative_to(repo_root)}")
+    print_redacted(f"Analysis submitted. Recorded at {record_path.relative_to(repo_root)}")
     print(f"Dashboard: {dashboard_url}")
     return 0
 

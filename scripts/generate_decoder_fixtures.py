@@ -28,6 +28,11 @@ from pathlib import Path
 import gdcm  # type: ignore  # pyright: ignore[reportMissingImports]  # provided by python-gdcm
 import pydicom
 
+try:
+    from scripts.privacy_console import print_redacted
+except ModuleNotFoundError:
+    from privacy_console import print_redacted
+
 # Friendly keyword -> (GDCM TransferSyntax enum attr, expected DICOM UID).
 SYNTAX_MAP: dict[str, tuple[str, str]] = {
     "jpeg_baseline": ("JPEGBaselineProcess1", "1.2.840.10008.1.2.4.50"),
@@ -99,7 +104,7 @@ def main() -> int:
     uid = transcode(args.source, args.out, args.syntax, args.jpegls_error)
     expected = SYNTAX_MAP[args.syntax][1]
     ok = "OK" if uid == expected else f"WARNING expected {expected}"
-    print(f"Wrote {args.out}  TransferSyntax={uid}  [{ok}]")
+    print_redacted(f"Wrote {args.out}  TransferSyntax={uid}  [{ok}]")
     return 0 if uid == expected else 1
 
 

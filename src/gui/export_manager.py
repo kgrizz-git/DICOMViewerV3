@@ -20,7 +20,6 @@ Requirements:
     - PIL/Pillow, pydicom (Dataset)
     - core.dicom_processor, core.export_rendering
 """
-
 import os
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -33,6 +32,7 @@ from core.dicom_processor import DICOMProcessor
 from gui import export_rendering as _er
 from utils.deep_anonymizer import DeepDICOMAnonymizer
 from utils.dicom_anonymizer import DICOMAnonymizer
+from utils.privacy.console import print_redacted
 
 if TYPE_CHECKING:
     from utils.deep_anonymizer import DeepAnonymizerOptions
@@ -610,6 +610,6 @@ class ExportManager:
 
                 return (True, downgrade_info)
         except Exception as e:
-            print(f"Error exporting slice: {e}")
+            print_redacted(f"Error exporting slice: {e}")
             return (False, None)
 

@@ -7,8 +7,6 @@ the parent SeriesNavigator via a lazy import to avoid import cycles.
 Inputs/outputs: standard Qt widget behavior.
 Requirements: PySide6, PIL, numpy, gui.navigator_colors.
 """
-
-
 import numpy as np
 from PIL import Image
 from PySide6.QtCore import QMimeData, QPoint, QRect, Qt, Signal
@@ -29,6 +27,7 @@ from PySide6.QtWidgets import (
 )
 
 from gui.navigator_colors import SUBWINDOW_DOT_COLORS, subwindow_slot_display_number
+from utils.privacy.console import print_redacted
 
 
 class StudyDivider(QFrame):
@@ -472,7 +471,7 @@ class SeriesThumbnail(QFrame):
                 painter.drawPixmap(x, y, scaled_pixmap)
             except Exception as e:
                 # Draw placeholder if image conversion fails
-                print(f"Error painting thumbnail: {e}")
+                print_redacted(f"Error painting thumbnail: {e}")
                 painter.fillRect(self.rect(), QColor(128, 128, 128))
                 painter.setPen(QColor(255, 255, 255))
                 painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "Error")

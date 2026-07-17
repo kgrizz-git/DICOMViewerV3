@@ -38,7 +38,6 @@ from PySide6.QtWidgets import (
 )
 
 from utils.config_manager import ConfigManager
-from utils.log_sanitizer import sanitize_message
 
 logger = logging.getLogger(__name__)
 
@@ -644,10 +643,7 @@ class OverlayConfigDialog(QDialog):
         try:
             self._handle_modality_changed(modality)
         except Exception:
-            logger.exception(
-                sanitize_message("Overlay config modality change failed for %s"),
-                sanitize_message(modality),
-            )
+            logger.error("Overlay config modality change failed; details withheld")
 
     def _handle_modality_changed(self, modality: str) -> None:
         """Update working config for the previous modality, then preview the new one."""

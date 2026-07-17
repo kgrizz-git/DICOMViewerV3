@@ -112,6 +112,8 @@ def initialize_handlers(app: DICOMViewerApp) -> None:
         ui_refresh_callback=app._refresh_tag_ui,
         tag_export_union_host=app,
         manage_wl_presets_callback=app._open_wl_preset_manager,
+        clear_study_index_callback=app.study_index_service.clear_all_data,
+        clear_mpr_cache_callback=app._mpr_controller.clear_persistent_cache,
     )
     # Set annotation options callback
     app.dialog_coordinator.annotation_options_applied_callback = app._on_annotation_options_applied

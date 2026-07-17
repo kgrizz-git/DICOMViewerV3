@@ -13,13 +13,27 @@ Activate a virtual environment before installing or running (see **`AGENTS.md`**
 ## Refactor backups and Git hooks
 
 - See **`.cursor/rules`** and project user rules. **Before major refactors only**, copy files to **`backups/`** with an ISO-like date in the name; do not proceed until the backup exists or the user has waived it. See **`scripts/git-hook-prune-backups.py`** for how **`backups/`** is pruned.
-- **Local Git hooks** (details in **`DEVELOPER_SETUP.md`**): with repo-managed hooks installed, **`scripts/git-hook-security-gate.py`** always runs **`scripts/git_hook_privacy_checks.py`** first on **staged `src/*.py`** (all branches): no real **`traceback.print_exc(`** calls (**`tokenize`** skips docstrings/comments/strings), plus logging/dialog heuristics on **added** lines; **`DICOMVIEWER_PRIVACY_HOOK=warn`** prints issues without blocking. The `commit-msg` hook separately blocks sensitive local paths, identities, private network addresses, and clinical identifiers without printing matched values. The pre-commit hook prunes **`backups/`** on **`main`** and **`WIP`** by intent (`scripts/git-hook-prune-backups.py --days 3 --max-commits 10`). Removals are staged with **`git add -u -- backups`**; on **`main`**, **pre-commit** then runs a **light** security check (debug flags + **detect-secrets** on **staged** files via `scripts/run_security_scan.py --pre-commit`, which exits **non-zero** on failure). A **full** scan (`--all`) runs on **pre-push** to **`main`**. Set **`DICOMVIEWER_PRECOMMIT_FULL_SECURITY_SCAN=1`** to force the full suite on pre-commit.
+- **Local Git hooks** (details in **`DEVELOPER_SETUP.md`**): the repo-managed
+  pre-commit path blocks the staged artifact gate and
+  `scripts/git_hook_privacy_checks.py --staged`; findings report only path,
+  line, and rule category. The `commit-msg` hook blocks sensitive metadata
+  without echoing matched values. Pre-push runs the full-tree privacy and
+  security lanes for `main`. Optional scanner wrappers remain local and are
+  documented in the PHI/PII guardrails; `SKIP` is not a successful scan.
+  The static privacy hook is a blocking syntactic guard, not a complete Python
+  data-flow proof; fail-closed runtime output/storage boundaries are the
+  authoritative protection.
 
 ## Security tooling and optional dev dependencies
 
 - **`pip install -r requirements-dev.txt`** — adds local Python security scanners (semgrep, detect-secrets).
 - **TruffleHog v3:** install separately via `powershell -ExecutionPolicy Bypass -File .\scripts\install-trufflehog-v3.ps1 -AddToUserPath` so local scans align with CI’s TruffleHog v3 action/binary line.
 - **Debug flags:** do not merge with **`DEBUG_*`** set to **`True`** in `src/utils/debug_flags.py` (CI fails on that).
+- **Isolated privacy tools:** create a separate environment from
+  `requirements-phi-tools.txt`, then use `scripts/privacy_tool_review.py`.
+  Hounddog is advisory/no-account/no-SCM; PhiScan scans staged data-like blobs;
+  media and DICOM review are manual admission aids and never certify removal of
+  PHI.
 
 ## Versioning and changelog
 
@@ -44,8 +58,15 @@ Maintain a rolling checklist of bundled Python packages, vendored binaries (e.g.
 - **macOS PySide6 submodule excludes** are **off** by default; set **`PYINSTALLER_MACOS_SLIM=1`** locally or enable the optional **workflow_dispatch** slim job — see **`info/BUILDING_EXECUTABLES.md`** / **`info/PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md`**. **`tests/test_pyinstaller_exclude_audit.py`** guards excluded module names against **`src/`** and **`tests/`** imports.
 - **`actions/upload-artifact` v6+** and related actions may require **self-hosted runners ≥ 2.327.1** (Node 24); GitHub-hosted **`ubuntu-latest`** satisfies this.
 - If **`.github/dependabot.yml`** lists **`labels:`**, those labels must exist on the repo (e.g. `dependencies`, `github-actions`) or Dependabot will warn on PRs.
-- **SonarQube Cloud** uses **Automatic Analysis** (GitHub App), configured by [`.sonarcloud.properties`](../.sonarcloud.properties): `sonar.sources=src`, `sonar.tests=tests`. Do **not** add a root `sonar-project.properties` while Automatic Analysis is on (Sonar ignores it; switch to CI-based analysis first if you need that file). Per-rule ignores for Automatic Analysis are set in the SonarQube Cloud UI (**Administration → General Settings → Analysis Scope**), not in the properties file.
+- **External analysis uploads are disabled by repository policy.** Coverage is
+  printed in the CI job log but is not sent to Codecov/Coveralls. SonarQube
+  Cloud, DeepSource, Sentry, and similar repository integrations should remain
+  uninstalled or disabled. Use the opt-in local SonarQube runner and local
+  security tools when deeper analysis is needed.
 - **Local SonarQube Community Build** is an opt-in developer tool, not a hook or CI gate. [`scripts/run_local_sonarqube.py`](../scripts/run_local_sonarqube.py) supplies the isolated [`tools/sonarqube/sonar-project.properties`](../tools/sonarqube/sonar-project.properties) file explicitly, can use Docker for the scanner, and writes the last successful submission timestamp to ignored `.sonar-local/last-analysis.json`. See [DEVELOPER_SETUP.md](DEVELOPER_SETUP.md) for token, server, coverage, and Docker-network guidance.
+  Run it with coverage at least every 30 days, before releases, and after large
+  dependency or security-sensitive changes. Main-push hooks provide a
+  non-blocking stale/missing reminder after all blocking local gates pass.
 
 ## User documentation links
 
@@ -63,7 +84,10 @@ python -m pytest tests/test_user_docs_links.py -q
 
 CI runs **`.github/workflows/user-docs-links.yml`** on **`main`** / **`develop`**.
 
-## Module layout and agent orchestration
+## Module layout and optional delegation
 
-- **`AGENTS.md`** at the repo root documents the **`src/`** tree, controller roles, **`_connect_signals`** rules, multi-agent **`Task`** chaining, and in-app display options for tooling context.
-- Multi-agent details: **`.cursor/rules/orchestration-auto-chain.mdc`**, **`.claude/skills/team-orchestration-delegation/SKILL.md`**, **`.claude/agents/orchestrator.md`**, **`orchestration/RUN_PACKET_TEMPLATE.md`**.
+- **`AGENTS.md`** at the repo root documents the project map, verification
+  commands, privacy rules, and in-app display options for tooling context.
+- One agent is the default. Delegation is optional for genuinely independent
+  work or one material high-risk review; there is no automatic
+  planner/coder/tester/reviewer chain.

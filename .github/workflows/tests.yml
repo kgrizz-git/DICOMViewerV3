@@ -1,12 +1,8 @@
-name: Tests + Codecov
+name: Tests
 
-# Runs the full pytest suite on every push/PR to main/develop, collects coverage
-# via pytest-cov, and uploads coverage.xml to Codecov with codecov-action@v5.
-#
-# The Codecov GitHub App should already be installed for the org (Step 1 of
-# Codecov's quick-start). The repo is public, so tokenless uploads are enabled
-# by default — no CODECOV_TOKEN secret is needed unless an org admin has set
-# tokens to "Required" under Settings → Global Upload Token.
+# Runs the full pytest suite on every push/PR to main/develop and prints a
+# coverage summary in the GitHub Actions log. Coverage data is not uploaded to
+# Codecov, Coveralls, SonarQube Cloud, or another external analysis service.
 #
 # Qt tests run headless via QT_QPA_PLATFORM=offscreen (PySide6).
 
@@ -44,7 +40,6 @@ concurrency:
 
 permissions:
   contents: read
-  checks: write
 
 jobs:
   test:
@@ -84,14 +79,5 @@ jobs:
         run: |
           python -m pytest tests \
             --cov=src \
-            --cov-report=xml \
             --cov-report=term \
             -v --tb=short
-
-      - name: Upload coverage to Codecov
-        if: always() && hashFiles('coverage.xml') != ''
-        uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5.5.5
-        with:
-          files: ./coverage.xml
-          fail_ci_if_error: false
-          verbose: true

@@ -69,10 +69,10 @@ immediately without re-running the installer.
 
 ## Optional local SonarQube Community Build analysis
 
-This repository keeps **SonarQube Cloud Automatic Analysis** enabled for GitHub,
-but also supports an opt-in analysis against a local SonarQube Community Build
-instance. It is intentionally **not** a Git hook: the scan can take time, and
-`--with-coverage` runs the full pytest suite first.
+This repository supports opt-in analysis against a local SonarQube Community
+Build instance. SonarQube Cloud and other external analysis uploads are
+disabled by policy. The local scan is intentionally **not** a Git hook: it can
+take time, and `--with-coverage` runs the full pytest suite first.
 
 1. Start the existing local SonarQube Community Build service and confirm its UI
    is reachable at `http://localhost:9000` (or set `SONAR_HOST_URL` to its URL).
@@ -109,9 +109,20 @@ scanner cannot reach a service published on host `localhost`, the script maps it
 to `host.docker.internal`; set `SONAR_DOCKER_HOST_URL` to override that container
 address (for example, a named Docker network service).
 
-Do not add a root `sonar-project.properties`: it would interfere with the
-existing SonarQube Cloud Automatic Analysis configuration. The separate local
-settings file is passed only by this runner.
+Recommended cadence: run `python scripts/run_local_sonarqube.py
+--with-coverage` at least every 30 days, before a release, and after a large
+dependency or security-sensitive change. A push that updates `main` checks the
+ignored timestamp only after the blocking privacy, PHI, secret, type, test, and
+full local scanner gates pass. Missing or stale analysis prints a reminder but
+does not block contributors who do not have the local service or token. Check
+freshness without contacting SonarQube:
+
+```bash
+python scripts/run_local_sonarqube.py --check-freshness-days 30
+```
+
+Do not add a root `sonar-project.properties` or cloud-analysis configuration.
+The separate local settings file is passed only by this runner.
 
 **Privacy / logging gate:** `scripts/git-hook-security-gate.py` invokes **`scripts/git_hook_privacy_checks.py`** on every **pre-commit** and **pre-push** invocation (before branch-gated scans). It reads the **staged** index for **`src/*.py`**: forbids real **`traceback.print_exc(`** calls (matches inside **`tokenize`** **STRING**/**COMMENT** tokens—e.g. docstrings—are skipped); on **git-added** lines only, applies heuristics for patient tag names in logs, path-like literals in **`logger.*`** calls, raw-exception patterns in **`QMessageBox`**-style calls, and **`logger.*`** with non-literal messages without **`sanitize_message`** / **`sanitize_exception`**. Set **`DICOMVIEWER_PRIVACY_HOOK=warn`** to print findings without blocking. From repo root: `.venv\Scripts\python.exe scripts\git_hook_privacy_checks.py`.
 

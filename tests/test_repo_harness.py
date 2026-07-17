@@ -133,5 +133,64 @@ class TestTodoBacklogPolicy(unittest.TestCase):
         self.assertEqual(errors, [])
 
 
+class TestExternalAnalysisUploadPolicy(unittest.TestCase):
+    """Unit-test the local-first coverage and analysis policy."""
+
+    def test_rejects_external_config_and_workflow_action(self) -> None:
+        import tempfile
+
+        module = _load_harness_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workflows = root / ".github" / "workflows"
+            workflows.mkdir(parents=True)
+            (root / "codecov.yml").write_text("coverage: {}\n", encoding="utf-8")
+            (workflows / "tests.yml").write_text(
+                "steps:\n  - uses: codecov/codecov-action@v5\n",
+                encoding="utf-8",
+            )
+
+            errors = module.check_external_analysis_upload_policy(root)
+
+        self.assertEqual(len(errors), 2)
+        self.assertTrue(any("codecov.yml" in error for error in errors))
+        self.assertTrue(any("codecov/codecov-action" in error for error in errors))
+
+    def test_accepts_console_only_local_coverage(self) -> None:
+        import tempfile
+
+        module = _load_harness_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workflows = root / ".github" / "workflows"
+            workflows.mkdir(parents=True)
+            (workflows / "tests.yml").write_text(
+                "steps:\n  - run: python -m pytest --cov=src --cov-report=term\n",
+                encoding="utf-8",
+            )
+
+            errors = module.check_external_analysis_upload_policy(root)
+
+        self.assertEqual(errors, [])
+
+    def test_rejects_secret_verification_against_provider_apis(self) -> None:
+        import tempfile
+
+        module = _load_harness_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workflows = root / ".github" / "workflows"
+            workflows.mkdir(parents=True)
+            (workflows / "secrets.yml").write_text(
+                "steps:\n  - run: trufflehog filesystem . --only-verified\n",
+                encoding="utf-8",
+            )
+
+            errors = module.check_external_analysis_upload_policy(root)
+
+        self.assertEqual(len(errors), 1)
+        self.assertIn("network verification", errors[0])
+
+
 if __name__ == "__main__":
     unittest.main()

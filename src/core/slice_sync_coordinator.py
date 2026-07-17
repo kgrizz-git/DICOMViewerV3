@@ -34,10 +34,10 @@ Design notes
 * SliceStack geometry is cached per ``(study_uid, series_uid)`` and
   invalidated when a series is closed or reassigned.
 """
-
 from typing import Any
 
 from core.slice_geometry import SlicePlane, SliceStack, find_nearest_slice
+from utils.privacy.console import print_redacted
 
 
 class SliceSyncCoordinator:
@@ -358,7 +358,7 @@ class SliceSyncCoordinator:
             try:
                 self.app._mpr_controller.display_mpr_slice(target_idx, new_dataset_idx)
             except Exception as exc:  # pragma: no cover
-                print(f"[SliceSyncCoordinator] Error updating MPR subwindow {target_idx}: {exc}")
+                print_redacted(f"[SliceSyncCoordinator] Error updating MPR subwindow {target_idx}: {exc}")
             return None
 
         datasets = self._get_datasets(target_idx)
@@ -386,5 +386,5 @@ class SliceSyncCoordinator:
                 update_metadata=False,   # don't overwrite the metadata panel
             )
         except Exception as exc:  # pragma: no cover
-            print(f"[SliceSyncCoordinator] Error updating subwindow {target_idx}: {exc}")
+            print_redacted(f"[SliceSyncCoordinator] Error updating subwindow {target_idx}: {exc}")
         return None

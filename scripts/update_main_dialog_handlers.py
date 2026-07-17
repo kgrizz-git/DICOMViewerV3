@@ -13,8 +13,12 @@ Original scripted changes:
   3. Replace the body of each of the five logic-bearing _open_* methods with
      a one-liner delegation call.
 """
-
 import ast
+
+try:
+    from scripts.privacy_console import print_redacted
+except ModuleNotFoundError:
+    from privacy_console import print_redacted
 
 TARGET = 'src/main.py'
 
@@ -184,4 +188,4 @@ try:
     total_lines = content.count('\n') + 1
     print(f'SYNTAX OK\nLines: {total_lines}')
 except SyntaxError as e:
-    print(f'SYNTAX ERROR: {e}')
+    print_redacted(f'SYNTAX ERROR: {e}')

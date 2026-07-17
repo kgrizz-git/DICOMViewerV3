@@ -34,6 +34,10 @@ class StudyIndexConfigMixin:
     def _config(self) -> dict[str, Any]:
         return cast(dict[str, Any], getattr(self, "config"))
 
+    def _save_study_index_config(self) -> bool:
+        save_func = cast(Callable[[], bool], getattr(self, "save_config"))
+        return save_func()
+
     def _save_config(self) -> None:
         save_func = cast(Callable[[], None], getattr(self, "save_config"))
         save_func()
@@ -42,8 +46,14 @@ class StudyIndexConfigMixin:
         return cast(Path, getattr(self, "config_dir"))
 
     def get_default_study_index_db_path(self) -> str:
-        """Default index DB path under the app config directory."""
-        return str(self._study_index_config_dir() / "study_index.sqlite")
+        """Return the protected default, preserving an existing legacy database."""
+
+        legacy = self._study_index_config_dir() / "study_index.sqlite"
+        private_root = cast(Path, getattr(self, "private_storage_dir"))
+        protected = private_root / "study-index" / "study_index.sqlite"
+        if legacy.exists() and not protected.exists():
+            return str(legacy)
+        return str(protected)
 
     def get_study_index_db_path(self) -> str:
         """Resolved DB path: user override or default."""
@@ -52,17 +62,57 @@ class StudyIndexConfigMixin:
             return os.path.normpath(os.path.abspath(custom))
         return self.get_default_study_index_db_path()
 
-    def set_study_index_db_path(self, path: str) -> None:
+    def set_study_index_db_path(self, path: str) -> bool:
         """Set custom DB path, or empty string to use default."""
-        self._config()["study_index_db_path"] = (path or "").strip()
-        self._save_config()
+        config = self._config()
+        previous = config.get("study_index_db_path", "")
+        config["study_index_db_path"] = (path or "").strip()
+        if self._save_study_index_config():
+            return True
+        config["study_index_db_path"] = previous
+        return False
 
     def get_study_index_auto_add_on_open(self) -> bool:
-        return bool(self._config().get("study_index_auto_add_on_open", True))
+        consent = self._config().get("study_index_auto_add_consent")
+        if not isinstance(consent, bool):
+            return False
+        return consent is True and self._config().get("study_index_auto_add_on_open") is True
 
-    def set_study_index_auto_add_on_open(self, enabled: bool) -> None:
-        self._config()["study_index_auto_add_on_open"] = bool(enabled)
-        self._save_config()
+    def set_study_index_auto_add_on_open(self, enabled: bool) -> bool:
+        """Record an explicit user choice and apply it to automatic indexing."""
+
+        config = self._config()
+        previous_enabled = config.get("study_index_auto_add_on_open", False)
+        previous_consent = config.get("study_index_auto_add_consent")
+        config["study_index_auto_add_on_open"] = enabled is True
+        config["study_index_auto_add_consent"] = enabled is True
+        if self._save_study_index_config():
+            return True
+        config["study_index_auto_add_on_open"] = previous_enabled
+        if previous_consent is None:
+            config.pop("study_index_auto_add_consent", None)
+        else:
+            config["study_index_auto_add_consent"] = previous_consent
+        return False
+
+    def has_study_index_auto_add_consent(self) -> bool:
+        """Return whether an explicit enable/disable choice has been recorded."""
+
+        return isinstance(self._config().get("study_index_auto_add_consent"), bool)
+
+    def needs_study_index_auto_add_consent(self) -> bool:
+        """Return whether first-use or legacy migration consent is still required."""
+
+        return not self.has_study_index_auto_add_consent()
+
+    def is_study_index_auto_add_consent_migration(self) -> bool:
+        """Return whether a legacy auto-add setting lacks explicit consent metadata."""
+
+        loaded_keys = cast(set[str], getattr(self, "_loaded_config_keys", set()))
+        return (
+            "study_index_auto_add_on_open" in loaded_keys
+            and "study_index_auto_add_consent" not in loaded_keys
+        )
 
     def get_study_index_browser_column_order(self) -> list[str]:
         """

@@ -21,7 +21,6 @@ Requirements:
     - pydicom for DICOM dataset handling
     - DICOMProcessor for image processing
 """
-
 from collections.abc import Callable
 from datetime import datetime
 from typing import Any
@@ -36,6 +35,7 @@ from gui.main_window import MainWindow
 from gui.window_level_controls import WindowLevelControls
 from utils.debug_flags import DEBUG_DIAG, DEBUG_LAYOUT
 from utils.dicom_utils import get_composite_series_key
+from utils.privacy.console import print_redacted
 
 
 class ViewStateManager:
@@ -811,7 +811,7 @@ class ViewStateManager:
                         except Exception as e:
                             # If series pixel range calculation fails, use current slice range
                             error_type = type(e).__name__
-                            print(f"Error recalculating series pixel range for rescale toggle ({error_type}): {e}")
+                            print_redacted(f"Error recalculating series pixel range for rescale toggle ({error_type}): {e}")
                             center_range = (pixel_min, pixel_max)
                             width_range = (1.0, max(1.0, pixel_max - pixel_min))
                             # Clear stored series pixel range on error

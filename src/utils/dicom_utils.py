@@ -20,7 +20,6 @@ Requirements:
     - pydicom library
     - numpy for calculations
 """
-
 import re
 
 import numpy as np
@@ -29,6 +28,7 @@ from pydicom.tag import Tag
 
 from utils.debug_flags import DEBUG_PATIENT_COORDS
 from utils.dicom_tag_keys import leaf_tag_from_key
+from utils.privacy.console import print_redacted
 
 
 def calculate_pixel_spacing_from_fov(dataset: Dataset) -> tuple[float, float] | None:
@@ -490,7 +490,7 @@ def pixel_to_patient_coordinates(
 
     except Exception as e:
         if DEBUG_PATIENT_COORDS:
-            print(f"[DEBUG-PATIENT-COORDS] Error calculating patient coordinates: {e}")
+            print_redacted(f"[DEBUG-PATIENT-COORDS] Error calculating patient coordinates: {e}")
         return None
 
 

@@ -6,7 +6,6 @@ Extracted from ``export_manager`` for cohesion. ``ExportManager`` delegates here
 Requirements: PIL, numpy, pydicom, ``core.dicom_processor``, ``gui.overlay_text_builder``,
 ``utils.dicom_utils``.
 """
-
 import copy
 import logging
 import os
@@ -25,6 +24,7 @@ from gui.overlay_text_builder import get_corner_text, get_modality
 from tools.angle_measurement_items import AngleMeasurementItem
 from utils.dicom_utils import get_composite_series_key, get_slice_thickness
 from utils.log_sanitizer import sanitized_format_exc
+from utils.privacy.console import print_redacted
 
 _logger = logging.getLogger(__name__)
 
@@ -286,7 +286,7 @@ def process_image_by_photometric_interpretation(image: Image.Image, dataset: Dat
         return image
 
     except Exception as e:
-        print(f"[EXPORT] Error processing image by PhotometricInterpretation: {e}")
+        print_redacted(f"[EXPORT] Error processing image by PhotometricInterpretation: {e}")
         _logger.debug("%s", sanitized_format_exc())
         # Return original image on error
         return image
@@ -398,7 +398,7 @@ def create_projection_for_export(
 
         return image
     except Exception as e:
-        print(f"Error creating projection for export: {e}")
+        print_redacted(f"Error creating projection for export: {e}")
         _logger.debug("%s", sanitized_format_exc())
         return None
 
@@ -627,7 +627,7 @@ def create_projection_dataset(
 
         return projection_dataset
     except Exception as e:
-        print(f"Error creating projection dataset: {e}")
+        print_redacted(f"Error creating projection dataset: {e}")
         _logger.debug("%s", sanitized_format_exc())
         return None
 

@@ -176,6 +176,23 @@ class PathsConfigMixin:
             self._config()["recent_files"] = recent_files
             self._save_config()
 
+    def clear_recent_path_history(self) -> bool:
+        """Forget remembered input, export, report, and recent-item locations."""
+
+        config = self._config()
+        keys = ("last_path", "last_export_path", "last_pylinac_output_path", "recent_files")
+        previous = {key: config.get(key) for key in keys}
+        config["last_path"] = ""
+        config["last_export_path"] = ""
+        config["last_pylinac_output_path"] = ""
+        config["recent_files"] = []
+        save_func = cast(Callable[[], bool], getattr(self, "save_config"))
+        if save_func():
+            return True
+        for key, value in previous.items():
+            config[key] = value
+        return False
+
     def move_recent_file_up(self, file_path: str) -> None:
         """
         Move a recent file entry one position earlier (toward the top) in the recent files list.

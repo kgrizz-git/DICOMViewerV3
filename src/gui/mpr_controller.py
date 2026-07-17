@@ -30,6 +30,7 @@ Requirements:
 from __future__ import annotations
 
 import copy
+import logging
 import os
 from typing import Any
 
@@ -69,6 +70,10 @@ from core.mpr_volume import (
 from gui.dialogs.mpr_orientation_choice_dialog import MprOrientationChoiceDialog
 from utils.debug_flags import DEBUG_MPR
 from utils.dicom_utils import get_composite_series_key
+from utils.privacy.console import print_redacted
+from utils.privacy.safe_storage import DeletionResult
+
+_logger = logging.getLogger(__name__)
 
 
 def seed_mpr_combine_state(
@@ -165,15 +170,63 @@ class MprController(QObject):
     # ------------------------------------------------------------------
 
     def _init_cache(self) -> None:
-        """Set up the disk cache in the app's config directory."""
+        """Set up the protected disk cache only after explicit opt-in."""
         try:
-            cache_dir = self._app.config_manager.config_dir / "mpr_cache"
-            max_mb = int(self._app.config_manager.get("mpr_cache_max_mb", 500))
+            if not self._app.config_manager.get_mpr_cache_enabled():
+                result = self._app.config_manager.clear_mpr_cache_storage()
+                if not result.success:
+                    _logger.warning(
+                        "Disabled MPR cache storage could not be fully cleared",
+                        extra={"operation": "mpr_cache.clear", "failed": result.failed},
+                    )
+                self._cache = None
+                return
+            cache_dir = self._app.config_manager.get_mpr_cache_path()
+            max_mb = self._app.config_manager.get_mpr_cache_max_mb()
             self._cache = MprCache(cache_dir=cache_dir, max_size_mb=max_mb)
-            _mpr_log(f"Cache initialised: dir={cache_dir} max_mb={max_mb}")
+            _mpr_log(f"Cache initialised: enabled=True max_mb={max_mb}")
         except Exception as exc:
-            print(f"[MprController] Cache init failed: {exc}; caching disabled.")
+            _logger.warning(
+                "MPR cache initialization failed",
+                extra={"operation": "mpr_cache.init", "error_class": type(exc).__name__},
+            )
             self._cache = None
+
+    def clear_persistent_cache(self) -> DeletionResult:
+        """Clear active and legacy derived-pixel files with truthful counts."""
+
+        self._cache = None
+        result = self._app.config_manager.clear_mpr_cache_storage()
+        if result.success and self._app.config_manager.get_mpr_cache_enabled():
+            try:
+                self._cache = MprCache(
+                    cache_dir=self._app.config_manager.get_mpr_cache_path(),
+                    max_size_mb=self._app.config_manager.get_mpr_cache_max_mb(),
+                )
+            except Exception as exc:
+                _logger.warning(
+                    "MPR cache could not be reinitialized after clearing",
+                    extra={
+                        "operation": "mpr_cache.reinitialize",
+                        "error_class": type(exc).__name__,
+                    },
+                )
+                return DeletionResult(removed=result.removed, failed=result.failed + 1)
+        return result
+
+    def apply_cache_settings(self) -> None:
+        """Apply an explicit cache setting change immediately."""
+
+        if not self._app.config_manager.get_mpr_cache_enabled():
+            self.clear_persistent_cache()
+            self._cache = None
+            return
+        if self._cache is None:
+            self._init_cache()
+            return
+        self._cache.set_max_size_mb(
+            self._app.config_manager.get_mpr_cache_max_mb()
+        )
 
     # ------------------------------------------------------------------
     # Public API
@@ -345,7 +398,7 @@ class MprController(QObject):
             QMessageBox.critical(
                 mw,
                 "Save MPR as DICOM",
-                f"Export failed:\n{exc}",
+                "Export failed. Details were withheld to protect private data.",
             )
             return
 
@@ -427,7 +480,7 @@ class MprController(QObject):
                         update_metadata=(idx == getattr(self._app, "focused_subwindow_index", -1)),
                     )
                 except Exception as exc:
-                    print(f"[MprController] Failed to restore prior slice in window {idx}: {exc}")
+                    print_redacted(f"[MprController] Failed to restore prior slice in window {idx}: {exc}")
 
             if idx == getattr(self._app, "focused_subwindow_index", -1):
                 self._app.current_dataset = previous_dataset
@@ -451,7 +504,7 @@ class MprController(QObject):
                 image_viewer.original_image = None
                 image_viewer.viewport().update()
             except Exception as exc:
-                print(f"[MprController] Failed to clear MPR view in window {idx}: {exc}")
+                print_redacted(f"[MprController] Failed to clear MPR view in window {idx}: {exc}")
 
             view_state_manager = self._app.subwindow_managers.get(idx, {}).get("view_state_manager")
             if view_state_manager is not None:
@@ -459,7 +512,7 @@ class MprController(QObject):
                     view_state_manager.set_current_data_context(None, {}, "", "", 0)
                     view_state_manager.set_current_series_identifier(None)
                 except Exception as exc:
-                    print(f"[MprController] Failed to reset view state for window {idx}: {exc}")
+                    print_redacted(f"[MprController] Failed to reset view state for window {idx}: {exc}")
 
             if idx == getattr(self._app, "focused_subwindow_index", -1):
                 self._app.current_dataset = None
@@ -868,7 +921,7 @@ class MprController(QObject):
                     view_state_manager.get_series_identifier(overlay_dataset)
                 )
             except Exception as exc:
-                print(f"[MprController] Failed to update MPR view state in window {idx}: {exc}")
+                print_redacted(f"[MprController] Failed to update MPR view state in window {idx}: {exc}")
 
         is_same_series = True  # Always preserve zoom when scrolling MPR.
         image_viewer.set_image(pil_image, preserve_view=is_same_series)
@@ -901,7 +954,7 @@ class MprController(QObject):
                 ):
                     roi_coordinator.update_roi_statistics_overlays()
             except Exception as exc:
-                print(
+                print_redacted(
                     f"[MprController] Failed to render ROIs/measurements for MPR slice: {exc}"
                 )
 
@@ -943,7 +996,7 @@ class MprController(QObject):
                     else:
                         overlay_manager.set_mpr_banner(None)
             except Exception as exc:
-                print(f"[MprController] Failed to refresh MPR overlay in window {idx}: {exc}")
+                print_redacted(f"[MprController] Failed to refresh MPR overlay in window {idx}: {exc}")
 
         if idx == getattr(self._app, "focused_subwindow_index", -1):
             self._app.current_dataset = overlay_dataset
@@ -1040,11 +1093,11 @@ class MprController(QObject):
                 datasets_to_use,
                 use_slice_location_if_no_position=use_slice_location_fallback,
             )
-        except MprVolumeError as exc:
+        except MprVolumeError:
             QMessageBox.critical(
                 self._app.main_window,
                 "MPR Error",
-                f"Cannot build MPR volume:\n{exc}",
+                "Cannot build the MPR volume. Details were withheld to protect private data.",
             )
             return
 
@@ -1104,7 +1157,7 @@ class MprController(QObject):
                     return
                 _mpr_log(f"Cache miss: key={key[:12]}...")
             except Exception as exc:
-                print(f"[MprController] Cache lookup error: {exc}")
+                print_redacted(f"[MprController] Cache lookup error: {exc}")
 
         # No cache hit — run the builder in a background thread.
         worker = MprBuilder.create_worker(
@@ -1149,7 +1202,7 @@ class MprController(QObject):
                 try:
                     self._cache.save(result)
                 except Exception as exc:
-                    print(f"[MprController] Cache save error: {exc}")
+                    print_redacted(f"[MprController] Cache save error: {exc}")
 
             # Verify image viewer exists before activating MPR
             image_viewer = self._get_image_viewer(target_idx)
@@ -1559,7 +1612,7 @@ class MprController(QObject):
                 wl_controls.set_window_level(wc, ww, block_signals=False, unit=unit)
                 _mpr_log(f"Reset W/L for MPR: center={wc:.1f} width={ww:.1f} rescaled={is_rescaled}")
         except Exception as exc:
-            print(f"[MprController] Failed to reset W/L for MPR in window {idx}: {exc}")
+            print_redacted(f"[MprController] Failed to reset W/L for MPR in window {idx}: {exc}")
 
     @staticmethod
     def _get_preferred_mpr_window_level(view_state_manager, wl_controls, array: np.ndarray):

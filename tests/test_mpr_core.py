@@ -204,6 +204,8 @@ class TestMprBuilderAndCache(unittest.TestCase):
             self.assertEqual(meta["interpolation"], "nearest")
             self.assertEqual(meta.get("rescale_slope"), result.rescale_slope)
             self.assertEqual(meta.get("rescale_intercept"), result.rescale_intercept)
+            self.assertNotIn("series_uid", meta)
+            self.assertRegex(meta["series_key"], r"^[0-9a-f]{64}$")
             np.testing.assert_allclose(slices[0], result.slices[0])
             loaded_result = MprResult(
                 slices=slices,

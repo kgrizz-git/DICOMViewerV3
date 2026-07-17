@@ -22,7 +22,6 @@ Requirements:
     - OverlayManager for overlays
     - ViewStateManager for view state coordination
 """
-
 from collections.abc import Callable
 from typing import Any
 
@@ -58,6 +57,7 @@ from utils.dicom_utils import (
     get_slice_thickness,
 )
 from utils.perf_timer import perf_timer
+from utils.privacy.console import print_redacted
 
 
 def _make_no_pixel_placeholder_pil(width: int = 640, height: int = 480) -> Image.Image:
@@ -500,7 +500,7 @@ class SliceDisplayManager:
                     pass
             except Exception as e:
                 error_type = type(e).__name__
-                print(f"Error creating projection image ({error_type}): {e}")
+                print_redacted(f"Error creating projection image ({error_type}): {e}")
                 pass
 
         no_pixel_placeholder = False
@@ -563,7 +563,7 @@ class SliceDisplayManager:
                     if fused_image is not None:
                         image = fused_image
             except Exception as e:
-                print(f"Error applying fusion: {e}")
+                print_redacted(f"Error applying fusion: {e}")
 
         modality = getattr(dataset, "Modality", None) or ""
         show_sr_bar = bool(no_pixel_placeholder and modality == "SR")
@@ -645,7 +645,7 @@ class SliceDisplayManager:
                     width_range = (1.0, max(1.0, pixel_max - pixel_min))
         except Exception as e:
             error_type = type(e).__name__
-            print(f"Error calculating pixel value range for window/level controls ({error_type}): {e}")
+            print_redacted(f"Error calculating pixel value range for window/level controls ({error_type}): {e}")
 
         unit = rescale_type if (use_rescaled_values and rescale_type) else None
         # Set ranges BEFORE values so slider normalization uses correct ranges
@@ -1107,7 +1107,7 @@ class SliceDisplayManager:
         # Use current_slice_index as instance identifier (array position)
         instance_identifier = self.current_slice_index
         if DEBUG_MEASUREMENT_SERIES:
-            print(
+            print_redacted(
                 "[DEBUG-MEAS-SERIES] display_measurements_for_slice: "
                 f"key={(study_uid, series_uid, instance_identifier)}, "
                 f"measurement_summary_before={self.measurement_tool.get_debug_summary(self.image_viewer.scene)}"
@@ -1123,7 +1123,7 @@ class SliceDisplayManager:
             study_uid, series_uid, instance_identifier, self.image_viewer.scene
         )
         if DEBUG_MEASUREMENT_SERIES:
-            print(
+            print_redacted(
                 "[DEBUG-MEAS-SERIES] display_measurements_for_slice complete: "
                 f"key={(study_uid, series_uid, instance_identifier)}, "
                 f"measurement_summary_after={self.measurement_tool.get_debug_summary(self.image_viewer.scene)}"
@@ -1224,7 +1224,7 @@ class SliceDisplayManager:
             Tuple of (new_series_uid, slice_index, dataset) or (None, None, None) if navigation not possible
         """
         if not self.current_studies or not self.current_study_uid:
-            print(f"[DEBUG] handle_series_navigation: No studies or study_uid. "
+            print_redacted(f"[DEBUG] handle_series_navigation: No studies or study_uid. "
                   f"studies={bool(self.current_studies)}, study_uid={self.current_study_uid[:20] if self.current_study_uid else 'None'}...")
             return None, None, None
 
@@ -1256,7 +1256,7 @@ class SliceDisplayManager:
         series_list.sort(key=lambda x: x[0])
 
         if DEBUG_SERIES:
-            print(f"[DEBUG] handle_series_navigation: Found {len(series_list)} series in study. "
+            print_redacted(f"[DEBUG] handle_series_navigation: Found {len(series_list)} series in study. "
                   f"Looking for current_series_uid={self.current_series_uid[:20] if self.current_series_uid else 'None'}...")
 
         # Find current series in sorted list
@@ -1268,7 +1268,7 @@ class SliceDisplayManager:
 
         if current_index is None:
             if DEBUG_SERIES:
-                print(f"[DEBUG] handle_series_navigation: Current series not found in sorted list. "
+                print_redacted(f"[DEBUG] handle_series_navigation: Current series not found in sorted list. "
                       f"Available series UIDs: {[uid[:20] + '...' for _, uid, _ in series_list[:3]]} (showing first 3)")
             return None, None, None  # Current series not found
 
@@ -1290,11 +1290,11 @@ class SliceDisplayManager:
 
         if not datasets:
             if DEBUG_SERIES:
-                print(f"[DEBUG] handle_series_navigation: New series {new_series_uid[:20] if new_series_uid else 'None'}... has no datasets")
+                print_redacted(f"[DEBUG] handle_series_navigation: New series {new_series_uid[:20] if new_series_uid else 'None'}... has no datasets")
             return None, None, None
 
         if DEBUG_SERIES:
-            print(f"[DEBUG] handle_series_navigation: Successfully navigating from index {current_index} to {new_index}, "
+            print_redacted(f"[DEBUG] handle_series_navigation: Successfully navigating from index {current_index} to {new_index}, "
                   f"new_series_uid={new_series_uid[:20]}...")
 
         # Return new series information

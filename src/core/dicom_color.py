@@ -8,7 +8,6 @@ color space to RGB, and detect/fix RGB/BGR channel order (e.g. for JPEG-LS).
 Verbose YBR conversion diagnostics are gated by ``DEBUG_YBR`` in
 ``utils.debug_flags`` (default off).
 """
-
 import logging
 
 import numpy as np
@@ -16,6 +15,7 @@ from pydicom.dataset import Dataset
 
 from utils.debug_flags import DEBUG_YBR
 from utils.log_sanitizer import sanitized_format_exc
+from utils.privacy.console import print_redacted
 
 _logger = logging.getLogger(__name__)
 
@@ -94,7 +94,7 @@ def is_color_image(dataset: Dataset) -> tuple[bool, str | None]:
 
     except Exception as e:
         # On error, default to grayscale
-        print(f"Error detecting color image: {e}")
+        print_redacted(f"Error detecting color image: {e}")
         return False, None
 
 
@@ -491,7 +491,7 @@ def convert_ybr_to_rgb(ybr_array: np.ndarray,
         return _finalize_rgb_result(rgb_array, original_shape)
 
     except Exception as e:
-        print(f"Error converting YBR to RGB: {e}")
+        print_redacted(f"Error converting YBR to RGB: {e}")
         _logger.debug("%s", sanitized_format_exc())
         # Return original array on error (may cause display issues but prevents crash)
         return ybr_array

@@ -290,7 +290,7 @@ class StudyCache:
         """
         from core.dicom_projections import clear_projection_cache
 
-        _logger.info("Evicting study %s from cache", study_uid)
+        _logger.info("Evicting one study from cache")
 
         # Clear projection cache (module-level, not per-study; full clear is
         # acceptable because projections are cheap to recompute).

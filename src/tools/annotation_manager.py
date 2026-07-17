@@ -16,7 +16,6 @@ Requirements:
     - PySide6 for graphics
     - pydicom for RT STRUCT parsing
 """
-
 import importlib
 import logging
 from typing import Any
@@ -36,6 +35,7 @@ from PySide6.QtWidgets import (
 from core.key_object_handler import KeyObjectHandler
 from core.presentation_state_handler import PresentationStateHandler
 from utils.log_sanitizer import sanitized_format_exc
+from utils.privacy.console import print_redacted
 
 _logger = logging.getLogger(__name__)
 
@@ -94,7 +94,7 @@ class AnnotationManager:
                     self.rt_struct_data = dataset
                     return True
         except Exception as e:
-            print(f"Error loading RT STRUCT: {e}")
+            print_redacted(f"Error loading RT STRUCT: {e}")
 
         return False
 
@@ -144,7 +144,7 @@ class AnnotationManager:
 
                             contours.extend(contour_data)
         except Exception as e:
-            print(f"Error extracting contours: {e}")
+            print_redacted(f"Error extracting contours: {e}")
 
         return contours
 

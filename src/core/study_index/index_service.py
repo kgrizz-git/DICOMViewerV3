@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 from typing import Any
 
 _logger = logging.getLogger(__name__)
@@ -19,6 +20,7 @@ from core.study_index.keyring_storage import get_or_create_study_index_passphras
 from core.study_index.metadata_extract import dataset_to_index_row
 from core.study_index.sqlcipher_store import StudyIndexStore
 from utils.config_manager import ConfigManager
+from utils.privacy.safe_storage import DeletionResult, secure_unlink
 
 
 class LocalStudyIndexService:
@@ -254,3 +256,27 @@ class LocalStudyIndexService:
 
     def cancel_folder_index(self) -> None:
         self._folder_cancel = True
+
+    def clear_all_data(self) -> DeletionResult:
+        """Clear the encrypted index when no background index operation is active."""
+
+        if self._write_thread and self._write_thread.isRunning():
+            return DeletionResult(failed=1)
+        if self._folder_thread and self._folder_thread.isRunning():
+            return DeletionResult(failed=1)
+        db_path = Path(self._db_path())
+        removed = 0
+        failed = 0
+        for candidate in (
+            db_path,
+            Path(f"{db_path}-journal"),
+            Path(f"{db_path}-wal"),
+            Path(f"{db_path}-shm"),
+        ):
+            try:
+                removed += int(secure_unlink(candidate))
+            except OSError:
+                failed += 1
+        self._schema_initialized = False
+        self._cached_db_path = ""
+        return DeletionResult(removed=removed, failed=failed)

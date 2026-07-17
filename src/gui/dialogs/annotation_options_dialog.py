@@ -63,8 +63,6 @@ class AnnotationOptionsDialog(QDialog):
         """
         super().__init__(parent)
 
-        from utils.debug_flags import DEBUG_FONT_VARIANT
-        from utils.debug_log import debug_log
 
         self.config_manager = config_manager
         self.setWindowTitle("Annotation Options")
@@ -73,21 +71,6 @@ class AnnotationOptionsDialog(QDialog):
 
         # Store original values for cancel
         self._store_original_values()
-
-        if DEBUG_FONT_VARIANT:
-            debug_log(
-                "annotation_options_dialog.py:__init__",
-                "Annotation options dialog constructed",
-                {
-                    "original_text_annotation_font_family": self.original_text_annotation_font_family,
-                    "original_text_annotation_font_variant": self.original_text_annotation_font_variant,
-                    "original_roi_font_family": self.original_roi_font_family,
-                    "original_roi_font_variant": self.original_roi_font_variant,
-                    "original_measurement_font_family": self.original_measurement_font_family,
-                    "original_measurement_font_variant": self.original_measurement_font_variant,
-                },
-                hypothesis_id="FONTVAR",
-            )
 
         self._create_ui()
         self._load_settings()
@@ -556,8 +539,6 @@ class AnnotationOptionsDialog(QDialog):
         preferred_variant: str | None = None,
     ) -> None:
         """Repopulate *variant_combo* based on the current family in *family_combo*."""
-        from utils.debug_flags import DEBUG_FONT_VARIANT
-        from utils.debug_log import debug_log
         variant_combo.blockSignals(True)
         current = preferred_variant or variant_combo.currentText() or "Bold"
         variant_combo.clear()
@@ -566,22 +547,6 @@ class AnnotationOptionsDialog(QDialog):
         idx = variant_combo.findText(current)
         variant_combo.setCurrentIndex(idx if idx >= 0 else 0)
         variant_combo.blockSignals(False)
-        if DEBUG_FONT_VARIANT:
-            debug_log(
-                "annotation_options_dialog.py:_repopulate_variant_combo",
-                "Populated annotation font variant combo",
-                {
-                    "family": family_combo.currentText(),
-                    "preferred_variant": preferred_variant,
-                    "current_before": current,
-                    "variants": variants,
-                    "selected_index": idx if idx >= 0 else 0,
-                    "selected_variant": variant_combo.currentText(),
-                    "combo_object": variant_combo.objectName() or variant_combo.__class__.__name__,
-                },
-                hypothesis_id="FONTVAR",
-            )
-
     def _on_family_changed(self, family_combo: "QComboBox", variant_combo: "QComboBox") -> None:
         """Refresh available variants for a font family, then apply the live preview."""
         current_variant = variant_combo.currentText()
@@ -716,22 +681,6 @@ class AnnotationOptionsDialog(QDialog):
 
     def _apply_settings(self) -> None:
         """Apply settings and close dialog."""
-        from utils.debug_flags import DEBUG_FONT_VARIANT
-        from utils.debug_log import debug_log
-        if DEBUG_FONT_VARIANT:
-            debug_log(
-                "annotation_options_dialog.py:_apply_settings",
-                "Applying annotation options",
-                {
-                    "roi_font_family": self.roi_font_family_combo.currentText(),
-                    "roi_font_variant": self.roi_font_variant_combo.currentText(),
-                    "measurement_font_family": self.measurement_font_family_combo.currentText(),
-                    "measurement_font_variant": self.measurement_font_variant_combo.currentText(),
-                    "text_font_family": self.text_font_family_combo.currentText(),
-                    "text_font_variant": self.text_font_variant_combo.currentText(),
-                },
-                hypothesis_id="FONTVAR",
-            )
         # Save ROI settings
         self.config_manager.set_roi_font_size(self.roi_font_size_spinbox.value())
         self.config_manager.set_roi_line_thickness(self.roi_line_thickness_spinbox.value())

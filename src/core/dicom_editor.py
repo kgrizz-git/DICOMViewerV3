@@ -17,7 +17,6 @@ Requirements:
     - pydicom library
     - typing for type hints
 """
-
 from typing import Any
 
 from pydicom.dataelem import DataElement
@@ -27,6 +26,7 @@ from pydicom.tag import Tag as tag_factory
 
 from utils.dicom_tag_path import resolve_tag_path
 from utils.dicom_value_conversion import convert_dicom_value
+from utils.privacy.console import print_redacted
 
 
 class DICOMEditor:
@@ -186,7 +186,7 @@ class DICOMEditor:
 
             return True
         except Exception as e:
-            print(f"Error updating tag {tag_identifier}: {e}")
+            print_redacted(f"Error updating tag {tag_identifier}: {e}")
             return False
 
     def _is_path_key(self, tag_identifier: str | tuple[int, int] | BaseTag) -> bool:
@@ -290,5 +290,5 @@ class DICOMEditor:
                 return True
             return False
         except Exception as e:
-            print(f"Error deleting tag {tag_identifier}: {e}")
+            print_redacted(f"Error deleting tag {tag_identifier}: {e}")
             return False

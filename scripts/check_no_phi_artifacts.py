@@ -29,13 +29,16 @@ from __future__ import annotations
 
 import argparse
 import bz2
+import getpass
 import gzip
 import hashlib
 import io
 import ipaddress
 import json
 import lzma
+import os
 import re
+import socket
 import subprocess
 import sys
 import tarfile
@@ -56,10 +59,43 @@ FORBIDDEN_PATH_PATTERNS: list[tuple[str, str]] = [
     ),
     (r"^pyright-report\.txt$", "generated type-check report (absolute local paths)"),
     (r"^backups/", "local source backups: not for version control"),
+    (r"^data/(?!\.gitkeep$)", "local/imported data directory"),
+    (r"^decoder-spike-artifacts/", "local decoder corpus and reports"),
+    (r"^logs/", "runtime logs may contain local or clinical context"),
+    (r"^resources/screenshots-ignored/", "local screenshots may contain PHI/PII"),
+    (r"^sample-DICOM-gitignored/", "local DICOM study directory"),
+    (r"^test-DICOM-data/", "local DICOM/QC study directory"),
+    (r"^\.sonar-local/", "local analysis state and coverage data"),
+    (r"^tmp/", "local temporary workspace"),
     (r"(^|/)\.DS_Store$", "macOS metadata"),
     (r"(^|/)\.cache/", "cache directory"),
 ]
 FORBIDDEN_ARTIFACT_SUFFIXES = {".cache", ".err", ".log", ".out", ".pkl", ".trace"}
+
+# These exact ignore rules are repository privacy controls, not convenience
+# entries.  The staged-index check below prevents a partial-staging trick from
+# removing a rule while leaving it present only in the working tree.
+REQUIRED_GITIGNORE_RULES = frozenset(
+    {
+        "*.db",
+        "*.dcm",
+        "*.dicom",
+        "*.ima",
+        "*.sqlite",
+        "*.sqlite3",
+        ".pytest-tmp-*/",
+        ".pytest-tmp/",
+        ".sonar-local/",
+        "backups/",
+        "data/*",
+        "decoder-spike-artifacts/",
+        "logs/",
+        "resources/screenshots-ignored/",
+        "sample-DICOM-gitignored/",
+        "test-DICOM-data/",
+        "tmp/",
+    }
+)
 
 # --- Rule 2: PHI/PII indicators inside data files ---------------------------
 DATA_SUFFIXES = {
@@ -123,6 +159,7 @@ MAX_CONTAINER_DEPTH = 3
 MAX_CONTAINER_MEMBERS = 500
 MAX_CONTAINER_MEMBER_BYTES = 32 * 1024 * 1024
 MAX_CONTAINER_TOTAL_BYTES = 96 * 1024 * 1024
+MAX_TEXT_BYTES = 16 * 1024 * 1024
 # SVG is text-readable and is also content-scanned above.  The other formats are
 # opaque containers, so they need an explicit hash review before admission.
 IMAGE_SUFFIXES = {
@@ -144,10 +181,16 @@ IMAGE_SUFFIXES = {
 }
 APPROVED_MEDIA_MANIFEST = "security/approved-media-sha256.json"
 APPROVED_TEXT_EXCEPTIONS_MANIFEST = "security/approved-phi-text-exceptions.json"
+SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 # A file without a suffix can hide a binary export or clinical data.  Existing
 # reviewed assets live in the hash manifest; every new one blocks until reviewed.
-EXTENSIONLESS_EXEMPT = {".gitignore", ".gitattributes"}
+EXTENSIONLESS_EXEMPT = {
+    ".cursorignore",
+    ".cursorindexingignore",
+    ".gitattributes",
+    ".gitignore",
+}
 
 # These DICOM attributes must never hold a real value in a tracked fixture,
 # including when nested in a sequence.  ``Dataset.iterall()`` visits sequence
@@ -189,26 +232,131 @@ CONTENT_RULES: list[tuple[re.Pattern[str], str]] = [
         re.compile(r"/(Users|home)/(?!runner\b|user\b)[A-Za-z0-9._-]+/"),
         "POSIX absolute home path",
     ),
+    (re.compile(r"\\\\[^\\\s]+\\[^\\\s]+"), "UNC path"),
+    (
+        re.compile(r"\b[a-z][a-z0-9+.-]*://[^\s/@:]+:[^\s/@]+@", re.I),
+        "authenticated URL",
+    ),
     (
         re.compile(r'"Patient(Name|ID|BirthDate)"\s*:\s*"(?!\s*")[^"]+'),
         "populated DICOM patient tag",
     ),
     (re.compile(r"\b(?:dicom|pacs)://[^\s/]+", re.I), "DICOM/PACS endpoint"),
     (
+        re.compile(r"\b(?:called|calling)[ _-]?ae(?:title)?\s*[:=]\s*\S+", re.I),
+        "DICOM AE endpoint",
+    ),
+    (
         re.compile(r"\b[a-z0-9][a-z0-9.-]*\.(?:corp|internal|lan|local)\b", re.I),
         "internal hostname",
     ),
 ]
-PRIVATE_NETWORKS = (
-    ipaddress.ip_network("10.0.0.0/8"),
-    ipaddress.ip_network("172.16.0.0/12"),
-    ipaddress.ip_network("192.168.0.0/16"),
-    ipaddress.ip_network("fc00::/7"),
+DOCUMENTATION_NETWORKS = (
+    ipaddress.ip_network("192.0.2.0/24"),
+    ipaddress.ip_network("198.51.100.0/24"),
+    ipaddress.ip_network("203.0.113.0/24"),
+    ipaddress.ip_network("2001:db8::/32"),
 )
 IP_ADDRESS_TOKEN = re.compile(
     r"(?<![0-9A-Fa-f:.])(?:[0-9]{1,3}(?:\.[0-9]{1,3}){3}|[0-9A-Fa-f]{0,4}:[0-9A-Fa-f:.]+)(?![0-9A-Fa-f:.])"
 )
+NETWORK_ADDRESS_CONTEXT = re.compile(
+    r"(?:\b(?:ip|ipv4|ipv6|host|hostname|endpoint|server|address|listen|bind|"
+    r"connect|url|proxy|pacs|dicom|ssh|tcp|udp)\b|https?://)",
+    re.I,
+)
 SAFE_INTERNAL_HOSTNAMES = frozenset({"host.docker.internal"})
+GENERIC_IDENTITIES = frozenset({"localhost", "runner", "user", "username"})
+
+SENSITIVE_FILENAME_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(
+        r"(?:^|[._-])(?:patientid|mrn|accession|account)[._-][A-Za-z0-9^.-]{4,}",
+        re.I,
+    ),
+    re.compile(r"(?:^|[._-])patientname[._-][A-Za-z]+(?:\^[A-Za-z]+|[-_][A-Za-z]+)", re.I),
+    re.compile(r"(?:^|[._-])\d+(?:\.\d+){3,}(?:[._-]|$)"),
+)
+
+
+def local_identities() -> frozenset[str]:
+    """Return local account/host tokens without persisting or reporting them."""
+    values = {
+        getpass.getuser(),
+        os.environ.get("USER", ""),
+        os.environ.get("USERNAME", ""),
+        socket.gethostname(),
+        socket.getfqdn(),
+    }
+    return frozenset(
+        value.lower()
+        for value in values
+        if len(value) >= 4 and value.lower() not in GENERIC_IDENTITIES
+    )
+
+
+def _contains_local_identity(text: str, identities: frozenset[str]) -> bool:
+    return any(
+        re.search(
+            rf"(?<![A-Za-z0-9_.-]){re.escape(identity)}(?![A-Za-z0-9_.-])",
+            text,
+            re.I,
+        )
+        for identity in identities
+    )
+
+
+def _address_requires_redaction(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """Block public/private addresses; allow loopback and documentation ranges."""
+    if address.is_loopback or any(address in network for network in DOCUMENTATION_NETWORKS):
+        return False
+    return address.is_global or address.is_private
+
+
+def address_requires_redaction(
+    address: ipaddress.IPv4Address | ipaddress.IPv6Address,
+) -> bool:
+    """Public network policy adapter for redacted repository preflight."""
+
+    return _address_requires_redaction(address)
+
+
+def _path_reasons(
+    path: str, identities: frozenset[str] | None = None
+) -> list[str]:
+    """Classify a repository/archive path without returning matched components."""
+    reasons: list[str] = []
+    normalized = path.replace("\\", "/")
+    path_parts = [part for part in normalized.split("/") if part]
+    if normalized.startswith(("/", "//")) or re.match(r"^[A-Za-z]:/", normalized):
+        reasons.append("absolute path name")
+    if any(part == ".." for part in path_parts):
+        reasons.append("path traversal name")
+    if any(pattern.search(part) for part in path_parts for pattern in SENSITIVE_FILENAME_PATTERNS):
+        reasons.append("sensitive-looking filename")
+    if _contains_local_identity(normalized, local_identities() if identities is None else identities):
+        reasons.append("local identity in filename")
+    for match in IP_ADDRESS_TOKEN.finditer(normalized):
+        try:
+            address = ipaddress.ip_address(match.group())
+        except ValueError:
+            continue
+        if _address_requires_redaction(address):
+            reasons.append("network address in filename")
+    return list(dict.fromkeys(reasons))
+
+
+def path_reasons(
+    path: str,
+    identities: frozenset[str] | None = None,
+) -> list[str]:
+    """Public category-only path policy for repository preflight."""
+
+    return _path_reasons(path, identities)
+
+
+def _safe_display_path(path: str, identities: frozenset[str] | None = None) -> str:
+    """Avoid echoing a filename when the filename is itself the finding."""
+    return "[redacted repository path]" if _path_reasons(path, identities) else path
 
 
 def _run(args: list[str], root: Path) -> str:
@@ -226,21 +374,105 @@ def staged_files(root: Path) -> list[str]:
     return [p for p in out.splitlines() if p]
 
 
+def check_gitignore_policy(root: Path, *, staged: bool) -> list[str]:
+    """Require privacy-critical ignore rules in the worktree or staged blob."""
+    try:
+        if staged:
+            raw = subprocess.run(
+                ["git", "show", ":.gitignore"],
+                cwd=root,
+                capture_output=True,
+                check=True,
+            ).stdout
+            text = raw.decode("utf-8", errors="surrogateescape")
+        else:
+            text = (root / ".gitignore").read_text(encoding="utf-8")
+    except (OSError, subprocess.CalledProcessError):
+        return [".gitignore: privacy policy file is missing or unreadable"]
+
+    active_rules = {
+        line.strip()
+        for line in text.splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    }
+    missing = sorted(REQUIRED_GITIGNORE_RULES - active_rules)
+    return [
+        ".gitignore: required privacy ignore rule is missing "
+        f"({rule})"
+        for rule in missing
+    ]
+
+
+def check_symlinks(paths: list[str], root: Path) -> list[str]:
+    """Reject indexed symlinks whose targets are absolute or leave the repository."""
+    wanted = set(paths)
+    problems: list[str] = []
+    try:
+        entries = subprocess.run(
+            ["git", "ls-files", "--stage", "-z"],
+            cwd=root,
+            capture_output=True,
+            check=True,
+        ).stdout.split(b"\0")
+    except subprocess.CalledProcessError:
+        return ["[repository index]: symlinks could not be inspected"]
+
+    root_resolved = root.resolve()
+    for raw_entry in entries:
+        if not raw_entry or b"\t" not in raw_entry:
+            continue
+        metadata, raw_path = raw_entry.split(b"\t", 1)
+        if not metadata.startswith(b"120000 "):
+            continue
+        path = raw_path.decode("utf-8", errors="surrogateescape")
+        if path not in wanted:
+            continue
+        display_path = _safe_display_path(path)
+        try:
+            target = subprocess.run(
+                ["git", "show", f":{path}"],
+                cwd=root,
+                capture_output=True,
+                check=True,
+            ).stdout.decode("utf-8", errors="surrogateescape")
+        except subprocess.CalledProcessError:
+            problems.append(f"{display_path}: symlink target could not be inspected")
+            continue
+        normalized_target = target.replace("\\", "/")
+        absolute = normalized_target.startswith(("/", "//")) or bool(
+            re.match(r"^[A-Za-z]:/", normalized_target)
+        )
+        resolved = (root / Path(path).parent / target).resolve(strict=False)
+        if absolute:
+            problems.append(f"{display_path}: absolute symlink target")
+        elif not resolved.is_relative_to(root_resolved):
+            problems.append(f"{display_path}: repository-escaping symlink target")
+    return problems
+
+
 def check_paths(paths: list[str]) -> list[str]:
     """Rule 1: forbidden paths, regardless of content."""
-    problems = []
+    problems: list[str] = []
+    identities = local_identities()
     for path in paths:
+        display_path = _safe_display_path(path, identities)
+        for reason in _path_reasons(path, identities):
+            problems.append(f"{display_path}: forbidden path ({reason})")
+        if path == ".gitmodules" or path.endswith("/.gitmodules"):
+            problems.append(f"{display_path}: repository remote configuration")
         if Path(path).suffix.lower() in FORBIDDEN_ARTIFACT_SUFFIXES:
-            problems.append(f"{path}: forbidden runtime artifact")
+            problems.append(f"{display_path}: forbidden runtime artifact")
             continue
         for pattern, why in FORBIDDEN_PATH_PATTERNS:
             if re.search(pattern, path):
-                problems.append(f"{path}: forbidden artifact ({why})")
+                problems.append(f"{display_path}: forbidden artifact ({why})")
                 break
     return problems
 
 
-def _content_reasons(text: str) -> list[str]:
+def _content_reasons(
+    text: str, identities: frozenset[str] | None = None
+) -> list[str]:
     """Return PHI/PII rule categories found in one text value, never the value."""
     reasons: list[str] = []
     for pattern, why in CONTENT_RULES:
@@ -253,13 +485,23 @@ def _content_reasons(text: str) -> list[str]:
         ):
             continue
         reasons.append(why)
+    local_terms = local_identities() if identities is None else identities
+    if _contains_local_identity(text, local_terms):
+        reasons.append("local account or hostname")
     for match in IP_ADDRESS_TOKEN.finditer(text):
         try:
             address = ipaddress.ip_address(match.group())
         except ValueError:
             continue
-        if any(address in network for network in PRIVATE_NETWORKS):
-            reasons.append("private-network address")
+        context = text[max(0, match.start() - 100) : match.end() + 100]
+        if not NETWORK_ADDRESS_CONTEXT.search(context):
+            continue
+        if _address_requires_redaction(address):
+            reasons.append(
+                "private-network address"
+                if address.is_private
+                else "public-network address"
+            )
     return list(dict.fromkeys(reasons))
 
 
@@ -271,11 +513,17 @@ def check_contents(paths: list[str], root: Path) -> list[str]:
         if Path(path).suffix.lower() not in DATA_SUFFIXES:
             continue
         full = root / path
-        if not full.is_file():
+        if full.is_symlink() or not full.is_file():
             continue
         try:
+            if full.stat().st_size > MAX_TEXT_BYTES:
+                problems.append(f"{path}: text exceeds the inspection limit")
+                continue
             text = full.read_text(encoding="utf-8", errors="ignore")
-        except OSError:
+        except OSError as exc:
+            problems.append(
+                f"{path}: text could not be inspected ({type(exc).__name__})"
+            )
             continue
         for lineno, line in enumerate(text.splitlines(), start=1):
             for reason in _content_reasons(line):
@@ -332,6 +580,51 @@ def _approved_media(root: Path) -> dict[str, str]:
         return {}
     files = payload.get("files", {})
     return files if isinstance(files, dict) else {}
+
+
+def check_approval_manifests(root: Path) -> list[str]:
+    """Fail closed when a reviewed-asset manifest is malformed or names risky paths."""
+    problems: list[str] = []
+    manifest_paths = (APPROVED_MEDIA_MANIFEST, APPROVED_TEXT_EXCEPTIONS_MANIFEST)
+    if not any((root / relpath).exists() for relpath in manifest_paths):
+        return []
+    for relpath in manifest_paths:
+        if not (root / relpath).exists():
+            continue
+        try:
+            payload = json.loads((root / relpath).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            problems.append(
+                f"{relpath}: approval manifest could not be inspected "
+                f"({type(exc).__name__})"
+            )
+            continue
+        if not isinstance(payload, dict) or not isinstance(payload.get("files", {}), dict):
+            problems.append(f"{relpath}: approval manifest has invalid structure")
+            continue
+        entries = payload.get("files", {})
+        assert isinstance(entries, dict)
+        for approved_path, entry in entries.items():
+            if not isinstance(approved_path, str) or _path_reasons(approved_path):
+                problems.append(f"{relpath}: approval manifest contains an unsafe path")
+                continue
+            expected_hash = entry if isinstance(entry, str) else entry.get("sha256") if isinstance(entry, dict) else None
+            if not isinstance(expected_hash, str) or not SHA256_PATTERN.fullmatch(expected_hash):
+                problems.append(f"{relpath}: approval manifest contains an invalid digest")
+        if relpath == APPROVED_MEDIA_MANIFEST:
+            trees = payload.get("image_trees", {})
+            if not isinstance(trees, dict):
+                problems.append(f"{relpath}: approval manifest has invalid image-tree structure")
+            else:
+                for directory, expected_hash in trees.items():
+                    if (
+                        not isinstance(directory, str)
+                        or _path_reasons(directory)
+                        or not isinstance(expected_hash, str)
+                        or not SHA256_PATTERN.fullmatch(expected_hash)
+                    ):
+                        problems.append(f"{relpath}: approval manifest contains an invalid image tree")
+    return list(dict.fromkeys(problems))
 
 
 def _is_approved_media(path: str, root: Path, approved: dict[str, str]) -> bool:
@@ -543,6 +836,8 @@ def _zip_members(payload: bytes) -> tuple[list[tuple[str, bytes]], str | None]:
                 return [], "too many archive members"
             if any(info.flag_bits & 0x1 for info in members):
                 return [], "encrypted archive member cannot be inspected"
+            if any((info.external_attr >> 16) & 0o170000 == 0o120000 for info in members):
+                return [], "archive contains a link member"
             if sum(info.file_size for info in members) > MAX_CONTAINER_TOTAL_BYTES:
                 return [], "archive expands beyond the inspection limit"
             result: list[tuple[str, bytes]] = []
@@ -562,7 +857,10 @@ def _zip_members(payload: bytes) -> tuple[list[tuple[str, bytes]], str | None]:
 def _tar_members(payload: bytes) -> tuple[list[tuple[str, bytes]], str | None]:
     try:
         with tarfile.open(fileobj=io.BytesIO(payload), mode="r:") as archive:
-            members = [member for member in archive.getmembers() if member.isfile()]
+            all_members = archive.getmembers()
+            if any(member.issym() or member.islnk() for member in all_members):
+                return [], "archive contains a link member"
+            members = [member for member in all_members if member.isfile()]
             if len(members) > MAX_CONTAINER_MEMBERS:
                 return [], "too many archive members"
             if sum(member.size for member in members) > MAX_CONTAINER_TOTAL_BYTES:
@@ -669,6 +967,11 @@ def _check_container(
 
     problems: list[str] = []
     for member_name, member in members:
+        member_reasons = _path_reasons(member_name)
+        for reason in member_reasons:
+            problems.append(f"{path}: archive contains a forbidden member name ({reason})")
+        if Path(member_name).name == ".gitmodules":
+            problems.append(f"{path}: archive contains repository remote configuration")
         suffix = Path(member_name).suffix.lower()
         if suffix in FORBIDDEN_ARTIFACT_SUFFIXES:
             problems.append(f"{path}: archive contains a forbidden runtime artifact")
@@ -702,6 +1005,8 @@ def check_reviewable_files(paths: list[str], root: Path) -> list[str]:
     approved_trees = _approved_image_trees(manifest_payload)
     tree_digests: dict[str, str] = {}
     for path in paths:
+        if (root / path).is_symlink():
+            continue
         suffix = Path(path).suffix.lower()
         is_extensionless = not suffix and path not in EXTENSIONLESS_EXEMPT
         has_dicom_preamble = _has_dicom_preamble(root / path)
@@ -770,7 +1075,10 @@ def main() -> int:
     scope = "staged" if args.staged else "tracked"
 
     problems = (
-        check_paths(paths)
+        check_gitignore_policy(root, staged=args.staged)
+        + check_approval_manifests(root)
+        + check_paths(paths)
+        + check_symlinks(paths, root)
         + check_contents(paths, root)
         + check_reviewable_files(paths, root)
     )

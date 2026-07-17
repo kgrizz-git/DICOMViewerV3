@@ -11,15 +11,26 @@ and API compatibility can be validated before wiring deeper UI flows.
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 from typing import Any
+
+try:
+    from scripts.privacy_console import print_redacted
+except ModuleNotFoundError:
+    import privacy_console  # pyright: ignore[reportImplicitRelativeImport]
+
+    print_redacted = privacy_console.print_redacted
 
 # Match the GUI runner: use viewer subclass (relaxed image index bounds).
 _SRC_ROOT = Path(__file__).resolve().parents[1] / "src"
 if str(_SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(_SRC_ROOT))
+
+from utils.privacy.safe_storage import (
+    assert_safe_internal_path,
+    ensure_private_directory,
+)
 
 
 def _jsonable(value: Any) -> Any:
@@ -41,20 +52,20 @@ def main() -> int:
 
     folder = Path(args.folder).expanduser().resolve()
     if not folder.exists() or not folder.is_dir():
-        print(f"Folder not found: {folder}")
+        print_redacted(f"Folder not found: {folder}")
         return 2
 
     try:
-        import pylinac  # type: ignore[import-not-found]
+        import pylinac  # pyright: ignore[reportMissingTypeStubs]
 
         from qa.pylinac_extent_subclasses import (
             ACRCTForViewer,  # type: ignore[import-not-found]
         )
     except Exception as exc:
-        print(f"Failed to import pylinac / viewer subclass: {exc}")
+        print_redacted(f"Failed to import pylinac / viewer subclass: {exc}")
         return 3
 
-    print(f"Running ACRCTForViewer on: {folder}")
+    print_redacted(f"Running ACRCTForViewer on: {folder}")
     print(f"pylinac version: {getattr(pylinac, '__version__', 'unknown')}")
 
     try:
@@ -62,17 +73,19 @@ def main() -> int:
         analyzer.analyze()
         results_data = analyzer.results_data()
         payload = _jsonable(results_data if isinstance(results_data, dict) else {"results_data": results_data})
-        print(json.dumps(payload, indent=2))
+        print_redacted(payload)
     except Exception as exc:
-        print(f"Analysis failed: {exc}")
+        print_redacted(f"Analysis failed: {exc}")
         return 4
 
     if args.pdf_out:
         try:
-            analyzer.publish_pdf(args.pdf_out)
-            print(f"PDF written: {args.pdf_out}")
+            pdf_path = assert_safe_internal_path(Path(args.pdf_out), source_root=_SRC_ROOT.parent)
+            ensure_private_directory(pdf_path.parent)
+            analyzer.publish_pdf(str(pdf_path))
+            print("PDF written to the explicitly selected protected directory")
         except Exception as exc:
-            print(f"PDF generation failed: {exc}")
+            print_redacted(f"PDF generation failed: {exc}")
             return 5
 
     return 0
@@ -80,4 +93,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

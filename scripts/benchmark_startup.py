@@ -1,5 +1,4 @@
 """Benchmark startup time by launching the app with DICOM_PERF_LOG=1."""
-
 import csv
 import os
 import re
@@ -7,6 +6,11 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+
+try:
+    from scripts.privacy_console import print_redacted
+except ModuleNotFoundError:
+    from privacy_console import print_redacted
 
 ROOT = Path(__file__).resolve().parent.parent
 RUN_PY = ROOT / "run.py"
@@ -85,7 +89,7 @@ def main() -> None:
         ts = datetime.now().isoformat(timespec="seconds")
         for r in results:
             w.writerow([ts, sha, r.get("wall_ms", ""), r.get("imports_ms", ""), r.get("app_init_ms", ""), r.get("total_ms", "")])
-    print(f"Results appended to {CSV_FILE}")
+    print_redacted(f"Results appended to {CSV_FILE}")
 
 
 if __name__ == "__main__":

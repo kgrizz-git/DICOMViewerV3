@@ -20,10 +20,10 @@ For each pair the script:
 7.  Saves numpy arrays, heatmap PNGs, and a shift-vs-error curve.
 
 Usage:
-    python tests/fusion_audit_quantitative_verification.py <dicom_folder>
+    python tests/fusion_audit_quantitative_verification.py <dicom_folder> <private_output_root>
 
 Inputs:  Folder containing PET/CT DICOM files.
-Outputs: Results in <dicom_folder>/fusion_audit_results/
+Outputs: Results below an explicit private output root outside the source checkout.
 
 Requirements: numpy, scipy, pydicom, SimpleITK, matplotlib, PIL (Pillow)
 """
@@ -38,6 +38,13 @@ from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
+
+try:
+    from scripts.privacy_console import print_structural_event
+except ModuleNotFoundError:
+    import privacy_console  # pyright: ignore[reportImplicitRelativeImport]
+
+    print_structural_event = privacy_console.print_structural_event
 
 try:
     import pydicom
@@ -66,6 +73,10 @@ if str(_SRC_DIR) not in sys.path:
 
 from core.dicom_processor import DICOMProcessor
 from core.fusion_handler import FusionHandler
+from utils.privacy.safe_storage import (
+    assert_safe_internal_path,
+    ensure_private_directory,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -131,7 +142,10 @@ def scan_folder(folder: str) -> dict[str, dict[str, list]]:
                     n += 1
             except Exception:
                 pass
-    print(f"Loaded {n} DICOM instances in {len(series_map)} series")
+    print_structural_event(
+        "fusion.load_summary",
+        metrics={"instance_count": n, "series_count": len(series_map)},
+    )
 
     for uid in series_map:
         series_map[uid].sort(key=lambda d: _slice_location(d) or 0.0)
@@ -446,12 +460,11 @@ def _setup_pair(ct_datasets, pt_datasets, pair_label, out_dir):
     return pair_dir, ct_sorted, pt_sorted
 
 def _get_dataset_info(ds, default_shape):
-    uid = getattr(ds, "SeriesInstanceUID", "?")[:30]
     slope, intercept = _rescale(ds)
     spacing = _pixel_spacing(ds)
     rows = int(getattr(ds, "Rows", default_shape[0]))
     cols = int(getattr(ds, "Columns", default_shape[1]))
-    return {"uid": uid, "slope": slope, "intercept": intercept, "spacing": spacing, "rows": rows, "cols": cols}
+    return {"slope": slope, "intercept": intercept, "spacing": spacing, "rows": rows, "cols": cols}
 
 def process_pair(
     ct_datasets: list,
@@ -464,8 +477,6 @@ def process_pair(
     pt_info = _get_dataset_info(pt_sorted[0], (128, 128))
     ct_info = _get_dataset_info(ct_sorted[0], (512, 512))
 
-    pt_uid = pt_info["uid"]
-    ct_uid = ct_info["uid"]
     pt_slope, _pt_intercept = pt_info["slope"], pt_info["intercept"]
     pt_sp, ct_sp = pt_info["spacing"], ct_info["spacing"]
     pt_rows, pt_cols = pt_info["rows"], pt_info["cols"]
@@ -476,9 +487,28 @@ def process_pair(
 
     print(f"\n{'='*70}")
     print(f"Pair: {pair_label}")
-    print(f"  CT: {len(ct_sorted)} slices, {ct_rows}x{ct_cols}, ps={ct_sp[0]:.3f}mm, uid={ct_uid}...")
-    print(f"  PT: {len(pt_sorted)} slices, {pt_rows}x{pt_cols}, ps={pt_sp[0]:.3f}mm, "
-          f"slope={pt_slope:.4f}, slice_sp={pt_slice_spacing:.1f}mm, uid={pt_uid}...")
+    print_structural_event(
+        "fusion.series_summary",
+        category="ct",
+        metrics={
+            "slice_count": len(ct_sorted),
+            "rows": ct_rows,
+            "columns": ct_cols,
+            "pixel_spacing_mm": ct_sp[0],
+        },
+    )
+    print_structural_event(
+        "fusion.series_summary",
+        category="pt",
+        metrics={
+            "slice_count": len(pt_sorted),
+            "rows": pt_rows,
+            "columns": pt_cols,
+            "pixel_spacing_mm": pt_sp[0],
+            "slope": pt_slope,
+            "slice_spacing_mm": pt_slice_spacing,
+        },
+    )
 
     # Step 1: find hot slices
     hot_indices = find_hot_slices(pt_sorted, n=5)
@@ -602,7 +632,7 @@ def process_pair(
     summary_path = pair_dir / "summary.json"
     with open(summary_path, "w") as f:
         json.dump(all_results, f, indent=2, default=str)
-    print(f"\n  Results saved to {pair_dir}")
+    print("\n  Results saved to the protected pair directory")
 
     return all_results
 
@@ -631,45 +661,56 @@ def print_summary_table(all_results: list[dict]):
 
 
 def parse_args(args):
-    if len(args) < 2:
-        print("Usage: python tests/fusion_audit_quantitative_verification.py <dicom_folder>")
+    if len(args) < 3:
+        print("Usage: python tests/fusion_audit_quantitative_verification.py <dicom_folder> <private_output_root>")
         sys.exit(1)
     folder = args[1]
     if not os.path.isdir(folder):
-        sys.exit(f"ERROR: '{folder}' is not a valid directory.")
-    return folder
+        sys.exit("ERROR: the input directory is unavailable.")
+    return folder, Path(args[2])
 
 
-def setup_output_dir(folder):
-    out_dir = Path(folder) / "fusion_audit_results_v2"
-    out_dir.mkdir(exist_ok=True)  # NOSONAR - folder is an explicit CLI arg for this manual verification script, not attacker-controlled input
-    return out_dir
+def setup_output_dir(output_root):
+    repo_root = _SCRIPT_DIR.parent
+    root = assert_safe_internal_path(Path(output_root), source_root=repo_root)
+    ensure_private_directory(root)
+    return ensure_private_directory(root / "fusion_audit_results_v2")
 
 
-def print_initial_info(folder, out_dir):
+def print_initial_info(folder):
     print("Fusion Quantitative Verification v2")
-    print(f"Data: {folder}")
-    print(f"Output: {out_dir}")
+    _ = folder
+    print_structural_event("fusion.input", category="protected")
+    print("Output: protected external directory")
     print("Loading DICOM data...\n")
 
 
 def load_for_groups(folder):
     t0 = time.time()
     groups = scan_folder(folder)
-    print(f"Load time: {time.time() - t0:.1f}s")
-    print(f"Frame-of-Reference groups: {len(groups)}")
+    print_structural_event(
+        "fusion.group_summary",
+        metrics={
+            "duration_ms": (time.time() - t0) * 1000,
+            "group_count": len(groups),
+        },
+    )
     return groups
 
 
 def main():
     t0 = time.time()
-    folder = parse_args(sys.argv)
-    out_dir = setup_output_dir(folder)
-    print_initial_info(folder, out_dir)
+    folder, output_root = parse_args(sys.argv)
+    try:
+        out_dir = setup_output_dir(output_root)
+    except (OSError, ValueError):
+        raise SystemExit("ERROR: choose a writable private output root outside the source checkout.") from None
+    print_initial_info(folder)
     for_groups = load_for_groups(folder)
     all_results = []
 
-    for for_uid, series_dict in for_groups.items():
+    pair_index = 0
+    for _for_uid, series_dict in for_groups.items():
         ct_series = {}
         pt_series = {}
         for uid, datasets in series_dict.items():
@@ -682,13 +723,12 @@ def main():
         if not ct_series or not pt_series:
             continue
 
-        for_label = for_uid[-8:]
-
         best_pt_uid = max(pt_series.keys(),
                          key=lambda u: abs(_rescale(pt_series[u][0])[0]))
 
         for _ct_uid, ct_ds in ct_series.items():
-            pair_label = f"FoR{for_label}_CT{getattr(ct_ds[0], 'SeriesNumber', '?')}_PT{getattr(pt_series[best_pt_uid][0], 'SeriesNumber', '?')}"
+            pair_index += 1
+            pair_label = f"pair_{pair_index:03d}"
             results = process_pair(ct_ds, pt_series[best_pt_uid], pair_label, out_dir)
             all_results.extend(results)
 
@@ -730,7 +770,7 @@ def main():
         print("ERRORS: All within acceptable range (<5% of max)")
 
     print(f"\nTotal elapsed: {time.time() - t0:.1f}s")
-    print(f"Results: {out_dir}")
+    print("Results: protected external directory")
     print(f"{'='*70}")
 
 

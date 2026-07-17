@@ -16,13 +16,17 @@ Outputs:
 Requirements:
     pydicom, numpy, SimpleITK, scipy (all in project requirements.txt)
 """
-
 import os
 import sys
 
 import numpy as np
 import pydicom
 import SimpleITK as sitk
+
+try:
+    from scripts.privacy_console import print_redacted
+except ModuleNotFoundError:
+    from privacy_console import print_redacted
 
 # ---------------------------------------------------------------------------
 # 1. DICOM loading helpers — built from DICOM spec knowledge
@@ -301,8 +305,8 @@ def run_verification():
     # --- Discover and load DICOM data ---
     print("\n[1] Discovering exam for FoR ...13397883 ...")
     _, ct_folder, pt_folder = discover_exam_for_FoR(base_dicom, "13397883")
-    print(f"    CT folder: {os.path.basename(ct_folder)}")
-    print(f"    PT folder: {os.path.basename(pt_folder)}")
+    print_redacted(f"    CT folder: {os.path.basename(ct_folder)}")
+    print_redacted(f"    PT folder: {os.path.basename(pt_folder)}")
 
     print("[2] Loading CT DICOM files ...")
     ct_datasets = load_dicom_series(ct_folder)
@@ -360,7 +364,7 @@ def run_verification():
                   f"({cmp_2d['max_err_pct']:.6f}%), "
                   f"mean_err={cmp_2d['mean_err']:.6f} -> {status}")
         else:
-            print(f"    2D: no reference file found at {ref_2d_path}")
+            print_redacted(f"    2D: no reference file found at {ref_2d_path}")
 
         # Also compare against _gt if available
         gt_2d_path = os.path.join(results_dir, f"{label}_2d_gt.npy")
@@ -386,7 +390,7 @@ def run_verification():
                   f"({cmp_3d['max_err_pct']:.6f}%), "
                   f"mean_err={cmp_3d['mean_err']:.6f} -> {status}")
         else:
-            print(f"    3D: no reference file found at {ref_3d_path}")
+            print_redacted(f"    3D: no reference file found at {ref_3d_path}")
 
         gt_3d_path = os.path.join(results_dir, f"{label}_3d_gt.npy")
         if os.path.exists(gt_3d_path):

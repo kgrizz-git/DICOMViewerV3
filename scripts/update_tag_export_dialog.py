@@ -8,9 +8,13 @@ Changes:
   3. Remove the four extracted methods: _analyze_tag_variations,
      _generate_default_filename, _write_excel_file, _write_csv_files.
 """
-
 import ast
 import re
+
+try:
+    from scripts.privacy_console import print_redacted
+except ModuleNotFoundError:
+    from privacy_console import print_redacted
 
 TARGET = 'src/gui/dialogs/tag_export_dialog.py'
 
@@ -111,4 +115,4 @@ try:
     total_lines = content.count('\n') + 1
     print(f'SYNTAX OK\nLines: {total_lines}')
 except SyntaxError as e:
-    print(f'SYNTAX ERROR: {e}')
+    print_redacted(f'SYNTAX ERROR: {e}')

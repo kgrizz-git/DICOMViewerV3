@@ -72,12 +72,19 @@ detect-secrets  1.5.x    (Secrets detector)
 | Tool | Purpose | Speed | Detection | Use Case |
 |------|---------|-------|-----------|----------|
 | **semgrep** | Security rules SAST | Fast | Logic bugs, unsafe patterns | Pre-commit scanning |
-| **truffleHog** | Credential/secret scanning | Medium | High-confidence secrets (verified) | Verify no credentials in code |
+| **truffleHog** | Credential/secret scanning | Medium | Potential secret patterns, offline | Find possible credentials without provider verification |
 | **detect-secrets** | Secret patterns | Fast | Low-confidence patterns | Find potential secrets |
 
 ---
 
 ## 1. Semgrep (Rule-Based SAST)
+
+Disable metrics/telemetry for every invocation. The tracked wrapper and CI job
+also pass the explicit `--metrics=off` flag:
+
+```bash
+export SEMGREP_SEND_METRICS=off
+```
 
 ### Basic Usage
 
@@ -141,33 +148,35 @@ semgrep --config=p/python --config=p/owasp-top-ten src/
 
 ## 2. TruffleHog v3 (Advanced Secrets Scanning)
 
-TruffleHog v3 finds credentials by scanning git history and files. It supports verified/unverified/unknown result types and can enforce failure with `--fail`.
+TruffleHog v3 finds possible credentials by scanning git history and files.
+Always use `--no-verification`: suspected credentials must never be submitted
+to provider APIs to determine whether they are valid.
 
 ### Basic Usage
 
 **Scan filesystem (current directory):**
 ```bash
-trufflehog filesystem . --fail --no-update
+trufflehog filesystem . --fail --no-update --no-verification
 ```
 
 **Scan a specific file:**
 ```bash
-trufflehog filesystem src/utils/config_manager.py
+trufflehog filesystem src/utils/config_manager.py --no-update --no-verification
 ```
 
 **Scan git history (current repo):**
 ```bash
-trufflehog git file://. --only-verified
+trufflehog git file://. --no-update --no-verification
 ```
 
 ### Output Options
 
 ```bash
 # JSON output
-trufflehog filesystem . --json
+trufflehog filesystem . --json --no-update --no-verification
 
 # Human-readable table
-trufflehog filesystem . --debug
+trufflehog filesystem . --debug --no-update --no-verification
 ```
 
 ### What It Detects
@@ -177,7 +186,7 @@ trufflehog filesystem . --debug
 - API keys and tokens (GitHub, Slack, etc.)
 - Database connection strings
 - OAuth tokens
-- Verified secrets (high confidence only with `--only-verified`)
+- Potential secrets without contacting the associated service
 
 ### Common Filters
 
@@ -264,7 +273,7 @@ semgrep --config=p/security-audit src/ || echo "⚠ Review semgrep findings"
 detect-secrets scan src/ && echo "✓ No secrets detected"
 
 # 4. If you want thorough verification:
-trufflehog filesystem . --fail --no-update && echo "✓ No verified secrets"
+trufflehog filesystem . --fail --no-update --no-verification && echo "✓ No potential secrets"
 ```
 
 ### Combine All Checks (One Command)
@@ -286,13 +295,39 @@ Fast check matching the **pre-commit** hook (staged files only; run from repo ro
 .\.venv\Scripts\python.exe .\scripts\run_security_scan.py --pre-commit --report
 ```
 
-Privacy / logging checks on **staged `src/*.py`** (same script the hook runs first; all branches when hooks are installed):
+Privacy/output checks on staged covered files (default is `--staged`):
 
 ```powershell
-.\.venv\Scripts\python.exe .\scripts\git_hook_privacy_checks.py
+.\.venv\Scripts\python.exe .\scripts\git_hook_privacy_checks.py --staged
+.\.venv\Scripts\python.exe .\scripts\git_hook_privacy_checks.py --all
+.\.venv\Scripts\python.exe .\scripts\git_hook_privacy_checks.py --all --critical
 ```
 
+Staged mode blocks all newly added categories. Full `--all` reports legacy
+print/debug migration debt; `--all --critical` is the blocking pre-push/CI
+lane for raw exception, traceback, dialog, logger, stream, and parser failures.
+
+The privacy hook deliberately performs local syntactic checks. It is not a
+sound Python alias, scope, interprocedural, or data-flow analyzer. Runtime
+fail-closed validation/redaction at the final output and protected-storage
+boundaries is authoritative. Use Semgrep or local-only Hounddog as advisory
+second opinions for indirect flows; do not treat a clean static result as a
+proof that runtime values contain no PHI/PII.
+
 Set **`DICOMVIEWER_PRIVACY_HOOK=warn`** to print violations without failing the hook (useful when tuning new code against heuristics).
+
+Isolated local privacy review tools:
+
+```powershell
+.\.phi-tools\Scripts\python.exe .\scripts\privacy_tool_review.py hounddog
+.\.phi-tools\Scripts\python.exe .\scripts\privacy_tool_review.py phiscan
+.\.phi-tools\Scripts\python.exe .\scripts\privacy_tool_review.py media PATH
+.\.phi-tools\Scripts\python.exe .\scripts\privacy_tool_review.py dicom PATH
+```
+
+The wrapper emits only counts/categories and exits `0` clean, `1` findings,
+`2` error, or `3` skip. Hounddog must remain local, `--no-git`, no-account, and
+advisory. Media/DICOM results require human review before repository admission.
 
 ### Enforce scans for `main` via Git hooks
 
@@ -312,11 +347,27 @@ bash ./scripts/setup-hooks.sh
 
 Behavior:
 
-- `pre-commit` (**all branches**): runs **`scripts/git_hook_privacy_checks.py`** first (staged **`src/*.py`** only): blocks **`traceback.print_exc(`** in real code (matches inside **`tokenize`** **STRING** / **COMMENT** spans—docstrings, string literals, `#` comments—are ignored); on **added** lines, heuristics for patient tag names in log/print lines, path-like literals in `logger.*` calls, raw-exception patterns in `QMessageBox` / dialog calls, and `logger.*` calls whose message is non-literal without **`sanitize_message`** / **`sanitize_exception`**. Set **`DICOMVIEWER_PRIVACY_HOOK=warn`** to log issues without blocking.
+- `pre-commit` (**all branches**): runs **`scripts/git_hook_privacy_checks.py`** first over its staged covered paths. It blocks directly recognizable unsafe output, raw exception/traceback use, sensitive fields, structural-event schema misuse/fabrication, and parse failures. The check is intentionally syntactic; indirect alias/data-flow review is advisory. Set **`DICOMVIEWER_PRIVACY_HOOK=warn`** to log issues without blocking while tuning a rule.
+- `pre-commit` (**all branches**): the artifact gate also prevents force-added
+  content in protected local-data roots and rejects removal of the exact
+  privacy-critical `.gitignore` rules. After the blocking artifact, privacy,
+  and secret gates pass, `run_conditional_privacy_reviews.py` invokes only the
+  advisory tools warranted by exact staged blobs (restricted PhiScan data,
+  raster OCR/metadata/Presidio, or DICOM review). Optional-tool `FINDINGS`,
+  `ERROR`, and `SKIP` states are visible but do not override or weaken the
+  blocking admission policy.
 - `commit-msg` (**all branches**): runs **`scripts/git_hook_commit_message_privacy.py`** and blocks machine-specific paths, local account/hostname terms, RFC1918/ULA addresses, internal PACS/DICOM endpoints, and patient/study identifiers. Its output reports only rule categories and line numbers, never the matched text.
 - `pre-commit` (branch **`main`**): after the privacy script, runs a **light** security check — debug flags plus **detect-secrets** on **staged** files only (`scripts/run_security_scan.py --pre-commit`). Skips Semgrep, TruffleHog, and pip-audit for speed. To run the **full** suite on every commit instead, set environment variable **`DICOMVIEWER_PRECOMMIT_FULL_SECURITY_SCAN=1`** (e.g. in your shell profile) before committing. **`run_security_scan.py`** exits with a **non-zero** status when any configured check fails (so the hook can block).
 - `pre-commit`: prunes `backups/` on **`main`** / **`WIP`** — **`scripts/git-hook-prune-backups.py --days 3 --max-commits 10`**: **tracked** files are removed if **more than 10 commits** since the last commit that touched the path **or** (when **more than 10** commits landed in the last **3** days) the touch is **strictly older than 3 days**; **untracked** files use embedded **`YYYYMMDD`** and **mtime** (the **older** of the two), removed when **strictly older than 3 days**. Then **`git add -u -- backups`** stages tracked removals (other branches: no prune). Shallow clones may skew Git counts; prune / staging errors are **non-fatal**.
-- `pre-push`: runs the basedpyright error gate across `src/` and `scripts/` (warnings reported, errors block), then runs **full** scans whenever a push updates `refs/heads/main` (covers fast-forward merges pushed to `main`) — `run_security_scan.py --all`
+- `pre-push`: runs the universal metadata/privacy, PHI artifact, Gitleaks,
+  basedpyright, coverage/test, and complexity gates first. If the proposed
+  update targets `refs/heads/main`, it then runs the full offline/local scanner
+  suite (`run_security_scan.py --all`). Only after those gates pass, it checks
+  the ignored local SonarQube timestamp and prints a non-blocking reminder when
+  the last successful Community Build analysis is missing or over 30 days old.
+  The same successful `main` path also runs local/no-account Hounddog after the
+  blocking suite and before the SonarQube freshness reminder. Hounddog findings
+  remain advisory and no report is retained.
 
 ---
 
@@ -490,7 +541,7 @@ $tools = @{
     "Semgrep (security-audit)" = "semgrep --config=p/security-audit --config=p/owasp-top-ten --json src/"
     "Semgrep (secrets)" = "semgrep --config=p/secrets --json src/"
     "Detect-secrets" = "detect-secrets scan src/ --baseline .secrets.baseline --json"
-    "TruffleHog (verified)" = "trufflehog filesystem . --only-verified --json"
+    "TruffleHog (offline)" = "trufflehog filesystem . --no-update --no-verification --json"
 }
 
 foreach ($tool in $tools.GetEnumerator()) {
@@ -540,11 +591,11 @@ semgrep --config=p/security-audit --config=p/owasp-top-ten src/  # ~10 sec
 ```bash
 semgrep --config=p/security-audit --config=p/secrets --config=p/python --config=p/owasp-top-ten src/
 detect-secrets scan src/ --baseline .secrets.baseline
-trufflehog filesystem . --only-verified
+trufflehog filesystem . --no-update --no-verification
 ```
 
 ---
 
 **Document Version:** 1.0  
 **Created:** 2026-03-22  
-**Last Updated:** 2026-03-22
+**Last Updated:** 2026-07-16

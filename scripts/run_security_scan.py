@@ -17,6 +17,11 @@ from pathlib import Path
 from shutil import which
 from typing import Any
 
+try:
+    from scripts.privacy_console import print_redacted
+except ModuleNotFoundError:
+    from privacy_console import print_redacted
+
 # Fix Unicode output on Windows
 if sys.platform == 'win32':
     import io
@@ -96,7 +101,13 @@ def check_semgrep(verbose=False):
     if not semgrep_path:
         print_fail("Semgrep executable not found in venv")
         return {"status": "fail", "reason": "missing_semgrep"}
-    cmd = [semgrep_path, "--config=p/security-audit", "--config=p/owasp-top-ten", "src/"]
+    cmd = [
+        semgrep_path,
+        "--metrics=off",
+        "--config=p/security-audit",
+        "--config=p/owasp-top-ten",
+        "src/",
+    ]
     if not verbose:
         cmd.append("--quiet")
     returncode, stdout, stderr = run_cmd(cmd, "Semgrep", verbose)
@@ -275,6 +286,7 @@ def check_trufflehog(verbose=False):
         "filesystem",
         *scan_targets,
         "--no-update",
+        "--no-verification",
         "--json",
         "--fail-on-scan-errors",
     ]
@@ -292,7 +304,7 @@ def check_trufflehog(verbose=False):
                 continue
 
     if returncode == 0 and not findings:
-        print_ok("No verified or unverified secrets found by TruffleHog")
+        print_ok("No potential secrets found by offline TruffleHog scan")
         return {"status": "pass"}
 
     if findings:
@@ -303,7 +315,7 @@ def check_trufflehog(verbose=False):
             for f in findings[:5]:
                 detector = f.get("DetectorName", "unknown")
                 file_path = f.get("SourceMetadata", {}).get("Data", {}).get("Filesystem", {}).get("file", "unknown")
-                print(f"  - {detector} in {file_path}")
+                print_redacted(f"  - {detector} in {file_path}")
         return {"status": "review", "findings": len(findings)}
 
     if returncode != 0:
@@ -313,7 +325,7 @@ def check_trufflehog(verbose=False):
         print_fail(f"TruffleHog exited with code {returncode}")
         return {"status": "fail", "reason": f"exit_code_{returncode}"}
 
-    print_ok("No verified or unverified secrets found by TruffleHog")
+    print_ok("No potential secrets found by offline TruffleHog scan")
     return {"status": "pass"}
 
 def check_pip_audit(verbose=False):

@@ -30,7 +30,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -40,6 +42,18 @@ import numpy as np
 
 from core.mpr_builder import MprResult
 from core.slice_geometry import SlicePlane, SliceStack
+from utils.privacy.safe_storage import (
+    assert_safe_internal_path,
+    atomic_write_private_text,
+    ensure_private_directory,
+)
+
+_logger = logging.getLogger(__name__)
+_SOURCE_ROOT = Path(__file__).resolve().parent.parent.parent
+
+
+def _is_windows() -> bool:
+    return os.name == "nt"
 
 # ---------------------------------------------------------------------------
 # Cache key helpers
@@ -189,7 +203,8 @@ class MprCache:
             max_size_mb:  Maximum total cache size in MB (0 = unlimited).
         """
         self._cache_dir = Path(cache_dir)
-        self._cache_dir.mkdir(parents=True, exist_ok=True)
+        assert_safe_internal_path(self._cache_dir, source_root=_SOURCE_ROOT)
+        ensure_private_directory(self._cache_dir)
         self._max_size_bytes = int(max_size_mb) * 1024 * 1024
         self._lock = threading.Lock()
         # In-memory index of all cache entries: key → _CacheEntry.
@@ -244,9 +259,12 @@ class MprCache:
             with open(entry.path_meta, encoding="utf-8") as f:
                 meta: dict[str, Any] = json.load(f)
 
-            slice_stack = self._reconstruct_stack(meta, slices)
+            slice_stack = self._reconstruct_stack(meta)
         except Exception as exc:
-            print(f"[MprCache] Load failed for key {key[:12]}…: {exc}")
+            _logger.warning(
+                "MPR cache load failed",
+                extra={"operation": "mpr_cache.load", "error_class": type(exc).__name__},
+            )
             return None
 
         # Update last-access time.
@@ -285,7 +303,7 @@ class MprCache:
             "cache_format_version": _MPR_CACHE_FORMAT_VERSION,
             "created": time.time(),
             "last_access": time.time(),
-            "series_uid": series_uid,
+            "series_key": hashlib.sha256(series_uid.encode("utf-8")).hexdigest(),
             "source_dataset_count": len(ds_list),
             "n_slices": result.n_slices,
             "output_spacing_mm": list(result.output_spacing_mm),
@@ -316,16 +334,37 @@ class MprCache:
         path_npz = self._cache_dir / (key + self._NPZ_SUFFIX)
         path_meta = self._cache_dir / (key + self._META_SUFFIX)
 
+        tmp_npz: Path | None = None
         try:
             npz_payload: dict[str, Any] = {"n_slices": np.array(result.n_slices)}
             for i, arr in enumerate(result.slices):
                 npz_payload[f"slice_{i}"] = arr.astype(np.float32)
-            np.savez_compressed(str(path_npz), **npz_payload)
-
-            with open(path_meta, "w", encoding="utf-8") as f:
-                json.dump(meta, f, indent=2)
+            descriptor, tmp_name = tempfile.mkstemp(
+                prefix=".mpr-cache-", suffix=".tmp", dir=self._cache_dir
+            )
+            tmp_npz = Path(tmp_name)
+            if not _is_windows():
+                tmp_npz.chmod(0o600)
+            with os.fdopen(descriptor, "wb") as stream:
+                np.savez_compressed(stream, **npz_payload)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(tmp_npz, path_npz)
+            tmp_npz = None
+            if not _is_windows():
+                path_npz.chmod(0o600)
+            atomic_write_private_text(
+                path_meta,
+                json.dumps(meta, indent=2),
+                source_root=_SOURCE_ROOT,
+            )
         except Exception as exc:
-            print(f"[MprCache] Save failed for key {key[:12]}…: {exc}")
+            if tmp_npz is not None:
+                tmp_npz.unlink(missing_ok=True)
+            _logger.warning(
+                "MPR cache save failed",
+                extra={"operation": "mpr_cache.save", "error_class": type(exc).__name__},
+            )
             return False
 
         size_bytes = self._file_size(path_npz) + self._file_size(path_meta)
@@ -377,6 +416,14 @@ class MprCache:
         """Return number of cached entries."""
         with self._lock:
             return len(self._index)
+
+    def set_max_size_mb(self, max_size_mb: int) -> None:
+        """Apply a new bounded size limit and evict oldest entries if required."""
+
+        with self._lock:
+            self._max_size_bytes = int(max_size_mb) * 1024 * 1024
+            if self._max_size_bytes > 0:
+                self._evict_lru()
 
     # ------------------------------------------------------------------
     # Disk scanning and indexing
@@ -454,32 +501,32 @@ class MprCache:
             with open(path_meta, encoding="utf-8") as f:
                 meta = json.load(f)
             meta["last_access"] = time.time()
-            with open(path_meta, "w", encoding="utf-8") as f:
-                json.dump(meta, f, indent=2)
+            atomic_write_private_text(
+                path_meta,
+                json.dumps(meta, indent=2),
+                source_root=_SOURCE_ROOT,
+            )
         except Exception:
             pass
 
     @staticmethod
     def _meta_has_series(path_meta: Path, series_uid: str) -> bool:
-        """Return True if a metadata file references *series_uid*."""
+        """Return True if metadata contains the matching non-reversible series key."""
         try:
             with open(path_meta, encoding="utf-8") as f:
                 meta = json.load(f)
-            return meta.get("series_uid", "") == series_uid
+            expected = hashlib.sha256(series_uid.encode("utf-8")).hexdigest()
+            return meta.get("series_key", "") == expected
         except Exception:
             return False
 
     @staticmethod
-    def _reconstruct_stack(
-        meta: dict[str, Any], slices: list[np.ndarray]
-    ) -> SliceStack:
+    def _reconstruct_stack(meta: dict[str, Any]) -> SliceStack:
         """
         Rebuild a SliceStack from cached metadata.
 
         Args:
             meta:   Metadata dict as stored in the JSON sidecar.
-            slices: Loaded pixel arrays (used only for length).
-
         Returns:
             SliceStack with correct geometry.
         """

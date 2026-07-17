@@ -15,6 +15,7 @@ import os
 import sqlite3
 import time
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any, cast
 
 # sqlcipher3 provides a sqlite3-compatible dbapi2 with encryption
@@ -27,6 +28,10 @@ _ST_OP = getattr(sqlcipher_sqlite, "OperationalError", sqlite3.OperationalError)
 _FTS_QUERY_ERRS: tuple[type[BaseException], ...] = tuple(
     {sqlite3.OperationalError, _ST_OP},
 )
+
+
+def _is_windows() -> bool:
+    return os.name == "nt"
 
 
 def _normalize_modalities_group_concat(raw: str | None) -> str:
@@ -81,9 +86,13 @@ class StudyIndexStore:
     def _connect(self) -> sqlite3.Connection:
         parent = os.path.dirname(os.path.abspath(self._db_path))
         if parent:
-            os.makedirs(parent, exist_ok=True)
+            parent_path = Path(parent)
+            if not parent_path.exists():
+                parent_path.mkdir(parents=True, mode=0o700)
         _connect_fn = cast(Any, sqlcipher_sqlite).connect
         conn = cast(sqlite3.Connection, _connect_fn(self._db_path, timeout=30.0))
+        if not _is_windows():
+            Path(self._db_path).chmod(0o600)
         conn.execute(_pragma_key_sql(self._passphrase))
         conn.execute("PRAGMA journal_mode=WAL;")
         return conn

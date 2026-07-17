@@ -17,7 +17,6 @@ Requirements:
     - FusionProcessor for image blending
     - FusionControlsWidget for UI
 """
-
 import logging
 from collections.abc import Callable
 from typing import Any, Optional
@@ -33,6 +32,7 @@ from core.fusion_processor import FusionProcessor
 from gui.fusion_controls_widget import FusionControlsWidget
 from utils.debug_flags import DEBUG_OFFSET, DEBUG_SPATIAL_ALIGNMENT
 from utils.log_sanitizer import sanitized_format_exc
+from utils.privacy.console import print_redacted
 
 _logger = logging.getLogger(__name__)
 
@@ -783,7 +783,7 @@ class FusionCoordinator:
             return fused_image
 
         except Exception as e:
-            print(f"Error creating fused image: {e}")
+            print_redacted(f"Error creating fused image: {e}")
             _logger.debug("%s", sanitized_format_exc())
             return None
 
@@ -904,8 +904,8 @@ class FusionCoordinator:
         # DEBUG
         if DEBUG_SPATIAL_ALIGNMENT:
             print("\n[SPATIAL ALIGNMENT DEBUG]")
-            print(f"  base_series: {self.fusion_handler.base_series_uid[:20] if self.fusion_handler.base_series_uid else 'None'}...")
-            print(f"  overlay_series: {self.fusion_handler.overlay_series_uid[:20] if self.fusion_handler.overlay_series_uid else 'None'}...")
+            print_redacted(f"  base_series: {self.fusion_handler.base_series_uid[:20] if self.fusion_handler.base_series_uid else 'None'}...")
+            print_redacted(f"  overlay_series: {self.fusion_handler.overlay_series_uid[:20] if self.fusion_handler.overlay_series_uid else 'None'}...")
             print(f"  base_pixel_spacing: {base_pixel_spacing}")
             print(f"  overlay_pixel_spacing: {overlay_pixel_spacing}")
 
@@ -937,8 +937,8 @@ class FusionCoordinator:
                 stored_offset = (offset_x, offset_y)
                 if DEBUG_SPATIAL_ALIGNMENT:
                     print(f"  calculated offset: ({offset_x:.2f}, {offset_y:.2f}) pixels")
-                    print(f"  base ImagePositionPatient: {self.fusion_handler.get_image_position_patient(base_ds)}")
-                    print(f"  overlay ImagePositionPatient: {self.fusion_handler.get_image_position_patient(overlay_ds)}")
+                    print_redacted(f"  base ImagePositionPatient: {self.fusion_handler.get_image_position_patient(base_ds)}")
+                    print_redacted(f"  overlay ImagePositionPatient: {self.fusion_handler.get_image_position_patient(overlay_ds)}")
                 # Only set if user hasn't manually modified
                 if not self.fusion_controls.has_user_modified_offset():
                     self.fusion_controls.set_calculated_offset(offset_x, offset_y)

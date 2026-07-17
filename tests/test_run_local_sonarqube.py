@@ -3,8 +3,10 @@ from __future__ import annotations
 import importlib.util
 import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from types import ModuleType
+from typing import Any
 
 
 def _load_module() -> ModuleType:
@@ -66,6 +68,61 @@ def test_last_submission_round_trip(tmp_path):
     assert record["dashboard_url"] == "http://localhost:9000/dashboard?id=dicom-viewer-v3"
 
 
+def test_freshness_check_distinguishes_fresh_stale_future_and_missing(
+    tmp_path, capsys
+):
+    module = _load_module()
+    now = datetime(2026, 7, 16, tzinfo=UTC)
+
+    assert module.check_submission_freshness(tmp_path, now=now) == 3
+    assert "No valid local SonarQube analysis" in capsys.readouterr().out
+
+    path = module.state_path(tmp_path)
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        '{"submitted_at_utc": "2026-07-01T00:00:00+00:00"}\n',
+        encoding="utf-8",
+    )
+    assert module.check_submission_freshness(tmp_path, now=now) == 0
+    assert "is fresh" in capsys.readouterr().out
+
+    path.write_text(
+        '{"submitted_at_utc": "2026-05-01T00:00:00+00:00"}\n',
+        encoding="utf-8",
+    )
+    assert module.check_submission_freshness(tmp_path, now=now) == 3
+    assert "is stale" in capsys.readouterr().out
+
+    path.write_text(
+        '{"submitted_at_utc": "2026-07-17T00:00:00+00:00"}\n',
+        encoding="utf-8",
+    )
+    assert module.check_submission_freshness(tmp_path, now=now) == 3
+    assert "future-dated" in capsys.readouterr().out
+
+
+def test_freshness_cli_does_not_require_token_or_contact_server(
+    monkeypatch, tmp_path
+):
+    module = _load_module()
+    monkeypatch.setattr(module, "REPO_ROOT", tmp_path)
+    monkeypatch.delenv("SONAR_TOKEN", raising=False)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["run_local_sonarqube.py", "--check-freshness-days", "30"],
+    )
+    monkeypatch.setattr(
+        module,
+        "get_server_status",
+        lambda *_args: (_ for _ in ()).throw(
+            AssertionError("server should not be contacted")
+        ),
+    )
+
+    assert module.main() == 3
+
+
 def test_main_requires_token_before_contacting_server(monkeypatch, tmp_path, capsys):
     module = _load_module()
     monkeypatch.setattr(module, "REPO_ROOT", tmp_path)
@@ -86,7 +143,7 @@ def test_main_records_only_a_successful_submission(monkeypatch, tmp_path):
     monkeypatch.setattr(module, "REPO_ROOT", tmp_path)
     monkeypatch.setenv("SONAR_TOKEN", "test-token")
     monkeypatch.setattr(sys, "argv", ["run_local_sonarqube.py", "--scanner", "local", "--skip-server-check"])
-    calls: list[tuple[list[str], dict]] = []
+    calls: list[tuple[list[str], dict[str, Any]]] = []
 
     def fake_run(command, **kwargs):
         calls.append((command, kwargs))

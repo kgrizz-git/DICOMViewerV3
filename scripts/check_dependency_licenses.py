@@ -51,6 +51,19 @@ from importlib import metadata
 from pathlib import Path
 from typing import Any
 
+try:
+    from scripts.privacy_console import (
+        print_license_accepted,
+        print_license_obligation,
+        print_license_violation,
+    )
+except ModuleNotFoundError:
+    import privacy_console  # pyright: ignore[reportImplicitRelativeImport]
+
+    print_license_accepted = privacy_console.print_license_accepted
+    print_license_obligation = privacy_console.print_license_obligation
+    print_license_violation = privacy_console.print_license_violation
+
 # Category severity ordering: higher == more restrictive. Used to combine
 # operands of SPDX expressions and lists of trove classifiers.
 PERMISSIVE = "PERMISSIVE"
@@ -170,7 +183,7 @@ def load_policy(path: Path) -> dict[str, Any]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))  # NOSONAR - path is an explicit --policy CLI arg for this local dev tool, not attacker-controlled input
     except (OSError, json.JSONDecodeError) as exc:
-        raise SystemExit(f"[license check] failed to read policy {path}: {exc}") from exc
+        raise SystemExit("[license check] failed to read the selected policy") from exc
     merged = {**defaults, **data}
     # Normalize exception / override keys to PEP 503 form for matching.
     merged["accepted_exceptions"] = {
@@ -256,32 +269,64 @@ def render_report(rows: list[dict[str, Any]], violations: list[dict[str, Any]], 
     if obligations:
         print(f"Weak copyleft / notice obligations ({len(obligations)}):")
         for r in obligations:
-            print(f"  - {r['name']} {r['version']}: {r['license']}")
+            print_license_obligation(
+                package=r.get("name", ""),
+                version=r.get("version", ""),
+                license_name=r.get("license", ""),
+                source=r.get("source", ""),
+            )
         print("  (allowed; ensure license notices ship with the distribution)")
         print()
 
     if accepted:
         print(f"Accepted exceptions ({len(accepted)}):")
         for r in accepted:
-            exc = r["exception"]
-            reason = exc.get("reason", "") if isinstance(exc, dict) else str(exc)
-            print(f"  - {r['name']} {r['version']}: {r['license']}")
-            print(f"      reason: {reason}")
+            if r.get("category") == UNKNOWN:
+                print_license_accepted(
+                    "UNKNOWN",
+                    package=r.get("name", ""),
+                    version=r.get("version", ""),
+                    license_name=r.get("license", ""),
+                    source=r.get("source", ""),
+                )
+            else:
+                print_license_accepted(
+                    "FORBIDDEN",
+                    package=r.get("name", ""),
+                    version=r.get("version", ""),
+                    license_name=r.get("license", ""),
+                    source=r.get("source", ""),
+                )
         print()
 
     if violations:
         print(f"POLICY VIOLATIONS ({len(violations)}):")
         for r in violations:
-            print(f"  ! {r['name']} {r['version']}: [{r['category']}] {r['license']} (via {r['source']})")
+            if r.get("category") == UNKNOWN:
+                print_license_violation(
+                    "UNKNOWN",
+                    package=r.get("name", ""),
+                    version=r.get("version", ""),
+                    license_name=r.get("license", ""),
+                    source=r.get("source", ""),
+                )
+            else:
+                print_license_violation(
+                    "FORBIDDEN",
+                    package=r.get("name", ""),
+                    version=r.get("version", ""),
+                    license_name=r.get("license", ""),
+                    source=r.get("source", ""),
+                )
         print()
         print("A new strong-copyleft (GPL/AGPL) dependency would make a")
         print("closed-source commercial build non-compliant. Either remove it,")
         print("replace it with a permissive/LGPL alternative, or -- if it is")
         print("knowingly accepted -- add it to accepted_exceptions in the policy.")
-        print(f"See: {doc_ref}")
+        _ = doc_ref
+        print("See the dependency license policy documentation.")
     else:
         print("OK: no un-accepted strong-copyleft dependencies found.")
-
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)

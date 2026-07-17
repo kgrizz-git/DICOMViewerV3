@@ -1,0 +1,308 @@
+{
+  "schema_version": 1,
+  "identifier_validators": {
+    "decoder_package": {
+      "kind": "enum",
+      "values": [
+        "pydicom",
+        "pylibjpeg",
+        "pylibjpeg-libjpeg",
+        "pylibjpeg-openjpeg",
+        "pylibjpeg-rle",
+        "pyjpegls"
+      ]
+    },
+    "format": {
+      "kind": "regex_family",
+      "pattern": "[A-Za-z0-9][A-Za-z0-9 ._()+/-]{0,95}",
+      "family_pattern": "JPEG|JPEGLS|JPEG-LS|RLE|DEFLATED|EXPLICIT VR|IMPLICIT VR|MPEG|HEVC|UNCOMPRESSED"
+    },
+    "license": {
+      "kind": "regex_family",
+      "pattern": "[A-Za-z0-9][A-Za-z0-9 ._()+:;/&-]{0,95}",
+      "family_pattern": "MIT|BSD|APACHE|GPL|LGPL|AGPL|MPL|EPL|CDDL|ISC|ZLIB|PSF|PYTHON SOFTWARE FOUNDATION|OFL|PUBLIC DOMAIN|UNLICENSE|BOOST|POSTGRESQL|UNKNOWN"
+    },
+    "module": {
+      "kind": "regex",
+      "pattern": "(?:src\\.)?(?:core|gui|metadata|qa|roi|tools|utils)(?:\\.[A-Za-z][A-Za-z0-9_]*)*"
+    },
+    "package": {
+      "kind": "regex",
+      "pattern": "[A-Za-z0-9][A-Za-z0-9_.-]{0,127}"
+    },
+    "repository_path": {
+      "kind": "regex",
+      "pattern": "(?:src/)?(?:core|gui|metadata|qa|roi|tools|utils)/(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\\.py"
+    },
+    "source": {
+      "kind": "enum",
+      "values": ["classifier", "expression", "license-field", "none", "override"]
+    },
+    "version": {
+      "kind": "regex",
+      "pattern": "[0-9]+(?:[.][0-9A-Za-z]+)*(?:[-+_.!][0-9A-Za-z]+)*"
+    }
+  },
+  "metric_validators": {
+    "boolean": {"kind": "boolean"},
+    "count": {"kind": "integer", "minimum": 0, "maximum": 9007199254740991},
+    "dimension": {"kind": "integer", "minimum": 0, "maximum": 1000000},
+    "duration_ms": {"kind": "number", "minimum": 0, "maximum": 604800000},
+    "index": {"kind": "integer", "minimum": 0, "maximum": 9007199254740991},
+    "megabytes": {"kind": "number", "minimum": 0, "maximum": 1000000000},
+    "number": {"kind": "number", "minimum": -1000000000000000, "maximum": 1000000000000000},
+    "shape": {
+      "kind": "integer_sequence",
+      "minimum_items": 1,
+      "maximum_items": 5,
+      "minimum": 0,
+      "maximum": 1000000
+    },
+    "spacing_mm": {"kind": "number", "minimum": 0, "maximum": 1000000}
+  },
+  "operations": {
+    "application.startup": {
+      "adapter": null,
+      "allow_error": true,
+      "categories": [null],
+      "identifiers": {},
+      "required_identifiers": [],
+      "metrics": {},
+      "required_metrics": []
+    },
+    "application.unhandled": {
+      "adapter": null,
+      "allow_error": true,
+      "categories": [null],
+      "identifiers": {},
+      "required_identifiers": [],
+      "metrics": {},
+      "required_metrics": []
+    },
+    "architecture.baseline_written": {
+      "adapter": "architecture",
+      "allow_error": false,
+      "categories": [null],
+      "identifiers": {},
+      "required_identifiers": [],
+      "metrics": {"count": "count"},
+      "required_metrics": ["count"]
+    },
+    "architecture.violation": {
+      "adapter": "architecture",
+      "allow_error": false,
+      "categories": ["core-gui", "domain-main", "gui-main", "syntax", "utils-domain"],
+      "identifiers": {"module": "module", "repository_path": "repository_path"},
+      "required_identifiers": ["repository_path"],
+      "metrics": {"line": "count"},
+      "required_metrics": ["line"]
+    },
+    "decoder.copy_failed": {
+      "adapter": null,
+      "allow_error": true,
+      "categories": [null],
+      "identifiers": {},
+      "required_identifiers": [],
+      "metrics": {},
+      "required_metrics": []
+    },
+    "decoder.hash_mismatch": {
+      "adapter": null,
+      "allow_error": false,
+      "categories": [null],
+      "identifiers": {},
+      "required_identifiers": [],
+      "metrics": {},
+      "required_metrics": []
+    },
+    "decoder.new_failure": {
+      "adapter": null,
+      "allow_error": false,
+      "categories": [null],
+      "identifiers": {},
+      "required_identifiers": [],
+      "metrics": {},
+      "required_metrics": []
+    },
+    "decoder.package": {
+      "adapter": null,
+      "allow_error": false,
+      "categories": [null, "not-installed"],
+      "identifiers": {"package": "decoder_package", "version": "version"},
+      "required_identifiers": ["package"],
+      "metrics": {},
+      "required_metrics": []
+    },
+    "decoder.syntax_summary": {
+      "adapter": null,
+      "allow_error": false,
+      "categories": ["at-risk", "standard"],
+      "identifiers": {"format": "format"},
+      "required_identifiers": ["format"],
+      "metrics": {
+        "at_risk": "boolean",
+        "decoded_count": "count",
+        "failed_count": "count",
+        "total_count": "count"
+      },
+      "required_metrics": ["at_risk", "decoded_count", "failed_count", "total_count"]
+    },
+    "fusion.group_summary": {
+      "adapter": null,
+      "allow_error": false,
+      "categories": [null],
+      "identifiers": {},
+      "required_identifiers": [],
+      "metrics": {"duration_ms": "duration_ms", "group_count": "count"},
+      "required_metrics": ["duration_ms", "group_count"]
+    },
+    "fusion.input": {
+      "adapter": null,
+      "allow_error": false,
+      "categories": ["protected"],
+      "identifiers": {},
+      "required_identifiers": [],
+      "metrics": {},
+      "required_metrics": []
+    },
+    "fusion.load_summary": {
+      "adapter": null,
+      "allow_error": false,
+      "categories": [null],
+      "identifiers": {},
+      "required_identifiers": [],
+      "metrics": {"instance_count": "count", "series_count": "count"},
+      "required_metrics": ["instance_count", "series_count"]
+    },
+    "fusion.series_summary": {
+      "adapter": null,
+      "allow_error": false,
+      "categories": ["ct", "pt"],
+      "identifiers": {},
+      "required_identifiers": [],
+      "metrics": {
+        "columns": "dimension",
+        "pixel_spacing_mm": "spacing_mm",
+        "rows": "dimension",
+        "shape": "shape",
+        "slice_count": "count",
+        "slice_spacing_mm": "spacing_mm",
+        "slope": "number"
+      },
+      "required_metrics": ["columns", "pixel_spacing_mm", "rows", "slice_count"]
+    },
+    "license.accepted": {
+      "adapter": "license",
+      "allow_error": false,
+      "categories": ["FORBIDDEN", "UNKNOWN"],
+      "identifiers": {"license": "license", "package": "package", "source": "source", "version": "version"},
+      "required_identifiers": ["license", "package", "source", "version"],
+      "metrics": {},
+      "required_metrics": []
+    },
+    "license.obligation": {
+      "adapter": "license",
+      "allow_error": false,
+      "categories": ["OBLIGATION"],
+      "identifiers": {"license": "license", "package": "package", "source": "source", "version": "version"},
+      "required_identifiers": ["license", "package", "source", "version"],
+      "metrics": {},
+      "required_metrics": []
+    },
+    "license.violation": {
+      "adapter": "license",
+      "allow_error": false,
+      "categories": ["FORBIDDEN", "UNKNOWN"],
+      "identifiers": {"license": "license", "package": "package", "source": "source", "version": "version"},
+      "required_identifiers": ["license", "package", "source", "version"],
+      "metrics": {},
+      "required_metrics": []
+    },
+    "performance.mark": {
+      "adapter": null,
+      "allow_error": false,
+      "categories": [],
+      "identifiers": {},
+      "required_identifiers": [],
+      "metrics": {},
+      "required_metrics": [],
+      "performance_kind": "mark"
+    },
+    "performance.startup": {
+      "adapter": null,
+      "allow_error": false,
+      "categories": [null],
+      "identifiers": {},
+      "required_identifiers": [],
+      "metrics": {"app_init_ms": "duration_ms", "import_ms": "duration_ms", "total_ms": "duration_ms"},
+      "required_metrics": ["app_init_ms", "import_ms", "total_ms"]
+    },
+    "performance.timer": {
+      "adapter": null,
+      "allow_error": false,
+      "categories": [],
+      "identifiers": {},
+      "required_identifiers": [],
+      "metrics": {},
+      "required_metrics": [],
+      "performance_kind": "timer"
+    }
+  },
+  "performance_variants": {
+    "first_paint.additive.display_slice": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}},
+    "first_paint.additive.display_slice.returned": {"kind": "mark", "metrics": {"image_item_present": "boolean", "target_idx": "index"}},
+    "first_paint.additive.event_loop_returned": {"kind": "mark", "metrics": {}},
+    "first_paint.additive.metadata_cine_refresh": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}},
+    "first_paint.additive.navigator.refresh_state": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}},
+    "first_paint.additive.navigator.set_subwindow_assignments": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}},
+    "first_paint.additive.navigator.update_series_list": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}},
+    "first_paint.display_slice": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}},
+    "first_paint.display_slice.returned": {"kind": "mark", "metrics": {"image_item_present": "boolean"}},
+    "first_paint.event_loop_returned": {"kind": "mark", "metrics": {}},
+    "first_paint.handle_additive_load.start": {"kind": "mark", "metrics": {"added_files": "count", "appended_series": "count", "new_series": "count"}},
+    "first_paint.handle_load_first_slice.start": {"kind": "mark", "metrics": {"studies": "count"}},
+    "first_paint.load_first_slice_info": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}},
+    "first_paint.merge_batch.apply.resort_appended_series": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}},
+    "first_paint.merge_batch.apply.update_multiframe_info": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}},
+    "first_paint.merge_batch.apply_batch": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}},
+    "first_paint.merge_batch.dedup_filter": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}},
+    "first_paint.merge_batch.input_summary": {"kind": "mark", "metrics": {"input_datasets": "count", "new_datasets": "count", "skipped_files": "count"}},
+    "first_paint.merge_batch.organize.create_frame_wrappers": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}},
+    "first_paint.merge_batch.organize.multiframe_detected": {"kind": "mark", "metrics": {"dataset_index": "index", "frames": "count"}},
+    "first_paint.merge_batch.organize.scan_and_split": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}},
+    "first_paint.merge_batch.organize.scan_summary": {"kind": "mark", "metrics": {"frame_wrappers": "count", "input_datasets": "count", "series": "count", "studies": "count"}},
+    "first_paint.merge_batch.organize.sort_and_map": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}},
+    "first_paint.merge_batch.organize.sort_series": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}},
+    "first_paint.merge_batch.organize_batch": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}},
+    "first_paint.merge_batch.record_loaded_paths": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}},
+    "first_paint.merge_batch.result_summary": {"kind": "mark", "metrics": {"added_files": "count", "appended_series": "count", "new_series": "count"}},
+    "first_paint.metadata_cine_history_refresh": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}},
+    "first_paint.navigator.apply_instance_thumbnail": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}},
+    "first_paint.navigator.apply_series_thumbnail": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}},
+    "first_paint.navigator.generate_instance_thumbnail": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}},
+    "first_paint.navigator.generate_series_thumbnail": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}},
+    "first_paint.navigator.refresh_state": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}},
+    "first_paint.navigator.set_subwindow_assignments": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}},
+    "first_paint.navigator.update_series_list": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}},
+    "first_paint.navigator.update_series_list.queued_thumbnails": {"kind": "mark", "metrics": {"instance_jobs": "count", "series_jobs": "count"}},
+    "first_paint.navigator.update_series_list.start": {"kind": "mark", "metrics": {"series": "count", "studies": "count"}},
+    "first_paint.pre_first_slice_reset": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}},
+    "first_paint.prehandoff.large_file_check_complete": {"kind": "mark", "metrics": {"checked_files": "count", "large_files": "count", "threshold_mb": "megabytes"}},
+    "first_paint.prehandoff.large_file_confirm.result": {"kind": "mark", "metrics": {"proceed": "boolean"}},
+    "first_paint.prehandoff.large_file_confirm.shown": {"kind": "mark", "metrics": {"large_files": "count", "largest_mb": "megabytes"}},
+    "first_paint.prehandoff.large_file_confirm.wait": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}},
+    "first_paint.prehandoff.loader_worker.load": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}},
+    "first_paint.prehandoff.loader_worker.load_complete": {"kind": "mark", "metrics": {"datasets": "count"}},
+    "first_paint.prehandoff.loader_worker.merge": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}},
+    "first_paint.prehandoff.loader_worker.merge_complete": {"kind": "mark", "metrics": {"added_files": "count", "appended_series": "count", "datasets": "count", "new_series": "count"}},
+    "first_paint.prehandoff.pipeline_async.organized_signal": {"kind": "mark", "metrics": {"added_files": "count", "appended_series": "count", "datasets": "count", "new_series": "count"}},
+    "first_paint.prehandoff.pipeline_async.start": {"kind": "mark", "metrics": {"folder_mode": "boolean", "progress_max": "count", "source_len": "count"}},
+    "first_paint.prehandoff.pipeline_async.ui_handoff": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}},
+    "first_paint.slice.context_and_rescale": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}},
+    "first_paint.slice.controls_and_metadata": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}},
+    "first_paint.slice.overlays_annotations": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}},
+    "first_paint.slice.render_base_image_pipeline": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}},
+    "first_paint.slice.resolve_dataset": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}},
+    "first_paint.slice.window_level_resolution": {"kind": "timer", "metrics": {"elapsed_ms": "duration_ms"}}
+  }
+}

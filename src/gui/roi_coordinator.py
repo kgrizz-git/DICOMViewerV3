@@ -20,7 +20,6 @@ Requirements:
     - ImageViewer for scene operations
     - DICOMProcessor for pixel array operations
 """
-
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -31,6 +30,7 @@ from PySide6.QtCore import QPointF, QRectF, QTimer
 from gui.roi_list_panel import ROIListPanel
 from gui.roi_statistics_panel import ROIStatisticsPanel
 from tools.roi_manager import ROIItem, ROIManager
+from utils.privacy.console import print_redacted
 
 if TYPE_CHECKING:
     from gui.crosshair_coordinator import CrosshairCoordinator
@@ -412,7 +412,7 @@ class ROICoordinator:
                                 if aw is not None:
                                     aw.setChecked(False)
             except Exception as e:
-                print(f"Error in auto window/level: {e}")
+                print_redacted(f"Error in auto window/level: {e}")
                 _logger.debug("%s", sanitized_format_exc())
                 # If error occurs, still delete ROI and switch back to pan mode
                 if roi_item is not None:
@@ -782,8 +782,7 @@ class ROICoordinator:
 
         if not roi_belongs_to_manager:
             # print(f"[DEBUG-ROI-STATS]   WARNING: ROI {id(roi)} does NOT belong to manager {id(self.roi_manager)}!")
-            import traceback
-            traceback.print_stack()
+            _logger.warning("ROI ownership validation failed; details withheld")
             return
 
         try:
@@ -1119,4 +1118,3 @@ class ROICoordinator:
 
         # Clear tracking
         del self._roi_move_tracking[roi]
-

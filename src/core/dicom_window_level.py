@@ -14,7 +14,6 @@ Requirements:
     - numpy, pydicom
     - core.dicom_pixel_array (get_pixel_array)
 """
-
 from typing import Any
 
 import numpy as np
@@ -22,6 +21,7 @@ from pydicom.dataset import Dataset
 
 from core.dicom_pixel_array import get_pixel_array
 from core.dicom_rescale import get_rescale_parameters
+from utils.privacy.console import print_redacted
 
 
 def _get_frame_voi_lut_item(dataset: Dataset) -> Dataset | None:
@@ -100,7 +100,7 @@ def apply_color_window_level_luminance(
         windowed_rgb = rgb_float * scale[..., np.newaxis]
         return np.clip(windowed_rgb, 0, 255).astype(np.uint8)
     except Exception as e:
-        print(f"Error applying color window/level: {e}")
+        print_redacted(f"Error applying color window/level: {e}")
         if pixel_array.max() > pixel_array.min():
             return ((pixel_array - pixel_array.min()) / (pixel_array.max() - pixel_array.min()) * 255.0).astype(np.uint8)
         return pixel_array.astype(np.uint8)

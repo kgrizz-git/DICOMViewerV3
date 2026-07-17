@@ -17,14 +17,33 @@ else
   exit 1
 fi
 
+# Git supplies proposed ref updates on stdin. Capture them once so both the
+# metadata/privacy guard and the main-only full security gate see identical
+# input; reading stdin in the first child would otherwise starve the second.
+PUSH_UPDATES="$(cat)"
+
+echo "[metadata] Validating proposed refs, authors, and remote URL..."
+printf '%s\n' "$PUSH_UPDATES" | "$PY_BIN" "$REPO_ROOT/scripts/git_hook_pre_push_privacy.py" \
+  --root "$REPO_ROOT" \
+  --remote-name "${1:-}" \
+  --remote-url "${2:-}" || exit 1
+
+echo "[phi] Scanning the complete tracked tree..."
+"$PY_BIN" "$REPO_ROOT/scripts/check_no_phi_artifacts.py" --root "$REPO_ROOT" || exit 1
+
+echo "[privacy] Scanning all covered output and logging sinks..."
+"$PY_BIN" "$REPO_ROOT/scripts/git_hook_privacy_checks.py" --all --critical || exit 1
+
+echo "[secrets] Scanning reachable history with mandatory Gitleaks..."
+"$PY_BIN" "$REPO_ROOT/scripts/check_gitleaks_history.py" --root "$REPO_ROOT" || exit 1
+
 # Static type gate: fail on basedpyright errors, matching CI. Warnings are
 # reported but do not block pushes until the repo warning baseline is cleared.
 echo "[pyright] Running basedpyright error gate..."
 "$PY_BIN" "$REPO_ROOT/scripts/check_basedpyright_errors.py" || exit 1
 
-# Coverage gate (warn only — does not block push).
-# Threshold: 50 % (see codecov.yml). Run pytest-cov; parse TOTAL %.
-# This mirrors the CI coverage upload in .github/workflows/tests.yml.
+# Coverage gate (warn only — does not block push or upload results).
+# Threshold: 50 %. Run pytest-cov locally and parse TOTAL %.
 echo "[coverage] Running pytest --cov=src..."
 COV_OUTPUT="$("$PY_BIN" -m pytest tests --cov=src --cov-report=term -q --no-header 2>&1)" || true
 TOTAL_PCT=$(echo "$COV_OUTPUT" | awk '/^TOTAL/{gsub(/%/,""); print $NF}')
@@ -52,4 +71,24 @@ else
   echo "[complexity] No high-complexity functions found."
 fi
 
-exec "$PY_BIN" "$REPO_ROOT/scripts/git-hook-security-gate.py" --hook-type pre-push
+printf '%s\n' "$PUSH_UPDATES" | \
+  "$PY_BIN" "$REPO_ROOT/scripts/git-hook-security-gate.py" --hook-type pre-push || exit 1
+
+# Hounddog is fast, local-only, and advisory. Run it only after every blocking
+# gate passes and only for a proposed main update; never upload or connect it.
+if [[ "$PUSH_UPDATES" == *" refs/heads/main "* ]]; then
+  echo "[privacy advisory] Running local Hounddog data-flow review..."
+  "$PY_BIN" "$REPO_ROOT/scripts/privacy_tool_review.py" hounddog || true
+fi
+
+# Only a proposed main update reaches the expensive full scanner above. Once
+# it passes, remind the developer when the ignored local SonarQube record is
+# missing or older than 30 days. This is advisory because SonarQube and its
+# token may intentionally be unavailable on another contributor's machine.
+if [[ "$PUSH_UPDATES" == *" refs/heads/main "* ]]; then
+  echo "[sonarqube] Checking local Community Build analysis freshness..."
+  "$PY_BIN" "$REPO_ROOT/scripts/run_local_sonarqube.py" \
+    --check-freshness-days 30 || true
+fi
+
+exit 0

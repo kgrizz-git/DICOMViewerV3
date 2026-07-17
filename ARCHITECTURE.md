@@ -85,7 +85,6 @@ Custom structural linting has an incremental guard: **`scripts/check_architectur
 | Design / UX tokens | [`DESIGN.md`](DESIGN.md) |
 | Human contributor workflow | [`dev-docs/CONTRIBUTING.md`](dev-docs/CONTRIBUTING.md) |
 | Developer doc index | [`dev-docs/README.md`](dev-docs/README.md) |
-| Multi-agent runs | [`plans/orchestration-state.md`](plans/orchestration-state.md) |
 | End-user docs | [`user-docs/USER_GUIDE.md`](user-docs/USER_GUIDE.md) |
 
 ---

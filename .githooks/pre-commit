@@ -42,6 +42,17 @@ fi
 echo "[phi] Checking staged files for PHI and runtime artifacts..."
 "$PY_BIN" "$REPO_ROOT/scripts/check_no_phi_artifacts.py" --staged --root "$REPO_ROOT" || exit 1
 
+echo "[privacy] Checking staged output and logging sinks..."
+"$PY_BIN" "$REPO_ROOT/scripts/git_hook_privacy_checks.py" --staged || exit 1
+
+echo "[secrets] Checking staged content with mandatory Gitleaks..."
+"$PY_BIN" "$REPO_ROOT/scripts/check_gitleaks_staged.py" --root "$REPO_ROOT" || exit 1
+
+# Advisory only: exact staged data/media/DICOM blobs trigger the applicable
+# isolated PhiScan, local OCR/metadata, or DICOM reviewer when available.
+echo "[privacy advisory] Running content-triggered local review tools..."
+"$PY_BIN" "$REPO_ROOT/scripts/run_conditional_privacy_reviews.py" || true
+
 # Repo harness checks (mirrors the GitHub Action)
 echo "[harness] Running repo harness checks..."
 "$PY_BIN" "$REPO_ROOT/scripts/check_repo_harness.py" --root "$REPO_ROOT" || exit 1

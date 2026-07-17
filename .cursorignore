@@ -1,0 +1,42 @@
+# Clinical/source data and derived artifacts
+*.dcm
+*.dicom
+*.ima
+sample-DICOM-gitignored/
+test-DICOM-data/
+exports/
+screenshots/
+reports/
+
+# Runtime state that may contain paths, identifiers, or derived pixels
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+*.sqlite-shm
+*.sqlite-wal
+*.log
+*.trace
+*.err
+*.out
+*.pkl
+*.cache
+dicom_viewer_config*.json
+.pytest-tmp*/
+.pytest_cache/
+tmp/
+backups/
+
+# Scanner reports and local environments
+*gitleaks-report*.json
+*phi-scan-report*
+*presidio-report*
+*hounddog-report*
+privacy-reports/
+scanner-reports/
+.venv/
+venv/
+env/
+.git/
+.cursor/debug*

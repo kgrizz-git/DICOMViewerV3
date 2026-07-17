@@ -76,6 +76,19 @@ REQUIRED_USER_DOC_TOPICS = (
     "IMAGE_FUSION_TECHNICAL_DOCUMENTATION.md",
 )
 
+FORBIDDEN_EXTERNAL_ANALYSIS_CONFIGS = (
+    ".codecov.yml",
+    ".sonarcloud.properties",
+    "codecov.yml",
+)
+FORBIDDEN_EXTERNAL_ANALYSIS_ACTIONS = (
+    "codecov/codecov-action",
+    "coverallsapp/",
+    "getsentry/",
+    "sonarsource/sonarqube-scan-action",
+)
+FORBIDDEN_NETWORK_VERIFICATION_FLAGS = ("--only-verified",)
+
 
 def split_anchor(url: str) -> tuple[str, str]:
     if "#" in url:
@@ -136,6 +149,32 @@ def check_agents_md(repo_root: Path) -> list[str]:
             "AGENTS.md must not contain '## Source module structure'; "
             "use dev-docs/SOURCE_LAYOUT.md"
         )
+    return errors
+
+
+def check_external_analysis_upload_policy(repo_root: Path) -> list[str]:
+    """Reject known third-party coverage, telemetry, and source-analysis uploads."""
+    errors: list[str] = []
+    for rel in FORBIDDEN_EXTERNAL_ANALYSIS_CONFIGS:
+        if (repo_root / rel).exists():
+            errors.append(f"external analysis configuration is prohibited: {rel}")
+
+    workflows = repo_root / ".github" / "workflows"
+    if workflows.is_dir():
+        for path in sorted((*workflows.glob("*.yml"), *workflows.glob("*.yaml"))):
+            text = path.read_text(encoding="utf-8").casefold()
+            for marker in FORBIDDEN_EXTERNAL_ANALYSIS_ACTIONS:
+                if marker in text:
+                    rel = path.relative_to(repo_root).as_posix()
+                    errors.append(
+                        f"{rel}: external analysis upload action is prohibited: {marker}"
+                    )
+            for marker in FORBIDDEN_NETWORK_VERIFICATION_FLAGS:
+                if marker in text:
+                    rel = path.relative_to(repo_root).as_posix()
+                    errors.append(
+                        f"{rel}: network verification of suspected secrets is prohibited: {marker}"
+                    )
     return errors
 
 
@@ -332,6 +371,7 @@ def main() -> int:
     all_errors: list[str] = []
     all_errors.extend(check_required_files(repo_root))
     all_errors.extend(check_agents_md(repo_root))
+    all_errors.extend(check_external_analysis_upload_policy(repo_root))
     all_errors.extend(check_todo_freshness(repo_root))
     all_errors.extend(check_todo_backlog_policy(repo_root))
     all_errors.extend(check_plan_links_in_todo(repo_root))

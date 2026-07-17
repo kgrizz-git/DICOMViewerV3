@@ -16,12 +16,13 @@ Requirements:
     - Standard library only
     - pydicom for dataset operations
 """
-
 from abc import ABC, abstractmethod
 from typing import Any
 
 from pydicom.dataset import Dataset
 from pydicom.tag import Tag
+
+from utils.privacy.console import print_redacted
 
 
 class TagEditCommand(ABC):
@@ -145,7 +146,7 @@ class EditTagCommand(TagEditCommand):
                     new_elem = DataElement(self.tag, vr, self.new_value)
                     self.dataset.add(new_elem)
         except Exception as e:
-            print(f"Error executing tag edit command: {e}")
+            print_redacted(f"Error executing tag edit command: {e}")
             raise
 
     def undo(self) -> None:
@@ -198,7 +199,7 @@ class EditTagCommand(TagEditCommand):
                         new_elem = DataElement(self.tag, vr, self.old_value)
                         self.dataset.add(new_elem)
         except Exception as e:
-            print(f"Error undoing tag edit command: {e}")
+            print_redacted(f"Error undoing tag edit command: {e}")
             raise
 
 

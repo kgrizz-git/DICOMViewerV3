@@ -900,11 +900,11 @@ class QAAppFacade:
                     import subprocess
 
                     subprocess.Popen(["xdg-open", resolved])
-            except Exception as exc:
+            except Exception:
                 QMessageBox.warning(
                     app.main_window,
                     "Open file",
-                    f"Could not open file:\n{exc}",
+                    "Could not open the file. Details were withheld to protect private data.",
                 )
 
         QTimer.singleShot(0, deferred_open)

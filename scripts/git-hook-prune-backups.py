@@ -56,6 +56,11 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
+try:
+    from scripts.privacy_console import print_redacted
+except ModuleNotFoundError:
+    from privacy_console import print_redacted
+
 # Eight-digit calendar dates 19xx / 20xx embedded in paths or filenames.
 _YYYYMMDD = re.compile(r"(?:19|20)\d{6}")
 # Full hash + Unix committer time from ``git log --format=%H %ct``.
@@ -321,14 +326,14 @@ def _prune_backups(
             continue
 
         if dry_run:
-            print(f"[backup hook] dry-run would remove: {path}", file=sys.stderr)
+            print_redacted(f"[backup hook] dry-run would remove: {path}", file=sys.stderr)
             removed += 1
             continue
         try:
             path.unlink()
             removed += 1
         except OSError as exc:
-            print(f"[backup hook] skip delete {path}: {exc}", file=sys.stderr)
+            print_redacted(f"[backup hook] skip delete {path}: {exc}", file=sys.stderr)
 
     if dry_run:
         return removed
@@ -392,7 +397,7 @@ def main() -> int:
     try:
         root = _repo_root()
     except (subprocess.CalledProcessError, OSError) as exc:
-        print(f"[backup hook] could not resolve repo root: {exc}", file=sys.stderr)
+        print_redacted(f"[backup hook] could not resolve repo root: {exc}", file=sys.stderr)
         return 1
 
     backups = root / "backups"
@@ -406,7 +411,7 @@ def main() -> int:
             dry_run=args.dry_run,
         )
     except OSError as exc:
-        print(f"[backup hook] prune failed: {exc}", file=sys.stderr)
+        print_redacted(f"[backup hook] prune failed: {exc}", file=sys.stderr)
         return 1
 
     if n:

@@ -26,13 +26,6 @@ _PERF_STARTUP_T0 = _time.perf_counter()
 
 import logging
 import sys
-import traceback
-from pathlib import Path
-
-# Add src directory to path
-src_dir = Path(__file__).parent
-sys.path.insert(0, str(src_dir))
-
 from collections.abc import Callable
 from typing import Any, cast
 
@@ -63,6 +56,7 @@ from gui.multi_window_layout import MultiWindowLayout
 from gui.overlay_manager import OverlayManager
 from gui.series_navigator import SeriesNavigator
 from gui.slice_navigator import SliceNavigator
+from gui.study_index_consent import ensure_study_index_auto_add_consent
 from gui.sub_window_container import SubWindowContainer
 from gui.window_level_controls import WindowLevelControls
 from gui.window_slot_map_widget import WindowSlotMapPopupDialog, WindowSlotMapWidget
@@ -74,7 +68,14 @@ from utils.annotation_clipboard import AnnotationClipboard
 from utils.bundled_fonts import register_fonts_with_qt
 from utils.config_manager import ConfigManager
 from utils.debug_flags import PERF_LOG
+from utils.debug_log import configure_debug_logging
 from utils.log_sanitizer import sanitized_format_exc
+from utils.privacy import (
+    install_privacy_filter,
+    install_privacy_streams,
+    log_structural_event,
+    safe_event_fields,
+)
 from utils.slice_sync_group_palette import (
     slice_sync_group_rgb,
     view_index_to_group_index,
@@ -82,9 +83,6 @@ from utils.slice_sync_group_palette import (
 from utils.undo_redo import UndoRedoManager
 
 _logger = logging.getLogger(__name__)
-
-if PERF_LOG:
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 # Import handler classes
 from core.cine_app_facade import CineAppFacade
@@ -367,6 +365,10 @@ class DICOMViewerApp(QObject):
 
         # DICOM data managers
         self.config_manager = ConfigManager()
+        configure_debug_logging(
+            self.config_manager.get_diagnostics_enabled(),
+            path=self.config_manager.get_diagnostics_log_path(),
+        )
         self.dicom_loader = DICOMLoader()
         self.dicom_organizer = DICOMOrganizer()
         self.dicom_processor = DICOMProcessor()
@@ -584,10 +586,17 @@ class DICOMViewerApp(QObject):
         self._update_3d_view_action_state()
 
         if PERF_LOG:
-            _logger.info("[PERF] imports: %.0fms | app_init: %.0fms | total: %.0fms",
-                         (_PERF_IMPORTS_DONE - _PERF_STARTUP_T0) * 1000,
-                         (_time.perf_counter() - _PERF_IMPORTS_DONE) * 1000,
-                         (_time.perf_counter() - _PERF_STARTUP_T0) * 1000)
+            log_structural_event(
+                _logger,
+                logging.INFO,
+                "performance.startup",
+                metrics={
+                    "import_ms": (_PERF_IMPORTS_DONE - _PERF_STARTUP_T0) * 1000,
+                    "app_init_ms": (_time.perf_counter() - _PERF_IMPORTS_DONE)
+                    * 1000,
+                    "total_ms": (_time.perf_counter() - _PERF_STARTUP_T0) * 1000,
+                },
+            )
 
     def _init_controllers_and_tools(self) -> None:
         """
@@ -785,7 +794,10 @@ class DICOMViewerApp(QObject):
             if subwindow is not None and not subwindow.is_focused:
                 subwindow.set_focused(True)
         except Exception as exc:
-            print(f"[DICOMViewerApp] _on_mpr_thumbnail_clicked: {exc}")
+            _logger.error(
+                "MPR thumbnail focus failed",
+                extra=safe_event_fields("mpr.thumbnail_focus", error=exc),
+            )
 
     def _on_mpr_assign_requested(
         self, source_subwindow_index: int, target_subwindow_index: int
@@ -1545,6 +1557,14 @@ class DICOMViewerApp(QObject):
         """Record opened files in the local study index when enabled in settings."""
         if was_cancelled:
             show_cancelled_index_skip_toast(self)
+        elif (
+            self.study_index_service.is_backend_available()
+            and self.config_manager.needs_study_index_auto_add_consent()
+        ):
+            ensure_study_index_auto_add_consent(
+                self.config_manager,
+                self.main_window,
+            )
         self.study_index_service.schedule_index_after_load(
             datasets,
             merge_paths,
@@ -2378,8 +2398,13 @@ class DICOMViewerApp(QObject):
 
 def exception_hook(exctype, value, tb):
     """Global exception handler to catch unhandled exceptions."""
-    error_msg = ''.join(traceback.format_exception(exctype, value, tb))
-    print(f"Unhandled exception:\n{error_msg}")
+    _ = (value, tb)
+    log_structural_event(
+        _logger,
+        logging.CRITICAL,
+        "application.unhandled",
+        error=exctype,
+    )
 
     # Try to show error dialog if QApplication exists
     try:
@@ -2387,14 +2412,35 @@ def exception_hook(exctype, value, tb):
             QMessageBox.critical(
                 None,
                 "Fatal Error",
-                f"An unexpected error occurred:\n\n{exctype.__name__}: {value}\n\nThe application may be unstable."
+                "An unexpected error occurred. Details were withheld to protect "
+                "private data. The application may be unstable.",
             )
     except Exception:
         pass  # If Qt is not available, just print
 
 
+def install_application_privacy_boundaries() -> None:
+    """Install idempotent fail-closed process boundaries for application startup.
+
+    Keeping this explicit makes importing :mod:`main` inert for tests and
+    embedded callers while ensuring the executable entry point protects logs
+    and process streams before application construction can load user data.
+    """
+
+    root_logger = logging.getLogger()
+    if not root_logger.handlers:
+        logging.basicConfig(
+            level=logging.INFO if PERF_LOG else logging.WARNING,
+            format="%(message)s",
+        )
+    install_privacy_filter(root_logger)
+    install_privacy_streams()
+
+
 def main():
     """Main entry point."""
+    install_application_privacy_boundaries()
+
     # Install global exception hook
     sys.excepthook = exception_hook
 
@@ -2402,7 +2448,12 @@ def main():
         app = DICOMViewerApp()
         return app.run()
     except Exception as e:
-        print(f"Fatal error: {e}")
+        log_structural_event(
+            _logger,
+            logging.CRITICAL,
+            "application.startup",
+            error=e,
+        )
         _logger.debug("%s", sanitized_format_exc())
         return 1
 

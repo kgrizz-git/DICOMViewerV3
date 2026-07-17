@@ -17,12 +17,16 @@ Requirements:
     - core.multiframe_handler (is_multiframe)
 """
 
+import logging
 
 import numpy as np
 from pydicom.dataset import Dataset
 
 from core.multiframe_handler import is_multiframe
 from core.sr_sop_classes import is_structured_report_dataset
+from utils.privacy import safe_event_fields
+
+_logger = logging.getLogger(__name__)
 
 # Track files that have shown compression errors (suppress redundant messages)
 _compression_error_files: set[str] = set()
@@ -95,7 +99,10 @@ def handle_planar_configuration(pixel_array: np.ndarray, dataset: Dataset) -> np
 
         return pixel_array
     except Exception as e:
-        print(f"[PLANAR] Error handling PlanarConfiguration: {e}")
+        _logger.warning(
+            "DICOM planar conversion failed",
+            extra=safe_event_fields("dicom.planar_conversion", error=e),
+        )
         return pixel_array
 
 
@@ -130,11 +137,14 @@ def get_pixel_array(dataset: Dataset) -> np.ndarray | None:
         return pixel_array
 
     except MemoryError as e:
-        print(f"Memory error extracting pixel array: {e}")
+        _logger.warning(
+            "DICOM pixel extraction exhausted memory",
+            extra=safe_event_fields("dicom.pixel_extract", error=e),
+        )
         return None
     except Exception as e:
         error_msg = str(e)
-        is_compression_error, display_msg = _classify_pixel_array_error(dataset, error_msg)
+        is_compression_error, _display_msg = _classify_pixel_array_error(dataset, error_msg)
         if is_compression_error:
             file_path = None
             if hasattr(dataset, 'filename'):
@@ -143,17 +153,21 @@ def get_pixel_array(dataset: Dataset) -> np.ndarray | None:
                 file_path = dataset.file_path
             if file_path and file_path not in _compression_error_files:
                 _compression_error_files.add(file_path)
-                print(f"[COMPRESSION ERROR] File: {file_path}")
-                print(f"  {display_msg}")
-                print(f"  Error: {error_msg[:200]}")
-                print("  To decode compressed DICOM files, install optional dependencies:")
-                print("    pip install pylibjpeg pyjpegls")
+                _logger.warning(
+                    "DICOM compression decode failed",
+                    extra=safe_event_fields("dicom.decode", error=e),
+                )
             elif not file_path:
                 error_key = error_msg[:100]
                 if error_key not in _compression_error_files:
                     _compression_error_files.add(error_key)
-                    print(f"[COMPRESSION ERROR] {display_msg}")
-                    print(f"  Error: {error_msg[:200]}")
+                    _logger.warning(
+                        "DICOM compression decode failed",
+                        extra=safe_event_fields("dicom.decode", error=e),
+                    )
         else:
-            print(f"Error extracting pixel array: {display_msg}")
+            _logger.warning(
+                "DICOM pixel extraction failed",
+                extra=safe_event_fields("dicom.pixel_extract", error=e),
+            )
         return None

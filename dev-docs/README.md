@@ -1,6 +1,6 @@
 # Developer documentation index
 
-**Last updated:** 2026-07-14
+**Last updated:** 2026-07-16
 
 This folder is for **contributors, maintainers, and release engineering**. End-user guides live under **`user-docs/`** (start at [`USER_GUIDE.md`](../user-docs/USER_GUIDE.md)); repository orientation for everyone is in the root **[`README.md`](../README.md)**.
 
@@ -13,7 +13,7 @@ For docs that already have a `**Last updated:**` line, update the date when an e
 | [`DEVELOPER_SETUP.md`](DEVELOPER_SETUP.md) | Environment setup, hooks, troubleshooting installs |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Human contributor playbook: hooks, CI, releases, pylinac bumps, licenses |
 | [`CODE_DOCUMENTATION.md`](CODE_DOCUMENTATION.md) | Where major UI modules, dialogs, and bundled help files live |
-| [`../AGENTS.md`](../AGENTS.md) | AI agents: venv, run/test, orchestration (short table of contents) |
+| [`../AGENTS.md`](../AGENTS.md) | AI agents: venv, privacy rules, run/test commands (short table of contents) |
 | [`../ARCHITECTURE.md`](../ARCHITECTURE.md) | Domains, dependency rules, where to change code |
 | [`SOURCE_LAYOUT.md`](SOURCE_LAYOUT.md) | Full `src/` tree, controllers, signal wiring |
 | [`HARNESS.md`](HARNESS.md) | Agent harness layers, scripts, CI, smoke workflow |
@@ -77,10 +77,8 @@ Deep dives on pylinac, DICOM behavior, GitHub Actions billing, fusion, SR, etc.:
 | [`.github/workflows/user-docs-links.yml`](../.github/workflows/user-docs-links.yml) | CI: user-docs links on `main` / `develop` |
 | [`.github/workflows/repo-harness.yml`](../.github/workflows/repo-harness.yml) | CI: harness docs + architecture boundaries + agent smoke on `main` / `develop` |
 
-## Orchestration (optional)
+## Agent smoke verification
 
 | Document | Purpose |
 |----------|---------|
-| [`orchestration/RUN_PACKET_TEMPLATE.md`](orchestration/RUN_PACKET_TEMPLATE.md) | Multi-agent run packets |
 | [`orchestration/AGENT_SMOKE.md`](orchestration/AGENT_SMOKE.md) | Manual UI smoke checklist for agents |
-| [Orchestration state](../plans/orchestration-state.md) | Repo-level `plans/orchestration-state.md` (if used in your workflow) |

@@ -21,6 +21,19 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+try:
+    from scripts.privacy_console import (
+        print_architecture_baseline_written,
+        print_architecture_violation,
+    )
+except ModuleNotFoundError:
+    import privacy_console  # pyright: ignore[reportImplicitRelativeImport]
+
+    print_architecture_baseline_written = (
+        privacy_console.print_architecture_baseline_written
+    )
+    print_architecture_violation = privacy_console.print_architecture_violation
+
 SRC_DIRNAME = "src"
 DEFAULT_BASELINE = Path("dev-docs/architecture_boundary_baseline.txt")
 
@@ -190,6 +203,68 @@ def write_baseline(path: Path, violations: list[ImportViolation], repo_root: Pat
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def _violation_category(violation: ImportViolation) -> str:
+    if violation.reason.startswith("core modules"):
+        return "core-gui"
+    if violation.reason.startswith("utils modules"):
+        return "utils-domain"
+    if violation.reason.startswith("gui modules"):
+        return "gui-main"
+    if violation.reason.startswith(("roi modules", "metadata modules")):
+        return "domain-main"
+    return "syntax"
+
+
+def _print_violation(violation: ImportViolation, repo_root: Path) -> None:
+    category = _violation_category(violation)
+    repository_path = violation.path.relative_to(repo_root).as_posix()
+    if category == "core-gui":
+        print_architecture_violation(
+            "core-gui",
+            module=violation.imported_module,
+            repository_path=repository_path,
+            line=violation.line,
+            file=sys.stderr,
+        )
+        print("core modules must not import gui", file=sys.stderr)
+    elif category == "utils-domain":
+        print_architecture_violation(
+            "utils-domain",
+            module=violation.imported_module,
+            repository_path=repository_path,
+            line=violation.line,
+            file=sys.stderr,
+        )
+        print("utils modules must not import app/UI domains", file=sys.stderr)
+    elif category == "gui-main":
+        print_architecture_violation(
+            "gui-main",
+            module=violation.imported_module,
+            repository_path=repository_path,
+            line=violation.line,
+            file=sys.stderr,
+        )
+        print("gui modules must not import main", file=sys.stderr)
+    elif category == "domain-main":
+        print_architecture_violation(
+            "domain-main",
+            module=violation.imported_module,
+            repository_path=repository_path,
+            line=violation.line,
+            file=sys.stderr,
+        )
+        print("domain modules must not import main", file=sys.stderr)
+    else:
+        print_architecture_violation(
+            "syntax",
+            module=violation.imported_module,
+            repository_path=repository_path,
+            line=violation.line,
+            file=sys.stderr,
+        )
+        print("Python source could not be parsed", file=sys.stderr)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -227,10 +302,7 @@ def main() -> int:
 
     if args.refresh_baseline:
         write_baseline(baseline_path, violations, repo_root)
-        print(
-            "Wrote architecture boundary baseline "
-            f"({len(violations)} violation(s)): {baseline_path.relative_to(repo_root)}"
-        )
+        print_architecture_baseline_written(count=len(violations))
         return 0
 
     baseline = read_baseline(baseline_path)
@@ -244,7 +316,7 @@ def main() -> int:
     if new_violations:
         print("Architecture boundary check failed:", file=sys.stderr)
         for violation in new_violations:
-            print(f"  {violation.format(repo_root)}", file=sys.stderr)
+            _print_violation(violation, repo_root)
         if stale_baseline:
             print(
                 f"  note: {len(stale_baseline)} stale baseline entrie(s) can be removed",
@@ -254,9 +326,10 @@ def main() -> int:
 
     baseline_note = f", baseline={len(baseline)}" if baseline else ""
     stale_note = f", stale_baseline={len(stale_baseline)}" if stale_baseline else ""
+    python_file_count = len(iter_python_files(src_root))
     print(
         "OK: architecture boundaries "
-        f"({len(iter_python_files(src_root))} Python file(s) scanned, "
+        f"({python_file_count} Python file(s) scanned, "
         f"violations={len(violations)}{baseline_note}{stale_note})"
     )
     return 0

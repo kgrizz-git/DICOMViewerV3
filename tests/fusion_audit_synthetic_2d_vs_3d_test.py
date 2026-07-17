@@ -12,11 +12,15 @@ This script does NOT modify any production code. It only prints diagnostic outpu
 
 Usage: python tests/fusion_audit_synthetic_2d_vs_3d_test.py
 """
-
 import os
 import sys
 
 import numpy as np
+
+try:
+    from scripts.privacy_console import print_redacted
+except ModuleNotFoundError:
+    from privacy_console import print_redacted
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
@@ -286,7 +290,7 @@ def test_variable_rescale_in_3d():
         v2d = values_2d[i] if values_2d[i] is not None else float('nan')
         v3d = values_3d[i] if values_3d[i] is not None else float('nan')
         error = abs(v3d - expected) if values_3d[i] is not None else float('nan')
-        print(f"  {i:5d} {v2d:15.1f} {v3d:15.1f} {expected:10.1f} {error:10.1f}")
+        print_redacted(f"  {i:5d} {v2d:15.1f} {v3d:15.1f} {expected:10.1f} {error:10.1f}")
 
     print()
 

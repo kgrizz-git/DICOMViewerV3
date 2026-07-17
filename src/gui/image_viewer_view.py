@@ -33,6 +33,7 @@ from core.direction_labels import (
 )
 from utils.bundled_fonts import make_qfont
 from utils.debug_flags import DEBUG_MAGNIFIER
+from utils.privacy.console import print_redacted
 
 if TYPE_CHECKING:
     pass
@@ -416,7 +417,7 @@ class ImageViewerViewMixin:
                 img_array = 255 - img_array
                 return Image.fromarray(img_array, mode='RGB')
         except Exception as e:
-            print(f"Error inverting image: {e}")
+            print_redacted(f"Error inverting image: {e}")
             return image  # Return original on error
 
     def invert_image(self) -> None:

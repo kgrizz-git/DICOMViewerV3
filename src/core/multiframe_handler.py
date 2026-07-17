@@ -20,6 +20,7 @@ Requirements:
     - numpy for array operations
 """
 
+import logging
 from enum import Enum
 from typing import Any
 
@@ -30,7 +31,10 @@ from pydicom.dataset import Dataset
 from pydicom.sequence import Sequence
 from pydicom.tag import Tag
 
+from utils.privacy import safe_event_fields
+
 _PIXEL_DATA_TAG = Tag(0x7FE00010)
+_logger = logging.getLogger(__name__)
 
 
 class FrameType(Enum):
@@ -356,7 +360,10 @@ def get_frame_pixel_array(dataset: Dataset, frame_index: int) -> np.ndarray | No
                     return None
             else:
                 # Unexpected shape
-                print(f"Unexpected pixel array shape: {pixel_array.shape}")
+                _logger.warning(
+                    "Unexpected DICOM pixel array rank",
+                    extra=safe_event_fields("dicom.frame_extract"),
+                )
                 return None
         else:
             # Single-frame dataset
@@ -366,20 +373,31 @@ def get_frame_pixel_array(dataset: Dataset, frame_index: int) -> np.ndarray | No
             return None
 
     except MemoryError as e:
-        print(f"Memory error extracting frame {frame_index} from dataset: {e}")
+        _logger.warning(
+            "DICOM frame extraction exhausted memory",
+            extra=safe_event_fields("dicom.frame_extract", error=e),
+        )
         return None
     except ValueError as e:
         # Can occur with malformed pixel data or excess padding issues
-        print(f"Value error extracting frame {frame_index} from dataset: {e}")
+        _logger.warning(
+            "DICOM frame extraction failed",
+            extra=safe_event_fields("dicom.frame_extract", error=e),
+        )
         return None
     except AttributeError as e:
         # Can occur if pixel_array property doesn't exist or is not accessible
-        print(f"Attribute error extracting frame {frame_index} from dataset: {e}")
+        _logger.warning(
+            "DICOM frame extraction failed",
+            extra=safe_event_fields("dicom.frame_extract", error=e),
+        )
         return None
     except Exception as e:
         # Catch any other exceptions from pydicom's pixel data processing
-        error_type = type(e).__name__
-        print(f"Error ({error_type}) extracting frame {frame_index} from dataset: {e}")
+        _logger.warning(
+            "DICOM frame extraction failed",
+            extra=safe_event_fields("dicom.frame_extract", error=e),
+        )
         return None
 
 
@@ -416,7 +434,10 @@ def create_frame_dataset(dataset: Dataset, frame_index: int) -> Dataset | None:
         return frame_dataset
 
     except Exception as e:
-        print(f"Error creating frame dataset for frame {frame_index}: {e}")
+        _logger.warning(
+            "DICOM frame dataset creation failed",
+            extra=safe_event_fields("dicom.frame_dataset", error=e),
+        )
         return None
 
 

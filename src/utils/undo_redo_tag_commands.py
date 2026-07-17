@@ -32,6 +32,7 @@ from pydicom.tag import Tag as make_tag
 
 from utils.dicom_tag_path import resolve_tag_path
 from utils.dicom_value_conversion import convert_dicom_value
+from utils.privacy.console import print_redacted
 from utils.undo_redo_command import Command
 
 
@@ -201,7 +202,7 @@ class TagEditCommand(Command):
                 self.ui_refresh_callback()
 
         except Exception as e:
-            print(f"Error executing tag edit command: {e}")
+            print_redacted(f"Error executing tag edit command: {e}")
             raise
 
     def undo(self) -> None:
@@ -224,5 +225,5 @@ class TagEditCommand(Command):
                 self.ui_refresh_callback()
 
         except Exception as e:
-            print(f"Error undoing tag edit command: {e}")
+            print_redacted(f"Error undoing tag edit command: {e}")
             raise

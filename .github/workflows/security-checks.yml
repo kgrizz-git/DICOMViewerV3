@@ -80,6 +80,7 @@ jobs:
           BASE_SHA=""
           HEAD_SHA="${{ github.sha }}"
           SKIP_REASON=""
+          TREE_SCAN="false"
 
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE_SHA="${{ github.event.pull_request.base.sha }}"
@@ -92,14 +93,18 @@ jobs:
 
           ZERO_SHA="0000000000000000000000000000000000000000"
           if [ -z "$SKIP_REASON" ] && { [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "$ZERO_SHA" ]; }; then
-            SKIP_REASON="Missing usable base commit (new branch, force-push edge case, or initial commit)"
+            TREE_SCAN="true"
           fi
 
-          if [ -z "$SKIP_REASON" ] && [ "$BASE_SHA" = "$HEAD_SHA" ]; then
+          if [ "$TREE_SCAN" != "true" ] && [ -z "$SKIP_REASON" ] && [ "$BASE_SHA" = "$HEAD_SHA" ]; then
             SKIP_REASON="No new commits between base and head"
           fi
 
-          if [ -n "$SKIP_REASON" ]; then
+          echo "tree_scan=$TREE_SCAN" >> "$GITHUB_OUTPUT"
+          if [ "$TREE_SCAN" = "true" ]; then
+            echo "should_scan=false" >> "$GITHUB_OUTPUT"
+            echo "TruffleHog will scan the full checked-out tree (initial/new-ref push)."
+          elif [ -n "$SKIP_REASON" ]; then
             echo "should_scan=false" >> "$GITHUB_OUTPUT"
             echo "skip_reason=$SKIP_REASON" >> "$GITHUB_OUTPUT"
             echo "TruffleHog scan skipped: $SKIP_REASON"
@@ -112,17 +117,27 @@ jobs:
 
       # Pin action + image tag so CI is reproducible; bump with Dependabot or when releasing.
       - name: Run TruffleHog secret scanner
-        if: steps.trufflehog_range.outputs.should_scan == 'true'
+        if: steps.trufflehog_range.outputs.should_scan == 'true' && steps.trufflehog_range.outputs.tree_scan != 'true'
         uses: trufflesecurity/trufflehog@00155c9dc586f34d189adc83d3ac2698c2ec551f # v3.95.8
         with:
           path: ./
           base: ${{ steps.trufflehog_range.outputs.base_sha }}
           head: ${{ steps.trufflehog_range.outputs.head_sha }}
           version: "3.95.8"
-          extra_args: --only-verified
+          # Never verify suspected credentials against provider APIs.
+          extra_args: --no-verification --no-update
+
+      - name: Run TruffleHog full-tree scanner for initial/new-ref push
+        if: steps.trufflehog_range.outputs.tree_scan == 'true'
+        uses: trufflesecurity/trufflehog@00155c9dc586f34d189adc83d3ac2698c2ec551f # v3.95.8
+        with:
+          path: ./
+          version: "3.95.8"
+          # Never verify suspected credentials against provider APIs.
+          extra_args: --no-verification --no-update
 
       - name: TruffleHog skipped
-        if: steps.trufflehog_range.outputs.should_scan != 'true'
+        if: steps.trufflehog_range.outputs.should_scan != 'true' && steps.trufflehog_range.outputs.tree_scan != 'true'
         run: |
           echo "TruffleHog was skipped: ${{ steps.trufflehog_range.outputs.skip_reason }}"
           
@@ -162,8 +177,8 @@ jobs:
       - name: Scan tracked files for PHI and runtime artifacts
         run: python scripts/check_no_phi_artifacts.py
 
-  pii-in-debug-scan:
-    name: Check Debug Logs for PII
+  privacy-output-scan:
+    name: Blocking Privacy Output Scan
     runs-on: ubuntu-latest
 
     steps:
@@ -172,26 +187,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Scan for patient PII in debug output
-        run: |
-          echo "Scanning for potential PII exposure in debug/logging code..."
-          
-          set +e
-          
-          # Check debug log writes that might include PII
-          ISSUES=$(grep -r "PatientName\|PatientID\|PatientBirthDate" src/ \
-            | grep -E "(print|debug|log)" \
-            | grep -v "overlay_manager\|overlay_config\|export_dialog" || true)
-          
-          if [ -n "$ISSUES" ]; then
-              echo "⚠️ Potential PII in debug output:"
-              echo "$ISSUES"
-          else
-              echo "✅ No obvious patient data in debug output found"
-          fi
-          
-          # Check for unredacted paths in exception handling
-          UNREDACTED=$(grep -r "traceback.print_exc\|exc_info=True" src/ | wc -l)
-          if [ "$UNREDACTED" -gt 0 ]; then
-              echo "⚠️ Warning: Found $UNREDACTED unredacted traceback prints (consider using log_sanitizer)"
-          fi
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+
+      - name: Block unsafe output sinks without echoing matched values
+        run: python scripts/git_hook_privacy_checks.py --all --critical
