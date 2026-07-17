@@ -3,17 +3,31 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 from .common import (
     PrivacyToolResult,
     ToolStatus,
     load_private_json,
+    local_only_environment,
     prepare_private_report,
     protected_workspace,
     resolve_executable,
     run_command,
 )
+
+EASYOCR_MODEL_FILENAMES = ("craft_mlt_25k.pth", "english_g2.pth")
+
+
+def easyocr_module_path() -> Path:
+    """Keep EasyOCR weights inside the isolated PHI-tools environment."""
+    return Path(sys.prefix) / "easyocr"
+
+
+def easyocr_models_available() -> bool:
+    model_dir = easyocr_module_path() / "model"
+    return all((model_dir / filename).is_file() for filename in EASYOCR_MODEL_FILENAMES)
 
 
 def run_dicom_review(
@@ -23,9 +37,16 @@ def run_dicom_review(
     timeout: float = 600,
 ) -> PrivacyToolResult:
     """Review one explicitly selected DICOM; ordinary viewer loading is unaffected."""
+    # The scanner runs with a protected temporary cwd; normalize relative input
+    # first so explicit repository paths keep referring to the selected file.
+    path = path.resolve()
     resolved = resolve_executable(executable)
     if resolved is None:
         return PrivacyToolResult("dicom-review", ToolStatus.SKIP, reason="tool-missing")
+    if Path(resolved).name.startswith("dicom-phi-scan") and not easyocr_models_available():
+        return PrivacyToolResult(
+            "dicom-review", ToolStatus.SKIP, reason="ocr-models-missing"
+        )
     with protected_workspace("dvv-dicom-") as workspace:
         report = workspace / "raw.json"
         prepare_private_report(report)
@@ -33,6 +54,9 @@ def run_dicom_review(
             [resolved, str(path), "--output", str(report), "--cpu"],
             timeout=timeout,
             cwd=workspace,
+            environment=local_only_environment(
+                {"EASYOCR_MODULE_PATH": str(easyocr_module_path())}
+            ),
         )
         if completed.timed_out:
             return PrivacyToolResult(

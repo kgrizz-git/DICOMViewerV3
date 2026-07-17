@@ -208,3 +208,49 @@ def test_media_metadata_and_ocr_output_are_counted_not_recorded(
     assert result.categories["embedded-metadata"] == 1
     assert result.categories["ocr-text"] == 1
     assert "MATCHED-CANARY" not in result.summary()
+
+
+def test_media_review_resolves_relative_path_before_protected_cwd(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    selected = tmp_path / "selected.bin"
+    selected.write_bytes(b"synthetic")
+    observed: list[Path] = []
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(media, "resolve_executable", lambda name: name)
+
+    def fake_run(command: list[str], **_kwargs: object) -> CommandResult:
+        path_index = 2 if command[0] == "exiftool" else 1
+        observed.append(Path(command[path_index]))
+        output = '[{}]' if command[0] == "exiftool" else "header\n"
+        return CommandResult(0, output, "")
+
+    monkeypatch.setattr(media, "run_command", fake_run)
+    media.run_media_review(Path("selected.bin"))
+
+    assert observed == [selected, selected]
+
+
+def test_dicom_review_resolves_relative_path_before_protected_cwd(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    selected = tmp_path / "selected.dcm"
+    selected.write_bytes(b"synthetic")
+    observed: list[Path] = []
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(dicom, "resolve_executable", lambda _name: "dicom-tool")
+
+    def fake_run(command: list[str], **_kwargs: object) -> CommandResult:
+        observed.append(Path(command[1]))
+        report = Path(command[command.index("--output") + 1])
+        report.write_text(
+            json.dumps({"tag_findings": [], "pixel_findings": []}),
+            encoding="utf-8",
+        )
+        report.chmod(0o600)
+        return CommandResult(0, "", "")
+
+    monkeypatch.setattr(dicom, "run_command", fake_run)
+    dicom.run_dicom_review(Path("selected.dcm"))
+
+    assert observed == [selected]

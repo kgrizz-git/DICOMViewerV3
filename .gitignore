@@ -149,6 +149,7 @@ celerybeat.pid
 !.env.sample
 .envrc
 .venv
+.phi-tools/
 env/
 venv/
 ENV/

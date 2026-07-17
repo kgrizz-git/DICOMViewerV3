@@ -15,7 +15,14 @@ from .common import (
 )
 
 _TECHNICAL_METADATA = {
+    "bitdepth",
+    "colorspace",
+    "colortype",
+    "compression",
     "directory",
+    "exifbyteorder",
+    "exifimageheight",
+    "exifimagewidth",
     "exiftoolversion",
     "fileaccessdate",
     "fileinodechangedate",
@@ -25,17 +32,30 @@ _TECHNICAL_METADATA = {
     "filesize",
     "filetype",
     "filetypeextension",
+    "filter",
     "imageheight",
     "imagesize",
     "imagewidth",
     "megapixels",
     "mimetype",
+    "orientation",
+    "pixelsperunitx",
+    "pixelsperunity",
+    "pixelunits",
+    "resolutionunit",
     "sourcefile",
+    "srgbrendering",
+    "xresolution",
+    "yresolution",
 }
 
 
 def run_media_review(path: Path, *, timeout: float = 300) -> PrivacyToolResult:
     """Review embedded metadata and OCR locally; retain no text or image crops."""
+    # Commands execute inside a protected temporary working directory. Resolve
+    # caller-supplied relative paths before changing cwd so the scanner sees the
+    # intended file rather than a nonexistent path below that workspace.
+    path = path.resolve()
     exiftool = resolve_executable("exiftool")
     tesseract = resolve_executable("tesseract")
     if exiftool is None and tesseract is None:

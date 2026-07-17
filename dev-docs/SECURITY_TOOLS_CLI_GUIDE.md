@@ -325,6 +325,21 @@ Isolated local privacy review tools:
 .\.phi-tools\Scripts\python.exe .\scripts\privacy_tool_review.py dicom PATH
 ```
 
+macOS/Linux setup (network is allowed for this installation phase only):
+
+```bash
+python3 -m venv .phi-tools
+.phi-tools/bin/python -m pip install -r requirements-phi-tools.txt
+brew install tesseract exiftool  # macOS; use the OS package manager elsewhere
+EASYOCR_MODULE_PATH="$PWD/.phi-tools/easyocr" \
+  .phi-tools/bin/python -c 'import easyocr; easyocr.Reader(["en"], gpu=False)'
+```
+
+The pinned spaCy model is installed by `requirements-phi-tools.txt`. EasyOCR
+weights are kept below the ignored/protected `.phi-tools/` root. The DICOM
+wrapper refuses to start if those weights are absent, preventing an ordinary
+scan from silently becoming a model-download operation.
+
 The wrapper emits only counts/categories and exits `0` clean, `1` findings,
 `2` error, or `3` skip. Hounddog must remain local, `--no-git`, no-account, and
 advisory. Media/DICOM results require human review before repository admission.
