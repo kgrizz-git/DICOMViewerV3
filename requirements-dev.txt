@@ -20,7 +20,7 @@ pip-audit>=2.10.1
 # Generates the third-party attribution SBOM (THIRD_PARTY_LICENSES.md) with full
 # license texts. Used by scripts/generate_third_party_licenses.py — NOT by the
 # pre-commit license gate (that is stdlib-only). See dev-docs/info/DEPENDENCY_LICENSE_POLICY.md.
-pip-licenses>=5.0.0
+pip-licenses>=5.5.5
 # Type checker CLI (matches common IDE Pyright/Based Pyright settings); run from repo root:
 #   basedpyright [files...]
 basedpyright>=1.39.9
