@@ -283,8 +283,8 @@
       "tested_version": "2.37.1",
       "enforcement": ["optional local convenience"],
       "network_policy": "offline-runtime",
-      "entrypoints": [".envrc"],
-      "tracked_configuration": [".env.example", ".envrc"]
+      "entrypoints": [".envrc", "scripts/sync_dev_environment.py"],
+      "tracked_configuration": [".env.example", ".envrc", "requirements-dev.txt"]
     },
     {
       "id": "docker",
@@ -360,6 +360,11 @@
       "id": "local-sonarqube-runner",
       "path": "scripts/run_local_sonarqube.py",
       "role": "Token-safe local SonarQube submission and ignored freshness record."
+    },
+    {
+      "id": "dev-environment-sync",
+      "path": "scripts/sync_dev_environment.py",
+      "role": "Network-free direnv drift notification plus explicit dependency installation and content-hash stamping."
     },
     {
       "id": "tool-inventory-validator",
