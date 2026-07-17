@@ -21,7 +21,7 @@ This application processes clinical imaging. Treat every study, export, screensh
 - Denies every force-added file under the local-only `data/` (except its
   `.gitkeep`), `test-DICOM-data/`, `sample-DICOM-gitignored/`,
   `decoder-spike-artifacts/`, `resources/screenshots-ignored/`, `logs/`,
-  `.sonar-local/`, `.scannerwork/`, `.sonar*`, `.sonarqube*`, `.phi-tools/`,
+  `.sonar-local/`, `.scannerwork/`, `.sonar*`, `.sonarlint/`, `.sonarqube*`, `.phi-tools/`,
   `.direnv/`, `tmp/`, and `backups/` roots, plus `.env` variants other than the
   empty tracked `.env.example`. It also reads the staged `.gitignore` blob and
   blocks removal of any privacy-critical ignore rule, so restoring a rule only

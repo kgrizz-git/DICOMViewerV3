@@ -98,6 +98,7 @@ def _approve_reviewable_asset(repo: Path, path: str) -> None:
         ".sonar-local/coverage.xml",
         ".scannerwork/report-task.txt",
         ".sonar/cache/index",
+        ".sonarlint/issuestore/index",
         ".sonarqube/cache/index",
         ".direnv/allow",
         ".env",

@@ -60,6 +60,7 @@ cover/
 .sonarqube/
 .sonar
 .sonarqube
+.sonarlint/
 
 # Translations
 *.mo
