@@ -34,6 +34,7 @@ For docs that already have a `**Last updated:**` line, update the date when an e
 | [`SECURITY_HARDENING_GUIDE.md`](SECURITY_HARDENING_GUIDE.md) | Security posture and hardening |
 | [`SECURITY_TOOLS_CLI_GUIDE.md`](SECURITY_TOOLS_CLI_GUIDE.md) | Local scanners (semgrep, TruffleHog, etc.) |
 | [`PHI_PII_REPOSITORY_GUARDRAILS.md`](PHI_PII_REPOSITORY_GUARDRAILS.md) | Blocking PHI/PII, artifact, output, and local-tool policy |
+| [`../security/security-tool-inventory.json`](../security/security-tool-inventory.json) | Canonical security/privacy tool, model, control, version, network, and enforcement inventory |
 | [`REPOSITORY_RECREATION_PRIVACY_RUNBOOK.md`](REPOSITORY_RECREATION_PRIVACY_RUNBOOK.md) | Prepared clean-history private-repository replacement procedure |
 | [`info/BUNDLED_PACKAGES_AND_FONTS_LICENSES.md`](info/BUNDLED_PACKAGES_AND_FONTS_LICENSES.md) | Dependency and font license inventory |
 | [`info/PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md`](info/PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md) | `pylibjpeg-libjpeg` replacement options and decoder tradeoffs |

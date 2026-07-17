@@ -4,6 +4,16 @@
 
 This guide shows how to use the security scanning tools installed in your venv. These are the same tools used in GitHub Actions workflows, but you can run them locally before committing.
 
+The canonical machine-readable inventory is
+[`security/security-tool-inventory.json`](../security/security-tool-inventory.json).
+It records every intentionally used security/privacy/analysis tool and model,
+its tested version, installation scope, network policy, enforcement mode, and
+entrypoints. After adding or upgrading a tool, update the inventory and run:
+
+```bash
+python scripts/check_security_tool_inventory.py
+```
+
 ---
 
 ## Installation

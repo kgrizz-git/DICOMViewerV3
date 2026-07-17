@@ -1,0 +1,377 @@
+{
+  "schema_version": 1,
+  "last_verified": "2026-07-16",
+  "scope": "Repository security, privacy, compliance, and supporting local-analysis tools intentionally used by DICOM Viewer V3.",
+  "policy": {
+    "default_data_handling": "local-only",
+    "finding_output": "category/count/status only; never retain or paste matched sensitive values",
+    "external_source_or_coverage_uploads": "prohibited",
+    "allowed_remote_outputs": "GitHub Actions logs and optional SARIF attached to this private GitHub repository only",
+    "version_field_meaning": "tested_version records the locally or CI-tested release, not an automatic upgrade constraint"
+  },
+  "tools": [
+    {
+      "id": "gitleaks",
+      "category": "secret-scanning",
+      "purpose": "Blocking staged-tree and Git-history secret scan with content-bound reviewed exceptions.",
+      "install_scope": "system executable",
+      "install_reference": "dev-docs/SECURITY_TOOLS_CLI_GUIDE.md",
+      "tested_version": "8.30.1",
+      "enforcement": ["pre-commit blocking", "pre-push blocking", "repository recreation blocking"],
+      "network_policy": "offline-runtime",
+      "entrypoints": ["scripts/check_gitleaks_staged.py", "scripts/check_gitleaks_history.py"],
+      "tracked_configuration": ["security/approved-gitleaks-fingerprints.json"]
+    },
+    {
+      "id": "trufflehog",
+      "category": "secret-scanning",
+      "purpose": "Offline local and blocking CI secret-pattern scan without provider verification.",
+      "install_scope": "system executable and pinned GitHub Action",
+      "install_reference": "scripts/install-trufflehog-v3.ps1",
+      "tested_version": "local 3.95.9; CI 3.95.8",
+      "enforcement": ["pre-push blocking", "CI blocking"],
+      "network_policy": "no-secret-verification",
+      "entrypoints": ["scripts/run_security_scan.py", ".github/workflows/security-checks.yml"],
+      "tracked_configuration": []
+    },
+    {
+      "id": "detect-secrets",
+      "category": "secret-scanning",
+      "purpose": "Fast staged-file secret detection and informational CI second opinion.",
+      "install_scope": "application development venv",
+      "install_reference": "requirements-dev.txt",
+      "tested_version": "1.5.0",
+      "enforcement": ["pre-commit blocking on main", "CI advisory"],
+      "network_policy": "offline-runtime",
+      "entrypoints": ["scripts/run_security_scan.py", ".github/workflows/security-checks.yml"],
+      "tracked_configuration": []
+    },
+    {
+      "id": "semgrep",
+      "category": "static-analysis",
+      "purpose": "Python security static analysis using community rules.",
+      "install_scope": "application development venv and CI",
+      "install_reference": "requirements-dev.txt",
+      "tested_version": "1.169.0",
+      "enforcement": ["pre-push blocking", "CI blocking"],
+      "network_policy": "rules-download-only-no-source-upload",
+      "entrypoints": ["scripts/run_security_scan.py", ".github/workflows/semgrep.yml"],
+      "tracked_configuration": []
+    },
+    {
+      "id": "pip-audit",
+      "category": "dependency-vulnerability",
+      "purpose": "Audit Python dependencies against published vulnerability data.",
+      "install_scope": "application development venv and CI",
+      "install_reference": "requirements-dev.txt",
+      "tested_version": "2.10.1",
+      "enforcement": ["pre-push blocking except reviewed advisories", "scheduled CI blocking except reviewed advisories"],
+      "network_policy": "advisory-database-access-only",
+      "entrypoints": ["scripts/run_security_scan.py", ".github/workflows/pip-audit.yml"],
+      "tracked_configuration": ["security/pip-audit-exceptions.md"]
+    },
+    {
+      "id": "grype",
+      "category": "dependency-vulnerability",
+      "purpose": "Repository/package vulnerability scan with optional private-repository SARIF.",
+      "install_scope": "pinned GitHub Action",
+      "install_reference": ".github/workflows/grype.yml",
+      "tested_version": "anchore/scan-action v7 commit-pinned",
+      "enforcement": ["scheduled and branch CI advisory"],
+      "network_policy": "github-actions-only",
+      "entrypoints": [".github/workflows/grype.yml"],
+      "tracked_configuration": []
+    },
+    {
+      "id": "hounddog",
+      "category": "privacy-dataflow",
+      "purpose": "Advisory local source/sink data-flow review.",
+      "install_scope": "user-local executable",
+      "install_reference": "dev-docs/SECURITY_TOOLS_CLI_GUIDE.md",
+      "tested_version": "3.3.0",
+      "enforcement": ["manual advisory", "main pre-push advisory"],
+      "network_policy": "offline-runtime-no-account-no-scm",
+      "entrypoints": ["scripts/privacy_tool_review.py", "scripts/run_conditional_privacy_reviews.py"],
+      "tracked_configuration": ["security/hounddog-project.json"]
+    },
+    {
+      "id": "phi-scan",
+      "category": "privacy-regex",
+      "purpose": "Advisory PHI/PII pattern review limited to relevant data and documentation assets.",
+      "install_scope": "isolated PHI tools venv",
+      "install_reference": "requirements-phi-tools.txt",
+      "tested_version": "0.7.0",
+      "enforcement": ["conditional staged advisory", "manual advisory"],
+      "network_policy": "offline-runtime",
+      "entrypoints": ["scripts/privacy_tool_review.py", "scripts/run_conditional_privacy_reviews.py"],
+      "tracked_configuration": []
+    },
+    {
+      "id": "presidio-analyzer",
+      "category": "privacy-ner",
+      "purpose": "Local NLP entity recognition for staged image OCR text.",
+      "install_scope": "isolated PHI tools venv",
+      "install_reference": "requirements-phi-tools.txt",
+      "tested_version": "2.2.363",
+      "enforcement": ["conditional staged advisory", "manual advisory"],
+      "network_policy": "offline-runtime",
+      "entrypoints": ["scripts/privacy_tool_review.py"],
+      "tracked_configuration": []
+    },
+    {
+      "id": "presidio-image-redactor",
+      "category": "privacy-image",
+      "purpose": "Provides the isolated image-privacy toolchain without writing redacted derivatives into the repository.",
+      "install_scope": "isolated PHI tools venv",
+      "install_reference": "requirements-phi-tools.txt",
+      "tested_version": "0.0.59",
+      "enforcement": ["manual advisory support"],
+      "network_policy": "offline-runtime",
+      "entrypoints": ["scripts/privacy_tool_review.py"],
+      "tracked_configuration": []
+    },
+    {
+      "id": "tesseract",
+      "category": "privacy-ocr",
+      "purpose": "Local OCR for staged raster-media privacy review.",
+      "install_scope": "system executable",
+      "install_reference": "dev-docs/SECURITY_TOOLS_CLI_GUIDE.md",
+      "tested_version": "5.5.2",
+      "enforcement": ["conditional staged advisory", "manual advisory"],
+      "network_policy": "offline-runtime",
+      "entrypoints": ["scripts/privacy_tool_review.py"],
+      "tracked_configuration": []
+    },
+    {
+      "id": "exiftool",
+      "category": "privacy-metadata",
+      "purpose": "Local metadata inspection for staged raster-media assets.",
+      "install_scope": "system executable",
+      "install_reference": "dev-docs/SECURITY_TOOLS_CLI_GUIDE.md",
+      "tested_version": "13.55",
+      "enforcement": ["conditional staged advisory", "manual advisory"],
+      "network_policy": "offline-runtime",
+      "entrypoints": ["scripts/privacy_tool_review.py"],
+      "tracked_configuration": []
+    },
+    {
+      "id": "dicom-phi-scan",
+      "category": "privacy-dicom",
+      "purpose": "Advisory external DICOM tag and burned-in pixel review before repository admission.",
+      "install_scope": "isolated PHI tools venv",
+      "install_reference": "requirements-phi-tools.txt",
+      "tested_version": "0.1.0 at e558a5232f405b4065d6079605a853f3e7c10152",
+      "enforcement": ["conditional staged advisory", "manual advisory"],
+      "network_policy": "offline-runtime",
+      "entrypoints": ["scripts/privacy_tool_review.py", "scripts/run_conditional_privacy_reviews.py"],
+      "tracked_configuration": []
+    },
+    {
+      "id": "easyocr",
+      "category": "privacy-ocr",
+      "purpose": "Local OCR engine used by the DICOM pixel scanner.",
+      "install_scope": "isolated PHI tools venv with ignored model cache",
+      "install_reference": "requirements-phi-tools.txt",
+      "tested_version": "1.7.2",
+      "enforcement": ["DICOM advisory dependency"],
+      "network_policy": "installation-only",
+      "entrypoints": ["scripts/privacy_tools/dicom.py"],
+      "tracked_configuration": []
+    },
+    {
+      "id": "spacy",
+      "category": "privacy-ner",
+      "purpose": "Local NLP runtime for Presidio Analyzer.",
+      "install_scope": "isolated PHI tools venv",
+      "install_reference": "requirements-phi-tools.txt",
+      "tested_version": "3.8.13",
+      "enforcement": ["Presidio advisory dependency"],
+      "network_policy": "offline-runtime",
+      "entrypoints": ["scripts/privacy_tools/media.py"],
+      "tracked_configuration": []
+    },
+    {
+      "id": "sonarqube-community-build",
+      "category": "local-static-analysis",
+      "purpose": "Opt-in local code-quality and security analysis with no cloud project.",
+      "install_scope": "local service",
+      "install_reference": "dev-docs/DEVELOPER_SETUP.md",
+      "tested_version": "locally managed Community Build",
+      "enforcement": ["manual advisory", "30-day main pre-push freshness reminder"],
+      "network_policy": "local-loopback-only",
+      "entrypoints": ["scripts/run_local_sonarqube.py"],
+      "tracked_configuration": ["tools/sonarqube/sonar-project.properties"]
+    },
+    {
+      "id": "sonar-scanner-cli",
+      "category": "local-static-analysis",
+      "purpose": "Submit source analysis to the local SonarQube Community Build service.",
+      "install_scope": "system executable or Docker image",
+      "install_reference": "dev-docs/DEVELOPER_SETUP.md",
+      "tested_version": "8.1.0.6389",
+      "enforcement": ["manual advisory"],
+      "network_policy": "local-sonarqube-only",
+      "entrypoints": ["scripts/run_local_sonarqube.py"],
+      "tracked_configuration": ["tools/sonarqube/sonar-project.properties"]
+    },
+    {
+      "id": "basedpyright",
+      "category": "static-analysis",
+      "purpose": "Type-error gate across application and repository scripts.",
+      "install_scope": "application development venv and CI",
+      "install_reference": "requirements-dev.txt",
+      "tested_version": "1.39.9",
+      "enforcement": ["pre-push blocking", "CI blocking"],
+      "network_policy": "offline-runtime",
+      "entrypoints": ["scripts/check_basedpyright_errors.py", ".github/workflows/pyright.yml"],
+      "tracked_configuration": ["pyrightconfig.json"]
+    },
+    {
+      "id": "ruff",
+      "category": "static-analysis",
+      "purpose": "Fast lint, import-order, and Python modernization checks.",
+      "install_scope": "application development venv and CI",
+      "install_reference": "requirements-dev.txt",
+      "tested_version": "0.15.21",
+      "enforcement": ["pre-commit blocking", "CI blocking"],
+      "network_policy": "offline-runtime",
+      "entrypoints": [".githooks/pre-commit", ".github/workflows/ruff.yml"],
+      "tracked_configuration": []
+    },
+    {
+      "id": "lizard",
+      "category": "complexity",
+      "purpose": "Cyclomatic-complexity and function-size gate.",
+      "install_scope": "application development venv",
+      "install_reference": "requirements-dev.txt",
+      "tested_version": "1.23.0",
+      "enforcement": ["pre-push blocking"],
+      "network_policy": "offline-runtime",
+      "entrypoints": [".githooks/pre-push", ".github/workflows/lizard.yml"],
+      "tracked_configuration": []
+    },
+    {
+      "id": "pytest-cov",
+      "category": "coverage",
+      "purpose": "Local and CI console coverage; reports are never uploaded to third parties.",
+      "install_scope": "application development venv and CI",
+      "install_reference": "requirements-dev.txt",
+      "tested_version": "7.1.0",
+      "enforcement": ["pre-push blocking", "CI blocking"],
+      "network_policy": "offline-runtime",
+      "entrypoints": ["scripts/run_local_sonarqube.py", ".github/workflows/tests.yml"],
+      "tracked_configuration": []
+    },
+    {
+      "id": "pip-licenses",
+      "category": "license-compliance",
+      "purpose": "Generate the third-party dependency/license inventory.",
+      "install_scope": "application development venv",
+      "install_reference": "requirements-dev.txt",
+      "tested_version": "5.5.5",
+      "enforcement": ["manual release maintenance"],
+      "network_policy": "offline-runtime",
+      "entrypoints": ["scripts/generate_third_party_licenses.py"],
+      "tracked_configuration": ["dev-docs/info/BUNDLED_PACKAGES_AND_FONTS_LICENSES.md"]
+    },
+    {
+      "id": "direnv",
+      "category": "local-environment",
+      "purpose": "Load ignored local Sonar credentials and activate an existing venv after explicit directory approval.",
+      "install_scope": "system executable",
+      "install_reference": "dev-docs/DEVELOPER_SETUP.md",
+      "tested_version": "2.37.1",
+      "enforcement": ["optional local convenience"],
+      "network_policy": "offline-runtime",
+      "entrypoints": [".envrc"],
+      "tracked_configuration": [".env.example", ".envrc"]
+    },
+    {
+      "id": "docker",
+      "category": "local-runtime",
+      "purpose": "Optional launcher for the Sonar scanner when a native scanner is unavailable.",
+      "install_scope": "system application",
+      "install_reference": "dev-docs/DEVELOPER_SETUP.md",
+      "tested_version": "29.6.1",
+      "enforcement": ["optional local support"],
+      "network_policy": "local-sonarqube-and-image-installation",
+      "entrypoints": ["scripts/run_local_sonarqube.py"],
+      "tracked_configuration": []
+    }
+  ],
+  "models": [
+    {
+      "id": "en-core-web-lg",
+      "purpose": "Pinned local English NER model for Presidio.",
+      "tested_version": "3.8.0",
+      "install_reference": "requirements-phi-tools.txt",
+      "storage": "isolated PHI tools venv",
+      "network_policy": "installation-only"
+    },
+    {
+      "id": "easyocr-craft-mlt-25k",
+      "purpose": "EasyOCR text-detection weights.",
+      "tested_version": "EasyOCR 1.7.2 model",
+      "sha256": "4a5efbfb48b4081100544e75e1e2b57f8de3d84f213004b14b85fd4b3748db17",
+      "storage": "ignored .phi-tools/easyocr/model",
+      "network_policy": "installation-only"
+    },
+    {
+      "id": "easyocr-english-g2",
+      "purpose": "EasyOCR English recognition weights.",
+      "tested_version": "EasyOCR 1.7.2 model",
+      "sha256": "e2272681d9d67a04e2dff396b6e95077bc19001f8f6d3593c307b9852e1c29e8",
+      "storage": "ignored .phi-tools/easyocr/model",
+      "network_policy": "installation-only"
+    }
+  ],
+  "repository_controls": [
+    {
+      "id": "phi-artifact-gate",
+      "path": "scripts/check_no_phi_artifacts.py",
+      "role": "Blocking tracked/staged PHI, PII, credential, local-path, and runtime-artifact admission gate."
+    },
+    {
+      "id": "privacy-output-gate",
+      "path": "scripts/git_hook_privacy_checks.py",
+      "role": "Blocking critical unsafe output/logging rule gate plus advisory debt inventory."
+    },
+    {
+      "id": "commit-message-privacy-gate",
+      "path": "scripts/git_hook_commit_message_privacy.py",
+      "role": "Blocking commit-message path, account, host, IP, endpoint, and identifier gate."
+    },
+    {
+      "id": "conditional-privacy-reviews",
+      "path": "scripts/run_conditional_privacy_reviews.py",
+      "role": "Runs relevant advisory PhiScan, OCR/metadata/Presidio, and DICOM lanes for exact staged blobs."
+    },
+    {
+      "id": "security-scan-runner",
+      "path": "scripts/run_security_scan.py",
+      "role": "Coordinates local static, secret, debug-flag, and dependency checks."
+    },
+    {
+      "id": "remote-privacy-preflight",
+      "path": "scripts/privacy_remote_preflight.py",
+      "role": "Summarizes repository privacy readiness before remote publication without exposing matches."
+    },
+    {
+      "id": "local-sonarqube-runner",
+      "path": "scripts/run_local_sonarqube.py",
+      "role": "Token-safe local SonarQube submission and ignored freshness record."
+    },
+    {
+      "id": "tool-inventory-validator",
+      "path": "scripts/check_security_tool_inventory.py",
+      "role": "Validates this inventory, its referenced paths, and required tool/control coverage."
+    }
+  ],
+  "prohibited_external_services": [
+    "Codecov",
+    "Coveralls",
+    "DeepSource",
+    "Sentry",
+    "SonarCloud"
+  ]
+}

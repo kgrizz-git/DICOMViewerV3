@@ -66,7 +66,12 @@ FORBIDDEN_PATH_PATTERNS: list[tuple[str, str]] = [
     (r"^sample-DICOM-gitignored/", "local DICOM study directory"),
     (r"^test-DICOM-data/", "local DICOM/QC study directory"),
     (r"^\.sonar-local/", "local analysis state and coverage data"),
+    (r"^\.scannerwork/", "Sonar scanner work directory"),
+    (r"^\.sonar(?:/|$)", "Sonar scanner/server state"),
+    (r"^\.sonarqube(?:/|$)", "SonarQube scanner/server state"),
     (r"^\.phi-tools/", "isolated local PHI scanner environment"),
+    (r"^\.direnv/", "direnv local state"),
+    (r"^\.env(?:$|\.(?!example$).+)", "local environment credentials"),
     (r"^tmp/", "local temporary workspace"),
     (r"(^|/)\.DS_Store$", "macOS metadata"),
     (r"(^|/)\.cache/", "cache directory"),
@@ -87,7 +92,15 @@ REQUIRED_GITIGNORE_RULES = frozenset(
         ".pytest-tmp-*/",
         ".pytest-tmp/",
         ".phi-tools/",
+        ".scannerwork/",
+        ".sonar",
+        ".sonar/",
         ".sonar-local/",
+        ".sonarqube",
+        ".sonarqube/",
+        ".direnv/",
+        ".env",
+        ".env.*",
         "backups/",
         "data/*",
         "decoder-spike-artifacts/",
@@ -185,14 +198,19 @@ APPROVED_MEDIA_MANIFEST = "security/approved-media-sha256.json"
 APPROVED_TEXT_EXCEPTIONS_MANIFEST = "security/approved-phi-text-exceptions.json"
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
-# A file without a suffix can hide a binary export or clinical data.  Existing
+# These exact repository control files are UTF-8 text despite lacking a
+# conventional data suffix. Keep them content-scanned rather than hash-approving
+# them as opaque media.
+TEXT_CONFIG_FILENAMES = {".env.example", ".envrc"}
+
+# A file without a suffix can hide a binary export or clinical data. Existing
 # reviewed assets live in the hash manifest; every new one blocks until reviewed.
 EXTENSIONLESS_EXEMPT = {
     ".cursorignore",
     ".cursorindexingignore",
     ".gitattributes",
     ".gitignore",
-}
+} | TEXT_CONFIG_FILENAMES
 
 # These DICOM attributes must never hold a real value in a tracked fixture,
 # including when nested in a sequence.  ``Dataset.iterall()`` visits sequence
@@ -512,7 +530,10 @@ def check_contents(paths: list[str], root: Path) -> list[str]:
     problems = []
     approved = _approved_text_exceptions(root)
     for path in paths:
-        if Path(path).suffix.lower() not in DATA_SUFFIXES:
+        if (
+            Path(path).suffix.lower() not in DATA_SUFFIXES
+            and path not in TEXT_CONFIG_FILENAMES
+        ):
             continue
         full = root / path
         if full.is_symlink() or not full.is_file():

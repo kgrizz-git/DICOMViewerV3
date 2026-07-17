@@ -35,6 +35,9 @@ jobs:
       - name: Check repo harness documentation
         run: python scripts/check_repo_harness.py --root "${{ github.workspace }}"
 
+      - name: Check security and privacy tool inventory
+        run: python scripts/check_security_tool_inventory.py --root "${{ github.workspace }}"
+
       - name: Check architecture boundaries
         run: python scripts/check_architecture_boundaries.py --root "${{ github.workspace }}"
 
