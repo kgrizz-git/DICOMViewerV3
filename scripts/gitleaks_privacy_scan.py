@@ -12,25 +12,34 @@ import subprocess
 import sys
 import tempfile
 from collections import Counter
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
 APPROVAL_MANIFEST = "security/approved-gitleaks-fingerprints.json"
 FINDINGS_EXIT_CODE = 7
 SAFE_RULE_ID = re.compile(r"^[A-Za-z0-9_.-]{1,100}$")
+OBJECT_ID = re.compile(r"^[0-9a-f]{40,64}$")
 ScanMode = Literal["staged", "history"]
 
 
-def _load_approvals(root: Path) -> set[tuple[str, str, str]]:
+@dataclass(frozen=True)
+class Approvals:
+    fingerprints: frozenset[tuple[str, str, str]]
+    blobs: frozenset[tuple[str, str, str, int]]
+
+
+def load_approvals(root: Path) -> Approvals:
     manifest = root / APPROVAL_MANIFEST
     if not manifest.exists():
-        return set()
+        return Approvals(frozenset(), frozenset())
     try:
         payload = json.loads(manifest.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise ValueError(f"approval manifest unreadable ({type(exc).__name__})") from exc
     reviewed = payload.get("reviewed") if isinstance(payload, dict) else None
-    if not isinstance(reviewed, list):
+    reviewed_blobs = payload.get("reviewed_blobs", []) if isinstance(payload, dict) else None
+    if not isinstance(reviewed, list) or not isinstance(reviewed_blobs, list):
         raise ValueError("approval manifest has invalid structure")
     approvals: set[tuple[str, str, str]] = set()
     for entry in reviewed:
@@ -49,7 +58,27 @@ def _load_approvals(root: Path) -> set[tuple[str, str, str]]:
         ):
             raise ValueError("approval manifest contains an incomplete entry")
         approvals.add((fingerprint, path, rule_id))
-    return approvals
+    blob_approvals: set[tuple[str, str, str, int]] = set()
+    for entry in reviewed_blobs:
+        if not isinstance(entry, dict):
+            raise ValueError("approval manifest contains an invalid blob entry")
+        object_id = entry.get("blob_oid")
+        path = entry.get("path")
+        rule_id = entry.get("rule_id")
+        start_line = entry.get("start_line")
+        if (
+            not isinstance(object_id, str)
+            or not OBJECT_ID.fullmatch(object_id)
+            or not isinstance(path, str)
+            or not path
+            or not isinstance(rule_id, str)
+            or not rule_id
+            or not isinstance(start_line, int)
+            or start_line < 1
+        ):
+            raise ValueError("approval manifest contains an incomplete blob entry")
+        blob_approvals.add((object_id, path, rule_id, start_line))
+    return Approvals(frozenset(approvals), frozenset(blob_approvals))
 
 
 def _finding_key(finding: dict[str, Any]) -> tuple[str, str, str] | None:
@@ -66,6 +95,41 @@ def _finding_key(finding: dict[str, Any]) -> tuple[str, str, str] | None:
     ):
         return None
     return fingerprint, path, rule_id
+
+
+def finding_blob_key(
+    root: Path, finding: dict[str, Any], mode: ScanMode
+) -> tuple[str, str, str, int] | None:
+    """Bind a review to exact file bytes without depending on commit identity."""
+    path = finding.get("File")
+    rule_id = finding.get("RuleID")
+    start_line = finding.get("StartLine")
+    if (
+        not isinstance(path, str)
+        or not path
+        or not isinstance(rule_id, str)
+        or not rule_id
+        or not isinstance(start_line, int)
+        or start_line < 1
+    ):
+        return None
+    commit = finding.get("Commit")
+    object_spec = f":{path}"
+    if mode == "history":
+        if not isinstance(commit, str) or not OBJECT_ID.fullmatch(commit):
+            return None
+        object_spec = f"{commit}:{path}"
+    completed = subprocess.run(
+        ["git", "rev-parse", object_spec],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    object_id = completed.stdout.strip()
+    if completed.returncode or not OBJECT_ID.fullmatch(object_id):
+        return None
+    return object_id, path, rule_id, start_line
 
 
 def _safe_rule_id(value: object) -> str:
@@ -100,7 +164,7 @@ def run_scan(
     if mode == "history" and not _has_head(root):
         return 0, "CLEAN: no reachable commits to scan"
     try:
-        approvals = _load_approvals(root)
+        approvals = load_approvals(root)
     except ValueError as exc:
         return 2, f"ERROR: {exc}"
 
@@ -154,7 +218,9 @@ def run_scan(
             key = _finding_key(raw_finding)
             if key is None:
                 malformed += 1
-            elif key in approvals:
+            elif key in approvals.fingerprints or finding_blob_key(
+                root, raw_finding, mode
+            ) in approvals.blobs:
                 approved_count += 1
             else:
                 unapproved.append(raw_finding)
@@ -167,7 +233,7 @@ def run_scan(
             )
             return 1, f"BLOCKED: {len(unapproved)} unapproved secret finding(s); categories: {summary}"
         if approved_count:
-            return 0, f"CLEAN: {approved_count} exact reviewed fingerprint(s), no unapproved findings"
+            return 0, f"CLEAN: {approved_count} exact reviewed finding(s), no unapproved findings"
         return 0, "CLEAN: no secret findings"
     finally:
         try:

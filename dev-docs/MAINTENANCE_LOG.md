@@ -15,7 +15,11 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
   selected paths before entering protected temporary working directories and
   made the DICOM wrapper fail closed when OCR weights are missing. Added the
   clean private-repository recreation runbook after verifying the 672-commit
-  `old-main` archive has no overlap with the 25 commits actually on GitHub.
+  `old-main` archive has no overlap with the 25 commits actually on GitHub. A
+  dry-run clean-root export then drove two corrections: force-adding only the
+  tracked archive so conservatively ignored packaged icons remain present, and
+  allowing reviewed Gitleaks false positives to bind to an exact Git blob,
+  rule, and line instead of the root commit identity.
 - Added protected-path and conditional local-review enforcement: the blocking
   artifact gate now rejects force-added files under privacy-critical local data,
   screenshot, log, analysis, backup, and temporary roots and validates the
