@@ -23,6 +23,8 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
+from utils.privacy.console import print_redacted
+
 
 def compute_mpr_combine_range(
     n_slices: int, slice_index: int, n_planes: int
@@ -93,5 +95,5 @@ def array_to_pil(
         uint8_arr = mapped.astype(np.uint8)
         return Image.fromarray(uint8_arr, mode="L")
     except Exception as exc:
-        print(f"[mpr_view_math] array_to_pil failed: {exc}")
+        print_redacted(f"[mpr_view_math] array_to_pil failed: {exc}")
         return None

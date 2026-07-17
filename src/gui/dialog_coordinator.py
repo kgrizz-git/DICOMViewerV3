@@ -41,6 +41,7 @@ from gui.dialogs.tag_viewer_dialog import TagViewerDialog
 from gui.main_window import MainWindow
 from utils.config_manager import ConfigManager
 from utils.doc_urls import user_guide_hub_url
+from utils.privacy.safe_storage import DeletionResult
 
 
 class DialogCoordinator:
@@ -71,6 +72,8 @@ class DialogCoordinator:
         ui_refresh_callback: Callable[[], None] | None = None,
         tag_export_union_host: Any | None = None,
         manage_wl_presets_callback: Callable[[], None] | None = None,
+        clear_study_index_callback: Callable[[], DeletionResult] | None = None,
+        clear_mpr_cache_callback: Callable[[], DeletionResult] | None = None,
     ):
         """
         Initialize the dialog coordinator.
@@ -103,6 +106,8 @@ class DialogCoordinator:
         self.get_focused_subwindow_index = get_focused_subwindow_index
         self.histogram_dialogs: dict[int, HistogramDialog | None] = {}
         self.manage_wl_presets_callback = manage_wl_presets_callback
+        self.clear_study_index_callback = clear_study_index_callback
+        self.clear_mpr_cache_callback = clear_mpr_cache_callback
 
         # Tag viewer dialog (persistent)
         self.tag_viewer_dialog: TagViewerDialog | None = None
@@ -115,6 +120,8 @@ class DialogCoordinator:
             self.config_manager,
             self.main_window,
             manage_wl_presets_callback=self.manage_wl_presets_callback,
+            clear_study_index_callback=self.clear_study_index_callback,
+            clear_mpr_cache_callback=self.clear_mpr_cache_callback,
         )
         if self.settings_applied_callback:
             dialog.settings_applied.connect(self.settings_applied_callback)
@@ -122,18 +129,6 @@ class DialogCoordinator:
 
     def open_overlay_settings(self) -> None:
         """Handle overlay settings dialog request."""
-        from utils.debug_flags import DEBUG_FONT_VARIANT
-        from utils.debug_log import debug_log
-        if DEBUG_FONT_VARIANT:
-            debug_log(
-                "dialog_coordinator.py:open_overlay_settings",
-                "Opening overlay settings dialog",
-                {
-                    "main_window_present": self.main_window is not None,
-                    "has_settings_applied_callback": self.settings_applied_callback is not None,
-                },
-                hypothesis_id="FONTVAR",
-            )
         dialog = OverlaySettingsDialog(self.config_manager, self.main_window)
         if self.settings_applied_callback:
             # Both signals trigger the same overlay-refresh pipeline:
@@ -199,18 +194,6 @@ class DialogCoordinator:
 
     def open_annotation_options(self) -> None:
         """Handle annotation options dialog request."""
-        from utils.debug_flags import DEBUG_FONT_VARIANT
-        from utils.debug_log import debug_log
-        if DEBUG_FONT_VARIANT:
-            debug_log(
-                "dialog_coordinator.py:open_annotation_options",
-                "Opening annotation options dialog",
-                {
-                    "main_window_present": self.main_window is not None,
-                    "has_annotation_options_applied_callback": self.annotation_options_applied_callback is not None,
-                },
-                hypothesis_id="FONTVAR",
-            )
         dialog = AnnotationOptionsDialog(self.config_manager, self.main_window)
         if self.annotation_options_applied_callback:
             dialog.settings_changed.connect(self.annotation_options_applied_callback)
@@ -505,4 +488,3 @@ class DialogCoordinator:
         dlg.show()
         dlg.raise_()
         dlg.activateWindow()
-

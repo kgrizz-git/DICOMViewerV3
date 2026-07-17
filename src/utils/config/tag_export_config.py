@@ -8,10 +8,11 @@ Mixin contract:
     Expects `self.config` (dict) and `self.save_config()` to be provided by
     the concrete ConfigManager class that inherits this mixin.
 """
-
 import json
 from collections.abc import Callable
 from typing import Any, cast
+
+from utils.privacy.console import print_redacted
 
 
 class TagExportConfigMixin:
@@ -79,7 +80,7 @@ class TagExportConfigMixin:
                 json.dump(export_data, f, indent=4, ensure_ascii=False)
             return True
         except (OSError, TypeError, ValueError) as e:
-            print(f"Error exporting tag export presets: {e}")
+            print_redacted(f"Error exporting tag export presets: {e}")
             return False
 
     def import_tag_export_presets(self, file_path: str) -> dict[str, int] | None:
@@ -103,7 +104,7 @@ class TagExportConfigMixin:
             with open(file_path, encoding="utf-8") as f:
                 import_data = json.load(f)
         except (OSError, json.JSONDecodeError) as e:
-            print(f"Error importing tag export presets: {e}")
+            print_redacted(f"Error importing tag export presets: {e}")
             return None
 
         if not isinstance(import_data, dict):

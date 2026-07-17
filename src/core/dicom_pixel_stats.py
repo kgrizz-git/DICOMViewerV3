@@ -16,13 +16,12 @@ Requirements:
     - core.dicom_pixel_array (get_pixel_array)
     - core.dicom_rescale (get_rescale_parameters)
 """
-
-
 import numpy as np
 from pydicom.dataset import Dataset
 
 from core.dicom_pixel_array import get_pixel_array
 from core.dicom_rescale import get_rescale_parameters
+from utils.privacy.console import print_redacted
 
 
 def get_pixel_value_range(dataset: Dataset, apply_rescale: bool = False) -> tuple[float | None, float | None]:
@@ -38,7 +37,7 @@ def get_pixel_value_range(dataset: Dataset, apply_rescale: bool = False) -> tupl
         return float(np.min(pixel_array)), float(np.max(pixel_array))
     except (MemoryError, ValueError, AttributeError, RuntimeError, Exception) as e:
         if not isinstance(e, MemoryError):
-            print(f"Error calculating pixel value range: {e}")
+            print_redacted(f"Error calculating pixel value range: {e}")
         return None, None
 
 
@@ -88,7 +87,7 @@ def get_series_pixel_value_range(
                 continue
         return (series_min, series_max) if (series_min is not None and series_max is not None) else (None, None)
     except Exception as e:
-        print(f"Error calculating series pixel value range: {e}")
+        print_redacted(f"Error calculating series pixel value range: {e}")
         return None, None
 
 
@@ -119,5 +118,5 @@ def get_series_pixel_median(datasets: list[Dataset], apply_rescale: bool = False
         return None
     except (MemoryError, Exception) as e:
         if not isinstance(e, MemoryError):
-            print(f"Error calculating series pixel median: {e}")
+            print_redacted(f"Error calculating series pixel median: {e}")
         return None

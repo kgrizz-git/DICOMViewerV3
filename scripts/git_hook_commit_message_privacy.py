@@ -17,6 +17,11 @@ import socket
 import sys
 from pathlib import Path
 
+try:
+    from scripts.privacy_console import print_redacted
+except ModuleNotFoundError:
+    from privacy_console import print_redacted
+
 LOCAL_PATH_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"[A-Za-z]:\\(?:Users|Documents and Settings)\\", re.I),
     re.compile(r"/(?:Users|home)/[^/\s]+/"),
@@ -109,7 +114,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         message = args.message_file.read_text(encoding="utf-8")
     except OSError as exc:
-        print(
+        print_redacted(
             f"[commit-msg privacy] could not read message file ({type(exc).__name__})",
             file=sys.stderr,
         )

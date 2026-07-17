@@ -16,6 +16,7 @@ from PySide6.QtCore import QTimer
 from core.navigation_slider_state import navigation_slider_mode_label_for_dataset
 from utils.dicom_utils import get_composite_series_key
 from utils.log_sanitizer import sanitized_format_exc
+from utils.privacy.console import print_redacted
 
 _logger = logging.getLogger(__name__)
 
@@ -69,7 +70,7 @@ def display_slice(app: Any, dataset: Any, preserve_view_override: bool | None = 
         if error_type not in error_msg:
             error_msg = f"{error_type}: {error_msg}"
         app.main_window.update_status(error_msg)
-        print(f"Error displaying slice: {error_msg}")
+        print_redacted(f"Error displaying slice: {error_msg}")
         _logger.debug("%s", sanitized_format_exc())
 
 

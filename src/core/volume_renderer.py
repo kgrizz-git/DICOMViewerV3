@@ -835,7 +835,7 @@ class VolumeRenderer:
                 self._ssao_pass = ssao
                 self._renderer.SetPass(ssao)
             except Exception:
-                _log.warning("SSAO pass setup failed; disabling.", exc_info=True)
+                _log.warning("SSAO pass setup failed; details withheld; disabling")
                 self._ssao_enabled = False
                 self._ssao_pass = None
                 self._renderer.SetPass(None)

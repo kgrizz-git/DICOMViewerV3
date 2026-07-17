@@ -27,6 +27,7 @@ from typing import Any
 
 from utils.debug_flags import DEBUG_PROJECTION
 from utils.log_sanitizer import sanitized_format_exc
+from utils.privacy.console import print_redacted
 
 _log = logging.getLogger(__name__)
 
@@ -157,7 +158,7 @@ class ProjectionAppFacade:
                                     break
                     except Exception as e:
                         if DEBUG_PROJECTION:
-                            print(
+                            print_redacted(
                                 f"[DEBUG-PROJECTION] _on_projection_enabled_changed: Error checking ROI coordinator callback: {e}"
                             )
                             _log.debug("%s", sanitized_format_exc())

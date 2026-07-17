@@ -24,7 +24,7 @@ pip-licenses>=5.0.0
 # Type checker CLI (matches common IDE Pyright/Based Pyright settings); run from repo root:
 #   basedpyright [files...]
 basedpyright>=1.39.9
-# Coverage for local + CI (pytest plugin); CI uploads to Codecov via codecov-action.
+# Coverage for local + CI summaries; reports are not uploaded to third parties.
 pytest-cov>=5.0.0
 # Linter (fast, drop-in replacement for flake8 + isort + pyupgrade)
 ruff>=0.12.0

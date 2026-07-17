@@ -24,6 +24,7 @@ Requirements:
 """
 
 import json
+import logging
 import os
 from os import PathLike
 from pathlib import Path
@@ -39,11 +40,25 @@ from utils.config.measurement_config import MeasurementConfigMixin
 from utils.config.metadata_ui_config import MetadataUIConfigMixin
 from utils.config.overlay_config import OverlayConfigMixin
 from utils.config.paths_config import PathsConfigMixin
+from utils.config.privacy_storage_config import PrivacyStorageConfigMixin
 from utils.config.qa_pylinac_config import QaPylinacConfigMixin
 from utils.config.roi_config import ROIConfigMixin
 from utils.config.slice_sync_config import SliceSyncConfigMixin
 from utils.config.study_index_config import StudyIndexConfigMixin
 from utils.config.tag_export_config import TagExportConfigMixin
+from utils.privacy.safe_storage import (
+    assert_safe_internal_path,
+    atomic_write_private_text,
+    ensure_private_directory,
+    get_private_app_dir,
+)
+
+_logger = logging.getLogger(__name__)
+_SOURCE_ROOT = Path(__file__).resolve().parent.parent.parent
+
+
+def _is_windows() -> bool:
+    return os.name == "nt"
 
 
 class ConfigManager(
@@ -62,6 +77,7 @@ class ConfigManager(
     SliceSyncConfigMixin,
     QaPylinacConfigMixin,
     StudyIndexConfigMixin,
+    PrivacyStorageConfigMixin,
 ):
     """
     Manages application configuration and user preferences.
@@ -99,6 +115,7 @@ class ConfigManager(
         self,
         config_filename: str = "dicom_viewer_config.json",
         config_dir: str | PathLike[str] | None = None,
+        private_storage_dir: str | PathLike[str] | None = None,
     ):
         """
         Initialise the configuration manager.
@@ -106,19 +123,45 @@ class ConfigManager(
         Args:
             config_filename: Name of the configuration file to use
             config_dir: Optional directory override for the config file location
+            private_storage_dir: Optional protected internal-storage override
         """
         if config_dir is not None:
             self.config_dir = Path(config_dir)
         else:
             # Platform-specific config directory
-            if os.name == "nt":  # Windows
+            if _is_windows():  # Windows
                 app_data = os.getenv("APPDATA", os.path.expanduser("~"))
                 self.config_dir = Path(app_data) / "DICOMViewerV3"
             else:  # macOS / Linux
                 self.config_dir = Path.home() / ".config" / "DICOMViewerV3"
 
-        self.config_dir.mkdir(parents=True, exist_ok=True)
+        assert_safe_internal_path(self.config_dir, source_root=_SOURCE_ROOT)
+        try:
+            ensure_private_directory(self.config_dir)
+        except OSError as exc:
+            # Sandboxed/managed installations may deny chmod on an existing
+            # platform-owned directory. Keep the app usable, but report only
+            # the failure class and retry on every launch/save.
+            self.config_dir.mkdir(parents=True, exist_ok=True)
+            _logger.warning(
+                "Application configuration permissions could not be tightened",
+                extra={
+                    "operation": "config.permissions",
+                    "error_class": type(exc).__name__,
+                },
+            )
         self.config_path = self.config_dir / config_filename
+        if private_storage_dir is not None:
+            self.private_storage_dir = Path(private_storage_dir)
+        elif config_dir is not None:
+            # Explicit config roots are used by tests and portable/managed setups;
+            # keep all internal state under that caller-owned root.
+            self.private_storage_dir = self.config_dir / "private-storage"
+        else:
+            self.private_storage_dir = get_private_app_dir(
+                "private-storage", create=False
+            )
+        self._loaded_config_keys: set[str] = set()
 
         # Default configuration values (all feature domains)
         self.default_config: dict[str, Any] = {
@@ -201,10 +244,14 @@ class ConfigManager(
             "slice_location_line_width_px": 1,
             "slice_sync_group_strip_height_px": 5,
             # MPR cache
+            "mpr_cache_enabled": False,
             "mpr_cache_max_mb": 500,
+            # Optional redacted diagnostics
+            "diagnostics_enabled": False,
             # Local study index (SQLCipher; see core/study_index)
             "study_index_db_path": "",
-            "study_index_auto_add_on_open": True,
+            "study_index_auto_add_on_open": False,
+            "study_index_auto_add_consent": None,
             "study_index_browser_column_order": [],
             "study_index_passphrase_warning_dismissed": False,
         }
@@ -222,11 +269,17 @@ class ConfigManager(
             try:
                 with open(self.config_path, encoding="utf-8") as f:
                     loaded_config = json.load(f)
+                    if not isinstance(loaded_config, dict):
+                        raise ValueError("configuration root must be an object")
+                    self._loaded_config_keys = set(loaded_config)
                     config = self.default_config.copy()
                     config.update(loaded_config)
                     return config
-            except (OSError, json.JSONDecodeError) as e:
-                print(f"Warning: Could not load config file: {e}")
+            except (OSError, ValueError) as e:
+                _logger.warning(
+                    "Application configuration could not be loaded",
+                    extra={"operation": "config.load", "error_class": type(e).__name__},
+                )
                 return self.default_config.copy()
         return self.default_config.copy()
 
@@ -241,18 +294,19 @@ class ConfigManager(
         Returns:
             True if save was successful, False otherwise
         """
-        tmp_path = self.config_path.with_suffix(".tmp")
         try:
-            with open(tmp_path, "w", encoding="utf-8") as f:
-                json.dump(self.config, f, indent=4, ensure_ascii=False)
-            os.replace(tmp_path, self.config_path)
+            payload = json.dumps(self.config, indent=4, ensure_ascii=False)
+            atomic_write_private_text(
+                self.config_path,
+                payload,
+                source_root=_SOURCE_ROOT,
+            )
             return True
-        except OSError as e:
-            print(f"Error saving config file: {e}")
-            try:
-                tmp_path.unlink(missing_ok=True)
-            except Exception:
-                pass
+        except (OSError, ValueError) as e:
+            _logger.error(
+                "Application configuration could not be saved",
+                extra={"operation": "config.save", "error_class": type(e).__name__},
+            )
             return False
 
     def get(self, key: str, default: Any = None) -> Any:

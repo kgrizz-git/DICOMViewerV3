@@ -84,7 +84,7 @@ def main() -> int:
     repo_root: Path = args.root.resolve()
 
     if not (repo_root / "user-docs").is_dir():
-        print(f"error: user-docs/ not found under {repo_root}", file=sys.stderr)
+        print("error: user-docs/ was not found under the repository root", file=sys.stderr)
         return 1
 
     all_errors: list[str] = []

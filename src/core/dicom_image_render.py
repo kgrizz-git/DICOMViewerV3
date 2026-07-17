@@ -17,7 +17,6 @@ Requirements:
     - core.dicom_color (YBR/RGB conversion)
     - core.dicom_window_level (window/level application)
 """
-
 import logging
 
 import numpy as np
@@ -30,6 +29,7 @@ from core.dicom_window_level import (
     apply_window_level,
 )
 from utils.log_sanitizer import sanitized_format_exc
+from utils.privacy.console import print_redacted
 
 _logger = logging.getLogger(__name__)
 
@@ -178,7 +178,7 @@ def render_color_image(
         # Fallback to grayscale
         return Image.fromarray(processed_array, mode='L')
     except Exception as e:
-        print(f"[PROCESSOR] Error converting color image to PIL Image: {e}")
+        print_redacted(f"[PROCESSOR] Error converting color image to PIL Image: {e}")
         _logger.debug("%s", sanitized_format_exc())
         return None
 

@@ -34,7 +34,6 @@ Callback interface (what the app must provide):
     current_dataset, current_studies, current_study_uid, current_series_uid,
     current_slice_index, current_datasets, focused_subwindow_index.
 """
-
 from typing import Any
 
 from pydicom.dataset import Dataset
@@ -88,6 +87,7 @@ from core.series_navigation_controller import (
 from utils.debug_flags import DEBUG_LOADING, DEBUG_SERIES
 from utils.dicom_utils import get_composite_series_key
 from utils.perf_timer import perf_mark, perf_timer
+from utils.privacy.console import print_redacted
 
 # Human-readable window labels for error messages (1-based).
 _WINDOW_LABELS = ["Window 1", "Window 2", "Window 3", "Window 4"]
@@ -350,7 +350,7 @@ class FileSeriesLoadingCoordinator:
             if extracted_study_uid != app.current_study_uid:
                 if DEBUG_SERIES:
 
-                    print(f"[DEBUG]   Extracted study_uid from dataset: {extracted_study_uid}")
+                    print_redacted(f"[DEBUG]   Extracted study_uid from dataset: {extracted_study_uid}")
 
             app.subwindow_data[focused_idx]['current_dataset'] = displayed_dataset
             app.subwindow_data[focused_idx]['current_slice_index'] = app.current_slice_index

@@ -160,7 +160,7 @@ def main() -> int:
         log_dir.mkdir(parents=True, exist_ok=True)
         out = log_dir / "agent-smoke-report.json"
         out.write_text(json.dumps(report, indent=2), encoding="utf-8")
-        print(f"Wrote {out.relative_to(repo_root)}")
+        print("Wrote the agent smoke report under the repository logs directory")
 
     if all_errors:
         print("Agent smoke harness failed:", file=sys.stderr)

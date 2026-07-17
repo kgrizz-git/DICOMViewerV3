@@ -13,7 +13,6 @@ Outputs: (window_center, window_width, use_rescaled_values) or transition
 Requirements: core.dicom_processor, core.wl_preset_catalog,
               core.slice_display_lut, utils.dicom_utils, utils.debug_flags.
 """
-
 from typing import Any
 
 import numpy as np
@@ -23,6 +22,7 @@ from core.slice_display_lut import apply_window_level_rescale_conversion
 from core.wl_preset_catalog import build_preset_list, presets_to_legacy
 from utils.debug_flags import DEBUG_MEASUREMENT_SERIES, DEBUG_WL
 from utils.dicom_utils import get_composite_series_key
+from utils.privacy.console import print_redacted
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -130,7 +130,7 @@ def _compute_pixel_range_wl(
         mgr.view_state_manager.set_series_pixel_range(series_pixel_min, series_pixel_max)
     except Exception as e:
         error_type = type(e).__name__
-        print(f"Error calculating series pixel range ({error_type}): {e}")
+        print_redacted(f"Error calculating series pixel range ({error_type}): {e}")
         series_pixel_min = None
         series_pixel_max = None
         mgr.view_state_manager.clear_series_pixel_range()
@@ -209,7 +209,7 @@ def _compute_wl_from_single_slice(
                 stored_window_width = 1.0
     except Exception as e:
         error_type = type(e).__name__
-        print(f"Error calculating single slice pixel range ({error_type}): {e}")
+        print_redacted(f"Error calculating single slice pixel range ({error_type}): {e}")
     return stored_window_center, stored_window_width
 
 
@@ -313,7 +313,7 @@ def compute_series_transition_state(
     is_new_study_series = mgr.view_state_manager.is_new_study_or_series(dataset)
     series_identifier = mgr.view_state_manager.get_series_identifier(dataset)
     if DEBUG_MEASUREMENT_SERIES:
-        print(
+        print_redacted(
             "[DEBUG-MEAS-SERIES] display_slice enter: "
             f"{mgr._measurement_debug_prefix(dataset, current_slice_index)}, "
             f"arg_current_series_uid={current_series_uid}, computed_series_uid={new_series_uid}, "
@@ -355,7 +355,7 @@ def resolve_window_level_for_series_transition(
     if DEBUG_WL:
         study_uid = getattr(dataset, 'StudyInstanceUID', '')[:24] if getattr(dataset, 'StudyInstanceUID', '') else ''
         modality = getattr(dataset, 'Modality', '?')
-        print(
+        print_redacted(
             f"[DEBUG-WL] display_slice ENTER: study={study_uid}... series={new_series_uid[:24] if new_series_uid else ''}... "
             f"modality={modality} is_new={is_new_study_series} is_same={is_same_series} | "
             f"rescale_slope={rescale_slope} rescale_intercept={rescale_intercept} | "
@@ -376,7 +376,7 @@ def resolve_window_level_for_series_transition(
             and new_series_uid in current_studies[study_uid]
         )
         if DEBUG_WL:
-            print(
+            print_redacted(
                 f"[DEBUG-WL] new series: series_in_current_studies={series_in_dict} "
                 f"(study_uid in current_studies={study_uid in current_studies if current_studies else False} "
                 f"series_uid in study={new_series_uid in current_studies.get(study_uid, {}) if study_uid and current_studies else False})"
@@ -421,7 +421,7 @@ def resolve_window_level_for_series_transition(
         if stored_window_center is not None and stored_window_width is not None:
             if DEBUG_WL:
                 study_uid = getattr(dataset, 'StudyInstanceUID', '')
-                print(
+                print_redacted(
                     f"[DEBUG-WL] New series WL: study_uid={study_uid[:20] if study_uid else ''}... "
                     f"series_uid={new_series_uid[:20] if new_series_uid else ''}... "
                     f"use_rescaled={use_rescaled_values} slope={rescale_slope} intercept={rescale_intercept} "
@@ -436,7 +436,7 @@ def resolve_window_level_for_series_transition(
             # -- Fallback branch: series not in dict or no stored W/L --------
             if DEBUG_WL:
                 study_uid = getattr(dataset, 'StudyInstanceUID', '')
-                print(
+                print_redacted(
                     f"[DEBUG-WL] New series WL fallback: study_uid={study_uid[:20] if study_uid else ''}... "
                     f"series_uid={new_series_uid[:20] if new_series_uid else ''}... "
                     f"computing from dataset being loaded"

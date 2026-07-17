@@ -4,12 +4,12 @@
     "resources/icons": "bf7a76920150fa903c4b53288e8c47af55ddaa80b4d6c31527e440bca1f99884"
   },
   "files": {
-    ".coveragerc": "abe5fd38133765617cdcb5a66842622a016535479dfbb2f7c22dd55053019685",
+    ".coveragerc": "14c7aae3c792624e702df322962c1eed4fec3776b8ad11b6a5eaa4aeb52da659",
     ".agents/skills/theme-factory/theme-showcase.pdf": "3e126eca9fe99088051f7cb984c97cedb31c7d9e09ce0ba5d61bd01e70a0d253",
     ".claude/skills/theme-factory/theme-showcase.pdf": "3e126eca9fe99088051f7cb984c97cedb31c7d9e09ce0ba5d61bd01e70a0d253",
     ".githooks/commit-msg": "62239dd5f122d2ee89763a066c2764ab6f6c4158658385dde67d1d3115fa75e3",
-    ".githooks/pre-commit": "bc5b06d99fd6d83cfd317d99783825567a87aa73c52221bd49dbd36b21430327",
-    ".githooks/pre-push": "eb6978fa36481fd910c2754ee902fda544d177b682530023dd4c43c9f415e72d",
+    ".githooks/pre-commit": "7cac5790d27f96c83463832820c8d96f60c8cf29dbfdb08650dfe3cddebeab8a",
+    ".githooks/pre-push": "c9aa2435064b2245a91c0d00e2c6316eb9311d5e5d512e301e6d8b8f6818da8d",
     ".python-version": "5b703ca38d3fd391f3e889f7ba893f94b921ff9e7b7e5d8d6622d5f7daca7049",
     "AppDir/DICOMViewerV3.png": "fa8c775adafddafdcd9194a6904bd1d15cd2def16550203cdf609f0933254c27",
     "data/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",

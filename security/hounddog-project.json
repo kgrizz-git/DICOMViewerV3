@@ -1,0 +1,26 @@
+{
+  "data_elements": [
+    "full-name",
+    "ip-address",
+    "medical-appointment",
+    "medical-condition",
+    "medical-concern",
+    "medical-diagnosis",
+    "medical-history",
+    "medical-procedure",
+    "medical-record-number",
+    "medical-test",
+    "mental-health-record",
+    "physical-address",
+    "username"
+  ],
+  "data_sinks": [
+    "configs",
+    "files",
+    "http",
+    "logs",
+    "openai",
+    "stderr",
+    "stdout"
+  ]
+}

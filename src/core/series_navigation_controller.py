@@ -6,7 +6,6 @@ series navigation, series assignment to subwindows, and series navigator
 selection events.  Each function takes an ``app`` (DICOMViewerApp) instance as
 its first parameter instead of ``self``.
 """
-
 import inspect
 import time
 from typing import Any
@@ -17,6 +16,7 @@ from PySide6.QtCore import QTimer
 from core.file_path_actions import update_about_this_file_dialog
 from utils.debug_flags import DEBUG_MEASUREMENT_SERIES, DEBUG_NAV, DEBUG_SERIES
 from utils.dicom_utils import get_composite_series_key
+from utils.privacy.console import print_redacted
 
 # Human-readable window labels for error messages (1-based).
 _WINDOW_LABELS = ["Window 1", "Window 2", "Window 3", "Window 4"]
@@ -104,7 +104,7 @@ def assign_series_to_subwindow(
     if study_cache is not None and target_study_uid:
         study_cache.mark_accessed(target_study_uid)
     if DEBUG_MEASUREMENT_SERIES:
-        print(
+        print_redacted(
             "[DEBUG-MEAS-SERIES] assign_series_to_subwindow: "
             f"idx={idx}, target_key={(target_study_uid, series_uid, slice_index)}, "
             f"focused_idx={getattr(app, 'focused_subwindow_index', -1)}"
@@ -162,7 +162,7 @@ def on_series_navigator_selected(app: Any, series_uid: str) -> None:
     """Handle series selection from series navigator (assigns to focused subwindow)."""
     focused_idx = getattr(app, "focused_subwindow_index", -1)
     if DEBUG_MEASUREMENT_SERIES:
-        print(
+        print_redacted(
             "[DEBUG-MEAS-SERIES] on_series_navigator_selected: "
             f"requested_series_uid={series_uid}, focused_idx={focused_idx}, "
             f"current_series_uid={getattr(app, 'current_series_uid', '')}"
@@ -287,7 +287,7 @@ def on_series_navigation_requested(app: Any, direction: int) -> None:
     caller_name = caller_frame.f_code.co_name if caller_frame else "unknown"
     caller_file = caller_frame.f_code.co_filename.split('/')[-1] if caller_frame else "unknown"
     if DEBUG_NAV:
-        print(f"[DEBUG-NAV] [{timestamp:.6f}] _on_series_navigation_requested: direction={direction}, caller={caller_name} in {caller_file}, lock={app._series_navigation_in_progress}")
+        print_redacted(f"[DEBUG-NAV] [{timestamp:.6f}] _on_series_navigation_requested: direction={direction}, caller={caller_name} in {caller_file}, lock={app._series_navigation_in_progress}")
 
     if app._series_navigation_in_progress:
         if DEBUG_NAV:
@@ -324,7 +324,7 @@ def on_series_navigation_requested(app: Any, direction: int) -> None:
                 if DEBUG_NAV:
                     if DEBUG_SERIES:
 
-                        print(f"[DEBUG] Series navigation: MISMATCH at start! Stored={focused_series_uid}, Extracted={extracted_series_uid}")
+                        print_redacted(f"[DEBUG] Series navigation: MISMATCH at start! Stored={focused_series_uid}, Extracted={extracted_series_uid}")
                 focused_series_uid = extracted_series_uid
                 focused_study_uid = extracted_study_uid
                 data['current_series_uid'] = extracted_series_uid
@@ -422,7 +422,7 @@ def on_series_navigation_requested(app: Any, direction: int) -> None:
         if DEBUG_NAV:
             if DEBUG_SERIES:
 
-                print(f"[DEBUG] Series navigation: subwindow {focused_idx}, study={focused_study_uid[:20] if focused_study_uid else 'None'}..., series={focused_series_uid[:20] if focused_series_uid else 'None'}..., direction={direction}")
+                print_redacted(f"[DEBUG] Series navigation: subwindow {focused_idx}, study={focused_study_uid[:20] if focused_study_uid else 'None'}..., series={focused_series_uid[:20] if focused_series_uid else 'None'}..., direction={direction}")
         if not focused_study_uid or focused_study_uid not in app.current_studies:
             if DEBUG_NAV:
                 if DEBUG_SERIES:

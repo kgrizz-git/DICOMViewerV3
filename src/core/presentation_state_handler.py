@@ -16,10 +16,11 @@ Requirements:
     - pydicom library
     - typing for type hints
 """
-
 from typing import Any
 
 from pydicom.dataset import Dataset
+
+from utils.privacy.console import print_redacted
 
 
 class PresentationStateHandler:
@@ -203,7 +204,7 @@ class PresentationStateHandler:
                         if annotation['type']:  # Only add if we have a type
                             annotations.append(annotation)
         except Exception as e:
-            print(f"Error parsing graphic annotations: {e}")
+            print_redacted(f"Error parsing graphic annotations: {e}")
 
         return annotations
 
@@ -245,7 +246,7 @@ class PresentationStateHandler:
                     if i + 1 < len(graphic_data):
                         coords.append((self._coerce_float(graphic_data[i]), self._coerce_float(graphic_data[i + 1])))
         except Exception as e:
-            print(f"Error parsing graphic data: {e}")
+            print_redacted(f"Error parsing graphic data: {e}")
 
         return coords
 
@@ -268,7 +269,7 @@ class PresentationStateHandler:
             if bottom_right and len(bottom_right) >= 2:
                 coords.append((self._coerce_float(bottom_right[0]), self._coerce_float(bottom_right[1])))
         except Exception as e:
-            print(f"Error parsing bounding box: {e}")
+            print_redacted(f"Error parsing bounding box: {e}")
 
         return coords
 
@@ -321,7 +322,7 @@ class PresentationStateHandler:
             if hasattr(dataset, 'ImageRotation'):
                 settings['rotation'] = self._coerce_float(dataset.ImageRotation)
         except Exception as e:
-            print(f"Error parsing display settings: {e}")
+            print_redacted(f"Error parsing display settings: {e}")
 
         return settings
 

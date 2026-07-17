@@ -28,6 +28,7 @@ Requirements:
 """
 
 import gc
+import logging
 import os
 import threading
 import time
@@ -44,8 +45,10 @@ from core.sr_sop_classes import (
     is_structured_report_dataset,
     structured_report_storage_label,
 )
+from utils.privacy import safe_event_fields
 
 _MAIN_THREAD_ID = threading.main_thread().ident
+_logger = logging.getLogger(__name__)
 
 
 def _is_main_thread() -> bool:
@@ -295,7 +298,10 @@ class DICOMLoader:
                 # `validate_dicom_file()` returns `Optional[str]`, but `failed_files` is
                 # typed as `List[Tuple[str, str]]`, so normalize `None` to a string.
                 error_msg_str = error_msg if error_msg is not None else "Unknown validation error"
-                print(f"Validation failed for {os.path.basename(file_path)}: {error_msg_str}")
+                _logger.warning(
+                    "DICOM validation failed",
+                    extra=safe_event_fields("dicom.validate"),
+                )
                 self.failed_files.append((file_path, error_msg_str))
                 return None
 
@@ -432,16 +438,17 @@ class DICOMLoader:
                                 # Only show error message once per file
                                 if file_path not in self._compression_error_files:
                                     self._compression_error_files.add(file_path)
-                                    print(f"[LOADER] Compression Error: {file_path}")
-                                    print(f"  {error_detail}")
-                                    print(f"  Error: {error_msg[:200]}")
+                                    _logger.warning(
+                                        "DICOM compression decode failed",
+                                        extra=safe_event_fields("dicom.decode", error=e),
+                                    )
                                 # Add to failed files with descriptive message
                                 self.failed_files.append((file_path, error_detail))
                                 return None
                             else:
-                                print(
-                                    f"[LOADER] Warning: Failed to pre-load pixel array: "
-                                    f"{classified_message}"
+                                _logger.warning(
+                                    "DICOM pixel pre-load failed",
+                                    extra=safe_event_fields("dicom.pixel_preload", error=e),
                                 )
 
             else:
@@ -497,9 +504,10 @@ class DICOMLoader:
                 # Only show error message once per file
                 if file_path not in self._compression_error_files:
                     self._compression_error_files.add(file_path)
-                    print(f"[LOADER] Compression Error: {file_path}")
-                    print(f"  {error_msg}")
-                    print(f"  Error: {error_msg_str[:200]}")
+                    _logger.warning(
+                        "DICOM compression decode failed",
+                        extra=safe_event_fields("dicom.decode", error=e),
+                    )
             else:
                 error_msg = f"Error reading file: {classified_message}"
             # Include error type for debugging
@@ -756,4 +764,3 @@ class DICOMLoader:
         """Clear loaded files and failed files lists."""
         self.loaded_files = []
         self.failed_files = []
-

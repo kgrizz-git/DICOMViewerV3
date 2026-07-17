@@ -17,7 +17,6 @@ Requirements:
     - numpy for array operations
     - pydicom for DICOM tag access
 """
-
 import logging
 import threading
 from collections import OrderedDict
@@ -25,6 +24,8 @@ from typing import Any, ClassVar
 
 import numpy as np
 from pydicom.dataset import Dataset
+
+from utils.privacy.console import print_redacted
 
 sitk: Any = None
 sitk_available: bool = False
@@ -136,14 +137,14 @@ class ImageResampler:
             # Sort datasets by slice location
             sorted_datasets = self._sort_datasets_by_location(datasets)
             if not sorted_datasets:
-                print(f"Warning: Could not sort datasets for series {series_uid}")
+                print_redacted(f"Warning: Could not sort datasets for series {series_uid}")
                 return None
 
             # Filter duplicate locations (keep first occurrence of each unique location)
             # This prevents zero-valued spacing errors when multiple slices share the same location
             filtered_datasets = self._filter_duplicate_locations(sorted_datasets)
             if not filtered_datasets:
-                print(f"Warning: No valid slices after filtering duplicates for series {series_uid}")
+                print_redacted(f"Warning: No valid slices after filtering duplicates for series {series_uid}")
                 return None
 
             # Use filtered datasets for all subsequent processing
@@ -184,7 +185,7 @@ class ImageResampler:
                         array = array * float(rescale_slope) + float(rescale_intercept)
                     pixel_arrays.append(array)
                 except Exception as e:
-                    print(f"Error extracting pixel array: {e}")
+                    print_redacted(f"Error extracting pixel array: {e}")
                     return None
 
             if not pixel_arrays:
@@ -269,7 +270,7 @@ class ImageResampler:
             return sitk_image
 
         except Exception as e:
-            print(f"Error converting DICOM series to SimpleITK: {e}")
+            print_redacted(f"Error converting DICOM series to SimpleITK: {e}")
             _logger.debug("%s", sanitized_format_exc())
             return None
 
@@ -375,7 +376,7 @@ class ImageResampler:
         try:
             return sitk.GetArrayFromImage(sitk_image)
         except Exception as e:
-            print(f"Error converting SimpleITK to numpy: {e}")
+            print_redacted(f"Error converting SimpleITK to numpy: {e}")
             return None
 
     def resample_to_reference(
@@ -425,7 +426,7 @@ class ImageResampler:
             return resampled
 
         except Exception as e:
-            print(f"Error resampling image: {e}")
+            print_redacted(f"Error resampling image: {e}")
             _logger.debug("%s", sanitized_format_exc())
             return None
 

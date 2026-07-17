@@ -28,7 +28,6 @@ Requirements:
 from __future__ import annotations
 
 import logging
-import traceback
 from typing import Any
 
 from pydicom.dataset import Dataset
@@ -99,10 +98,9 @@ class _VolumeBuilderWorker(QThread):
             if self._cancelled:
                 return
             self.build_finished.emit(volume, volume_data)
-        except Exception as exc:
-            msg = f"Failed to build 3D volume: {exc}"
+        except Exception:
+            msg = "Failed to build 3D volume; details withheld"
             _log.error(msg)
-            _log.debug(traceback.format_exc())
             self.error.emit(msg)
 
 
@@ -283,13 +281,12 @@ class VolumeRenderDialog(QDialog):
             )
             if DEBUG_VOLUME_3D:
                 print("[DEBUG-VOLUME-3D] VolumeViewerWidget.initialize() complete.")
-        except Exception as exc:
-            _log.error("Failed to set up 3D renderer: %s", exc)
-            _log.debug(traceback.format_exc())
+        except Exception:
+            _log.error("Failed to set up 3D renderer; details withheld")
             QMessageBox.critical(
                 self,
                 "3D Volume Render Error",
-                f"Failed to initialize 3D rendering:\n\n{exc}",
+                "Failed to initialize 3D rendering. Details were withheld to protect private data.",
             )
             self.close()
 

@@ -8,8 +8,12 @@ This script does NOT modify any production code. It only prints diagnostic outpu
 
 Usage: python tests/fusion_audit_direction_matrix_test.py
 """
-
 import numpy as np
+
+try:
+    from scripts.privacy_console import print_redacted
+except ModuleNotFoundError:
+    from privacy_console import print_redacted
 
 try:
     import SimpleITK as sitk
@@ -249,14 +253,14 @@ def test_sagittal_coronal():
         orient_current = sitk.DICOMOrientImageFilter.GetOrientationFromDirectionCosines(current)
         orient_correct = sitk.DICOMOrientImageFilter.GetOrientationFromDirectionCosines(correct)
 
-        print(f"\n  {name}:")
+        print_redacted(f"\n  {name}:")
         print(f"    Row cosines: {row_cos}")
         print(f"    Col cosines: {col_cos}")
         print(f"    Current code label: {orient_current}")
         print(f"    Correct label:      {orient_correct}")
         print(f"    Equal: {are_equal}")
         if not are_equal:
-            print(f"    BUG: Direction matrices differ for {name}!")
+            print_redacted(f"    BUG: Direction matrices differ for {name}!")
 
 
 if __name__ == "__main__":

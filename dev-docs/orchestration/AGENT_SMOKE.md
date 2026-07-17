@@ -1,6 +1,6 @@
 # Agent manual smoke checklist
 
-**Last updated:** 2026-05-22  
+**Last updated:** 2026-07-16
 **Automated prelude:** `python scripts/agent_smoke_harness.py --write-report` (see [`../HARNESS.md`](../HARNESS.md)).
 
 Use this after UX, loading, MPR, 3D volume render, SR, study index, or navigator changes when automated tests pass but behavior needs human or browser-agent eyes.
@@ -50,4 +50,5 @@ Use this after UX, loading, MPR, 3D volume render, SR, study index, or navigator
 
 ## Record results
 
-Note app version (`src/version.py`), branch, and pass/fail in PR text or `logs/test-ledger.md` when orchestrator **tester** requests manual smoke.
+Report the app version (`src/version.py`), branch, and pass/fail directly in the
+task or PR summary. Do not create a separate test ledger.

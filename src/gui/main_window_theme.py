@@ -78,10 +78,7 @@ def get_theme_stylesheet(
         qss_file = themes_dir / "light.qss"
     if not qss_file.exists():
         # Keep startup resilient in mis-packaged bundles: log and continue unstyled.
-        print(
-            "Warning: Theme stylesheet not found. "
-            f"Searched in '{themes_dir}' for '{theme}.qss' and 'light.qss'."
-        )
+        print("Warning: Theme stylesheet resources were not found.")
         return ""
     preset = get_preset(accent_id)
     stylesheet = qss_file.read_text(encoding="utf-8")

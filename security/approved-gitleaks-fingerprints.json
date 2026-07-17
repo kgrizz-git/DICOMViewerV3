@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "reviewed": [
+    {
+      "fingerprint": "bce40e87f8db2e85d973123cf8519baacb8f7ee4:security/approved-media-sha256.json:jfrog-identity-token:25",
+      "path": "security/approved-media-sha256.json",
+      "rule_id": "jfrog-identity-token",
+      "reason": "Reviewed SHA-256 media digest; not a credential"
+    },
+    {
+      "fingerprint": "bce40e87f8db2e85d973123cf8519baacb8f7ee4:security/approved-media-sha256.json:jfrog-identity-token:26",
+      "path": "security/approved-media-sha256.json",
+      "rule_id": "jfrog-identity-token",
+      "reason": "Reviewed SHA-256 media digest; not a credential"
+    },
+    {
+      "fingerprint": "28234b88d273737e11748078321ad1a9ca98b696:info/private_fork.md:curl-auth-header:152",
+      "path": "info/private_fork.md",
+      "rule_id": "curl-auth-header",
+      "reason": "Reviewed historical documentation marker; not a credential"
+    },
+    {
+      "fingerprint": "d5fb9fba8695f0935cad6823fc4f8749dd479bfd:info/private_fork.md:curl-auth-header:152",
+      "path": "info/private_fork.md",
+      "rule_id": "curl-auth-header",
+      "reason": "Reviewed historical documentation marker; not a credential"
+    }
+  ]
+}

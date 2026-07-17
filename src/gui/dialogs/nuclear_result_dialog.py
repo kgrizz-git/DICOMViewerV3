@@ -358,8 +358,12 @@ class NuclearResultDialog(QDialog):
                 analyze_kwargs=self._analyze_kwargs,
                 out_path=path,
             )
-        except Exception as exc:  # show readable error, do not crash the dialog
-            QMessageBox.warning(self, "Figure export failed", str(exc))
+        except Exception:  # show a safe error, do not crash the dialog
+            QMessageBox.warning(
+                self,
+                "Figure export failed",
+                "The figure could not be exported. Details were withheld to protect private data.",
+            )
             return
         if not saved:
             return

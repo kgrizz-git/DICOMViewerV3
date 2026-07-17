@@ -22,6 +22,10 @@ import os
 import sys
 from typing import cast
 
+try:
+    from scripts.privacy_console import print_redacted
+except ModuleNotFoundError:
+    from privacy_console import print_redacted
 from pydicom import Dataset
 from pydicom.dataset import FileMetaDataset
 from pydicom.filewriter import dcmwrite
@@ -185,7 +189,7 @@ def main() -> int:
         path = os.path.join(out_dir, name)
         dcmwrite(path, ds, write_like_original=False)
         size = os.path.getsize(path)
-        print(f"Wrote {path} ({size} bytes) SOPClassUID={sop}")
+        print_redacted(f"Wrote {path} ({size} bytes) SOPClassUID={sop}")
         if size > 512 * 1024:
             print("WARNING: file exceeds 512 KiB fixture policy", file=sys.stderr)
     return 0

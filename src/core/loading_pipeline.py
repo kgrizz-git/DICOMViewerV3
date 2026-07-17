@@ -480,7 +480,7 @@ def run_load_pipeline_async(
     perf_mark(
         "first_paint.prehandoff.pipeline_async.start",
         source_len=len(source_name),
-        folder_mode=_is_folder_mode,
+        folder_mode=file_paths_for_merge is None,
         progress_max=progress_max,
     )
 
@@ -753,12 +753,12 @@ def run_load_pipeline_async(
         loading_manager.stop_animated_loading()
         loading_manager.close_progress_dialog()
         loader.reset_cancellation()
-        _logger.debug("LoaderWorker error: %s", error_msg)
+        _logger.debug("Loader worker reported a redacted error")
         file_dialog.show_error(
             main_window,
             "Critical Error",
-            f"A critical error occurred during loading.\n\n"
-            f"Error: {error_msg}\n\n"
+            "A critical error occurred during loading. Details were withheld "
+            "to protect private data.\n\n"
             "This may be due to corrupted or unsupported DICOM files.",
         )
         if on_pipeline_complete:

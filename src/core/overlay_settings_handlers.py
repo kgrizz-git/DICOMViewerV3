@@ -151,6 +151,14 @@ def on_annotation_options_applied(app: Any) -> None:
 
 def on_settings_applied(app: Any) -> None:
     """Handle settings being applied."""
+    from utils.debug_log import configure_debug_logging
+
+    configure_debug_logging(
+        app.config_manager.get_diagnostics_enabled(),
+        path=app.config_manager.get_diagnostics_log_path(),
+    )
+    if hasattr(app, "_mpr_controller"):
+        app._mpr_controller.apply_cache_settings()
     app.main_window._apply_theme()
     if app.main_window.apply_toolbar_label_style is not None:
         app.main_window.apply_toolbar_label_style(

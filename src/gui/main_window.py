@@ -71,9 +71,6 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-# Add parent directory to path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from gui.dialogs.edit_recent_list_dialog import EditRecentListDialog
 from gui.main_window_menu_builder import build_menu_bar
 from gui.main_window_status_controller import MainWindowStatusController
@@ -1777,4 +1774,3 @@ class MainWindow(QMainWindow):
         self.config_manager.save_config()
 
         event.accept()
-

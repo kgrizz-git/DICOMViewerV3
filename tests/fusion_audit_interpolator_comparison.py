@@ -25,6 +25,11 @@ from pathlib import Path
 import numpy as np
 
 try:
+    from scripts.privacy_console import print_redacted
+except ModuleNotFoundError:
+    from privacy_console import print_redacted
+
+try:
     import pydicom
 except ImportError:
     sys.exit("ERROR: pydicom not available.")
@@ -195,7 +200,7 @@ def compare_arrays(a, b, label_a, label_b):
 def main():
     folder = "test-DICOM-data/SomeFusion"
     print("Fusion 3D Interpolator Comparison")
-    print(f"Data: {folder}\n")
+    print_redacted(f"Data: {folder}\n")
 
     t0 = time.time()
     for_groups = scan_folder(folder)

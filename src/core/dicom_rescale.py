@@ -14,9 +14,9 @@ Outputs:
 Requirements:
     - pydicom
 """
-
-
 from pydicom.dataset import Dataset
+
+from utils.privacy.console import print_redacted
 
 _DISPLAY_NONE_RESCALE_TYPES = {"UNSPECIFIED", "US"}
 
@@ -111,7 +111,7 @@ def get_rescale_parameters(dataset: Dataset) -> tuple[float | None, float | None
 
         return rescale_slope, rescale_intercept, rescale_type
     except Exception as e:
-        print(f"Error extracting rescale parameters: {e}")
+        print_redacted(f"Error extracting rescale parameters: {e}")
         return None, None, None
 
 

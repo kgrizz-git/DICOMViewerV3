@@ -29,9 +29,11 @@ def test_sanitize_message_redacts_paths_only_when_requested() -> None:
     message = 'Failed to open /Users/john/Desktop/study.dcm'
     partially_redacted = sanitize_message(message, redact_paths=False)
     assert "/Users/john/Desktop/study.dcm" not in partially_redacted
-    assert "/[REDACTED]/Desktop/study.dcm" in partially_redacted
+    assert "study.dcm" not in partially_redacted
+    assert "[REDACTED]" in partially_redacted
     redacted = sanitize_message(message, redact_paths=True)
     assert "/Users/john/Desktop/study.dcm" not in redacted
+    assert "study.dcm" not in redacted
     assert "[REDACTED]" in redacted
 
 
@@ -41,7 +43,7 @@ def test_sanitize_exception_redacts_file_lines_and_preserves_traceback_structure
     assert "Traceback" in sanitized
     assert "/Users/john/Documents/case.py" not in sanitized
     assert "PatientName=John" not in sanitized
-    assert "[REDACTED]" in sanitized
+    assert "[REDACTED" in sanitized
 
 
 def test_validate_no_pii_in_output_detects_problem_patterns() -> None:

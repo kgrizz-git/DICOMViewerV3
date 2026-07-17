@@ -208,7 +208,8 @@ class TestModalitySwitching:
             dialog._on_modality_changed("CT")
 
         assert "Overlay config modality change failed" in caplog.text
-        assert "commit failed" in caplog.text
+        assert "details withheld" in caplog.text
+        assert "commit failed" not in caplog.text
 
 
 # ---------------------------------------------------------------------------

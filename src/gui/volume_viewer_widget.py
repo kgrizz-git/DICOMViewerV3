@@ -1195,8 +1195,12 @@ class VolumeViewerWidget(QWidget):
                 background=bg_name,
                 quality=q_name,
             )
-        except ValueError as exc:
-            QMessageBox.warning(self, "Save Preset", str(exc))
+        except ValueError:
+            QMessageBox.warning(
+                self,
+                "Save Preset",
+                "The preset could not be saved. Details were withheld to protect private data.",
+            )
             return
 
         self._user_presets = upsert_user_preset(self._user_presets, record)
@@ -1450,7 +1454,7 @@ class VolumeViewerWidget(QWidget):
             self._box_widget = box_widget
             self._crop_planes = vtk_mod.vtkPlanes()
         except Exception:
-            _log.warning("Could not create crop box widget", exc_info=True)
+            _log.warning("Could not create crop box widget; details withheld")
 
     def _disable_crop_box(self) -> None:
         """Hide the box widget and remove clipping planes."""
@@ -1653,9 +1657,7 @@ class VolumeViewerWidget(QWidget):
     def cleanup(self) -> None:
         """Release VTK interactor and renderer resources."""
         if DEBUG_VOLUME_3D:
-            import traceback
             print("[DEBUG-VOLUME-3D] VolumeViewerWidget.cleanup() called from:")
-            traceback.print_stack()
         if hasattr(self, "_box_widget") and self._box_widget is not None:
             self._box_widget.Off()
             self._box_widget = None

@@ -17,10 +17,10 @@ Requirements:
     - PIL/Pillow for image handling
     - numpy for array operations
 """
-
-
 import numpy as np
 from PIL import Image
+
+from utils.privacy.console import print_redacted
 
 
 def array_to_image(array: np.ndarray) -> Image.Image | None:
@@ -51,7 +51,7 @@ def array_to_image(array: np.ndarray) -> Image.Image | None:
         else:
             return None
     except Exception as e:
-        print(f"Error converting array to image: {e}")
+        print_redacted(f"Error converting array to image: {e}")
         return None
 
 

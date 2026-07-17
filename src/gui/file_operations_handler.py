@@ -168,7 +168,7 @@ class FileOperationsHandler:
         perf_mark(
             "first_paint.prehandoff.large_file_confirm.shown",
             large_files=len(large_files),
-            largest_mb=f"{large_files[0][1]:.1f}",
+            largest_mb=large_files[0][1],
         )
         with perf_timer("first_paint.prehandoff.large_file_confirm.wait"):
             proceed = self.file_dialog.confirm_large_files(

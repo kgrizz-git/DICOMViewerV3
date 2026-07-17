@@ -7,11 +7,15 @@ why pydicom might be loading them incorrectly.
 Usage:
     python scripts/diagnose_multiframe.py <path_to_dicom_file>
 """
-
 import os
 import sys
 
 import pydicom
+
+try:
+    from scripts.privacy_console import print_redacted
+except ModuleNotFoundError:
+    from privacy_console import print_redacted
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
@@ -19,13 +23,7 @@ from utils.log_sanitizer import sanitized_format_exc
 
 
 def _print_traceback_for_debug(prefix: str = "   ") -> None:
-    if os.environ.get("DICOM_DEBUG_TRACEBACKS") == "1":
-        import traceback
-
-        traceback.print_exc()
-        return
-
-    print(f"{prefix}Sanitized traceback follows. Set DICOM_DEBUG_TRACEBACKS=1 for the raw traceback.")
+    print(f"{prefix}Sanitized traceback follows.")
     print(sanitized_format_exc())
 
 
@@ -45,10 +43,10 @@ def _print_transfer_syntax(ds) -> None:
     print("\n2. Transfer Syntax:")
     if hasattr(ds, 'file_meta') and hasattr(ds.file_meta, 'TransferSyntaxUID'):
         ts_uid = ds.file_meta.TransferSyntaxUID
-        print(f"   UID: {ts_uid}")
-        print(f"   Name: {ts_uid.name if hasattr(ts_uid, 'name') else 'Unknown'}")
-        print(f"   Is Compressed: {ts_uid.is_compressed if hasattr(ts_uid, 'is_compressed') else 'Unknown'}")
-        print(f"   Is Encapsulated: {ts_uid.is_encapsulated if hasattr(ts_uid, 'is_encapsulated') else 'Unknown'}")
+        print_redacted(f"   UID: {ts_uid}")
+        print_redacted(f"   Name: {ts_uid.name if hasattr(ts_uid, 'name') else 'Unknown'}")
+        print_redacted(f"   Is Compressed: {ts_uid.is_compressed if hasattr(ts_uid, 'is_compressed') else 'Unknown'}")
+        print_redacted(f"   Is Encapsulated: {ts_uid.is_encapsulated if hasattr(ts_uid, 'is_encapsulated') else 'Unknown'}")
     else:
         print("   Transfer Syntax: NOT FOUND")
 
@@ -110,8 +108,8 @@ def _print_sop_class(ds) -> None:
     print("\n7. SOP Class:")
     if hasattr(ds, 'SOPClassUID'):
         sop_uid = ds.SOPClassUID
-        print(f"   UID: {sop_uid}")
-        print(f"   Name: {sop_uid.name if hasattr(sop_uid, 'name') else 'Unknown'}")
+        print_redacted(f"   UID: {sop_uid}")
+        print_redacted(f"   Name: {sop_uid.name if hasattr(sop_uid, 'name') else 'Unknown'}")
 
 
 def _print_pixel_array_loading_test(ds, dicom_path) -> None:
@@ -143,7 +141,7 @@ def _print_pixel_array_loading_test(ds, dicom_path) -> None:
                 print("   ✓ Correct 3D shape with all frames")
 
     except Exception as e:
-        print(f"   ❌ FAILED: {type(e).__name__}: {e}")
+        print_redacted(f"   ❌ FAILED: {type(e).__name__}: {e}")
         _print_traceback_for_debug()
 
 
@@ -158,7 +156,7 @@ def _print_alternate_loading_methods(ds) -> None:
             expected_len = get_expected_length(ds)
             print(f"      Expected pixel data length: {expected_len:,} bytes")
         except Exception as e:
-            print(f"      Could not get expected length: {e}")
+            print_redacted(f"      Could not get expected length: {e}")
 
     # Method B: Check available pixel data handlers
     print("   B. Available pixel data handlers:")
@@ -177,7 +175,7 @@ def _print_alternate_loading_methods(ds) -> None:
             handlers.append("numpy")
         print(f"      Installed: {', '.join(handlers) if handlers else 'None'}")
     except Exception as e:
-        print(f"      Could not check handlers: {e}")
+        print_redacted(f"      Could not check handlers: {e}")
 
 
 def diagnose_multiframe(dicom_path):
@@ -185,14 +183,14 @@ def diagnose_multiframe(dicom_path):
     print(f"\n{'='*60}")
     print("DICOM Multi-Frame Diagnostic")
     print(f"{'='*60}")
-    print(f"File: {os.path.basename(dicom_path)}")
-    print(f"Path: {dicom_path}\n")
+    print_redacted(f"File: {os.path.basename(dicom_path)}")
+    print_redacted(f"Path: {dicom_path}\n")
 
     # Load metadata only first
     try:
         ds = pydicom.dcmread(dicom_path, stop_before_pixels=True)
     except Exception as e:
-        print(f"❌ FAILED to load file: {type(e).__name__}: {e}")
+        print_redacted(f"❌ FAILED to load file: {type(e).__name__}: {e}")
         return
 
     _print_basic_tags(ds)
@@ -218,7 +216,7 @@ if __name__ == "__main__":
 
     input_path = sys.argv[1]
     if not os.path.exists(input_path):
-        print(f"Error: File not found: {input_path}")
+        print_redacted(f"Error: File not found: {input_path}")
         sys.exit(1)
 
     diagnose_multiframe(input_path)

@@ -19,34 +19,8 @@ Usage:
 
 import re
 
-# DICOM fields containing patient PII that should never appear in logs
-PATIENT_PII_FIELDS = {
-    "PatientName",
-    "PatientID",
-    "PatientBirthDate",
-    "PatientAge",
-    "PatientSex",
-    "PatientAddress",
-    "PatientTelephoneNumbers",
-    "PatientComments",
-    "ResponsiblePerson",
-    "ResponsiblePersonRole",
-    "EmergencyContactTelephoneNumber",
-}
-
-# Regex patterns for PII that should be redacted
-PII_PATTERNS = {
-    # Common patient name patterns (varies by DICOM source)
-    "patient_name": r"(?:patient\s*(?:name|id|mrn|identifier)[\s:=]*['\"]?(?P<value>[A-Za-z\s\-\.]+?)(?:['\"]|\s|$|,))",
-    # Patient IDs / MRN patterns
-    "patient_id": r"(?:(?:mrn|patient\s*id|pid|external\s*id)[\s:=]*['\"]?(?P<value>[A-Z0-9\-]+?)(?:['\"]|$|\s))",
-    # Dates of birth
-    "dob": r"(?:(?:dob|birth\s*date|birthdate)[\s:=]*(?P<value>\d{1,2}[/-]\d{1,2}[/-]\d{2,4}))",
-    # Absolute file paths (Windows and Unix)
-    "file_path": r"(?:[A-Z]:\\|/)(?:Users|home|root|Documents|Downloads|Desktop)(?:\\|/)[^\s\"]*",
-    # User home directories
-    "home_dir": r"(?:Users|home)[\\/][A-Za-z0-9_\-\.]+",
-}
+from utils.privacy.classification import PATIENT_PII_FIELDS
+from utils.privacy.redaction import redact_exception, redact_text
 
 
 def sanitize_message(message: str, redact_paths: bool = False) -> str:
@@ -60,33 +34,10 @@ def sanitize_message(message: str, redact_paths: bool = False) -> str:
     Returns:
         Sanitized message with PII replaced with [REDACTED]
     """
-    if not message:
-        return message
-
-    sanitized = message
-
-    # Redact known PII fields referenced in the message
-    for field in PATIENT_PII_FIELDS:
-        # Match: field = "value" or field: value or field='value'
-        pattern = rf"(?:{field}\s*[=:]?\s*['\"]?)([^'\"=:\s,;\]\}}]+)"
-        sanitized = re.sub(pattern, "[REDACTED]", sanitized, flags=re.IGNORECASE)
-
-    # Redact common PII patterns
-    for pattern_name, pattern in PII_PATTERNS.items():
-        if pattern_name == "file_path" and not redact_paths:
-            continue  # Skip path redaction by default (noisy)
-        sanitized = re.sub(pattern, "[REDACTED]", sanitized, flags=re.IGNORECASE)
-
-    # Redact anything that looks like a date (YYYY-MM-DD, MM/DD/YYYY, etc.)
-    # with conservative application to avoid over-redaction
-    # Only redact if preceded by known date field names
-    date_pattern = r"(?:(?:date|dob|birth)[\s:=]*)?(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})"
-    matches = re.finditer(date_pattern, sanitized, re.IGNORECASE)
-    for match in reversed(list(matches)):
-        if "date" in sanitized[max(0, match.start() - 20):match.start()].lower():
-            sanitized = sanitized[:match.start()] + "[REDACTED]" + sanitized[match.end():]
-
-    return sanitized
+    # ``redact_paths`` is retained for source compatibility.  Runtime output may
+    # not opt out of full-path and basename protection, so the shared redactor
+    # always removes absolute user paths.
+    return redact_text(message, redact_paths=redact_paths)
 
 
 def sanitize_exception(traceback_str: str) -> str:
@@ -99,30 +50,7 @@ def sanitize_exception(traceback_str: str) -> str:
     Returns:
         Sanitized traceback with paths and PII redacted
     """
-    if not traceback_str:
-        return traceback_str
-
-    lines = traceback_str.split("\n")
-    sanitized_lines = []
-
-    for line in lines:
-        # Redact absolute paths in File lines
-        # Before: File "[HOME]/Documents/DICOM/study.dcm"
-        # After:  File "[REDACTED]/study.dcm"
-        if "File \"" in line or "File '" in line:
-            line = re.sub(
-                r"""File ["']([A-Z]:\\|/)(?:Users|home|root|Documents)[^\\"']*["']""",
-                r"File \"[REDACTED]/...[filename]\"",
-                line,
-                flags=re.IGNORECASE
-            )
-
-        # Redact patient data from exception messages
-        line = sanitize_message(line, redact_paths=False)
-
-        sanitized_lines.append(line)
-
-    return "\n".join(sanitized_lines)
+    return redact_exception(traceback_str)
 
 
 def sanitized_format_exc() -> str:
@@ -154,6 +82,7 @@ def create_safe_exception_handler(func_name: str = "") -> str:
     Returns:
         Code template for safe exception handling
     """
+    _ = func_name
     return """
 try:
     # Your code here

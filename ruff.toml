@@ -106,6 +106,10 @@ ignore-names = [
 # contract" docstring). B009's rewrite to direct attribute access breaks the
 # basedpyright gate, which is the stricter of the two checks.
 "src/utils/config/*.py" = ["B009"]
+# These tracked CLI entry points predate the underscore-named Python module
+# convention and are invoked by path from Git hooks and setup documentation.
+"scripts/git-hook-prune-backups.py" = ["N999"]
+"scripts/git-hook-security-gate.py" = ["N999"]
 
 [lint.isort]
 known-first-party = ["src"]

@@ -32,6 +32,11 @@ _spec.loader.exec_module(phi)
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
     subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    (tmp_path / ".gitignore").write_text(
+        "\n".join(sorted(phi.REQUIRED_GITIGNORE_RULES)) + "\n",
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "add", ".gitignore"], cwd=tmp_path, check=True)
     return tmp_path
 
 
@@ -79,6 +84,43 @@ def _approve_reviewable_asset(repo: Path, path: str) -> None:
     manifest.write_text(
         json.dumps({"files": {path: phi._sha256(repo / path)}}), encoding="utf-8"
     )
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "data/import.csv",
+        "decoder-spike-artifacts/report.json",
+        "logs/session.txt",
+        "resources/screenshots-ignored/view.png",
+        "sample-DICOM-gitignored/study.bin",
+        "test-DICOM-data/study.bin",
+        ".sonar-local/coverage.xml",
+        "tmp/output.txt",
+    ],
+)
+def test_blocks_force_added_files_in_protected_local_roots(repo: Path, path: str) -> None:
+    _stage(repo, path, "synthetic")
+
+    assert _run(repo) == 1
+
+
+def test_allows_only_data_gitkeep_placeholder(repo: Path) -> None:
+    _stage(repo, "data/.gitkeep", "")
+    _approve_reviewable_asset(repo, "data/.gitkeep")
+
+    assert _run(repo) == 0
+
+
+def test_blocks_staged_removal_of_required_gitignore_rule(repo: Path) -> None:
+    gitignore = repo / ".gitignore"
+    original = gitignore.read_text(encoding="utf-8")
+    gitignore.write_text(original.replace("test-DICOM-data/\n", ""), encoding="utf-8")
+    subprocess.run(["git", "add", ".gitignore"], cwd=repo, check=True)
+    # Restore the working copy after staging to prove the checker reads the index.
+    gitignore.write_text(original, encoding="utf-8")
+
+    assert _run(repo) == 1
 
 
 # --- the actual historical leak ---------------------------------------------
@@ -467,6 +509,65 @@ def test_unsupported_archives_fail_closed_even_when_hash_approved(repo):
 
 def test_empty_repo_passes(repo):
     assert _run(repo) == 0
+
+
+def test_sensitive_filename_is_blocked_without_echoing_it(repo):
+    marker = "patientname-SentinelAlpha-SentinelBeta.txt"
+    _stage(repo, f"notes/{marker}", "synthetic")
+    completed = subprocess.run(
+        [sys.executable, str(_SCRIPT), "--staged", "--root", str(repo)],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 1
+    assert marker not in completed.stderr
+    assert "sensitive-looking filename" in completed.stderr
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        r"share=\\private-host\clinical",
+        "url=https://account:credential@example.test/resource",
+        "CallingAETitle=CLINICAL_AE",
+        "endpoint=8.8.8.8",
+    ],
+)
+def test_additional_endpoint_and_network_content_is_blocked(repo, content):
+    _stage(repo, "notes/network.txt", content)
+    assert _run(repo) == 1
+
+
+@pytest.mark.parametrize("content", ["127.0.0.1", "::1", "198.51.100.42", "2001:db8::42"])
+def test_loopback_and_documentation_addresses_are_allowed(repo, content):
+    _stage(repo, "notes/network.txt", content)
+    assert _run(repo) == 0
+
+
+def test_archive_member_name_is_blocked_without_echoing_it(repo):
+    marker = "patientname-SentinelAlpha-SentinelBeta.txt"
+    payload = io.BytesIO()
+    with zipfile.ZipFile(payload, "w") as archive:
+        archive.writestr(marker, "synthetic")
+    _stage_bytes(repo, "imports/review.zip", payload.getvalue())
+    problems = phi._check_container("imports/review.zip", repo)
+    assert problems
+    assert all(marker not in problem for problem in problems)
+
+
+@pytest.mark.parametrize("target", ["/private/clinical", "../../outside"])
+def test_absolute_and_escaping_symlinks_are_blocked(repo, target):
+    link = repo / "linked-data"
+    link.symlink_to(target)
+    subprocess.run(["git", "add", "-f", "linked-data"], cwd=repo, check=True)
+    assert phi.check_symlinks(["linked-data"], repo)
+    assert _run(repo) == 1
+
+
+def test_gitmodules_is_blocked(repo):
+    _stage(repo, ".gitmodules", '[submodule "x"]\nurl=https://example.test/x.git\n')
+    assert _run(repo) == 1
 
 
 # --- the live repository -----------------------------------------------------

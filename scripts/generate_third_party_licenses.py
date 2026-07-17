@@ -65,7 +65,7 @@ def run_pip_licenses(python: str, extra: list[str]) -> str:
     except FileNotFoundError:
         raise SystemExit("[sbom] python interpreter not found.") from None
     except subprocess.CalledProcessError as exc:
-        sys.stderr.write(exc.stderr or "")
+        sys.stderr.write("[sbom] pip-licenses command failed; output withheld.\n")
         if "No module named" in (exc.stderr or ""):
             raise SystemExit(
                 "[sbom] pip-licenses is not installed. Install dev deps:\n"

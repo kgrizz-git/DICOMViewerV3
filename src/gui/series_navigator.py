@@ -23,7 +23,6 @@ Requirements:
     - Thumbnail W/L uses the same preset / series-range / rescale rules as slice display
       (see `_resolve_thumbnail_window_level` and `core.slice_display_lut`).
 """
-
 import time
 from typing import Any
 
@@ -54,6 +53,7 @@ from gui.series_navigator_model import (
 from gui.series_navigator_view import SeriesThumbnail, StudyDivider, StudyLabel
 from utils.debug_flags import DEBUG_NAV
 from utils.perf_timer import perf_mark, perf_timer
+from utils.privacy.console import print_redacted
 
 
 class SeriesNavigator(QWidget):
@@ -923,7 +923,7 @@ class SeriesNavigator(QWidget):
                 "missing required dependencies" in error_msg.lower() or
                 "unable to convert" in error_msg.lower()):
                 return self._create_compression_error_thumbnail()
-            print(f"Error generating thumbnail: {e}")
+            print_redacted(f"Error generating thumbnail: {e}")
             return None
 
     def _create_compression_error_thumbnail(self) -> Image.Image:
@@ -1052,7 +1052,7 @@ class SeriesNavigator(QWidget):
                 thumbnail_widget.update()  # Trigger repaint
                 # print(f"[DEBUG-WL] Regenerated series navigator thumbnail for series {series_uid[:20]}...")
         except Exception as e:
-            print(f"Error regenerating thumbnail: {e}")
+            print_redacted(f"Error regenerating thumbnail: {e}")
 
     def clear(self) -> None:
         """Clear all thumbnails, labels, dividers, and study sections."""

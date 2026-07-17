@@ -14,7 +14,6 @@ Requirements:
     - MeasurementTool for measurement operations
     - ImageViewer for scene operations
 """
-
 import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Optional
@@ -28,6 +27,7 @@ from tools.measurement_tool import MeasurementTool
 from utils.debug_flags import DEBUG_MAGNIFIER, DEBUG_MEASUREMENT_SERIES
 from utils.dicom_utils import get_composite_series_key
 from utils.log_sanitizer import sanitized_format_exc
+from utils.privacy.console import print_redacted
 
 if TYPE_CHECKING:
     from utils.undo_redo import UndoRedoManager
@@ -153,7 +153,7 @@ class MeasurementCoordinator:
             instance_identifier = self.get_current_slice_index()
             self.measurement_tool.set_current_slice(study_uid, series_uid, instance_identifier)
             if DEBUG_MEASUREMENT_SERIES:
-                print(
+                print_redacted(
                     "[DEBUG-MEAS-SERIES] measurement_started: "
                     f"dataset_key={(study_uid, series_uid, instance_identifier)}, "
                     f"tool_summary={self.measurement_tool.get_debug_summary(self.image_viewer.scene)}"
@@ -181,7 +181,7 @@ class MeasurementCoordinator:
             debug_study_uid = getattr(current_dataset, 'StudyInstanceUID', '') if current_dataset is not None else ''
             debug_series_uid = get_composite_series_key(current_dataset) if current_dataset is not None else ''
             debug_instance_identifier = self.get_current_slice_index()
-            print(
+            print_redacted(
                 "[DEBUG-MEAS-SERIES] measurement_finished before finish_measurement: "
                 f"dataset_key={(debug_study_uid, debug_series_uid, debug_instance_identifier)}, "
                 f"tool_current_key={(self.measurement_tool.current_study_uid, self.measurement_tool.current_series_uid, self.measurement_tool.current_instance_identifier)}, "
@@ -216,7 +216,7 @@ class MeasurementCoordinator:
                     self.update_undo_redo_state_callback()
 
             if DEBUG_MEASUREMENT_SERIES:
-                print(
+                print_redacted(
                     "[DEBUG-MEAS-SERIES] measurement_finished after finish_measurement: "
                     f"tool_current_key={(self.measurement_tool.current_study_uid, self.measurement_tool.current_series_uid, self.measurement_tool.current_instance_identifier)}, "
                     f"tool_summary={self.measurement_tool.get_debug_summary(self.image_viewer.scene)}"

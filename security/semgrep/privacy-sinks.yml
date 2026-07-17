@@ -1,0 +1,54 @@
+rules:
+  - id: dicomviewer-privacy-forbidden-traceback-output
+    languages: [python]
+    severity: ERROR
+    message: Unsafe traceback output sink; use central redaction.
+    pattern-either:
+      - pattern: traceback.print_exc(...)
+      - pattern: traceback.print_stack(...)
+
+  - id: dicomviewer-privacy-forbidden-logging-exception
+    languages: [python]
+    severity: ERROR
+    message: Exception logging must use a redacted message without implicit exception data.
+    pattern-either:
+      - pattern: logging.exception(...)
+      - pattern: $LOGGER.exception(...)
+
+  - id: dicomviewer-privacy-forbidden-exc-info
+    languages: [python]
+    severity: ERROR
+    message: exc_info can expose raw exception data.
+    pattern: $LOGGER.$METHOD(..., exc_info=True, ...)
+
+  - id: dicomviewer-privacy-unsafe-dynamic-output
+    languages: [python]
+    severity: ERROR
+    message: Dynamic console/debug output must use central redaction.
+    patterns:
+      - pattern-either:
+          - pattern: print(f"...{$VALUE}...")
+          - pattern: print($VALUE)
+          - pattern: sys.stdout.write($VALUE)
+          - pattern: sys.stderr.write($VALUE)
+          - pattern: debug_log(..., $VALUE, ...)
+      - metavariable-pattern:
+          metavariable: $VALUE
+          patterns:
+            - pattern-not: redact_text(...)
+            - pattern-not: redact_value(...)
+            - pattern-not: redact_exception(...)
+            - pattern-not: sanitize_message(...)
+            - pattern-not: sanitize_exception(...)
+
+  - id: dicomviewer-privacy-unapproved-outbound-network
+    languages: [python]
+    severity: ERROR
+    message: Outbound networking requires explicit privacy review and approval.
+    pattern-either:
+      - pattern: requests.$METHOD(...)
+      - pattern: httpx.$METHOD(...)
+      - pattern: urllib.request.urlopen(...)
+      - pattern: socket.create_connection(...)
+      - pattern: $SOCKET.connect(...)
+      - pattern: aiohttp.ClientSession(...)

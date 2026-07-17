@@ -14,7 +14,6 @@ Outputs:
 Requirements:
     - numpy, pydicom
 """
-
 import logging
 from collections.abc import Sequence
 from typing import Any, cast
@@ -23,6 +22,7 @@ import numpy as np
 from pydicom.dataset import Dataset
 
 from utils.log_sanitizer import sanitized_format_exc
+from utils.privacy.console import print_redacted
 
 _logger = logging.getLogger(__name__)
 
@@ -140,7 +140,7 @@ def convert_palette_color_to_rgb(pixel_array: np.ndarray, dataset: Dataset) -> t
         )
         return rgb_array, True
     except Exception as e:
-        print(f"[PROCESSOR] Error applying palette color lookup: {e}")
+        print_redacted(f"[PROCESSOR] Error applying palette color lookup: {e}")
         _logger.debug("%s", sanitized_format_exc())
         # Fallback: treat as grayscale if palette lookup fails
         return pixel_array, False

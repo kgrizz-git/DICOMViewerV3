@@ -12,12 +12,16 @@ Usage:
 
 The script recursively scans the folder for DICOM files and groups them by series.
 """
-
 import os
 import sys
 from collections import defaultdict
 
 import numpy as np
+
+try:
+    from scripts.privacy_console import print_redacted
+except ModuleNotFoundError:
+    from privacy_console import print_redacted
 
 try:
     import pydicom
@@ -61,15 +65,15 @@ def analyze_series(series_uid, datasets):
 
     print(f"\n{'-' * 60}")
     print(f"Series {series_num}: {modality} - {series_desc}")
-    print(f"  UID: {series_uid[:40]}...")
+    print_redacted(f"  UID: {series_uid[:40]}...")
     print(f"  Slices: {num_slices}")
 
     # Frame of Reference
     for_uid = getattr(ds0, 'FrameOfReferenceUID', None)
     if for_uid:
-        print(f"  FrameOfReferenceUID: {for_uid[:40]}...")
+        print_redacted(f"  FrameOfReferenceUID: {for_uid[:40]}...")
     else:
-        print("  FrameOfReferenceUID: MISSING")
+        print_redacted("  FrameOfReferenceUID: MISSING")
 
     # Orientation
     iop = getattr(ds0, 'ImageOrientationPatient', None)
@@ -197,7 +201,7 @@ def check_fusion_compatibility(series_analyses, series_dict):
         if len(members) < 2:
             continue
 
-        print(f"\nFrame of Reference: {for_uid[:40]}...")
+        print_redacted(f"\nFrame of Reference: {for_uid[:40]}...")
         pet_series = [(uid, info) for uid, info in members if info['modality'] in ('PT', 'NM')]
         anat_series = [(uid, info) for uid, info in members if info['modality'] in ('CT', 'MR')]
 
@@ -229,13 +233,13 @@ def main():
 
     folder_path = sys.argv[1]
     if not os.path.isdir(folder_path):
-        print(f"ERROR: '{folder_path}' is not a valid directory.")
+        print_redacted(f"ERROR: '{folder_path}' is not a valid directory.")
         return
 
     print(f"\n{'=' * 60}")
     print("FUSION AUDIT: DICOM Dataset Checker")
     print(f"{'=' * 60}")
-    print(f"Scanning: {folder_path}\n")
+    print_redacted(f"Scanning: {folder_path}\n")
 
     series_dict = scan_dicom_folder(folder_path)
 

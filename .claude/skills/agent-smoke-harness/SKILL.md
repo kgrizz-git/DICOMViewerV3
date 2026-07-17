@@ -1,6 +1,6 @@
 ---
 name: agent-smoke-harness
-description: Run DICOM Viewer V3 agent smoke checks and manual UI smoke checklist after UX or loading changes. Use when verifying harness health, post-implementation smoke, or orchestrator requests manual smoke.
+description: Run DICOM Viewer V3 automated and manual smoke checks after UX, loading, navigation, MPR, overlay, SR, or harness changes.
 ---
 
 # Agent smoke harness
@@ -45,7 +45,7 @@ python -m pytest tests/ -v
 
 Use long timeout (~10 minutes) for full suite on slow machines (see **AGENTS.md**).
 
-## Handoff
+## Report
 
-- **Status: complete** — include `agent-smoke-report.json` version field and pytest summary.
-- **Status: blocked** — note failing step; do not skip `pytest` failures.
+Report the command results and any failed manual step directly to the user. Do
+not create role handoffs, orchestration state, or a test ledger.

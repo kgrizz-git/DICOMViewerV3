@@ -9,10 +9,14 @@ This script tests that:
 Usage:
     python scripts/test_multiframe_fix.py <path_to_mg_file>
 """
-
 import io
 import os
 import sys
+
+try:
+    from scripts.privacy_console import print_redacted
+except ModuleNotFoundError:
+    from privacy_console import print_redacted
 
 # Force UTF-8 encoding for stdout on Windows
 if sys.platform == 'win32':
@@ -32,13 +36,7 @@ from utils.log_sanitizer import sanitized_format_exc
 
 
 def _print_traceback_for_debug() -> None:
-    if os.environ.get("DICOM_DEBUG_TRACEBACKS") == "1":
-        import traceback
-
-        traceback.print_exc()
-        return
-
-    print("Sanitized traceback follows. Set DICOM_DEBUG_TRACEBACKS=1 for the raw traceback.")
+    print("Sanitized traceback follows.")
     print(sanitized_format_exc())
 
 
@@ -149,10 +147,10 @@ def _step5_organize_into_series(dataset, file_path: str):
     print("Organized structure:")
     print(f"  Number of studies: {len(organized)}")
     for study_uid, series_dict in organized.items():
-        print(f"  Study {study_uid[:16]}...:")
+        print_redacted(f"  Study {study_uid[:16]}...:")
         print(f"    Number of series: {len(series_dict)}")
         for series_uid, instances in series_dict.items():
-            print(f"    Series {series_uid[:16]}...:")
+            print_redacted(f"    Series {series_uid[:16]}...:")
             print(f"      Type of instances: {type(instances)}")
             print(f"      Length: {len(instances)}")
             if isinstance(instances, list) and len(instances) > 0:
@@ -195,13 +193,13 @@ def _step6_check_wrapper_pixel_arrays(organized) -> bool:
         try:
             pixel_array = instance.pixel_array
         except Exception as e:
-            print(f"❌ FAILED: Instance {idx} raised exception: {e}")
+            print_redacted(f"❌ FAILED: Instance {idx} raised exception: {e}")
             _print_traceback_for_debug()
             return False
 
         error = _wrapper_pixel_array_error(idx, pixel_array)
         if error is not None:
-            print(error)
+            print_redacted(error)
             return False
 
         print(f"  Instance {idx:2d}: shape={pixel_array.shape}, dtype={pixel_array.dtype}")
@@ -213,7 +211,7 @@ def _step6_check_wrapper_pixel_arrays(organized) -> bool:
 def test_multiframe_loading(file_path: str):
     """Test loading and extracting frames from a multi-frame DICOM file."""
     print("Testing multi-frame DICOM loading...")
-    print(f"File: {file_path}\n")
+    print_redacted(f"File: {file_path}\n")
 
     dataset = _step1_load_file(file_path)
     if dataset is None:
@@ -252,13 +250,13 @@ if __name__ == "__main__":
     file_path = sys.argv[1]
 
     if not os.path.exists(file_path):
-        print(f"Error: File not found: {file_path}")
+        print_redacted(f"Error: File not found: {file_path}")
         sys.exit(1)
 
     try:
         success = test_multiframe_loading(file_path)
         sys.exit(0 if success else 1)
     except Exception as e:
-        print(f"\n❌ FATAL ERROR: {e}")
+        print_redacted(f"\n❌ FATAL ERROR: {e}")
         _print_traceback_for_debug()
         sys.exit(1)

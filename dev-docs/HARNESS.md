@@ -78,9 +78,12 @@ Agents with browser MCP can drive the running app per project UX skills; logs an
 
 ---
 
-## Layer 5 — Multi-agent orchestration
+## Layer 5 — Focused verification
 
-Optional team workflow: `.claude/agents/`, `.claude/skills/team-orchestration-delegation/`, [`plans/orchestration-state.md`](../plans/orchestration-state.md), [`.cursor/rules/orchestration-auto-chain.mdc`](../.cursor/rules/orchestration-auto-chain.mdc) (see [`.cursor/rules/README.md`](../.cursor/rules/README.md)).
+Default to one agent and the verification commands above. For a materially
+high-risk change, one focused independent review may be useful, but no
+project-local planner/coder/tester/orchestrator role chain is required or
+maintained.
 
 Skill: [`.claude/skills/agent-smoke-harness/SKILL.md`](../.claude/skills/agent-smoke-harness/SKILL.md).
 

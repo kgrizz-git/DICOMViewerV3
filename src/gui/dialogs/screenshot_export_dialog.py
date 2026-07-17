@@ -567,7 +567,11 @@ class ScreenshotExportDialog(QDialog):
             QApplication.processEvents()
 
         if err:
-            QMessageBox.warning(self, "Export incomplete", err)
+            QMessageBox.warning(
+                self,
+                "Export incomplete",
+                sanitize_message(err, redact_paths=True),
+            )
             if saved == 0:
                 return
 

@@ -8,13 +8,12 @@ Inputs: DICOMProcessor, projection parameters, study/series context, WL/rescale.
 Outputs: PIL Image or None if projection cannot be formed.
 Requirements: numpy, PIL, pydicom Dataset via study/series lists.
 """
-
-
 import numpy as np
 from PIL import Image
 from pydicom.dataset import Dataset
 
 from core.dicom_processor import DICOMProcessor
+from utils.privacy.console import print_redacted
 
 
 def create_slice_projection_pil_image(
@@ -111,7 +110,7 @@ def create_slice_projection_pil_image(
             return Image.fromarray(processed_array, mode="RGB")
         return Image.fromarray(processed_array)
     except Exception as e:
-        print(f"Error converting projection array to PIL Image: {e}")
+        print_redacted(f"Error converting projection array to PIL Image: {e}")
         return None
 
 

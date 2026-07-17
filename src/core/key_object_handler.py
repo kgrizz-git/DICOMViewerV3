@@ -15,10 +15,11 @@ Requirements:
     - pydicom library
     - typing for type hints
 """
-
 from typing import Any
 
 from pydicom.dataset import Dataset
+
+from utils.privacy.console import print_redacted
 
 
 class KeyObjectHandler:
@@ -78,7 +79,7 @@ class KeyObjectHandler:
             if hasattr(dataset, 'ContentSequence'):
                 referenced_uids = self._extract_uids_from_content_sequence(dataset.ContentSequence)
         except Exception as e:
-            print(f"Error extracting referenced images: {e}")
+            print_redacted(f"Error extracting referenced images: {e}")
 
         return referenced_uids
 
@@ -112,7 +113,7 @@ class KeyObjectHandler:
                         if uid not in uids:
                             uids.append(uid)
         except Exception as e:
-            print(f"Error extracting UIDs from ContentSequence: {e}")
+            print_redacted(f"Error extracting UIDs from ContentSequence: {e}")
 
         return uids
 
@@ -188,7 +189,7 @@ class KeyObjectHandler:
                     nested_annotations = self.parse_content_sequence(content_item.ContentSequence)
                     annotations.extend(nested_annotations)
         except Exception as e:
-            print(f"Error parsing ContentSequence: {e}")
+            print_redacted(f"Error parsing ContentSequence: {e}")
 
         return annotations
 

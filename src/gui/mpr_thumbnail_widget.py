@@ -41,6 +41,7 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import QMenu, QWidget
 
 from gui.navigator_colors import SUBWINDOW_DOT_COLORS, subwindow_slot_display_number
+from utils.privacy.console import print_redacted
 
 # MIME type used to distinguish MPR thumbnail drags from regular series drags.
 MPR_ASSIGN_MIME = "application/x-dv3-mpr-assign"
@@ -181,7 +182,7 @@ class MprThumbnailWidget(QWidget):
             self._img_bytes_ref = img_bytes
             self._preview_pixmap = QPixmap.fromImage(qimg)
         except Exception as exc:
-            print(f"[MprThumbnailWidget] Failed to build preview pixmap: {exc}")
+            print_redacted(f"[MprThumbnailWidget] Failed to build preview pixmap: {exc}")
             self._preview_pixmap = None
 
         self.update()

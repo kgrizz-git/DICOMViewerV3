@@ -16,9 +16,10 @@ Mixin contract:
     (OverlayConfigMixin, ROIConfigMixin, MeasurementConfigMixin,
     AnnotationConfigMixin, MetadataUIConfigMixin, DisplayConfigMixin).
 """
-
 import json
 from typing import Any, Protocol, cast
+
+from utils.privacy.console import print_redacted
 
 
 class _CustomizationsHost(Protocol):
@@ -302,7 +303,7 @@ class CustomizationsConfigMixin:
                 json.dump(export_data, f, indent=4, ensure_ascii=False)
             return True
         except (OSError, TypeError, ValueError) as e:
-            print(f"Error exporting customizations: {e}")
+            print_redacted(f"Error exporting customizations: {e}")
             return False
 
     def import_customizations(self, file_path: str) -> bool:
@@ -338,5 +339,5 @@ class CustomizationsConfigMixin:
 
             return True
         except (OSError, json.JSONDecodeError) as e:
-            print(f"Error importing customizations: {e}")
+            print_redacted(f"Error importing customizations: {e}")
             return False

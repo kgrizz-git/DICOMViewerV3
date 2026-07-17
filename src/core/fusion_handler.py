@@ -18,7 +18,6 @@ Requirements:
     - numpy for array operations
     - SimpleITK for 3D resampling (Phase 2)
 """
-
 import logging
 from enum import Enum
 from typing import Any
@@ -31,6 +30,7 @@ from core.dicom_processor import DICOMProcessor
 from core.image_resampler import ImageResampler
 from utils.debug_flags import DEBUG_OFFSET
 from utils.log_sanitizer import sanitized_format_exc
+from utils.privacy.console import print_redacted
 
 _logger = logging.getLogger(__name__)
 
@@ -502,7 +502,7 @@ class FusionHandler:
                     self._resampling_failure_reason = "Zero-valued spacing not supported for 3D mode"
                 else:
                     self._resampling_failure_reason = f"3D resampling error: {error_msg[:100]}"
-                print(f"Error in 3D resampling: {e}, falling back to 2D")
+                print_redacted(f"Error in 3D resampling: {e}, falling back to 2D")
                 _logger.debug("%s", sanitized_format_exc())
         else:
             # 2D mode was selected/predicted, so actual mode is 2D
@@ -523,7 +523,7 @@ class FusionHandler:
             if rescale_slope is not None and rescale_intercept is not None:
                 array1 = array1.astype(np.float32) * float(rescale_slope) + float(rescale_intercept)
         except Exception as e:
-            print(f"Error getting overlay pixel array: {e}")
+            print_redacted(f"Error getting overlay pixel array: {e}")
             return None
 
         if idx2 is None:
@@ -538,7 +538,7 @@ class FusionHandler:
             if rescale_slope is not None and rescale_intercept is not None:
                 array2 = array2.astype(np.float32) * float(rescale_slope) + float(rescale_intercept)
         except Exception as e:
-            print(f"Error getting second overlay pixel array: {e}")
+            print_redacted(f"Error getting second overlay pixel array: {e}")
             return array1  # Fall back to first slice
 
         # Check array shapes match

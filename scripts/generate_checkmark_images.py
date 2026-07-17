@@ -8,10 +8,14 @@ This script generates two 16x16 PNG checkmark images:
 Both images have transparent backgrounds and use the same checkmark path
 as the original SVG: M 3,8 L 7,12 L 13,4
 """
-
 from pathlib import Path
 
 from PIL import Image, ImageDraw
+
+try:
+    from scripts.privacy_console import print_redacted
+except ModuleNotFoundError:
+    from privacy_console import print_redacted
 
 # Get project root (parent of scripts directory)
 project_root = Path(__file__).parent.parent
@@ -48,7 +52,7 @@ def create_checkmark_image(color: tuple[int, ...], filename: str):
     # Save image
     output_path = resources_dir / filename
     img.save(output_path, 'PNG')
-    print(f"Created: {output_path}")
+    print_redacted(f"Created: {output_path}")
 
 # Generate white checkmark for dark theme
 create_checkmark_image((255, 255, 255, 255), "checkbox_checkmark_white.png")
