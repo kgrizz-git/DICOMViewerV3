@@ -27,6 +27,6 @@ basedpyright>=1.39.9
 # Coverage for local + CI summaries; reports are not uploaded to third parties.
 pytest-cov>=5.0.0
 # Linter (fast, drop-in replacement for flake8 + isort + pyupgrade)
-ruff>=0.12.0
+ruff>=0.15.21
 # Complexity analysis (cyclomatic complexity, NLOC, etc.)
 lizard>=1.23.0
