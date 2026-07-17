@@ -10,7 +10,8 @@
     ".claude"
   ],
   "extraPaths": [
-    "src"
+    "src",
+    "scripts"
   ],
   "venvPath": ".",
   "venv": ".venv",

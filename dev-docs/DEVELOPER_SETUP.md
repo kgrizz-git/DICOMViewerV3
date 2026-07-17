@@ -67,6 +67,23 @@ This sets `core.hooksPath` to `.githooks/`, so Git runs the `pre-commit`, `commi
 version-controlled directory. No file copying — edits to `.githooks/` take effect
 immediately without re-running the installer.
 
+### Optional direnv setup
+
+The tracked `.envrc` loads an ignored `.env` file and activates an existing
+`.venv` or `venv`. It intentionally performs no package installation or network
+access.
+
+```bash
+cp .env.example .env
+# Edit only .env and add the local SONAR_TOKEN.
+direnv allow
+```
+
+The `.env`, `.direnv/`, Sonar scanner work/cache directories, and local analysis
+records are ignored and blocked from staging even with `git add -f`. Run
+`direnv deny` to revoke approval for this checkout. Contributors without direnv
+can continue exporting variables and activating the venv manually.
+
 ## Optional local SonarQube Community Build analysis
 
 This repository supports opt-in analysis against a local SonarQube Community
@@ -77,7 +94,9 @@ take time, and `--with-coverage` runs the full pytest suite first.
 1. Start the existing local SonarQube Community Build service and confirm its UI
    is reachable at `http://localhost:9000` (or set `SONAR_HOST_URL` to its URL).
 2. In its UI, create a user or project analysis token at **User → My Account →
-   Security**. Do not put the token in a tracked file.
+   Security**. Do not put the token in a tracked file. With direnv, copy
+   `.env.example` to ignored `.env`, populate only `SONAR_TOKEN`, and run
+   `direnv allow`.
 3. Activate this project’s venv and run:
 
    ```bash

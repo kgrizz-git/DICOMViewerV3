@@ -32,7 +32,8 @@ or local-only DICOM/QC data.
 2. Full tests, repository harness, architecture check, staged/tracked PHI gate,
    critical privacy scan, Gitleaks history scan, and local security suite pass.
 3. Local SonarQube analysis is current.
-4. `git ls-files` contains no `.phi-tools/`, `.sonar-local/`, local study data,
+4. `git ls-files` contains no `.phi-tools/`, `.sonar-local/`, `.scannerwork/`,
+   `.sonar*`, `.sonarqube*`, `.direnv/`, `.env`, local study data,
    scanner reports, coverage XML, or ignored runtime state.
 5. Record the source commit hash and `git write-tree` hash in the execution
    notes. The clean snapshot must reproduce that tree hash before publication.

@@ -51,8 +51,15 @@ coverage.xml
 .pytest_cache/
 cover/
 
-# Local SonarQube Community Build scanner state (cache, coverage XML, last run).
+# Local SonarQube Community Build server/scanner state (cache, coverage XML,
+# work directories, and last-run records). Keep the explicit variants because
+# different scanner/server launch methods use different names.
 .sonar-local/
+.scannerwork/
+.sonar/
+.sonarqube/
+.sonar
+.sonarqube
 
 # Translations
 *.mo
@@ -147,7 +154,7 @@ celerybeat.pid
 .env.*
 !.env.example
 !.env.sample
-.envrc
+.direnv/
 .venv
 .phi-tools/
 env/

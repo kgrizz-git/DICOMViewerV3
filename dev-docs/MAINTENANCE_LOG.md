@@ -8,6 +8,13 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-16
 
+- Added the canonical machine-readable security/privacy tool inventory with
+  tested versions, installation scopes, network policies, hook/CI enforcement,
+  model hashes, internal control entrypoints, and explicit prohibited external
+  services. The repo harness and CI now validate its schema, required coverage,
+  and referenced paths. Added a tracked, no-install `.envrc`, safe
+  `.env.example`, and privacy-critical ignores/admission blocks for `.env`,
+  `.direnv/`, `.scannerwork/`, `.sonar*`, and `.sonarqube*` local state.
 - Installed and validated the isolated local PHI review environment
   (`.phi-tools`, approximately 1.7 GB): pinned PhiScan, Presidio plus the pinned English
   spaCy model, DICOM PHI scanner, EasyOCR/PyTorch with environment-local model

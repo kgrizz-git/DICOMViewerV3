@@ -96,6 +96,12 @@ def _approve_reviewable_asset(repo: Path, path: str) -> None:
         "sample-DICOM-gitignored/study.bin",
         "test-DICOM-data/study.bin",
         ".sonar-local/coverage.xml",
+        ".scannerwork/report-task.txt",
+        ".sonar/cache/index",
+        ".sonarqube/cache/index",
+        ".direnv/allow",
+        ".env",
+        ".env.local",
         "tmp/output.txt",
     ],
 )
@@ -119,6 +125,19 @@ def test_blocks_staged_removal_of_required_gitignore_rule(repo: Path) -> None:
     subprocess.run(["git", "add", ".gitignore"], cwd=repo, check=True)
     # Restore the working copy after staging to prove the checker reads the index.
     gitignore.write_text(original, encoding="utf-8")
+
+    assert _run(repo) == 1
+
+
+def test_allows_safe_tracked_environment_templates(repo: Path) -> None:
+    _stage(repo, ".env.example", "SONAR_TOKEN=\n")
+    _stage(repo, ".envrc", "dotenv_if_exists .env\n")
+
+    assert _run(repo) == 0
+
+
+def test_scans_tracked_envrc_as_text(repo: Path) -> None:
+    _stage(repo, ".envrc", 'export recent_files="C:\\\\Users\\\\someone\\\\study.dcm"\n')
 
     assert _run(repo) == 1
 

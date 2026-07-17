@@ -21,9 +21,11 @@ This application processes clinical imaging. Treat every study, export, screensh
 - Denies every force-added file under the local-only `data/` (except its
   `.gitkeep`), `test-DICOM-data/`, `sample-DICOM-gitignored/`,
   `decoder-spike-artifacts/`, `resources/screenshots-ignored/`, `logs/`,
-  `.sonar-local/`, `.phi-tools/`, `tmp/`, and `backups/` roots. It also reads the staged
-  `.gitignore` blob and blocks removal of any privacy-critical ignore rule, so
-  restoring a rule only in the working tree cannot mask a staged deletion.
+  `.sonar-local/`, `.scannerwork/`, `.sonar*`, `.sonarqube*`, `.phi-tools/`,
+  `.direnv/`, `tmp/`, and `backups/` roots, plus `.env` variants other than the
+  empty tracked `.env.example`. It also reads the staged `.gitignore` blob and
+  blocks removal of any privacy-critical ignore rule, so restoring a rule only
+  in the working tree cannot mask a staged deletion.
 - Scans tracked text data, including JSON, CSV/TSV, YAML, INI, XML, HTML, Markdown, TeX, PostScript/EPS, notebooks, and SVG, for local-path, patient-tag, private-network, and internal-endpoint indicators.
 - Reads XLSX/XLSM cells for the same indicators. XLSX/XLSM, Office/OpenDocument packages (`.docx`, `.docm`, `.pptx`, `.pptm`, `.odt`, `.ods`, `.odp`, and templates/slideshows), and Apple iWork packages (`.pages`, `.numbers`, `.key`) also require manual review because they can embed images and other opaque content.
 - Extracts text from every unencrypted PDF page and fails closed when a PDF cannot be read. PDFs, PostScript/EPS, and notebooks require hash-bound manual review because they can contain rendered or embedded images that text extraction cannot prove safe.
@@ -98,6 +100,10 @@ credentials; use TruffleHog `--no-verification` and value-redacted output.
   `phiscan`, `media PATH`, or `dicom PATH`. Exit states are distinct:
   `CLEAN=0`, `FINDINGS=1`, `ERROR=2`, `SKIP=3`; a skip is never a pass.
 - For secrets and dependency scanning, follow the [Security Tools CLI Guide](SECURITY_TOOLS_CLI_GUIDE.md).
+- Every intentionally used tool, model, version, network policy, and enforcement
+  point is recorded in
+  [`security/security-tool-inventory.json`](../security/security-tool-inventory.json);
+  the repo harness validates it with `scripts/check_security_tool_inventory.py`.
 
 The pre-commit hook invokes `scripts/run_conditional_privacy_reviews.py` only
 when the staged index contains a relevant high-risk shape: data-like files under

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import subprocess
 import sys
 from datetime import date, datetime
 from pathlib import Path
@@ -51,9 +52,11 @@ REQUIRED_FILES = (
     "dev-docs/MAINTENANCE_LOG.md",
     "src/utils/debug_flags.py",
     "scripts/check_repo_harness.py",
+    "scripts/check_security_tool_inventory.py",
     "scripts/check_architecture_boundaries.py",
     "scripts/agent_smoke_harness.py",
     "scripts/check_user_docs_links.py",
+    "security/security-tool-inventory.json",
 )
 
 AGENTS_MAX_LINES = 130
@@ -176,6 +179,25 @@ def check_external_analysis_upload_policy(repo_root: Path) -> list[str]:
                         f"{rel}: network verification of suspected secrets is prohibited: {marker}"
                     )
     return errors
+
+
+def check_security_tool_inventory(repo_root: Path) -> list[str]:
+    """Run the canonical tool-inventory validator as part of the harness."""
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(repo_root / "scripts" / "check_security_tool_inventory.py"),
+            "--root",
+            str(repo_root),
+        ],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        return []
+    detail = (result.stderr or result.stdout).strip()
+    return [f"security/privacy tool inventory validation failed: {detail}"]
 
 
 def check_todo_freshness(repo_root: Path) -> list[str]:
@@ -372,6 +394,7 @@ def main() -> int:
     all_errors.extend(check_required_files(repo_root))
     all_errors.extend(check_agents_md(repo_root))
     all_errors.extend(check_external_analysis_upload_policy(repo_root))
+    all_errors.extend(check_security_tool_inventory(repo_root))
     all_errors.extend(check_todo_freshness(repo_root))
     all_errors.extend(check_todo_backlog_policy(repo_root))
     all_errors.extend(check_plan_links_in_todo(repo_root))
