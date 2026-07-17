@@ -45,24 +45,28 @@ or local-only DICOM/QC data.
 2. Extract into a new sibling directory, initialize a new repository with
    `main`, and set the repository-local author to
    `216068303+kgrizz-git@users.noreply.github.com`.
-3. Run the blocking tracked-tree and privacy checks in the extracted snapshot.
+3. Stage the extracted archive with `git add -f --all`. Force-add is deliberate
+   here because the archive contains only source-tracked files, while several
+   required packaged icons and the PyInstaller spec match conservative ignore
+   patterns. Confirm the new index tree equals the recorded source tree hash.
+4. Run the blocking tracked-tree and privacy checks in the extracted snapshot.
    Initialize/install a fresh application `.venv`; do not copy either local
    virtual environment.
-4. Create one root commit. Confirm exactly one reachable commit, one local
+5. Create one root commit. Confirm exactly one reachable commit, one local
    branch, one root, a clean tree, and only the noreply author email.
-5. Preserve the existing private repository only if desired as an explicitly
+6. Preserve the existing private repository only if desired as an explicitly
    local archive. Deleting the GitHub repository removes its current main and
    Dependabot refs and cannot be undone through this workflow.
-6. After a separate explicit confirmation, delete and recreate
+7. After a separate explicit confirmation, delete and recreate
    `kgrizz-git/DICOMViewerV3` as **private**, push only the new `main`, and
    confirm the remote contains one branch and one commit.
-7. Restore non-secret settings: Issues on, Projects on, Wiki/Discussions off.
+8. Restore non-secret settings: Issues on, Projects on, Wiki/Discussions off.
    Prefer squash merges and automatic branch deletion; review whether merge
    commits and rebases should remain enabled.
-8. Keep Codecov, SonarCloud, Sentry, external analysis uploads, repository
+9. Keep Codecov, SonarCloud, Sentry, external analysis uploads, repository
    webhooks, Actions secrets, variables, and environments absent unless a later
    explicit policy decision changes that.
-9. Re-enable Dependabot only after the root snapshot is present. Its new
+10. Re-enable Dependabot only after the root snapshot is present. Its new
    branches must be based exclusively on the recreated history.
 
 ## Post-recreation evidence
