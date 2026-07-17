@@ -8,6 +8,14 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-16
 
+- Installed and validated the isolated local PHI review environment
+  (`.phi-tools`, approximately 1.7 GB): pinned PhiScan, Presidio plus the pinned English
+  spaCy model, DICOM PHI scanner, EasyOCR/PyTorch with environment-local model
+  weights, and system Tesseract/ExifTool. Fixed media/DICOM wrappers to resolve
+  selected paths before entering protected temporary working directories and
+  made the DICOM wrapper fail closed when OCR weights are missing. Added the
+  clean private-repository recreation runbook after verifying the 672-commit
+  `old-main` archive has no overlap with the 25 commits actually on GitHub.
 - Added protected-path and conditional local-review enforcement: the blocking
   artifact gate now rejects force-added files under privacy-critical local data,
   screenshot, log, analysis, backup, and temporary roots and validates the

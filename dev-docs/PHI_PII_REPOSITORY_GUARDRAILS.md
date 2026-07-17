@@ -21,7 +21,7 @@ This application processes clinical imaging. Treat every study, export, screensh
 - Denies every force-added file under the local-only `data/` (except its
   `.gitkeep`), `test-DICOM-data/`, `sample-DICOM-gitignored/`,
   `decoder-spike-artifacts/`, `resources/screenshots-ignored/`, `logs/`,
-  `.sonar-local/`, `tmp/`, and `backups/` roots. It also reads the staged
+  `.sonar-local/`, `.phi-tools/`, `tmp/`, and `backups/` roots. It also reads the staged
   `.gitignore` blob and blocks removal of any privacy-critical ignore rule, so
   restoring a rule only in the working tree cannot mask a staged deletion.
 - Scans tracked text data, including JSON, CSV/TSV, YAML, INI, XML, HTML, Markdown, TeX, PostScript/EPS, notebooks, and SVG, for local-path, patient-tag, private-network, and internal-endpoint indicators.

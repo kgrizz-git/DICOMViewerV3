@@ -11,4 +11,7 @@ phi-scan==0.7.0; python_version >= "3.12"
 typer==0.24.1; python_version >= "3.12"
 presidio-analyzer==2.2.363
 presidio-image-redactor==0.0.59
+# Presidio's default AnalyzerEngine otherwise tries to download this model at
+# scan time. Pin it here so installation is the only network-enabled phase.
+en-core-web-lg @ https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl
 dicom-phi-scan @ git+https://github.com/elijahrockers/dicom-phi-scan.git@e558a5232f405b4065d6079605a853f3e7c10152
