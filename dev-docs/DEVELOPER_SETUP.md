@@ -71,13 +71,21 @@ immediately without re-running the installer.
 
 The tracked `.envrc` loads an ignored `.env` file and activates an existing
 `.venv` or `venv`. It intentionally performs no package installation or network
-access.
+access. It watches `requirements.txt` and `requirements-dev.txt` and prints a
+short reminder when the active venv has not been explicitly synchronized.
 
 ```bash
 cp .env.example .env
 # Edit only .env and add the local SONAR_TOKEN.
 direnv allow
+python scripts/sync_dev_environment.py
 ```
+
+The sync command is the explicit network/install step. It installs
+`requirements-dev.txt` and writes a content-hash stamp inside the ignored venv.
+After either requirements file changes, direnv reloads and reminds contributors
+to run the command again. A requirements change does **not** require another
+`direnv allow`; approval is required only when `.envrc` itself changes.
 
 The `.env`, `.direnv/`, Sonar scanner work/cache directories, and local analysis
 records are ignored and blocked from staging even with `git add -f`. Run

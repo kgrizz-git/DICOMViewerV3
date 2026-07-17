@@ -48,6 +48,7 @@ REQUIRED_CONTROL_IDS = frozenset(
     {
         "commit-message-privacy-gate",
         "conditional-privacy-reviews",
+        "dev-environment-sync",
         "local-sonarqube-runner",
         "phi-artifact-gate",
         "privacy-output-gate",
