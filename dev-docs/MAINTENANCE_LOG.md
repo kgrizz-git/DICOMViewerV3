@@ -8,6 +8,13 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-18
 
+- Completed the ROI coordinator statistics-path Sonar slice
+  (`plans/SONARQUBE_ROI_COORDINATOR_STATS_SLICE_PLAN_20260718.md`): extracted
+  projection/spacing/ownership helpers for
+  `_get_pixel_array_for_statistics`, `update_roi_statistics`, and
+  `update_roi_statistics_overlays`; removed dead closure-debug code. Added
+  `tests/gui/test_roi_coordinator_statistics.py`. Fresh analysis: **461**
+  priority findings (down from 464); targeted stats-path `S3776` cleared.
 - Completed the undo/redo annotation-command Sonar slice
   (`plans/SONARQUBE_UNDO_REDO_ANNOTATION_COMMANDS_SLICE_PLAN_20260718.md`):
   extracted add/remove helpers for `MeasurementCommand`,
