@@ -124,7 +124,7 @@ def test_fetch_issues_rejects_malformed_and_incomplete_responses(monkeypatch):
         )
 
 
-def test_collect_severe_report_queries_both_policy_classes(monkeypatch):
+def test_collect_reported_findings_queries_all_policy_classes(monkeypatch):
     module = _load_module()
     seen_queries = []
 
@@ -139,12 +139,13 @@ def test_collect_severe_report_queries_both_policy_classes(monkeypatch):
         lambda *_args: module.AnalysisMetadata(date="2026-07-18", revision="abc123"),
     )
 
-    report = module.collect_severe_report("http://localhost:9000", "token", "dicom-viewer-v3")
+    report = module.collect_reported_findings("http://localhost:9000", "token", "dicom-viewer-v3")
 
     assert report.issues == ()
     assert seen_queries == [
         {"severities": "BLOCKER"},
         {"severities": "CRITICAL", "types": "BUG,VULNERABILITY"},
+        {"severities": "MAJOR"},
     ]
 
 
