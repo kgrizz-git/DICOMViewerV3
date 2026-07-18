@@ -39,7 +39,14 @@ This file tracks active and near-term tasks.
 
 ## Static analysis
 
-- [ ] **[P2]** **Local SonarQube MAJOR CODE_SMELL cleanup (114 findings):** deferred from the S2245/S3923/S1244 remediation pass on `fix/sonarqube-major-findings-20260718`. Re-run `scripts/report_local_sonarqube_issues.py` and triage smells (e.g. `python:S107`, `python:S1854`, `python:S3358`, `python:S1066`) in a dedicated branch — do not mix into behavior-preserving security/logic fixes. Plan reference: [SONARQUBE_MAJOR_FINDINGS_REMEDIATION_PLAN_20260718.md](plans/SONARQUBE_MAJOR_FINDINGS_REMEDIATION_PLAN_20260718.md).
+- [ ] **[P2]** **Continue the local SonarQube code-smell backlog after the
+  critical first slice:** first slice is complete (priority findings 476 → 472;
+  S5727 cleared; two ROICommand S3776 findings cleared). Re-run the widened
+  reporter, then select one behavior domain at a time from the remaining
+  cognitive-complexity, duplicate-string, MAJOR, and lower-impact findings. Do
+  not mix unrelated MPR, fusion, loading, annotation, font-registry, or
+  UI-controller refactors in the same branch. Plan reference:
+  [Critical code-smell first slice](plans/SONARQUBE_CRITICAL_CODE_SMELL_FIRST_SLICE_PLAN_20260718.md).
 
 
 ## Bugs / Correctness

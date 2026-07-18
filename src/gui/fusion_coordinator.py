@@ -909,8 +909,9 @@ class FusionCoordinator:
             print(f"  base_pixel_spacing: {base_pixel_spacing}")
             print(f"  overlay_pixel_spacing: {overlay_pixel_spacing}")
 
-        stored_scale: tuple[float, float] | None = None
-        stored_offset: tuple[float, float] | None = None
+        # Every reachable branch below assigns both tuples before the cache write.
+        stored_scale: tuple[float, float]
+        stored_offset: tuple[float, float]
 
         # Calculate and display scaling factors
         if base_pixel_spacing and overlay_pixel_spacing:
@@ -960,16 +961,15 @@ class FusionCoordinator:
             if not self.fusion_controls.has_user_modified_offset():
                 self.fusion_controls.set_calculated_offset(0.0, 0.0)
 
-        # Store calculated values in cache
-        if stored_scale is not None and stored_offset is not None:
-            self.fusion_handler.set_alignment(
-                self.fusion_handler.base_series_uid,
-                self.fusion_handler.overlay_series_uid,
-                stored_scale,
-                stored_offset
-            )
-            if DEBUG_SPATIAL_ALIGNMENT:
-                print(f"[SPATIAL ALIGNMENT] Stored in cache: scale={stored_scale}, offset={stored_offset}")
+        # Store calculated values in cache (always assigned by the branches above)
+        self.fusion_handler.set_alignment(
+            self.fusion_handler.base_series_uid,
+            self.fusion_handler.overlay_series_uid,
+            stored_scale,
+            stored_offset
+        )
+        if DEBUG_SPATIAL_ALIGNMENT:
+            print(f"[SPATIAL ALIGNMENT] Stored in cache: scale={stored_scale}, offset={stored_offset}")
 
         # Update resampling status to ensure offset controls are enabled/disabled correctly
         self._update_resampling_status()

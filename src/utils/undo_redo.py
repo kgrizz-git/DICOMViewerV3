@@ -164,34 +164,77 @@ class ROICommand(Command):
         if self.roi_manager.selected_roi == self.roi_item:
             self.roi_manager.selected_roi = None
 
+    def _add_roi_to_manager_and_scene(self) -> bool:
+        """
+        Add the ROI to the manager list and scene when not already present.
+
+        Returns:
+            True if the ROI was newly added; False if it was already registered.
+        """
+        if self.scene is None:
+            return False
+        if self.key not in self.roi_manager.rois:
+            self.roi_manager.rois[self.key] = []
+        if self.roi_item in self.roi_manager.rois[self.key]:
+            return False
+        self.roi_manager.rois[self.key].append(self.roi_item)
+        if self.roi_item.item.scene() != self.scene:
+            self.scene.addItem(self.roi_item.item)
+        return True
+
+    def _remove_roi_from_manager_and_scene(self) -> None:
+        """Clear UI state, drop the ROI from the manager list, and remove scene items."""
+        if self.scene is None:
+            return
+        if self.key not in self.roi_manager.rois:
+            return
+        if self.roi_item not in self.roi_manager.rois[self.key]:
+            return
+        self._clear_roi_removal_ui_state()
+        self.roi_manager.rois[self.key].remove(self.roi_item)
+        if self.roi_item.item.scene() != self.scene:
+            return
+        # Remove statistics overlay if present
+        if (
+            hasattr(self.roi_item, "statistics_overlay_item")
+            and self.roi_item.statistics_overlay_item is not None
+        ):
+            self.roi_manager.remove_statistics_overlay(self.roi_item, self.scene)
+        self.scene.removeItem(self.roi_item.item)
+
+    def _restore_overlay_after_undo_remove(self) -> None:
+        """
+        Restore overlay-visible flag and reattach a surviving overlay item.
+
+        Called only on undo of a remove action, before the statistics callback.
+        """
+        if self.scene is None:
+            return
+        # Restore the overlay visibility flag to its pre-deletion value so
+        # that the subsequent overlay re-add and statistics callback work
+        # correctly (handle_roi_deleted sets the flag to False during deletion).
+        self.roi_item.statistics_overlay_visible = self._saved_overlay_visible
+        # Re-add existing overlay item to scene if it survived deletion
+        if (
+            hasattr(self.roi_item, "statistics_overlay_item")
+            and self.roi_item.statistics_overlay_item is not None
+            and self.roi_item.statistics_overlay_visible
+        ):
+            overlay_item = self.roi_item.statistics_overlay_item
+            if overlay_item.scene() != self.scene:
+                self.scene.addItem(overlay_item)
+            overlay_item.setVisible(True)
+
     def execute(self) -> None:
         """Execute the command."""
         if self.scene is None:
             return
 
         if self.action == "add":
-            # Add ROI
-            if self.key not in self.roi_manager.rois:
-                self.roi_manager.rois[self.key] = []
-            if self.roi_item not in self.roi_manager.rois[self.key]:
-                self.roi_manager.rois[self.key].append(self.roi_item)
-                if self.roi_item.item.scene() != self.scene:
-                    self.scene.addItem(self.roi_item.item)
-                # Restore statistics overlay if it was visible (for redo)
-                if self.update_statistics_callback:
-                    self.update_statistics_callback()
+            if self._add_roi_to_manager_and_scene() and self.update_statistics_callback:
+                self.update_statistics_callback()
         elif self.action == "remove":
-            # Remove ROI
-            if self.key in self.roi_manager.rois:
-                if self.roi_item in self.roi_manager.rois[self.key]:
-                    self._clear_roi_removal_ui_state()
-                    self.roi_manager.rois[self.key].remove(self.roi_item)
-                    if self.roi_item.item.scene() == self.scene:
-                        # Remove statistics overlay if present
-                        if (hasattr(self.roi_item, 'statistics_overlay_item') and
-                            self.roi_item.statistics_overlay_item is not None):
-                            self.roi_manager.remove_statistics_overlay(self.roi_item, self.scene)
-                        self.scene.removeItem(self.roi_item.item)
+            self._remove_roi_from_manager_and_scene()
 
     def undo(self) -> None:
         """Undo the command."""
@@ -199,42 +242,16 @@ class ROICommand(Command):
             return
 
         if self.action == "add":
-            # Undo add = remove
-            if self.key in self.roi_manager.rois:
-                if self.roi_item in self.roi_manager.rois[self.key]:
-                    self._clear_roi_removal_ui_state()
-                    self.roi_manager.rois[self.key].remove(self.roi_item)
-                    if self.roi_item.item.scene() == self.scene:
-                        # Remove statistics overlay if present
-                        if (hasattr(self.roi_item, 'statistics_overlay_item') and
-                            self.roi_item.statistics_overlay_item is not None):
-                            self.roi_manager.remove_statistics_overlay(self.roi_item, self.scene)
-                        self.scene.removeItem(self.roi_item.item)
+            self._remove_roi_from_manager_and_scene()
         elif self.action == "remove":
-            # Undo remove = add
-            if self.key not in self.roi_manager.rois:
-                self.roi_manager.rois[self.key] = []
-            if self.roi_item not in self.roi_manager.rois[self.key]:
-                self.roi_manager.rois[self.key].append(self.roi_item)
-                if self.roi_item.item.scene() != self.scene:
-                    self.scene.addItem(self.roi_item.item)
-                # Restore the overlay visibility flag to its pre-deletion value so
-                # that the subsequent overlay re-add and statistics callback work
-                # correctly (handle_roi_deleted sets the flag to False during deletion).
-                self.roi_item.statistics_overlay_visible = self._saved_overlay_visible
-                # Re-add existing overlay item to scene if it survived deletion
-                if (hasattr(self.roi_item, 'statistics_overlay_item') and
-                        self.roi_item.statistics_overlay_item is not None and
-                        self.roi_item.statistics_overlay_visible):
-                    overlay_item = self.roi_item.statistics_overlay_item
-                    if overlay_item.scene() != self.scene:
-                        self.scene.addItem(overlay_item)
-                    overlay_item.setVisible(True)
-                # Trigger statistics overlay update to recalculate and refresh text;
-                # update_roi_statistics_overlays checks statistics_overlay_visible, so
-                # the flag must be restored (above) before this call.
-                if self.update_statistics_callback:
-                    self.update_statistics_callback()
+            if not self._add_roi_to_manager_and_scene():
+                return
+            self._restore_overlay_after_undo_remove()
+            # Trigger statistics overlay update to recalculate and refresh text;
+            # update_roi_statistics_overlays checks statistics_overlay_visible, so
+            # the flag must be restored (above) before this call.
+            if self.update_statistics_callback:
+                self.update_statistics_callback()
 
 
 class ROIGeometryResizeCommand(Command):

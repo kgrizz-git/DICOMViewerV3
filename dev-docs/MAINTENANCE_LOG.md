@@ -8,6 +8,17 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-18
 
+- Completed the first CRITICAL code-smell remediation slice
+  (`plans/SONARQUBE_CRITICAL_CODE_SMELL_FIRST_SLICE_PLAN_20260718.md`):
+  - **S5727:** removed redundant `None` guards before
+    `FusionCoordinator._update_spatial_alignment` cache writes; every branch
+    already assigned `(scale, offset)` tuples. Added
+    `tests/gui/test_fusion_coordinator_spatial_alignment.py`.
+  - **S3776 (ROICommand only):** extracted add/remove/overlay-restore helpers in
+    `utils.undo_redo.ROICommand` without changing undo semantics. Added
+    `tests/test_undo_redo_roi_commands.py`.
+  - Fresh local analysis + scoped reporter: **472** active priority findings
+    (down from 476); remaining CRITICAL/MAJOR backlog stays in `TO_DO.md`.
 - Widened the scoped local SonarQube reporter to include all open BLOCKER,
   CRITICAL, and MAJOR issues, regardless of type. The prior CRITICAL query
   filtered to BUG/VULNERABILITY and omitted the dashboard's CRITICAL
