@@ -346,73 +346,69 @@ class MeasurementCommand(Command):
         self.scene = scene
         self.key = (study_uid, series_uid, instance_identifier)
 
+    def _add_measurement_to_manager_and_scene(self, *, refresh_geometry: bool = False) -> bool:
+        """
+        Add the measurement to the tool list and scene when not already present.
+
+        Returns:
+            True if newly added; False if already registered.
+        """
+        if self.scene is None:
+            return False
+        if self.key not in self.measurement_tool.measurements:
+            self.measurement_tool.measurements[self.key] = []
+        if self.measurement_item in self.measurement_tool.measurements[self.key]:
+            return False
+        self.measurement_tool.measurements[self.key].append(self.measurement_item)
+        if self.measurement_item.scene() != self.scene:
+            self.scene.addItem(self.measurement_item)
+        if hasattr(self.measurement_item, "text_item") and self.measurement_item.text_item is not None:
+            if self.measurement_item.text_item.scene() != self.scene:
+                self.scene.addItem(self.measurement_item.text_item)
+            if refresh_geometry:
+                # Ensure text is visible and positioned correctly after undo-remove.
+                self.measurement_item.text_item.setVisible(True)
+                if hasattr(self.measurement_item, "update_distance"):
+                    self.measurement_item.update_distance()
+                elif hasattr(self.measurement_item, "update_angle_geometry"):
+                    self.measurement_item.update_angle_geometry()
+        return True
+
+    def _remove_measurement_from_manager_and_scene(self) -> None:
+        """Drop the measurement from the tool list and remove scene items/handles."""
+        if self.scene is None:
+            return
+        if self.key not in self.measurement_tool.measurements:
+            return
+        if self.measurement_item not in self.measurement_tool.measurements[self.key]:
+            return
+        self.measurement_tool.measurements[self.key].remove(self.measurement_item)
+        if self.measurement_item.scene() != self.scene:
+            return
+        if hasattr(self.measurement_item, "text_item") and self.measurement_item.text_item is not None:
+            if self.measurement_item.text_item.scene() == self.scene:
+                self.scene.removeItem(self.measurement_item.text_item)
+        if hasattr(self.measurement_item, "hide_handles"):
+            self.measurement_item.hide_handles()
+        self.scene.removeItem(self.measurement_item)
+
     def execute(self) -> None:
         """Execute the command."""
         if self.scene is None:
             return
-
         if self.action == "add":
-            # Add measurement
-            if self.key not in self.measurement_tool.measurements:
-                self.measurement_tool.measurements[self.key] = []
-            if self.measurement_item not in self.measurement_tool.measurements[self.key]:
-                self.measurement_tool.measurements[self.key].append(self.measurement_item)
-                if self.measurement_item.scene() != self.scene:
-                    self.scene.addItem(self.measurement_item)
-                # Add text item if it exists
-                if hasattr(self.measurement_item, 'text_item') and self.measurement_item.text_item is not None:
-                    if self.measurement_item.text_item.scene() != self.scene:
-                        self.scene.addItem(self.measurement_item.text_item)
+            self._add_measurement_to_manager_and_scene()
         elif self.action == "remove":
-            # Remove measurement
-            if self.key in self.measurement_tool.measurements:
-                if self.measurement_item in self.measurement_tool.measurements[self.key]:
-                    self.measurement_tool.measurements[self.key].remove(self.measurement_item)
-                    if self.measurement_item.scene() == self.scene:
-                        # Remove text item first
-                        if hasattr(self.measurement_item, 'text_item') and self.measurement_item.text_item is not None:
-                            if self.measurement_item.text_item.scene() == self.scene:
-                                self.scene.removeItem(self.measurement_item.text_item)
-                        # Remove handles
-                        if hasattr(self.measurement_item, 'hide_handles'):
-                            self.measurement_item.hide_handles()
-                        self.scene.removeItem(self.measurement_item)
+            self._remove_measurement_from_manager_and_scene()
 
     def undo(self) -> None:
         """Undo the command."""
         if self.scene is None:
             return
-
         if self.action == "add":
-            # Undo add = remove
-            if self.key in self.measurement_tool.measurements:
-                if self.measurement_item in self.measurement_tool.measurements[self.key]:
-                    self.measurement_tool.measurements[self.key].remove(self.measurement_item)
-                    if self.measurement_item.scene() == self.scene:
-                        if hasattr(self.measurement_item, 'text_item') and self.measurement_item.text_item is not None:
-                            if self.measurement_item.text_item.scene() == self.scene:
-                                self.scene.removeItem(self.measurement_item.text_item)
-                        if hasattr(self.measurement_item, 'hide_handles'):
-                            self.measurement_item.hide_handles()
-                        self.scene.removeItem(self.measurement_item)
+            self._remove_measurement_from_manager_and_scene()
         elif self.action == "remove":
-            # Undo remove = add
-            if self.key not in self.measurement_tool.measurements:
-                self.measurement_tool.measurements[self.key] = []
-            if self.measurement_item not in self.measurement_tool.measurements[self.key]:
-                self.measurement_tool.measurements[self.key].append(self.measurement_item)
-                if self.measurement_item.scene() != self.scene:
-                    self.scene.addItem(self.measurement_item)
-                if hasattr(self.measurement_item, 'text_item') and self.measurement_item.text_item is not None:
-                    if self.measurement_item.text_item.scene() != self.scene:
-                        self.scene.addItem(self.measurement_item.text_item)
-                    # Ensure text is visible and positioned correctly
-                    self.measurement_item.text_item.setVisible(True)
-                    # Update distance / angle to refresh text position and content
-                    if hasattr(self.measurement_item, 'update_distance'):
-                        self.measurement_item.update_distance()
-                    elif hasattr(self.measurement_item, 'update_angle_geometry'):
-                        self.measurement_item.update_angle_geometry()
+            self._add_measurement_to_manager_and_scene(refresh_geometry=True)
 
 
 class TextAnnotationCommand(Command):
@@ -441,54 +437,56 @@ class TextAnnotationCommand(Command):
         self.scene = scene
         self.key = (study_uid, series_uid, instance_identifier)
 
+    def _add_annotation_to_manager_and_scene(self) -> bool:
+        """
+        Add the text annotation to the tool list and scene when not already present.
+
+        Returns:
+            True if newly added; False if already registered.
+        """
+        if self.scene is None:
+            return False
+        if self.key not in self.text_annotation_tool.annotations:
+            self.text_annotation_tool.annotations[self.key] = []
+        if self.annotation_item in self.text_annotation_tool.annotations[self.key]:
+            return False
+        self.text_annotation_tool.annotations[self.key].append(self.annotation_item)
+        # Ensure item state is correct (no callback, not new annotation)
+        self.annotation_item.on_editing_finished = None
+        self.annotation_item._is_new_annotation = False
+        if self.annotation_item.scene() != self.scene:
+            self.scene.addItem(self.annotation_item)
+        return True
+
+    def _remove_annotation_from_manager_and_scene(self) -> None:
+        """Drop the text annotation from the tool list and remove it from the scene."""
+        if self.scene is None:
+            return
+        if self.key not in self.text_annotation_tool.annotations:
+            return
+        if self.annotation_item not in self.text_annotation_tool.annotations[self.key]:
+            return
+        self.text_annotation_tool.annotations[self.key].remove(self.annotation_item)
+        if self.annotation_item.scene() == self.scene:
+            self.scene.removeItem(self.annotation_item)
+
     def execute(self) -> None:
         """Execute the command."""
         if self.scene is None:
             return
-
-
         if self.action == "add":
-            # Add annotation
-            if self.key not in self.text_annotation_tool.annotations:
-                self.text_annotation_tool.annotations[self.key] = []
-            if self.annotation_item not in self.text_annotation_tool.annotations[self.key]:
-                self.text_annotation_tool.annotations[self.key].append(self.annotation_item)
-                # Ensure item state is correct (no callback, not new annotation)
-                self.annotation_item.on_editing_finished = None
-                self.annotation_item._is_new_annotation = False
-                if self.annotation_item.scene() != self.scene:
-                    self.scene.addItem(self.annotation_item)
+            self._add_annotation_to_manager_and_scene()
         elif self.action == "remove":
-            # Remove annotation
-            if self.key in self.text_annotation_tool.annotations:
-                if self.annotation_item in self.text_annotation_tool.annotations[self.key]:
-                    self.text_annotation_tool.annotations[self.key].remove(self.annotation_item)
-                    if self.annotation_item.scene() == self.scene:
-                        self.scene.removeItem(self.annotation_item)
+            self._remove_annotation_from_manager_and_scene()
 
     def undo(self) -> None:
         """Undo the command."""
         if self.scene is None:
             return
-
         if self.action == "add":
-            # Undo add = remove
-            if self.key in self.text_annotation_tool.annotations:
-                if self.annotation_item in self.text_annotation_tool.annotations[self.key]:
-                    self.text_annotation_tool.annotations[self.key].remove(self.annotation_item)
-                    if self.annotation_item.scene() == self.scene:
-                        self.scene.removeItem(self.annotation_item)
+            self._remove_annotation_from_manager_and_scene()
         elif self.action == "remove":
-            # Undo remove = add
-            if self.key not in self.text_annotation_tool.annotations:
-                self.text_annotation_tool.annotations[self.key] = []
-            if self.annotation_item not in self.text_annotation_tool.annotations[self.key]:
-                self.text_annotation_tool.annotations[self.key].append(self.annotation_item)
-                # Ensure item state is correct (no callback, not new annotation)
-                self.annotation_item.on_editing_finished = None
-                self.annotation_item._is_new_annotation = False
-                if self.annotation_item.scene() != self.scene:
-                    self.scene.addItem(self.annotation_item)
+            self._add_annotation_to_manager_and_scene()
 
 
 class ArrowAnnotationCommand(Command):
@@ -517,47 +515,53 @@ class ArrowAnnotationCommand(Command):
         self.scene = scene
         self.key = (study_uid, series_uid, instance_identifier)
 
+    def _add_arrow_to_manager_and_scene(self) -> bool:
+        """
+        Add the arrow to the tool list and scene when not already present.
+
+        Returns:
+            True if newly added; False if already registered.
+        """
+        if self.scene is None:
+            return False
+        if self.key not in self.arrow_annotation_tool.arrows:
+            self.arrow_annotation_tool.arrows[self.key] = []
+        if self.arrow_item in self.arrow_annotation_tool.arrows[self.key]:
+            return False
+        self.arrow_annotation_tool.arrows[self.key].append(self.arrow_item)
+        if self.arrow_item.scene() != self.scene:
+            self.scene.addItem(self.arrow_item)
+        return True
+
+    def _remove_arrow_from_manager_and_scene(self) -> None:
+        """Drop the arrow from the tool list and remove it from the scene."""
+        if self.scene is None:
+            return
+        if self.key not in self.arrow_annotation_tool.arrows:
+            return
+        if self.arrow_item not in self.arrow_annotation_tool.arrows[self.key]:
+            return
+        self.arrow_annotation_tool.arrows[self.key].remove(self.arrow_item)
+        if self.arrow_item.scene() == self.scene:
+            self.scene.removeItem(self.arrow_item)
+
     def execute(self) -> None:
         """Execute the command."""
         if self.scene is None:
             return
-
         if self.action == "add":
-            # Add arrow
-            if self.key not in self.arrow_annotation_tool.arrows:
-                self.arrow_annotation_tool.arrows[self.key] = []
-            if self.arrow_item not in self.arrow_annotation_tool.arrows[self.key]:
-                self.arrow_annotation_tool.arrows[self.key].append(self.arrow_item)
-                if self.arrow_item.scene() != self.scene:
-                    self.scene.addItem(self.arrow_item)
+            self._add_arrow_to_manager_and_scene()
         elif self.action == "remove":
-            # Remove arrow
-            if self.key in self.arrow_annotation_tool.arrows:
-                if self.arrow_item in self.arrow_annotation_tool.arrows[self.key]:
-                    self.arrow_annotation_tool.arrows[self.key].remove(self.arrow_item)
-                    if self.arrow_item.scene() == self.scene:
-                        self.scene.removeItem(self.arrow_item)
+            self._remove_arrow_from_manager_and_scene()
 
     def undo(self) -> None:
         """Undo the command."""
         if self.scene is None:
             return
-
         if self.action == "add":
-            # Undo add = remove
-            if self.key in self.arrow_annotation_tool.arrows:
-                if self.arrow_item in self.arrow_annotation_tool.arrows[self.key]:
-                    self.arrow_annotation_tool.arrows[self.key].remove(self.arrow_item)
-                    if self.arrow_item.scene() == self.scene:
-                        self.scene.removeItem(self.arrow_item)
+            self._remove_arrow_from_manager_and_scene()
         elif self.action == "remove":
-            # Undo remove = add
-            if self.key not in self.arrow_annotation_tool.arrows:
-                self.arrow_annotation_tool.arrows[self.key] = []
-            if self.arrow_item not in self.arrow_annotation_tool.arrows[self.key]:
-                self.arrow_annotation_tool.arrows[self.key].append(self.arrow_item)
-                if self.arrow_item.scene() != self.scene:
-                    self.scene.addItem(self.arrow_item)
+            self._add_arrow_to_manager_and_scene()
 
 
 class TextAnnotationEditCommand(Command):
@@ -833,72 +837,64 @@ class CrosshairCommand(Command):
         self.scene = scene
         self.key = (study_uid, series_uid, instance_identifier)
 
+    def _add_crosshair_to_manager_and_scene(self, *, restore_text: bool = False) -> bool:
+        """
+        Add the crosshair to the manager list and scene when not already present.
+
+        Returns:
+            True if newly added; False if already registered.
+        """
+        if self.scene is None:
+            return False
+        if self.key not in self.crosshair_manager.crosshairs:
+            self.crosshair_manager.crosshairs[self.key] = []
+        if self.crosshair_item in self.crosshair_manager.crosshairs[self.key]:
+            return False
+        self.crosshair_manager.crosshairs[self.key].append(self.crosshair_item)
+        if self.crosshair_item.scene() != self.scene:
+            self.scene.addItem(self.crosshair_item)
+        if hasattr(self.crosshair_item, "text_item") and self.crosshair_item.text_item is not None:
+            if self.crosshair_item.text_item.scene() != self.scene:
+                self.scene.addItem(self.crosshair_item.text_item)
+            if restore_text:
+                self.crosshair_item.text_item.setVisible(True)
+        return True
+
+    def _remove_crosshair_from_manager_and_scene(self) -> None:
+        """Drop the crosshair from the manager list and remove scene items."""
+        if self.scene is None:
+            return
+        if self.key not in self.crosshair_manager.crosshairs:
+            return
+        if self.crosshair_item not in self.crosshair_manager.crosshairs[self.key]:
+            return
+        self.crosshair_manager.crosshairs[self.key].remove(self.crosshair_item)
+        if self.crosshair_item.scene() != self.scene:
+            return
+        if hasattr(self.crosshair_item, "text_item") and self.crosshair_item.text_item is not None:
+            if self.crosshair_item.text_item.scene() == self.scene:
+                if hasattr(self.crosshair_item.text_item, "mark_deleted"):
+                    self.crosshair_item.text_item.mark_deleted()
+                self.scene.removeItem(self.crosshair_item.text_item)
+        self.scene.removeItem(self.crosshair_item)
+
     def execute(self) -> None:
         """Execute the command."""
         if self.scene is None:
             return
-
         if self.action == "add":
-            # Add crosshair
-            if self.key not in self.crosshair_manager.crosshairs:
-                self.crosshair_manager.crosshairs[self.key] = []
-            if self.crosshair_item not in self.crosshair_manager.crosshairs[self.key]:
-                self.crosshair_manager.crosshairs[self.key].append(self.crosshair_item)
-                if self.crosshair_item.scene() != self.scene:
-                    self.scene.addItem(self.crosshair_item)
-                # Add text item if it exists
-                if hasattr(self.crosshair_item, 'text_item') and self.crosshair_item.text_item is not None:
-                    if self.crosshair_item.text_item.scene() != self.scene:
-                        self.scene.addItem(self.crosshair_item.text_item)
+            self._add_crosshair_to_manager_and_scene()
         elif self.action == "remove":
-            # Remove crosshair
-            if self.key in self.crosshair_manager.crosshairs:
-                if self.crosshair_item in self.crosshair_manager.crosshairs[self.key]:
-                    self.crosshair_manager.crosshairs[self.key].remove(self.crosshair_item)
-                    if self.crosshair_item.scene() == self.scene:
-                        # Remove text item first
-                        if hasattr(self.crosshair_item, 'text_item') and self.crosshair_item.text_item is not None:
-                            if self.crosshair_item.text_item.scene() == self.scene:
-                                if hasattr(self.crosshair_item.text_item, 'mark_deleted'):
-                                    self.crosshair_item.text_item.mark_deleted()
-                                self.scene.removeItem(self.crosshair_item.text_item)
-                        self.scene.removeItem(self.crosshair_item)
+            self._remove_crosshair_from_manager_and_scene()
 
     def undo(self) -> None:
         """Undo the command."""
         if self.scene is None:
             return
-
         if self.action == "add":
-            # Undo add = remove
-            if self.key in self.crosshair_manager.crosshairs:
-                if self.crosshair_item in self.crosshair_manager.crosshairs[self.key]:
-                    self.crosshair_manager.crosshairs[self.key].remove(self.crosshair_item)
-                    if self.crosshair_item.scene() == self.scene:
-                        if hasattr(self.crosshair_item, 'text_item') and self.crosshair_item.text_item is not None:
-                            if self.crosshair_item.text_item.scene() == self.scene:
-                                if hasattr(self.crosshair_item.text_item, 'mark_deleted'):
-                                    self.crosshair_item.text_item.mark_deleted()
-                                self.scene.removeItem(self.crosshair_item.text_item)
-                        self.scene.removeItem(self.crosshair_item)
+            self._remove_crosshair_from_manager_and_scene()
         elif self.action == "remove":
-            # Undo remove = add
-            if self.key not in self.crosshair_manager.crosshairs:
-                self.crosshair_manager.crosshairs[self.key] = []
-            if self.crosshair_item not in self.crosshair_manager.crosshairs[self.key]:
-                self.crosshair_manager.crosshairs[self.key].append(self.crosshair_item)
-                if self.crosshair_item.scene() != self.scene:
-                    self.scene.addItem(self.crosshair_item)
-                # Restore text item if it exists
-                if (hasattr(self.crosshair_item, 'text_item') and
-                    self.crosshair_item.text_item is not None):
-                    if self.crosshair_item.text_item.scene() != self.scene:
-                        self.scene.addItem(self.crosshair_item.text_item)
-                    # Ensure text is visible
-                    self.crosshair_item.text_item.setVisible(True)
-                if hasattr(self.crosshair_item, 'text_item') and self.crosshair_item.text_item is not None:
-                    if self.crosshair_item.text_item.scene() != self.scene:
-                        self.scene.addItem(self.crosshair_item.text_item)
+            self._add_crosshair_to_manager_and_scene(restore_text=True)
 
 
 class CrosshairMoveCommand(Command):

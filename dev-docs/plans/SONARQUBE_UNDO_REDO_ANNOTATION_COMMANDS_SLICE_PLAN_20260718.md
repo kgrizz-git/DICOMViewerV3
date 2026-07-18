@@ -1,10 +1,14 @@
 # Plan: Second Slice — Undo/Redo Annotation Command Complexity
 
 **Last updated:** 2026-07-18
-**Status:** Active
+**Status:** Implemented
 **Baseline:** post first-slice local analysis; scoped reporter **472** active
 priority findings (360 CRITICAL, 112 MAJOR). `python:S3776` = 293 open;
 `python:S1192` = 67 open.
+**Post-fix analysis:** local scanner after Phase 1–2; scoped reporter
+returned **464** active priority findings (352 CRITICAL, 112 MAJOR).
+`python:S3776` open count 293 → 285; `undo_redo.py` S3776 = 0 for the four
+targeted add/remove command classes.
 **Predecessor:**
 [`SONARQUBE_CRITICAL_CODE_SMELL_FIRST_SLICE_PLAN_20260718.md`](SONARQUBE_CRITICAL_CODE_SMELL_FIRST_SLICE_PLAN_20260718.md)
 
@@ -61,15 +65,15 @@ Add `tests/test_undo_redo_annotation_commands.py` (mirror
 
 For each of Measurement / Text / Arrow / Crosshair:
 
-- [ ] **add → undo:** item is registered under the composite key, present in
+- [x] **add → undo:** item is registered under the composite key, present in
       the scene after execute, absent from both after undo; no duplicates on a
       second execute.
-- [ ] **remove → undo → redo:** item leaves the manager + scene on remove;
+- [x] **remove → undo → redo:** item leaves the manager + scene on remove;
       undo restores membership and scene attachment; redo removes again.
-- [ ] **Measurement-specific:** text item is added/removed with the
+- [x] **Measurement-specific:** text item is added/removed with the
       measurement; `hide_handles()` runs on remove paths when present; undo of
       remove refreshes distance or angle geometry when those methods exist.
-- [ ] **Crosshair-specific:** linked text item is removed with
+- [x] **Crosshair-specific:** linked text item is removed with
       `mark_deleted()` when that method exists; undo of remove reattaches the
       text item when still present on the crosshair.
 
@@ -80,14 +84,14 @@ Use lightweight fakes / real Qt graphics items as appropriate; prefer real
 
 Modify only `src/utils/undo_redo.py`. Follow the `ROICommand` pattern:
 
-- [ ] `MeasurementCommand`: `_add_measurement_to_manager_and_scene() -> bool`,
+- [x] `MeasurementCommand`: `_add_measurement_to_manager_and_scene() -> bool`,
       `_remove_measurement_from_manager_and_scene()`, keep execute/undo as thin
       action dispatch. Preserve text-item attach/detach and handle hiding.
-- [ ] `TextAnnotationCommand`: `_add_annotation_…` / `_remove_annotation_…`;
+- [x] `TextAnnotationCommand`: `_add_annotation_…` / `_remove_annotation_…`;
       preserve `_is_new_annotation = False` and `on_editing_finished = None` on
       add paths.
-- [ ] `ArrowAnnotationCommand`: same add/remove helper split.
-- [ ] `CrosshairCommand`: same split; preserve text-item `mark_deleted()` on
+- [x] `ArrowAnnotationCommand`: same add/remove helper split.
+- [x] `CrosshairCommand`: same split; preserve text-item `mark_deleted()` on
       remove and text reattach on undo-remove.
 
 Constraints:
@@ -100,19 +104,19 @@ Constraints:
 
 ## Phase 3 — Verify and close out
 
-- [ ] Run focused tests:
+- [x] Run focused tests:
       `python -m pytest tests/test_undo_redo_annotation_commands.py tests/test_undo_redo_roi_commands.py tests/test_roi_delete_resize_handles.py tests/gui/test_measurement_move_tracking.py -v`
-- [ ] Run `python scripts/agent_smoke_harness.py`,
+- [x] Run `python scripts/agent_smoke_harness.py`,
       `python scripts/check_architecture_boundaries.py`, and
       `python scripts/check_repo_harness.py`.
-- [ ] Submit fresh analysis: `python scripts/run_local_sonarqube.py`, then
+- [x] Submit fresh analysis: `python scripts/run_local_sonarqube.py`, then
       `python scripts/report_local_sonarqube_issues.py --expected-revision "$(git rev-parse HEAD)"`.
       Confirm the eight targeted S3776 findings are closed; record the new
       total without treating the absolute count as a hard fail.
-- [ ] Update `dev-docs/MAINTENANCE_LOG.md`, a brief `CHANGELOG.md` Unreleased
+- [x] Update `dev-docs/MAINTENANCE_LOG.md`, a brief `CHANGELOG.md` Unreleased
       patch note (maintainability only), and point `dev-docs/TO_DO.md` at the
       next deferred domain.
-- [ ] Mark this plan Implemented and leave a follow-up backlog item for either
+- [x] Mark this plan Implemented and leave a follow-up backlog item for either
       (a) next S3776 domain or (b) a separate MAJOR mechanical sweep.
 
 ## Suggested follow-up slices (not this plan)

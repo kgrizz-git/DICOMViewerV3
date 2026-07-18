@@ -8,6 +8,13 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-18
 
+- Completed the undo/redo annotation-command Sonar slice
+  (`plans/SONARQUBE_UNDO_REDO_ANNOTATION_COMMANDS_SLICE_PLAN_20260718.md`):
+  extracted add/remove helpers for `MeasurementCommand`,
+  `TextAnnotationCommand`, `ArrowAnnotationCommand`, and `CrosshairCommand`.
+  Added `tests/test_undo_redo_annotation_commands.py`. Fresh local analysis +
+  scoped reporter: **464** active priority findings (down from 472);
+  `undo_redo.py` targeted `S3776` findings cleared (293 → 285 overall).
 - Completed the first CRITICAL code-smell remediation slice
   (`plans/SONARQUBE_CRITICAL_CODE_SMELL_FIRST_SLICE_PLAN_20260718.md`):
   - **S5727:** removed redundant `None` guards before
