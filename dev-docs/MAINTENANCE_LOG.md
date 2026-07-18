@@ -8,6 +8,13 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-18
 
+- Completed the view state manager Sonar slice
+  (`plans/SONARQUBE_VIEW_STATE_MANAGER_SLICE_PLAN_20260718.md`): extracted
+  helpers for `store_initial_view_state`, `reset_view`,
+  `handle_window_changed`, `handle_rescale_toggle`, and
+  `handle_viewport_resized`. Added
+  `tests/gui/test_view_state_manager_sonar_slice.py`. Fresh analysis: **399**
+  priority findings (down from 408); five targeted `S3776` cleared.
 - Completed the Sonar MAJOR mechanical sweep
   (`plans/SONARQUBE_MAJOR_MECHANICAL_SWEEP_PLAN_20260718.md`): cleared all open
   `python:S125`, `python:S1066`, and `python:S1172` findings (commented-out

@@ -39,18 +39,19 @@ This file tracks active and near-term tasks.
 
 ## Static analysis
 
-- [ ] **[P2]** **Continue the local SonarQube code-smell backlog after the MAJOR
-  mechanical sweep:** that sweep is complete (454 → 408; `S125`/`S1066`/`S1172`
-  all cleared). Next suggested domain: `view_state_manager.py` CRITICAL
-  `S3776`, or other controller clusters (`mpr_controller` / `roi_manager` /
-  `fusion_coordinator`). Remaining MAJOR noise is mostly `S108`/`S107`. Do not
-  mix unrelated loading or font-registry refactors in the same branch. Plan
+- [ ] **[P2]** **Continue the local SonarQube code-smell backlog after the view
+  state manager slice:** that slice is complete (408 → 399; five
+  `view_state_manager` `S3776` findings cleared). Next suggested domains:
+  larger controller clusters (`mpr_controller` / `roi_manager` /
+  `fusion_coordinator`) or remaining MAJOR noise (`S108`/`S107`). Do not mix
+  unrelated loading or font-registry refactors in the same branch. Plan
   references:
   [Critical first slice](plans/SONARQUBE_CRITICAL_CODE_SMELL_FIRST_SLICE_PLAN_20260718.md),
   [Undo/redo annotation commands slice](plans/SONARQUBE_UNDO_REDO_ANNOTATION_COMMANDS_SLICE_PLAN_20260718.md),
   [ROI coordinator stats slice](plans/SONARQUBE_ROI_COORDINATOR_STATS_SLICE_PLAN_20260718.md),
   [Slice display manager slice](plans/SONARQUBE_SLICE_DISPLAY_MANAGER_SLICE_PLAN_20260718.md),
-  [MAJOR mechanical sweep](plans/SONARQUBE_MAJOR_MECHANICAL_SWEEP_PLAN_20260718.md).
+  [MAJOR mechanical sweep](plans/SONARQUBE_MAJOR_MECHANICAL_SWEEP_PLAN_20260718.md),
+  [View state manager slice](plans/SONARQUBE_VIEW_STATE_MANAGER_SLICE_PLAN_20260718.md).
 
 
 ## Bugs / Correctness
