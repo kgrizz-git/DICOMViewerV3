@@ -1,6 +1,6 @@
 # Architecture — DICOM Viewer V3
 
-**Last updated:** 2026-05-21  
+**Last updated:** 2026-07-18  
 **Audience:** Engineers and AI agents. This is the top-level map; file-level detail lives in **[`dev-docs/SOURCE_LAYOUT.md`](dev-docs/SOURCE_LAYOUT.md)**.
 
 ---
@@ -18,6 +18,8 @@ Desktop **PySide6** DICOM viewer: multi-pane layouts, series navigator, MPR, fus
 | **App shell** | `src/main.py`, `src/core/app_handler_bootstrap.py`, `src/core/app_signal_wiring.py` | Lifecycle, handler wiring, global signals |
 | **GUI / chrome** | `src/gui/` | Main window, menus, toolbar, dialogs, themes (`DESIGN.md`) |
 | **View / display** | `src/core/slice_display_*.py`, `src/gui/image_viewer*.py`, `src/core/subwindow_*` | Pixels, W/L, overlays, multi-window layout |
+| **Window / level** | `dicom_window_level.py`, `slice_display_lut.py`, `wl_preset_catalog.py`, `window_level_preset_handler.py` | Raw vs rescaled W/L alignment, preset catalog, context-menu apply |
+| **Slice sync / reference lines** | `slice_geometry.py`, `slice_sync_coordinator.py`, `slice_location_line_*` | Anatomic linked-pane sync; cross-view slice-location reference lines |
 | **Loading / organize** | `src/core/loading_*`, DICOM organizer, `FileOperationsHandler` | Open folder/files, navigator population |
 | **MPR** | `src/core/mpr_*.py`, `mpr_controller.py`, `mpr_geometry.py` | Volume build, reslice, detached navigator thumbnail |
 | **Fusion** | `src/core/fusion_*`, `fusion_handler_io.py` | 2D/3D registration display |
@@ -26,7 +28,7 @@ Desktop **PySide6** DICOM viewer: multi-pane layouts, series navigator, MPR, fus
 | **Structured report** | `src/core/sr_*.py`, `rdsr_*.py`, `gui/dialogs/structured_report_*` | SR detection, dose events, browser |
 | **Study index** | `src/core/study_index/` | SQLCipher + FTS5 local index |
 | **QA (pylinac)** | `src/qa/`, `qa_app_facade.py` | ACR CT/MRI workflows |
-| **Export / cine** | `export_*`, `cine_*` | Static images, video, MPR DICOM save |
+| **Export / cine** | `export_*`, `cine_*`, `roi_export_service.py`, `spreadsheet_safety.py` | Static images, video, MPR DICOM save, ROI statistics export (TXT/CSV/XLSX) |
 | **Config / utils** | `src/utils/config/`, `config_manager.py` | Persisted preferences by feature mixin |
 
 ---
@@ -64,6 +66,10 @@ Custom structural linting has an incremental guard: **`scripts/check_architectur
 | Navigator / thumbnails | `src/gui/series_navigator_*` |
 | Overlay text / Spacebar cycle | `overlay_config`, `KeyboardEventHandler`, `OverlayManager` |
 | MPR behavior | `src/core/mpr_controller.py`, `mpr_navigator_thumbnail.py` |
+| Slice sync / linked groups | `slice_sync_coordinator.py`, `utils/config/slice_sync_config.py`, `gui/dialogs/slice_sync_dialog.py` |
+| Slice location reference lines | `slice_location_line_helper.py`, `gui/slice_location_line_coordinator.py`, `gui/slice_location_line_manager.py` |
+| ROI statistics export | `roi_export_service.py`, `gui/dialogs/export_roi_statistics_dialog.py` |
+| Window/level presets | `wl_preset_catalog.py`, `window_level_preset_handler.py`, `dicom_window_level.py` |
 | Privacy / PHI display | `privacy_controller.py`, `view_actions.on_privacy_view_toggled` |
 | Study index search | `src/core/study_index/`, `study_index_search_dialog.py` |
 | SR / RDSR | `rdsr_dose_sr.py`, `structured_report_browser_dialog.py` |
