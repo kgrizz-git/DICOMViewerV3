@@ -110,7 +110,8 @@ def convert_window_level_rescaled_to_raw(
     center: float, width: float, slope: float, intercept: float
 ) -> tuple[float, float]:
     """Convert window/level from rescaled to raw pixel values. Returns (raw_center, raw_width)."""
-    if slope == 0.0:  # NOSONAR(S1244): RescaleSlope is DICOM DS-VR; exact 0.0 is well-defined
+    # RescaleSlope is DICOM DS-VR; exact 0.0 is well-defined
+    if slope == 0.0:  # NOSONAR(S1244)
         return center, width
     return (center - intercept) / slope, width / slope
 
@@ -171,7 +172,8 @@ def get_window_level_from_dataset(
             from_dicom_tags
             and rescale_slope is not None
             and rescale_intercept is not None
-            and rescale_slope != 0.0  # NOSONAR(S1244): RescaleSlope is DICOM DS-VR; exact 0.0 is well-defined
+            # RescaleSlope is DICOM DS-VR; exact 0.0 is well-defined
+            and rescale_slope != 0.0  # NOSONAR(S1244)
         )
         return window_center, window_width, is_rescaled
     except Exception:
@@ -226,7 +228,8 @@ def convert_window_level_units(
         and extracted_from_dataset
         and rescale_slope is not None
         and rescale_intercept is not None
-        and rescale_slope != 0.0  # NOSONAR(S1244): RescaleSlope is DICOM DS-VR; exact 0.0 is well-defined
+        # RescaleSlope is DICOM DS-VR; exact 0.0 is well-defined
+        and rescale_slope != 0.0  # NOSONAR(S1244)
     ):
         if not apply_rescale and is_rescaled:
             # Window/level is in rescaled units (HU), but we're not applying rescale to
@@ -378,7 +381,8 @@ def get_window_level_presets_from_dataset(
                 from_dicom_tags
                 and rescale_slope is not None
                 and rescale_intercept is not None
-                and rescale_slope != 0.0  # NOSONAR(S1244): RescaleSlope is DICOM DS-VR; exact 0.0 is well-defined
+                # RescaleSlope is DICOM DS-VR; exact 0.0 is well-defined
+                and rescale_slope != 0.0  # NOSONAR(S1244)
             )
             presets.append((wc, ww, is_rescaled, preset_name))
         return presets

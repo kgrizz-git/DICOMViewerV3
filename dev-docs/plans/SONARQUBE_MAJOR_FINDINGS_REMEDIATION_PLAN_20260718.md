@@ -173,14 +173,22 @@ upgraded to `# NOSONAR(S1244)` for parity.
 
 ### Suppression recipe (use exactly this form for auditability)
 
-- Single-line compare: append `  # NOSONAR(S1244): <rationale>` to the line.
+SonarPython on this Community Build rejects `# NOSONAR(S1244): <rationale>` as
+malformed (`python:S7632`) and then **does not suppress** the target rule. Use:
+
+```python
+# <rationale citing DS-VR / VTK contract / sentinel>
+if slope == 0.0:  # NOSONAR(S1244)
+```
+
+- Trailing comment on the equality line must be exactly `# NOSONAR(S1244)`
+  (optional bare `# NOSONAR` also works but is broader).
+- Put the one-line rationale on the **previous** line as a normal comment —
+  not after a colon on the NOSONAR token.
 - Compound guard on one line (`A or B or slope == 0.0`): split the float-equality
-  sub-clause onto its own line, then suppress only that line. *Do not* suppress
-  the whole compound expression.
-- Generator form (`if all(v == 0.0 for v in bounds):`): append
-  `  # NOSONAR(S1244): <rationale>` to the line containing the generator.
-- Each rationale comment should be ≤ 80 chars and cite the source of the exact
-  value (DS-VR, VTK contract, configuration sentinel, label sentinel).
+  sub-clause onto its own line, then suppress only that line.
+- Generator form (`if all(v == 0.0 for v in bounds):`): trailing
+  `# NOSONAR(S1244)` on that line; rationale on the line above.
 
 ### Phase 3a — DICOM-stored `RescaleSlope` / `RescaleIntercept` exact-zero guards
 

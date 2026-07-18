@@ -169,6 +169,10 @@ def fetch_issues(
     while True:
         parameters = {
             "componentKeys": project_key,
+            # Explicit open-set only. Omitting statuses on this SonarQube build
+            # also returns CLOSED/FIXED issues, which falsely re-reports remediated
+            # findings (S2245/S3923) after a successful analysis.
+            "statuses": "OPEN,CONFIRMED,REOPENED",
             "p": str(page),
             "ps": str(PAGE_SIZE),
             **query,

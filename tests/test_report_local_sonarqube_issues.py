@@ -68,6 +68,7 @@ def test_fetch_issues_uses_component_filter_and_keeps_token_out_of_url(monkeypat
     parsed = parse_qs(urlparse(requests[0][0].full_url).query)
     assert parsed["componentKeys"] == ["dicom-viewer-v3"]
     assert parsed["severities"] == ["BLOCKER"]
+    assert parsed["statuses"] == ["OPEN,CONFIRMED,REOPENED"]
     assert "projectKeys" not in parsed
     assert "test-token" not in requests[0][0].full_url
     assert requests[0][0].get_header("Authorization") is not None

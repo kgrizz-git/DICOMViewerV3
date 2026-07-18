@@ -440,7 +440,8 @@ class ViewStateManager:
             if reset_use_rescaled_values and not self.use_rescaled_values:
                 # Stored in rescaled, need raw
                 if (self.rescale_slope is not None and self.rescale_intercept is not None and
-                    self.rescale_slope != 0.0):  # NOSONAR(S1244): RescaleSlope is DICOM DS-VR; exact 0.0 is well-defined
+                    # RescaleSlope is DICOM DS-VR; exact 0.0 is well-defined
+                    self.rescale_slope != 0.0):  # NOSONAR(S1244)
                     reset_window_center, reset_window_width = self.dicom_processor.convert_window_level_rescaled_to_raw(
                         reset_window_center, reset_window_width, self.rescale_slope, self.rescale_intercept
                     )
@@ -489,7 +490,8 @@ class ViewStateManager:
                         if wc is not None and ww is not None:
                             # Convert if needed
                             if is_rescaled and not use_rescaled:
-                                if (self.rescale_slope is not None and self.rescale_intercept is not None and self.rescale_slope != 0.0):  # NOSONAR(S1244): RescaleSlope is DICOM DS-VR; exact 0.0 is well-defined
+                                # RescaleSlope is DICOM DS-VR; exact 0.0 is well-defined
+                                if (self.rescale_slope is not None and self.rescale_intercept is not None and self.rescale_slope != 0.0):  # NOSONAR(S1244)
                                     wc, ww = self.dicom_processor.convert_window_level_rescaled_to_raw(
                                         wc, ww, self.rescale_slope, self.rescale_intercept
                                     )
@@ -690,7 +692,8 @@ class ViewStateManager:
                 if preset_is_rescaled and not self.use_rescaled_values:
                     # Preset is rescaled, but we're using raw - convert preset to raw
                     if (self.rescale_slope is not None and self.rescale_intercept is not None and
-                        self.rescale_slope != 0.0):  # NOSONAR(S1244): RescaleSlope is DICOM DS-VR; exact 0.0 is well-defined
+                        # RescaleSlope is DICOM DS-VR; exact 0.0 is well-defined
+                        self.rescale_slope != 0.0):  # NOSONAR(S1244)
                         compare_wc, compare_ww = self.dicom_processor.convert_window_level_rescaled_to_raw(
                             preset_wc, preset_ww, self.rescale_slope, self.rescale_intercept
                         )
@@ -759,7 +762,8 @@ class ViewStateManager:
         # Convert window/level values if we have rescale parameters
         if (current_center is not None and current_width is not None and
             self.rescale_slope is not None and self.rescale_intercept is not None and
-            self.rescale_slope != 0.0):  # NOSONAR(S1244): RescaleSlope is DICOM DS-VR; exact 0.0 is well-defined
+            # RescaleSlope is DICOM DS-VR; exact 0.0 is well-defined
+            self.rescale_slope != 0.0):  # NOSONAR(S1244)
 
             # Determine conversion direction
             if self.use_rescaled_values and not checked:

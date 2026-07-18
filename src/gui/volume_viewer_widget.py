@@ -1443,7 +1443,8 @@ class VolumeViewerWidget(QWidget):
             rep.SetPlaceFactor(1.0)
             ren = self._renderer.get_renderer()
             bounds = list(ren.ComputeVisiblePropBounds())
-            if all(v == 0.0 for v in bounds):  # NOSONAR(S1244): VTK ComputeVisiblePropBounds all-zero is empty-scene sentinel
+            # VTK ComputeVisiblePropBounds all-zero is empty-scene sentinel
+            if all(v == 0.0 for v in bounds):  # NOSONAR(S1244)
                 return
             rep.PlaceWidget(bounds)
             box_widget.SetRepresentation(rep)
