@@ -125,7 +125,9 @@ jobs:
           head: ${{ steps.trufflehog_range.outputs.head_sha }}
           version: "3.95.8"
           # Never verify suspected credentials against provider APIs.
-          extra_args: --no-verification --no-update
+          # The action already injects --no-update; passing it here too makes
+          # trufflehog abort with "flag 'no-update' cannot be repeated".
+          extra_args: --no-verification
 
       - name: Run TruffleHog full-tree scanner for initial/new-ref push
         if: steps.trufflehog_range.outputs.tree_scan == 'true'
@@ -134,7 +136,9 @@ jobs:
           path: ./
           version: "3.95.8"
           # Never verify suspected credentials against provider APIs.
-          extra_args: --no-verification --no-update
+          # The action already injects --no-update; passing it here too makes
+          # trufflehog abort with "flag 'no-update' cannot be repeated".
+          extra_args: --no-verification
 
       - name: TruffleHog skipped
         if: steps.trufflehog_range.outputs.should_scan != 'true' && steps.trufflehog_range.outputs.tree_scan != 'true'
