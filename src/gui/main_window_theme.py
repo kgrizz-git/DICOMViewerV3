@@ -104,5 +104,6 @@ def get_theme_viewer_background_color(theme: str) -> QColor:
     Returns:
         QColor for ImageViewer.set_background_color()
     """
+    _ = theme  # reserved for theme-specific backgrounds
     # Letterbox around the image: keep the same near-black frame in both themes.
     return QColor(14, 14, 14)  # #0e0e0e

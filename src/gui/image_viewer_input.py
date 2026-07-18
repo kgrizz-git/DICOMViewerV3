@@ -343,13 +343,13 @@ class ImageViewerInputMixin:
             and hasattr(parent, "is_focused")
             and hasattr(parent, "set_focused")
             and hasattr(parent, "focus_changed")
+            and not bool(parent.is_focused)
+            and event.button() == Qt.MouseButton.LeftButton
         ):
-            if not bool(parent.is_focused):
-                if event.button() == Qt.MouseButton.LeftButton:
-                    event.accept()
-                    parent.set_focused(True)
-                    parent.focus_changed.emit(True)
-                    return
+            event.accept()
+            parent.set_focused(True)
+            parent.focus_changed.emit(True)
+            return
 
         if event.button() == Qt.MouseButton.LeftButton:
             # Handle select mode - allow default Qt selection behavior
@@ -408,8 +408,6 @@ class ImageViewerInputMixin:
                         parent = parent.parentItem()
                 if is_empty_space and not (is_roi_item or is_measurement_item or is_handle or is_measurement_text or is_measurement_child or is_text_annotation_item or is_arrow_annotation_item):
                     # Clicking on empty space - deselect everything
-                    # print(f"[DEBUG-DESELECT] Empty space click detected in Select mode")
-                    # print(f"[DEBUG-DESELECT]   is_empty_space: {is_empty_space}, is_roi_item: {is_roi_item}, is_measurement_item: {is_measurement_item}")
 
                     if self.scene is not None:
                         # First, explicitly deselect all measurements, text annotations, arrow annotations, and their text labels
@@ -421,16 +419,11 @@ class ImageViewerInputMixin:
 
                         # Clear scene selection (this will visually deselect ROIs)
                         list(self.scene.selectedItems())
-                        # print(f"[DEBUG-DESELECT]   Selected items in scene before clear: {len(selected_before)}")
-                        # for item in selected_before:
-                        #     print(f"[DEBUG-DESELECT]     Item: {type(item).__name__}, isSelected: {item.isSelected()}")
                         self.scene.clearSelection()
                         list(self.scene.selectedItems())
-                        # print(f"[DEBUG-DESELECT]   Selected items in scene after clear: {len(selected_after)}")
 
                     # Emit signal to clear ROI selection - this is critical for proper ROI deselection
                     # This must happen BEFORE calling super() to prevent Qt's default behavior from interfering
-                    # print(f"[DEBUG-DESELECT]   Emitting image_clicked_no_roi signal")
                     self.image_clicked_no_roi.emit()
 
                     # Accept the event to prevent further processing

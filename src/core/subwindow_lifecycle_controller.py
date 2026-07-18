@@ -512,6 +512,7 @@ class SubwindowLifecycleController:
 
     def display_rois_for_subwindow(self, idx: int, preserve_view: bool = False) -> None:
         """Display ROIs for a specific subwindow (subwindow-scoped; delegates to app state)."""
+        _ = preserve_view  # retained for call-site compatibility
         app = self.app
         if idx not in app.subwindow_managers:
             return

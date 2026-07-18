@@ -461,12 +461,6 @@ class ImageViewerViewMixin:
             preserve_view: If True, preserve current zoom and pan position
             apply_inversion: Optional bool to override inversion state. If None, uses self.image_inverted
         """
-        # print(f"[VIEWER] set_image called")
-        # print(f"[VIEWER] Image size: {image.size}, mode: {image.mode}, preserve_view: {preserve_view}")
-        # print(f"[VIEWER] Image id: {id(image)}")
-        # print(f"[VIEWER] Apply inversion: {apply_inversion}")
-        # print(f"[VIEWER] Current image_inverted: {self.image_inverted}")
-        # print(f"[VIEWER] Current original_image id: {id(self.original_image) if self.original_image else 'None'}")
 
         # Store original image for inversion
         # When preserve_view=False: new slice, always store new original_image
@@ -474,11 +468,7 @@ class ImageViewerViewMixin:
         # When preserve_view=True and apply_inversion is None: new slice (scrolling), store new original_image
         if not preserve_view:
             # New slice - always store new original image (non-inverted)
-            # print(f"[VIEWER] Storing new original_image (preserve_view=False)")
-            # print(f"[VIEWER] Before: original_image id = {id(self.original_image) if self.original_image else 'None'}")
-            # print(f"[VIEWER] Image to copy id = {id(image)}")
             self.original_image = image.copy()
-            # print(f"[VIEWER] After: original_image id = {id(self.original_image)}")
 
             # Update inversion state FIRST before determining if we need to invert
             # If apply_inversion is provided, use it (stored state for this series)
@@ -497,8 +487,6 @@ class ImageViewerViewMixin:
             if should_invert:
                 image = self._apply_inversion(image)
         elif preserve_view:
-            # print(f"[VIEWER] preserve_view=True branch")
-            # print(f"[VIEWER] apply_inversion = {apply_inversion}")
             # Same series - might be same slice (inversion toggle) or new slice (scrolling)
             if apply_inversion is not None:
                 # Same slice - inversion toggle, preserve existing original_image
@@ -512,15 +500,10 @@ class ImageViewerViewMixin:
                         image = self.original_image
             else:
                 # New slice (scrolling within same series) - store new original_image
-                # print(f"[VIEWER] Storing new original_image (scrolling within same series)")
-                # print(f"[VIEWER] Before: original_image id = {id(self.original_image) if self.original_image else 'None'}")
-                # print(f"[VIEWER] Image to copy id = {id(image)}")
                 self.original_image = image.copy()
-                # print(f"[VIEWER] After: original_image id = {id(self.original_image)}")
                 # Don't reset inversion state - preserve it for the series
                 # Apply inversion if the series is currently inverted
                 if self.image_inverted:
-                    # print(f"[VIEWER] Applying inversion to new slice (series is inverted)")
                     image = self._apply_inversion(image)
                 # If image_inverted is False, image is already non-inverted (from dataset), use as-is
         # If preserve_view is True and apply_inversion is None,
@@ -541,7 +524,6 @@ class ImageViewerViewMixin:
             saved_v_scroll = None
 
         # Convert PIL Image to QPixmap
-        # print(f"[VIEWER] Converting PIL Image to QImage...")
 
         # Keep the bytes buffer alive as an instance variable so Qt can
         # safely read it until the next set_image() call.  This eliminates the
@@ -564,39 +546,27 @@ class ImageViewerViewMixin:
             qimage = QImage(self._display_bytes_ref, image.width, image.height, bytes_per_line,
                           QImage.Format.Format_RGB888)
 
-        # print(f"[VIEWER] QImage created, converting to QPixmap...")
         pixmap = QPixmap.fromImage(qimage)
-        # print(f"[VIEWER] QPixmap created: {pixmap.width()}x{pixmap.height()}, isNull: {pixmap.isNull()}")
-        # print(f"[VIEWER] Pixmap cache key: {pixmap.cacheKey() if hasattr(pixmap, 'cacheKey') else 'N/A'}")
 
         # Remove old image item only
         # Note: ROIs and overlays will be preserved and re-added by their managers
         if self.image_item is not None:
             self.image_item.pixmap()
-            # print(f"[VIEWER] Removing old image item, pixmap cache key: {old_pixmap.cacheKey() if old_pixmap and hasattr(old_pixmap, 'cacheKey') else 'None'}")
             self.scene.removeItem(self.image_item)
 
         # Create new image item
-        # print(f"[VIEWER] Creating QGraphicsPixmapItem...")
         self.image_item = QGraphicsPixmapItem(pixmap)
         # Set image item to lowest Z-value so other items appear on top
         self.image_item.setZValue(0)
-        # print(f"[VIEWER] New image item created, pixmap cache key: {self.image_item.pixmap().cacheKey() if self.image_item.pixmap() and hasattr(self.image_item.pixmap(), 'cacheKey') else 'None'}")
-        # print(f"[VIEWER] Adding item to scene...")
         self.scene.addItem(self.image_item)
-        # print(f"[VIEWER] Item added to scene successfully")
         self._apply_smoothing_mode()
 
         # Force scene and viewport update to ensure display refreshes
-        # print(f"[VIEWER] Forcing scene and viewport update...")
         self.scene.invalidate(self.scene.sceneRect())
         self.viewport().update()
-        # print(f"[VIEWER] Scene and viewport updated")
 
         # Set scene rect to image dimensions to ensure proper overlay positioning
-        # print(f"[VIEWER] Getting image bounding rect...")
         image_rect = self.image_item.boundingRect()
-        # print(f"[VIEWER] Image rect: {image_rect}")
 
         # Calculate fixed scene rect size that accommodates:
         # - If image is larger than viewport: 2x image size
@@ -622,17 +592,13 @@ class ImageViewerViewMixin:
         # Otherwise, use 3x image size + viewport at zoom 0.5
         if image_width > viewport_width_scene:
             scene_width = image_width * 2.0
-            # print(f"[SCENE_RECT] Image width ({image_width:.2f}) > viewport width in scene coords ({viewport_width_scene:.2f}) - using 2x image size: {scene_width:.2f}")
         else:
             scene_width = 3.0 * image_width + viewport_at_zoom_0_5_width
-            # print(f"[SCENE_RECT] Image width ({image_width:.2f}) <= viewport width in scene coords ({viewport_width_scene:.2f}) - using 3x image size + viewport at zoom 0.5: {scene_width:.2f}")
 
         if image_height > viewport_height_scene:
             scene_height = image_height * 2.0
-            # print(f"[SCENE_RECT] Image height ({image_height:.2f}) > viewport height in scene coords ({viewport_height_scene:.2f}) - using 2x image size: {scene_height:.2f}")
         else:
             scene_height = 3.0 * image_height + viewport_at_zoom_0_5_height
-            # print(f"[SCENE_RECT] Image height ({image_height:.2f}) <= viewport height in scene coords ({viewport_height_scene:.2f}) - using 3x image size + viewport at zoom 0.5: {scene_height:.2f}")
 
         # Calculate margins to center the image in the expanded scene rect
         margin_x = (scene_width - image_width) / 2.0
@@ -752,7 +718,10 @@ class ImageViewerViewMixin:
         Args:
             center_image: If True, center the image in the viewport (for initialization/reset).
                          If False, preserve current view position.
+                         Currently the view is always recentered; the flag is retained for
+                         call-site compatibility.
         """
+        _ = center_image  # API compatibility; centering is always applied today
         fit_zoom = self.compute_fit_zoom()
         if fit_zoom is None:
             return

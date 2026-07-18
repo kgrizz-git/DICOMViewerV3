@@ -128,7 +128,6 @@ class TestInitNewSeriesState:
 
         _init_new_series_state(
             mgr,
-            dataset=object(),
             rescale_slope=2.0,
             rescale_intercept=1.0,
             series_identifier="study:series",
@@ -144,7 +143,7 @@ class TestInitNewSeriesState:
 
     def test_use_rescaled_values_false_when_slope_or_intercept_missing(self):
         mgr = _make_mgr()
-        _init_new_series_state(mgr, dataset=object(), rescale_slope=None, rescale_intercept=1.0, series_identifier="s")
+        _init_new_series_state(mgr, rescale_slope=None, rescale_intercept=1.0, series_identifier="s")
         assert mgr.view_state_manager.use_rescaled_values is False
 
 
@@ -185,7 +184,7 @@ class TestComputePixelRangeWl:
         mgr = _make_mgr()
         mgr.dicom_processor.get_series_pixel_value_range.return_value = (0.0, 100.0)
         ds = _make_dataset()
-        result = _compute_pixel_range_wl(mgr, ds, [ds], use_rescaled_values=False)
+        result = _compute_pixel_range_wl(mgr, [ds], use_rescaled_values=False)
         assert result == (None, None, 0.0, 100.0)
         mgr.view_state_manager.set_series_pixel_range.assert_called_once_with(0.0, 100.0)
 
@@ -193,7 +192,7 @@ class TestComputePixelRangeWl:
         mgr = _make_mgr()
         mgr.dicom_processor.get_series_pixel_value_range.side_effect = RuntimeError("boom")
         ds = _make_dataset()
-        result = _compute_pixel_range_wl(mgr, ds, [ds], use_rescaled_values=False)
+        result = _compute_pixel_range_wl(mgr, [ds], use_rescaled_values=False)
         assert result == (None, None, None, None)
         mgr.view_state_manager.clear_series_pixel_range.assert_called_once()
 

@@ -116,11 +116,10 @@ def dispatch_app_key_event(app: Any, event: Any) -> bool | None:
         app.main_window.set_fullscreen(False)
         return True
 
-    if event.key() == Qt.Key.Key_Z:
-        if event.modifiers() & (
-            Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier
-        ):
-            return False
+    if event.key() == Qt.Key.Key_Z and event.modifiers() & (
+        Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier
+    ):
+        return False
 
     if event.key() in (Qt.Key.Key_1, Qt.Key.Key_2, Qt.Key.Key_3, Qt.Key.Key_4):
         focused_widget = QApplication.focusWidget()

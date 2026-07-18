@@ -81,6 +81,7 @@ def build_cine_export_frame_indices(
 
 def effective_fps_for_encoder(video_format: str, requested_fps: float) -> float:
     """Clamp FPS to a sane range for FFmpeg / GIF writers."""
+    _ = video_format  # reserved for format-specific clamps
     fps = float(requested_fps)
     if fps <= 0:
         fps = 10.0

@@ -461,9 +461,8 @@ class CrosshairManager:
 
         # Remove from storage
         key = (self.current_study_uid, self.current_series_uid, self.current_instance_identifier)
-        if key in self.crosshairs:
-            if crosshair_item in self.crosshairs[key]:
-                self.crosshairs[key].remove(crosshair_item)
+        if key in self.crosshairs and crosshair_item in self.crosshairs[key]:
+            self.crosshairs[key].remove(crosshair_item)
 
     def clear_crosshairs_for_slice(self, scene) -> None:
         """

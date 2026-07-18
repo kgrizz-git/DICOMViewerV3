@@ -116,12 +116,8 @@ class IntensityProjectionControlsWidget(QWidget):
     def _on_enable_changed(self, state: int) -> None:
         """Handle enable checkbox state change."""
         enabled = (state == Qt.CheckState.Checked.value)
-        # print(f"[DEBUG _on_enable_changed] Called from checkbox stateChanged signal: state={state}, enabled={enabled}")
-        # print(f"[DEBUG _on_enable_changed] Checkbox.isChecked()={self.enable_checkbox.isChecked()}")
         self._set_controls_enabled(enabled)
-        # print(f"[DEBUG _on_enable_changed] Emitting enabled_changed signal with enabled={enabled}")
         self.enabled_changed.emit(enabled)
-        # print(f"[DEBUG _on_enable_changed] Signal emitted, checkbox.isChecked()={self.enable_checkbox.isChecked()}")
 
     def _on_projection_type_changed(self, text: str) -> None:
         """Handle projection type dropdown change."""
@@ -164,22 +160,16 @@ class IntensityProjectionControlsWidget(QWidget):
             enabled: True to enable, False to disable
             keep_signals_blocked: If True, don't unblock signals at the end (caller will handle it)
         """
-        # DEBUG: Log current state before change
         current_checked = self.enable_checkbox.isChecked()
         self.enable_checkbox.checkState()
         self.isVisible()
         self.isEnabled()
         self.enable_checkbox.isVisible()
         self.enable_checkbox.isEnabled()
-        # print(f"[DEBUG set_enabled] Called with enabled={enabled}, keep_signals_blocked={keep_signals_blocked}")
-        # print(f"[DEBUG set_enabled] Current state: isChecked={current_checked}, checkState={current_check_state}")
-        # print(f"[DEBUG set_enabled] Widget visible={widget_visible}, enabled={widget_enabled}")
-        # print(f"[DEBUG set_enabled] Checkbox visible={checkbox_visible}, enabled={checkbox_enabled}")
 
         # Check if state already matches - but still update to ensure visual state is correct
         # (needed for cases where checkbox state might be out of sync)
         if current_checked == enabled:
-            # print(f"[DEBUG set_enabled] State already matches ({enabled}), but forcing update to ensure sync")
             # Don't return - continue to update to ensure visual state is correct
             pass
 
@@ -191,12 +181,10 @@ class IntensityProjectionControlsWidget(QWidget):
         check_state = Qt.CheckState.Checked if enabled else Qt.CheckState.Unchecked
         self.enable_checkbox.setCheckState(check_state)
         self.enable_checkbox.isChecked()
-        # print(f"[DEBUG set_enabled] After setCheckState: isChecked={after_setcheckstate}")
 
         # Also use setChecked as a backup to ensure state is set
         self.enable_checkbox.setChecked(enabled)
         self.enable_checkbox.isChecked()
-        # print(f"[DEBUG set_enabled] After setChecked: isChecked={after_setchecked}")
 
         self._set_controls_enabled(enabled)
 
@@ -204,18 +192,14 @@ class IntensityProjectionControlsWidget(QWidget):
         if not keep_signals_blocked and not was_blocked:
             # Before unblocking, verify the state is correct
             verify_state = self.enable_checkbox.isChecked()
-            # print(f"[DEBUG set_enabled] Before unblocking: checkbox.isChecked()={verify_state}, target={enabled}")
 
             # Only unblock if state matches what we set it to
             if verify_state == enabled:
                 self.enable_checkbox.blockSignals(False)
-                # print(f"[DEBUG set_enabled] Unblocked signals (was_blocked={was_blocked}), state verified as {enabled}")
             else:
                 # State doesn't match - something went wrong, keep signals blocked
-                # print(f"[DEBUG set_enabled] ERROR: State mismatch! Expected {enabled}, got {verify_state}. Keeping signals blocked.")
                 pass
         else:
-            # print(f"[DEBUG set_enabled] Keeping signals blocked (keep_signals_blocked={keep_signals_blocked}, was_blocked={was_blocked})")
             pass
 
         # Force immediate repaint to ensure visual state is refreshed
@@ -227,7 +211,6 @@ class IntensityProjectionControlsWidget(QWidget):
 
         # DEBUG: Final state check
         self.enable_checkbox.isChecked()
-        # print(f"[DEBUG set_enabled] Final state: isChecked={final_checked}")
 
     def set_projection_type(self, projection_type: str) -> None:
         """

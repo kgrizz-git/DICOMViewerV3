@@ -73,7 +73,7 @@ def test_get_current_plane(monkeypatch) -> None:
     stack = _FakeStack()
     monkeypatch.setattr(c, "_get_stack", lambda idx: stack)
     monkeypatch.setattr(c, "_get_slice_index", lambda idx: 1)
-    monkeypatch.setattr(c, "_dataset_idx_to_sorted_pos", lambda idx, di, st: 1)
+    monkeypatch.setattr(c, "_dataset_idx_to_sorted_pos", lambda di, st: 1)
     assert c.get_current_plane(0) is stack.planes[1]
 
 
@@ -130,11 +130,11 @@ def test_dataset_idx_to_sorted_pos_direct_and_clamp() -> None:
     c = _coord()
     stack = _FakeStack()
     stack.original_indices = [0, 2, 4]
-    assert c._dataset_idx_to_sorted_pos(0, 2, stack) == 1  # direct hit
-    assert c._dataset_idx_to_sorted_pos(0, 3, stack) == 1  # nearest to 3 is 2 (pos 1)
+    assert c._dataset_idx_to_sorted_pos(2, stack) == 1  # direct hit
+    assert c._dataset_idx_to_sorted_pos(3, stack) == 1  # nearest to 3 is 2 (pos 1)
     empty = _FakeStack()
     empty.original_indices = []
-    assert c._dataset_idx_to_sorted_pos(0, 3, empty) is None
+    assert c._dataset_idx_to_sorted_pos(3, empty) is None
 
 
 # --------------------------------------------------------------------------- #
@@ -161,7 +161,7 @@ def test_on_slice_changed_syncs_and_surfaces_hint(monkeypatch) -> None:
     stack = _FakeStack()
     monkeypatch.setattr(c, "_get_stack", lambda idx: stack)
     monkeypatch.setattr(c, "_get_slice_index", lambda idx: 0)
-    monkeypatch.setattr(c, "_dataset_idx_to_sorted_pos", lambda idx, di, st: 0)
+    monkeypatch.setattr(c, "_dataset_idx_to_sorted_pos", lambda di, st: 0)
     monkeypatch.setattr(c, "_update_target", lambda t, plane: "outside_coverage")
     c.on_slice_changed(0)
     c.app.main_window.update_status.assert_called_once()
@@ -191,7 +191,7 @@ def test_on_slice_changed_uses_mapper_for_permuted_indices(monkeypatch) -> None:
     stack = _PermutedStack()
     seen: list[tuple[int, object]] = []
 
-    def _map(idx, dataset_idx, st):
+    def _map(dataset_idx, st):
         return st.original_indices.index(dataset_idx)
 
     def _update(target, plane):
@@ -210,7 +210,7 @@ def test_on_slice_changed_uses_mapper_for_permuted_indices(monkeypatch) -> None:
 
     # Out-of-range dataset index 9 → mapper clamp/nearest → sorted_pos for nearest
     # nearest to 9 among [2,0,1] is 2 → sorted_pos 0 → plane "p0"
-    def _map_clamp(idx, dataset_idx, st):
+    def _map_clamp(dataset_idx, st):
         try:
             return st.original_indices.index(dataset_idx)
         except ValueError:

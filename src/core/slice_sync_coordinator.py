@@ -115,7 +115,7 @@ class SliceSyncCoordinator:
         if stack is None:
             return None
         slice_idx = self._get_slice_index(idx)
-        sorted_pos = self._dataset_idx_to_sorted_pos(idx, slice_idx, stack)
+        sorted_pos = self._dataset_idx_to_sorted_pos(slice_idx, stack)
         if sorted_pos is None:
             return None
         return stack.planes[sorted_pos]
@@ -196,9 +196,7 @@ class SliceSyncCoordinator:
         # ordered by anatomic position; original_indices holds the reverse map.
         # Do not index planes with the raw dataset index (would desync when the
         # permutation is non-identity).
-        sorted_pos = self._dataset_idx_to_sorted_pos(
-            source_idx, source_slice_idx, source_stack
-        )
+        sorted_pos = self._dataset_idx_to_sorted_pos(source_slice_idx, source_stack)
         if sorted_pos is None:
             return
         source_plane = source_stack.planes[sorted_pos]
@@ -266,7 +264,7 @@ class SliceSyncCoordinator:
         return stack
 
     def _dataset_idx_to_sorted_pos(
-        self, idx: int, dataset_idx: int, stack: SliceStack
+        self, dataset_idx: int, stack: SliceStack
     ) -> int | None:
         """
         Map a dataset-list index (used as current_slice_index) to the sorted

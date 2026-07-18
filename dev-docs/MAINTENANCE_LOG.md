@@ -8,6 +8,12 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-18
 
+- Completed the Sonar MAJOR mechanical sweep
+  (`plans/SONARQUBE_MAJOR_MECHANICAL_SWEEP_PLAN_20260718.md`): cleared all open
+  `python:S125`, `python:S1066`, and `python:S1172` findings (commented-out
+  code, collapsible ifs, unused parameters with signature-safe removals or
+  `_ = param` retention). Fresh analysis: **408** priority findings (down from
+  454); targeted three MAJOR rules at 0.
 - Completed the slice display manager Sonar slice
   (`plans/SONARQUBE_SLICE_DISPLAY_MANAGER_SLICE_PLAN_20260718.md`): extracted
   helpers for `_render_base_image_pipeline`, `_sync_controls_and_metadata`,

@@ -428,6 +428,7 @@ def create_projection_dataset(
     Returns:
         Modified Dataset with projection as pixel data, or None if failed
     """
+    _ = use_rescaled_values  # retained for API compatibility
     try:
         # Get series datasets
         if study_uid not in studies or series_uid not in studies[study_uid]:

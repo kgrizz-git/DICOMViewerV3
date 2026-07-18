@@ -64,7 +64,6 @@ def format_final_status(
     num_series: int,
     num_files: int,
     source_name: str,
-    num_processed: int | None = None,
     non_dicom_count: int = 0,
     duplicate_count: int = 0,
     extension_skipped_count: int = 0,
@@ -76,7 +75,6 @@ def format_final_status(
         num_series: Number of series in the batch.
         num_files: Number of files loaded in the batch.
         source_name: Human-readable label for the source.
-        num_processed: Unused; kept for call-site compatibility.
         non_dicom_count: Files that failed to load (attempted but not DICOM or errors).
         duplicate_count: Duplicate files that were not added.
         extension_skipped_count: Files skipped by extension (not attempted).
@@ -352,7 +350,6 @@ def run_load_pipeline(
         # ── Status bar update ──────────────────────────────────────────────
         num_studies, num_series, num_files = batch_counts_from_merge_result(merge_result)
         extension_skipped = loader.get_extension_skipped_count()
-        num_processed = loader.get_attempted_file_count() + extension_skipped
         non_dicom_count = len(loader.get_failed_files())
         duplicate_count = merge_result.skipped_file_count
         if was_cancelled:
@@ -366,7 +363,6 @@ def run_load_pipeline(
                 num_series,
                 num_files,
                 source_name,
-                num_processed=num_processed,
                 non_dicom_count=non_dicom_count,
                 duplicate_count=duplicate_count,
                 extension_skipped_count=extension_skipped,
@@ -681,7 +677,6 @@ def run_load_pipeline_async(
         # Status bar update
         num_studies, num_series, num_files = batch_counts_from_merge_result(merge_result)
         extension_skipped = loader.get_extension_skipped_count()
-        num_processed = loader.get_attempted_file_count() + extension_skipped
         non_dicom_count = len(loader.get_failed_files())
         duplicate_count = merge_result.skipped_file_count
         merge_paths = (
@@ -704,7 +699,6 @@ def run_load_pipeline_async(
                 num_series,
                 num_files,
                 source_name,
-                num_processed=num_processed,
                 non_dicom_count=non_dicom_count,
                 duplicate_count=duplicate_count,
                 extension_skipped_count=extension_skipped,

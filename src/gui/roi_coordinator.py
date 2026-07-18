@@ -542,9 +542,6 @@ class ROICoordinator:
     def handle_image_clicked_no_roi(self) -> None:
         """Handle image click when not on an ROI - deselect current ROI."""
         self.roi_manager.exit_roi_geometry_edit_mode()
-        # print(f"[DEBUG-DESELECT] handle_image_clicked_no_roi: Called")
-        # print(f"[DEBUG-DESELECT]   Current selected ROI: {id(self.roi_manager.get_selected_roi()) if self.roi_manager.get_selected_roi() else None}")
-        # print(f"[DEBUG-DESELECT]   Scene: {id(self.image_viewer.scene) if self.image_viewer.scene else None}")
 
         # Deselect ROI
         self.roi_manager.select_roi(None)
@@ -552,23 +549,16 @@ class ROICoordinator:
         # Clear scene selection to prevent Qt's default mouse release behavior from re-selecting the ROI
         if self.image_viewer.scene is not None:
             list(self.image_viewer.scene.selectedItems())
-            # print(f"[DEBUG-DESELECT]   Selected items in scene before clear: {len(selected_items)}")
-            # for item in selected_items:
-            #     print(f"[DEBUG-DESELECT]     Item: {type(item).__name__}, isSelected: {item.isSelected()}")
             self.image_viewer.scene.clearSelection()
             list(self.image_viewer.scene.selectedItems())
-            # print(f"[DEBUG-DESELECT]   Selected items in scene after clear: {len(selected_items_after)}")
 
         # Clear ROI list selection
         self.roi_list_panel.roi_list.currentItem()
-        # print(f"[DEBUG-DESELECT]   ROI list current item before clear: {current_list_item.text() if current_list_item else None}")
         self.roi_list_panel.select_roi_in_list(None)
         self.roi_list_panel.roi_list.currentItem()
-        # print(f"[DEBUG-DESELECT]   ROI list current item after clear: {current_list_item_after.text() if current_list_item_after else None}")
 
         # Clear ROI statistics panel
         self.roi_statistics_panel.clear_statistics()
-        # print(f"[DEBUG-DESELECT]   Finished handle_image_clicked_no_roi")
 
     def handle_roi_selected(self, roi) -> None:
         """
@@ -586,7 +576,6 @@ class ROICoordinator:
                     break
 
             if not roi_belongs:
-                # print(f"[DEBUG-OVERLAY] handle_roi_selected: ROI {id(roi)} doesn't belong to manager {id(self.roi_manager)}, ignoring")
                 return
 
         self.update_roi_statistics(roi)
@@ -655,12 +644,10 @@ class ROICoordinator:
         Args:
             roi: Deleted ROI item
         """
-        # print(f"[DEBUG-ROI] handle_roi_deleted called for ROI {id(roi)}")
         # Explicitly remove statistics overlay from scene
         if self.image_viewer.scene is not None:
             # Check if ROI still has overlay before trying to remove
             if hasattr(roi, 'statistics_overlay_item') and roi.statistics_overlay_item is not None:
-                # print(f"[DEBUG-ROI] Removing overlay from deleted ROI")
                 self.roi_manager.remove_statistics_overlay(roi, self.image_viewer.scene)
 
         # Mark overlay visibility false to prevent recreation via stale callbacks
@@ -677,7 +664,6 @@ class ROICoordinator:
             instance_identifier = self.get_current_slice_index()
             remaining_rois = self.roi_manager.get_rois_for_slice(study_uid, series_uid, instance_identifier)
             if remaining_rois:
-                # print(f"[DEBUG-ROI] Rebuilding overlays for {len(remaining_rois)} remaining ROIs")
                 self.update_roi_statistics_overlays()
 
         # Clear statistics if this was the selected ROI

@@ -41,7 +41,6 @@ def _set_rescale_toggle_state(mgr: Any, checked: bool) -> None:
 
 def _init_new_series_state(
     mgr: Any,
-    dataset: Dataset,
     rescale_slope: float | None,
     rescale_intercept: float | None,
     series_identifier: str,
@@ -106,7 +105,6 @@ def _build_presets_and_extract_wl(
 
 def _compute_pixel_range_wl(
     mgr: Any,
-    dataset: Dataset,
     series_datasets: list[Dataset],
     use_rescaled_values: bool,
 ) -> tuple[float | None, float | None, float | None, float | None]:
@@ -338,10 +336,11 @@ def resolve_window_level_for_series_transition(
     rescale_intercept: float | None,
 ) -> tuple[float | None, float | None, bool]:
     """Resolve window/level and rescale mode across same-series vs new-series transitions."""
+    _ = current_series_uid  # retained for call-site / API compatibility
 
     # -- 1. If new study/series: initialise rescale state, reset W/L ---------
     if is_new_study_series:
-        _init_new_series_state(mgr, dataset, rescale_slope, rescale_intercept, series_identifier)
+        _init_new_series_state(mgr, rescale_slope, rescale_intercept, series_identifier)
 
     # -- 2. Determine use_rescaled_values ------------------------------------
     window_center = mgr.view_state_manager.current_window_center
@@ -388,7 +387,7 @@ def resolve_window_level_for_series_transition(
 
                 # 4a. Compute series pixel range
                 _, _, series_pixel_min, series_pixel_max = _compute_pixel_range_wl(
-                    mgr, dataset, series_datasets, use_rescaled_values
+                    mgr, series_datasets, use_rescaled_values
                 )
 
                 # 4b. Build presets and extract embedded W/L

@@ -765,18 +765,21 @@ class SliceDisplayManager:
             valid_min = pixel_min
             valid_max = pixel_max
         if (
-            window_center < valid_min
-            or window_center > valid_max
-            or window_width < 1.0
-            or window_width > (valid_max - valid_min)
+            (
+                window_center < valid_min
+                or window_center > valid_max
+                or window_width < 1.0
+                or window_width > (valid_max - valid_min)
+            )
+            and valid_min is not None
+            and valid_max is not None
         ):
-            if valid_min is not None and valid_max is not None:
-                window_center = (valid_min + valid_max) / 2.0
-                window_width = valid_max - valid_min
-                if window_width <= 0:
-                    window_width = 1.0
-                self.view_state_manager.current_window_center = window_center
-                self.view_state_manager.current_window_width = window_width
+            window_center = (valid_min + valid_max) / 2.0
+            window_width = valid_max - valid_min
+            if window_width <= 0:
+                window_width = 1.0
+            self.view_state_manager.current_window_center = window_center
+            self.view_state_manager.current_window_width = window_width
         return window_center, window_width
 
     def _store_window_level(
@@ -925,12 +928,14 @@ class SliceDisplayManager:
         current_series_uid: str,
     ) -> int:
         """Count slices in the active series, or 0 when context is incomplete."""
-        if current_studies and current_study_uid and current_series_uid:
-            if (
-                current_study_uid in current_studies
-                and current_series_uid in current_studies[current_study_uid]
-            ):
-                return len(current_studies[current_study_uid][current_series_uid])
+        if (
+            current_studies
+            and current_study_uid
+            and current_series_uid
+            and current_study_uid in current_studies
+            and current_series_uid in current_studies[current_study_uid]
+        ):
+            return len(current_studies[current_study_uid][current_series_uid])
         return 0
 
     def _sum_slice_thickness_over_range(
@@ -1130,11 +1135,6 @@ class SliceDisplayManager:
         update_controls: bool = True,
         update_metadata: bool = True
     ) -> None:
-        # DEBUG: Log when display_slice is called
-        # print(f"[WL UNIT DEBUG] display_slice called")
-        # print(f"[WL UNIT DEBUG]   current_slice_index: {current_slice_index}")
-        # if self.view_state_manager:
-        #     print(f"[WL UNIT DEBUG]   view_state_manager.rescale_type (before): {self.view_state_manager.rescale_type}")
         """
         Display a DICOM slice.
         
@@ -1191,9 +1191,7 @@ class SliceDisplayManager:
                             "This is a known issue with JPEG-LS compression."
                         )
 
-            # DEBUG: Track series detection
             getattr(dataset, 'Modality', 'Unknown')
-            # print(f"[DEBUG-WL] display_slice: modality={modality}, is_new_study_series={is_new_study_series}, series_id={series_identifier[:20]}...")
 
             with perf_timer("first_paint.slice.window_level_resolution"):
                 window_center, window_width, use_rescaled_values = self._resolve_window_level_for_series_transition(
@@ -1253,7 +1251,6 @@ class SliceDisplayManager:
         except MemoryError as e:
             # Re-raise MemoryError with context for caller to handle
             error_msg = f"Memory error displaying slice: {e!s}"
-            # print(error_msg)
             raise MemoryError(error_msg) from e
         except Exception as e:
             # Re-raise with context for caller to handle
@@ -1261,7 +1258,6 @@ class SliceDisplayManager:
             error_msg = f"Error displaying slice: {e!s}"
             if error_type not in error_msg:
                 error_msg = f"{error_type}: {error_msg}"
-            # print(error_msg)
             raise
 
     def _roi_belongs_to_slice(
@@ -1447,7 +1443,6 @@ class SliceDisplayManager:
         Args:
             slice_index: New slice index
         """
-        # print(f"[SLICE] handle_slice_changed called with slice_index: {slice_index}")
         if not self.current_studies or not self.current_series_uid:
             return
 
@@ -1456,8 +1451,6 @@ class SliceDisplayManager:
             self.current_slice_index = slice_index
             dataset = datasets[slice_index]
 
-            # print(f"[SLICE] Dataset SOPInstanceUID: {getattr(dataset, 'SOPInstanceUID', 'N/A')}")
-            # print(f"[SLICE] Dataset InstanceNumber: {getattr(dataset, 'InstanceNumber', 'N/A')}")
             self.display_slice(
                 dataset,
                 self.current_studies,

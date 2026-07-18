@@ -292,14 +292,13 @@ class TagEditDialog(QDialog):
                 return False
 
         # UID validation (UI: must be valid UID format)
-        elif self.vr == "UI":
-            if not re.match(r'^[\d.]+$', value):
-                QMessageBox.warning(
-                    self,
-                    "Invalid UID Format",
-                    "UID must contain only digits and dots"
-                )
-                return False
+        elif self.vr == "UI" and not re.match(r'^[\d.]+$', value):
+            QMessageBox.warning(
+                self,
+                "Invalid UID Format",
+                "UID must contain only digits and dots"
+            )
+            return False
 
         # String length validation
         max_lengths = {

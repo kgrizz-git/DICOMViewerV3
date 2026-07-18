@@ -65,15 +65,19 @@ class ROIGraphicsEllipseItem(QGraphicsEllipseItem):
         super().mouseMoveEvent(event)
         if event.buttons() & Qt.MouseButton.LeftButton:
             current_pos = self.pos()
-            if self._last_callback_pos is None or (
-                current_pos - self._last_callback_pos
-            ).manhattanLength() > 1.0:
-                if self.on_moved_callback:
-                    try:
-                        self.on_moved_callback()
-                        self._last_callback_pos = current_pos
-                    except Exception:
-                        pass
+            if (
+                self.on_moved_callback
+                and (
+                    self._last_callback_pos is None
+                    or (current_pos - self._last_callback_pos).manhattanLength()
+                    > 1.0
+                )
+            ):
+                try:
+                    self.on_moved_callback()
+                    self._last_callback_pos = current_pos
+                except Exception:
+                    pass
 
     def shape(self) -> QPainterPath:
         """Only the ellipse outline, not the interior, is hit-testable."""
@@ -107,15 +111,19 @@ class ROIGraphicsRectItem(QGraphicsRectItem):
         super().mouseMoveEvent(event)
         if event.buttons() & Qt.MouseButton.LeftButton:
             current_pos = self.pos()
-            if self._last_callback_pos is None or (
-                current_pos - self._last_callback_pos
-            ).manhattanLength() > 1.0:
-                if self.on_moved_callback:
-                    try:
-                        self.on_moved_callback()
-                        self._last_callback_pos = current_pos
-                    except Exception:
-                        pass
+            if (
+                self.on_moved_callback
+                and (
+                    self._last_callback_pos is None
+                    or (current_pos - self._last_callback_pos).manhattanLength()
+                    > 1.0
+                )
+            ):
+                try:
+                    self.on_moved_callback()
+                    self._last_callback_pos = current_pos
+                except Exception:
+                    pass
 
     def shape(self) -> QPainterPath:
         """Only the rectangle outline, not the interior, is hit-testable."""

@@ -330,9 +330,9 @@ def get_corner_text(
         and multiframe_context is None
         and "InstanceNumber" in tags
         and total_slices is None
+        and frame_index is not None
     ):
-        if frame_index is not None:
-            frame_display = frame_index + 1
-            lines.append(f"Frame: {frame_display}/{total_frames}")
+        frame_display = frame_index + 1
+        lines.append(f"Frame: {frame_display}/{total_frames}")
 
     return "\n".join(lines)
