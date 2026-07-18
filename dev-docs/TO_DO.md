@@ -40,13 +40,14 @@ This file tracks active and near-term tasks.
 ## Static analysis
 
 - [ ] **[P2]** **Continue the local SonarQube code-smell backlog after the
-  critical first slice:** first slice is complete (priority findings 476 → 472;
-  S5727 cleared; two ROICommand S3776 findings cleared). Re-run the widened
-  reporter, then select one behavior domain at a time from the remaining
-  cognitive-complexity, duplicate-string, MAJOR, and lower-impact findings. Do
-  not mix unrelated MPR, fusion, loading, annotation, font-registry, or
-  UI-controller refactors in the same branch. Plan reference:
-  [Critical code-smell first slice](plans/SONARQUBE_CRITICAL_CODE_SMELL_FIRST_SLICE_PLAN_20260718.md).
+  undo/redo annotation-command slice:** first CRITICAL slice is done (476 →
+  472); next active plan is the remaining `undo_redo.py` Measurement / Text /
+  Arrow / Crosshair `S3776` helpers. After that, pick one behavior domain at a
+  time from remaining cognitive-complexity, duplicate-string, MAJOR, and
+  lower-impact findings. Do not mix unrelated MPR, fusion, loading, font-
+  registry, or UI-controller refactors in the same branch. Plan references:
+  [Critical first slice](plans/SONARQUBE_CRITICAL_CODE_SMELL_FIRST_SLICE_PLAN_20260718.md),
+  [Undo/redo annotation commands slice](plans/SONARQUBE_UNDO_REDO_ANNOTATION_COMMANDS_SLICE_PLAN_20260718.md).
 
 
 ## Bugs / Correctness
