@@ -1,6 +1,6 @@
 # Temporary pip-audit Exceptions
 
-**Last reviewed:** 2026-07-14
+**Last reviewed:** 2026-07-18
 
 These exceptions keep the dependency-audit workflow actionable while compatibility work is completed. They are not assertions that the vulnerabilities are harmless, and they do not suppress Grype, Semgrep, or runtime PHI protections.
 
@@ -8,6 +8,9 @@ These exceptions keep the dependency-audit workflow actionable while compatibili
 |---|---|---:|---|---|
 | `PYSEC-2026-2266` | `pydicom 2.4.5` | `3.0.2` | `pylinac==3.43.2` declares `pydicom<3`; this is a clinical QA dependency and its upgrade requires the documented verification plan. | A compatible Pylinac release permits pydicom 3 **and** the required dependency-bump / ACR-QA verification is complete. |
 | `PYSEC-2026-2132` | `click 8.1.8` | `8.3.3` | The current Semgrep release requires `click~=8.1.8`. | A Semgrep release resolves with Click 8.3.3 or later; upgrade Semgrep and remove this exception. |
+| `CVE-2026-52870` | `mcp 1.23.3` | `1.27.2` | Transitive, dev-only dependency of `semgrep`, which pins `mcp==1.23.3`. Not installed by the shipped application (`requirements.txt`); only present in the dev/security tooling environment. | A Semgrep release depends on `mcp>=1.28.1`; upgrade Semgrep and remove all three `mcp` exceptions together. |
+| `CVE-2026-52869` | `mcp 1.23.3` | `1.27.2` | Transitive, dev-only dependency of `semgrep`, which pins `mcp==1.23.3`. Not installed by the shipped application (`requirements.txt`); only present in the dev/security tooling environment. | A Semgrep release depends on `mcp>=1.28.1`; upgrade Semgrep and remove all three `mcp` exceptions together. |
+| `CVE-2026-59950` | `mcp 1.23.3` | `1.28.1` | Transitive, dev-only dependency of `semgrep`, which pins `mcp==1.23.3`. Not installed by the shipped application (`requirements.txt`); only present in the dev/security tooling environment. | A Semgrep release depends on `mcp>=1.28.1`; upgrade Semgrep and remove all three `mcp` exceptions together. |
 
 ## Monitoring and review
 
