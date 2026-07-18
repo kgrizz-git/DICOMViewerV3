@@ -20,7 +20,7 @@
 # - matplotlib: Plotting library for histogram display
 # - openpyxl: Library for reading and writing Excel files (for tag export)
 
-PySide6>=6.11.0
+PySide6>=6.11.1
 # Stays on pydicom 2.x: pylinac 3.43.2 caps it at `pydicom<3`. This also blocks the
 # imagecodecs (BSD) decoder plugin and highdicom, which need pydicom 3.x. Moving to
 # pydicom 3 requires a coordinated pylinac bump + ACR QA re-verify. See
@@ -37,11 +37,11 @@ openpyxl>=3.1.5
 sqlcipher3>=0.6.2
 # Stores the SQLCipher passphrase in the OS credential store (Windows Credential Manager, macOS Keychain, etc.)
 keyring>=25.7.0
-SimpleITK>=2.5.4  # For 3D image resampling in image fusion (Phase 2)
+SimpleITK>=2.5.5  # For 3D image resampling in image fusion (Phase 2)
 vtk>=9.6.2  # GPU-accelerated 3D volume rendering (vtkSmartVolumeMapper + QVTKRenderWindowInteractor)
 # Pinned exact version; 3.43.2 is the current verified ACR CT/MRI integration pin. Re-verify after each bump (see dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md, dev-docs/plans/DEPENDENCY_BUMP_VERIFICATION_PLAN.md).
 pylinac==3.43.2  # Automated phantom QA analysis (ACR CT + ACR MRI Large)
-scipy>=1.17.1  # pylinac numerical dependency
+scipy>=1.18.0  # pylinac numerical dependency
 scikit-image>=0.22.0  # pylinac image processing dependency
 pypdf>=6.14.2  # PDF merging for compare-mode combined PDF report
 
