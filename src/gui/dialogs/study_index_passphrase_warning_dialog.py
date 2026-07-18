@@ -15,7 +15,6 @@ The passphrase is auto-generated and never chosen by the user.
 from __future__ import annotations
 
 import platform
-from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -26,9 +25,6 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-
-if TYPE_CHECKING:
-    pass
 
 
 def _credential_store_name() -> str:

@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+_FRAME_SLIDER_TOOLTIP = "Current frame / Total frames\nRight-click to set cine bounds"
 
 class CineControlsWidget(QWidget):
     """
@@ -137,7 +138,7 @@ class CineControlsWidget(QWidget):
         self.frame_slider.setMinimum(0)
         self.frame_slider.setMaximum(0)
         self.frame_slider.setValue(0)
-        self.frame_slider.setToolTip("Current frame / Total frames\nRight-click to set cine bounds")
+        self.frame_slider.setToolTip(_FRAME_SLIDER_TOOLTIP)
         self.frame_slider.setEnabled(False)
         self.frame_slider.valueChanged.connect(self._on_frame_slider_changed)
         # Enable context menu for right-click
@@ -375,7 +376,7 @@ class CineControlsWidget(QWidget):
                 tooltip = f"Current frame / Total frames\nCine bounds: {self.loop_start_frame + 1} - {self.loop_end_frame + 1}\nRight-click to change"
                 self.frame_slider.setToolTip(tooltip)
             else:
-                self.frame_slider.setToolTip("Current frame / Total frames\nRight-click to set cine bounds")
+                self.frame_slider.setToolTip(_FRAME_SLIDER_TOOLTIP)
         elif self.loop_start_frame is not None:
             tooltip = f"Current frame / Total frames\nCine start: {self.loop_start_frame + 1}\nRight-click to set cine end or clear"
             self.frame_slider.setToolTip(tooltip)
@@ -383,7 +384,7 @@ class CineControlsWidget(QWidget):
             tooltip = f"Current frame / Total frames\nCine end: {self.loop_end_frame + 1}\nRight-click to set cine start or clear"
             self.frame_slider.setToolTip(tooltip)
         else:
-            self.frame_slider.setToolTip("Current frame / Total frames\nRight-click to set cine bounds")
+            self.frame_slider.setToolTip(_FRAME_SLIDER_TOOLTIP)
 
     def set_loop_bounds(self, start_frame: int | None, end_frame: int | None) -> None:
         """

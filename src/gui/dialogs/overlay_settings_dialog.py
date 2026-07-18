@@ -35,6 +35,7 @@ from PySide6.QtWidgets import (
 from utils.bundled_fonts import get_font_families, get_font_variants
 from utils.config_manager import ConfigManager
 
+_BTN_CHOOSE_COLOR = "Choose Color..."
 
 class OverlaySettingsDialog(QDialog):
     """
@@ -161,7 +162,7 @@ class OverlaySettingsDialog(QDialog):
         self.color_label.setStyleSheet("background-color: rgb(255, 255, 0); border: 1px solid black;")
         self.color_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        color_button = QPushButton("Choose Color...")
+        color_button = QPushButton(_BTN_CHOOSE_COLOR)
         color_button.clicked.connect(self._choose_color)
 
         color_layout.addWidget(self.color_label)
@@ -196,7 +197,7 @@ class OverlaySettingsDialog(QDialog):
         self.direction_labels_color_label = QLabel()
         self.direction_labels_color_label.setMinimumSize(50, 30)
         self.direction_labels_color_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        direction_color_button = QPushButton("Choose Color...")
+        direction_color_button = QPushButton(_BTN_CHOOSE_COLOR)
         direction_color_button.clicked.connect(self._choose_direction_labels_color)
         direction_color_layout.addWidget(self.direction_labels_color_label)
         direction_color_layout.addWidget(direction_color_button)
@@ -207,7 +208,7 @@ class OverlaySettingsDialog(QDialog):
         self.scale_markers_color_label = QLabel()
         self.scale_markers_color_label.setMinimumSize(50, 30)
         self.scale_markers_color_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        scale_markers_color_button = QPushButton("Choose Color...")
+        scale_markers_color_button = QPushButton(_BTN_CHOOSE_COLOR)
         scale_markers_color_button.clicked.connect(self._choose_scale_markers_color)
         scale_markers_color_layout.addWidget(self.scale_markers_color_label)
         scale_markers_color_layout.addWidget(scale_markers_color_button)

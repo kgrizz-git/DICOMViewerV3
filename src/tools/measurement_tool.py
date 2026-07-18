@@ -531,8 +531,7 @@ class MeasurementTool:
             temp_ref: dict[str, AngleMeasurementItem | None] = {"item": None}
 
             def _offset_cb(_off: QPointF) -> None:
-                if temp_ref["item"] is not None:
-                    pass
+                return
 
             draggable = DraggableAngleMeasurementText(None, _offset_cb)
             draggable.setDefaultTextColor(QColor(*font_color))

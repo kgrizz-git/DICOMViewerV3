@@ -43,6 +43,7 @@ from utils.config_manager import ConfigManager
 from utils.doc_urls import user_guide_hub_url
 from utils.privacy.safe_storage import DeletionResult
 
+_MSG_NO_DATA_LOADED = "No Data Loaded"
 
 class DialogCoordinator:
     """
@@ -221,7 +222,7 @@ class DialogCoordinator:
         if not current_studies:
             QMessageBox.warning(
                 self.main_window,
-                "No Data Loaded",
+                _MSG_NO_DATA_LOADED,
                 "Please load DICOM files before exporting tags."
             )
             return
@@ -258,7 +259,7 @@ class DialogCoordinator:
         if not current_studies:
             QMessageBox.warning(
                 self.main_window,
-                "No Data Loaded",
+                _MSG_NO_DATA_LOADED,
                 "Please load DICOM files before exporting images."
             )
             return
@@ -289,7 +290,7 @@ class DialogCoordinator:
         if not current_studies:
             QMessageBox.warning(
                 self.main_window,
-                "No Data Loaded",
+                _MSG_NO_DATA_LOADED,
                 "Please load DICOM files before exporting with deep anonymization.",
             )
             return
@@ -416,7 +417,7 @@ class DialogCoordinator:
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.warning(
                 self.main_window,
-                "No Data Loaded",
+                _MSG_NO_DATA_LOADED,
                 "Please load DICOM files before exporting ROI statistics."
             )
             return

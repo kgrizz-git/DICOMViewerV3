@@ -127,6 +127,8 @@ _SUPPORTED_TESTS = (
 )
 
 
+_LABEL_UFOV_RATIO = "UFOV ratio:"
+
 class NuclearQaOptionsDialog(QDialog):
     """Collect pylinac.nuclear options before analysis."""
 
@@ -203,7 +205,7 @@ class NuclearQaOptionsDialog(QDialog):
         self._threshold.setSingleStep(0.05)
         self._threshold.setDecimals(2)
         self._threshold.setValue(DEFAULT_THRESHOLD)
-        form.addRow("UFOV ratio:", self._ufov)
+        form.addRow(_LABEL_UFOV_RATIO, self._ufov)
         form.addRow("CFOV ratio:", self._cfov)
         form.addRow("Differential window (px):", self._window)
         form.addRow("Threshold (fraction of mean):", self._threshold)
@@ -316,7 +318,7 @@ class NuclearQaOptionsDialog(QDialog):
         self._tu_window.setValue(DEFAULT_TU_WINDOW_SIZE)
         form.addRow("First frame:", self._tu_first)
         form.addRow("Last frame (-1 = last):", self._tu_last)
-        form.addRow("UFOV ratio:", self._tu_ufov)
+        form.addRow(_LABEL_UFOV_RATIO, self._tu_ufov)
         form.addRow("CFOV ratio:", self._tu_cfov)
         form.addRow("Center ratio:", self._tu_center)
         form.addRow("Threshold (fraction of mean):", self._tu_threshold)
@@ -367,7 +369,7 @@ class NuclearQaOptionsDialog(QDialog):
         self._tc_search_slices = QSpinBox()
         self._tc_search_slices.setRange(MIN_SEARCH_SLICES, MAX_SEARCH_SLICES)
         self._tc_search_slices.setValue(DEFAULT_SEARCH_SLICES)
-        form.addRow("UFOV ratio:", self._tc_ufov)
+        form.addRow(_LABEL_UFOV_RATIO, self._tc_ufov)
         form.addRow("Search window (px):", self._tc_search_window)
         form.addRow("Search slices:", self._tc_search_slices)
         return page

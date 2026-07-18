@@ -170,8 +170,6 @@ class ViewStateManager:
         """
         if self.redisplay_slice_callback:
             self.redisplay_slice_callback(preserve_view)
-        else:
-            pass
 
     def apply_window_level_from_context_menu_preset(
         self, center: float, width: float, preset_index: int

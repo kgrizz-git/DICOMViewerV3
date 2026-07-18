@@ -32,6 +32,13 @@ from PySide6.QtWidgets import (
 
 from tools.roi_manager import RoiStatisticsMap
 
+_TITLE_ROI_STATISTICS = "ROI Statistics"
+_STAT_MEAN = "Mean"
+_STAT_STD_DEV = "Std Dev"
+_STAT_MIN = "Min"
+_STAT_MAX = "Max"
+_STAT_PIXELS = "Pixels"
+_STAT_AREA = "Area"
 
 class ROIStatisticsPanel(QWidget):
     """
@@ -64,7 +71,7 @@ class ROIStatisticsPanel(QWidget):
         layout.setContentsMargins(3, 4, 4, 4)
 
         # Title (will be updated with ROI identifier)
-        self.title_label = QLabel("ROI Statistics")
+        self.title_label = QLabel(_TITLE_ROI_STATISTICS)
         self.title_label.setStyleSheet("font-weight: bold; font-size: 12pt;")
         layout.addWidget(self.title_label)
 
@@ -91,12 +98,12 @@ class ROIStatisticsPanel(QWidget):
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
 
         # Set row labels
-        self.stats_table.setItem(0, 0, QTableWidgetItem("Mean"))
-        self.stats_table.setItem(1, 0, QTableWidgetItem("Std Dev"))
-        self.stats_table.setItem(2, 0, QTableWidgetItem("Min"))
-        self.stats_table.setItem(3, 0, QTableWidgetItem("Max"))
-        self.stats_table.setItem(4, 0, QTableWidgetItem("Pixels"))
-        self.stats_table.setItem(5, 0, QTableWidgetItem("Area"))
+        self.stats_table.setItem(0, 0, QTableWidgetItem(_STAT_MEAN))
+        self.stats_table.setItem(1, 0, QTableWidgetItem(_STAT_STD_DEV))
+        self.stats_table.setItem(2, 0, QTableWidgetItem(_STAT_MIN))
+        self.stats_table.setItem(3, 0, QTableWidgetItem(_STAT_MAX))
+        self.stats_table.setItem(4, 0, QTableWidgetItem(_STAT_PIXELS))
+        self.stats_table.setItem(5, 0, QTableWidgetItem(_STAT_AREA))
 
         # Initialize with empty values and units
         for i in range(6):
@@ -204,29 +211,29 @@ class ROIStatisticsPanel(QWidget):
 
         # Update title with ROI identifier
         if roi_identifier:
-            self.title_label.setText(f"ROI Statistics - {roi_identifier}")
+            self.title_label.setText(f"{_TITLE_ROI_STATISTICS} - {roi_identifier}")
         else:
-            self.title_label.setText("ROI Statistics")
+            self.title_label.setText(_TITLE_ROI_STATISTICS)
 
         # Format values (numbers only in Value column) and units (in Unit column)
         rescale_unit = rescale_type or ""
 
         rows: list[tuple[str, str, str]] = [
-            ("Mean", f"{statistics.get('mean', 0):.2f}", rescale_unit),
-            ("Std Dev", f"{statistics.get('std', 0):.2f}", rescale_unit),
-            ("Min", f"{statistics.get('min', 0):.2f}", rescale_unit),
-            ("Max", f"{statistics.get('max', 0):.2f}", rescale_unit),
-            ("Pixels", f"{statistics.get('count', 0)}", ""),
+            (_STAT_MEAN, f"{statistics.get('mean', 0):.2f}", rescale_unit),
+            (_STAT_STD_DEV, f"{statistics.get('std', 0):.2f}", rescale_unit),
+            (_STAT_MIN, f"{statistics.get('min', 0):.2f}", rescale_unit),
+            (_STAT_MAX, f"{statistics.get('max', 0):.2f}", rescale_unit),
+            (_STAT_PIXELS, f"{statistics.get('count', 0)}", ""),
         ]
         area_mm2 = statistics.get("area_mm2")
         area_pixels = statistics.get("area_pixels", 0.0)
         if area_mm2 is not None:
             if area_mm2 >= 100.0:
-                rows.append(("Area", f"{area_mm2 / 100.0:.2f}", "cm²"))
+                rows.append((_STAT_AREA, f"{area_mm2 / 100.0:.2f}", "cm²"))
             else:
-                rows.append(("Area", f"{area_mm2:.2f}", "mm²"))
+                rows.append((_STAT_AREA, f"{area_mm2:.2f}", "mm²"))
         else:
-            rows.append(("Area", f"{area_pixels:.1f}", "pixels"))
+            rows.append((_STAT_AREA, f"{area_pixels:.1f}", "pixels"))
 
         mc = int(statistics.get("multichannel_count") or 0)
         if mc >= 2:
@@ -252,10 +259,10 @@ class ROIStatisticsPanel(QWidget):
     def clear_statistics(self) -> None:
         """Clear displayed statistics."""
         self.stats_table.setRowCount(6)
-        base = ["Mean", "Std Dev", "Min", "Max", "Pixels", "Area"]
+        base = [_STAT_MEAN, _STAT_STD_DEV, _STAT_MIN, _STAT_MAX, _STAT_PIXELS, _STAT_AREA]
         for i, lab in enumerate(base):
             self.stats_table.setItem(i, 0, QTableWidgetItem(lab))
             self.stats_table.setItem(i, 1, QTableWidgetItem(""))
             self.stats_table.setItem(i, 2, QTableWidgetItem(""))
         self.current_statistics = None
-        self.title_label.setText("ROI Statistics")
+        self.title_label.setText(_TITLE_ROI_STATISTICS)

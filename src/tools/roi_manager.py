@@ -519,15 +519,14 @@ class ROIManager:
 
         # Select new ROI
         self.selected_roi = roi
-        if roi is None:
-            pass
-        elif roi.item is None or not isValid(roi.item):
-            self.selected_roi = None
-        else:
-            try:
-                roi.item.setSelected(True)
-            except RuntimeError:
+        if roi is not None:
+            if roi.item is None or not isValid(roi.item):
                 self.selected_roi = None
+            else:
+                try:
+                    roi.item.setSelected(True)
+                except RuntimeError:
+                    self.selected_roi = None
 
     def get_selected_roi(self) -> ROIItem | None:
         """
@@ -1026,8 +1025,6 @@ class ROIManager:
             # Now safe to add to new scene
             if text_item.scene() != scene:
                 scene.addItem(text_item)
-            else:
-                pass
             text_item.show()
         else:
             text_item.hide()
@@ -1115,8 +1112,6 @@ class ROIManager:
             except RuntimeError:
                 # C++ object already deleted; nothing left to remove
                 pass
-        else:
-            pass
 
         # Fallback: search the scene for any text items tagged with this ROI id
         if scene is not None:
@@ -1125,8 +1120,6 @@ class ROIManager:
                 if isinstance(item, QGraphicsTextItem):
                     if item.data(0) == id(roi):
                         items_to_remove.append(item)
-            if items_to_remove:
-                pass
             for item in items_to_remove:
                 if hasattr(item, 'roi'):
                     item.roi = None
@@ -1166,8 +1159,6 @@ class ROIManager:
                         if hasattr(overlay_item, 'mark_deleted'):
                             overlay_item.mark_deleted()
                         cleared_count += 1
-                    else:
-                        pass
                     roi.statistics_overlay_item = None
 
         # Remove ALL statistics overlay items from the scene, regardless of which manager's ROIs they belong to

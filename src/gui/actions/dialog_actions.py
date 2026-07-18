@@ -51,6 +51,9 @@ if TYPE_CHECKING:
     from gui.wl_preset_menu import WLPresetMenuContext
     from main import DICOMViewerApp
 
+_TITLE_EXPORT_CINE = "Export Cine"
+_TITLE_STRUCTURED_REPORT = "Structured Report"
+
 
 def open_about_this_file(app: DICOMViewerApp) -> None:
     """Handle About This File dialog request."""
@@ -288,7 +291,7 @@ def open_structured_report_browser(
     if data.get("is_mpr"):
         QMessageBox.information(
             app.main_window,
-            "Structured Report",
+            _TITLE_STRUCTURED_REPORT,
             "MPR views do not carry the SR document. Switch to a 2D SR instance.",
         )
         return
@@ -296,14 +299,14 @@ def open_structured_report_browser(
     if ds is None:
         QMessageBox.information(
             app.main_window,
-            "Structured Report",
+            _TITLE_STRUCTURED_REPORT,
             "No DICOM file is loaded in this window.",
         )
         return
     if not is_structured_report_dataset(ds):
         QMessageBox.information(
             app.main_window,
-            "Structured Report",
+            _TITLE_STRUCTURED_REPORT,
             "The current file is not a Structured Report (SR storage class or Modality SR).",
         )
         return
@@ -326,7 +329,7 @@ def open_export_cine_video(app: DICOMViewerApp) -> None:
     """
     blocker = describe_focused_cine_export_blocker(app)
     if blocker:
-        QMessageBox.information(app.main_window, "Export Cine", blocker)
+        QMessageBox.information(app.main_window, _TITLE_EXPORT_CINE, blocker)
         return
 
     idx = app.get_focused_subwindow_index()
@@ -335,12 +338,12 @@ def open_export_cine_video(app: DICOMViewerApp) -> None:
     series_uid = str(data.get("current_series_uid") or "")
     studies = app.current_studies
     if not studies or study_uid not in studies or series_uid not in studies[study_uid]:
-        QMessageBox.warning(app.main_window, "Export Cine", "Series data is not available.")
+        QMessageBox.warning(app.main_window, _TITLE_EXPORT_CINE, "Series data is not available.")
         return
     series_list = studies[study_uid][series_uid]
     total = len(series_list)
     if total < 2:
-        QMessageBox.information(app.main_window, "Export Cine", "Not enough frames to export.")
+        QMessageBox.information(app.main_window, _TITLE_EXPORT_CINE, "Not enough frames to export.")
         return
 
     fps_default = float(app.cine_player.get_effective_frame_rate())
@@ -361,7 +364,7 @@ def open_export_cine_video(app: DICOMViewerApp) -> None:
         opts.use_cine_loop_bounds,
     )
     if not indices:
-        QMessageBox.warning(app.main_window, "Export Cine", "No frames in the selected range.")
+        QMessageBox.warning(app.main_window, _TITLE_EXPORT_CINE, "No frames in the selected range.")
         return
 
     ext = "." + opts.video_format.lower()
@@ -472,7 +475,7 @@ def open_export_cine_video(app: DICOMViewerApp) -> None:
             if img is None:
                 QMessageBox.critical(
                     app.main_window,
-                    "Export Cine",
+                    _TITLE_EXPORT_CINE,
                     f"Failed to rasterize frame {frame_idx + 1} of {total}.",
                 )
                 safe_remove_partial_output(outp)
@@ -530,14 +533,14 @@ def open_export_cine_video(app: DICOMViewerApp) -> None:
         if enc_err[0] is None:
             QMessageBox.critical(
                 app.main_window,
-                "Export Cine",
+                _TITLE_EXPORT_CINE,
                 "Encoding did not complete.",
             )
             safe_remove_partial_output(outp)
         elif enc_err[0] == "":
             QMessageBox.information(
                 app.main_window,
-                "Export Cine",
+                _TITLE_EXPORT_CINE,
                 f"Successfully wrote:\n{outp}",
             )
         else:
@@ -545,7 +548,7 @@ def open_export_cine_video(app: DICOMViewerApp) -> None:
             if "cancel" not in low:
                 QMessageBox.critical(
                     app.main_window,
-                    "Export Cine",
+                    _TITLE_EXPORT_CINE,
                     enc_err[0],
                 )
             safe_remove_partial_output(outp)

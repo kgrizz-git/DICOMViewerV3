@@ -36,6 +36,13 @@ from PySide6.QtWidgets import (
 from utils.bundled_fonts import get_font_families, get_font_variants
 from utils.config_manager import ConfigManager
 
+# Shared form labels / button text (repeated across ROI, measurement, text, arrow sections).
+_LABEL_FONT_SIZE = "Font Size:"
+_LABEL_COLOR = "Color:"
+_LABEL_FONT = "Font:"
+_LABEL_VARIANT = "Variant:"
+_BTN_CHOOSE_COLOR = "Choose Color..."
+
 
 class AnnotationOptionsDialog(QDialog):
     """
@@ -171,7 +178,7 @@ class AnnotationOptionsDialog(QDialog):
         roi_font_size_layout.addWidget(roi_font_size_increase_button)
         roi_font_size_layout.addStretch()
 
-        roi_layout.addRow("Font Size:", roi_font_size_layout)
+        roi_layout.addRow(_LABEL_FONT_SIZE, roi_font_size_layout)
 
         # ROI Line Thickness with +/- buttons
         roi_line_thickness_layout = QHBoxLayout()
@@ -202,23 +209,23 @@ class AnnotationOptionsDialog(QDialog):
         self.roi_color_label.setStyleSheet("background-color: rgb(255, 0, 0); border: 1px solid black;")
         self.roi_color_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        roi_color_button = QPushButton("Choose Color...")
+        roi_color_button = QPushButton(_BTN_CHOOSE_COLOR)
         roi_color_button.clicked.connect(lambda: self._choose_color("roi"))
 
         roi_color_layout.addWidget(self.roi_color_label)
         roi_color_layout.addWidget(roi_color_button)
         roi_color_layout.addStretch()
 
-        roi_layout.addRow("Color:", roi_color_layout)
+        roi_layout.addRow(_LABEL_COLOR, roi_color_layout)
 
         # ROI Font Family
         self.roi_font_family_combo = QComboBox()
         self.roi_font_family_combo.addItems(get_font_families())
-        roi_layout.addRow("Font:", self.roi_font_family_combo)
+        roi_layout.addRow(_LABEL_FONT, self.roi_font_family_combo)
 
         # ROI Font Variant
         self.roi_font_variant_combo = QComboBox()
-        roi_layout.addRow("Variant:", self.roi_font_variant_combo)
+        roi_layout.addRow(_LABEL_VARIANT, self.roi_font_variant_combo)
 
         roi_group.setLayout(roi_layout)
         left_col.addWidget(roi_group)
@@ -278,7 +285,7 @@ class AnnotationOptionsDialog(QDialog):
         measurement_font_size_layout.addWidget(measurement_font_size_increase_button)
         measurement_font_size_layout.addStretch()
 
-        measurement_layout.addRow("Font Size:", measurement_font_size_layout)
+        measurement_layout.addRow(_LABEL_FONT_SIZE, measurement_font_size_layout)
 
         # Measurement Line Thickness with +/- buttons
         measurement_line_thickness_layout = QHBoxLayout()
@@ -309,23 +316,23 @@ class AnnotationOptionsDialog(QDialog):
         self.measurement_color_label.setStyleSheet("background-color: rgb(0, 255, 0); border: 1px solid black;")
         self.measurement_color_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        measurement_color_button = QPushButton("Choose Color...")
+        measurement_color_button = QPushButton(_BTN_CHOOSE_COLOR)
         measurement_color_button.clicked.connect(lambda: self._choose_color("measurement"))
 
         measurement_color_layout.addWidget(self.measurement_color_label)
         measurement_color_layout.addWidget(measurement_color_button)
         measurement_color_layout.addStretch()
 
-        measurement_layout.addRow("Color:", measurement_color_layout)
+        measurement_layout.addRow(_LABEL_COLOR, measurement_color_layout)
 
         # Measurement Font Family
         self.measurement_font_family_combo = QComboBox()
         self.measurement_font_family_combo.addItems(get_font_families())
-        measurement_layout.addRow("Font:", self.measurement_font_family_combo)
+        measurement_layout.addRow(_LABEL_FONT, self.measurement_font_family_combo)
 
         # Measurement Font Variant
         self.measurement_font_variant_combo = QComboBox()
-        measurement_layout.addRow("Variant:", self.measurement_font_variant_combo)
+        measurement_layout.addRow(_LABEL_VARIANT, self.measurement_font_variant_combo)
 
         measurement_group.setLayout(measurement_layout)
         right_col.addWidget(measurement_group)
@@ -354,7 +361,7 @@ class AnnotationOptionsDialog(QDialog):
         text_font_size_layout.addWidget(text_font_size_increase_button)
         text_font_size_layout.addStretch()
 
-        text_layout.addRow("Font Size:", text_font_size_layout)
+        text_layout.addRow(_LABEL_FONT_SIZE, text_font_size_layout)
 
         # Text Annotation Color
         text_color_layout = QHBoxLayout()
@@ -363,23 +370,23 @@ class AnnotationOptionsDialog(QDialog):
         self.text_color_label.setStyleSheet("background-color: rgb(255, 255, 0); border: 1px solid black;")
         self.text_color_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        text_color_button = QPushButton("Choose Color...")
+        text_color_button = QPushButton(_BTN_CHOOSE_COLOR)
         text_color_button.clicked.connect(lambda: self._choose_color("text"))
 
         text_color_layout.addWidget(self.text_color_label)
         text_color_layout.addWidget(text_color_button)
         text_color_layout.addStretch()
 
-        text_layout.addRow("Color:", text_color_layout)
+        text_layout.addRow(_LABEL_COLOR, text_color_layout)
 
         # Text Annotation Font Family
         self.text_font_family_combo = QComboBox()
         self.text_font_family_combo.addItems(get_font_families())
-        text_layout.addRow("Font:", self.text_font_family_combo)
+        text_layout.addRow(_LABEL_FONT, self.text_font_family_combo)
 
         # Text Annotation Font Variant
         self.text_font_variant_combo = QComboBox()
-        text_layout.addRow("Variant:", self.text_font_variant_combo)
+        text_layout.addRow(_LABEL_VARIANT, self.text_font_variant_combo)
 
         text_group.setLayout(text_layout)
         right_col.addWidget(text_group)
@@ -395,14 +402,14 @@ class AnnotationOptionsDialog(QDialog):
         self.arrow_color_label.setStyleSheet("background-color: rgb(255, 255, 0); border: 1px solid black;")
         self.arrow_color_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        arrow_color_button = QPushButton("Choose Color...")
+        arrow_color_button = QPushButton(_BTN_CHOOSE_COLOR)
         arrow_color_button.clicked.connect(lambda: self._choose_color("arrow"))
 
         arrow_color_layout.addWidget(self.arrow_color_label)
         arrow_color_layout.addWidget(arrow_color_button)
         arrow_color_layout.addStretch()
 
-        arrow_layout.addRow("Color:", arrow_color_layout)
+        arrow_layout.addRow(_LABEL_COLOR, arrow_color_layout)
 
         # Arrow size (arrowhead size and line thickness)
         arrow_size_layout = QHBoxLayout()

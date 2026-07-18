@@ -24,6 +24,20 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+_PROJ_LABEL_AIP = "Average (AIP)"
+_PROJ_LABEL_MIP = "Maximum (MIP)"
+_PROJ_LABEL_MINIP = "Minimum (MinIP)"
+_PROJ_LABELS = (_PROJ_LABEL_AIP, _PROJ_LABEL_MIP, _PROJ_LABEL_MINIP)
+_PROJ_LABEL_TO_TYPE = {
+    _PROJ_LABEL_AIP: "aip",
+    _PROJ_LABEL_MIP: "mip",
+    _PROJ_LABEL_MINIP: "minip",
+}
+_PROJ_TYPE_TO_LABEL = {
+    "aip": _PROJ_LABEL_AIP,
+    "mip": _PROJ_LABEL_MIP,
+    "minip": _PROJ_LABEL_MINIP,
+}
 
 class IntensityProjectionControlsWidget(QWidget):
     """
@@ -82,8 +96,8 @@ class IntensityProjectionControlsWidget(QWidget):
         projection_layout.addWidget(projection_label)
 
         self.projection_combo = QComboBox()
-        self.projection_combo.addItems(["Average (AIP)", "Maximum (MIP)", "Minimum (MinIP)"])
-        self.projection_combo.setCurrentText("Average (AIP)")
+        self.projection_combo.addItems(list(_PROJ_LABELS))
+        self.projection_combo.setCurrentText(_PROJ_LABEL_AIP)
         self.projection_combo.setToolTip("Select projection type")
         self.projection_combo.currentTextChanged.connect(self._on_projection_type_changed)
         projection_layout.addWidget(self.projection_combo)
@@ -122,11 +136,7 @@ class IntensityProjectionControlsWidget(QWidget):
     def _on_projection_type_changed(self, text: str) -> None:
         """Handle projection type dropdown change."""
         # Map display text to internal type
-        type_map = {
-            "Average (AIP)": "aip",
-            "Maximum (MIP)": "mip",
-            "Minimum (MinIP)": "minip"
-        }
+        type_map = _PROJ_LABEL_TO_TYPE
         projection_type = type_map.get(text, "aip")
         self.projection_type_changed.emit(projection_type)
 
@@ -136,7 +146,7 @@ class IntensityProjectionControlsWidget(QWidget):
             count = int(text)
             self.slice_count_changed.emit(count)
         except (ValueError, AttributeError):
-            pass
+            return  # Ignore non-integer combo text
 
     def _set_controls_enabled(self, enabled: bool) -> None:
         """
@@ -160,18 +170,14 @@ class IntensityProjectionControlsWidget(QWidget):
             enabled: True to enable, False to disable
             keep_signals_blocked: If True, don't unblock signals at the end (caller will handle it)
         """
-        current_checked = self.enable_checkbox.isChecked()
         self.enable_checkbox.checkState()
         self.isVisible()
         self.isEnabled()
         self.enable_checkbox.isVisible()
         self.enable_checkbox.isEnabled()
 
-        # Check if state already matches - but still update to ensure visual state is correct
-        # (needed for cases where checkbox state might be out of sync)
-        if current_checked == enabled:
-            # Don't return - continue to update to ensure visual state is correct
-            pass
+        # Always update checkbox visual state (may be out of sync even when
+        # checked state already equals enabled).
 
         # Block signals to prevent recursive updates
         was_blocked = self.enable_checkbox.signalsBlocked()
@@ -196,11 +202,7 @@ class IntensityProjectionControlsWidget(QWidget):
             # Only unblock if state matches what we set it to
             if verify_state == enabled:
                 self.enable_checkbox.blockSignals(False)
-            else:
-                # State doesn't match - something went wrong, keep signals blocked
-                pass
-        else:
-            pass
+            # else: state doesn't match — keep signals blocked
 
         # Force immediate repaint to ensure visual state is refreshed
         # Use QTimer to ensure update happens after current event processing
@@ -219,13 +221,9 @@ class IntensityProjectionControlsWidget(QWidget):
         Args:
             projection_type: "aip", "mip", or "minip"
         """
-        type_map = {
-            "aip": "Average (AIP)",
-            "mip": "Maximum (MIP)",
-            "minip": "Minimum (MinIP)"
-        }
-        display_text = type_map.get(projection_type, "Average (AIP)")
-        if display_text in ["Average (AIP)", "Maximum (MIP)", "Minimum (MinIP)"]:
+        type_map = _PROJ_TYPE_TO_LABEL
+        display_text = type_map.get(projection_type, _PROJ_LABEL_AIP)
+        if display_text in _PROJ_LABELS:
             self.projection_combo.blockSignals(True)
             self.projection_combo.setCurrentText(display_text)
             self.projection_combo.blockSignals(False)
@@ -260,11 +258,7 @@ class IntensityProjectionControlsWidget(QWidget):
             "aip", "mip", or "minip"
         """
         text = self.projection_combo.currentText()
-        type_map = {
-            "Average (AIP)": "aip",
-            "Maximum (MIP)": "mip",
-            "Minimum (MinIP)": "minip"
-        }
+        type_map = _PROJ_LABEL_TO_TYPE
         return type_map.get(text, "aip")
 
     def get_slice_count(self) -> int:

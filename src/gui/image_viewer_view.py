@@ -10,7 +10,7 @@ Requirements: PySide6, PIL, numpy.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import numpy as np
 from PIL import Image
@@ -34,9 +34,6 @@ from core.direction_labels import (
 from utils.bundled_fonts import make_qfont
 from utils.debug_flags import DEBUG_MAGNIFIER
 from utils.privacy.console import print_redacted
-
-if TYPE_CHECKING:
-    pass
 
 
 class ImageViewerViewMixin:

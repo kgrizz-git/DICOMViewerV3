@@ -186,9 +186,7 @@ class StudyIndexStore:
                 self._migrate_v1_to_v2(conn)
             elif version == 2:
                 self._migrate_v2_to_v3(conn)
-            elif version == self.SCHEMA_VERSION:
-                pass
-            else:
+            elif version > self.SCHEMA_VERSION:
                 raise sqlite3.OperationalError(
                     f"study_index unsupported user_version={version}; "
                     f"expected 0, 1, 2, or {self.SCHEMA_VERSION}"

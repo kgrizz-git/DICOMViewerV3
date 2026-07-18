@@ -39,6 +39,11 @@ from PySide6.QtWidgets import (
 
 from utils.config_manager import ConfigManager
 
+CORNER_UPPER_LEFT = "Upper Left"
+CORNER_UPPER_RIGHT = "Upper Right"
+CORNER_LOWER_LEFT = "Lower Left"
+CORNER_LOWER_RIGHT = "Lower Right"
+
 logger = logging.getLogger(__name__)
 
 # Common DICOM tag keywords
@@ -244,14 +249,14 @@ class OverlayConfigDialog(QDialog):
         layout.addWidget(tags_help)
 
         corners_tab = QTabWidget()
-        self.upper_left_widget = self._create_corner_widget("Upper Left")
-        corners_tab.addTab(self.upper_left_widget, "Upper Left")
-        self.upper_right_widget = self._create_corner_widget("Upper Right")
-        corners_tab.addTab(self.upper_right_widget, "Upper Right")
-        self.lower_left_widget = self._create_corner_widget("Lower Left")
-        corners_tab.addTab(self.lower_left_widget, "Lower Left")
-        self.lower_right_widget = self._create_corner_widget("Lower Right")
-        corners_tab.addTab(self.lower_right_widget, "Lower Right")
+        self.upper_left_widget = self._create_corner_widget(CORNER_UPPER_LEFT)
+        corners_tab.addTab(self.upper_left_widget, CORNER_UPPER_LEFT)
+        self.upper_right_widget = self._create_corner_widget(CORNER_UPPER_RIGHT)
+        corners_tab.addTab(self.upper_right_widget, CORNER_UPPER_RIGHT)
+        self.lower_left_widget = self._create_corner_widget(CORNER_LOWER_LEFT)
+        corners_tab.addTab(self.lower_left_widget, CORNER_LOWER_LEFT)
+        self.lower_right_widget = self._create_corner_widget(CORNER_LOWER_RIGHT)
+        corners_tab.addTab(self.lower_right_widget, CORNER_LOWER_RIGHT)
         corners_tab.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         layout.addWidget(corners_tab, 1)
 
@@ -660,10 +665,10 @@ class OverlayConfigDialog(QDialog):
         """Save current modality configuration to the in-memory dict for *layer*."""
         _se, _al, sl, _mu, _md = self._corner_ui_maps(layer)
         config = {
-            "upper_left": [sl["Upper Left"].item(i).text() for i in range(sl["Upper Left"].count())],
-            "upper_right": [sl["Upper Right"].item(i).text() for i in range(sl["Upper Right"].count())],
-            "lower_left": [sl["Lower Left"].item(i).text() for i in range(sl["Lower Left"].count())],
-            "lower_right": [sl["Lower Right"].item(i).text() for i in range(sl["Lower Right"].count())],
+            "upper_left": [sl[CORNER_UPPER_LEFT].item(i).text() for i in range(sl[CORNER_UPPER_LEFT].count())],
+            "upper_right": [sl[CORNER_UPPER_RIGHT].item(i).text() for i in range(sl[CORNER_UPPER_RIGHT].count())],
+            "lower_left": [sl[CORNER_LOWER_LEFT].item(i).text() for i in range(sl[CORNER_LOWER_LEFT].count())],
+            "lower_right": [sl[CORNER_LOWER_RIGHT].item(i).text() for i in range(sl[CORNER_LOWER_RIGHT].count())],
         }
         if layer == "detailed":
             self.modality_configs_detailed[self.current_modality] = config
@@ -704,10 +709,10 @@ class OverlayConfigDialog(QDialog):
             lists = self.selected_lists
 
         for corner_name, corner_key in [
-            ("Upper Left", "upper_left"),
-            ("Upper Right", "upper_right"),
-            ("Lower Left", "lower_left"),
-            ("Lower Right", "lower_right"),
+            (CORNER_UPPER_LEFT, "upper_left"),
+            (CORNER_UPPER_RIGHT, "upper_right"),
+            (CORNER_LOWER_LEFT, "lower_left"),
+            (CORNER_LOWER_RIGHT, "lower_right"),
         ]:
             if corner_name in lists:
                 selected_list = lists[corner_name]

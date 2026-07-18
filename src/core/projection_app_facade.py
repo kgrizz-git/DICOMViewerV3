@@ -170,8 +170,6 @@ class ProjectionAppFacade:
                         f"[DEBUG-PROJECTION] _on_projection_enabled_changed: Widget state ({current_widget_state}) != signal ({enabled}), syncing widget"
                     )
                 app.intensity_projection_controls_widget.set_enabled(enabled)
-            else:
-                pass
 
         # Redisplay current slice with new projection state
         if app.current_dataset is not None:

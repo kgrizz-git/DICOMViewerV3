@@ -12,6 +12,8 @@ from typing import Any
 
 from PySide6.QtWidgets import QMenu
 
+_ACTION_ANNOTATION_OPTIONS = "Annotation Options..."
+
 
 def toggle_roi_statistic(viewer: Any, roi: Any, stat_name: str, checked: bool) -> None:
     """Toggle a statistic in the ROI's visible_statistics set and notify coordinators."""
@@ -132,7 +134,7 @@ def handle_mouse_press_right_button(viewer: Any, event: Any) -> None:
         context_menu.addSeparator()
 
         # Annotation Options action
-        annotation_options_action = context_menu.addAction("Annotation Options...")
+        annotation_options_action = context_menu.addAction(_ACTION_ANNOTATION_OPTIONS)
         annotation_options_action.triggered.connect(viewer.annotation_options_requested.emit)
 
         context_menu.exec(event.globalPosition().toPoint())
@@ -147,7 +149,7 @@ def handle_mouse_press_right_button(viewer: Any, event: Any) -> None:
         context_menu.addSeparator()
 
         # Annotation Options action
-        annotation_options_action = context_menu.addAction("Annotation Options...")
+        annotation_options_action = context_menu.addAction(_ACTION_ANNOTATION_OPTIONS)
         annotation_options_action.triggered.connect(viewer.annotation_options_requested.emit)
 
         context_menu.exec(event.globalPosition().toPoint())
@@ -167,7 +169,7 @@ def handle_mouse_press_right_button(viewer: Any, event: Any) -> None:
         context_menu.addSeparator()
 
         # Annotation Options action
-        annotation_options_action = context_menu.addAction("Annotation Options...")
+        annotation_options_action = context_menu.addAction(_ACTION_ANNOTATION_OPTIONS)
         annotation_options_action.triggered.connect(viewer.annotation_options_requested.emit)
 
         context_menu.exec(event.globalPosition().toPoint())
@@ -187,7 +189,7 @@ def handle_mouse_press_right_button(viewer: Any, event: Any) -> None:
         context_menu.addSeparator()
 
         # Annotation Options action
-        annotation_options_action = context_menu.addAction("Annotation Options...")
+        annotation_options_action = context_menu.addAction(_ACTION_ANNOTATION_OPTIONS)
         annotation_options_action.triggered.connect(viewer.annotation_options_requested.emit)
 
         context_menu.exec(event.globalPosition().toPoint())
@@ -209,7 +211,7 @@ def handle_mouse_press_right_button(viewer: Any, event: Any) -> None:
         context_menu.addSeparator()
 
         # Annotation Options action
-        annotation_options_action = context_menu.addAction("Annotation Options...")
+        annotation_options_action = context_menu.addAction(_ACTION_ANNOTATION_OPTIONS)
         annotation_options_action.triggered.connect(viewer.annotation_options_requested.emit)
 
         context_menu.exec(event.globalPosition().toPoint())

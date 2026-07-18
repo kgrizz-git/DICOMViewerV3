@@ -8,6 +8,12 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-18
 
+- Cleared all open `python:S108` empty-block findings and started
+  `python:S1192` (duplicate string literals): extracted shared UI/status
+  constants in dialogs/widgets/loading paths; left `src/utils/bundled_fonts.py`
+  deferred as a font data table. Fresh analysis: **347** priority findings
+  (down from 399); `S108` at 0; `S1192` remaining **39** (16 in
+  `bundled_fonts`).
 - Completed the view state manager Sonar slice
   (`plans/SONARQUBE_VIEW_STATE_MANAGER_SLICE_PLAN_20260718.md`): extracted
   helpers for `store_initial_view_state`, `reset_view`,

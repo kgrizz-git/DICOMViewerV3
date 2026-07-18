@@ -278,10 +278,6 @@ class AnnotationManager:
                         for ann in parsed_ps['annotations']:
                             ann['source'] = 'presentation_state'
                             annotations.append(ann)
-                    else:
-                        pass
-            else:
-                pass
 
             # Check Key Objects for this study
             if study_uid in self.key_objects:
@@ -307,10 +303,6 @@ class AnnotationManager:
                                 'units': ann.get('units', 'PIXEL')
                             }
                             annotations.append(graphic_ann)
-                    else:
-                        pass
-            else:
-                pass
         except Exception:
             _logger.debug("%s", sanitized_format_exc())
 
@@ -371,8 +363,6 @@ class AnnotationManager:
                                 scene.addItem(text_item)
                                 items.append(text_item)
                                 self._add_annotation_to_scene(scene, text_item)
-                            else:
-                                pass
 
                 elif ann_type == 'POLYLINE':
                     # Create polyline (path)
@@ -393,8 +383,6 @@ class AnnotationManager:
                             scene.addItem(path_item)
                             items.append(path_item)
                             self._add_annotation_to_scene(scene, path_item)
-                        else:
-                            pass
 
                 elif ann_type == 'CIRCLE':
                     # Create circle
@@ -420,8 +408,6 @@ class AnnotationManager:
                             scene.addItem(ellipse_item)
                             items.append(ellipse_item)
                             self._add_annotation_to_scene(scene, ellipse_item)
-                        else:
-                            pass
 
                 elif ann_type == 'ELLIPSE':
                     # Create ellipse (simplified - using bounding box)
@@ -446,8 +432,6 @@ class AnnotationManager:
                             scene.addItem(ellipse_item)
                             items.append(ellipse_item)
                             self._add_annotation_to_scene(scene, ellipse_item)
-                        else:
-                            pass
 
                 elif ann_type == 'POINT':
                     # Create point (small circle)
@@ -468,8 +452,6 @@ class AnnotationManager:
                             scene.addItem(ellipse_item)
                             items.append(ellipse_item)
                             self._add_annotation_to_scene(scene, ellipse_item)
-                        else:
-                            pass
 
                 elif ann_type == 'OVERLAY':
                     # Render overlay graphics from bitmap
@@ -500,9 +482,6 @@ class AnnotationManager:
                         self._render_overlay_paths(
                             overlay_paths, coords, overlay_paths, pen, qcolor, scene, items
                         )
-
-                    if overlay_rows > 0 and overlay_cols > 0:
-                        pass
         except Exception:
             _logger.debug("%s", sanitized_format_exc())
 

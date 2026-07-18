@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (
 
 from utils.config_manager import ConfigManager
 
+_MSG_NO_RECENT_FILES = "No recent files"
 
 class EditRecentListDialog(QDialog):
     """
@@ -140,7 +141,7 @@ class EditRecentListDialog(QDialog):
 
         if not recent_files:
             # Show message if no recent files
-            item = QListWidgetItem("No recent files")
+            item = QListWidgetItem(_MSG_NO_RECENT_FILES)
             item.setFlags(Qt.ItemFlag.NoItemFlags)  # Make it non-interactive
             self.list_widget.addItem(item)
             self.remove_button.setEnabled(False)
@@ -176,7 +177,7 @@ class EditRecentListDialog(QDialog):
 
         # If list is now empty, show message
         if self.list_widget.count() == 0:
-            item = QListWidgetItem("No recent files")
+            item = QListWidgetItem(_MSG_NO_RECENT_FILES)
             item.setFlags(Qt.ItemFlag.NoItemFlags)
             self.list_widget.addItem(item)
             self.remove_button.setEnabled(False)
@@ -308,7 +309,7 @@ class EditRecentListDialog(QDialog):
 
         # If list is now empty, show message
         if self.list_widget.count() == 0:
-            item = QListWidgetItem("No recent files")
+            item = QListWidgetItem(_MSG_NO_RECENT_FILES)
             item.setFlags(Qt.ItemFlag.NoItemFlags)
             self.list_widget.addItem(item)
             self.remove_button.setEnabled(False)
@@ -343,7 +344,7 @@ class EditRecentListDialog(QDialog):
         if self.list_widget.count() == 0:
             return
 
-        # Check if the only item is the "No recent files" message
+        # Check if the only item is the _MSG_NO_RECENT_FILES message
         if self.list_widget.count() == 1:
             item = self.list_widget.item(0)
             if item and not (item.flags() & Qt.ItemFlag.ItemIsEnabled):
@@ -363,7 +364,7 @@ class EditRecentListDialog(QDialog):
             self.list_widget.clear()
 
             # Show message if list is now empty
-            item = QListWidgetItem("No recent files")
+            item = QListWidgetItem(_MSG_NO_RECENT_FILES)
             item.setFlags(Qt.ItemFlag.NoItemFlags)
             self.list_widget.addItem(item)
 
@@ -471,7 +472,7 @@ class EditRecentListDialog(QDialog):
         remaining_files = []
         for i in range(self.list_widget.count()):
             item = self.list_widget.item(i)
-            # Skip non-interactive items (like "No recent files" message)
+            # Skip non-interactive items (like _MSG_NO_RECENT_FILES message)
             if item.flags() & Qt.ItemFlag.ItemIsEnabled:
                 file_path = item.data(Qt.ItemDataRole.UserRole)
                 if file_path:
