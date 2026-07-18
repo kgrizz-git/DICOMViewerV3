@@ -463,7 +463,7 @@ class SliceDisplayManager:
             rescale_slope, rescale_intercept,
         )
 
-    def _render_base_image_pipeline(
+    def _try_build_projection_image(
         self,
         dataset: Dataset,
         current_studies: dict[str, dict[str, list[Dataset]]],
@@ -475,66 +475,74 @@ class SliceDisplayManager:
         use_rescaled_values: bool,
         rescale_slope: float | None,
         rescale_intercept: float | None,
+    ):
+        """Return a projection PIL image when enabled, else None on skip/failure."""
+        if not self.projection_enabled:
+            return None
+        try:
+            return self._create_projection_image(
+                dataset,
+                current_studies,
+                current_study_uid,
+                current_series_uid,
+                current_slice_index,
+                window_center,
+                window_width,
+                use_rescaled_values,
+                rescale_slope,
+                rescale_intercept,
+            )
+        except Exception as e:
+            error_type = type(e).__name__
+            print_redacted(f"Error creating projection image ({error_type}): {e}")
+            return None
+
+    def _dataset_to_image_or_placeholder(
+        self,
+        dataset: Dataset,
+        window_center: float | None,
+        window_width: float | None,
+        use_rescaled_values: bool,
+    ) -> tuple[Image.Image, bool]:
+        """Convert dataset to PIL image, or a no-pixel placeholder when conversion yields None."""
+        if DEBUG_WL:
+            print(
+                f"[DEBUG-WL] dataset_to_image: window_center={window_center} window_width={window_width} "
+                f"apply_rescale={use_rescaled_values}"
+            )
+        try:
+            if window_center is not None and window_width is not None:
+                image = self.dicom_processor.dataset_to_image(
+                    dataset,
+                    window_center=window_center,
+                    window_width=window_width,
+                    apply_rescale=use_rescaled_values,
+                )
+            else:
+                image = self.dicom_processor.dataset_to_image(
+                    dataset,
+                    apply_rescale=use_rescaled_values,
+                )
+            if image is None:
+                return _make_no_pixel_placeholder_pil(), True
+            return image, False
+        except (MemoryError, ValueError, AttributeError, RuntimeError) as e:
+            error_type = type(e).__name__
+            error_msg = f"Error converting dataset to image ({error_type}): {e!s}"
+            raise RuntimeError(error_msg) from e
+        except Exception as e:
+            error_type = type(e).__name__
+            error_msg = f"Unexpected error converting dataset to image ({error_type}): {e!s}"
+            raise RuntimeError(error_msg) from e
+
+    def _resolve_view_preserve_and_inversion(
+        self,
         is_same_series: bool,
         is_new_study_series: bool,
         series_identifier: str,
         preserve_view_override: bool | None,
-    ) -> None:
-        """Projection, single-slice render, fusion, viewer image + fit (same order as prior display_slice)."""
-        image = None
-        if self.projection_enabled:
-            try:
-                image = self._create_projection_image(
-                    dataset,
-                    current_studies,
-                    current_study_uid,
-                    current_series_uid,
-                    current_slice_index,
-                    window_center,
-                    window_width,
-                    use_rescaled_values,
-                    rescale_slope,
-                    rescale_intercept,
-                )
-                if image is None:
-                    pass
-            except Exception as e:
-                error_type = type(e).__name__
-                print_redacted(f"Error creating projection image ({error_type}): {e}")
-                pass
-
-        no_pixel_placeholder = False
-        if image is None:
-            if DEBUG_WL:
-                print(
-                    f"[DEBUG-WL] dataset_to_image: window_center={window_center} window_width={window_width} "
-                    f"apply_rescale={use_rescaled_values}"
-                )
-            try:
-                if window_center is not None and window_width is not None:
-                    image = self.dicom_processor.dataset_to_image(
-                        dataset,
-                        window_center=window_center,
-                        window_width=window_width,
-                        apply_rescale=use_rescaled_values,
-                    )
-                else:
-                    image = self.dicom_processor.dataset_to_image(
-                        dataset,
-                        apply_rescale=use_rescaled_values,
-                    )
-                if image is None:
-                    image = _make_no_pixel_placeholder_pil()
-                    no_pixel_placeholder = True
-            except (MemoryError, ValueError, AttributeError, RuntimeError) as e:
-                error_type = type(e).__name__
-                error_msg = f"Error converting dataset to image ({error_type}): {e!s}"
-                raise RuntimeError(error_msg) from e
-            except Exception as e:
-                error_type = type(e).__name__
-                error_msg = f"Unexpected error converting dataset to image ({error_type}): {e!s}"
-                raise RuntimeError(error_msg) from e
-
+    ) -> tuple[bool, bool, bool | None]:
+        """Return (preserve_view, force_fit_to_view, apply_inversion)."""
         apply_inversion = None
         preserve_view = is_same_series and not is_new_study_series
         force_fit_to_view = False
@@ -543,28 +551,42 @@ class SliceDisplayManager:
             force_fit_to_view = not preserve_view_override
         if not preserve_view:
             if series_identifier and series_identifier in self.view_state_manager.series_defaults:
-                series_inverted = self.view_state_manager.get_series_inversion_state(series_identifier)
-                apply_inversion = series_inverted
+                apply_inversion = self.view_state_manager.get_series_inversion_state(series_identifier)
             self.view_state_manager.restore_orientation(series_identifier)
+        return preserve_view, force_fit_to_view, apply_inversion
 
+    def _maybe_apply_fusion(
+        self,
+        image: Image.Image | None,
+        no_pixel_placeholder: bool,
+        current_studies: dict[str, dict[str, list[Dataset]]],
+        current_study_uid: str,
+        current_series_uid: str,
+        current_slice_index: int,
+    ):
+        """Blend fusion overlay into image when a fusion coordinator is active."""
         if (
-            self.fusion_coordinator is not None
-            and image is not None
-            and not no_pixel_placeholder
+            self.fusion_coordinator is None
+            or image is None
+            or no_pixel_placeholder
         ):
-            try:
-                base_datasets = current_studies.get(current_study_uid, {}).get(current_series_uid, [])
-                if base_datasets:
-                    fused_image = self.fusion_coordinator.get_fused_image(
-                        image,
-                        base_datasets,
-                        current_slice_index,
-                    )
-                    if fused_image is not None:
-                        image = fused_image
-            except Exception as e:
-                print_redacted(f"Error applying fusion: {e}")
+            return image
+        try:
+            base_datasets = current_studies.get(current_study_uid, {}).get(current_series_uid, [])
+            if base_datasets:
+                fused_image = self.fusion_coordinator.get_fused_image(
+                    image,
+                    base_datasets,
+                    current_slice_index,
+                )
+                if fused_image is not None:
+                    return fused_image
+        except Exception as e:
+            print_redacted(f"Error applying fusion: {e}")
+        return image
 
+    def _configure_no_pixel_sr_bar(self, dataset: Dataset, no_pixel_placeholder: bool) -> None:
+        """Show or hide the SR no-pixel placeholder action bar on the viewer."""
         modality = getattr(dataset, "Modality", None) or ""
         show_sr_bar = bool(no_pixel_placeholder and modality == "SR")
         if show_sr_bar and self.open_structured_report_browser_callback is not None:
@@ -587,6 +609,16 @@ class SliceDisplayManager:
         else:
             self.image_viewer.set_no_pixel_placeholder_bar(False)
 
+    def _apply_image_to_viewer_and_fit(
+        self,
+        image,
+        preserve_view: bool,
+        apply_inversion: bool | None,
+        is_new_study_series: bool,
+        force_fit_to_view: bool,
+        series_identifier: str,
+    ) -> None:
+        """Push image to the viewer and optionally fit / store initial zoom."""
         self.image_viewer.set_image(image, preserve_view=preserve_view, apply_inversion=apply_inversion)
 
         if is_new_study_series or force_fit_to_view:
@@ -605,6 +637,234 @@ class SliceDisplayManager:
                             "initial_fit_zoom": stored_zoom,
                         }
                     )
+
+    def _render_base_image_pipeline(
+        self,
+        dataset: Dataset,
+        current_studies: dict[str, dict[str, list[Dataset]]],
+        current_study_uid: str,
+        current_series_uid: str,
+        current_slice_index: int,
+        window_center: float | None,
+        window_width: float | None,
+        use_rescaled_values: bool,
+        rescale_slope: float | None,
+        rescale_intercept: float | None,
+        is_same_series: bool,
+        is_new_study_series: bool,
+        series_identifier: str,
+        preserve_view_override: bool | None,
+    ) -> None:
+        """Projection, single-slice render, fusion, viewer image + fit (same order as prior display_slice)."""
+        image = self._try_build_projection_image(
+            dataset,
+            current_studies,
+            current_study_uid,
+            current_series_uid,
+            current_slice_index,
+            window_center,
+            window_width,
+            use_rescaled_values,
+            rescale_slope,
+            rescale_intercept,
+        )
+        no_pixel_placeholder = False
+        if image is None:
+            image, no_pixel_placeholder = self._dataset_to_image_or_placeholder(
+                dataset, window_center, window_width, use_rescaled_values
+            )
+
+        preserve_view, force_fit_to_view, apply_inversion = self._resolve_view_preserve_and_inversion(
+            is_same_series, is_new_study_series, series_identifier, preserve_view_override
+        )
+        image = self._maybe_apply_fusion(
+            image,
+            no_pixel_placeholder,
+            current_studies,
+            current_study_uid,
+            current_series_uid,
+            current_slice_index,
+        )
+        self._configure_no_pixel_sr_bar(dataset, no_pixel_placeholder)
+        self._apply_image_to_viewer_and_fit(
+            image,
+            preserve_view,
+            apply_inversion,
+            is_new_study_series,
+            force_fit_to_view,
+            series_identifier,
+        )
+
+    def _compute_pixel_wl_ranges(
+        self, dataset: Dataset, use_rescaled_values: bool
+    ) -> tuple[float | None, float | None, tuple[float, float] | None, tuple[float, float] | None]:
+        """Return pixel_min, pixel_max, center_range, width_range for W/L controls."""
+        pixel_min = None
+        pixel_max = None
+        center_range = None
+        width_range = None
+        try:
+            pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(
+                dataset, apply_rescale=use_rescaled_values
+            )
+            if pixel_min is not None and pixel_max is not None:
+                series_pixel_min, series_pixel_max = self.view_state_manager.get_series_pixel_range()
+                if series_pixel_min is not None and series_pixel_max is not None:
+                    center_range = (series_pixel_min, series_pixel_max)
+                    width_range = (1.0, max(1.0, series_pixel_max - series_pixel_min))
+                else:
+                    center_range = (pixel_min, pixel_max)
+                    width_range = (1.0, max(1.0, pixel_max - pixel_min))
+        except Exception as e:
+            error_type = type(e).__name__
+            print_redacted(f"Error calculating pixel value range for window/level controls ({error_type}): {e}")
+        return pixel_min, pixel_max, center_range, width_range
+
+    def _apply_wl_ranges_values_and_unit(
+        self,
+        update_controls: bool,
+        is_new_study_series: bool,
+        window_center: float | None,
+        window_width: float | None,
+        center_range: tuple[float, float] | None,
+        width_range: tuple[float, float] | None,
+        unit: str | None,
+    ) -> None:
+        """Push W/L ranges, optional new-series values, and unit to the controls widget."""
+        if update_controls and center_range is not None and width_range is not None:
+            self.window_level_controls.set_ranges(center_range, width_range)
+        if update_controls and is_new_study_series and window_center is not None and window_width is not None:
+            self.window_level_controls.set_window_level(
+                window_center, window_width, block_signals=True, unit=unit
+            )
+        if update_controls:
+            self.window_level_controls.set_unit(unit)
+
+    def _clamp_stored_window_level_if_out_of_range(
+        self,
+        is_new_study_series: bool,
+        window_center: float | None,
+        window_width: float | None,
+        pixel_min: float | None,
+        pixel_max: float | None,
+    ) -> tuple[float | None, float | None]:
+        """Clamp stored W/L to the valid pixel/series range when continuing within a series."""
+        if (
+            is_new_study_series
+            or window_center is None
+            or window_width is None
+            or pixel_min is None
+            or pixel_max is None
+        ):
+            return window_center, window_width
+        series_pixel_min, series_pixel_max = self.view_state_manager.get_series_pixel_range()
+        if series_pixel_min is not None and series_pixel_max is not None:
+            valid_min = series_pixel_min
+            valid_max = series_pixel_max
+        else:
+            valid_min = pixel_min
+            valid_max = pixel_max
+        if (
+            window_center < valid_min
+            or window_center > valid_max
+            or window_width < 1.0
+            or window_width > (valid_max - valid_min)
+        ):
+            if valid_min is not None and valid_max is not None:
+                window_center = (valid_min + valid_max) / 2.0
+                window_width = valid_max - valid_min
+                if window_width <= 0:
+                    window_width = 1.0
+                self.view_state_manager.current_window_center = window_center
+                self.view_state_manager.current_window_width = window_width
+        return window_center, window_width
+
+    def _store_window_level(
+        self,
+        window_center: float,
+        window_width: float,
+        update_controls: bool,
+        unit: str | None,
+    ) -> None:
+        """Persist W/L on view state and optionally push to the controls widget."""
+        if update_controls:
+            self.window_level_controls.set_window_level(
+                window_center, window_width, block_signals=True, unit=unit
+            )
+        self.view_state_manager.current_window_center = window_center
+        self.view_state_manager.current_window_width = window_width
+
+    def _apply_fallback_window_level_from_dataset_or_defaults(
+        self,
+        dataset: Dataset,
+        update_controls: bool,
+        use_rescaled_values: bool,
+        rescale_slope: float | None,
+        rescale_intercept: float | None,
+        pixel_min: float | None,
+        pixel_max: float | None,
+        unit: str | None,
+    ) -> None:
+        """Resolve W/L from the dataset tags, else from pixel min/max defaults."""
+        wc, ww, is_rescaled = self.dicom_processor.get_window_level_from_dataset(
+            dataset,
+            rescale_slope=rescale_slope,
+            rescale_intercept=rescale_intercept,
+        )
+        if wc is not None and ww is not None:
+            wc, ww = apply_window_level_rescale_conversion(
+                wc,
+                ww,
+                is_rescaled=is_rescaled,
+                use_rescaled_values=use_rescaled_values,
+                rescale_slope=rescale_slope,
+                rescale_intercept=rescale_intercept,
+                dicom_processor=self.dicom_processor,
+            )
+            self._store_window_level(wc, ww, update_controls, unit)
+        elif pixel_min is not None and pixel_max is not None:
+            default_center = (pixel_min + pixel_max) / 2.0
+            default_width = pixel_max - pixel_min
+            if default_width <= 0:
+                default_width = 1.0
+            self._store_window_level(default_center, default_width, update_controls, unit)
+        self.view_state_manager.window_level_user_modified = False
+
+    def _sync_wl_for_continuing_or_fallback_series(
+        self,
+        dataset: Dataset,
+        update_controls: bool,
+        use_rescaled_values: bool,
+        is_new_study_series: bool,
+        is_same_series: bool,
+        window_center: float | None,
+        window_width: float | None,
+        rescale_slope: float | None,
+        rescale_intercept: float | None,
+        pixel_min: float | None,
+        pixel_max: float | None,
+        unit: str | None,
+    ) -> None:
+        """Update W/L for same-series continue, or resolve fallback W/L from dataset/defaults."""
+        if is_new_study_series and window_center is not None and window_width is not None:
+            return
+        if is_same_series and window_center is not None and window_width is not None:
+            if update_controls:
+                self.window_level_controls.set_window_level(
+                    window_center, window_width, block_signals=True, unit=unit
+                )
+            return
+        if not is_same_series or window_center is None or window_width is None:
+            self._apply_fallback_window_level_from_dataset_or_defaults(
+                dataset,
+                update_controls,
+                use_rescaled_values,
+                rescale_slope,
+                rescale_intercept,
+                pixel_min,
+                pixel_max,
+                unit,
+            )
 
     def _sync_controls_and_metadata(
         self,
@@ -627,168 +887,102 @@ class SliceDisplayManager:
         if self.update_tag_viewer_callback:
             self.update_tag_viewer_callback(dataset)
 
-        pixel_min = None
-        pixel_max = None
-        center_range = None
-        width_range = None
-        try:
-            pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(
-                dataset, apply_rescale=use_rescaled_values
-            )
-            if pixel_min is not None and pixel_max is not None:
-                series_pixel_min, series_pixel_max = self.view_state_manager.get_series_pixel_range()
-                if series_pixel_min is not None and series_pixel_max is not None:
-                    center_range = (series_pixel_min, series_pixel_max)
-                    width_range = (1.0, max(1.0, series_pixel_max - series_pixel_min))
-                else:
-                    center_range = (pixel_min, pixel_max)
-                    width_range = (1.0, max(1.0, pixel_max - pixel_min))
-        except Exception as e:
-            error_type = type(e).__name__
-            print_redacted(f"Error calculating pixel value range for window/level controls ({error_type}): {e}")
-
+        pixel_min, pixel_max, center_range, width_range = self._compute_pixel_wl_ranges(
+            dataset, use_rescaled_values
+        )
         unit = rescale_type if (use_rescaled_values and rescale_type) else None
-        # Set ranges BEFORE values so slider normalization uses correct ranges
-        if update_controls and center_range is not None and width_range is not None:
-            self.window_level_controls.set_ranges(center_range, width_range)
-        if update_controls and is_new_study_series and window_center is not None and window_width is not None:
-            self.window_level_controls.set_window_level(
-                window_center, window_width, block_signals=True, unit=unit
-            )
-        if update_controls:
-            self.window_level_controls.set_unit(unit)
+        self._apply_wl_ranges_values_and_unit(
+            update_controls,
+            is_new_study_series,
+            window_center,
+            window_width,
+            center_range,
+            width_range,
+            unit,
+        )
+        window_center, window_width = self._clamp_stored_window_level_if_out_of_range(
+            is_new_study_series, window_center, window_width, pixel_min, pixel_max
+        )
+        self._sync_wl_for_continuing_or_fallback_series(
+            dataset,
+            update_controls,
+            use_rescaled_values,
+            is_new_study_series,
+            is_same_series,
+            window_center,
+            window_width,
+            rescale_slope,
+            rescale_intercept,
+            pixel_min,
+            pixel_max,
+            unit,
+        )
 
-        if (
-            not is_new_study_series
-            and window_center is not None
-            and window_width is not None
-            and pixel_min is not None
-            and pixel_max is not None
-        ):
-            series_pixel_min, series_pixel_max = self.view_state_manager.get_series_pixel_range()
-            if series_pixel_min is not None and series_pixel_max is not None:
-                valid_min = series_pixel_min
-                valid_max = series_pixel_max
-            else:
-                valid_min = pixel_min
-                valid_max = pixel_max
-            if (
-                window_center < valid_min
-                or window_center > valid_max
-                or window_width < 1.0
-                or window_width > (valid_max - valid_min)
-            ):
-                if valid_min is not None and valid_max is not None:
-                    window_center = (valid_min + valid_max) / 2.0
-                    window_width = valid_max - valid_min
-                    if window_width <= 0:
-                        window_width = 1.0
-                    self.view_state_manager.current_window_center = window_center
-                    self.view_state_manager.current_window_width = window_width
-
-        if is_new_study_series and window_center is not None and window_width is not None:
-            pass
-        elif is_same_series and window_center is not None and window_width is not None:
-            if update_controls:
-                self.window_level_controls.set_window_level(
-                    window_center, window_width, block_signals=True, unit=unit
-                )
-        else:
-            if not is_same_series or (window_center is None or window_width is None):
-                wc, ww, is_rescaled = self.dicom_processor.get_window_level_from_dataset(
-                    dataset,
-                    rescale_slope=rescale_slope,
-                    rescale_intercept=rescale_intercept,
-                )
-                if wc is not None and ww is not None:
-                    wc, ww = apply_window_level_rescale_conversion(
-                        wc,
-                        ww,
-                        is_rescaled=is_rescaled,
-                        use_rescaled_values=use_rescaled_values,
-                        rescale_slope=rescale_slope,
-                        rescale_intercept=rescale_intercept,
-                        dicom_processor=self.dicom_processor,
-                    )
-                    if update_controls:
-                        self.window_level_controls.set_window_level(wc, ww, block_signals=True, unit=unit)
-                    self.view_state_manager.current_window_center = wc
-                    self.view_state_manager.current_window_width = ww
-                elif pixel_min is not None and pixel_max is not None:
-                    default_center = (pixel_min + pixel_max) / 2.0
-                    default_width = pixel_max - pixel_min
-                    if default_width <= 0:
-                        default_width = 1.0
-                    if update_controls:
-                        self.window_level_controls.set_window_level(
-                            default_center, default_width, block_signals=True, unit=unit
-                        )
-                    self.view_state_manager.current_window_center = default_center
-                    self.view_state_manager.current_window_width = default_width
-                self.view_state_manager.window_level_user_modified = False
-
-    def _render_scene_overlays_annotations(
+    def _resolve_total_slices(
         self,
-        dataset: Dataset,
         current_studies: dict[str, dict[str, list[Dataset]]],
         current_study_uid: str,
         current_series_uid: str,
-        current_slice_index: int,
-        is_new_study_series: bool,
-    ) -> None:
-        """Render overlay, ROI/measurement, and annotation scene items for the active slice."""
-        parser = DICOMParser(dataset)
-        total_slices = 0
+    ) -> int:
+        """Count slices in the active series, or 0 when context is incomplete."""
         if current_studies and current_study_uid and current_series_uid:
             if (
                 current_study_uid in current_studies
                 and current_series_uid in current_studies[current_study_uid]
             ):
-                total_slices = len(current_studies[current_study_uid][current_series_uid])
+                return len(current_studies[current_study_uid][current_series_uid])
+        return 0
 
-        projection_start_slice = None
-        projection_end_slice = None
-        projection_total_thickness = None
-        if self.projection_enabled and total_slices > 0:
-            projection_start_slice = max(0, current_slice_index)
-            projection_end_slice = min(total_slices - 1, current_slice_index + self.projection_slice_count - 1)
-            if (
-                current_study_uid in current_studies
-                and current_series_uid in current_studies[current_study_uid]
-            ):
-                series_datasets = current_studies[current_study_uid][current_series_uid]
-                total_thickness = 0.0
-                thickness_count = 0
-                for i in range(projection_start_slice, projection_end_slice + 1):
-                    if 0 <= i < len(series_datasets):
-                        slice_dataset = series_datasets[i]
-                        thickness = get_slice_thickness(slice_dataset)
-                        if thickness is not None:
-                            total_thickness += thickness
-                            thickness_count += 1
-                if thickness_count > 0:
-                    projection_total_thickness = total_thickness
+    def _sum_slice_thickness_over_range(
+        self,
+        series_datasets: list[Dataset],
+        start_index: int,
+        end_index: int,
+    ) -> float | None:
+        """Sum SliceThickness over inclusive indices; return None when no values found."""
+        total_thickness = 0.0
+        thickness_count = 0
+        for i in range(start_index, end_index + 1):
+            if 0 <= i < len(series_datasets):
+                thickness = get_slice_thickness(series_datasets[i])
+                if thickness is not None:
+                    total_thickness += thickness
+                    thickness_count += 1
+        if thickness_count > 0:
+            return total_thickness
+        return None
 
-        self.overlay_manager.create_overlay_items(
-            self.image_viewer.scene,
-            parser,
-            total_slices=total_slices if total_slices > 0 else None,
-            projection_enabled=self.projection_enabled,
-            projection_start_slice=projection_start_slice,
-            projection_end_slice=projection_end_slice,
-            projection_total_thickness=projection_total_thickness,
-            projection_type=self.projection_type if self.projection_enabled else None,
-            multiframe_context=self.get_multiframe_overlay_context(
-                dataset=dataset,
-                study_uid=current_study_uid,
-                series_uid=current_series_uid,
-            ),
-            stack_position=(current_slice_index + 1) if total_slices > 0 else None,
+    def _projection_overlay_thickness_meta(
+        self,
+        current_studies: dict[str, dict[str, list[Dataset]]],
+        current_study_uid: str,
+        current_series_uid: str,
+        current_slice_index: int,
+        total_slices: int,
+    ) -> tuple[int | None, int | None, float | None]:
+        """Return projection start/end indices and summed slice thickness for overlays."""
+        if not (self.projection_enabled and total_slices > 0):
+            return None, None, None
+        projection_start_slice = max(0, current_slice_index)
+        projection_end_slice = min(
+            total_slices - 1, current_slice_index + self.projection_slice_count - 1
         )
+        projection_total_thickness = None
+        if (
+            current_study_uid in current_studies
+            and current_series_uid in current_studies[current_study_uid]
+        ):
+            projection_total_thickness = self._sum_slice_thickness_over_range(
+                current_studies[current_study_uid][current_series_uid],
+                projection_start_slice,
+                projection_end_slice,
+            )
+        return projection_start_slice, projection_end_slice, projection_total_thickness
 
-        pixel_spacing = get_pixel_spacing(dataset)
-        self.measurement_tool.set_pixel_spacing(pixel_spacing)
-
+    def _bind_tools_to_current_slice(
+        self, dataset: Dataset, current_slice_index: int
+    ) -> tuple[str, str, int]:
+        """Set current-slice context on ROI/measurement/annotation tools."""
         study_uid = getattr(dataset, "StudyInstanceUID", "")
         series_uid = get_composite_series_key(dataset)
         instance_identifier = current_slice_index
@@ -798,7 +992,16 @@ class SliceDisplayManager:
             self.text_annotation_tool.set_current_slice(study_uid, series_uid, instance_identifier)
         if self.arrow_annotation_tool:
             self.arrow_annotation_tool.set_current_slice(study_uid, series_uid, instance_identifier)
+        return study_uid, series_uid, instance_identifier
 
+    def _clear_tools_on_new_series(
+        self,
+        is_new_study_series: bool,
+        study_uid: str,
+        series_uid: str,
+        instance_identifier: int,
+    ) -> None:
+        """Clear measurement/annotation scene items when entering a new study/series."""
         if is_new_study_series:
             if DEBUG_MEASUREMENT_SERIES:
                 print(
@@ -822,6 +1025,8 @@ class SliceDisplayManager:
                 f"measurement_summary={self.measurement_tool.get_debug_summary(self.image_viewer.scene)}"
             )
 
+    def _invoke_slice_annotation_displays(self, dataset: Dataset) -> None:
+        """Display ROIs, measurements, and text/arrow annotations for the active slice."""
         if self.display_rois_callback:
             self.display_rois_callback(dataset)
         else:
@@ -837,24 +1042,82 @@ class SliceDisplayManager:
         if self.arrow_annotation_tool:
             self.display_arrow_annotations_for_slice(dataset)
 
-        if self.annotation_manager and self.dicom_organizer:
-            try:
-                self.annotation_manager.clear_annotations(self.image_viewer.scene)
-                annotations = self.annotation_manager.get_annotations_for_image(dataset, current_study_uid)
-                if annotations:
-                    image_width = 512.0
-                    image_height = 512.0
-                    if hasattr(dataset, "Columns") and hasattr(dataset, "Rows"):
-                        image_width = float(dataset.Columns)
-                        image_height = float(dataset.Rows)
-                    self.annotation_manager.create_presentation_state_items(
-                        self.image_viewer.scene,
-                        annotations,
-                        image_width,
-                        image_height,
-                    )
-            except Exception:
-                pass
+    def _render_presentation_state_items(
+        self, dataset: Dataset, current_study_uid: str
+    ) -> None:
+        """Clear and recreate presentation-state annotation items when available."""
+        if not (self.annotation_manager and self.dicom_organizer):
+            return
+        try:
+            self.annotation_manager.clear_annotations(self.image_viewer.scene)
+            annotations = self.annotation_manager.get_annotations_for_image(dataset, current_study_uid)
+            if annotations:
+                image_width = 512.0
+                image_height = 512.0
+                if hasattr(dataset, "Columns") and hasattr(dataset, "Rows"):
+                    image_width = float(dataset.Columns)
+                    image_height = float(dataset.Rows)
+                self.annotation_manager.create_presentation_state_items(
+                    self.image_viewer.scene,
+                    annotations,
+                    image_width,
+                    image_height,
+                )
+        except Exception:
+            pass
+
+    def _render_scene_overlays_annotations(
+        self,
+        dataset: Dataset,
+        current_studies: dict[str, dict[str, list[Dataset]]],
+        current_study_uid: str,
+        current_series_uid: str,
+        current_slice_index: int,
+        is_new_study_series: bool,
+    ) -> None:
+        """Render overlay, ROI/measurement, and annotation scene items for the active slice."""
+        parser = DICOMParser(dataset)
+        total_slices = self._resolve_total_slices(
+            current_studies, current_study_uid, current_series_uid
+        )
+        projection_start_slice, projection_end_slice, projection_total_thickness = (
+            self._projection_overlay_thickness_meta(
+                current_studies,
+                current_study_uid,
+                current_series_uid,
+                current_slice_index,
+                total_slices,
+            )
+        )
+
+        self.overlay_manager.create_overlay_items(
+            self.image_viewer.scene,
+            parser,
+            total_slices=total_slices if total_slices > 0 else None,
+            projection_enabled=self.projection_enabled,
+            projection_start_slice=projection_start_slice,
+            projection_end_slice=projection_end_slice,
+            projection_total_thickness=projection_total_thickness,
+            projection_type=self.projection_type if self.projection_enabled else None,
+            multiframe_context=self.get_multiframe_overlay_context(
+                dataset=dataset,
+                study_uid=current_study_uid,
+                series_uid=current_series_uid,
+            ),
+            stack_position=(current_slice_index + 1) if total_slices > 0 else None,
+        )
+
+        pixel_spacing = get_pixel_spacing(dataset)
+        self.measurement_tool.set_pixel_spacing(pixel_spacing)
+
+        study_uid, series_uid, instance_identifier = self._bind_tools_to_current_slice(
+            dataset, current_slice_index
+        )
+        self._clear_tools_on_new_series(
+            is_new_study_series, study_uid, series_uid, instance_identifier
+        )
+        self._invoke_slice_annotation_displays(dataset)
+        self._render_presentation_state_items(dataset, current_study_uid)
 
     def display_slice(  # pyright: ignore[reportGeneralTypeIssues]
         self,
@@ -1001,6 +1264,68 @@ class SliceDisplayManager:
             # print(error_msg)
             raise
 
+    def _roi_belongs_to_slice(
+        self, roi, study_uid: str, series_uid: str, instance_identifier: int
+    ) -> bool:
+        """Return True when the ROI is stored under the current slice composite key."""
+        slice_key = (study_uid, series_uid, instance_identifier)
+        for key, roi_list in self.roi_manager.rois.items():
+            if roi in roi_list:
+                return key == slice_key
+        return False
+
+    def _remove_roi_graphics_from_scene(self, roi, item) -> None:
+        """Remove an ROI's statistics overlay and graphics item from the viewer scene."""
+        if roi.statistics_overlay_item is not None:
+            if roi.statistics_overlay_item.scene() == self.image_viewer.scene:
+                self.image_viewer.scene.removeItem(roi.statistics_overlay_item)
+            roi.statistics_overlay_item = None
+        if item.scene() == self.image_viewer.scene:
+            self.image_viewer.scene.removeItem(item)
+
+    def _remove_rois_not_on_current_slice(
+        self, study_uid: str, series_uid: str, instance_identifier: int
+    ) -> None:
+        """Remove ROI graphics (and stats overlays) that belong to other slices."""
+        for item in list(self.image_viewer.scene.items()):
+            roi = self.roi_manager.find_roi_by_item(item)
+            if roi is None:
+                continue
+            if self._roi_belongs_to_slice(roi, study_uid, series_uid, instance_identifier):
+                continue
+            self._remove_roi_graphics_from_scene(roi, item)
+
+    def _ensure_current_rois_in_scene(self, rois) -> None:
+        """Add current-slice ROIs to the scene and ensure they are visible."""
+        for roi in rois:
+            roi_scene = roi.item.scene() if roi.item else None
+            if roi_scene == self.image_viewer.scene:
+                roi.item.setZValue(100)
+                roi.item.show()
+            else:
+                self.image_viewer.scene.addItem(roi.item)
+                roi.item.setZValue(100)
+
+    def _sync_roi_list_selection_and_stats(self, rois, study_uid: str, series_uid: str, instance_identifier: int) -> None:
+        """Refresh ROI list, overlays, and selection/statistics for the current slice."""
+        if self.roi_list_panel is not None:
+            self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
+
+        if self.update_roi_statistics_overlays_callback is not None:
+            self.update_roi_statistics_overlays_callback()
+
+        selected_roi = self.roi_manager.get_selected_roi()
+        if selected_roi is not None and selected_roi in rois:
+            if self.roi_list_panel is not None:
+                self.roi_list_panel.select_roi_in_list(selected_roi)
+        else:
+            if selected_roi is not None:
+                self.roi_manager.select_roi(None)
+            if self.roi_list_panel is not None:
+                self.roi_list_panel.select_roi_in_list(None)
+            if self.roi_statistics_panel is not None:
+                self.roi_statistics_panel.clear_statistics()
+
     def display_rois_for_slice(self, dataset: Dataset) -> None:
         """
         Display ROIs for a slice.
@@ -1010,86 +1335,14 @@ class SliceDisplayManager:
         Args:
             dataset: pydicom Dataset for the current slice
         """
-        # Extract DICOM identifiers
         study_uid = getattr(dataset, 'StudyInstanceUID', '')
         series_uid = get_composite_series_key(dataset)
-        # Use current_slice_index as instance identifier (array position)
         instance_identifier = self.current_slice_index
-        # print(f"[ROI DEBUG] display_rois_for_slice retrieving ROIs with instance_identifier={instance_identifier} (self.current_slice_index)")
 
-        # Get all ROIs for this slice using composite key
         rois = self.roi_manager.get_rois_for_slice(study_uid, series_uid, instance_identifier)
-        # print(f"[DEBUG-OVERLAY] display_rois_for_slice: scene={id(self.image_viewer.scene)}, "
-        #       f"roi_manager={id(self.roi_manager)}, found {len(rois)} ROIs for slice {instance_identifier}")
-
-        # Remove ROIs from other slices from the scene
-        # (but keep them in the manager's storage)
-        current_scene_items = list(self.image_viewer.scene.items())
-        for item in current_scene_items:
-            # Check if this item is an ROI
-            roi = self.roi_manager.find_roi_by_item(item)
-            if roi is not None:
-                # Check if this ROI belongs to current slice
-                roi_belongs_to_current = False
-                for key, roi_list in self.roi_manager.rois.items():
-                    if roi in roi_list:
-                        # Check if this key matches current slice
-                        if key == (study_uid, series_uid, instance_identifier):
-                            roi_belongs_to_current = True
-                        break
-                # Remove ROI if it's from a different slice
-                if not roi_belongs_to_current:
-                    # Remove statistics overlay if present
-                    if roi.statistics_overlay_item is not None:
-                        if roi.statistics_overlay_item.scene() == self.image_viewer.scene:
-                            self.image_viewer.scene.removeItem(roi.statistics_overlay_item)
-                        roi.statistics_overlay_item = None
-                    # Only remove if item actually belongs to this scene
-                    if item.scene() == self.image_viewer.scene:
-                        self.image_viewer.scene.removeItem(item)
-
-        # Add ROIs for current slice to scene if not already there
-        # Force refresh to ensure visibility after image changes
-        for _i, roi in enumerate(rois):
-            roi_scene = roi.item.scene() if roi.item else None
-            if roi_scene == self.image_viewer.scene:
-                # Already in scene, but ensure it's visible and has correct Z-value
-                roi.item.setZValue(100)  # Above image but below overlay
-                roi.item.show()  # Ensure visible
-                # print(f"  ROI {i} already in scene {id(self.image_viewer.scene)}")
-            else:
-                # Not in scene, add it
-                # print(f"  ROI {i} not in scene, adding to scene {id(self.image_viewer.scene)} (was in {id(roi_scene)})")
-                self.image_viewer.scene.addItem(roi.item)
-                # Ensure ROI is visible (set appropriate Z-value)
-                roi.item.setZValue(100)  # Above image but below overlay
-
-        # Update ROI list panel to show only ROIs for current slice
-        if self.roi_list_panel is not None:
-            self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
-
-        # Update ROI statistics overlays
-        if self.update_roi_statistics_overlays_callback is not None:
-            # print(f"[DEBUG-OVERLAY] display_rois_for_slice: Calling update_roi_statistics_overlays_callback")
-            self.update_roi_statistics_overlays_callback()
-
-        # Check selected ROI and update/clear statistics
-        selected_roi = self.roi_manager.get_selected_roi()
-        if selected_roi is not None and selected_roi in rois:
-            # Selected ROI belongs to current slice - keep it selected and update list selection
-            if self.roi_list_panel is not None:
-                self.roi_list_panel.select_roi_in_list(selected_roi)
-            # Statistics will be updated by ROI coordinator when ROI is clicked/selected
-        else:
-            # Clear selection if ROI doesn't belong to current slice
-            if selected_roi is not None:
-                self.roi_manager.select_roi(None)
-            # Clear list selection
-            if self.roi_list_panel is not None:
-                self.roi_list_panel.select_roi_in_list(None)
-            # Clear statistics panel
-            if self.roi_statistics_panel is not None:
-                self.roi_statistics_panel.clear_statistics()
+        self._remove_rois_not_on_current_slice(study_uid, series_uid, instance_identifier)
+        self._ensure_current_rois_in_scene(rois)
+        self._sync_roi_list_selection_and_stats(rois, study_uid, series_uid, instance_identifier)
 
     def display_measurements_for_slice(self, dataset: Dataset) -> None:
         """
@@ -1213,6 +1466,106 @@ class SliceDisplayManager:
                 slice_index
             )
 
+    def _build_sorted_series_list(
+        self, study_series: dict[str, list[Dataset]]
+    ) -> list[tuple[int, str, list[Dataset]]]:
+        """Build (SeriesNumber, series_uid, datasets) rows sorted by SeriesNumber ascending."""
+        series_list: list[tuple[int, str, list[Dataset]]] = []
+        for series_uid, datasets in study_series.items():
+            if datasets:
+                first_dataset = datasets[0]
+                series_number = getattr(first_dataset, 'SeriesNumber', None)
+                try:
+                    series_num = int(series_number) if series_number is not None else 0
+                except (ValueError, TypeError):
+                    series_num = 0
+                series_list.append((series_num, series_uid, datasets))
+        series_list.sort(key=lambda x: x[0])
+        return series_list
+
+    def _index_of_series_uid(
+        self, series_list: list[tuple[int, str, list[Dataset]]], series_uid: str
+    ) -> int | None:
+        """Return the index of series_uid in the sorted series list, or None."""
+        for idx, (_, uid, _) in enumerate(series_list):
+            if uid == series_uid:
+                return idx
+        return None
+
+    def _series_nav_debug(self, message: str, *, redacted: bool = False) -> None:
+        """Emit a series-navigation debug line when DEBUG_SERIES is enabled."""
+        if not DEBUG_SERIES:
+            return
+        if redacted:
+            print_redacted(message)
+        else:
+            print(message)
+
+    def _resolve_adjacent_series(
+        self, direction: int
+    ) -> tuple[str | None, int | None, Dataset | None]:
+        """Resolve the adjacent series by SeriesNumber order, or None when navigation is impossible."""
+        if not self.current_studies or not self.current_study_uid:
+            print_redacted(
+                f"[DEBUG] handle_series_navigation: No studies or study_uid. "
+                f"studies={bool(self.current_studies)}, "
+                f"study_uid={self.current_study_uid[:20] if self.current_study_uid else 'None'}..."
+            )
+            return None, None, None
+
+        study_series = self.current_studies[self.current_study_uid]
+        if len(study_series) <= 1:
+            self._series_nav_debug(
+                f"[DEBUG] handle_series_navigation: Only {len(study_series)} series in study, cannot navigate"
+            )
+            return None, None, None
+
+        series_list = self._build_sorted_series_list(study_series)
+        self._series_nav_debug(
+            f"[DEBUG] handle_series_navigation: Found {len(series_list)} series in study. "
+            f"Looking for current_series_uid="
+            f"{self.current_series_uid[:20] if self.current_series_uid else 'None'}...",
+            redacted=True,
+        )
+
+        current_index = self._index_of_series_uid(series_list, self.current_series_uid)
+        if current_index is None:
+            self._series_nav_debug(
+                f"[DEBUG] handle_series_navigation: Current series not found in sorted list. "
+                f"Available series UIDs: {[uid[:20] + '...' for _, uid, _ in series_list[:3]]} "
+                f"(showing first 3)",
+                redacted=True,
+            )
+            return None, None, None
+
+        self._series_nav_debug(
+            f"[DEBUG] handle_series_navigation: Current series found at index "
+            f"{current_index} of {len(series_list)}"
+        )
+        new_index = current_index + direction
+        if new_index < 0 or new_index >= len(series_list):
+            self._series_nav_debug(
+                f"[DEBUG] handle_series_navigation: New index {new_index} out of range "
+                f"[0, {len(series_list)})"
+            )
+            return None, None, None
+
+        _, new_series_uid, datasets = series_list[new_index]
+        if not datasets:
+            self._series_nav_debug(
+                f"[DEBUG] handle_series_navigation: New series "
+                f"{new_series_uid[:20] if new_series_uid else 'None'}... has no datasets",
+                redacted=True,
+            )
+            return None, None, None
+
+        self._series_nav_debug(
+            f"[DEBUG] handle_series_navigation: Successfully navigating from index "
+            f"{current_index} to {new_index}, new_series_uid={new_series_uid[:20]}...",
+            redacted=True,
+        )
+        return new_series_uid, 0, datasets[0]
+
     def handle_series_navigation(self, direction: int) -> tuple[str | None, int | None, Dataset | None]:
         """
         Handle series navigation request.
@@ -1223,82 +1576,7 @@ class SliceDisplayManager:
         Returns:
             Tuple of (new_series_uid, slice_index, dataset) or (None, None, None) if navigation not possible
         """
-        if not self.current_studies or not self.current_study_uid:
-            print_redacted(f"[DEBUG] handle_series_navigation: No studies or study_uid. "
-                  f"studies={bool(self.current_studies)}, study_uid={self.current_study_uid[:20] if self.current_study_uid else 'None'}...")
-            return None, None, None
-
-        # Get all series for current study
-        study_series = self.current_studies[self.current_study_uid]
-
-        # Check if there are multiple series
-        if len(study_series) <= 1:
-            if DEBUG_SERIES:
-
-                print(f"[DEBUG] handle_series_navigation: Only {len(study_series)} series in study, cannot navigate")
-            return None, None, None  # No navigation needed if only one series
-
-        # Build list of series with SeriesNumber for sorting
-        series_list = []
-        for series_uid, datasets in study_series.items():
-            if datasets:
-                # Extract SeriesNumber from first dataset
-                first_dataset = datasets[0]
-                series_number = getattr(first_dataset, 'SeriesNumber', None)
-                # Convert to int if possible, otherwise use 0
-                try:
-                    series_num = int(series_number) if series_number is not None else 0
-                except (ValueError, TypeError):
-                    series_num = 0
-                series_list.append((series_num, series_uid, datasets))
-
-        # Sort by SeriesNumber (ascending)
-        series_list.sort(key=lambda x: x[0])
-
-        if DEBUG_SERIES:
-            print_redacted(f"[DEBUG] handle_series_navigation: Found {len(series_list)} series in study. "
-                  f"Looking for current_series_uid={self.current_series_uid[:20] if self.current_series_uid else 'None'}...")
-
-        # Find current series in sorted list
-        current_index = None
-        for idx, (_, series_uid, _) in enumerate(series_list):
-            if series_uid == self.current_series_uid:
-                current_index = idx
-                break
-
-        if current_index is None:
-            if DEBUG_SERIES:
-                print_redacted(f"[DEBUG] handle_series_navigation: Current series not found in sorted list. "
-                      f"Available series UIDs: {[uid[:20] + '...' for _, uid, _ in series_list[:3]]} (showing first 3)")
-            return None, None, None  # Current series not found
-
-        if DEBUG_SERIES:
-            print(f"[DEBUG] handle_series_navigation: Current series found at index {current_index} of {len(series_list)}")
-
-        # Calculate new series index
-        new_index = current_index + direction
-
-        # Clamp to valid range
-        if new_index < 0 or new_index >= len(series_list):
-            if DEBUG_SERIES:
-
-                print(f"[DEBUG] handle_series_navigation: New index {new_index} out of range [0, {len(series_list)})")
-            return None, None, None  # Already at first or last series
-
-        # Get new series UID and datasets
-        _, new_series_uid, datasets = series_list[new_index]
-
-        if not datasets:
-            if DEBUG_SERIES:
-                print_redacted(f"[DEBUG] handle_series_navigation: New series {new_series_uid[:20] if new_series_uid else 'None'}... has no datasets")
-            return None, None, None
-
-        if DEBUG_SERIES:
-            print_redacted(f"[DEBUG] handle_series_navigation: Successfully navigating from index {current_index} to {new_index}, "
-                  f"new_series_uid={new_series_uid[:20]}...")
-
-        # Return new series information
-        return new_series_uid, 0, datasets[0]
+        return self._resolve_adjacent_series(direction)
 
     def handle_arrow_key_pressed(self, direction: int) -> None:
         """

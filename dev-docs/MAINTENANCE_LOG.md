@@ -8,6 +8,14 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-18
 
+- Completed the slice display manager Sonar slice
+  (`plans/SONARQUBE_SLICE_DISPLAY_MANAGER_SLICE_PLAN_20260718.md`): extracted
+  helpers for `_render_base_image_pipeline`, `_sync_controls_and_metadata`,
+  `_render_scene_overlays_annotations`, `display_rois_for_slice`, and
+  `handle_series_navigation`. Added
+  `tests/gui/test_slice_display_manager_sonar_slice.py`. Fresh analysis:
+  **454** priority findings (down from 461); five targeted `S3776` cleared
+  (`python:S3776` 282 → 277).
 - Completed the ROI coordinator statistics-path Sonar slice
   (`plans/SONARQUBE_ROI_COORDINATOR_STATS_SLICE_PLAN_20260718.md`): extracted
   projection/spacing/ownership helpers for
