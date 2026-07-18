@@ -5,11 +5,19 @@ alwaysApply: true
 
 # Agent instructions – DICOM Viewer V3
 
-**Last updated:** 2026-07-16
+**Last updated:** 2026-07-18
 
 **Table of contents** for agents: operational facts here; architecture, module tree, and harness checks linked below (progressive disclosure per [harness engineering](https://openai.com/index/harness-engineering/)).
 
 **Human contributors:** [`dev-docs/CONTRIBUTING.md`](dev-docs/CONTRIBUTING.md) · **Harness index:** [`dev-docs/HARNESS.md`](dev-docs/HARNESS.md)
+
+## Local dashboard access
+
+If a read-only check of a local dashboard or loopback service fails inside the
+sandbox, retry the same narrow command once with `require_escalated` before
+reporting the service unavailable. When the project uses an ignored `.env` for
+credentials, load it only within that command; never echo or otherwise expose
+its values.
 
 ## Virtual environment (venv)
 

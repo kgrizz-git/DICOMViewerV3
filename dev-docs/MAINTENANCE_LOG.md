@@ -8,6 +8,15 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-18
 
+- Widened the scoped local SonarQube reporter to include all open BLOCKER,
+  CRITICAL, and MAJOR issues, regardless of type. The prior CRITICAL query
+  filtered to BUG/VULNERABILITY and omitted the dashboard's CRITICAL
+  CODE_SMELL findings; regression coverage now locks the all-types scope.
+- Local SonarQube runner and scoped reporter now load simple `KEY=VALUE` (or
+  `export KEY=VALUE`) entries from the ignored repository-root `.env` file.
+  Explicit environment variables still take precedence, the file is parsed
+  rather than executed, and token values are never printed. This lets the
+  documented `.env` workflow work without a separate shell export.
 - Remediated local SonarQube MAJOR findings on branch
   `fix/sonarqube-major-findings-20260718` (analysis
   `2026-07-18T17:12:01+0000` / revision `9484958196fcd183a88407f5f312d77bb521f8df`):

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Report priority findings for exactly one local SonarQube component.
 
-The command is deliberately opt-in and local-only. It queries BLOCKER issues,
-CRITICAL BUG and VULNERABILITY issues, and MAJOR issues (all types, not just
-bugs and vulnerabilities) for one component, rejecting any response that contains
-another project's component key. This prevents a mixed-project response from being
-triaged as a DICOM Viewer finding.
+The command is deliberately opt-in and local-only. It queries all BLOCKER,
+CRITICAL, and MAJOR issues for one component, regardless of issue type,
+rejecting any response that contains another project's component key. This
+prevents a mixed-project response from being triaged as a DICOM Viewer finding.
 
-Usage (with SONAR_TOKEN set and the local service running):
+Usage (with SONAR_TOKEN in the ignored .env file or exported, and the local
+service running):
     python scripts/report_local_sonarqube_issues.py
     python scripts/report_local_sonarqube_issues.py --fail-on-findings
     python scripts/report_local_sonarqube_issues.py --output tmp/sonar-findings.md
@@ -38,6 +38,7 @@ try:
         DEFAULT_HOST_URL,
         DEFAULT_PROJECT_KEY,
         get_server_status,
+        load_dotenv,
         normalize_host_url,
     )
 except ModuleNotFoundError:
@@ -46,6 +47,7 @@ except ModuleNotFoundError:
         DEFAULT_HOST_URL,
         DEFAULT_PROJECT_KEY,
         get_server_status,
+        load_dotenv,
         normalize_host_url,
     )
 
@@ -53,7 +55,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 PAGE_SIZE = 500
 REPORTED_QUERIES = (
     ("BLOCKER", {"severities": "BLOCKER"}),
-    ("CRITICAL BUG/VULNERABILITY", {"severities": "CRITICAL", "types": "BUG,VULNERABILITY"}),
+    ("CRITICAL", {"severities": "CRITICAL"}),
     ("MAJOR", {"severities": "MAJOR"}),
 )
 
@@ -324,10 +326,15 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     """Run the component-safe report and return a conventional CLI exit code."""
+    load_dotenv(REPO_ROOT)
     args = parse_args()
     token = os.environ.get("SONAR_TOKEN")
     if not token:
-        print("SONAR_TOKEN is not set. Configure a local analysis token before reporting.", file=sys.stderr)
+        print(
+            "SONAR_TOKEN is not set. Add a local analysis token to the ignored .env "
+            "file or export it before reporting.",
+            file=sys.stderr,
+        )
         return 2
     project_key = args.project_key.strip()
     if not project_key:
