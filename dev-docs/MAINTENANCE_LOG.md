@@ -8,6 +8,23 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-18
 
+- Remediated local SonarQube MAJOR findings on branch
+  `fix/sonarqube-major-findings-20260718` (analysis
+  `2026-07-18T17:12:01+0000` / revision `9484958196fcd183a88407f5f312d77bb521f8df`):
+  - **S2245:** `deep_anonymizer` date-shift jitter now uses `secrets.randbelow`.
+  - **S3923:** collapsed six identical if/else sites (annotation options colors,
+    image-viewer pixel-array ambiguous branch, slice-sync plane lookup via the
+    shared dataset→sorted mapper, measurement undo-batch tracking for angle and
+    linear items).
+  - **S1244:** documented `# NOSONAR(S1244)` suppressions for all 19 float-equality
+    findings (DICOM DS-VR RescaleSlope/Intercept guards, VTK empty-scene bounds
+    sentinels, flip/zoom/export/angle label sentinels); upgraded the bare
+    `# NOSONAR` at `dicom_window_level.py:229` to rule-scoped form. No
+    `math.isclose` refactors.
+  - Deferred 114 MAJOR CODE_SMELL findings — tracked in `TO_DO.md`.
+  - Plan: `plans/SONARQUBE_MAJOR_FINDINGS_REMEDIATION_PLAN_20260718.md`.
+
+
 - Hardened local SonarQube endpoint handling: `SONAR_HOST_URL` now accepts
   only HTTP(S) loopback hosts, and the Docker-only override accepts only
   `host.docker.internal`. Added regression coverage for `file://`, remote,

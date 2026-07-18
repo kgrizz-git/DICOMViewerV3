@@ -380,78 +380,38 @@ class MeasurementCoordinator:
             if measurement_item is None:
                 return
             if isinstance(measurement_item, AngleMeasurementItem):
-                if hasattr(measurement_item, "_updating_handles") and measurement_item._updating_handles:
-                    cur = (measurement_item.p1, measurement_item.p2, measurement_item.p3)
-                    if measurement_item not in self._measurement_move_tracking:
-                        self._measurement_move_tracking[measurement_item] = {
-                            "kind": "angle",
-                            "initial_p1": cur[0],
-                            "initial_p2": cur[1],
-                            "initial_p3": cur[2],
-                            "current_p1": cur[0],
-                            "current_p2": cur[1],
-                            "current_p3": cur[2],
-                        }
-                    else:
-                        self._measurement_move_tracking[measurement_item]["current_p1"] = measurement_item.p1
-                        self._measurement_move_tracking[measurement_item]["current_p2"] = measurement_item.p2
-                        self._measurement_move_tracking[measurement_item]["current_p3"] = measurement_item.p3
+                # Handle-drag and group-drag share the same undo-batch tracking;
+                # `_updating_handles` only suppresses recursive item updates elsewhere.
+                cur = (measurement_item.p1, measurement_item.p2, measurement_item.p3)
+                if measurement_item not in self._measurement_move_tracking:
+                    self._measurement_move_tracking[measurement_item] = {
+                        "kind": "angle",
+                        "initial_p1": cur[0],
+                        "initial_p2": cur[1],
+                        "initial_p3": cur[2],
+                        "current_p1": cur[0],
+                        "current_p2": cur[1],
+                        "current_p3": cur[2],
+                    }
                 else:
-                    cur = (measurement_item.p1, measurement_item.p2, measurement_item.p3)
-                    if measurement_item not in self._measurement_move_tracking:
-                        self._measurement_move_tracking[measurement_item] = {
-                            "kind": "angle",
-                            "initial_p1": cur[0],
-                            "initial_p2": cur[1],
-                            "initial_p3": cur[2],
-                            "current_p1": cur[0],
-                            "current_p2": cur[1],
-                            "current_p3": cur[2],
-                        }
-                    else:
-                        self._measurement_move_tracking[measurement_item]["current_p1"] = measurement_item.p1
-                        self._measurement_move_tracking[measurement_item]["current_p2"] = measurement_item.p2
-                        self._measurement_move_tracking[measurement_item]["current_p3"] = measurement_item.p3
+                    self._measurement_move_tracking[measurement_item]["current_p1"] = measurement_item.p1
+                    self._measurement_move_tracking[measurement_item]["current_p2"] = measurement_item.p2
+                    self._measurement_move_tracking[measurement_item]["current_p3"] = measurement_item.p3
             elif hasattr(measurement_item, "start_point"):
-                # Check if handles are being updated (handle drag in progress)
-                if hasattr(measurement_item, '_updating_handles') and measurement_item._updating_handles:
-                    # This is a handle drag, track both start and end points
-                    current_start = measurement_item.start_point
-                    current_end = measurement_item.end_point
-
-                    # Check if measurement is being tracked for movement
-                    if measurement_item not in self._measurement_move_tracking:
-                        # Store initial positions and start tracking
-                        self._measurement_move_tracking[measurement_item] = {
-                            'kind': 'linear',
-                            'initial_start': current_start,
-                            'initial_end': current_end,
-                            'current_start': current_start,
-                            'current_end': current_end
-                        }
-                    else:
-                        # Update current positions (don't create command yet)
-                        self._measurement_move_tracking[measurement_item]['current_start'] = current_start
-                        self._measurement_move_tracking[measurement_item]['current_end'] = current_end
+                # Handle-drag and group-drag share the same undo-batch tracking.
+                current_start = measurement_item.start_point
+                current_end = measurement_item.end_point
+                if measurement_item not in self._measurement_move_tracking:
+                    self._measurement_move_tracking[measurement_item] = {
+                        'kind': 'linear',
+                        'initial_start': current_start,
+                        'initial_end': current_end,
+                        'current_start': current_start,
+                        'current_end': current_end
+                    }
                 else:
-                    # This is a group move (dragging the line)
-                    current_start = measurement_item.start_point
-                    current_end = measurement_item.end_point
-
-                    # Check if measurement is being tracked for movement
-                    if measurement_item not in self._measurement_move_tracking:
-                        # Store initial positions and start tracking
-                        self._measurement_move_tracking[measurement_item] = {
-                            'kind': 'linear',
-                            'initial_start': current_start,
-                            'initial_end': current_end,
-                            'current_start': current_start,
-                            'current_end': current_end
-                        }
-                    else:
-                        # Update current positions (don't create command yet)
-                        self._measurement_move_tracking[measurement_item]['current_start'] = current_start
-                        self._measurement_move_tracking[measurement_item]['current_end'] = current_end
+                    self._measurement_move_tracking[measurement_item]['current_start'] = current_start
+                    self._measurement_move_tracking[measurement_item]['current_end'] = current_end
             else:
                 return
 

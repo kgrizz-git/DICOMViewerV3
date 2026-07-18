@@ -60,7 +60,8 @@ def interior_angle_at_vertex_degrees(p1: QPointF, p2: QPointF, p3: QPointF) -> f
 
 def format_angle_label(degrees: float) -> str:
     """Human-readable angle string for overlay."""
-    if degrees >= 100.0 or degrees == 0.0:
+    # zero-angle label-format sentinel
+    if degrees >= 100.0 or degrees == 0.0:  # NOSONAR(S1244)
         return f"{degrees:.1f}°"
     return f"{degrees:.2f}°"
 

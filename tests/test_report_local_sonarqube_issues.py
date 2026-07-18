@@ -68,6 +68,7 @@ def test_fetch_issues_uses_component_filter_and_keeps_token_out_of_url(monkeypat
     parsed = parse_qs(urlparse(requests[0][0].full_url).query)
     assert parsed["componentKeys"] == ["dicom-viewer-v3"]
     assert parsed["severities"] == ["BLOCKER"]
+    assert parsed["statuses"] == ["OPEN,CONFIRMED,REOPENED"]
     assert "projectKeys" not in parsed
     assert "test-token" not in requests[0][0].full_url
     assert requests[0][0].get_header("Authorization") is not None
@@ -124,7 +125,7 @@ def test_fetch_issues_rejects_malformed_and_incomplete_responses(monkeypatch):
         )
 
 
-def test_collect_severe_report_queries_both_policy_classes(monkeypatch):
+def test_collect_reported_findings_queries_all_policy_classes(monkeypatch):
     module = _load_module()
     seen_queries = []
 
@@ -139,12 +140,13 @@ def test_collect_severe_report_queries_both_policy_classes(monkeypatch):
         lambda *_args: module.AnalysisMetadata(date="2026-07-18", revision="abc123"),
     )
 
-    report = module.collect_severe_report("http://localhost:9000", "token", "dicom-viewer-v3")
+    report = module.collect_reported_findings("http://localhost:9000", "token", "dicom-viewer-v3")
 
     assert report.issues == ()
     assert seen_queries == [
         {"severities": "BLOCKER"},
         {"severities": "CRITICAL", "types": "BUG,VULNERABILITY"},
+        {"severities": "MAJOR"},
     ]
 
 

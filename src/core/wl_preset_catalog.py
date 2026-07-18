@@ -145,7 +145,8 @@ def _has_usable_rescale(
     return (
         rescale_slope is not None
         and rescale_intercept is not None
-        and rescale_slope != 0.0
+        # RescaleSlope is DICOM DS-VR; exact 0.0 is well-defined
+        and rescale_slope != 0.0  # NOSONAR(S1244)
     )
 
 

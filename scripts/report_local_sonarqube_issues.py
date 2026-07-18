@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""Report severe findings for exactly one local SonarQube component.
+"""Report priority findings for exactly one local SonarQube component.
 
-The command is deliberately opt-in and local-only. It queries all BLOCKER
-issues plus CRITICAL BUG and VULNERABILITY issues for one component, rejecting
-any response that contains another project's component key. This prevents a
-mixed-project response from being triaged as a DICOM Viewer finding.
+The command is deliberately opt-in and local-only. It queries BLOCKER issues,
+CRITICAL BUG and VULNERABILITY issues, and MAJOR issues (all types, not just
+bugs and vulnerabilities) for one component, rejecting any response that contains
+another project's component key. This prevents a mixed-project response from being
+triaged as a DICOM Viewer finding.
 
 Usage (with SONAR_TOKEN set and the local service running):
     python scripts/report_local_sonarqube_issues.py
     python scripts/report_local_sonarqube_issues.py --fail-on-findings
-    python scripts/report_local_sonarqube_issues.py --output tmp/sonar-severe.md
+    python scripts/report_local_sonarqube_issues.py --output tmp/sonar-findings.md
 
 The optional report path is restricted to the ignored ``tmp/`` directory.
 Tokens remain in the environment and HTTP Authorization header; they are never
@@ -50,9 +51,10 @@ except ModuleNotFoundError:
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PAGE_SIZE = 500
-SEVERE_QUERIES = (
+REPORTED_QUERIES = (
     ("BLOCKER", {"severities": "BLOCKER"}),
     ("CRITICAL BUG/VULNERABILITY", {"severities": "CRITICAL", "types": "BUG,VULNERABILITY"}),
+    ("MAJOR", {"severities": "MAJOR"}),
 )
 
 
@@ -167,6 +169,10 @@ def fetch_issues(
     while True:
         parameters = {
             "componentKeys": project_key,
+            # Explicit open-set only. Omitting statuses on this SonarQube build
+            # also returns CLOSED/FIXED issues, which falsely re-reports remediated
+            # findings (S2245/S3923) after a successful analysis.
+            "statuses": "OPEN,CONFIRMED,REOPENED",
             "p": str(page),
             "ps": str(PAGE_SIZE),
             **query,
@@ -220,10 +226,10 @@ def fetch_latest_analysis(host_url: str, token: str, project_key: str) -> Analys
     return AnalysisMetadata(date=date, revision=revision)
 
 
-def collect_severe_report(host_url: str, token: str, project_key: str) -> SonarReport:
-    """Fetch the policy-defined severe findings and the latest analysis identity."""
+def collect_reported_findings(host_url: str, token: str, project_key: str) -> SonarReport:
+    """Fetch the policy-defined priority findings and the latest analysis identity."""
     issues: list[SonarIssue] = []
-    for _label, query in SEVERE_QUERIES:
+    for _label, query in REPORTED_QUERIES:
         issues.extend(fetch_issues(host_url, token, project_key, query))
     analysis = fetch_latest_analysis(host_url, token, project_key)
     return SonarReport(project_key=project_key, analysis=analysis, issues=tuple(issues))
@@ -232,12 +238,12 @@ def collect_severe_report(host_url: str, token: str, project_key: str) -> SonarR
 def render_markdown_report(report: SonarReport) -> str:
     """Render a stable, concise Markdown report without server-supplied messages."""
     lines = [
-        "# Local SonarQube Severe Findings",
+        "# Local SonarQube Reported Findings",
         "",
         f"- Project: `{report.project_key}`",
         f"- Latest analysis: `{report.analysis.date or 'not available'}`",
         f"- Revision: `{report.analysis.revision or 'not available'}`",
-        f"- Severe findings: {len(report.issues)}",
+        f"- Reported findings: {len(report.issues)}",
         "",
     ]
     if report.issues:
@@ -306,7 +312,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--fail-on-findings",
         action="store_true",
-        help="Exit 1 when any scoped severe finding is present.",
+        help="Exit 1 when any scoped priority finding is present.",
     )
     parser.add_argument(
         "--output",
@@ -332,7 +338,7 @@ def main() -> int:
         if get_server_status(host_url) != "UP":
             print_redacted(f"SonarQube is not ready: {host_url} did not report UP.", file=sys.stderr)
             return 2
-        report = collect_severe_report(host_url, token, project_key)
+        report = collect_reported_findings(host_url, token, project_key)
         if args.expected_revision and report.analysis.revision != args.expected_revision:
             print("SonarQube latest analysis revision does not match --expected-revision.", file=sys.stderr)
             return 2
@@ -343,8 +349,8 @@ def main() -> int:
         print_redacted(f"Local SonarQube report failed: {exc}", file=sys.stderr)
         return 2
 
-    print("Local SonarQube severe-finding report completed.")
-    print(f"Severe findings: {len(report.issues)}")
+    print("Local SonarQube reported-finding report completed.")
+    print(f"Reported findings: {len(report.issues)}")
     print("Use --output tmp/<report>.md to retain scoped finding metadata.")
     if output_path is not None:
         print("Detailed report written under the ignored tmp/ directory.")

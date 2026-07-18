@@ -17,7 +17,7 @@ Requirements:
 
 from __future__ import annotations
 
-import random
+import secrets
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -49,10 +49,11 @@ from utils.dicom_vr_helpers import is_date_vr
 DICOM_STANDARD_UID_ROOT = "1.2.840.10008"
 
 # Date-shift anchor: the earliest StudyDate in a batch is mapped to this date
-# (clearly fake, far in the past) plus a random batch-wide jitter. The single
-# offset is applied to every dataset, so all relative gaps are preserved while
-# the anchor lands somewhere in DATE_ANCHOR ± DATE_JITTER_MAX_DAYS — obscuring the
-# true baseline so dates can't be reversed just from knowing the tool's anchor.
+# (clearly fake, far in the past) minus a cryptographically unpredictable
+# batch-wide jitter drawn via secrets.randbelow. The single offset is applied to
+# every dataset, so all relative gaps are preserved while the anchor lands in
+# [DATE_ANCHOR - DATE_JITTER_MAX_DAYS, DATE_ANCHOR] — obscuring the true baseline
+# so dates can't be reversed just from knowing the tool's anchor.
 DATE_ANCHOR = datetime(1900, 1, 1)
 DATE_JITTER_MAX_DAYS = 3650  # up to ~10 years earlier than the anchor
 
@@ -274,11 +275,13 @@ class DeepDICOMAnonymizer:
 
         A single offset for the whole export preserves every relative gap — across
         studies, not just within one — while landing the earliest date on a clearly
-        fake epoch (DATE_ANCHOR minus a random jitter) instead of a plausibly recent
-        one. The jitter is chosen once per batch so the absolute baseline is hidden:
-        knowing the tool anchors to 1900 is not enough to recover real dates.
+        fake epoch (DATE_ANCHOR minus an unpredictable jitter) instead of a
+        plausibly recent one. The jitter is chosen once per batch via
+        ``secrets.randbelow`` so the absolute baseline is hidden: knowing the tool
+        anchors to 1900 is not enough to recover real dates.
         """
-        jitter = random.randint(0, DATE_JITTER_MAX_DAYS)
+        # Inclusive upper bound matches the former random.randint(0, MAX) range.
+        jitter = secrets.randbelow(DATE_JITTER_MAX_DAYS + 1)
         target = DATE_ANCHOR - timedelta(days=jitter)
         earliest: datetime | None = None
         for ds in datasets:

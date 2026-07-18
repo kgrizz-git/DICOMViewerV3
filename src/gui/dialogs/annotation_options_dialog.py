@@ -447,16 +447,9 @@ class AnnotationOptionsDialog(QDialog):
         roi_line_thickness = self.config_manager.get_roi_line_thickness()
         self.roi_line_thickness_spinbox.setValue(roi_line_thickness)
 
-        # ROI color: prefer line color, fallback to font color
+        # ROI color: line color is authoritative (font color is unified on save).
         roi_line_color = self.config_manager.get_roi_line_color()
-        roi_font_color = self.config_manager.get_roi_font_color()
-        # Use line color (prefer it), fallback to font color if they differ
-        # If they're the same, use line color. If different, prefer line unless it's default
-        if roi_line_color == roi_font_color:
-            roi_color = roi_line_color
-        else:
-            # They differ - prefer line color (as per plan)
-            roi_color = roi_line_color
+        roi_color = roi_line_color
         self._update_color_display("roi", *roi_color)
         self.roi_color = roi_color
         roi_family = self.config_manager.get_roi_font_family()
@@ -475,16 +468,9 @@ class AnnotationOptionsDialog(QDialog):
         measurement_line_thickness = self.config_manager.get_measurement_line_thickness()
         self.measurement_line_thickness_spinbox.setValue(measurement_line_thickness)
 
-        # Measurement color: prefer line color, fallback to font color
+        # Measurement color: line color is authoritative (font color is unified on save).
         measurement_line_color = self.config_manager.get_measurement_line_color()
-        measurement_font_color = self.config_manager.get_measurement_font_color()
-        # Use line color (prefer it), fallback to font color if they differ
-        # If they're the same, use line color. If different, prefer line
-        if measurement_line_color == measurement_font_color:
-            measurement_color = measurement_line_color
-        else:
-            # They differ - prefer line color (as per plan)
-            measurement_color = measurement_line_color
+        measurement_color = measurement_line_color
         self._update_color_display("measurement", *measurement_color)
         self.measurement_color = measurement_color
         measurement_family = self.config_manager.get_measurement_font_family()

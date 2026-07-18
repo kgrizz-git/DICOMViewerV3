@@ -192,18 +192,16 @@ class SliceSyncCoordinator:
             return  # no geometry available for source
 
         source_slice_idx = self._get_slice_index(source_idx)
-        if source_slice_idx < 0 or source_slice_idx >= len(source_stack.planes):
-            # Map navigator index to sorted geometry index.
-            # original_indices maps sorted_pos → dataset_idx; we need dataset_idx → sorted_pos.
-            sorted_pos = self._dataset_idx_to_sorted_pos(source_idx, source_slice_idx, source_stack)
-            if sorted_pos is None:
-                return
-            source_plane = source_stack.planes[sorted_pos]
-        else:
-            sorted_pos = self._dataset_idx_to_sorted_pos(source_idx, source_slice_idx, source_stack)
-            if sorted_pos is None:
-                return
-            source_plane = source_stack.planes[sorted_pos]
+        # Always map dataset-list index → sorted plane index. SliceStack.planes is
+        # ordered by anatomic position; original_indices holds the reverse map.
+        # Do not index planes with the raw dataset index (would desync when the
+        # permutation is non-identity).
+        sorted_pos = self._dataset_idx_to_sorted_pos(
+            source_idx, source_slice_idx, source_stack
+        )
+        if sorted_pos is None:
+            return
+        source_plane = source_stack.planes[sorted_pos]
 
         # Update each target, collecting any outside-coverage skips (T6/T7).
         skipped_targets: list[int] = []
