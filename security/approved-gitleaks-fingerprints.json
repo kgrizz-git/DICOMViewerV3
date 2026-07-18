@@ -1,31 +1,6 @@
 {
   "version": 1,
-  "reviewed": [
-    {
-      "fingerprint": "bce40e87f8db2e85d973123cf8519baacb8f7ee4:security/approved-media-sha256.json:jfrog-identity-token:25",
-      "path": "security/approved-media-sha256.json",
-      "rule_id": "jfrog-identity-token",
-      "reason": "Reviewed SHA-256 media digest; not a credential"
-    },
-    {
-      "fingerprint": "bce40e87f8db2e85d973123cf8519baacb8f7ee4:security/approved-media-sha256.json:jfrog-identity-token:26",
-      "path": "security/approved-media-sha256.json",
-      "rule_id": "jfrog-identity-token",
-      "reason": "Reviewed SHA-256 media digest; not a credential"
-    },
-    {
-      "fingerprint": "28234b88d273737e11748078321ad1a9ca98b696:info/private_fork.md:curl-auth-header:152",
-      "path": "info/private_fork.md",
-      "rule_id": "curl-auth-header",
-      "reason": "Reviewed historical documentation marker; not a credential"
-    },
-    {
-      "fingerprint": "d5fb9fba8695f0935cad6823fc4f8749dd479bfd:info/private_fork.md:curl-auth-header:152",
-      "path": "info/private_fork.md",
-      "rule_id": "curl-auth-header",
-      "reason": "Reviewed historical documentation marker; not a credential"
-    }
-  ],
+  "reviewed": [],
   "reviewed_blobs": [
     {
       "blob_oid": "f8cd8f2bd47661268ef2e38b71c856a8e7506a84",
@@ -40,6 +15,20 @@
       "rule_id": "jfrog-identity-token",
       "start_line": 32,
       "reason": "Reviewed SHA-256 DICOM fixture digest; not a credential"
+    },
+    {
+      "blob_oid": "0dd63c5d24dd7f9b54687194c067500e7c85d28c",
+      "path": "security/approved-media-sha256.json",
+      "rule_id": "jfrog-identity-token",
+      "start_line": 25,
+      "reason": "Reviewed SHA-256 digest of synthetic DICOM RDSR fixture; not a credential"
+    },
+    {
+      "blob_oid": "0dd63c5d24dd7f9b54687194c067500e7c85d28c",
+      "path": "security/approved-media-sha256.json",
+      "rule_id": "jfrog-identity-token",
+      "start_line": 26,
+      "reason": "Reviewed SHA-256 digest of synthetic DICOM RDSR fixture; not a credential"
     }
   ]
 }
