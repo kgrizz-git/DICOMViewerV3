@@ -100,7 +100,9 @@ disabled by policy. The local scan is intentionally **not** a Git hook: it can
 take time, and `--with-coverage` runs the full pytest suite first.
 
 1. Start the existing local SonarQube Community Build service and confirm its UI
-   is reachable at `http://localhost:9000` (or set `SONAR_HOST_URL` to its URL).
+   is reachable at `http://localhost:9000` (or set `SONAR_HOST_URL` to another
+   loopback URL such as `http://127.0.0.1:9000`). Remote hosts are rejected so
+   the local analysis token cannot be sent off-machine.
 2. In its UI, create a user or project analysis token at **User → My Account →
    Security**. Do not put the token in a tracked file. With direnv, copy
    `.env.example` to ignored `.env`, populate only `SONAR_TOKEN`, and run
@@ -133,8 +135,26 @@ python scripts/run_local_sonarqube.py --status
 To include test coverage, use `python scripts/run_local_sonarqube.py
 --with-coverage`; this deliberately runs the full suite first. When the Docker
 scanner cannot reach a service published on host `localhost`, the script maps it
-to `host.docker.internal`; set `SONAR_DOCKER_HOST_URL` to override that container
-address (for example, a named Docker network service).
+to `host.docker.internal`. `SONAR_DOCKER_HOST_URL` may only name that Docker host
+gateway; named Docker network services are deliberately unsupported because the
+local-only policy must not permit an arbitrary token destination.
+
+After a successful analysis, report only the severe findings that belong to
+this repository's exact component key:
+
+```bash
+python scripts/report_local_sonarqube_issues.py --fail-on-findings \
+  --expected-revision "$(git rev-parse HEAD)" \
+  --output tmp/sonarqube-severe-findings.md
+```
+
+The reporter queries `componentKeys=dicom-viewer-v3` for all BLOCKER issues and
+for CRITICAL BUG/VULNERABILITY issues, verifies every returned component has
+that exact prefix, and fails on a mixed-project response. The optional Markdown
+report is restricted to ignored `tmp/`; neither the token nor SonarQube issue
+messages are written to it. On PowerShell, pass the `git rev-parse HEAD` result
+as the `--expected-revision` value, or omit that optional assertion when only
+reading the report.
 
 Recommended cadence: run `python scripts/run_local_sonarqube.py
 --with-coverage` at least every 30 days, before a release, and after a large

@@ -8,6 +8,8 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
+import pytest
+
 
 def _load_module() -> ModuleType:
     script_path = Path(__file__).resolve().parents[1] / "scripts" / "run_local_sonarqube.py"
@@ -19,16 +21,42 @@ def _load_module() -> ModuleType:
     return module
 
 
-def test_docker_host_url_rewrites_only_localhost():
+def test_normalize_host_url_accepts_loopback_endpoints():
+    module = _load_module()
+
+    assert module.normalize_host_url("http://localhost:9000/") == "http://localhost:9000"
+    assert module.normalize_host_url("http://127.0.0.1:9000") == "http://127.0.0.1:9000"
+    assert module.normalize_host_url("https://[::1]:9000") == "https://[::1]:9000"
+
+
+@pytest.mark.parametrize(
+    "host_url",
+    (
+        "file:///etc/passwd",
+        "ftp://localhost:9000",
+        "https://sonarqube.example.test",
+        "http://192.0.2.10:9000",
+        "http://user:password@localhost:9000",
+    ),
+)
+def test_normalize_host_url_rejects_non_loopback_or_non_http_hosts(host_url):
+    module = _load_module()
+
+    with pytest.raises(ValueError, match="loopback http\\(s\\) URL"):
+        module.normalize_host_url(host_url)
+
+
+def test_docker_host_url_uses_only_the_docker_host_gateway():
     module = _load_module()
 
     assert module.docker_host_url("http://localhost:9000") == "http://host.docker.internal:9000"
     assert module.docker_host_url("http://127.0.0.1:9000") == "http://host.docker.internal:9000"
-    assert module.docker_host_url("https://sonarqube.example.test") == "https://sonarqube.example.test"
     assert (
-        module.docker_host_url("http://localhost:9000", "http://sonarqube:9000")
-        == "http://sonarqube:9000"
+        module.docker_host_url("http://localhost:9000", "http://host.docker.internal:9000")
+        == "http://host.docker.internal:9000"
     )
+    with pytest.raises(ValueError, match="Docker's host gateway"):
+        module.docker_host_url("http://localhost:9000", "http://sonarqube:9000")
 
 
 def test_docker_command_keeps_token_out_of_arguments(tmp_path):
