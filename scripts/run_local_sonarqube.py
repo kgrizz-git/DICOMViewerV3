@@ -24,6 +24,7 @@ import shutil
 import subprocess
 import sys
 from datetime import UTC, datetime
+from ipaddress import ip_address
 from pathlib import Path
 from typing import Any
 from urllib.error import URLError
@@ -44,27 +45,66 @@ SCANNER_CACHE_VOLUME = "dicom-viewer-v3-sonar-scanner-cache"
 STATE_DIRECTORY = Path(".sonar-local")
 STATE_FILE_NAME = "last-analysis.json"
 DEFAULT_FRESHNESS_DAYS = 30
+LOOPBACK_HOSTNAME = "localhost"
+DOCKER_HOST_GATEWAY = "host.docker.internal"
 
 
 def normalize_host_url(value: str) -> str:
-    """Validate a SonarQube server URL and remove its trailing slash."""
+    """Accept only an HTTP(S) SonarQube URL addressed to this machine."""
     url = value.rstrip("/")
     parsed = urlsplit(url)
-    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-        raise ValueError("SONAR_HOST_URL must be a full http(s) URL, for example http://localhost:9000")
+    hostname = parsed.hostname
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or not _is_loopback_host(hostname)
+    ):
+        raise ValueError(
+            "SONAR_HOST_URL must be a loopback http(s) URL, "
+            "for example http://localhost:9000"
+        )
+    return url
+
+
+def _is_loopback_host(hostname: str) -> bool:
+    """Return whether a parsed hostname names this machine's loopback interface."""
+    if hostname == LOOPBACK_HOSTNAME:
+        return True
+    try:
+        return ip_address(hostname).is_loopback
+    except ValueError:
+        return False
+
+
+def normalize_docker_host_url(value: str) -> str:
+    """Accept only Docker's host gateway for the scanner-container endpoint."""
+    url = value.rstrip("/")
+    parsed = urlsplit(url)
+    if (
+        parsed.scheme not in {"http", "https"}
+        or parsed.hostname != DOCKER_HOST_GATEWAY
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
+        raise ValueError(
+            "SONAR_DOCKER_HOST_URL must use Docker's host gateway, "
+            f"for example http://{DOCKER_HOST_GATEWAY}:9000"
+        )
     return url
 
 
 def docker_host_url(host_url: str, override: str | None = None) -> str:
     """Return a URL that a Dockerized scanner can use to reach SonarQube."""
     if override:
-        return normalize_host_url(override)
+        return normalize_docker_host_url(override)
 
     parsed = urlsplit(host_url)
     if parsed.hostname not in {"localhost", "127.0.0.1", "::1"}:
         return host_url
 
-    netloc = "host.docker.internal"
+    netloc = DOCKER_HOST_GATEWAY
     if parsed.port is not None:
         netloc = f"{netloc}:{parsed.port}"
     return urlunsplit((parsed.scheme, netloc, parsed.path, parsed.query, parsed.fragment))
@@ -187,6 +227,8 @@ def get_server_status(host_url: str, timeout_seconds: float = 5.0) -> str:
     endpoint = f"{host_url}/api/system/status"
     request = Request(endpoint, headers={"Accept": "application/json"})
     try:
+        # The CLI normalizes host_url to an HTTP(S) loopback endpoint before this call.
+        # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
         with urlopen(request, timeout=timeout_seconds) as response:
             payload = json.loads(response.read().decode("utf-8"))
     except (OSError, URLError, json.JSONDecodeError) as exc:

@@ -8,6 +8,12 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-18
 
+- Hardened local SonarQube endpoint handling: `SONAR_HOST_URL` now accepts
+  only HTTP(S) loopback hosts, and the Docker-only override accepts only
+  `host.docker.internal`. Added regression coverage for `file://`, remote,
+  and credential-bearing URL rejection. The two validated `urllib` request
+  sinks now have narrow Semgrep suppressions documenting this enforced
+  boundary; the targeted security-audit scan returns zero findings.
 - Added `scripts/report_local_sonarqube_issues.py`, an opt-in local reporter
   that queries severe SonarQube findings with `componentKeys`, requires every
   returned issue to belong to the requested component, rejects malformed or

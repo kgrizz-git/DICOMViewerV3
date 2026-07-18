@@ -104,6 +104,8 @@ def _read_json(url: str, token: str) -> dict[str, Any]:
         },
     )
     try:
+        # The CLI normalizes host_url to an HTTP(S) loopback endpoint before this call.
+        # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
         with urlopen(request, timeout=10.0) as response:
             payload = json.loads(response.read().decode("utf-8"))
     except (HTTPError, OSError, URLError, UnicodeDecodeError, json.JSONDecodeError) as exc:
