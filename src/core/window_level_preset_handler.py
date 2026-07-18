@@ -39,7 +39,7 @@ def apply_window_level_preset(app: Any, preset_index: int) -> None:
         if (
             rescale_slope is not None
             and rescale_intercept is not None
-            and rescale_slope != 0.0
+            and rescale_slope != 0.0  # NOSONAR(S1244): RescaleSlope is DICOM DS-VR; exact 0.0 is well-defined
         ):
             wc, ww = app.dicom_processor.convert_window_level_rescaled_to_raw(
                 wc, ww, rescale_slope, rescale_intercept

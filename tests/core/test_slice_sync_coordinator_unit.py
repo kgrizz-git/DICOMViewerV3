@@ -168,6 +168,65 @@ def test_on_slice_changed_syncs_and_surfaces_hint(monkeypatch) -> None:
     assert "window 2" in c.app.main_window.update_status.call_args[0][0]
 
 
+
+
+def test_on_slice_changed_uses_mapper_for_permuted_indices(monkeypatch) -> None:
+    """Collapse of the S3923 if/else must keep dataset→sorted mapping.
+
+    When original_indices is a non-identity permutation, both an in-range and
+    an out-of-range source_slice_idx must resolve through the mapper — never
+    by indexing planes with the raw dataset index.
+    """
+    c = _coord(subwindow_data={0: {}, 1: {}})
+    c.enabled = True
+    c.groups = [[0, 1]]
+
+    class _PermutedStack:
+        def __init__(self) -> None:
+            self.planes = ["p0", "p1", "p2"]
+            # sorted_pos 0→dataset 2, 1→dataset 0, 2→dataset 1
+            self.original_indices = [2, 0, 1]
+            self.slice_thickness = 2.0
+
+    stack = _PermutedStack()
+    seen: list[tuple[int, object]] = []
+
+    def _map(idx, dataset_idx, st):
+        return st.original_indices.index(dataset_idx)
+
+    def _update(target, plane):
+        seen.append((target, plane))
+        return None
+
+    monkeypatch.setattr(c, "_get_stack", lambda idx: stack)
+    monkeypatch.setattr(c, "_dataset_idx_to_sorted_pos", _map)
+    monkeypatch.setattr(c, "_update_target", _update)
+
+    # In-range dataset index 0 → sorted_pos 1 → plane "p1"
+    monkeypatch.setattr(c, "_get_slice_index", lambda idx: 0)
+    seen.clear()
+    c.on_slice_changed(0)
+    assert seen == [(1, "p1")]
+
+    # Out-of-range dataset index 9 → mapper clamp/nearest → sorted_pos for nearest
+    # nearest to 9 among [2,0,1] is 2 → sorted_pos 0 → plane "p0"
+    def _map_clamp(idx, dataset_idx, st):
+        try:
+            return st.original_indices.index(dataset_idx)
+        except ValueError:
+            best = min(
+                range(len(st.original_indices)),
+                key=lambda i: abs(st.original_indices[i] - dataset_idx),
+            )
+            return best
+
+    monkeypatch.setattr(c, "_dataset_idx_to_sorted_pos", _map_clamp)
+    monkeypatch.setattr(c, "_get_slice_index", lambda idx: 9)
+    seen.clear()
+    c.on_slice_changed(0)
+    assert seen == [(1, "p0")]
+
+
 # --------------------------------------------------------------------------- #
 # _surface_sync_hint (debounce)
 # --------------------------------------------------------------------------- #

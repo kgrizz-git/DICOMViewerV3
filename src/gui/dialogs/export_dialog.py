@@ -694,7 +694,7 @@ class ExportDialog(QDialog):
             msg = f"Successfully exported {exported_count} file(s) to:\n{self.output_path}"
             if downgraded_list:
                 def scale_label(s: float) -> str:
-                    if s == 1.0:
+                    if s == 1.0:  # NOSONAR(S1244): Native label keyed on exact identity scale
                         return "Native"
                     return f"{s}×"
                 lines = []

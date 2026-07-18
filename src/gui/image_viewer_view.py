@@ -174,7 +174,7 @@ class ImageViewerViewMixin:
         # Apply flip via scale with negative factors
         sx = -1.0 if self._flip_h else 1.0  # type: ignore[attr-defined]
         sy = -1.0 if self._flip_v else 1.0  # type: ignore[attr-defined]
-        if sx != 1.0 or sy != 1.0:
+        if sx != 1.0 or sy != 1.0:  # NOSONAR(S1244): flip factors are exact ±1.0 sentinels
             t.scale(sx, sy)
         # Apply zoom
         t.scale(self.current_zoom, self.current_zoom)
@@ -1075,7 +1075,7 @@ class ImageViewerViewMixin:
             print(f"[DEBUG-MAGNIFIER] _extract_image_region: extracted_region=({x1}, {y1}) to ({x2}, {y2}), dimensions=({extracted_width}x{extracted_height})")
 
         # Apply zoom factor; use same smooth/fast setting as main view
-        if zoom_factor != 1.0:
+        if zoom_factor != 1.0:  # NOSONAR(S1244): magnifier identity path; exact 1.0 is config sentinel
             scaled_width = int(extracted_width * zoom_factor)
             scaled_height = int(extracted_height * zoom_factor)
             transform_mode = (
@@ -1291,13 +1291,9 @@ class ImageViewerViewMixin:
                         return ""
                     frame_array = pixel_array[z]
                 else:
-                    # Single-frame grayscale or ambiguous - check last dimension
-                    if array_shape[2] == 3:
-                        # Likely single-frame color
-                        frame_array = pixel_array
-                    else:
-                        # Single-frame grayscale (shouldn't happen with 3D, but handle it)
-                        frame_array = pixel_array
+                    # Single-frame grayscale or ambiguous 3-D shape: keep the full
+                    # array and let the shape checks below decide grayscale vs color.
+                    frame_array = pixel_array
             else:
                 # Single-frame grayscale: shape is (height, width)
                 frame_array = pixel_array

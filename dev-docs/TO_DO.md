@@ -1,6 +1,6 @@
 # To-Do Checklist
 
-**Last updated:** 2026-07-16
+**Last updated:** 2026-07-18
 
 ---
 
@@ -35,6 +35,11 @@ This file tracks active and near-term tasks.
 - [ ] **[P1]** **Evaluate local OCR for burned-in PHI and DICOM pixel review.** Audit a conventional local OCR engine and a locally run model/tool (including `dicom-phi-scan`/EasyOCR as a reference) for provenance, model downloads, licensing, resource use, and safe report behaviour. Compare them using only temporary, wholly synthetic DICOM, image, PDF, and Office/OpenDocument-package fixtures outside the repository; scan DICOM pixels independently from metadata. Keep the result local-only and warning-only; report only path, category, confidence, and safe position metadata—never detected text or image crops. Do not trust `BurnedInAnnotation=NO`, OCR silence, or an AI result to skip human review. GitHub’s public secret-scanning/public-monitoring features audit credentials, not PII/PHI, so they are not a substitute. See [DICOM PHI Scanner evaluation constraints](info/LOCAL_PHI_PII_DETECTION_MODEL_OPTIONS.md#dicom-phi-scanner-useful-reference-and-synthetic-only-spike).
 - [ ] **[P2]** **Spike an opt-in local PII/PHI text-review command.** Evaluate NVIDIA GLiNER PII, Fastino GLiNER2 Privacy Filter, and OpenAI Privacy Filter against a wholly synthetic corpus of documentation, log, and extracted-DICOM-tag text; compare them to the existing deterministic checks and local Presidio recognizers. Run from a dedicated PHI-tools environment, keep the result warning-only/default-off, and report only path, category, score, and safe position metadata — never matched values. See [Local PII/PHI detection options](info/LOCAL_PHI_PII_DETECTION_MODEL_OPTIONS.md#proposed-evaluation-sequence).
 - [ ] **[P3]** **Evaluate independent local PHI reviewers before choosing an optional integration.** Compare the clinical-note model `obi/deid_roberta_i2b2`, a GLiNER size variant, and—only as a schema-constrained second-pass reviewer—OpenAI `gpt-oss-20b` through LM Studio. Decide whether custom Presidio `EntityRecognizer` adapters for GLiNER, GLiNER2, and/or OpenAI Privacy Filter are justified; do not treat Presidio or an LLM as a replacement for the DICOM metadata gate or OCR/image review. See [model scope and integration details](info/LOCAL_PHI_PII_DETECTION_MODEL_OPTIONS.md).
+
+
+## Static analysis
+
+- [ ] **[P2]** **Local SonarQube MAJOR CODE_SMELL cleanup (114 findings):** deferred from the S2245/S3923/S1244 remediation pass on `fix/sonarqube-major-findings-20260718`. Re-run `scripts/report_local_sonarqube_issues.py` and triage smells (e.g. `python:S107`, `python:S1854`, `python:S3358`, `python:S1066`) in a dedicated branch — do not mix into behavior-preserving security/logic fixes. Plan reference: [SONARQUBE_MAJOR_FINDINGS_REMEDIATION_PLAN_20260718.md](plans/SONARQUBE_MAJOR_FINDINGS_REMEDIATION_PLAN_20260718.md).
 
 
 ## Bugs / Correctness

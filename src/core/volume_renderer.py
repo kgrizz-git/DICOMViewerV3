@@ -126,7 +126,9 @@ def _calibrate_volume_array(
         slope, intercept, rescale_type = get_rescale_parameters(dataset)
         if slope is None or intercept is None:
             return arr, False, None
-        if not np.isfinite(slope) or not np.isfinite(intercept) or slope == 0.0:
+        if not np.isfinite(slope) or not np.isfinite(intercept):
+            return arr, False, None
+        if slope == 0.0:  # NOSONAR(S1244): RescaleSlope is DICOM DS-VR; exact 0.0 is well-defined
             return arr, False, None
 
         scalar_units = infer_rescale_type(dataset, slope, intercept, rescale_type)
@@ -999,7 +1001,7 @@ class VolumeRenderer:
         """Position the camera on a patient-axis direction and frame the volume."""
         bounds = list(self._renderer.ComputeVisiblePropBounds())
         # Guard: empty scene returns all zeros.
-        if all(v == 0.0 for v in bounds):
+        if all(v == 0.0 for v in bounds):  # NOSONAR(S1244): VTK ComputeVisiblePropBounds all-zero is empty-scene sentinel
             self._renderer.ResetCamera()
             return
         cx = (bounds[0] + bounds[1]) * 0.5
@@ -1043,7 +1045,7 @@ class VolumeRenderer:
         """
         bounds = list(self._renderer.ComputeVisiblePropBounds())
         # Guard: empty scene returns all zeros.
-        if all(v == 0.0 for v in bounds):
+        if all(v == 0.0 for v in bounds):  # NOSONAR(S1244): VTK ComputeVisiblePropBounds all-zero is empty-scene sentinel
             self._renderer.ResetCamera()
             return
         cx = (bounds[0] + bounds[1]) * 0.5
