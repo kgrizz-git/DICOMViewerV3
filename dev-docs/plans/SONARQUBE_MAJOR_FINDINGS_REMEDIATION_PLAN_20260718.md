@@ -288,11 +288,14 @@ comment via rule-scoped `# NOSONAR(S1244)`.
 
 ## Verification (after each phase)
 
-> **Verification note (2026-07-18):** Code remediation is complete in the working
-> tree and focused tests pass. A fresh `run_local_sonarqube.py` submission at
-> 19:02 UTC still analyzed SCM revision `0dc60b5` (pre-remediation tip) because
-> the fixes were not yet committed — Sonar reported missing blame for dirty
-> files. Re-run analysis **after commit** to confirm S2245/S3923/S1244 clearance.
+> **Verification note (2026-07-18):** Cleared on analysis
+> `2026-07-18T19:36:18+0000` / revision `3602e06` (commit
+> `3602e06 Fix SonarQube suppression formatting and issue filtering`). Open
+> MAJOR report is **112 CODE_SMELL only** — **0** S2245, **0** S3923, **0**
+> S1244, **0** S7632. Intermediate lesson: `# NOSONAR(S1244): rationale` is
+> malformed on this SonarPython build; use a prior-line rationale + trailing
+> `# NOSONAR(S1244)`. Reporter must pass `statuses=OPEN,CONFIRMED,REOPENED` or
+> CLOSED/FIXED issues are re-listed.
 
 
 - [ ] `python -m pytest tests/ -q` green (focus: anonymizer, slice sync,
@@ -300,7 +303,7 @@ comment via rule-scoped `# NOSONAR(S1244)`.
 - [ ] `ruff` and `basedpyright` clean for touched modules.
 - [ ] `python scripts/git_hook_privacy_checks.py --staged` passes (privacy-
       relevant: Phase 1 touches de-identification).
-- [ ] **Fresh local Sonar analysis required first:** submit/process a new
+- [x] **Fresh local Sonar analysis required first:** submit/process a new
       analysis of the branch tip through `python scripts/run_local_sonarqube.py`
       (or the project's standard local analysis entrypoint) so the scanner has
       seen the `# NOSONAR(S1244)` comments and the S3923 collapses, *then*
