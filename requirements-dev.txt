@@ -20,13 +20,13 @@ pip-audit>=2.10.1
 # Generates the third-party attribution SBOM (THIRD_PARTY_LICENSES.md) with full
 # license texts. Used by scripts/generate_third_party_licenses.py — NOT by the
 # pre-commit license gate (that is stdlib-only). See dev-docs/info/DEPENDENCY_LICENSE_POLICY.md.
-pip-licenses>=5.0.0
+pip-licenses>=5.5.5
 # Type checker CLI (matches common IDE Pyright/Based Pyright settings); run from repo root:
 #   basedpyright [files...]
 basedpyright>=1.39.9
 # Coverage for local + CI summaries; reports are not uploaded to third parties.
-pytest-cov>=5.0.0
+pytest-cov>=7.1.0
 # Linter (fast, drop-in replacement for flake8 + isort + pyupgrade)
-ruff>=0.12.0
+ruff>=0.15.21
 # Complexity analysis (cyclomatic complexity, NLOC, etc.)
 lizard>=1.23.0
