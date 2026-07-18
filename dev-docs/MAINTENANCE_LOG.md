@@ -1,10 +1,27 @@
 # Maintenance Log
 
-**Last updated:** 2026-07-16
+**Last updated:** 2026-07-18
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
 
 Use this log for CI, static analysis, harness changes, dependency-verification passes, repo hygiene, doc-garden cleanup, and other maintainer workflow notes. Use [`../CHANGELOG.md`](../CHANGELOG.md) for user-visible product/release changes. Use [`TO_DO.md`](TO_DO.md) only for active backlog items and near-term follow-ups.
+
+## 2026-07-18
+
+- Added `scripts/report_local_sonarqube_issues.py`, an opt-in local reporter
+  that queries severe SonarQube findings with `componentKeys`, requires every
+  returned issue to belong to the requested component, rejects malformed or
+  incomplete pagination, and keeps credentials out of command arguments and
+  persisted reports. It can assert the latest analysis revision and writes
+  detailed metadata only below ignored `tmp/`. Added mocked-HTTP regression
+  tests, local-runner documentation, and the inventory entrypoint.
+- Corrected a false DICOM Viewer triage report: its ten findings belonged to
+  `weekend-digest-free-apis` and `spotibye`. A fresh local analysis processed
+  at 2026-07-18 17:12:01 UTC for revision
+  `9484958196fcd183a88407f5f312d77bb521f8df` returned zero component-scoped
+  BLOCKER or CRITICAL BUG/VULNERABILITY findings. Focused tests (14), Ruff,
+  basedpyright, full privacy-output check, security-tool inventory, and repo
+  harness passed.
 
 ## 2026-07-16
 

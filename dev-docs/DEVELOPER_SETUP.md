@@ -136,6 +136,23 @@ scanner cannot reach a service published on host `localhost`, the script maps it
 to `host.docker.internal`; set `SONAR_DOCKER_HOST_URL` to override that container
 address (for example, a named Docker network service).
 
+After a successful analysis, report only the severe findings that belong to
+this repository's exact component key:
+
+```bash
+python scripts/report_local_sonarqube_issues.py --fail-on-findings \
+  --expected-revision "$(git rev-parse HEAD)" \
+  --output tmp/sonarqube-severe-findings.md
+```
+
+The reporter queries `componentKeys=dicom-viewer-v3` for all BLOCKER issues and
+for CRITICAL BUG/VULNERABILITY issues, verifies every returned component has
+that exact prefix, and fails on a mixed-project response. The optional Markdown
+report is restricted to ignored `tmp/`; neither the token nor SonarQube issue
+messages are written to it. On PowerShell, pass the `git rev-parse HEAD` result
+as the `--expected-revision` value, or omit that optional assertion when only
+reading the report.
+
 Recommended cadence: run `python scripts/run_local_sonarqube.py
 --with-coverage` at least every 30 days, before a release, and after a large
 dependency or security-sensitive change. A push that updates `main` checks the

@@ -199,7 +199,10 @@
       "tested_version": "locally managed Community Build",
       "enforcement": ["manual advisory", "30-day main pre-push freshness reminder"],
       "network_policy": "local-loopback-only",
-      "entrypoints": ["scripts/run_local_sonarqube.py"],
+      "entrypoints": [
+        "scripts/run_local_sonarqube.py",
+        "scripts/report_local_sonarqube_issues.py"
+      ],
       "tracked_configuration": ["tools/sonarqube/sonar-project.properties"]
     },
     {
