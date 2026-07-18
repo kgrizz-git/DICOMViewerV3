@@ -28,6 +28,7 @@ from PySide6.QtGui import QAction, QActionGroup, QKeySequence
 
 from gui.main_window_toolbar_builder import _icon, _icon_color
 
+_TOOLTIP_ASYMMETRIC_3PANE = "Asymmetric 3-pane (key 3)"
 
 def build_menu_bar(main_window) -> None:
     """
@@ -234,19 +235,19 @@ def build_menu_bar(main_window) -> None:
 
     main_window.layout_2l1_action = QAction("2 left + large right", main_window)
     main_window.layout_2l1_action.setCheckable(True)
-    main_window.layout_2l1_action.setToolTip("Asymmetric 3-pane (key 3)")
+    main_window.layout_2l1_action.setToolTip(_TOOLTIP_ASYMMETRIC_3PANE)
     main_window.layout_2l1_action.triggered.connect(lambda: main_window._on_layout_changed("2L+1"))
     layout_menu.addAction(main_window.layout_2l1_action)
 
     main_window.layout_2t1_action = QAction("Large top + 2 bottom", main_window)
     main_window.layout_2t1_action.setCheckable(True)
-    main_window.layout_2t1_action.setToolTip("Asymmetric 3-pane (key 3)")
+    main_window.layout_2t1_action.setToolTip(_TOOLTIP_ASYMMETRIC_3PANE)
     main_window.layout_2t1_action.triggered.connect(lambda: main_window._on_layout_changed("2T+1"))
     layout_menu.addAction(main_window.layout_2t1_action)
 
     main_window.layout_1p2b_action = QAction("2 top + large bottom", main_window)
     main_window.layout_1p2b_action.setCheckable(True)
-    main_window.layout_1p2b_action.setToolTip("Asymmetric 3-pane (key 3)")
+    main_window.layout_1p2b_action.setToolTip(_TOOLTIP_ASYMMETRIC_3PANE)
     main_window.layout_1p2b_action.triggered.connect(lambda: main_window._on_layout_changed("1+2B"))
     layout_menu.addAction(main_window.layout_1p2b_action)
 

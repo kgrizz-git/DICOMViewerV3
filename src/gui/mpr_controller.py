@@ -76,6 +76,10 @@ from utils.privacy.safe_storage import DeletionResult
 _logger = logging.getLogger(__name__)
 
 
+
+_TITLE_SAVE_MPR_DICOM = "Save MPR as DICOM"
+_TITLE_MPR_ERROR = "MPR Error"
+
 def seed_mpr_combine_state(
     data: dict[str, Any], request: Any | None, output_thickness_mm: float
 ) -> None:
@@ -310,7 +314,7 @@ class MprController(QObject):
         if not data.get("is_mpr"):
             QMessageBox.information(
                 mw,
-                "Save MPR as DICOM",
+                _TITLE_SAVE_MPR_DICOM,
                 "The focused window is not an MPR view.\n"
                 "Create an MPR in a pane and focus it, then try again.",
             )
@@ -319,7 +323,7 @@ class MprController(QObject):
         if result is None or getattr(result, "n_slices", 0) < 1:
             QMessageBox.information(
                 mw,
-                "Save MPR as DICOM",
+                _TITLE_SAVE_MPR_DICOM,
                 "No MPR slice stack is available to export yet.",
             )
             return
@@ -333,7 +337,7 @@ class MprController(QObject):
         if template is None:
             QMessageBox.warning(
                 mw,
-                "Save MPR as DICOM",
+                _TITLE_SAVE_MPR_DICOM,
                 "Could not resolve a source DICOM dataset for metadata export.",
             )
             return
@@ -397,7 +401,7 @@ class MprController(QObject):
                 return
             QMessageBox.critical(
                 mw,
-                "Save MPR as DICOM",
+                _TITLE_SAVE_MPR_DICOM,
                 "Export failed. Details were withheld to protect private data.",
             )
             return
@@ -405,7 +409,7 @@ class MprController(QObject):
         progress.close()
         QMessageBox.information(
             mw,
-            "Save MPR as DICOM",
+            _TITLE_SAVE_MPR_DICOM,
             f"Successfully wrote {len(paths)} file(s).\n\n"
             f"First file:\n{paths[0]}",
         )
@@ -1071,7 +1075,7 @@ class MprController(QObject):
             if len(groups) == 0:
                 QMessageBox.critical(
                     self._app.main_window,
-                    "MPR Error",
+                    _TITLE_MPR_ERROR,
                     "No slices with valid orientation could be used. "
                     "Ensure the series has ImagePositionPatient (or SliceLocation) and "
                     "ImageOrientationPatient.",
@@ -1096,7 +1100,7 @@ class MprController(QObject):
         except MprVolumeError:
             QMessageBox.critical(
                 self._app.main_window,
-                "MPR Error",
+                _TITLE_MPR_ERROR,
                 "Cannot build the MPR volume. Details were withheld to protect private data.",
             )
             return
@@ -1209,7 +1213,7 @@ class MprController(QObject):
             if image_viewer is None:
                 QMessageBox.critical(
                     self._app.main_window,
-                    "MPR Error",
+                    _TITLE_MPR_ERROR,
                     "Cannot activate MPR: image viewer not ready. Please try again.",
                 )
                 return
@@ -1225,7 +1229,7 @@ class MprController(QObject):
                 return
             QMessageBox.critical(
                 self._app.main_window,
-                "MPR Error",
+                _TITLE_MPR_ERROR,
                 f"MPR build failed:\n{msg}",
             )
 

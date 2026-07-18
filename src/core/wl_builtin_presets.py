@@ -14,6 +14,8 @@ Modality codes follow DICOM (CT, MR, PT, CR, DX, MG, US, NM, RF, …).
 
 WLPreset = tuple[float, float, bool, str | None]  # (center, width, is_rescaled, name)
 
+_PRESET_DEFAULT_RAW = "Default (raw)"
+
 BUILTIN_PRESETS: dict[str, list[WLPreset]] = {
     "CT": [
         (40.0, 400.0, True, "Abdomen"),
@@ -43,19 +45,19 @@ BUILTIN_PRESETS: dict[str, list[WLPreset]] = {
     "CR": [
         (-600.0, 1500.0, True, "Chest"),
         (300.0, 1500.0, True, "Bone"),
-        (2048.0, 4096.0, False, "Default (raw)"),
+        (2048.0, 4096.0, False, _PRESET_DEFAULT_RAW),
     ],
     "DX": [
         (-600.0, 1500.0, True, "Chest"),
         (300.0, 1500.0, True, "Bone"),
-        (2048.0, 4096.0, False, "Default (raw)"),
+        (2048.0, 4096.0, False, _PRESET_DEFAULT_RAW),
     ],
     "MG": [
         (2048.0, 4096.0, False, "Default"),
     ],
     "NM": [
         (500.0, 1000.0, True, "Default"),
-        (128.0, 256.0, False, "Default (raw)"),
+        (128.0, 256.0, False, _PRESET_DEFAULT_RAW),
     ],
     "US": [
         (128.0, 256.0, False, "Default"),
@@ -78,6 +80,8 @@ MR_HU_PRESETS: list[WLPreset] = [
     (400.0, 800.0, True, "Brain T2 (HU)"),
     (400.0, 800.0, True, "Spine (HU)"),
 ]
+
+
 
 
 def get_builtin_presets(modality: str | None) -> list[WLPreset]:

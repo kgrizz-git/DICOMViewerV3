@@ -33,6 +33,8 @@ from PySide6.QtWidgets import QFileDialog, QMessageBox
 JSON_FILE_FILTER = "JSON Files (*.json);;All Files (*)"
 
 
+_JSON_SUFFIX = ".json"
+
 class CustomizationHandlers:
     """
     Handles export/import of customizations and tag export presets:
@@ -69,8 +71,8 @@ class CustomizationHandlers:
         )
         if not file_path:
             return
-        if not file_path.endswith(".json"):
-            file_path += ".json"
+        if not file_path.endswith(_JSON_SUFFIX):
+            file_path += _JSON_SUFFIX
 
         if self._config.export_customizations(file_path):
             self._config.set_last_export_path(os.path.dirname(file_path))
@@ -146,8 +148,8 @@ class CustomizationHandlers:
         )
         if not file_path:
             return
-        if not file_path.endswith(".json"):
-            file_path += ".json"
+        if not file_path.endswith(_JSON_SUFFIX):
+            file_path += _JSON_SUFFIX
 
         if self._config.export_tag_export_presets(file_path):
             self._config.set_last_export_path(os.path.dirname(file_path))

@@ -102,6 +102,9 @@ _OVERLAY_LABEL_STYLE = (
 )
 
 
+
+_TITLE_SAVE_PRESET = "Save Preset"
+
 class VolumeViewerWidget(QWidget):
     """
     3D volume rendering viewport with interactive controls.
@@ -1126,7 +1129,7 @@ class VolumeViewerWidget(QWidget):
         ):
             QMessageBox.warning(
                 self,
-                "Save Preset",
+                _TITLE_SAVE_PRESET,
                 "Preset saving is not available (configuration is unavailable).",
             )
             return
@@ -1135,7 +1138,7 @@ class VolumeViewerWidget(QWidget):
         if builtin_preset_by_name(base_name) is None:
             QMessageBox.warning(
                 self,
-                "Save Preset",
+                _TITLE_SAVE_PRESET,
                 "Could not determine the base transfer function for the current settings.",
             )
             return
@@ -1155,7 +1158,7 @@ class VolumeViewerWidget(QWidget):
         if preset_name in builtin_preset_names():
             QMessageBox.warning(
                 self,
-                "Save Preset",
+                _TITLE_SAVE_PRESET,
                 f"The name {preset_name!r} is reserved for a built-in preset.\n"
                 "Choose a different name.",
             )
@@ -1198,7 +1201,7 @@ class VolumeViewerWidget(QWidget):
         except ValueError:
             QMessageBox.warning(
                 self,
-                "Save Preset",
+                _TITLE_SAVE_PRESET,
                 "The preset could not be saved. Details were withheld to protect private data.",
             )
             return

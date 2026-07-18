@@ -105,6 +105,9 @@ _BTN_USE_FOCUSED_SERIES = "Use Focused Series"
 _BTN_CHOOSE_FOLDER = "Choose Folder"
 
 
+
+_UTC_TIMESTAMP_FMT = "%Y%m%dT%H%M%SZ"
+
 class QAAppFacade:
     """Cohesive ACR QA / pylinac entry paths cut from ``DICOMViewerApp``."""
 
@@ -255,7 +258,7 @@ class QAAppFacade:
         document.
         """
         app = self._app
-        timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+        timestamp = datetime.now(UTC).strftime(_UTC_TIMESTAMP_FMT)
         path = app._prompt_save_path(
             "Save QA Results (JSON or CSV)",
             f"{default_stem}-{timestamp}.json",
@@ -286,7 +289,7 @@ class QAAppFacade:
     ) -> None:
         """Offer JSON export for a finished Stage 1 QA run."""
         app = self._app
-        timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+        timestamp = datetime.now(UTC).strftime(_UTC_TIMESTAMP_FMT)
         json_path = app._prompt_save_path(
             "Save QA Results JSON",
             f"{default_stem}-{timestamp}.json",
@@ -969,7 +972,7 @@ class QAAppFacade:
             inputs: Top-level inputs dict to embed (from json_inputs).
         """
         app = self._app
-        timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+        timestamp = datetime.now(UTC).strftime(_UTC_TIMESTAMP_FMT)
         json_path = app._prompt_save_path(
             "Save QA Compare Results JSON",
             f"qa-acr-mri-compare-{timestamp}.json",

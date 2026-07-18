@@ -37,6 +37,10 @@ _PIXEL_DATA_TAG = Tag(0x7FE00010)
 _logger = logging.getLogger(__name__)
 
 
+
+_EVENT_FRAME_EXTRACT = "dicom.frame_extract"
+_MSG_FRAME_EXTRACT_FAILED = "DICOM frame extraction failed"
+
 class FrameType(Enum):
     """Semantic frame classification for multi-frame series."""
 
@@ -362,7 +366,7 @@ def get_frame_pixel_array(dataset: Dataset, frame_index: int) -> np.ndarray | No
                 # Unexpected shape
                 _logger.warning(
                     "Unexpected DICOM pixel array rank",
-                    extra=safe_event_fields("dicom.frame_extract"),
+                    extra=safe_event_fields(_EVENT_FRAME_EXTRACT),
                 )
                 return None
         else:
@@ -375,28 +379,28 @@ def get_frame_pixel_array(dataset: Dataset, frame_index: int) -> np.ndarray | No
     except MemoryError as e:
         _logger.warning(
             "DICOM frame extraction exhausted memory",
-            extra=safe_event_fields("dicom.frame_extract", error=e),
+            extra=safe_event_fields(_EVENT_FRAME_EXTRACT, error=e),
         )
         return None
     except ValueError as e:
         # Can occur with malformed pixel data or excess padding issues
         _logger.warning(
-            "DICOM frame extraction failed",
-            extra=safe_event_fields("dicom.frame_extract", error=e),
+            _MSG_FRAME_EXTRACT_FAILED,
+            extra=safe_event_fields(_EVENT_FRAME_EXTRACT, error=e),
         )
         return None
     except AttributeError as e:
         # Can occur if pixel_array property doesn't exist or is not accessible
         _logger.warning(
-            "DICOM frame extraction failed",
-            extra=safe_event_fields("dicom.frame_extract", error=e),
+            _MSG_FRAME_EXTRACT_FAILED,
+            extra=safe_event_fields(_EVENT_FRAME_EXTRACT, error=e),
         )
         return None
     except Exception as e:
         # Catch any other exceptions from pydicom's pixel data processing
         _logger.warning(
-            "DICOM frame extraction failed",
-            extra=safe_event_fields("dicom.frame_extract", error=e),
+            _MSG_FRAME_EXTRACT_FAILED,
+            extra=safe_event_fields(_EVENT_FRAME_EXTRACT, error=e),
         )
         return None
 

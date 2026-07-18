@@ -52,6 +52,9 @@ from utils.log_sanitizer import sanitize_message
 _PAGE_SIZE = 100
 
 
+
+_TITLE_STUDY_INDEX = "Study index"
+
 class _StudyIndexMdyLineEdit(QLineEdit):
     """
     Date filter field: keep only digits (max 8) and insert ``/`` after MM and DD.
@@ -371,7 +374,7 @@ class StudyIndexSearchDialog(QDialog):
             return True
         QMessageBox.warning(
             self,
-            "Study index",
+            _TITLE_STUDY_INDEX,
             "sqlcipher3 or keyring is not available. Install dependencies from requirements.txt.",
         )
         return False
@@ -381,7 +384,7 @@ class StudyIndexSearchDialog(QDialog):
             return
         df, dt, date_err = self._effective_date_filters(strict=strict_dates)
         if date_err:
-            QMessageBox.warning(self, "Study index", date_err)
+            QMessageBox.warning(self, _TITLE_STUDY_INDEX, date_err)
             return
         if reset:
             self._offset = 0
@@ -396,7 +399,7 @@ class StudyIndexSearchDialog(QDialog):
             safe_details = sanitize_message(str(e), redact_paths=True)
             QMessageBox.warning(
                 self,
-                "Study index",
+                _TITLE_STUDY_INDEX,
                 f"Search parameters are invalid. Please adjust filters.\n\nDetails: {safe_details}",
             )
             return
@@ -404,7 +407,7 @@ class StudyIndexSearchDialog(QDialog):
             safe_details = sanitize_message(str(e), redact_paths=True)
             QMessageBox.critical(
                 self,
-                "Study index",
+                _TITLE_STUDY_INDEX,
                 f"Query failed. Please try again.\n\nDetails: {safe_details}",
             )
             return
@@ -446,7 +449,7 @@ class StudyIndexSearchDialog(QDialog):
     def _open_selected_file(self) -> None:
         row = self._selected_row()
         if row < 0:
-            QMessageBox.information(self, "Study index", "Select a row first.")
+            QMessageBox.information(self, _TITLE_STUDY_INDEX, "Select a row first.")
             return
         self._open_row(row)
 
@@ -457,7 +460,7 @@ class StudyIndexSearchDialog(QDialog):
         fallback = (snap.get("open_file_path") or "").strip()
 
         if not study_uid or not study_root:
-            QMessageBox.warning(self, "Study index", "Row is missing study UID or folder path.")
+            QMessageBox.warning(self, _TITLE_STUDY_INDEX, "Row is missing study UID or folder path.")
             return
 
         # Full folder rescan (same as Open Folder / recent folder) when the indexed
@@ -473,7 +476,7 @@ class StudyIndexSearchDialog(QDialog):
             safe_details = sanitize_message(str(e), redact_paths=True)
             QMessageBox.critical(
                 self,
-                "Study index",
+                _TITLE_STUDY_INDEX,
                 f"Failed to retrieve file list from index.\n\nDetails: {safe_details}",
             )
             return
@@ -485,7 +488,7 @@ class StudyIndexSearchDialog(QDialog):
             if fallback and os.path.isfile(fallback):
                 QMessageBox.information(
                     self,
-                    "Study index",
+                    _TITLE_STUDY_INDEX,
                     (
                         "None of the indexed file paths were found at their recorded locations.\n"
                         "Loading only the sample file as a fallback.\n\n"
@@ -497,7 +500,7 @@ class StudyIndexSearchDialog(QDialog):
                 return
             QMessageBox.warning(
                 self,
-                "Study index",
+                _TITLE_STUDY_INDEX,
                 (
                     "None of the indexed files were found on disk.\n"
                     "The study may have been moved or deleted.\n\n"
@@ -510,7 +513,7 @@ class StudyIndexSearchDialog(QDialog):
         if missing_count > 0:
             QMessageBox.warning(
                 self,
-                "Study index",
+                _TITLE_STUDY_INDEX,
                 (
                     f"{missing_count} of {len(paths)} indexed file(s) were not found "
                     "on disk and will be skipped.\n"
@@ -537,7 +540,7 @@ class StudyIndexSearchDialog(QDialog):
     def _on_remove_from_index_clicked(self) -> None:
         row = self._selected_row()
         if row < 0:
-            QMessageBox.information(self, "Study index", "Select a study row first.")
+            QMessageBox.information(self, _TITLE_STUDY_INDEX, "Select a study row first.")
             return
         self._remove_study_at_row(row)
 
@@ -550,7 +553,7 @@ class StudyIndexSearchDialog(QDialog):
         if not study_uid or not study_root:
             QMessageBox.warning(
                 self,
-                "Study index",
+                _TITLE_STUDY_INDEX,
                 "The selected row is missing a study UID or study folder path.",
             )
             return
@@ -565,7 +568,7 @@ class StudyIndexSearchDialog(QDialog):
             "or indexing the folder again (if auto-add on open is enabled)."
         )
         if (
-            QMessageBox.question(self, "Study index", msg)
+            QMessageBox.question(self, _TITLE_STUDY_INDEX, msg)
             != QMessageBox.StandardButton.Yes
         ):
             return
@@ -573,18 +576,18 @@ class StudyIndexSearchDialog(QDialog):
             deleted = self._service.delete_grouped_study(study_uid, study_root)
         except Exception as e:
             safe_details = sanitize_message(str(e), redact_paths=True)
-            QMessageBox.critical(self, "Study index", f"Remove failed:\n{safe_details}")
+            QMessageBox.critical(self, _TITLE_STUDY_INDEX, f"Remove failed:\n{safe_details}")
             return
         if deleted <= 0:
             QMessageBox.warning(
                 self,
-                "Study index",
+                _TITLE_STUDY_INDEX,
                 "No rows were removed (the entry may have changed or already been removed).",
             )
         else:
             QMessageBox.information(
                 self,
-                "Study index",
+                _TITLE_STUDY_INDEX,
                 f"Removed {deleted} indexed instance(s) from the database.",
             )
         self._run_browse(reset=True, strict_dates=False)
@@ -599,11 +602,11 @@ class StudyIndexSearchDialog(QDialog):
 
         def on_fail(msg: str) -> None:
             if msg != "Cancelled":
-                QMessageBox.warning(self, "Study index", f"Indexing failed:\n{msg}")
+                QMessageBox.warning(self, _TITLE_STUDY_INDEX, f"Indexing failed:\n{msg}")
 
         def on_ok(n: int) -> None:
             QMessageBox.information(
-                self, "Study index", f"Indexed {n} DICOM file(s) into the local database."
+                self, _TITLE_STUDY_INDEX, f"Indexed {n} DICOM file(s) into the local database."
             )
             self._run_browse(reset=True)
 

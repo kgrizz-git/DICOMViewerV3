@@ -22,6 +22,7 @@ from core.dicom_parser import DICOMParser
 from core.dicom_processor import DICOMProcessor
 from gui.overlay_text_builder import get_corner_text, get_modality
 from tools.angle_measurement_items import AngleMeasurementItem
+from utils.bundled_fonts import DEFAULT_FONT_FAMILY, DEFAULT_FONT_VARIANT
 from utils.dicom_utils import get_composite_series_key, get_slice_thickness
 from utils.log_sanitizer import sanitized_format_exc
 from utils.privacy.console import print_redacted
@@ -42,8 +43,8 @@ def _get_bundled_font_path(filename: str) -> str:
     return str(base / "resources" / "fonts" / filename)
 
 
-def _load_font_with_fallback(size: int, variant: str = "Bold",
-                             font_family: str = "IBM Plex Sans") -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+def _load_font_with_fallback(size: int, variant: str = DEFAULT_FONT_VARIANT,
+                             font_family: str = DEFAULT_FONT_FAMILY) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     """Load a TrueType font at *size* with a robust cross-platform fallback chain.
 
     Priority:
@@ -796,8 +797,8 @@ def _draw_rois(
         line_thickness_setting, width, height, anno_scale
     )
     font_size = export_text_size_pixels(font_size_setting, width, height, anno_scale)
-    font_family = config_manager.get_roi_font_family() if config_manager else "IBM Plex Sans"
-    font_variant = config_manager.get_roi_font_variant() if config_manager else "Bold"
+    font_family = config_manager.get_roi_font_family() if config_manager else DEFAULT_FONT_FAMILY
+    font_variant = config_manager.get_roi_font_variant() if config_manager else DEFAULT_FONT_VARIANT
 
     for roi in rois:
         bounds = roi.get_bounds()
@@ -849,9 +850,9 @@ def _draw_measurements(
     )
     font_size = export_text_size_pixels(font_size_setting, width, height, anno_scale)
     font_family = (
-        config_manager.get_measurement_font_family() if config_manager else "IBM Plex Sans"
+        config_manager.get_measurement_font_family() if config_manager else DEFAULT_FONT_FAMILY
     )
-    font_variant = config_manager.get_measurement_font_variant() if config_manager else "Bold"
+    font_variant = config_manager.get_measurement_font_variant() if config_manager else DEFAULT_FONT_VARIANT
 
     for measurement in measurements:
         if isinstance(measurement, AngleMeasurementItem):

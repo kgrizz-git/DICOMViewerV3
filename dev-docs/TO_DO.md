@@ -39,12 +39,11 @@ This file tracks active and near-term tasks.
 
 ## Static analysis
 
-- [ ] **[P2]** **Continue the local SonarQube code-smell backlog after S108 /
-  S1192 start:** `S108` cleared; easy `S1192` clusters extracted (399 → 347).
-  Remaining `S1192` ≈ 23 outside deferred `bundled_fonts` (16). Next suggested
-  domains: larger controller `S3776` clusters (`mpr_controller` /
-  `roi_manager` / `fusion_coordinator`), remaining `S1192`, or MAJOR `S107`.
-  Do not mix font-registry refactors into unrelated slices. Plan references:
+- [ ] **[P2]** **Continue the local SonarQube code-smell backlog after S1192:**
+  `S108` cleared; non-font `S1192` extracted; `bundled_fonts` S1192 ignored
+  via file-scoped multicriteria only. Next: larger controller `S3776`
+  clusters (`mpr_controller` / `roi_manager` / `fusion_coordinator`) or MAJOR
+  `S107`. Plan references:
   [Critical first slice](plans/SONARQUBE_CRITICAL_CODE_SMELL_FIRST_SLICE_PLAN_20260718.md),
   [Undo/redo annotation commands slice](plans/SONARQUBE_UNDO_REDO_ANNOTATION_COMMANDS_SLICE_PLAN_20260718.md),
   [ROI coordinator stats slice](plans/SONARQUBE_ROI_COORDINATOR_STATS_SLICE_PLAN_20260718.md),

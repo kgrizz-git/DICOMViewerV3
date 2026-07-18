@@ -17,6 +17,9 @@ from typing import Any
 from pydicom.dataset import Dataset
 from PySide6.QtCore import Qt
 
+_WARN_FILTER_ACTION = "ignore"
+_WARN_DISCONNECT_MSG = ".*Failed to disconnect.*"
+
 # ---------------------------------------------------------------------------
 # Module-level utility
 # ---------------------------------------------------------------------------
@@ -24,7 +27,7 @@ from PySide6.QtCore import Qt
 def _connect_unique(signal: Any, slot: Any) -> None:
     """Connect a Qt signal once by removing the same slot before reconnecting."""
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore", RuntimeWarning)
+        warnings.simplefilter(_WARN_FILTER_ACTION, RuntimeWarning)
         try:
             signal.disconnect(slot)
         except (RuntimeError, TypeError):
@@ -83,7 +86,7 @@ def connect_subwindow_signals(ctrl: Any) -> None:
             image_viewer = subwindow.image_viewer
             vid = id(image_viewer)
             with warnings.catch_warnings():
-                warnings.filterwarnings('ignore', category=RuntimeWarning, message='.*Failed to disconnect.*')
+                warnings.filterwarnings(_WARN_FILTER_ACTION, category=RuntimeWarning, message=_WARN_DISCONNECT_MSG)
                 try:
                     image_viewer.files_dropped.disconnect(app._open_files_from_paths)
                 except (TypeError, RuntimeError):
@@ -336,7 +339,7 @@ def connect_all_subwindow_transform_signals(ctrl: Any) -> None:
             view_state_manager = managers.get('view_state_manager')
             if view_state_manager:
                 with warnings.catch_warnings():
-                    warnings.filterwarnings('ignore', category=RuntimeWarning, message='.*Failed to disconnect.*')
+                    warnings.filterwarnings(_WARN_FILTER_ACTION, category=RuntimeWarning, message=_WARN_DISCONNECT_MSG)
                     try:
                         image_viewer.transform_changed.disconnect(view_state_manager.handle_transform_changed)
                     except (TypeError, RuntimeError):
@@ -372,7 +375,7 @@ def disconnect_focused_subwindow_signals(ctrl: Any) -> None:
     if app.image_viewer is None:
         return
     with warnings.catch_warnings():
-        warnings.filterwarnings('ignore', category=RuntimeWarning, message='.*Failed to disconnect.*')
+        warnings.filterwarnings(_WARN_FILTER_ACTION, category=RuntimeWarning, message=_WARN_DISCONNECT_MSG)
         try:
             app.image_viewer.annotation_options_requested.disconnect()
         except (TypeError, RuntimeError):

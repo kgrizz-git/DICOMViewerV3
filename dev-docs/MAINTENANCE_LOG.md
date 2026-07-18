@@ -8,6 +8,12 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-18
 
+- Finished non-font `python:S1192` cleanup and added a file-scoped ignore for
+  `S1192` on `src/utils/bundled_fonts.py` only
+  (`tools/sonarqube/sonar-project.properties` multicriteria
+  `bundled_fonts_s1192`) so the font catalog stays readable without demoting
+  the rule globally. Fresh analysis: **308** priority findings (down from 347);
+  `S1192` at 0 (including fonts ignore).
 - Cleared all open `python:S108` empty-block findings and started
   `python:S1192` (duplicate string literals): extracted shared UI/status
   constants in dialogs/widgets/loading paths; left `src/utils/bundled_fonts.py`
