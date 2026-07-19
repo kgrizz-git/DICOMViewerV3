@@ -1,6 +1,6 @@
 # Source layout (`src/`)
 
-**Last updated:** 2026-05-21  
+**Last updated:** 2026-07-18  
 **Purpose:** Detailed module tree, controller ownership, app bootstrap order, and Qt signal-wiring rules. Agents should read **[`ARCHITECTURE.md`](../ARCHITECTURE.md)** first for domains and dependency rules; use this file when you need file-level navigation.
 
 ---
@@ -34,10 +34,19 @@ src/
 │   ├── subwindow_image_viewer_sync.py # Propagate privacy, slice sync, smoothing, scale/direction markers to all pane ImageViewers (used by main.py)
 │   ├── subwindow_manager_factory.py # build_managers_for_subwindow(app, idx, subwindow) — per-pane ROI/measurement/overlay/slice/fusion graph (used by main.py)
 │   ├── cine_app_facade.py             # Cine player, frame slider, loop bounds; MPR-focused panes enable linear cine over ``n_slices``; ``app_signal_wiring`` connects slots to this facade (post-assessment Phase 8)
-│   ├── window_level_preset_handler.py # Context-menu W/L preset apply with raw/rescaled alignment (post-assessment Phase 7)
 │   ├── main_app_key_event_filter.py   # Layout digit focus gating + key dispatch to ``KeyboardEventHandler`` (post-assessment Phase 9)
 │   ├── slice_display_lut.py           # Window/level raw vs rescaled alignment helpers (used by SliceDisplayManager)
 │   ├── slice_display_pixels.py        # Intensity projection → PIL pipeline (used by SliceDisplayManager)
+│   ├── slice_window_level_resolver.py # Resolve effective W/L for a slice (dataset tags + user overrides)
+│   ├── dicom_window_level.py          # DICOM window/level tag parsing and display-range math
+│   ├── wl_preset_catalog.py           # Built-in and user W/L preset catalog (modality-aware labels)
+│   ├── window_level_preset_handler.py # Context-menu W/L preset apply with raw/rescaled alignment (post-assessment Phase 7)
+│   ├── slice_geometry.py              # Pure 3-D slice-plane/stack math (patient mm); shared by sync and location lines
+│   ├── slice_sync_coordinator.py      # Linked-group anatomic slice sync across panes (off by default)
+│   ├── slice_location_line_helper.py  # Pure geometry: plane intersections → 2-D line segments per target pane
+│   ├── roi_export_service.py          # ROI/crosshair/measurement aggregation + TXT/CSV/XLSX writers (formula-safe cells)
+│   ├── spreadsheet_safety.py          # Neutralize formula-like spreadsheet cell prefixes on export
+│   ├── study_navigation_handlers.py   # Study/series navigation menu slots (delegated from main)
 │   ├── direction_labels.py            # Patient LPS direction strings from ImageOrientationPatient (viewer edge labels; tests in tests/test_direction_labels.py)
 │   ├── dicom_parser.py                # Dataset metadata: get_all_tags (iterall + optional export catalog merge)
 │   ├── sr_sop_classes.py              # SR storage SOP class registry; ``is_structured_report_dataset``
@@ -49,8 +58,13 @@ src/
 │   ├── tag_export_union.py            # union_tags_across_datasets (merged tag map); separate from catalog to avoid a dicom_parser ↔ catalog import cycle for static analysis
 │   └── tag_export_writer.py           # Tag export file writers: Excel, CSV, UTF-8 tab-separated text (shared row builder)
 ├── gui/                           # All Qt widgets, dialogs, layout; e.g. overlay_items_factory, series_navigator_view (thumbnails), series_navigator_model (labels/instance entries), main_window_*_builder (menus/toolbar); **`dialogs/tag_export_union_worker.py`** — tag-union merge thread (orchestrated by **`core/tag_export_union_host.py`** via **`DICOMViewerApp._schedule_tag_export_union_rebuild`** ); **`dialogs/structured_report_browser_dialog.py`** — modeless SR tree + dose events (optional **Hide empty columns**, on by default; CSV/XLSX still export all columns) + exports (**Tools → Structured Report…**)
+│   ├── slice_location_line_manager.py   # Per-pane QGraphics line items for slice-location reference lines
+│   ├── slice_location_line_coordinator.py  # App-level refresh across panes; reads ``SliceSyncConfigMixin`` visibility flags
 │   ├── metadata_table_model.py    # Metadata panel tree delegate + tag filter/group/value helpers (Phase 5D; `metadata_panel.py` wires UI)
-│   └── dialogs/mri_compare_result_dialog.py  # ACR MRI compare-results table + JSON/PDF actions; `qa_app_facade` wires callbacks (Phase 5E)
+│   └── dialogs/
+│       ├── slice_sync_dialog.py       # Manage linked sync groups (**View → Manage Sync Groups…**)
+│       ├── export_roi_statistics_dialog.py  # **Tools → Export ROI Statistics** series picker + format options
+│       └── mri_compare_result_dialog.py  # ACR MRI compare-results table + JSON/PDF actions; `qa_app_facade` wires callbacks (Phase 5E)
 ├── tools/                         # Interactive tools (ROI, measurement, annotation, crosshair)
 │   └── roi_persistence.py         # Clipboard-oriented ROI dict serialization (Phase 5B; copy/paste schema)
 └── utils/                         # Utilities (config, undo/redo, DICOM helpers, etc.)
@@ -64,6 +78,7 @@ src/
         ├── display_config.py      # theme, smooth_image_when_zoomed, privacy_view, scroll_wheel_mode
         ├── overlay_config.py      # overlay mode/visibility/font/tags + overlay_tags_detailed_extra (Detailed-only corner tags), get_all_modalities
         ├── layout_config.py       # multi_window_layout, view_slot_order
+        ├── slice_sync_config.py   # slice_sync_enabled, linked groups, slice-location line visibility/width/mode
         ├── roi_config.py          # ROI font/line/default_visible_statistics
         ├── measurement_config.py  # measurement font/line
         ├── annotation_config.py   # text/arrow annotation appearance
@@ -87,6 +102,17 @@ src/
 | `ROIMeasurementController` | `src/roi/roi_measurement_controller.py` | `ROIManager`, `MeasurementTool`, `AnnotationManager`, `ROIStatisticsPanel`, `ROIListPanel`; tracks active (focused-subwindow) managers via `update_focused_managers()` |
 | `SubwindowLifecycleController` | `src/core/subwindow_lifecycle_controller.py` | Per-subwindow manager creation, focus changes, display updates |
 | `PrivacyController` | `src/core/privacy_controller.py` | Privacy-mode propagation (metadata, overlay/crosshair managers, image viewers) and overlay refresh after privacy change; invoked from `core.actions.view_actions.on_privacy_view_toggled` via `DICOMViewerApp._on_privacy_view_toggled` |
+| `SliceSyncCoordinator` | `src/core/slice_sync_coordinator.py` | Linked-group anatomic slice sync; geometry cache keyed by `(study_uid, series_uid)`; off by default |
+| `SliceLocationLineCoordinator` | `src/gui/slice_location_line_coordinator.py` | Cross-pane slice-location reference lines; delegates segment math to `slice_location_line_helper` |
+
+### Slice sync and location-line flow
+
+1. **Config** — `SliceSyncConfigMixin` (`utils/config/slice_sync_config.py`) persists `slice_sync_enabled`, `slice_sync_groups`, and slice-location line visibility/style.
+2. **Slice change** — `SliceSyncCoordinator.on_slice_changed(source_idx)` updates linked panes when sync is enabled; `SliceLocationLineCoordinator.refresh_all()` (or targeted refresh) runs regardless.
+3. **Geometry** — `slice_geometry.py` builds `SliceStack` / `SlicePlane` from DICOM IPP/IOP; `find_nearest_slice` enforces a half-thickness tolerance so non-overlapping stacks do not jump.
+4. **UI** — **View → Manage Sync Groups…** (`slice_sync_dialog.py`); **View → Show Slice Location Lines** toggles the coordinator via config.
+
+Tests: `tests/core/test_slice_sync_coordinator_unit.py`, `tests/core/test_slice_geometry.py`, `tests/core/test_slice_location_line_helper_logic.py`, `tests/utils/test_slice_sync_config.py`.
 
 ---
 

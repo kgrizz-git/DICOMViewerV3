@@ -1,5 +1,7 @@
 # Developer setup and troubleshooting
 
+**Last updated:** 2026-07-18
+
 Use this page with [CONTRIBUTING.md](CONTRIBUTING.md) (hooks, CI, releases), [AGENTS.md](../AGENTS.md) (venv, module layout, agents), and [tests/README.md](../tests/README.md).
 
 ## Common issues
@@ -138,9 +140,9 @@ to `host.docker.internal`. `SONAR_DOCKER_HOST_URL` may only name that Docker hos
 gateway; named Docker network services are deliberately unsupported because the
 local-only policy must not permit an arbitrary token destination.
 
-After a successful analysis, report only the priority findings that belong to
-this repository's exact component key. The reporter uses the same ignored
-`.env` file automatically:
+After a successful analysis, report priority findings that belong to this
+repository's exact component key. The reporter uses the same ignored `.env`
+file automatically:
 
 ```bash
 python scripts/report_local_sonarqube_issues.py --fail-on-findings \
@@ -148,13 +150,31 @@ python scripts/report_local_sonarqube_issues.py --fail-on-findings \
   --output tmp/sonarqube-priority-findings.md
 ```
 
-The reporter queries `componentKeys=dicom-viewer-v3` for all BLOCKER, CRITICAL,
-and MAJOR issues regardless of type, verifies every returned component has that
-exact prefix, and fails on a mixed-project response. The optional Markdown report
-is restricted to ignored `tmp/`; neither the token nor SonarQube issue messages
-are written to it. On PowerShell, pass the `git rev-parse HEAD` result as the
+The reporter queries `componentKeys=dicom-viewer-v3` for three scoped tiers:
+
+| Tier | SonarQube filter | Typical use |
+|------|------------------|-------------|
+| **BLOCKER** | All BLOCKER issues | Must-fix before release |
+| **CRITICAL** | All CRITICAL issues (any type) | High-severity bugs, smells, and vulnerabilities |
+| **MAJOR** | All MAJOR issues (any type) | Code-smell backlog triage (`TO_DO.md` tracks deferred MAJOR cleanup) |
+
+It verifies every returned component has the `dicom-viewer-v3` prefix and
+rejects a mixed-project response. `--fail-on-findings` exits **1** when any
+scoped issue is present (all three tiers). The optional Markdown report is
+restricted to ignored `tmp/`; neither the token nor SonarQube issue messages are
+written to it. On PowerShell, pass the `git rev-parse HEAD` result as the
 `--expected-revision` value, or omit that optional assertion when only reading
 the report.
+
+For a release or remediation branch, pair the reporter with a fresh analysis of
+the same revision:
+
+```bash
+python scripts/run_local_sonarqube.py --with-coverage
+python scripts/report_local_sonarqube_issues.py \
+  --expected-revision "$(git rev-parse HEAD)" \
+  --output tmp/sonarqube-priority-findings.md
+```
 
 Recommended cadence: run `python scripts/run_local_sonarqube.py
 --with-coverage` at least every 30 days, before a release, and after a large
