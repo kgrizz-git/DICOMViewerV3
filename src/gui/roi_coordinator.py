@@ -353,108 +353,149 @@ class ROICoordinator:
     def handle_roi_drawing_finished(self) -> None:
         """Handle ROI drawing finish."""
         roi_item = self.roi_manager.finish_drawing()
+        current_dataset, study_uid, series_uid, instance_identifier = (
+            self._drawing_finish_slice_context()
+        )
 
-        # Extract DICOM identifiers for updating ROI list
+        if self.image_viewer.mouse_mode == "auto_window_level" and roi_item is not None:
+            self._drawing_finish_auto_window_level(
+                roi_item,
+                current_dataset,
+                study_uid,
+                series_uid,
+                instance_identifier,
+            )
+            return
+
+        self._drawing_finish_normal_add(
+            roi_item, current_dataset, study_uid, series_uid, instance_identifier
+        )
+
+    def _drawing_finish_slice_context(
+        self,
+    ) -> tuple[Any, str, str, int]:
+        """Resolve current dataset and slice identifiers for a drawing finish."""
         current_dataset = self.get_current_dataset()
         study_uid = ""
         series_uid = ""
-        # Use current slice index as instance identifier (array position)
         instance_identifier = self.get_current_slice_index()
         if current_dataset is not None:
-            study_uid = getattr(current_dataset, 'StudyInstanceUID', '')
+            study_uid = getattr(current_dataset, "StudyInstanceUID", "")
             series_uid = get_composite_series_key(current_dataset)
+        return current_dataset, study_uid, series_uid, instance_identifier
 
-        # Check if we're in auto_window_level mode
-        if self.image_viewer.mouse_mode == "auto_window_level" and roi_item is not None:
-            # Auto window/level mode - calculate window/level from ROI and delete ROI
-            try:
-                # roi_item is already the ROIItem we need (finish_drawing returns ROIItem directly)
-                roi = roi_item
-                if roi is not None and current_dataset is not None:
-                    # Get pixel array (projection if enabled, otherwise original)
-                    pixel_array = self._get_pixel_array_for_statistics()
-                    if pixel_array is not None:
-                        # Extract pixel spacing for area calculation
-                        if self._is_mpr_view() and self.get_mpr_output_pixel_spacing is not None:
-                            pixel_spacing = self.get_mpr_output_pixel_spacing()
-                        else:
-                            pixel_spacing = get_pixel_spacing(current_dataset)
-
-                        # Get rescale parameters
-                        rescale_slope, rescale_intercept, rescale_type, use_rescaled = self.get_rescale_params()
-
-                        if self._is_mpr_view():
-                            awl_slope, awl_intercept = None, None
-                        else:
-                            awl_slope = rescale_slope if use_rescaled else None
-                            awl_intercept = rescale_intercept if use_rescaled else None
-
-                        stats = self.roi_manager.calculate_statistics(
-                            roi,
-                            pixel_array,
-                            rescale_slope=awl_slope,
-                            rescale_intercept=awl_intercept,
-                            pixel_spacing=pixel_spacing,
-                            dataset=current_dataset,
-                        )
-                        min_v = stats.get("min")
-                        max_v = stats.get("max")
-                        if stats and min_v is not None and max_v is not None:
-                            # Set window width = max - min
-                            window_width = float(max_v) - float(min_v)
-                            # Set window center = midpoint (halfway between min and max)
-                            window_center = (float(min_v) + float(max_v)) / 2.0
-
-                            # Update window/level controls
-                            self.window_level_controls.set_window_level(window_center, window_width)
-
-                            # Delete the ROI (it was only used for calculation)
-                            self.roi_manager.delete_roi(roi, self.image_viewer.scene)
-
-                            # Clear statistics panel since ROI was deleted
-                            self.roi_statistics_panel.clear_statistics()
-
-                            # Update ROI list panel
-                            self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier, self.roi_manager)
-
-                            # Switch back to pan mode
-                            if self.set_mouse_mode_callback:
-                                self.set_mouse_mode_callback("pan")
-                            else:
-                                self.image_viewer.set_mouse_mode("pan")
-                                # Update toolbar button state
-                                pa = self.main_window.mouse_mode_pan_action
-                                aw = self.main_window.mouse_mode_auto_window_level_action
-                                if pa is not None:
-                                    pa.setChecked(True)
-                                if aw is not None:
-                                    aw.setChecked(False)
-            except Exception as e:
-                print_redacted(f"Error in auto window/level: {e}")
-                _logger.debug("%s", sanitized_format_exc())
-                # If error occurs, still delete ROI and switch back to pan mode
-                if roi_item is not None:
-                    # roi_item is already the ROIItem we need
-                    self.roi_manager.delete_roi(roi_item, self.image_viewer.scene)
-                    # Clear statistics panel since ROI was deleted
-                    self.roi_statistics_panel.clear_statistics()
-                    self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier, self.roi_manager)
-                if self.set_mouse_mode_callback:
-                    self.set_mouse_mode_callback("pan")
-                else:
-                    self.image_viewer.set_mouse_mode("pan")
-                    pa2 = self.main_window.mouse_mode_pan_action
-                    aw2 = self.main_window.mouse_mode_auto_window_level_action
-                    if pa2 is not None:
-                        pa2.setChecked(True)
-                    if aw2 is not None:
-                        aw2.setChecked(False)
+    def _drawing_finish_restore_pan_mode(self) -> None:
+        """Return mouse mode to pan after an auto-W/L ROI gesture."""
+        if self.set_mouse_mode_callback:
+            self.set_mouse_mode_callback("pan")
             return
+        self.image_viewer.set_mouse_mode("pan")
+        pa = self.main_window.mouse_mode_pan_action
+        aw = self.main_window.mouse_mode_auto_window_level_action
+        if pa is not None:
+            pa.setChecked(True)
+        if aw is not None:
+            aw.setChecked(False)
 
-        # Normal ROI drawing finish (not auto window/level)
-        # Create undo/redo command for ROI addition
+    def _drawing_finish_discard_auto_wl_roi(
+        self,
+        roi_item,
+        study_uid: str,
+        series_uid: str,
+        instance_identifier: int,
+    ) -> None:
+        """Delete a temporary auto-W/L ROI and refresh list/stats panels."""
+        self.roi_manager.delete_roi(roi_item, self.image_viewer.scene)
+        self.roi_statistics_panel.clear_statistics()
+        self.roi_list_panel.update_roi_list(
+            study_uid, series_uid, instance_identifier, self.roi_manager
+        )
+
+    def _drawing_finish_compute_auto_wl(
+        self, roi, current_dataset
+    ) -> tuple[float, float] | None:
+        """
+        Compute window center/width from an auto-W/L ROI.
+
+        Returns:
+            ``(center, width)`` or ``None`` when stats cannot be computed.
+        """
+        pixel_array = self._get_pixel_array_for_statistics()
+        if pixel_array is None:
+            return None
+        if self._is_mpr_view() and self.get_mpr_output_pixel_spacing is not None:
+            pixel_spacing = self.get_mpr_output_pixel_spacing()
+        else:
+            pixel_spacing = get_pixel_spacing(current_dataset)
+
+        rescale_slope, rescale_intercept, _rescale_type, use_rescaled = (
+            self.get_rescale_params()
+        )
+        if self._is_mpr_view():
+            awl_slope, awl_intercept = None, None
+        else:
+            awl_slope = rescale_slope if use_rescaled else None
+            awl_intercept = rescale_intercept if use_rescaled else None
+
+        stats = self.roi_manager.calculate_statistics(
+            roi,
+            pixel_array,
+            rescale_slope=awl_slope,
+            rescale_intercept=awl_intercept,
+            pixel_spacing=pixel_spacing,
+            dataset=current_dataset,
+        )
+        min_v = stats.get("min")
+        max_v = stats.get("max")
+        if not stats or min_v is None or max_v is None:
+            return None
+        window_width = float(max_v) - float(min_v)
+        window_center = (float(min_v) + float(max_v)) / 2.0
+        return window_center, window_width
+
+    def _drawing_finish_auto_window_level(
+        self,
+        roi_item,
+        current_dataset,
+        study_uid: str,
+        series_uid: str,
+        instance_identifier: int,
+    ) -> None:
+        """Apply auto window/level from a temporary ROI, then discard it."""
+        try:
+            roi = roi_item
+            if roi is not None and current_dataset is not None:
+                wl = self._drawing_finish_compute_auto_wl(roi, current_dataset)
+                if wl is not None:
+                    window_center, window_width = wl
+                    self.window_level_controls.set_window_level(
+                        window_center, window_width
+                    )
+                    self._drawing_finish_discard_auto_wl_roi(
+                        roi, study_uid, series_uid, instance_identifier
+                    )
+                    self._drawing_finish_restore_pan_mode()
+        except Exception as e:
+            print_redacted(f"Error in auto window/level: {e}")
+            _logger.debug("%s", sanitized_format_exc())
+            if roi_item is not None:
+                self._drawing_finish_discard_auto_wl_roi(
+                    roi_item, study_uid, series_uid, instance_identifier
+                )
+            self._drawing_finish_restore_pan_mode()
+
+    def _drawing_finish_normal_add(
+        self,
+        roi_item,
+        current_dataset,
+        study_uid: str,
+        series_uid: str,
+        instance_identifier: int,
+    ) -> None:
+        """Commit a normal ROI draw (undo-aware) and select it for stats."""
         if roi_item is not None and self.undo_redo_manager and self.image_viewer.scene:
             from utils.undo_redo import ROICommand
+
             command = ROICommand(
                 self.roi_manager,
                 "add",
@@ -463,25 +504,23 @@ class ROICoordinator:
                 study_uid,
                 series_uid,
                 instance_identifier,
-                update_statistics_callback=self.update_roi_statistics_overlays
+                update_statistics_callback=self.update_roi_statistics_overlays,
             )
             self.undo_redo_manager.execute_command(command)
-            # Update undo/redo state after command execution
             if self.update_undo_redo_state_callback:
                 self.update_undo_redo_state_callback()
 
-        # Update ROI list
-        self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier, self.roi_manager)
+        self.roi_list_panel.update_roi_list(
+            study_uid, series_uid, instance_identifier, self.roi_manager
+        )
 
-        # Auto-select the newly drawn ROI: highlight in list and show statistics
-        if roi_item is not None:
-            # Set up movement callback for the newly created ROI
-            roi_item.on_moved_callback = lambda r=roi_item: self._on_roi_moved(r)
-
-            self.roi_list_panel.select_roi_in_list(roi_item)
-            if current_dataset is not None:
-                self.update_roi_statistics(roi_item)
-            self._auto_show_resize_handles_after_select(roi_item)
+        if roi_item is None:
+            return
+        roi_item.on_moved_callback = lambda r=roi_item: self._on_roi_moved(r)
+        self.roi_list_panel.select_roi_in_list(roi_item)
+        if current_dataset is not None:
+            self.update_roi_statistics(roi_item)
+        self._auto_show_resize_handles_after_select(roi_item)
 
     def handle_roi_clicked(self, item) -> None:
         """
@@ -589,53 +628,58 @@ class ROICoordinator:
             item: QGraphicsItem to delete
         """
         roi = self.roi_manager.find_roi_by_item(item)
-        if roi:
-            # Drop resize handles before remove (ROICommand does not remove handle items).
-            scene = self.image_viewer.scene
-            if scene is not None:
-                try:
-                    roi.hide_resize_handles(scene)
-                except RuntimeError:
-                    pass
-            self.roi_manager.exit_roi_geometry_edit_mode()
+        if not roi:
+            return
 
-            # Get identifiers before deletion
-            current_dataset = self.get_current_dataset()
-            study_uid = ""
-            series_uid = ""
-            instance_identifier = self.get_current_slice_index()
-            if current_dataset is not None:
-                study_uid = getattr(current_dataset, 'StudyInstanceUID', '')
-                series_uid = get_composite_series_key(current_dataset)
+        self._delete_prepare_roi_for_removal(roi)
+        current_dataset, study_uid, series_uid, instance_identifier = (
+            self._drawing_finish_slice_context()
+        )
+        self._delete_execute_remove(roi, study_uid, series_uid, instance_identifier)
+        self.handle_roi_deleted(roi)
+        if current_dataset is not None:
+            self.roi_list_panel.update_roi_list(
+                study_uid, series_uid, instance_identifier, self.roi_manager
+            )
+        if self.roi_manager.get_selected_roi() is None:
+            self.roi_statistics_panel.clear_statistics()
 
-            # Create undo/redo command for ROI deletion
-            if self.undo_redo_manager and self.image_viewer.scene:
-                from utils.undo_redo import ROICommand
-                command = ROICommand(
-                    self.roi_manager,
-                    "remove",
-                    roi,
-                    self.image_viewer.scene,
-                    study_uid,
-                    series_uid,
-                    instance_identifier,
-                    update_statistics_callback=self.update_roi_statistics_overlays
-                )
-                self.undo_redo_manager.execute_command(command)
-                # Update undo/redo state after command execution
-                if self.update_undo_redo_state_callback:
-                    self.update_undo_redo_state_callback()
-            else:
-                # Fallback to direct deletion if undo/redo not available
-                self.roi_manager.delete_roi(roi, self.image_viewer.scene)
+    def _delete_prepare_roi_for_removal(self, roi) -> None:
+        """Hide resize handles and exit geometry-edit mode before ROI removal."""
+        scene = self.image_viewer.scene
+        if scene is not None:
+            try:
+                roi.hide_resize_handles(scene)
+            except RuntimeError:
+                pass
+        self.roi_manager.exit_roi_geometry_edit_mode()
 
-            # Explicitly handle deletion to ensure overlay is removed
-            self.handle_roi_deleted(roi)
-            # Update ROI list panel
-            if current_dataset is not None:
-                self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier, self.roi_manager)
-            if self.roi_manager.get_selected_roi() is None:
-                self.roi_statistics_panel.clear_statistics()
+    def _delete_execute_remove(
+        self,
+        roi,
+        study_uid: str,
+        series_uid: str,
+        instance_identifier: int,
+    ) -> None:
+        """Remove ROI via undo command when available, else delete directly."""
+        if self.undo_redo_manager and self.image_viewer.scene:
+            from utils.undo_redo import ROICommand
+
+            command = ROICommand(
+                self.roi_manager,
+                "remove",
+                roi,
+                self.image_viewer.scene,
+                study_uid,
+                series_uid,
+                instance_identifier,
+                update_statistics_callback=self.update_roi_statistics_overlays,
+            )
+            self.undo_redo_manager.execute_command(command)
+            if self.update_undo_redo_state_callback:
+                self.update_undo_redo_state_callback()
+            return
+        self.roi_manager.delete_roi(roi, self.image_viewer.scene)
 
     def handle_roi_deleted(self, roi) -> None:
         """
@@ -680,41 +724,63 @@ class ROICoordinator:
         if current_dataset is None:
             return
 
-        # Get current slice identifiers
-        study_uid = getattr(current_dataset, 'StudyInstanceUID', '')
+        study_uid = getattr(current_dataset, "StudyInstanceUID", "")
         series_uid = get_composite_series_key(current_dataset)
-
         if not study_uid or not series_uid:
             return
 
-        # Use current slice index as instance identifier (array position)
         instance_identifier = self.get_current_slice_index()
+        rois_to_delete, crosshairs_to_delete = self._delete_all_collect_targets(
+            study_uid, series_uid, instance_identifier
+        )
+        if not rois_to_delete and not crosshairs_to_delete:
+            return
 
-        # Get all ROIs for this slice before deletion
+        self.roi_manager.exit_roi_geometry_edit_mode()
+        self._delete_all_execute(
+            rois_to_delete,
+            crosshairs_to_delete,
+            study_uid,
+            series_uid,
+            instance_identifier,
+        )
+        self.roi_list_panel.update_roi_list(
+            study_uid, series_uid, instance_identifier, self.roi_manager
+        )
+        self.roi_statistics_panel.clear_statistics()
+
+    def _delete_all_collect_targets(
+        self, study_uid: str, series_uid: str, instance_identifier: int
+    ) -> tuple[list, list]:
+        """Collect ROIs and crosshairs on the current slice before bulk delete."""
         key = (study_uid, series_uid, instance_identifier)
-        rois_to_delete = []
+        rois_to_delete: list = []
         if key in self.roi_manager.rois:
             rois_to_delete = list(self.roi_manager.rois[key])
 
-        # Get all crosshairs for this slice before deletion
-        crosshairs_to_delete = []
+        crosshairs_to_delete: list = []
         if self.crosshair_coordinator and self.crosshair_coordinator.crosshair_manager:
             if key in self.crosshair_coordinator.crosshair_manager.crosshairs:
-                crosshairs_to_delete = list(self.crosshair_coordinator.crosshair_manager.crosshairs[key])
+                crosshairs_to_delete = list(
+                    self.crosshair_coordinator.crosshair_manager.crosshairs[key]
+                )
+        return rois_to_delete, crosshairs_to_delete
 
-        if not rois_to_delete and not crosshairs_to_delete:
-            return  # Nothing to delete
+    def _delete_all_build_commands(
+        self,
+        rois_to_delete: list,
+        crosshairs_to_delete: list,
+        study_uid: str,
+        series_uid: str,
+        instance_identifier: int,
+    ) -> list:
+        """Build undo commands for bulk ROI and crosshair removal."""
+        from utils.undo_redo import CrosshairCommand, ROICommand
 
-        self.roi_manager.exit_roi_geometry_edit_mode()
-
-        # Create a composite command for deleting all ROIs and crosshairs together
-        if self.undo_redo_manager and self.image_viewer.scene:
-            from utils.undo_redo import CompositeCommand, CrosshairCommand, ROICommand
-            commands = []
-
-            # Add ROI deletion commands
-            for roi_item in rois_to_delete:
-                command = ROICommand(
+        commands = []
+        for roi_item in rois_to_delete:
+            commands.append(
+                ROICommand(
                     self.roi_manager,
                     "remove",
                     roi_item,
@@ -722,41 +788,55 @@ class ROICoordinator:
                     study_uid,
                     series_uid,
                     instance_identifier,
-                    update_statistics_callback=self.update_roi_statistics_overlays
+                    update_statistics_callback=self.update_roi_statistics_overlays,
                 )
-                commands.append(command)
-
-            # Add crosshair deletion commands
-            if self.crosshair_coordinator and crosshairs_to_delete:
-                for crosshair_item in crosshairs_to_delete:
-                    command = CrosshairCommand(
+            )
+        if self.crosshair_coordinator and crosshairs_to_delete:
+            for crosshair_item in crosshairs_to_delete:
+                commands.append(
+                    CrosshairCommand(
                         self.crosshair_coordinator.crosshair_manager,
                         "remove",
                         crosshair_item,
                         self.image_viewer.scene,
                         study_uid,
                         series_uid,
-                        instance_identifier
+                        instance_identifier,
                     )
-                    commands.append(command)
+                )
+        return commands
 
+    def _delete_all_execute(
+        self,
+        rois_to_delete: list,
+        crosshairs_to_delete: list,
+        study_uid: str,
+        series_uid: str,
+        instance_identifier: int,
+    ) -> None:
+        """Execute bulk delete via composite undo command or direct clear."""
+        if self.undo_redo_manager and self.image_viewer.scene:
+            from utils.undo_redo import CompositeCommand
+
+            commands = self._delete_all_build_commands(
+                rois_to_delete,
+                crosshairs_to_delete,
+                study_uid,
+                series_uid,
+                instance_identifier,
+            )
             if commands:
-                composite_command = CompositeCommand(commands)
-                self.undo_redo_manager.execute_command(composite_command)
+                self.undo_redo_manager.execute_command(CompositeCommand(commands))
                 if self.update_undo_redo_state_callback:
                     self.update_undo_redo_state_callback()
-        else:
-            # Fallback to direct deletion
-            if rois_to_delete:
-                self.roi_manager.clear_slice_rois(study_uid, series_uid, instance_identifier, self.image_viewer.scene)
-            if self.crosshair_coordinator and crosshairs_to_delete:
-                self.crosshair_coordinator.handle_clear_crosshairs()
+            return
 
-        # Update ROI list panel
-        self.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier, self.roi_manager)
-
-        # Clear ROI statistics panel
-        self.roi_statistics_panel.clear_statistics()
+        if rois_to_delete:
+            self.roi_manager.clear_slice_rois(
+                study_uid, series_uid, instance_identifier, self.image_viewer.scene
+            )
+        if self.crosshair_coordinator and crosshairs_to_delete:
+            self.crosshair_coordinator.handle_clear_crosshairs()
 
     def update_roi_statistics(self, roi) -> None:
         """
@@ -823,36 +903,46 @@ class ROICoordinator:
     def handle_scene_selection_changed(self) -> None:
         """Handle scene selection change (e.g., when ROI is moved)."""
         try:
-            # Check if scene is still valid
             if self.image_viewer.scene is None:
                 return
             selected_items = self.image_viewer.scene.selectedItems()
             if selected_items:
-                # Find ROI for selected item
-                for item in selected_items:
-                    roi = self.roi_manager.find_roi_by_item(item)
-                    if roi:
-                        # Update statistics when ROI is moved/selected
-                        self.update_roi_statistics(roi)
-                        # Update list panel selection
-                        self.roi_list_panel.select_roi_in_list(roi)
-                        self._auto_show_resize_handles_after_select(roi)
-                        break
+                self._scene_selection_sync_selected_roi(selected_items)
             else:
-                # No selection - update overlay positions for all ROIs that might have moved
-                # This handles the case where ROI is moved but then deselected
-                current_dataset = self.get_current_dataset()
-                if current_dataset is not None:
-                    study_uid = getattr(current_dataset, 'StudyInstanceUID', '')
-                    series_uid = get_composite_series_key(current_dataset)
-                    instance_identifier = self.get_current_slice_index()
-                    rois = self.roi_manager.get_rois_for_slice(study_uid, series_uid, instance_identifier)
-                    for roi in rois:
-                        if roi.statistics_overlay_item is not None and roi.statistics_overlay_visible:
-                            self.roi_manager.update_statistics_overlay_position(roi, self.image_viewer.scene)
+                self._scene_selection_refresh_overlay_positions()
         except RuntimeError:
             # Scene has been deleted or is invalid, ignore
             return
+
+    def _scene_selection_sync_selected_roi(self, selected_items) -> None:
+        """Sync list/stats/handles for the first selected scene ROI."""
+        for item in selected_items:
+            roi = self.roi_manager.find_roi_by_item(item)
+            if roi:
+                self.update_roi_statistics(roi)
+                self.roi_list_panel.select_roi_in_list(roi)
+                self._auto_show_resize_handles_after_select(roi)
+                break
+
+    def _scene_selection_refresh_overlay_positions(self) -> None:
+        """Refresh overlay positions for visible ROI stats after deselection."""
+        current_dataset = self.get_current_dataset()
+        if current_dataset is None:
+            return
+        study_uid = getattr(current_dataset, "StudyInstanceUID", "")
+        series_uid = get_composite_series_key(current_dataset)
+        instance_identifier = self.get_current_slice_index()
+        rois = self.roi_manager.get_rois_for_slice(
+            study_uid, series_uid, instance_identifier
+        )
+        for roi in rois:
+            if (
+                roi.statistics_overlay_item is not None
+                and roi.statistics_overlay_visible
+            ):
+                self.roi_manager.update_statistics_overlay_position(
+                    roi, self.image_viewer.scene
+                )
 
     def hide_roi_graphics(self, hide: bool) -> None:
         """

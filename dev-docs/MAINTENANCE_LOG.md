@@ -8,6 +8,12 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-18
 
+- Completed the ROI coordinator Sonar finish slice
+  (`plans/SONARQUBE_ROI_COORDINATOR_FINISH_SLICE_PLAN_20260718.md`): extracted
+  helpers for `handle_roi_drawing_finished`, `handle_roi_delete_requested`,
+  `delete_all_rois_current_slice`, and `handle_scene_selection_changed`. Added
+  `tests/gui/test_roi_coordinator_sonar_finish_slice.py`. Fresh analysis:
+  **295** priority findings (down from 299); `roi_coordinator` `S3776` → 0.
 - Completed the MPR controller Sonar finish slice
   (`plans/SONARQUBE_MPR_CONTROLLER_FINISH_SLICE_PLAN_20260718.md`): extracted
   helpers for `prompt_save_mpr_as_dicom`, `attach_floating_mpr`,
