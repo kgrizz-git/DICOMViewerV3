@@ -210,3 +210,132 @@ def test_auto_detect_skips_when_already_notified() -> None:
             studies, "study-1", [("a", "PET"), ("b", "CT")]
         )
     suggest.assert_not_called()
+
+
+def test_finish_overlay_load_warns_on_duplicate_locations() -> None:
+    ds = SimpleNamespace()
+    studies = {"study-1": {"overlay-1": [ds]}}
+    coord, handler, controls = _make_coordinator(studies=studies)
+    handler.has_duplicate_locations.return_value = (True, 2)
+    handler.fusion_enabled = False
+
+    with (
+        patch.object(coord, "_update_resampling_status") as resampling,
+        patch.object(coord, "_update_spatial_alignment") as align,
+        patch.object(coord, "_append_status") as status,
+        patch(
+            "core.dicom_processor.DICOMProcessor.get_rescale_parameters",
+            return_value=(None, None, None),
+        ),
+        patch(
+            "core.dicom_processor.DICOMProcessor.get_series_pixel_value_range",
+            return_value=(0.0, 100.0),
+        ),
+        patch(
+            "core.dicom_processor.DICOMProcessor.get_window_level_from_dataset",
+            return_value=(40.0, 80.0, False),
+        ),
+    ):
+        coord._finish_overlay_series_load()
+
+    status.assert_called()
+    assert "same location" in status.call_args[0][0]
+    assert handler.overlay_window == 80.0
+    assert handler.overlay_level == 40.0
+    controls.set_overlay_window_level.assert_called_once_with(80.0, 40.0)
+    resampling.assert_called_once()
+    align.assert_called_once()
+
+
+def test_finish_overlay_load_noop_without_overlay_uid() -> None:
+    coord, handler, _controls = _make_coordinator(overlay_uid="")
+    with (
+        patch.object(coord, "_update_resampling_status") as resampling,
+        patch.object(coord, "_update_spatial_alignment") as align,
+    ):
+        coord._finish_overlay_series_load()
+    resampling.assert_not_called()
+    align.assert_not_called()
+    handler.has_duplicate_locations.assert_not_called()
+
+
+def test_get_fused_image_returns_none_when_disabled() -> None:
+    from PIL import Image
+
+    coord, handler, _controls = _make_coordinator()
+    handler.fusion_enabled = False
+    result = coord.get_fused_image(Image.new("L", (4, 4)), [SimpleNamespace()], 0)
+    assert result is None
+
+
+def test_get_fused_image_blends_when_overlay_available() -> None:
+    import numpy as np
+    from PIL import Image
+
+    ds = SimpleNamespace()
+    studies = {"study-1": {"overlay-1": [ds]}}
+    coord, handler, controls = _make_coordinator(studies=studies)
+    handler.fusion_enabled = True
+    handler._should_use_3d_resampling.return_value = (False, None)
+    handler.interpolate_overlay_slice.return_value = np.ones((4, 4), dtype=np.float32)
+    handler.get_actual_resampling_mode_used.return_value = False
+    handler.get_pixel_spacing.return_value = (1.0, 1.0)
+    handler.find_matching_slice.return_value = (0, None)
+    controls.get_overlay_window_level.return_value = (100.0, 50.0)
+    controls.get_translation_offset.return_value = (1.0, 2.0)
+    fused_pil = Image.new("RGB", (4, 4))
+    coord.fusion_processor.create_fusion_image.return_value = np.zeros(
+        (4, 4, 3), dtype=np.uint8
+    )
+    coord.fusion_processor.convert_array_to_pil_image.return_value = fused_pil
+
+    result = coord.get_fused_image(Image.new("L", (4, 4)), [ds], 0)
+
+    assert result is fused_pil
+    coord.fusion_processor.create_fusion_image.assert_called_once()
+    call_kwargs = coord.fusion_processor.create_fusion_image.call_args.kwargs
+    assert call_kwargs["translation_offset"] == (1.0, 2.0)
+    assert call_kwargs["skip_2d_resize"] is False
+
+
+def test_get_fused_image_sets_coverage_hint_when_no_overlay() -> None:
+    from PIL import Image
+
+    from core.fusion_handler import OverlayMatchResult
+
+    ds = SimpleNamespace()
+    studies = {"study-1": {"overlay-1": [ds]}}
+    coord, handler, controls = _make_coordinator(studies=studies)
+    handler.fusion_enabled = True
+    handler._should_use_3d_resampling.return_value = (False, None)
+    handler.interpolate_overlay_slice.return_value = None
+    handler._last_overlay_match_result = OverlayMatchResult.above_stack
+
+    result = coord.get_fused_image(Image.new("L", (4, 4)), [ds], 0)
+
+    assert result is None
+    controls.set_status.assert_called()
+    assert "outside overlay" in controls.set_status.call_args[0][0]
+
+
+def test_spatial_alignment_calculates_and_caches_offset() -> None:
+    base_ds = SimpleNamespace()
+    overlay_ds = SimpleNamespace()
+    studies = {"study-1": {"base-1": [base_ds], "overlay-1": [overlay_ds]}}
+    coord, handler, controls = _make_coordinator(studies=studies)
+    handler.get_alignment.return_value = None
+    handler.get_pixel_spacing_with_source.side_effect = [
+        ((1.0, 1.0), "PixelSpacing"),
+        ((2.0, 2.0), "PixelSpacing"),
+    ]
+    handler.calculate_translation_offset.return_value = (5.0, -3.0)
+    controls.has_user_modified_offset.return_value = False
+
+    with patch.object(coord, "_update_resampling_status"):
+        coord._update_spatial_alignment()
+
+    controls.set_scaling_factors.assert_called_once_with(2.0, 2.0)
+    controls.set_calculated_offset.assert_called_once_with(5.0, -3.0)
+    handler.set_alignment.assert_called_once_with(
+        "base-1", "overlay-1", (2.0, 2.0), (5.0, -3.0)
+    )
