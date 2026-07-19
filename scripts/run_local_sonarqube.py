@@ -6,8 +6,8 @@ default; pass --with-coverage when the additional full pytest run is wanted.
 The script records the most recent successful scanner submission in
 .sonar-local/last-analysis.json, which is intentionally ignored by Git.
 
-Usage (from the repository root, with the project venv active):
-    export SONAR_TOKEN=<analysis-token>
+Usage (from the repository root, with the project venv active and SONAR_TOKEN
+in the ignored .env file or exported in the shell):
     python scripts/run_local_sonarqube.py
     python scripts/run_local_sonarqube.py --with-coverage
     python scripts/run_local_sonarqube.py --status
@@ -240,6 +240,37 @@ def get_server_status(host_url: str, timeout_seconds: float = 5.0) -> str:
     return status
 
 
+def load_dotenv(repo_root: Path) -> bool:
+    """Load KEY=VALUE pairs from a repo-root .env file into os.environ.
+
+    Existing environment variables take precedence so explicit exports win
+    over the file. Only simple ``KEY=VALUE`` (or ``export KEY=VALUE``) lines
+    are parsed; the file is never executed as a shell script. Returns True
+    when a .env file was found and contributed at least one variable. The
+    token is only read into the environment and is never printed or logged.
+    """
+    env_path = repo_root / ".env"
+    if not env_path.is_file():
+        return False
+    loaded = 0
+    with env_path.open(encoding="utf-8") as handle:
+        for raw in handle:
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip().removeprefix("export ").strip()
+            value = value.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+                value = value[1:-1]
+            if key.isidentifier() and key not in os.environ:
+                os.environ[key] = value
+                loaded += 1
+    return loaded > 0
+
+
 def scanner_mode(requested_mode: str) -> str:
     """Select the installed native scanner first, then the Docker scanner."""
     if requested_mode != "auto":
@@ -364,8 +395,9 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     """Run the requested local analysis and return its shell exit status."""
-    args = parse_args()
     repo_root = REPO_ROOT
+    load_dotenv(repo_root)
+    args = parse_args()
     if args.status:
         return print_last_submission(repo_root)
     if args.check_freshness_days is not None:
@@ -387,7 +419,8 @@ def main() -> int:
     if not os.environ.get("SONAR_TOKEN"):
         print(
             "SONAR_TOKEN is not set. Create an analysis token in SonarQube "
-            "(User > My Account > Security) and export it before running this command.",
+            "(User > My Account > Security) and add it to the ignored .env "
+            "file or export it before running this command.",
             file=sys.stderr,
         )
         return 2

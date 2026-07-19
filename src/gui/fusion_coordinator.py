@@ -210,38 +210,43 @@ class FusionCoordinator:
         self.fusion_handler.fusion_enabled = enabled
 
         if enabled:
-            # Validate series selection. Treat missing overlay as an
-            # informational prompt rather than an error in the status box.
-            if not self.fusion_handler.base_series_uid or not self.fusion_handler.overlay_series_uid:
-                self._append_status("Please select overlay series", severity="info")
+            if not self._fusion_enabled_has_series_selection():
                 return
-
-            # Update spatial alignment when first enabling fusion
             self._update_spatial_alignment()
-
-            # Check Frame of Reference compatibility
-            studies = self.get_current_studies()
-            study_uid = self.get_current_study_uid()
-
-            if study_uid in studies:
-                base_datasets = studies[study_uid].get(self.fusion_handler.base_series_uid, [])
-                overlay_datasets = studies[study_uid].get(self.fusion_handler.overlay_series_uid, [])
-
-                if base_datasets and overlay_datasets:
-                    if self.fusion_handler.check_frame_of_reference_match(base_datasets, overlay_datasets):
-                        self._append_status("Aligned (Frame of Reference)", severity="info")
-                        # Update resampling status
-                        self._update_resampling_status()
-                    else:
-                        self._append_status("Different Frame of Reference", severity="warning")
-                        # Note: Still allow fusion, but warn user
-                        # Update resampling status
-                        self._update_resampling_status()
+            self._fusion_enabled_report_frame_of_reference()
         else:
             self._append_status("Disabled", severity="info")
 
-        # Request display update
         self.request_display_update()
+
+    def _fusion_enabled_has_series_selection(self) -> bool:
+        """Return True when both series are selected; otherwise prompt and return False."""
+        if self.fusion_handler.base_series_uid and self.fusion_handler.overlay_series_uid:
+            return True
+        self._append_status("Please select overlay series", severity="info")
+        return False
+
+    def _fusion_enabled_report_frame_of_reference(self) -> None:
+        """Append FoR status and refresh resampling status when both series exist."""
+        studies = self.get_current_studies()
+        study_uid = self.get_current_study_uid()
+        if study_uid not in studies:
+            return
+
+        base_datasets = studies[study_uid].get(self.fusion_handler.base_series_uid, [])
+        overlay_datasets = studies[study_uid].get(
+            self.fusion_handler.overlay_series_uid, []
+        )
+        if not base_datasets or not overlay_datasets:
+            return
+
+        if self.fusion_handler.check_frame_of_reference_match(
+            base_datasets, overlay_datasets
+        ):
+            self._append_status("Aligned (Frame of Reference)", severity="info")
+        else:
+            self._append_status("Different Frame of Reference", severity="warning")
+        self._update_resampling_status()
 
     def handle_base_series_changed(self, series_uid: str) -> None:
         """
@@ -272,32 +277,38 @@ class FusionCoordinator:
         Args:
             base_uid: Base series UID
         """
-        display_name = "Not set"
-        if base_uid:
-            studies = self.get_current_studies()
-            study_uid = self.get_current_study_uid()
-            if study_uid in studies and base_uid in studies[study_uid]:
-                datasets = studies[study_uid][base_uid]
-                if datasets:
-                    first_ds = datasets[0]
-                    series_number = getattr(first_ds, 'SeriesNumber', None)
-                    series_desc = getattr(first_ds, 'SeriesDescription', '')
-                    modality = getattr(first_ds, 'Modality', '')
-                    parts = []
-                    if series_number is not None:
-                        parts.append(f"S{series_number}")
-                    if modality:
-                        parts.append(modality)
-                    if series_desc:
-                        parts.append(series_desc)
-                    if parts:
-                        display_name = " - ".join(parts)
-                    else:
-                        display_name = base_uid[:20]
-            else:
-                display_name = base_uid[:20]
+        self.fusion_controls.set_base_display(
+            self._format_base_series_display_name(base_uid)
+        )
 
-        self.fusion_controls.set_base_display(display_name)
+    def _format_base_series_display_name(self, base_uid: str) -> str:
+        """Build the read-only base-series label for fusion controls."""
+        if not base_uid:
+            return "Not set"
+
+        studies = self.get_current_studies()
+        study_uid = self.get_current_study_uid()
+        if study_uid not in studies or base_uid not in studies[study_uid]:
+            return base_uid[:20]
+
+        datasets = studies[study_uid][base_uid]
+        if not datasets:
+            return base_uid[:20]
+
+        first_ds = datasets[0]
+        series_number = getattr(first_ds, "SeriesNumber", None)
+        series_desc = getattr(first_ds, "SeriesDescription", "")
+        modality = getattr(first_ds, "Modality", "")
+        parts = []
+        if series_number is not None:
+            parts.append(f"S{series_number}")
+        if modality:
+            parts.append(modality)
+        if series_desc:
+            parts.append(series_desc)
+        if parts:
+            return " - ".join(parts)
+        return base_uid[:20]
 
     def handle_overlay_series_changed(self, series_uid: str) -> None:
         """
@@ -328,100 +339,173 @@ class FusionCoordinator:
 
         studies = self.get_current_studies()
         study_uid = self.get_current_study_uid()
-
-        # Check for duplicate locations in overlay series
-        if study_uid in studies and series_uid in studies[study_uid]:
-            overlay_datasets = studies[study_uid][series_uid]
-            if overlay_datasets:
-                has_duplicates, duplicate_count = self.fusion_handler.has_duplicate_locations(overlay_datasets)
-                if has_duplicates:
-                    self._append_status(
-                        "Overlay series has multiple slices at the same location. Only the first occurrence at each location will be used in 3D fusion.",
-                        severity="warning"
-                    )
-
-        # Update resampling status when overlay changes
+        self._overlay_load_warn_duplicate_locations(studies, study_uid, series_uid)
         self._update_resampling_status()
-
-        # Auto-set overlay window/level: try DICOM tags first, then auto-calculate from series
-        if study_uid in studies and series_uid in studies[study_uid]:
-            datasets = studies[study_uid][series_uid]
-            if datasets:
-                from core.dicom_processor import DICOMProcessor
-
-                # For large series, sample slices to avoid long freezes when computing pixel range
-                MAX_SLICES_FOR_PIXEL_RANGE = 24
-                if len(datasets) > MAX_SLICES_FOR_PIXEL_RANGE:
-                    step = (len(datasets) - 1) / (MAX_SLICES_FOR_PIXEL_RANGE - 1) if MAX_SLICES_FOR_PIXEL_RANGE > 1 else 0
-                    indices = [0] + [int(round(step * i)) for i in range(1, MAX_SLICES_FOR_PIXEL_RANGE - 1)] + [len(datasets) - 1]
-                    indices = sorted(set(indices))
-                    datasets_to_scan = [datasets[i] for i in indices]
-                else:
-                    datasets_to_scan = datasets
-
-                # Get rescale parameters
-                rescale_slope, rescale_intercept, rescale_type = DICOMProcessor.get_rescale_parameters(datasets[0])
-                has_rescale = (rescale_slope is not None and rescale_intercept is not None)
-
-                # Get raw pixel value range (full series or sampled)
-                raw_min, raw_max = DICOMProcessor.get_series_pixel_value_range(datasets_to_scan, apply_rescale=False)
-                if raw_min is not None and raw_max is not None:
-                    raw_range = raw_max - raw_min
-                    if DEBUG_OFFSET:
-                        print(f"[OVERLAY PIXEL VALUES] Raw (entire series): min={raw_min:.2f}, max={raw_max:.2f}, range={raw_range:.2f}")
-
-                # Get rescaled pixel value range (full or sampled series) if rescale parameters exist
-                if has_rescale:
-                    rescaled_min, rescaled_max = DICOMProcessor.get_series_pixel_value_range(datasets_to_scan, apply_rescale=True)
-                    if rescaled_min is not None and rescaled_max is not None:
-                        rescaled_range = rescaled_max - rescaled_min
-                        if DEBUG_OFFSET:
-                            print(f"[OVERLAY PIXEL VALUES] Rescaled (entire series): min={rescaled_min:.2f}, max={rescaled_max:.2f}, range={rescaled_range:.2f}")
-                            print(f"[OVERLAY PIXEL VALUES] Rescale parameters: slope={rescale_slope}, intercept={rescale_intercept}")
-                else:
-                    if DEBUG_OFFSET:
-                        print("[OVERLAY PIXEL VALUES] No rescale parameters (RescaleSlope/RescaleIntercept not present)")
-
-                # Try to get window/level from DICOM tags (with auto-calculation fallback for single slice)
-                window_center, window_width, is_rescaled = DICOMProcessor.get_window_level_from_dataset(
-                    datasets[0],
-                    rescale_slope=rescale_slope,
-                    rescale_intercept=rescale_intercept
-                )
-
-                # If DICOM tags don't provide valid values, calculate from series (or sampled)
-                if window_center is None or window_width is None:
-                    apply_rescale = (rescale_slope is not None and rescale_intercept is not None)
-                    series_min, series_max = DICOMProcessor.get_series_pixel_value_range(
-                        datasets_to_scan,
-                        apply_rescale=apply_rescale
-                    )
-
-                    if series_min is not None and series_max is not None:
-                        window_center = (series_min + series_max) / 2.0
-                        window_width = series_max - series_min
-                        if DEBUG_OFFSET:
-                            print(f"[OVERLAY W/L] Auto-calculated from series: window={window_width:.1f}, level={window_center:.1f}")
-                    else:
-                        window_width = 1000.0
-                        window_center = 500.0
-                        if DEBUG_OFFSET:
-                            print(f"[OVERLAY W/L] Using defaults: window={window_width:.1f}, level={window_center:.1f}")
-                else:
-                    if DEBUG_OFFSET:
-                        print(f"[OVERLAY W/L] From DICOM tags: window={window_width:.1f}, level={window_center:.1f}")
-
-                if window_center is not None and window_width is not None:
-                    self.fusion_handler.overlay_window = window_width
-                    self.fusion_handler.overlay_level = window_center
-                    self.fusion_controls.set_overlay_window_level(window_width, window_center)
-
-        # Update spatial alignment parameters
+        self._overlay_load_auto_window_level(studies, study_uid, series_uid)
         self._update_spatial_alignment()
-
-        # Re-validate if fusion is enabled (triggers display update, possibly 3D resampling)
         if self.fusion_handler.fusion_enabled:
             self.handle_fusion_enabled_changed(True)
+
+    def _overlay_load_warn_duplicate_locations(
+        self, studies: dict[str, Any], study_uid: str, series_uid: str
+    ) -> None:
+        """Warn when the overlay series has multiple slices at the same location."""
+        if study_uid not in studies or series_uid not in studies[study_uid]:
+            return
+        overlay_datasets = studies[study_uid][series_uid]
+        if not overlay_datasets:
+            return
+        has_duplicates, _duplicate_count = self.fusion_handler.has_duplicate_locations(
+            overlay_datasets
+        )
+        if has_duplicates:
+            self._append_status(
+                "Overlay series has multiple slices at the same location. "
+                "Only the first occurrence at each location will be used in 3D fusion.",
+                severity="warning",
+            )
+
+    @staticmethod
+    def _overlay_load_sample_datasets(datasets: list[Dataset]) -> list[Dataset]:
+        """Sample large series so pixel-range scans stay responsive."""
+        max_slices = 24
+        if len(datasets) <= max_slices:
+            return datasets
+        step = (len(datasets) - 1) / (max_slices - 1) if max_slices > 1 else 0
+        indices = (
+            [0]
+            + [int(round(step * i)) for i in range(1, max_slices - 1)]
+            + [len(datasets) - 1]
+        )
+        return [datasets[i] for i in sorted(set(indices))]
+
+    def _overlay_load_resolve_window_level(
+        self, datasets: list[Dataset], datasets_to_scan: list[Dataset]
+    ) -> tuple[float, float] | None:
+        """
+        Resolve overlay window/level from DICOM tags or series pixel range.
+
+        Returns:
+            ``(window_center, window_width)`` or ``None`` when unresolved.
+        """
+        from core.dicom_processor import DICOMProcessor
+
+        rescale_slope, rescale_intercept, _rescale_type = (
+            DICOMProcessor.get_rescale_parameters(datasets[0])
+        )
+        has_rescale = rescale_slope is not None and rescale_intercept is not None
+        self._overlay_load_debug_pixel_ranges(
+            datasets_to_scan, has_rescale, rescale_slope, rescale_intercept
+        )
+
+        window_center, window_width, _is_rescaled = (
+            DICOMProcessor.get_window_level_from_dataset(
+                datasets[0],
+                rescale_slope=rescale_slope,
+                rescale_intercept=rescale_intercept,
+            )
+        )
+        if window_center is None or window_width is None:
+            window_center, window_width = self._overlay_load_fallback_window_level(
+                datasets_to_scan, rescale_slope, rescale_intercept
+            )
+        elif DEBUG_OFFSET:
+            print(
+                f"[OVERLAY W/L] From DICOM tags: "
+                f"window={window_width:.1f}, level={window_center:.1f}"
+            )
+
+        if window_center is None or window_width is None:
+            return None
+        return window_center, window_width
+
+    @staticmethod
+    def _overlay_load_debug_pixel_ranges(
+        datasets_to_scan: list[Dataset],
+        has_rescale: bool,
+        rescale_slope,
+        rescale_intercept,
+    ) -> None:
+        """Emit optional DEBUG_OFFSET pixel-range diagnostics for overlay load."""
+        if not DEBUG_OFFSET:
+            return
+        from core.dicom_processor import DICOMProcessor
+
+        raw_min, raw_max = DICOMProcessor.get_series_pixel_value_range(
+            datasets_to_scan, apply_rescale=False
+        )
+        if raw_min is not None and raw_max is not None:
+            print(
+                f"[OVERLAY PIXEL VALUES] Raw (entire series): "
+                f"min={raw_min:.2f}, max={raw_max:.2f}, range={raw_max - raw_min:.2f}"
+            )
+        if not has_rescale:
+            print(
+                "[OVERLAY PIXEL VALUES] No rescale parameters "
+                "(RescaleSlope/RescaleIntercept not present)"
+            )
+            return
+        rescaled_min, rescaled_max = DICOMProcessor.get_series_pixel_value_range(
+            datasets_to_scan, apply_rescale=True
+        )
+        if rescaled_min is None or rescaled_max is None:
+            return
+        print(
+            f"[OVERLAY PIXEL VALUES] Rescaled (entire series): "
+            f"min={rescaled_min:.2f}, max={rescaled_max:.2f}, "
+            f"range={rescaled_max - rescaled_min:.2f}"
+        )
+        print(
+            f"[OVERLAY PIXEL VALUES] Rescale parameters: "
+            f"slope={rescale_slope}, intercept={rescale_intercept}"
+        )
+
+    @staticmethod
+    def _overlay_load_fallback_window_level(
+        datasets_to_scan: list[Dataset], rescale_slope, rescale_intercept
+    ) -> tuple[float, float]:
+        """Compute window/level from series range or defaults when tags are absent."""
+        from core.dicom_processor import DICOMProcessor
+
+        apply_rescale = rescale_slope is not None and rescale_intercept is not None
+        series_min, series_max = DICOMProcessor.get_series_pixel_value_range(
+            datasets_to_scan, apply_rescale=apply_rescale
+        )
+        if series_min is not None and series_max is not None:
+            window_center = (series_min + series_max) / 2.0
+            window_width = series_max - series_min
+            if DEBUG_OFFSET:
+                print(
+                    f"[OVERLAY W/L] Auto-calculated from series: "
+                    f"window={window_width:.1f}, level={window_center:.1f}"
+                )
+            return window_center, window_width
+        window_width = 1000.0
+        window_center = 500.0
+        if DEBUG_OFFSET:
+            print(
+                f"[OVERLAY W/L] Using defaults: "
+                f"window={window_width:.1f}, level={window_center:.1f}"
+            )
+        return window_center, window_width
+
+    def _overlay_load_auto_window_level(
+        self, studies: dict[str, Any], study_uid: str, series_uid: str
+    ) -> None:
+        """Auto-set overlay window/level from DICOM tags or series pixel range."""
+        if study_uid not in studies or series_uid not in studies[study_uid]:
+            return
+        datasets = studies[study_uid][series_uid]
+        if not datasets:
+            return
+        datasets_to_scan = self._overlay_load_sample_datasets(datasets)
+        wl = self._overlay_load_resolve_window_level(datasets, datasets_to_scan)
+        if wl is None:
+            return
+        window_center, window_width = wl
+        self.fusion_handler.overlay_window = window_width
+        self.fusion_handler.overlay_level = window_center
+        self.fusion_controls.set_overlay_window_level(window_width, window_center)
 
     def handle_opacity_changed(self, opacity: float) -> None:
         """
@@ -480,62 +564,68 @@ class FusionCoordinator:
 
     def sync_ui_from_handler_state(self) -> None:
         """Update UI controls to match current FusionHandler state."""
-        # Block signals to prevent recursive updates
-        # Check if fusion_controls has an _updating flag, otherwise use signal blocking
-        if hasattr(self.fusion_controls, '_updating'):
+        if hasattr(self.fusion_controls, "_updating"):
             self.fusion_controls._updating = True
 
-        # Update checkbox
-        if hasattr(self.fusion_controls, 'set_fusion_enabled'):
+        self._sync_ui_enabled_and_blend_controls()
+        self._sync_ui_window_level_and_resampling()
+        self._sync_ui_series_displays()
+
+        if hasattr(self.fusion_controls, "_updating"):
+            self.fusion_controls._updating = False
+
+    def _sync_ui_enabled_and_blend_controls(self) -> None:
+        """Sync fusion enabled, opacity, threshold, and colormap controls."""
+        if hasattr(self.fusion_controls, "set_fusion_enabled"):
             self.fusion_controls.set_fusion_enabled(self.fusion_handler.fusion_enabled)
 
-        # Update opacity, threshold, colormap (set directly on controls)
-        if hasattr(self.fusion_controls, 'opacity_slider'):
+        if hasattr(self.fusion_controls, "opacity_slider"):
             opacity_value = int(self.fusion_handler.opacity * 100)
             self.fusion_controls.opacity_slider.setValue(opacity_value)
-            if hasattr(self.fusion_controls, 'opacity_value_label'):
+            if hasattr(self.fusion_controls, "opacity_value_label"):
                 self.fusion_controls.opacity_value_label.setText(f"{opacity_value}%")
-        if hasattr(self.fusion_controls, 'threshold_slider'):
+        if hasattr(self.fusion_controls, "threshold_slider"):
             threshold_value = int(self.fusion_handler.threshold * 100)
             self.fusion_controls.threshold_slider.setValue(threshold_value)
-            if hasattr(self.fusion_controls, 'threshold_value_label'):
+            if hasattr(self.fusion_controls, "threshold_value_label"):
                 self.fusion_controls.threshold_value_label.setText(f"{threshold_value}%")
-        if hasattr(self.fusion_controls, 'colormap_combo'):
-            colormap_index = self.fusion_controls.colormap_combo.findText(self.fusion_handler.colormap)
+        if hasattr(self.fusion_controls, "colormap_combo"):
+            colormap_index = self.fusion_controls.colormap_combo.findText(
+                self.fusion_handler.colormap
+            )
             if colormap_index >= 0:
                 self.fusion_controls.colormap_combo.setCurrentIndex(colormap_index)
 
-        # Update window/level from handler (now stored per-subwindow)
-        if hasattr(self.fusion_controls, 'set_overlay_window_level'):
+    def _sync_ui_window_level_and_resampling(self) -> None:
+        """Sync overlay W/L and resampling/interpolation controls."""
+        if hasattr(self.fusion_controls, "set_overlay_window_level"):
             self.fusion_controls.set_overlay_window_level(
                 self.fusion_handler.overlay_window,
-                self.fusion_handler.overlay_level
+                self.fusion_handler.overlay_level,
+            )
+        if hasattr(self.fusion_controls, "set_resampling_mode"):
+            self.fusion_controls.set_resampling_mode(self.fusion_handler.resampling_mode)
+        if hasattr(self.fusion_controls, "set_interpolation_method"):
+            self.fusion_controls.set_interpolation_method(
+                self.fusion_handler.interpolation_method
             )
 
-        # Update resampling mode and interpolation
-        if hasattr(self.fusion_controls, 'set_resampling_mode'):
-            self.fusion_controls.set_resampling_mode(self.fusion_handler.resampling_mode)
-        if hasattr(self.fusion_controls, 'set_interpolation_method'):
-            self.fusion_controls.set_interpolation_method(self.fusion_handler.interpolation_method)
-
-        # Update base/overlay series displays
+    def _sync_ui_series_displays(self) -> None:
+        """Sync base display and overlay combo selection from handler state."""
         if self.fusion_handler.base_series_uid:
             self._update_base_display(self.fusion_handler.base_series_uid)
         else:
             self._update_base_display("")
 
-        if self.fusion_handler.overlay_series_uid:
-            # Update overlay combo selection
-            if hasattr(self.fusion_controls, 'overlay_series_combo'):
-                combo = self.fusion_controls.overlay_series_combo
-                for i in range(combo.count()):
-                    if combo.itemData(i) == self.fusion_handler.overlay_series_uid:
-                        combo.setCurrentIndex(i)
-                        break
-
-        # Unblock signals
-        if hasattr(self.fusion_controls, '_updating'):
-            self.fusion_controls._updating = False
+        if not self.fusion_handler.overlay_series_uid:
+            return
+        if not hasattr(self.fusion_controls, "overlay_series_combo"):
+            return
+        combo = self.fusion_controls.overlay_series_combo
+        for i in range(combo.count()):
+            if combo.itemData(i) == self.fusion_handler.overlay_series_uid:
+                combo.setCurrentIndex(i)
+                break
 
     def handle_translation_offset_changed(self, x_offset: float, y_offset: float) -> None:
         """
@@ -583,76 +673,97 @@ class FusionCoordinator:
 
     def _update_resampling_status(self) -> None:
         """Update resampling status display in UI."""
-        if not self.fusion_handler.base_series_uid or not self.fusion_handler.overlay_series_uid:
+        datasets = self._resampling_status_resolve_datasets()
+        if datasets is None:
             return
+        base_datasets, overlay_datasets = datasets
 
-        studies = self.get_current_studies()
-        study_uid = self.get_current_study_uid()
-
-        if study_uid not in studies:
-            return
-
-        base_datasets = studies[study_uid].get(self.fusion_handler.base_series_uid, [])
-        overlay_datasets = studies[study_uid].get(self.fusion_handler.overlay_series_uid, [])
-
-        if not base_datasets or not overlay_datasets:
-            return
-
-        # Get status from handler (this now reflects actual mode if available)
-        mode_display, reason = self.fusion_handler.get_resampling_status(base_datasets, overlay_datasets)
-
-        # Check predicted mode
-        use_3d, _ = self.fusion_handler._should_use_3d_resampling(base_datasets, overlay_datasets)
-
-        # Check actual mode used
+        mode_display, reason = self.fusion_handler.get_resampling_status(
+            base_datasets, overlay_datasets
+        )
+        use_3d, _ = self.fusion_handler._should_use_3d_resampling(
+            base_datasets, overlay_datasets
+        )
         actual_mode = self.fusion_handler.get_actual_resampling_mode_used()
-
-        # Use actual mode if available, otherwise use predicted mode
         actual_use_3d = actual_mode if actual_mode is not None else use_3d
 
-        # Disable offset controls when 3D resampling is active (offset is not applied in 3D mode)
+        self._resampling_status_apply_offset_controls(actual_use_3d)
+        show_warning, warning_text = self._resampling_status_compute_warning(
+            base_datasets, overlay_datasets, use_3d, actual_mode
+        )
+        self.fusion_controls.set_resampling_status(
+            mode_display, reason, show_warning, warning_text
+        )
+
+    def _resampling_status_resolve_datasets(
+        self,
+    ) -> tuple[list[Dataset], list[Dataset]] | None:
+        """Return base/overlay dataset lists when both series are available."""
+        if (
+            not self.fusion_handler.base_series_uid
+            or not self.fusion_handler.overlay_series_uid
+        ):
+            return None
+        studies = self.get_current_studies()
+        study_uid = self.get_current_study_uid()
+        if study_uid not in studies:
+            return None
+        base_datasets = studies[study_uid].get(self.fusion_handler.base_series_uid, [])
+        overlay_datasets = studies[study_uid].get(
+            self.fusion_handler.overlay_series_uid, []
+        )
+        if not base_datasets or not overlay_datasets:
+            return None
+        return base_datasets, overlay_datasets
+
+    def _resampling_status_apply_offset_controls(self, actual_use_3d: bool) -> None:
+        """Enable/disable offset controls and update offset status text for 2D/3D."""
         if hasattr(self.fusion_controls, "set_offset_controls_enabled"):
             self.fusion_controls.set_offset_controls_enabled(not actual_use_3d)
-
-        # Update offset status text to indicate how alignment is determined
         if hasattr(self.fusion_controls, "set_offset_status_text"):
             self.fusion_controls.set_offset_status_text(actual_use_3d)
 
-        # Check if 3D was attempted but failed (actual mode is False but predicted was True)
-        show_warning = False
-        warning_text = ""
+    def _resampling_status_compute_warning(
+        self,
+        base_datasets: list[Dataset],
+        overlay_datasets: list[Dataset],
+        use_3d: bool,
+        actual_mode: bool | None,
+    ) -> tuple[bool, str]:
+        """
+        Compute resampling warning state and apply 3D-failure UI side effects.
+
+        Returns:
+            ``(show_warning, warning_text)`` for the resampling status label.
+        """
         if actual_mode is False and use_3d:
-            # 3D failed and fell back to 2D - show warning in status box and update UI
             failure_reason = self.fusion_handler.get_resampling_failure_reason()
             if failure_reason:
                 warning_msg = f"3D resampling failed ({failure_reason}), using 2D mode"
             else:
                 warning_msg = "3D resampling failed, using 2D mode"
             self._append_status(warning_msg, severity="warning")
-
-            # Update radio buttons and handler mode to reflect actual mode (2D) when 3D fails
-            # This ensures UI matches what's actually being used
-            # Update handler first, then UI
-            self.fusion_handler.resampling_mode = 'fast'
+            self.fusion_handler.resampling_mode = "fast"
             if hasattr(self.fusion_controls, "set_resampling_mode"):
-                self.fusion_controls.set_resampling_mode('fast')  # Switch to 2D mode
+                self.fusion_controls.set_resampling_mode("fast")
+            warning_text = (
+                f"3D resampling failed "
+                f"({failure_reason if failure_reason else 'unknown error'}), "
+                f"using 2D fallback mode"
+            )
+            return True, warning_text
 
-            # Show warning in resampling group
-            show_warning = True
-            warning_text = f"3D resampling failed ({failure_reason if failure_reason else 'unknown error'}), using 2D fallback mode"
-        elif self.fusion_handler.resampling_mode == 'fast':
-            # Check if 3D would be recommended (but user selected 2D)
+        if self.fusion_handler.resampling_mode == "fast":
             needs_3d, _ = self.fusion_handler.image_resampler.needs_resampling(
                 overlay_datasets, base_datasets
             )
             if needs_3d:
-                show_warning = True
-                warning_text = "Warning: 3D resampling recommended for accuracy. Current mode may produce misalignment."
-
-        # Update inline warning label in the resampling group only. We intentionally
-        # do not log the \"Using: ...\" informational message in the fusion status
-        # box to avoid unnecessary noise there.
-        self.fusion_controls.set_resampling_status(mode_display, reason, show_warning, warning_text)
+                return (
+                    True,
+                    "Warning: 3D resampling recommended for accuracy. "
+                    "Current mode may produce misalignment.",
+                )
+        return False, ""
 
     def get_fused_image(
         self,
@@ -673,96 +784,128 @@ class FusionCoordinator:
         """
         if not self.fusion_handler.fusion_enabled:
             return None
-
         if not self.fusion_handler.overlay_series_uid:
             return None
 
-        # Get overlay datasets
-        studies = self.get_current_studies()
-        study_uid = self.get_current_study_uid()
-
-        if study_uid not in studies:
+        overlay_datasets = self._fused_resolve_overlay_datasets()
+        if overlay_datasets is None:
             return None
 
-        overlay_datasets = studies[study_uid].get(self.fusion_handler.overlay_series_uid, [])
-        if not overlay_datasets:
-            return None
-
-        # Phase 2: Check if 3D resampling will be used (before getting overlay array)
-        use_3d, _ = self.fusion_handler._should_use_3d_resampling(base_datasets, overlay_datasets)
-
-        # Get overlay array (with interpolation if needed, or 3D resampling)
-        overlay_array = self.fusion_handler.interpolate_overlay_slice(
-            current_slice_idx,
-            base_datasets,
-            overlay_datasets
+        use_3d, _ = self.fusion_handler._should_use_3d_resampling(
+            base_datasets, overlay_datasets
         )
-
+        overlay_array = self.fusion_handler.interpolate_overlay_slice(
+            current_slice_idx, base_datasets, overlay_datasets
+        )
         if overlay_array is None:
-            # Surface a status hint when the base slice is outside the overlay
-            # stack — change-only debounce prevents log spam during rapid scroll.
             self._update_fusion_coverage_hint(
                 self.fusion_handler._last_overlay_match_result
             )
             return None
 
-        # Overlay returned — clear any outstanding coverage hint (T3/T4).
-        if self._last_fusion_hint is not None:
-            self._last_fusion_hint = None
-            if self.fusion_controls is not None:
-                self.fusion_controls.set_status(
-                    "Fusion overlay active.", severity="info"
-                )
+        self._fused_clear_coverage_hint_if_needed()
+        actual_use_3d = self._fused_resolve_actual_3d(use_3d)
+        base_array = np.array(base_image)
+        overlay_window, overlay_level = self.fusion_controls.get_overlay_window_level()
+        (
+            base_pixel_spacing,
+            overlay_pixel_spacing,
+            translation_offset,
+        ) = self._fused_collect_spatial_params(
+            base_datasets,
+            overlay_datasets,
+            current_slice_idx,
+            actual_use_3d,
+        )
+        return self._fused_blend(
+            base_array,
+            overlay_array,
+            overlay_window,
+            overlay_level,
+            base_pixel_spacing,
+            overlay_pixel_spacing,
+            translation_offset,
+            actual_use_3d,
+        )
 
-        # Check actual mode used (may differ from predicted if 3D failed)
+    def _fused_resolve_overlay_datasets(self) -> list[Dataset] | None:
+        """Return overlay datasets for the current study, or None when unavailable."""
+        studies = self.get_current_studies()
+        study_uid = self.get_current_study_uid()
+        if study_uid not in studies:
+            return None
+        overlay_datasets = studies[study_uid].get(
+            self.fusion_handler.overlay_series_uid, []
+        )
+        if not overlay_datasets:
+            return None
+        return overlay_datasets
+
+    def _fused_clear_coverage_hint_if_needed(self) -> None:
+        """Clear a prior out-of-coverage hint once an overlay slice is available."""
+        if self._last_fusion_hint is None:
+            return
+        self._last_fusion_hint = None
+        if self.fusion_controls is not None:
+            self.fusion_controls.set_status("Fusion overlay active.", severity="info")
+
+    def _fused_resolve_actual_3d(self, use_3d: bool) -> bool:
+        """Resolve whether 3D resampling was actually used; schedule UI refresh if set."""
         actual_use_3d = self.fusion_handler.get_actual_resampling_mode_used()
         if actual_use_3d is None:
-            # Fallback to predicted mode if actual mode not set yet
-            actual_use_3d = use_3d
-        else:
-            # Actual mode was just determined - update UI to reflect it
-            # Update resampling status to reflect actual mode
-            QTimer.singleShot(0, self._update_resampling_status)
+            return use_3d
+        QTimer.singleShot(0, self._update_resampling_status)
+        return actual_use_3d
 
-        # Convert base image to array
-        base_array = np.array(base_image)
+    def _fused_collect_spatial_params(
+        self,
+        base_datasets: list[Dataset],
+        overlay_datasets: list[Dataset],
+        current_slice_idx: int,
+        actual_use_3d: bool,
+    ) -> tuple[Any, Any, Any]:
+        """Collect 2D spacing/offset params (None for 3D mode)."""
+        if actual_use_3d:
+            if DEBUG_OFFSET:
+                print(
+                    "[OFFSET DEBUG] get_fused_image (3D mode): Offset not applied - "
+                    "3D resampling handles alignment"
+                )
+            return None, None, None
 
-        # Get overlay window/level from controls
-        overlay_window, overlay_level = self.fusion_controls.get_overlay_window_level()
-
-        # Get spatial parameters (only needed for 2D mode)
         base_pixel_spacing = None
         overlay_pixel_spacing = None
         translation_offset = None
+        if 0 <= current_slice_idx < len(base_datasets):
+            base_ds = base_datasets[current_slice_idx]
+            base_pixel_spacing = self.fusion_handler.get_pixel_spacing(base_ds)
+            overlay_idx, _ = self.fusion_handler.find_matching_slice(
+                current_slice_idx, base_datasets, overlay_datasets
+            )
+            if overlay_idx is not None and overlay_idx < len(overlay_datasets):
+                overlay_ds = overlay_datasets[overlay_idx]
+                overlay_pixel_spacing = self.fusion_handler.get_pixel_spacing(overlay_ds)
+                translation_offset = self.fusion_controls.get_translation_offset()
+                if DEBUG_OFFSET:
+                    print(
+                        "[OFFSET DEBUG] get_fused_image (2D mode): "
+                        f"Using offset from spinboxes: "
+                        f"X={translation_offset[0]:.1f}, Y={translation_offset[1]:.1f}"
+                    )
+        return base_pixel_spacing, overlay_pixel_spacing, translation_offset
 
-        if not actual_use_3d:  # Only get spatial params for 2D mode
-            if current_slice_idx < len(base_datasets) and current_slice_idx >= 0:
-                base_ds = base_datasets[current_slice_idx]
-                base_pixel_spacing = self.fusion_handler.get_pixel_spacing(base_ds)
-
-                # Find corresponding overlay dataset for offset calculation
-                overlay_idx, _ = self.fusion_handler.find_matching_slice(
-                    current_slice_idx, base_datasets, overlay_datasets
-                )
-
-                if overlay_idx is not None and overlay_idx < len(overlay_datasets):
-                    overlay_ds = overlay_datasets[overlay_idx]
-                    overlay_pixel_spacing = self.fusion_handler.get_pixel_spacing(overlay_ds)
-
-                    # Get translation offset from controls (user's current setting)
-                    # Only for 2D mode - 3D resampling handles alignment automatically
-                    translation_offset = self.fusion_controls.get_translation_offset()
-                    if DEBUG_OFFSET:
-                        print(f"[OFFSET DEBUG] get_fused_image (2D mode): Using offset from spinboxes: X={translation_offset[0]:.1f}, Y={translation_offset[1]:.1f}")
-        else:
-            # Phase 2: For 3D mode, translation offset is NOT applied
-            # 3D resampling already handles spatial alignment through the resampling grid
-            # Manual fine-tuning would require a different approach (e.g., transform matrix adjustment)
-            translation_offset = None
-            if DEBUG_OFFSET:
-                print("[OFFSET DEBUG] get_fused_image (3D mode): Offset not applied - 3D resampling handles alignment")
-
-        # Create fused image
+    def _fused_blend(
+        self,
+        base_array: np.ndarray,
+        overlay_array: np.ndarray,
+        overlay_window: float,
+        overlay_level: float,
+        base_pixel_spacing,
+        overlay_pixel_spacing,
+        translation_offset,
+        actual_use_3d: bool,
+    ) -> Image.Image | None:
+        """Blend base/overlay arrays into a fused PIL image."""
         try:
             fused_array = self.fusion_processor.create_fusion_image(
                 base_array=base_array,
@@ -770,18 +913,14 @@ class FusionCoordinator:
                 alpha=self.fusion_handler.opacity,
                 colormap=self.fusion_handler.colormap,
                 threshold=self.fusion_handler.threshold,
-                base_wl=None,  # Base image already windowed/leveled
+                base_wl=None,
                 overlay_wl=(overlay_window, overlay_level),
                 base_pixel_spacing=base_pixel_spacing,
                 overlay_pixel_spacing=overlay_pixel_spacing,
                 translation_offset=translation_offset,
-                skip_2d_resize=actual_use_3d  # Phase 2: Skip 2D resize when 3D resampling was actually used
+                skip_2d_resize=actual_use_3d,
             )
-
-            # Convert to PIL Image
-            fused_image = self.fusion_processor.convert_array_to_pil_image(fused_array)
-            return fused_image
-
+            return self.fusion_processor.convert_array_to_pil_image(fused_array)
         except Exception as e:
             print_redacted(f"Error creating fused image: {e}")
             _logger.debug("%s", sanitized_format_exc())
@@ -824,175 +963,195 @@ class FusionCoordinator:
         Checks cache first, then calculates and stores if not cached.
         Updates the UI with calculated offset and scaling factors.
         """
-        # Only proceed if both base and overlay series are selected
-        if not self.fusion_handler.base_series_uid or not self.fusion_handler.overlay_series_uid:
+        if (
+            not self.fusion_handler.base_series_uid
+            or not self.fusion_handler.overlay_series_uid
+        ):
             return
 
-        # Check if we have cached alignment for this pair
         cached_alignment = self.fusion_handler.get_alignment(
             self.fusion_handler.base_series_uid,
-            self.fusion_handler.overlay_series_uid
+            self.fusion_handler.overlay_series_uid,
         )
-
         if cached_alignment:
-            # Restore from cache
-            scale = cached_alignment.get('scale')
-            offset = cached_alignment.get('offset')
-
-            if scale:
-                self.fusion_controls.set_scaling_factors(scale[0], scale[1])
-
-            if offset:
-                # Only restore if user hasn't manually modified
-                if not self.fusion_controls.has_user_modified_offset():
-                    self.fusion_controls.set_calculated_offset(offset[0], offset[1])
-                    if DEBUG_SPATIAL_ALIGNMENT:
-                        print(f"[SPATIAL ALIGNMENT] Restored from cache: scale={scale}, offset={offset}")
-                else:
-                    if DEBUG_SPATIAL_ALIGNMENT:
-                        print("[SPATIAL ALIGNMENT] Cache exists but user modified offset, keeping user values")
-
-            # Still need to update resampling status to ensure offset controls are enabled/disabled correctly
+            self._spatial_restore_from_cache(cached_alignment)
             self._update_resampling_status()
-            return  # Skip calculation
+            return
 
-        # No cache, calculate fresh values
-        # Get datasets
+        datasets = self._spatial_resolve_series_datasets()
+        if datasets is None:
+            return
+        base_ds, overlay_ds = datasets
+
+        base_spacing, base_source = self.fusion_handler.get_pixel_spacing_with_source(
+            base_ds
+        )
+        overlay_spacing, overlay_source = (
+            self.fusion_handler.get_pixel_spacing_with_source(overlay_ds)
+        )
+        self._spatial_push_pixel_spacing(
+            base_spacing, base_source, overlay_spacing, overlay_source
+        )
+        if DEBUG_SPATIAL_ALIGNMENT:
+            self._spatial_debug_log_spacings(base_spacing, overlay_spacing)
+
+        stored_scale = self._spatial_compute_and_apply_scale(
+            base_spacing, overlay_spacing
+        )
+        stored_offset = self._spatial_compute_and_apply_offset(
+            base_ds, overlay_ds, base_spacing, overlay_spacing
+        )
+        self.fusion_handler.set_alignment(
+            self.fusion_handler.base_series_uid,
+            self.fusion_handler.overlay_series_uid,
+            stored_scale,
+            stored_offset,
+        )
+        if DEBUG_SPATIAL_ALIGNMENT:
+            print(
+                f"[SPATIAL ALIGNMENT] Stored in cache: "
+                f"scale={stored_scale}, offset={stored_offset}"
+            )
+        self._update_resampling_status()
+
+    def _spatial_restore_from_cache(self, cached_alignment: dict[str, Any]) -> None:
+        """Restore scale/offset UI from a cached alignment pair."""
+        scale = cached_alignment.get("scale")
+        offset = cached_alignment.get("offset")
+        if scale:
+            self.fusion_controls.set_scaling_factors(scale[0], scale[1])
+        if not offset:
+            return
+        if not self.fusion_controls.has_user_modified_offset():
+            self.fusion_controls.set_calculated_offset(offset[0], offset[1])
+            if DEBUG_SPATIAL_ALIGNMENT:
+                print(
+                    f"[SPATIAL ALIGNMENT] Restored from cache: "
+                    f"scale={scale}, offset={offset}"
+                )
+        elif DEBUG_SPATIAL_ALIGNMENT:
+            print(
+                "[SPATIAL ALIGNMENT] Cache exists but user modified offset, "
+                "keeping user values"
+            )
+
+    def _spatial_resolve_series_datasets(
+        self,
+    ) -> tuple[Any, Any] | None:
+        """Return first base/overlay datasets when both series are present."""
         studies = self.get_current_studies()
         study_uid = self.get_current_study_uid()
-
         if study_uid not in studies:
-            return
-
+            return None
         base_datasets = studies[study_uid].get(self.fusion_handler.base_series_uid, [])
-        overlay_datasets = studies[study_uid].get(self.fusion_handler.overlay_series_uid, [])
-
+        overlay_datasets = studies[study_uid].get(
+            self.fusion_handler.overlay_series_uid, []
+        )
         if not base_datasets or not overlay_datasets:
-            return
+            return None
+        return base_datasets[0], overlay_datasets[0]
 
-        # Get first slices for spatial metadata
-        base_ds = base_datasets[0]
-        overlay_ds = overlay_datasets[0]
-
-        # Get pixel spacings (with source metadata)
-        base_spacing, base_source = self.fusion_handler.get_pixel_spacing_with_source(base_ds)
-        overlay_spacing, overlay_source = self.fusion_handler.get_pixel_spacing_with_source(overlay_ds)
-
-        base_pixel_spacing = base_spacing
-        overlay_pixel_spacing = overlay_spacing
-
-        # Decide which spacing to expose to the controls for mm/px conversion.
-        # IMPORTANT: Offset is calculated in base pixel coordinates, so we MUST use
-        # base pixel spacing for offset conversion, not overlay spacing.
+    def _spatial_push_pixel_spacing(
+        self,
+        base_spacing,
+        base_source,
+        overlay_spacing,
+        overlay_source,
+    ) -> None:
+        """Push spacing used for mm/px conversion into fusion controls."""
         row_spacing_mm = None
         col_spacing_mm = None
         spacing_source = None
         if base_spacing is not None:
-            # Use base spacing for offset conversion (offset is in base pixel coordinates)
             row_spacing_mm, col_spacing_mm = base_spacing
             spacing_source = base_source
         elif overlay_spacing is not None:
-            # Fallback to overlay spacing if base spacing not available
             row_spacing_mm, col_spacing_mm = overlay_spacing
             spacing_source = overlay_source
-
-        # Push spacing information into controls so the unit toggle and inline
-        # spacing description beneath Spatial Alignment stay in sync.
         if hasattr(self.fusion_controls, "set_pixel_spacing"):
-            self.fusion_controls.set_pixel_spacing(row_spacing_mm, col_spacing_mm, spacing_source)
+            self.fusion_controls.set_pixel_spacing(
+                row_spacing_mm, col_spacing_mm, spacing_source
+            )
 
-        # DEBUG
-        if DEBUG_SPATIAL_ALIGNMENT:
-            print("\n[SPATIAL ALIGNMENT DEBUG]")
-            print_redacted(f"  base_series: {self.fusion_handler.base_series_uid[:20] if self.fusion_handler.base_series_uid else 'None'}...")
-            print_redacted(f"  overlay_series: {self.fusion_handler.overlay_series_uid[:20] if self.fusion_handler.overlay_series_uid else 'None'}...")
-            print(f"  base_pixel_spacing: {base_pixel_spacing}")
-            print(f"  overlay_pixel_spacing: {overlay_pixel_spacing}")
+    def _spatial_debug_log_spacings(self, base_spacing, overlay_spacing) -> None:
+        """Emit debug spacing details when DEBUG_SPATIAL_ALIGNMENT is enabled."""
+        print("\n[SPATIAL ALIGNMENT DEBUG]")
+        print_redacted(
+            f"  base_series: "
+            f"{self.fusion_handler.base_series_uid[:20] if self.fusion_handler.base_series_uid else 'None'}..."
+        )
+        print_redacted(
+            f"  overlay_series: "
+            f"{self.fusion_handler.overlay_series_uid[:20] if self.fusion_handler.overlay_series_uid else 'None'}..."
+        )
+        print(f"  base_pixel_spacing: {base_spacing}")
+        print(f"  overlay_pixel_spacing: {overlay_spacing}")
 
-        stored_scale: tuple[float, float] | None = None
-        stored_offset: tuple[float, float] | None = None
-
-        # Calculate and display scaling factors
-        if base_pixel_spacing and overlay_pixel_spacing:
-            scale_x = overlay_pixel_spacing[1] / base_pixel_spacing[1]  # column spacing
-            scale_y = overlay_pixel_spacing[0] / base_pixel_spacing[0]  # row spacing
+    def _spatial_compute_and_apply_scale(
+        self, base_spacing, overlay_spacing
+    ) -> tuple[float, float]:
+        """Compute scale factors, update controls, and return the stored tuple."""
+        if base_spacing and overlay_spacing:
+            scale_x = overlay_spacing[1] / base_spacing[1]
+            scale_y = overlay_spacing[0] / base_spacing[0]
             if DEBUG_SPATIAL_ALIGNMENT:
                 print(f"  scale_x: {scale_x:.4f}, scale_y: {scale_y:.4f}")
-            stored_scale = (scale_x, scale_y)
             self.fusion_controls.set_scaling_factors(scale_x, scale_y)
-        else:
-            # No pixel spacing available
-            stored_scale = (1.0, 1.0)
-            self.fusion_controls.set_scaling_factors(1.0, 1.0)
-            self._append_status("Pixel spacing not available", severity="warning")
+            return scale_x, scale_y
+        self.fusion_controls.set_scaling_factors(1.0, 1.0)
+        self._append_status("Pixel spacing not available", severity="warning")
+        return 1.0, 1.0
 
-        # Calculate and display translation offset
-        if base_pixel_spacing and overlay_pixel_spacing:
-            offset = self.fusion_handler.calculate_translation_offset(
-                base_ds, overlay_ds, base_pixel_spacing, overlay_pixel_spacing
-            )
-
-            if offset:
-                offset_x, offset_y = offset
-                stored_offset = (offset_x, offset_y)
-                if DEBUG_SPATIAL_ALIGNMENT:
-                    print(f"  calculated offset: ({offset_x:.2f}, {offset_y:.2f}) pixels")
-                    print_redacted(f"  base ImagePositionPatient: {self.fusion_handler.get_image_position_patient(base_ds)}")
-                    print_redacted(f"  overlay ImagePositionPatient: {self.fusion_handler.get_image_position_patient(overlay_ds)}")
-                # Only set if user hasn't manually modified
-                if not self.fusion_controls.has_user_modified_offset():
-                    self.fusion_controls.set_calculated_offset(offset_x, offset_y)
-            else:
-                if DEBUG_SPATIAL_ALIGNMENT:
-                    print("  offset calculation failed - no ImagePositionPatient")
-                # No image position available
-                stored_offset = (0.0, 0.0)
-                if not self.fusion_controls.has_user_modified_offset():
-                    self.fusion_controls.set_calculated_offset(0.0, 0.0)
-                status_lbl = getattr(self.fusion_controls, "status_label", None)
-                if (
-                    status_lbl is None
-                    or not status_lbl.text().startswith("Status: Warning")
-                ):
-                    self._append_status("Image position not available", severity="warning")
-        else:
-            stored_offset = (0.0, 0.0)
+    def _spatial_compute_and_apply_offset(
+        self,
+        base_ds,
+        overlay_ds,
+        base_spacing,
+        overlay_spacing,
+    ) -> tuple[float, float]:
+        """Compute translation offset, update controls when allowed, return stored tuple."""
+        if not (base_spacing and overlay_spacing):
             if not self.fusion_controls.has_user_modified_offset():
                 self.fusion_controls.set_calculated_offset(0.0, 0.0)
+            return 0.0, 0.0
 
-        # Store calculated values in cache
-        if stored_scale is not None and stored_offset is not None:
-            self.fusion_handler.set_alignment(
-                self.fusion_handler.base_series_uid,
-                self.fusion_handler.overlay_series_uid,
-                stored_scale,
-                stored_offset
-            )
+        offset = self.fusion_handler.calculate_translation_offset(
+            base_ds, overlay_ds, base_spacing, overlay_spacing
+        )
+        if offset:
+            offset_x, offset_y = offset
             if DEBUG_SPATIAL_ALIGNMENT:
-                print(f"[SPATIAL ALIGNMENT] Stored in cache: scale={stored_scale}, offset={stored_offset}")
+                print(f"  calculated offset: ({offset_x:.2f}, {offset_y:.2f}) pixels")
+                print_redacted(
+                    f"  base ImagePositionPatient: "
+                    f"{self.fusion_handler.get_image_position_patient(base_ds)}"
+                )
+                print_redacted(
+                    f"  overlay ImagePositionPatient: "
+                    f"{self.fusion_handler.get_image_position_patient(overlay_ds)}"
+                )
+            if not self.fusion_controls.has_user_modified_offset():
+                self.fusion_controls.set_calculated_offset(offset_x, offset_y)
+            return offset_x, offset_y
 
-        # Update resampling status to ensure offset controls are enabled/disabled correctly
-        self._update_resampling_status()
+        if DEBUG_SPATIAL_ALIGNMENT:
+            print("  offset calculation failed - no ImagePositionPatient")
+        if not self.fusion_controls.has_user_modified_offset():
+            self.fusion_controls.set_calculated_offset(0.0, 0.0)
+        status_lbl = getattr(self.fusion_controls, "status_label", None)
+        if status_lbl is None or not status_lbl.text().startswith("Status: Warning"):
+            self._append_status("Image position not available", severity="warning")
+        return 0.0, 0.0
 
     def update_fusion_controls_series_list(self) -> None:
         """Update fusion controls with available series."""
         studies = self.get_current_studies()
         study_uid = self.get_current_study_uid()
 
-        # DEBUG
-        # print(f"[FUSION DEBUG] update_fusion_controls_series_list called")
-        # print(f"[FUSION DEBUG]   studies exists: {studies is not None}")
-        # if studies:
-        #     print(f"[FUSION DEBUG]   studies count: {len(studies)}")
-        # print(f"[FUSION DEBUG]   study_uid: {study_uid[:20] if study_uid else 'None'}...")
 
         # Get available series
         series_list = self.fusion_handler.get_available_series_for_fusion(studies, study_uid)
 
-        # DEBUG
-        # print(f"[FUSION DEBUG]   series_list count: {len(series_list)}")
-        # for uid, name in series_list:
-        #     print(f"[FUSION DEBUG]     - {name}")
 
         # Update controls
         current_base = self.fusion_handler.base_series_uid or ""
@@ -1007,7 +1166,6 @@ class FusionCoordinator:
                 if not current_base or current_base != current_viewing_series:
                     self.fusion_handler.set_base_series(current_viewing_series)
                     current_base = current_viewing_series
-                    # print(f"[FUSION DEBUG] Auto-initialized/updated base series to current viewing series: {current_viewing_series[:20]}...")
 
         self.fusion_controls.update_series_lists(
             series_list,
@@ -1022,8 +1180,6 @@ class FusionCoordinator:
             # No series loaded, show "Not set"
             self._update_base_display("")
 
-        # DEBUG
-        # print(f"[FUSION DEBUG]   Overlay dropdown updated. Overlay items: {self.fusion_controls.overlay_series_combo.count()}")
 
         # Auto-detect compatible series (global check happens inside _auto_detect_fusion_candidates)
         self._auto_detect_fusion_candidates(studies, study_uid, series_list)
@@ -1031,7 +1187,6 @@ class FusionCoordinator:
         # Update spatial alignment if both series are selected
         # (This handles the case where series list is updated and selections exist)
         if self.fusion_handler.base_series_uid and self.fusion_handler.overlay_series_uid:
-            # print(f"[FUSION DEBUG] update_fusion_controls_series_list: Calling _update_spatial_alignment")
             self._update_spatial_alignment()
 
     def _auto_detect_fusion_candidates(
@@ -1050,43 +1205,64 @@ class FusionCoordinator:
         """
         if study_uid not in studies or len(series_list) < 2:
             return
-
-        # Check if notification was already shown for this study (global check)
         if self._check_notification_shown and self._check_notification_shown(study_uid):
-            return  # Already notified, skip
+            return
 
-        # Look for PET/SPECT and CT/MR combinations
-        pet_series = []
-        ct_series = []
+        pet_series, ct_series = self._auto_detect_partition_modalities(
+            studies, study_uid, series_list
+        )
+        if not pet_series or not ct_series:
+            return
 
+        pair = self._auto_detect_find_compatible_pair(pet_series, ct_series)
+        if pair is None:
+            return
+        ct_uid, ct_name, pet_uid, pet_name = pair
+        self._suggest_fusion(ct_uid, ct_name, pet_uid, pet_name)
+        if self._mark_notification_shown:
+            self._mark_notification_shown(study_uid)
+
+    def _auto_detect_partition_modalities(
+        self,
+        studies: dict[str, Any],
+        study_uid: str,
+        series_list: list[tuple[str, str]],
+    ) -> tuple[
+        list[tuple[str, str, list[Dataset]]],
+        list[tuple[str, str, list[Dataset]]],
+    ]:
+        """Partition series into PET/NM and CT/MR candidate lists."""
+        pet_series: list[tuple[str, str, list[Dataset]]] = []
+        ct_series: list[tuple[str, str, list[Dataset]]] = []
         for series_uid, display_name in series_list:
             datasets = studies[study_uid].get(series_uid, [])
             if not datasets:
                 continue
-
-            modality = getattr(datasets[0], 'Modality', '')
-
-            if modality in ['PT', 'NM']:  # PET or Nuclear Medicine
+            modality = getattr(datasets[0], "Modality", "")
+            if modality in ["PT", "NM"]:
                 pet_series.append((series_uid, display_name, datasets))
-            elif modality in ['CT', 'MR']:  # CT or MR
+            elif modality in ["CT", "MR"]:
                 ct_series.append((series_uid, display_name, datasets))
+        return pet_series, ct_series
 
-        # Check if we have compatible pairs
-        if not pet_series or not ct_series:
-            return
+    def _auto_detect_find_compatible_pair(
+        self,
+        pet_series: list[tuple[str, str, list[Dataset]]],
+        ct_series: list[tuple[str, str, list[Dataset]]],
+    ) -> tuple[str, str, str, str] | None:
+        """
+        Find the first FoR-compatible PET/CT pair.
 
-        # Find first compatible pair (same Frame of Reference)
+        Returns:
+            ``(ct_uid, ct_name, pet_uid, pet_name)`` or ``None``.
+        """
         for pet_uid, pet_name, pet_datasets in pet_series:
             for ct_uid, ct_name, ct_datasets in ct_series:
-                if self.fusion_handler.check_frame_of_reference_match(pet_datasets, ct_datasets):
-                    # Found compatible pair - suggest fusion
-                    self._suggest_fusion(ct_uid, ct_name, pet_uid, pet_name)
-
-                    # Mark study as notified (global tracking)
-                    if self._mark_notification_shown:
-                        self._mark_notification_shown(study_uid)
-
-                    return
+                if self.fusion_handler.check_frame_of_reference_match(
+                    pet_datasets, ct_datasets
+                ):
+                    return ct_uid, ct_name, pet_uid, pet_name
+        return None
 
     def _suggest_fusion(
         self,
@@ -1104,6 +1280,7 @@ class FusionCoordinator:
             overlay_uid: Overlay series UID
             overlay_name: Overlay series display name
         """
+        _ = (base_uid, overlay_uid)  # retained for future deep-link into fusion setup
         # Show informational message about compatible series
         QMessageBox.information(
             self.fusion_controls,

@@ -51,6 +51,8 @@ from core.mpr_volume import MprVolume
 from core.slice_geometry import SlicePlane
 from utils.dicom_utils import get_pixel_spacing, get_slice_thickness
 
+_STYLE_SERIES_INFO = "color: gray; font-size: 10px;"
+
 # ---------------------------------------------------------------------------
 # Request dataclass
 # ---------------------------------------------------------------------------
@@ -152,7 +154,7 @@ class MprDialog(QDialog):
         series_layout.addRow("Series:", self._series_combo)
 
         self._series_info_label = QLabel("")
-        self._series_info_label.setStyleSheet("color: gray; font-size: 10px;")
+        self._series_info_label.setStyleSheet(_STYLE_SERIES_INFO)
         series_layout.addRow("", self._series_info_label)
 
         self._geometry_warning = QLabel(
@@ -265,7 +267,7 @@ class MprDialog(QDialog):
             self._update_combine_thickness_hint
         )
         self._combine_thickness_label = QLabel("")
-        self._combine_thickness_label.setStyleSheet("color: gray; font-size: 10px;")
+        self._combine_thickness_label.setStyleSheet(_STYLE_SERIES_INFO)
         _slice_row.addWidget(self._combine_slice_combo)
         _slice_row.addWidget(self._combine_thickness_label)
         _slice_row.addStretch(1)
@@ -277,7 +279,7 @@ class MprDialog(QDialog):
 
         # Estimated output size (read-only).
         self._estimate_label = QLabel("")
-        self._estimate_label.setStyleSheet("color: gray; font-size: 10px;")
+        self._estimate_label.setStyleSheet(_STYLE_SERIES_INFO)
         params_layout.addRow("Est. output:", self._estimate_label)
 
         self._spacing_spin.valueChanged.connect(self._update_estimate)

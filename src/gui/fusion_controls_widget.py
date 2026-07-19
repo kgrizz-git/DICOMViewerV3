@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
 
 from utils.debug_flags import DEBUG_OFFSET
 
+_STYLE_BOLD = "font-weight: bold;"
 
 class FusionControlsWidget(QWidget):
     """
@@ -114,7 +115,7 @@ class FusionControlsWidget(QWidget):
 
         # Base series display (read-only text, not dropdown)
         base_label = QLabel("Base Series:")
-        base_label.setStyleSheet("font-weight: bold;")
+        base_label.setStyleSheet(_STYLE_BOLD)
         group_layout.addWidget(base_label)
 
         self.base_series_display = QLabel("Not set")
@@ -131,7 +132,7 @@ class FusionControlsWidget(QWidget):
         overlay_container_layout.setSpacing(0)
 
         overlay_label = QLabel("Overlay Series:")
-        overlay_label.setStyleSheet("font-weight: bold;")
+        overlay_label.setStyleSheet(_STYLE_BOLD)
         overlay_container_layout.addWidget(overlay_label)
 
         self.overlay_series_combo = QComboBox()
@@ -264,7 +265,7 @@ class FusionControlsWidget(QWidget):
 
         # Resampling mode selector (radio buttons)
         mode_label = QLabel("Resampling Mode:")
-        mode_label.setStyleSheet("font-weight: bold;")
+        mode_label.setStyleSheet(_STYLE_BOLD)
         resampling_layout.addWidget(mode_label)
 
         self.resampling_mode_group = QButtonGroup(self)

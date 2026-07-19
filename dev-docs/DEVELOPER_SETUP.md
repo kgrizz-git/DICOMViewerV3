@@ -104,20 +104,19 @@ take time, and `--with-coverage` runs the full pytest suite first.
    loopback URL such as `http://127.0.0.1:9000`). Remote hosts are rejected so
    the local analysis token cannot be sent off-machine.
 2. In its UI, create a user or project analysis token at **User → My Account →
-   Security**. Do not put the token in a tracked file. With direnv, copy
-   `.env.example` to ignored `.env`, populate only `SONAR_TOKEN`, and run
-   `direnv allow`.
+   Security**. Do not put the token in a tracked file. Copy `.env.example` to
+   ignored `.env` and populate `SONAR_TOKEN`. Both the runner and reporter load
+   simple `KEY=VALUE` entries from that file automatically; an explicitly
+   exported variable takes precedence. With direnv, also run `direnv allow`.
 3. Activate this project’s venv and run:
 
    ```bash
-   export SONAR_TOKEN=<analysis-token>
    python scripts/run_local_sonarqube.py
    ```
 
    PowerShell equivalent:
 
    ```powershell
-   $env:SONAR_TOKEN = "<analysis-token>"
    python scripts/run_local_sonarqube.py
    ```
 
@@ -139,22 +138,23 @@ to `host.docker.internal`. `SONAR_DOCKER_HOST_URL` may only name that Docker hos
 gateway; named Docker network services are deliberately unsupported because the
 local-only policy must not permit an arbitrary token destination.
 
-After a successful analysis, report only the severe findings that belong to
-this repository's exact component key:
+After a successful analysis, report only the priority findings that belong to
+this repository's exact component key. The reporter uses the same ignored
+`.env` file automatically:
 
 ```bash
 python scripts/report_local_sonarqube_issues.py --fail-on-findings \
   --expected-revision "$(git rev-parse HEAD)" \
-  --output tmp/sonarqube-severe-findings.md
+  --output tmp/sonarqube-priority-findings.md
 ```
 
-The reporter queries `componentKeys=dicom-viewer-v3` for all BLOCKER issues and
-for CRITICAL BUG/VULNERABILITY issues, verifies every returned component has
-that exact prefix, and fails on a mixed-project response. The optional Markdown
-report is restricted to ignored `tmp/`; neither the token nor SonarQube issue
-messages are written to it. On PowerShell, pass the `git rev-parse HEAD` result
-as the `--expected-revision` value, or omit that optional assertion when only
-reading the report.
+The reporter queries `componentKeys=dicom-viewer-v3` for all BLOCKER, CRITICAL,
+and MAJOR issues regardless of type, verifies every returned component has that
+exact prefix, and fails on a mixed-project response. The optional Markdown report
+is restricted to ignored `tmp/`; neither the token nor SonarQube issue messages
+are written to it. On PowerShell, pass the `git rev-parse HEAD` result as the
+`--expected-revision` value, or omit that optional assertion when only reading
+the report.
 
 Recommended cadence: run `python scripts/run_local_sonarqube.py
 --with-coverage` at least every 30 days, before a release, and after a large

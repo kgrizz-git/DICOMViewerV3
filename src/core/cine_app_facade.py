@@ -85,7 +85,7 @@ class CineAppFacade:
         if not is_cine_capable and app.cine_player.is_playback_active():
             app.cine_player.stop_playback()
 
-    def on_manual_slice_navigation(self, slice_index: int) -> None:
+    def on_manual_slice_navigation(self, _slice_index: int) -> None:
         """Pause cine when the user navigates slices manually (not via cine advance)."""
         app = self._app
         if app.cine_player.is_playback_active() and not app.cine_player.is_cine_advancing():

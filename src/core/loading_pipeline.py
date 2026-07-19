@@ -49,6 +49,11 @@ _logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Pure utility functions
 # ---------------------------------------------------------------------------
+_STATUS_LOADING_CANCELLED = "Loading cancelled."
+_TITLE_LOADING_WARNINGS = "Loading Warnings"
+_TITLE_MEMORY_ERROR = "Memory Error"
+_TITLE_ERROR = "Error"
+
 
 def format_source_name(file_paths: list[str]) -> str:
     """Format a human-readable source label for the status bar."""
@@ -64,7 +69,6 @@ def format_final_status(
     num_series: int,
     num_files: int,
     source_name: str,
-    num_processed: int | None = None,
     non_dicom_count: int = 0,
     duplicate_count: int = 0,
     extension_skipped_count: int = 0,
@@ -76,7 +80,6 @@ def format_final_status(
         num_series: Number of series in the batch.
         num_files: Number of files loaded in the batch.
         source_name: Human-readable label for the source.
-        num_processed: Unused; kept for call-site compatibility.
         non_dicom_count: Files that failed to load (attempted but not DICOM or errors).
         duplicate_count: Duplicate files that were not added.
         extension_skipped_count: Files skipped by extension (not attempted).
@@ -261,7 +264,7 @@ def run_load_pipeline(
         if was_cancelled:
             num_loaded = len(datasets) if datasets else 0
             if num_loaded <= 0:
-                update_status_callback("Loading cancelled.")
+                update_status_callback(_STATUS_LOADING_CANCELLED)
                 loader.reset_cancellation()
                 return None, None
             # Continue with partial data; final status set after organise/display.
@@ -288,7 +291,7 @@ def run_load_pipeline(
                         error_msg += f"\n... and {len(failed) - 5} more"
                 else:
                     error_msg = "No DICOM files could be loaded."
-            file_dialog.show_error(main_window, "Error", error_msg)
+            file_dialog.show_error(main_window, _TITLE_ERROR, error_msg)
             return None, None
 
         # ── Warnings for failed files ──────────────────────────────────────
@@ -304,7 +307,7 @@ def run_load_pipeline(
                     warning_msg += f"\n{os.path.basename(path)}: {error}"
                 if len(failed) > 5:
                     warning_msg += f"\n... and {len(failed) - 5} more"
-            file_dialog.show_warning(main_window, "Loading Warnings", warning_msg)
+            file_dialog.show_warning(main_window, _TITLE_LOADING_WARNINGS, warning_msg)
 
         # ── Organise ──────────────────────────────────────────────────────
         merge_paths = (
@@ -321,14 +324,14 @@ def run_load_pipeline(
         except MemoryError as e:
             file_dialog.show_error(
                 main_window,
-                "Memory Error",
+                _TITLE_MEMORY_ERROR,
                 f"Out of memory while organizing DICOM files. "
                 f"Try closing other applications or loading fewer files.\n\nError: {e}",
             )
             return None, None
         except Exception as e:
             file_dialog.show_error(
-                main_window, "Error", f"Error organizing DICOM files: {e}"
+                main_window, _TITLE_ERROR, f"Error organizing DICOM files: {e}"
             )
             return None, None
 
@@ -338,21 +341,20 @@ def run_load_pipeline(
         except MemoryError as e:
             file_dialog.show_error(
                 main_window,
-                "Memory Error",
+                _TITLE_MEMORY_ERROR,
                 f"Out of memory while displaying image. "
                 f"Try closing other applications.\n\nError: {e}",
             )
             return None, None
         except Exception as e:
             file_dialog.show_error(
-                main_window, "Error", f"Error displaying first slice: {e}"
+                main_window, _TITLE_ERROR, f"Error displaying first slice: {e}"
             )
             return None, None
 
         # ── Status bar update ──────────────────────────────────────────────
         num_studies, num_series, num_files = batch_counts_from_merge_result(merge_result)
         extension_skipped = loader.get_extension_skipped_count()
-        num_processed = loader.get_attempted_file_count() + extension_skipped
         non_dicom_count = len(loader.get_failed_files())
         duplicate_count = merge_result.skipped_file_count
         if was_cancelled:
@@ -366,7 +368,6 @@ def run_load_pipeline(
                 num_series,
                 num_files,
                 source_name,
-                num_processed=num_processed,
                 non_dicom_count=non_dicom_count,
                 duplicate_count=duplicate_count,
                 extension_skipped_count=extension_skipped,
@@ -417,7 +418,7 @@ def run_load_pipeline(
         loader.reset_cancellation()
         file_dialog.show_error(
             main_window,
-            "Memory Error",
+            _TITLE_MEMORY_ERROR,
             f"Out of memory while loading. "
             f"Try closing other applications or use a system with more memory.\n\nError: {e}",
         )
@@ -563,7 +564,7 @@ def run_load_pipeline_async(
         if was_cancelled:
             num_loaded = len(datasets) if datasets else 0
             if num_loaded <= 0:
-                update_status_callback("Loading cancelled.")
+                update_status_callback(_STATUS_LOADING_CANCELLED)
                 loader.reset_cancellation()
                 if on_pipeline_complete:
                     on_pipeline_complete(None, None)
@@ -591,7 +592,7 @@ def run_load_pipeline_async(
                         error_msg += f"\n... and {len(failed) - 5} more"
                 else:
                     error_msg = "No DICOM files could be loaded."
-            file_dialog.show_error(main_window, "Error", error_msg)
+            file_dialog.show_error(main_window, _TITLE_ERROR, error_msg)
             if on_pipeline_complete:
                 on_pipeline_complete(None, None)
             return
@@ -609,7 +610,7 @@ def run_load_pipeline_async(
                     warning_msg += f"\n{os.path.basename(path)}: {error}"
                 if len(failed) > 5:
                     warning_msg += f"\n... and {len(failed) - 5} more"
-            file_dialog.show_warning(main_window, "Loading Warnings", warning_msg)
+            file_dialog.show_warning(main_window, _TITLE_LOADING_WARNINGS, warning_msg)
 
         loader.reset_cancellation()
         if on_pipeline_complete:
@@ -633,7 +634,7 @@ def run_load_pipeline_async(
         if was_cancelled:
             num_loaded = len(datasets) if datasets else 0
             if num_loaded <= 0:
-                update_status_callback("Loading cancelled.")
+                update_status_callback(_STATUS_LOADING_CANCELLED)
                 loader.reset_cancellation()
                 if on_pipeline_complete:
                     on_pipeline_complete(None, None)
@@ -654,7 +655,7 @@ def run_load_pipeline_async(
                     warning_msg += f"\n{os.path.basename(path)}: {error}"
                 if len(failed) > 5:
                     warning_msg += f"\n... and {len(failed) - 5} more"
-            file_dialog.show_warning(main_window, "Loading Warnings", warning_msg)
+            file_dialog.show_warning(main_window, _TITLE_LOADING_WARNINGS, warning_msg)
 
         # Display first slice (UI-thread only)
         try:
@@ -663,7 +664,7 @@ def run_load_pipeline_async(
         except MemoryError as e:
             file_dialog.show_error(
                 main_window,
-                "Memory Error",
+                _TITLE_MEMORY_ERROR,
                 f"Out of memory while displaying image. "
                 f"Try closing other applications.\n\nError: {e}",
             )
@@ -672,7 +673,7 @@ def run_load_pipeline_async(
             return
         except Exception as e:
             file_dialog.show_error(
-                main_window, "Error", f"Error displaying first slice: {e}"
+                main_window, _TITLE_ERROR, f"Error displaying first slice: {e}"
             )
             if on_pipeline_complete:
                 on_pipeline_complete(None, None)
@@ -681,7 +682,6 @@ def run_load_pipeline_async(
         # Status bar update
         num_studies, num_series, num_files = batch_counts_from_merge_result(merge_result)
         extension_skipped = loader.get_extension_skipped_count()
-        num_processed = loader.get_attempted_file_count() + extension_skipped
         non_dicom_count = len(loader.get_failed_files())
         duplicate_count = merge_result.skipped_file_count
         merge_paths = (
@@ -704,7 +704,6 @@ def run_load_pipeline_async(
                 num_series,
                 num_files,
                 source_name,
-                num_processed=num_processed,
                 non_dicom_count=non_dicom_count,
                 duplicate_count=duplicate_count,
                 extension_skipped_count=extension_skipped,

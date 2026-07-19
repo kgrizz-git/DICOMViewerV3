@@ -30,6 +30,10 @@ _FTS_QUERY_ERRS: tuple[type[BaseException], ...] = tuple(
 )
 
 
+
+_SQL_WHERE = " WHERE "
+_SQL_AND = " AND "
+
 def _is_windows() -> bool:
     return os.name == "nt"
 
@@ -186,9 +190,7 @@ class StudyIndexStore:
                 self._migrate_v1_to_v2(conn)
             elif version == 2:
                 self._migrate_v2_to_v3(conn)
-            elif version == self.SCHEMA_VERSION:
-                pass
-            else:
+            elif version > self.SCHEMA_VERSION:
                 raise sqlite3.OperationalError(
                     f"study_index unsupported user_version={version}; "
                     f"expected 0, 1, 2, or {self.SCHEMA_VERSION}"
@@ -334,7 +336,7 @@ class StudyIndexStore:
             clauses.append(f"{self._col(table_alias, 'study_date')} <= ?")
             params.append(dt)
 
-        where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+        where = (_SQL_WHERE + _SQL_AND.join(clauses)) if clauses else ""
         return where, params
 
     @staticmethod
@@ -379,9 +381,9 @@ class StudyIndexStore:
         if fts_q:
             fts_sql = self._fts_exists_sql("study_index_entry")
             if where:
-                where = where + " AND " + fts_sql
+                where = where + _SQL_AND + fts_sql
             else:
-                where = " WHERE " + fts_sql
+                where = _SQL_WHERE + fts_sql
             params.append(fts_q)
         sql = (
             "SELECT file_path, study_root_path, study_uid, series_uid, sop_instance_uid, "
@@ -441,9 +443,9 @@ class StudyIndexStore:
         if fts_q:
             fts_sql = self._fts_exists_sql("e")
             if where:
-                where = where + " AND " + fts_sql
+                where = where + _SQL_AND + fts_sql
             else:
-                where = " WHERE " + fts_sql
+                where = _SQL_WHERE + fts_sql
             params.append(fts_q)
         # COUNT(DISTINCT …): ignore empty series_uid so blank rows do not inflate series_count.
         sql = (

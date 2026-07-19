@@ -24,6 +24,8 @@ from PySide6.QtGui import QFont, QFontDatabase
 # Variants are listed in logical order (lightest to heaviest, then italic),
 # followed by SemiCondensed variants with the same ordering.
 # Excluded across all families: Thin, ExtraBold, Black, ExtraCondensed, Condensed.
+# Local Sonar: python:S1192 ignored for this file only (font catalog data table);
+# see tools/sonarqube/sonar-project.properties multicriteria bundled_fonts_s1192.
 BUNDLED_FONTS: dict[str, dict[str, str]] = {
     "IBM Plex Sans": {
         "Light":                   "IBM_Plex_Sans/static/IBMPlexSans-Light.ttf",

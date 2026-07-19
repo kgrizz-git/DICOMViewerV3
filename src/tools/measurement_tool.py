@@ -39,7 +39,7 @@ from tools.measurement_items import (
     MeasurementHandle,
     MeasurementItem,
 )
-from utils.bundled_fonts import make_qfont
+from utils.bundled_fonts import DEFAULT_FONT_FAMILY, DEFAULT_FONT_VARIANT, make_qfont
 from utils.debug_flags import DEBUG_MEASUREMENT_SERIES
 
 # Re-export for backward compatibility (existing imports from tools.measurement_tool still work)
@@ -228,8 +228,8 @@ class MeasurementTool:
         if self.config_manager:
             font_size = self.config_manager.get_measurement_font_size()
             font_color = self.config_manager.get_measurement_font_color()
-        font_family = self.config_manager.get_measurement_font_family() if self.config_manager else "IBM Plex Sans"
-        font_variant = self.config_manager.get_measurement_font_variant() if self.config_manager else "Bold"
+        font_family = self.config_manager.get_measurement_font_family() if self.config_manager else DEFAULT_FONT_FAMILY
+        font_variant = self.config_manager.get_measurement_font_variant() if self.config_manager else DEFAULT_FONT_VARIANT
 
         # Create temporary text item (not draggable during drawing)
         self.current_text_item = QGraphicsTextItem(distance_formatted)
@@ -296,8 +296,8 @@ class MeasurementTool:
         if self.config_manager:
             font_size = self.config_manager.get_measurement_font_size()
             font_color = self.config_manager.get_measurement_font_color()
-        font_family = self.config_manager.get_measurement_font_family() if self.config_manager else "IBM Plex Sans"
-        font_variant = self.config_manager.get_measurement_font_variant() if self.config_manager else "Bold"
+        font_family = self.config_manager.get_measurement_font_family() if self.config_manager else DEFAULT_FONT_FAMILY
+        font_variant = self.config_manager.get_measurement_font_variant() if self.config_manager else DEFAULT_FONT_VARIANT
 
         # Create a temporary measurement to get callback reference
         # We'll update the reference after creating the actual measurement
@@ -463,12 +463,12 @@ class MeasurementTool:
                 font_family = (
                     self.config_manager.get_measurement_font_family()
                     if self.config_manager
-                    else "IBM Plex Sans"
+                    else DEFAULT_FONT_FAMILY
                 )
                 font_variant = (
                     self.config_manager.get_measurement_font_variant()
                     if self.config_manager
-                    else "Bold"
+                    else DEFAULT_FONT_VARIANT
                 )
                 self.angle_preview_text = QGraphicsTextItem(label)
                 self.angle_preview_text.setDefaultTextColor(QColor(*font_color))
@@ -520,19 +520,18 @@ class MeasurementTool:
             font_family = (
                 self.config_manager.get_measurement_font_family()
                 if self.config_manager
-                else "IBM Plex Sans"
+                else DEFAULT_FONT_FAMILY
             )
             font_variant = (
                 self.config_manager.get_measurement_font_variant()
                 if self.config_manager
-                else "Bold"
+                else DEFAULT_FONT_VARIANT
             )
 
             temp_ref: dict[str, AngleMeasurementItem | None] = {"item": None}
 
             def _offset_cb(_off: QPointF) -> None:
-                if temp_ref["item"] is not None:
-                    pass
+                return
 
             draggable = DraggableAngleMeasurementText(None, _offset_cb)
             draggable.setDefaultTextColor(QColor(*font_color))

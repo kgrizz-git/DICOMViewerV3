@@ -39,7 +39,21 @@ This file tracks active and near-term tasks.
 
 ## Static analysis
 
-- [ ] **[P2]** **Local SonarQube MAJOR CODE_SMELL cleanup (114 findings):** deferred from the S2245/S3923/S1244 remediation pass on `fix/sonarqube-major-findings-20260718`. Re-run `scripts/report_local_sonarqube_issues.py` and triage smells (e.g. `python:S107`, `python:S1854`, `python:S3358`, `python:S1066`) in a dedicated branch — do not mix into behavior-preserving security/logic fixes. Plan reference: [SONARQUBE_MAJOR_FINDINGS_REMEDIATION_PLAN_20260718.md](plans/SONARQUBE_MAJOR_FINDINGS_REMEDIATION_PLAN_20260718.md).
+- [ ] **[P2]** **Continue the local SonarQube code-smell backlog after the fusion
+  coordinator finish slice:** `fusion_coordinator` `S3776` is now 0 (290 → 287
+  priority findings). Next: pick another high-count `S3776` domain from the
+  scoped reporter (e.g. loading/organizer/resampler clusters). Plan references:
+  [Fusion coordinator finish slice](plans/SONARQUBE_FUSION_COORDINATOR_FINISH_SLICE_PLAN_20260718.md),
+  [Fusion coordinator first slice](plans/SONARQUBE_FUSION_COORDINATOR_SLICE_PLAN_20260718.md),
+  [ROI coordinator finish slice](plans/SONARQUBE_ROI_COORDINATOR_FINISH_SLICE_PLAN_20260718.md),
+  [MPR controller finish slice](plans/SONARQUBE_MPR_CONTROLLER_FINISH_SLICE_PLAN_20260718.md),
+  [MPR controller slice](plans/SONARQUBE_MPR_CONTROLLER_SLICE_PLAN_20260718.md),
+  [Critical first slice](plans/SONARQUBE_CRITICAL_CODE_SMELL_FIRST_SLICE_PLAN_20260718.md),
+  [Undo/redo annotation commands slice](plans/SONARQUBE_UNDO_REDO_ANNOTATION_COMMANDS_SLICE_PLAN_20260718.md),
+  [ROI coordinator stats slice](plans/SONARQUBE_ROI_COORDINATOR_STATS_SLICE_PLAN_20260718.md),
+  [Slice display manager slice](plans/SONARQUBE_SLICE_DISPLAY_MANAGER_SLICE_PLAN_20260718.md),
+  [MAJOR mechanical sweep](plans/SONARQUBE_MAJOR_MECHANICAL_SWEEP_PLAN_20260718.md),
+  [View state manager slice](plans/SONARQUBE_VIEW_STATE_MANAGER_SLICE_PLAN_20260718.md).
 
 
 ## Bugs / Correctness

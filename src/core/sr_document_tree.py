@@ -164,9 +164,8 @@ def _format_waveform(item: Dataset) -> str:
 def _format_sc_coord(item: Dataset) -> str:
     g = getattr(item, "GraphicData", None)
     n = 0
-    if g is not None:
-        if hasattr(g, "__len__"):
-            n = len(g)  # type: ignore[arg-type]
+    if g is not None and hasattr(g, "__len__"):
+        n = len(g)  # type: ignore[arg-type]
     gt = getattr(item, "GraphicType", None)
     return f"type={gt or '?'}, values={n}"
 

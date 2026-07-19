@@ -59,6 +59,10 @@ LARGE_SEQUENCE_LEAF_THRESHOLD = 200
 LARGE_EXPORT_SELECTION_THRESHOLD = 1000
 
 
+
+_ITEM_NO_PRESET = "(No preset)"
+_TITLE_NO_CONFIG_MANAGER = "No Config Manager"
+
 def _leaf_descendant_counts(
     tags: dict[str, Any],
     children_by_parent: dict[str | None, list[tuple[str, dict[str, Any]]]],
@@ -1142,7 +1146,7 @@ class TagExportDialog(QDialog):
         presets = self.config_manager.get_tag_export_presets()
         if presets:
             self.preset_combo.addItems(sorted(presets.keys()))
-        self.preset_combo.addItem("(No preset)")
+        self.preset_combo.addItem(_ITEM_NO_PRESET)
         self.preset_combo.setCurrentIndex(self.preset_combo.count() - 1)
 
     def _on_preset_selected(self, preset_name: str) -> None:
@@ -1152,7 +1156,7 @@ class TagExportDialog(QDialog):
     def _save_preset(self) -> None:
         """Save current tag selections as a preset."""
         if not self.config_manager:
-            QMessageBox.warning(self, "No Config Manager",
+            QMessageBox.warning(self, _TITLE_NO_CONFIG_MANAGER,
                               "Preset saving is not available.")
             return
 
@@ -1195,14 +1199,14 @@ class TagExportDialog(QDialog):
     def _load_preset(self) -> None:
         """Load a preset and apply tag selections."""
         if not self.config_manager:
-            QMessageBox.warning(self, "No Config Manager",
+            QMessageBox.warning(self, _TITLE_NO_CONFIG_MANAGER,
                               "Preset loading is not available.")
             return
         if self.preset_combo is None:
             return
 
         preset_name = self.preset_combo.currentText()
-        if not preset_name or preset_name == "(No preset)":
+        if not preset_name or preset_name == _ITEM_NO_PRESET:
             QMessageBox.warning(self, "No Preset Selected",
                               "Please select a preset to load.")
             return
@@ -1263,14 +1267,14 @@ class TagExportDialog(QDialog):
     def _delete_preset(self) -> None:
         """Delete the selected preset."""
         if not self.config_manager:
-            QMessageBox.warning(self, "No Config Manager",
+            QMessageBox.warning(self, _TITLE_NO_CONFIG_MANAGER,
                               "Preset deletion is not available.")
             return
         if self.preset_combo is None:
             return
 
         preset_name = self.preset_combo.currentText()
-        if not preset_name or preset_name == "(No preset)":
+        if not preset_name or preset_name == _ITEM_NO_PRESET:
             QMessageBox.warning(self, "No Preset Selected",
                               "Please select a preset to delete.")
             return
@@ -1295,7 +1299,7 @@ class TagExportDialog(QDialog):
         if not self.config_manager:
             QMessageBox.warning(
                 self,
-                "No Config Manager",
+                _TITLE_NO_CONFIG_MANAGER,
                 "Preset export is not available."
             )
             return
@@ -1353,7 +1357,7 @@ class TagExportDialog(QDialog):
         if not self.config_manager:
             QMessageBox.warning(
                 self,
-                "No Config Manager",
+                _TITLE_NO_CONFIG_MANAGER,
                 "Preset import is not available."
             )
             return

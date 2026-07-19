@@ -148,7 +148,6 @@ def apply_orientation_to_labels(
     elif rot == 180:
         top, bottom, left, right = bottom, top, right, left
     elif rot == 270:
-        # new_top=old_right, new_right=old_bottom, new_bottom=old_left, new_left=old_top
         top, bottom, left, right = right, left, top, bottom
 
     # --- Flips (applied after rotation) ---

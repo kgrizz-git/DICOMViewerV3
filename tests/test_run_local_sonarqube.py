@@ -59,6 +59,25 @@ def test_docker_host_url_uses_only_the_docker_host_gateway():
         module.docker_host_url("http://localhost:9000", "http://sonarqube:9000")
 
 
+def test_load_dotenv_uses_file_values_without_overriding_exports(monkeypatch, tmp_path):
+    module = _load_module()
+    (tmp_path / ".env").write_text(
+        "# Local-only values\n"
+        "SONAR_TOKEN=file-token\n"
+        "SONAR_HOST_URL='http://127.0.0.1:9000'\n"
+        "export OPTIONAL_VALUE=from-file\n",
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("SONAR_TOKEN", raising=False)
+    monkeypatch.delenv("SONAR_HOST_URL", raising=False)
+    monkeypatch.setenv("OPTIONAL_VALUE", "exported-value")
+
+    assert module.load_dotenv(tmp_path) is True
+    assert module.os.environ["SONAR_TOKEN"] == "file-token"
+    assert module.os.environ["SONAR_HOST_URL"] == "http://127.0.0.1:9000"
+    assert module.os.environ["OPTIONAL_VALUE"] == "exported-value"
+
+
 def test_docker_command_keeps_token_out_of_arguments(tmp_path):
     module = _load_module()
     command = module.build_scanner_command(
@@ -186,6 +205,31 @@ def test_main_records_only_a_successful_submission(monkeypatch, tmp_path):
     record = module.read_last_submission(tmp_path)
     assert record is not None
     assert record["scanner"] == "local"
+
+
+def test_main_loads_dotenv_before_parsing_host_defaults(monkeypatch, tmp_path):
+    module = _load_module()
+    (tmp_path / ".env").write_text(
+        "SONAR_TOKEN=file-token\nSONAR_HOST_URL=http://127.0.0.1:9000\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "REPO_ROOT", tmp_path)
+    monkeypatch.delenv("SONAR_TOKEN", raising=False)
+    monkeypatch.delenv("SONAR_HOST_URL", raising=False)
+    monkeypatch.setattr(sys, "argv", ["run_local_sonarqube.py", "--scanner", "local"])
+    seen_hosts: list[str] = []
+    calls: list[tuple[list[str], dict[str, Any]]] = []
+
+    def fake_run(command, **kwargs):
+        calls.append((command, kwargs))
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(module, "get_server_status", lambda host: seen_hosts.append(host) or "UP")
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+
+    assert module.main() == 0
+    assert seen_hosts == ["http://127.0.0.1:9000"]
+    assert calls[0][1]["env"]["SONAR_TOKEN"] == "file-token"
 
 
 def test_main_preserves_last_submission_when_scanner_fails(monkeypatch, tmp_path):

@@ -382,7 +382,7 @@ class DICOMOrganizer:
                             for k, v in batch_fp.items():
                                 if k[0] == study_uid and k[1] == base_key:
                                     self.file_paths[k] = v
-                            with perf_timer("first_paint.merge_batch.apply.update_multiframe_info"):
+                            with perf_timer("first_paint.merge_batch.apply.update_multiframe_info"):  # NOSONAR(S1192) - privacy AST gate requires literal perf labels
                                 self._update_series_multiframe_info(study_uid, base_key)
                             result.appended_series.append((study_uid, base_key))
                         else:
@@ -390,7 +390,7 @@ class DICOMOrganizer:
                             for k, v in batch_fp.items():
                                 if k[0] == study_uid and k[1] == base_key:
                                     self.file_paths[k] = v
-                            with perf_timer("first_paint.merge_batch.apply.update_multiframe_info"):
+                            with perf_timer("first_paint.merge_batch.apply.update_multiframe_info"):  # NOSONAR(S1192) - privacy AST gate requires literal perf labels
                                 self._update_series_multiframe_info(study_uid, base_key)
                             result.new_series.append((study_uid, base_key))
                     else:
@@ -402,7 +402,7 @@ class DICOMOrganizer:
                         for k, v in batch_fp.items():
                             if k[0] == study_uid and k[1] == base_key:
                                 self.file_paths[(study_uid, effective_key, k[2])] = v
-                        with perf_timer("first_paint.merge_batch.apply.update_multiframe_info"):
+                        with perf_timer("first_paint.merge_batch.apply.update_multiframe_info"):  # NOSONAR(S1192) - privacy AST gate requires literal perf labels
                             self._update_series_multiframe_info(study_uid, effective_key)
                         result.new_series.append((study_uid, effective_key))
 

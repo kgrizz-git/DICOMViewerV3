@@ -24,6 +24,20 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+_PROJ_LABEL_AIP = "Average (AIP)"
+_PROJ_LABEL_MIP = "Maximum (MIP)"
+_PROJ_LABEL_MINIP = "Minimum (MinIP)"
+_PROJ_LABELS = (_PROJ_LABEL_AIP, _PROJ_LABEL_MIP, _PROJ_LABEL_MINIP)
+_PROJ_LABEL_TO_TYPE = {
+    _PROJ_LABEL_AIP: "aip",
+    _PROJ_LABEL_MIP: "mip",
+    _PROJ_LABEL_MINIP: "minip",
+}
+_PROJ_TYPE_TO_LABEL = {
+    "aip": _PROJ_LABEL_AIP,
+    "mip": _PROJ_LABEL_MIP,
+    "minip": _PROJ_LABEL_MINIP,
+}
 
 class IntensityProjectionControlsWidget(QWidget):
     """
@@ -82,8 +96,8 @@ class IntensityProjectionControlsWidget(QWidget):
         projection_layout.addWidget(projection_label)
 
         self.projection_combo = QComboBox()
-        self.projection_combo.addItems(["Average (AIP)", "Maximum (MIP)", "Minimum (MinIP)"])
-        self.projection_combo.setCurrentText("Average (AIP)")
+        self.projection_combo.addItems(list(_PROJ_LABELS))
+        self.projection_combo.setCurrentText(_PROJ_LABEL_AIP)
         self.projection_combo.setToolTip("Select projection type")
         self.projection_combo.currentTextChanged.connect(self._on_projection_type_changed)
         projection_layout.addWidget(self.projection_combo)
@@ -116,21 +130,13 @@ class IntensityProjectionControlsWidget(QWidget):
     def _on_enable_changed(self, state: int) -> None:
         """Handle enable checkbox state change."""
         enabled = (state == Qt.CheckState.Checked.value)
-        # print(f"[DEBUG _on_enable_changed] Called from checkbox stateChanged signal: state={state}, enabled={enabled}")
-        # print(f"[DEBUG _on_enable_changed] Checkbox.isChecked()={self.enable_checkbox.isChecked()}")
         self._set_controls_enabled(enabled)
-        # print(f"[DEBUG _on_enable_changed] Emitting enabled_changed signal with enabled={enabled}")
         self.enabled_changed.emit(enabled)
-        # print(f"[DEBUG _on_enable_changed] Signal emitted, checkbox.isChecked()={self.enable_checkbox.isChecked()}")
 
     def _on_projection_type_changed(self, text: str) -> None:
         """Handle projection type dropdown change."""
         # Map display text to internal type
-        type_map = {
-            "Average (AIP)": "aip",
-            "Maximum (MIP)": "mip",
-            "Minimum (MinIP)": "minip"
-        }
+        type_map = _PROJ_LABEL_TO_TYPE
         projection_type = type_map.get(text, "aip")
         self.projection_type_changed.emit(projection_type)
 
@@ -140,7 +146,7 @@ class IntensityProjectionControlsWidget(QWidget):
             count = int(text)
             self.slice_count_changed.emit(count)
         except (ValueError, AttributeError):
-            pass
+            return  # Ignore non-integer combo text
 
     def _set_controls_enabled(self, enabled: bool) -> None:
         """
@@ -164,24 +170,14 @@ class IntensityProjectionControlsWidget(QWidget):
             enabled: True to enable, False to disable
             keep_signals_blocked: If True, don't unblock signals at the end (caller will handle it)
         """
-        # DEBUG: Log current state before change
-        current_checked = self.enable_checkbox.isChecked()
         self.enable_checkbox.checkState()
         self.isVisible()
         self.isEnabled()
         self.enable_checkbox.isVisible()
         self.enable_checkbox.isEnabled()
-        # print(f"[DEBUG set_enabled] Called with enabled={enabled}, keep_signals_blocked={keep_signals_blocked}")
-        # print(f"[DEBUG set_enabled] Current state: isChecked={current_checked}, checkState={current_check_state}")
-        # print(f"[DEBUG set_enabled] Widget visible={widget_visible}, enabled={widget_enabled}")
-        # print(f"[DEBUG set_enabled] Checkbox visible={checkbox_visible}, enabled={checkbox_enabled}")
 
-        # Check if state already matches - but still update to ensure visual state is correct
-        # (needed for cases where checkbox state might be out of sync)
-        if current_checked == enabled:
-            # print(f"[DEBUG set_enabled] State already matches ({enabled}), but forcing update to ensure sync")
-            # Don't return - continue to update to ensure visual state is correct
-            pass
+        # Always update checkbox visual state (may be out of sync even when
+        # checked state already equals enabled).
 
         # Block signals to prevent recursive updates
         was_blocked = self.enable_checkbox.signalsBlocked()
@@ -191,12 +187,10 @@ class IntensityProjectionControlsWidget(QWidget):
         check_state = Qt.CheckState.Checked if enabled else Qt.CheckState.Unchecked
         self.enable_checkbox.setCheckState(check_state)
         self.enable_checkbox.isChecked()
-        # print(f"[DEBUG set_enabled] After setCheckState: isChecked={after_setcheckstate}")
 
         # Also use setChecked as a backup to ensure state is set
         self.enable_checkbox.setChecked(enabled)
         self.enable_checkbox.isChecked()
-        # print(f"[DEBUG set_enabled] After setChecked: isChecked={after_setchecked}")
 
         self._set_controls_enabled(enabled)
 
@@ -204,19 +198,11 @@ class IntensityProjectionControlsWidget(QWidget):
         if not keep_signals_blocked and not was_blocked:
             # Before unblocking, verify the state is correct
             verify_state = self.enable_checkbox.isChecked()
-            # print(f"[DEBUG set_enabled] Before unblocking: checkbox.isChecked()={verify_state}, target={enabled}")
 
             # Only unblock if state matches what we set it to
             if verify_state == enabled:
                 self.enable_checkbox.blockSignals(False)
-                # print(f"[DEBUG set_enabled] Unblocked signals (was_blocked={was_blocked}), state verified as {enabled}")
-            else:
-                # State doesn't match - something went wrong, keep signals blocked
-                # print(f"[DEBUG set_enabled] ERROR: State mismatch! Expected {enabled}, got {verify_state}. Keeping signals blocked.")
-                pass
-        else:
-            # print(f"[DEBUG set_enabled] Keeping signals blocked (keep_signals_blocked={keep_signals_blocked}, was_blocked={was_blocked})")
-            pass
+            # else: state doesn't match — keep signals blocked
 
         # Force immediate repaint to ensure visual state is refreshed
         # Use QTimer to ensure update happens after current event processing
@@ -227,7 +213,6 @@ class IntensityProjectionControlsWidget(QWidget):
 
         # DEBUG: Final state check
         self.enable_checkbox.isChecked()
-        # print(f"[DEBUG set_enabled] Final state: isChecked={final_checked}")
 
     def set_projection_type(self, projection_type: str) -> None:
         """
@@ -236,13 +221,9 @@ class IntensityProjectionControlsWidget(QWidget):
         Args:
             projection_type: "aip", "mip", or "minip"
         """
-        type_map = {
-            "aip": "Average (AIP)",
-            "mip": "Maximum (MIP)",
-            "minip": "Minimum (MinIP)"
-        }
-        display_text = type_map.get(projection_type, "Average (AIP)")
-        if display_text in ["Average (AIP)", "Maximum (MIP)", "Minimum (MinIP)"]:
+        type_map = _PROJ_TYPE_TO_LABEL
+        display_text = type_map.get(projection_type, _PROJ_LABEL_AIP)
+        if display_text in _PROJ_LABELS:
             self.projection_combo.blockSignals(True)
             self.projection_combo.setCurrentText(display_text)
             self.projection_combo.blockSignals(False)
@@ -277,11 +258,7 @@ class IntensityProjectionControlsWidget(QWidget):
             "aip", "mip", or "minip"
         """
         text = self.projection_combo.currentText()
-        type_map = {
-            "Average (AIP)": "aip",
-            "Maximum (MIP)": "mip",
-            "Minimum (MinIP)": "minip"
-        }
+        type_map = _PROJ_LABEL_TO_TYPE
         return type_map.get(text, "aip")
 
     def get_slice_count(self) -> int:

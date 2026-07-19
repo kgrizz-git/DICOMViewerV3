@@ -170,8 +170,6 @@ class ProjectionAppFacade:
                         f"[DEBUG-PROJECTION] _on_projection_enabled_changed: Widget state ({current_widget_state}) != signal ({enabled}), syncing widget"
                     )
                 app.intensity_projection_controls_widget.set_enabled(enabled)
-            else:
-                pass
 
         # Redisplay current slice with new projection state
         if app.current_dataset is not None:
@@ -216,11 +214,10 @@ class ProjectionAppFacade:
             app._slice_location_line_coordinator.refresh_all()
 
             selected_roi = app.roi_manager.get_selected_roi()
-            if selected_roi is not None:
-                if DEBUG_PROJECTION:
-                    print(
-                        "[DEBUG-PROJECTION] _on_projection_enabled_changed: Selected ROI exists, statistics should be updated by _display_rois_for_slice"
-                    )
+            if selected_roi is not None and DEBUG_PROJECTION:
+                print(
+                    "[DEBUG-PROJECTION] _on_projection_enabled_changed: Selected ROI exists, statistics should be updated by _display_rois_for_slice"
+                )
         elif DEBUG_PROJECTION:
             print(
                 "[DEBUG-PROJECTION] _on_projection_enabled_changed: current_dataset is None, cannot redisplay"

@@ -468,6 +468,7 @@ class TextAnnotationTool:
         Returns:
             Created text annotation item or None
         """
+        _ = initial_text  # reserved for prefilled annotation text
 
         # Guard against double-call
         if self.current_item is None:

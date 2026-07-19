@@ -387,7 +387,6 @@ class ROIManager:
             series_uid: SeriesInstanceUID
             instance_identifier: InstanceNumber from DICOM or slice_index as fallback
         """
-        # print(f"[ROI DEBUG] set_current_slice called with instance_identifier={instance_identifier}")
         old_key = (self.current_study_uid, self.current_series_uid, self.current_instance_identifier)
         new_key = (study_uid, series_uid, instance_identifier)
         if old_key != new_key:
@@ -477,13 +476,10 @@ class ROIManager:
 
         # Add to current slice using composite key
         key = (self.current_study_uid, self.current_series_uid, self.current_instance_identifier)
-        # print(f"[ROI DEBUG] finish_drawing storing ROI with key={key}, instance_identifier={self.current_instance_identifier}")
         if key not in self.rois:
             self.rois[key] = []
 
         self.rois[key].append(self.current_roi_item)
-        # print(f"[ROI DEBUG] Total ROIs for key {key}: {len(self.rois[key])}")
-        # print(f"[ROI DEBUG] All keys in rois dict: {list(self.rois.keys())}")
 
         # Enable selectable/movable now that drawing is finished
         self.current_roi_item.item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
@@ -522,17 +518,15 @@ class ROIManager:
                     pass
 
         # Select new ROI
-        # print(f"[DEBUG-OVERLAY] select_roi: roi_manager={id(self)}, selecting ROI {id(roi) if roi else None}")
         self.selected_roi = roi
-        if roi is None:
-            pass
-        elif roi.item is None or not isValid(roi.item):
-            self.selected_roi = None
-        else:
-            try:
-                roi.item.setSelected(True)
-            except RuntimeError:
+        if roi is not None:
+            if roi.item is None or not isValid(roi.item):
                 self.selected_roi = None
+            else:
+                try:
+                    roi.item.setSelected(True)
+                except RuntimeError:
+                    self.selected_roi = None
 
     def get_selected_roi(self) -> ROIItem | None:
         """
@@ -574,13 +568,11 @@ class ROIManager:
         Returns:
             True if deleted, False otherwise
         """
-        # print(f"[DEBUG-ROI] delete_roi called for ROI {id(roi)}")
         if self._editing_roi == roi:
             self.exit_roi_geometry_edit_mode()
         # Find and remove from rois dict
         for roi_list in self.rois.values():
             if roi in roi_list:
-                # print(f"[DEBUG-ROI] Found ROI in list, removing")
                 roi_list.remove(roi)
                 # Remove statistics overlay BEFORE removing ROI item from scene
                 # This ensures the overlay is properly removed
@@ -596,12 +588,9 @@ class ROIManager:
 
                 # Deselect if this was the selected ROI
                 if self.selected_roi == roi:
-                    # print(f"[DEBUG-ROI] Deselecting deleted ROI")
                     self.selected_roi = None
 
-                # print(f"[DEBUG-ROI] ROI deletion complete")
                 return True
-        # print(f"[DEBUG-ROI] ROI not found in lists")
         return False
 
     def get_rois_for_slice(self, study_uid: str, series_uid: str, instance_identifier: int) -> list[ROIItem]:
@@ -797,7 +786,7 @@ class ROIManager:
         if pixel_spacing is not None and len(pixel_spacing) >= 2:
             row_spacing = pixel_spacing[0]  # mm per pixel in row direction
             col_spacing = pixel_spacing[1]  # mm per pixel in column direction
-            # Area in mm² = area in pixels * (row_spacing * col_spacing)
+            # Convert pixel count to physical area using row/column spacing in mm.
             area_mm2 = area_pixels * row_spacing * col_spacing
 
         # Get pixels within ROI
@@ -967,15 +956,12 @@ class ROIManager:
         text_item = roi.statistics_overlay_item
         if text_item is None:
             text_item = DraggableStatisticsOverlay(roi, update_offset)
-            # print(f"[DEBUG-OVERLAY] create_statistics_overlay: Created NEW overlay for ROI {id(roi)} in scene {id(scene)}")
         else:
             # Reuse existing overlay item, but ensure it's removed from any other scene first
             # This prevents overlays from appearing in multiple subwindows
             old_scene = text_item.scene()
-            # print(f"[DEBUG-OVERLAY] create_statistics_overlay: REUSING overlay for ROI {id(roi)}, "
             #       f"old_scene={id(old_scene) if old_scene else None}, new_scene={id(scene)}")
             if old_scene is not None and old_scene != scene:
-                # print(f"[DEBUG-OVERLAY]   WARNING: Overlay is in different scene! Removing from old scene {id(old_scene)}")
                 old_scene.removeItem(text_item)
             text_item.roi = roi
             text_item.offset_update_callback = update_offset
@@ -1035,21 +1021,15 @@ class ROIManager:
             # This prevents overlays from appearing in multiple subwindows
             current_scene = text_item.scene()
             if current_scene is not None and current_scene != scene:
-                # print(f"[DEBUG-OVERLAY]   Removing overlay from scene {id(current_scene)} before adding to scene {id(scene)}")
                 current_scene.removeItem(text_item)
             # Now safe to add to new scene
             if text_item.scene() != scene:
-                # print(f"[DEBUG-OVERLAY]   Adding overlay to scene {id(scene)}")
                 scene.addItem(text_item)
-            else:
-                # print(f"[DEBUG-OVERLAY]   Overlay already in scene {id(scene)}")
-                pass
             text_item.show()
         else:
             text_item.hide()
 
         roi.statistics_overlay_item = text_item
-        # print(f"[DEBUG-OVERLAY]   Final state: overlay.scene()={id(text_item.scene()) if text_item.scene() else None}")
 
     def update_statistics_overlay(self, roi: ROIItem, statistics: RoiStatisticsMap,
                                  scene: QGraphicsScene, font_size: int | None = None,
@@ -1112,11 +1092,9 @@ class ROIManager:
             roi: ROI item
             scene: QGraphicsScene to remove item from
         """
-        # print(f"[DEBUG-OVERLAY] remove_statistics_overlay called for ROI {id(roi)}")
         removed_any = False
         if roi.statistics_overlay_item is not None:
             overlay_item = roi.statistics_overlay_item
-            # print(f"[DEBUG-OVERLAY] Removing overlay item {id(overlay_item)}")
             # Clear reference FIRST to prevent re-access
             roi.statistics_overlay_item = None
             # Disconnect overlay from ROI to prevent crashes
@@ -1134,9 +1112,6 @@ class ROIManager:
             except RuntimeError:
                 # C++ object already deleted; nothing left to remove
                 pass
-        else:
-            # print(f"[DEBUG-OVERLAY] No overlay item reference to remove")
-            pass
 
         # Fallback: search the scene for any text items tagged with this ROI id
         if scene is not None:
@@ -1145,9 +1120,6 @@ class ROIManager:
                 if isinstance(item, QGraphicsTextItem):
                     if item.data(0) == id(roi):
                         items_to_remove.append(item)
-            if items_to_remove:
-                # print(f"[DEBUG-OVERLAY] Removing {len(items_to_remove)} orphan overlay items for ROI {id(roi)}")
-                pass
             for item in items_to_remove:
                 if hasattr(item, 'roi'):
                     item.roi = None
@@ -1158,7 +1130,6 @@ class ROIManager:
 
         if scene is not None and removed_any:
             scene.update()
-            # print(f"[DEBUG-OVERLAY] Scene updated after overlay removal")
 
     def remove_all_statistics_overlays_from_scene(self, scene: QGraphicsScene) -> None:
         """
@@ -1172,7 +1143,6 @@ class ROIManager:
         Args:
             scene: QGraphicsScene to remove items from
         """
-        # print(f"[DEBUG-OVERLAY] remove_all_statistics_overlays_from_scene: scene={id(scene)}, roi_manager={id(self)}")
 
         # First, clear references in our own ROIs to prevent dangling references
         cleared_count = 0
@@ -1184,17 +1154,12 @@ class ROIManager:
                     # Only clear the reference if the overlay is in the target scene
                     # This prevents clearing references to overlays in other scenes
                     if overlay_scene == scene:
-                        # print(f"  Clearing reference for ROI {id(roi)} overlay (overlay in target scene)")
                         if hasattr(overlay_item, 'roi'):
                             overlay_item.roi = None
                         if hasattr(overlay_item, 'mark_deleted'):
                             overlay_item.mark_deleted()
                         cleared_count += 1
-                    else:
-                        # print(f"  Keeping reference for ROI {id(roi)} overlay (overlay in different scene {id(overlay_scene)})")
-                        pass
                     roi.statistics_overlay_item = None
-        # print(f"  Cleared {cleared_count} overlay references from ROIs in this manager")
 
         # Remove ALL statistics overlay items from the scene, regardless of which manager's ROIs they belong to
         # This is critical to prevent overlays from one subwindow appearing in another
@@ -1207,12 +1172,10 @@ class ROIManager:
                     item.flags() & QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations):
                     items_to_remove.append(item)
 
-        # print(f"  Found {len(items_to_remove)} statistics overlay items in scene to remove")
 
         # Remove all statistics overlay items found in the scene
         for item in items_to_remove:
             # Disconnect from any ROI reference
-            # print(f"  Removing overlay item {id(item)} (associated with ROI {roi_id})")
             if hasattr(item, 'roi'):
                 item.roi = None
             if hasattr(item, 'mark_deleted'):
@@ -1220,7 +1183,6 @@ class ROIManager:
             scene.removeItem(item)
 
         scene.update()
-        # print(f"[DEBUG-OVERLAY] Finished removing overlays from scene {id(scene)}")
 
     def hide_all_statistics_overlays(self, scene: QGraphicsScene, hide: bool) -> None:
         """

@@ -70,6 +70,9 @@ _SPHERE_FIELDS: tuple[tuple[str, str], ...] = (
 PromptSavePath = Callable[..., str]
 
 
+
+_UTC_TIMESTAMP_FMT = "%Y%m%dT%H%M%SZ"
+
 def _sorted_frames(frames: dict[str, Any]) -> list[tuple[str, Any]]:
     """Sort frame entries by trailing frame number ('Frame 1', 'Frame 2', ...)."""
 
@@ -297,7 +300,7 @@ class NuclearResultDialog(QDialog):
             self._on_status(message)
 
     def _export_json(self) -> None:
-        ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+        ts = datetime.now(UTC).strftime(_UTC_TIMESTAMP_FMT)
         path = self._save_path(
             "Save QA Results JSON",
             f"{self._default_stem}-{ts}.json",
@@ -313,7 +316,7 @@ class NuclearResultDialog(QDialog):
         self._notify(f"Saved QA JSON: {path}")
 
     def _export_csv(self) -> None:
-        ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+        ts = datetime.now(UTC).strftime(_UTC_TIMESTAMP_FMT)
         path = self._save_path(
             "Save QA Results CSV",
             f"{self._default_stem}-{ts}.csv",
@@ -340,7 +343,7 @@ class NuclearResultDialog(QDialog):
                 self, "Save Figure", "The source DICOM path is unknown for this run."
             )
             return
-        ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+        ts = datetime.now(UTC).strftime(_UTC_TIMESTAMP_FMT)
         path = self._save_path(
             "Save Analyzed Figure (PNG)",
             f"{self._default_stem}-{ts}.png",

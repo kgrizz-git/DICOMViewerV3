@@ -40,6 +40,8 @@ from gui.image_viewer import ImageViewer
 from gui.mpr_thumbnail_widget import MPR_ASSIGN_MIME
 from gui.style_constants import get_focus_border_color
 
+_SERIES_UID_PREFIX = "series_uid:"
+
 
 def _parse_series_drop_mime(text: str) -> tuple[str, int, str]:
     """
@@ -59,8 +61,8 @@ def _parse_series_drop_mime(text: str) -> tuple[str, int, str]:
             except ValueError:
                 return "", 0, ""
         return "", 0, ""
-    if text.startswith("series_uid:"):
-        rest = text[len("series_uid:") :]
+    if text.startswith(_SERIES_UID_PREFIX):
+        rest = text[len(_SERIES_UID_PREFIX) :]
         if not rest:
             return "", 0, ""
         if ":" in rest:
@@ -251,7 +253,7 @@ class SubWindowContainer(QFrame):
             return True
         if mime.hasText():
             text = mime.text()
-            if text.startswith("series_uid:") or text.startswith("dv3_assign\t"):
+            if text.startswith(_SERIES_UID_PREFIX) or text.startswith("dv3_assign\t"):
                 return True
         return False
 

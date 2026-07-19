@@ -47,6 +47,7 @@ from pydicom.dataset import Dataset
 from core.dicom_processor import DICOMProcessor
 from gui import export_rendering as _er
 
+_MSG_EXPORT_CANCELLED = "Export cancelled."
 
 def clamp_int(value: int, lo: int, hi: int) -> int:
     return max(lo, min(hi, value))
@@ -81,6 +82,7 @@ def build_cine_export_frame_indices(
 
 def effective_fps_for_encoder(video_format: str, requested_fps: float) -> float:
     """Clamp FPS to a sane range for FFmpeg / GIF writers."""
+    _ = video_format  # reserved for format-specific clamps
     fps = float(requested_fps)
     if fps <= 0:
         fps = 10.0
@@ -265,7 +267,7 @@ def encode_cine_video_from_png_paths(
     eff_fps = effective_fps_for_encoder(fmt, fps)
 
     if cancel_event and cancel_event.is_set():
-        raise RuntimeError("Export cancelled.")
+        raise RuntimeError(_MSG_EXPORT_CANCELLED)
 
     if fmt == "GIF":
         duration_ms = gif_frame_duration_milliseconds(fmt, fps)
@@ -279,7 +281,7 @@ def encode_cine_video_from_png_paths(
         try:
             for _i, p in enumerate(paths):
                 if cancel_event and cancel_event.is_set():
-                    raise RuntimeError("Export cancelled.")
+                    raise RuntimeError(_MSG_EXPORT_CANCELLED)
                 arr = imageio.imread(str(p))
                 if arr.ndim == 2:
                     arr = np.stack([arr] * 3, axis=-1)
@@ -301,7 +303,7 @@ def encode_cine_video_from_png_paths(
         try:
             for p in paths:
                 if cancel_event and cancel_event.is_set():
-                    raise RuntimeError("Export cancelled.")
+                    raise RuntimeError(_MSG_EXPORT_CANCELLED)
                 arr = imageio.imread(str(p))
                 if arr.ndim == 2:
                     arr = np.stack([arr] * 3, axis=-1)

@@ -125,7 +125,7 @@ def test_fetch_issues_rejects_malformed_and_incomplete_responses(monkeypatch):
         )
 
 
-def test_collect_reported_findings_queries_all_policy_classes(monkeypatch):
+def test_collect_reported_findings_queries_all_priority_severities(monkeypatch):
     module = _load_module()
     seen_queries = []
 
@@ -145,7 +145,7 @@ def test_collect_reported_findings_queries_all_policy_classes(monkeypatch):
     assert report.issues == ()
     assert seen_queries == [
         {"severities": "BLOCKER"},
-        {"severities": "CRITICAL", "types": "BUG,VULNERABILITY"},
+        {"severities": "CRITICAL"},
         {"severities": "MAJOR"},
     ]
 
@@ -174,3 +174,26 @@ def test_markdown_report_is_token_free_and_output_stays_in_tmp(tmp_path):
 
     with pytest.raises(module.SonarReportError, match="must stay below"):
         module.resolve_output_path(tmp_path, Path("report.md"))
+
+
+def test_main_loads_token_from_dotenv(monkeypatch, tmp_path):
+    module = _load_module()
+    (tmp_path / ".env").write_text("SONAR_TOKEN=file-token\n", encoding="utf-8")
+    monkeypatch.setattr(module, "REPO_ROOT", tmp_path)
+    monkeypatch.delenv("SONAR_TOKEN", raising=False)
+    monkeypatch.setattr(sys, "argv", ["report_local_sonarqube_issues.py"])
+    seen_tokens: list[str] = []
+    report = module.SonarReport(
+        project_key="dicom-viewer-v3",
+        analysis=module.AnalysisMetadata(date="2026-07-18", revision="abc123"),
+        issues=(),
+    )
+    monkeypatch.setattr(module, "get_server_status", lambda _host: "UP")
+    monkeypatch.setattr(
+        module,
+        "collect_reported_findings",
+        lambda _host, token, _project: seen_tokens.append(token) or report,
+    )
+
+    assert module.main() == 0
+    assert seen_tokens == ["file-token"]

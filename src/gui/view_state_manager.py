@@ -168,13 +168,8 @@ class ViewStateManager:
         Args:
             preserve_view: True to preserve zoom/pan, False to refit
         """
-        # print(f"[DEBUG-WL] _redisplay_current_slice called: preserve_view={preserve_view}")
-        # print(f"[DEBUG-WL]   redisplay_slice_callback: {self.redisplay_slice_callback}")
         if self.redisplay_slice_callback:
             self.redisplay_slice_callback(preserve_view)
-        else:
-            # print(f"[DEBUG-WL]   WARNING: redisplay_slice_callback is None!")
-            pass
 
     def apply_window_level_from_context_menu_preset(
         self, center: float, width: float, preset_index: int
@@ -263,6 +258,86 @@ class ViewStateManager:
         # If series identifier changed, it's a new study/series
         return new_series_identifier != self.current_series_identifier
 
+    def _capture_global_initial_view_fallbacks(self) -> None:
+        """Store global fallback zoom, pan, and window/level for reset."""
+        if self.initial_zoom is None:
+            self.initial_zoom = self.image_viewer.current_zoom
+
+        if self.initial_h_scroll is None:
+            self.initial_h_scroll = self.image_viewer.horizontalScrollBar().value()
+        if self.initial_v_scroll is None:
+            self.initial_v_scroll = self.image_viewer.verticalScrollBar().value()
+
+        if self.initial_scene_center is None:
+            scene_center = self.image_viewer.get_viewport_center_scene()
+            if scene_center is not None:
+                self.initial_scene_center = scene_center
+
+        if self.initial_window_center is None:
+            self.initial_window_center = self.current_window_center
+        if self.initial_window_width is None:
+            self.initial_window_width = self.current_window_width
+
+    def _upsert_series_defaults_from_current_view(self, scene_center: QPointF | None) -> None:
+        """Update series defaults with current view state including window/level."""
+        series_id = self.current_series_identifier
+        if series_id is None:
+            return
+        self.series_defaults[series_id].update({
+            'window_center': self.current_window_center,
+            'window_width': self.current_window_width,
+            'zoom': self.image_viewer.current_zoom,
+            'h_scroll': self.image_viewer.horizontalScrollBar().value(),
+            'v_scroll': self.image_viewer.verticalScrollBar().value(),
+            'scene_center': scene_center,
+            'use_rescaled_values': self.use_rescaled_values,
+            'image_inverted': self.image_viewer.image_inverted
+        })
+
+    def _restore_stored_series_wl_and_refresh(self, scene_center: QPointF | None) -> None:
+        """Restore stored W/L, redisplay, and update zoom/pan without overwriting W/L."""
+        series_id = self.current_series_identifier
+        if series_id is None:
+            return
+        series_entry = self.series_defaults[series_id]
+        stored_wc = series_entry['window_center']
+        stored_ww = series_entry['window_width']
+        stored_rescaled = series_entry['use_rescaled_values']
+
+        self.current_window_center = stored_wc
+        self.current_window_width = stored_ww
+
+        unit = self.rescale_type if (stored_rescaled and self.rescale_type) else None
+        self.window_level_controls.set_window_level(
+            stored_wc, stored_ww, block_signals=True, unit=unit
+        )
+
+        self._redisplay_current_slice(preserve_view=True)
+
+        if (self.series_navigator and self.current_study_uid and self.current_series_uid and
+                self.current_study_uid in self.current_studies and
+                self.current_series_uid in self.current_studies[self.current_study_uid]):
+            series_datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
+            if series_datasets:
+                first_dataset = series_datasets[0]
+                self.series_navigator.regenerate_series_thumbnail(
+                    self.current_study_uid,
+                    self.current_series_uid,
+                    first_dataset,
+                    stored_wc,
+                    stored_ww,
+                    stored_rescaled
+                )
+
+        series_entry.update({
+            'zoom': self.image_viewer.current_zoom,
+            'h_scroll': self.image_viewer.horizontalScrollBar().value(),
+            'v_scroll': self.image_viewer.verticalScrollBar().value(),
+            'scene_center': scene_center,
+            'image_inverted': self.image_viewer.image_inverted
+        })
+        series_entry['window_level_defaults_set'] = True
+
     def store_initial_view_state(self) -> None:
         """
         Store the initial view state (zoom, pan, window/level) for reset functionality.
@@ -273,119 +348,243 @@ class ViewStateManager:
         if self.image_viewer.image_item is None:
             return
 
-        # print(f"[DEBUG-WL] store_initial_view_state called: series_id={self.current_series_identifier[:20] if self.current_series_identifier else 'None'}...")
-        # print(f"[DEBUG-WL] Current values: wc={self.current_window_center}, ww={self.current_window_width}, use_rescaled={self.use_rescaled_values}")
+        self._capture_global_initial_view_fallbacks()
 
-        # Store initial zoom (global fallback)
-        if self.initial_zoom is None:
-            self.initial_zoom = self.image_viewer.current_zoom
-
-        # Store initial pan position (scrollbar values) - global fallback
-        # Keep for backward compatibility, but prefer scene center for reset
-        if self.initial_h_scroll is None:
-            self.initial_h_scroll = self.image_viewer.horizontalScrollBar().value()
-        if self.initial_v_scroll is None:
-            self.initial_v_scroll = self.image_viewer.verticalScrollBar().value()
-
-        # Store initial scene center point in scene coordinates - preferred for reset
-        # This works correctly even when viewport size changes (e.g., splitter moved)
-        if self.initial_scene_center is None:
-            scene_center = self.image_viewer.get_viewport_center_scene()
-            if scene_center is not None:
-                self.initial_scene_center = scene_center
-
-        # Store initial window/level (global fallback)
-        if self.initial_window_center is None:
-            self.initial_window_center = self.current_window_center
-        if self.initial_window_width is None:
-            self.initial_window_width = self.current_window_width
-
-        # Store per-series defaults if we have a current series identifier
         if self.current_series_identifier:
-            # Get scene center point for this series
             scene_center = self.image_viewer.get_viewport_center_scene()
 
             if self.current_series_identifier not in self.series_defaults:
-                # Create new entry with all defaults
-                # print(f"[DEBUG-WL] Creating NEW series_defaults entry")
                 self.series_defaults[self.current_series_identifier] = {
                     'window_center': self.current_window_center,
                     'window_width': self.current_window_width,
                     'zoom': self.image_viewer.current_zoom,
                     'h_scroll': self.image_viewer.horizontalScrollBar().value(),
                     'v_scroll': self.image_viewer.verticalScrollBar().value(),
-                    'scene_center': scene_center,  # Store scene center point in scene coordinates
+                    'scene_center': scene_center,
                     'use_rescaled_values': self.use_rescaled_values,
                     'image_inverted': self.image_viewer.image_inverted
                 }
+            elif self.series_defaults[self.current_series_identifier].get('window_level_defaults_set', False):
+                self._restore_stored_series_wl_and_refresh(scene_center)
             else:
-                # Entry already exists - check if window/level defaults were already set during display_slice
-                defaults_already_set = self.series_defaults[self.current_series_identifier].get('window_level_defaults_set', False)
+                self._upsert_series_defaults_from_current_view(scene_center)
 
-                if defaults_already_set:
-                    # Window/level defaults were already set correctly during display_slice
-                    # Restore current values from series_defaults in case they were corrupted
-                    stored_wc = self.series_defaults[self.current_series_identifier]['window_center']
-                    stored_ww = self.series_defaults[self.current_series_identifier]['window_width']
-                    stored_rescaled = self.series_defaults[self.current_series_identifier]['use_rescaled_values']
-                    # print(f"[DEBUG-WL] UPDATING existing series_defaults (preserving window/level)")
-                    # print(f"[DEBUG-WL] Restoring current values from series_defaults: wc={stored_wc}, ww={stored_ww}")
+    def _load_reset_defaults_for_series(
+        self, series_identifier: str
+    ) -> tuple[Any, float | None, float | None, bool | None]:
+        """Load zoom and W/L defaults for reset from series or global state."""
+        if series_identifier in self.series_defaults:
+            defaults = self.series_defaults[series_identifier]
+            return (
+                defaults.get('zoom'),
+                defaults.get('window_center'),
+                defaults.get('window_width'),
+                defaults.get('use_rescaled_values'),
+            )
+        return (
+            self.initial_zoom,
+            self.initial_window_center,
+            self.initial_window_width,
+            None,
+        )
 
-                    # Restore current values to correct defaults
-                    self.current_window_center = stored_wc
-                    self.current_window_width = stored_ww
+    def _convert_reset_wl_for_current_rescale(
+        self,
+        reset_window_center: float,
+        reset_window_width: float,
+        reset_use_rescaled_values: bool,
+    ) -> tuple[float, float]:
+        """Convert stored W/L to match the current rescale display mode."""
+        if reset_use_rescaled_values == self.use_rescaled_values:
+            return reset_window_center, reset_window_width
 
-                    # Update the window/level controls to reflect the restored values
-                    unit = self.rescale_type if (stored_rescaled and self.rescale_type) else None
-                    self.window_level_controls.set_window_level(
-                        stored_wc, stored_ww, block_signals=True, unit=unit
-                    )
-                    # print(f"[DEBUG-WL] Updated window/level controls with restored values")
+        if reset_use_rescaled_values and not self.use_rescaled_values:
+            if (self.rescale_slope is not None and self.rescale_intercept is not None and
+                    self.rescale_slope != 0.0):  # NOSONAR(S1244)
+                return self.dicom_processor.convert_window_level_rescaled_to_raw(
+                    reset_window_center, reset_window_width,
+                    self.rescale_slope, self.rescale_intercept
+                )
+        elif not reset_use_rescaled_values and self.use_rescaled_values:
+            if self.rescale_slope is not None and self.rescale_intercept is not None:
+                return self.dicom_processor.convert_window_level_raw_to_rescaled(
+                    reset_window_center, reset_window_width,
+                    self.rescale_slope, self.rescale_intercept
+                )
+        return reset_window_center, reset_window_width
 
-                    # Re-display the current image with the corrected window/level
-                    # This fixes the initial display that was rendered with corrupted values
-                    self._redisplay_current_slice(preserve_view=True)
+    def _recalculate_missing_reset_wl(self) -> tuple[float | None, float | None]:
+        """Recalculate window/level defaults from current dataset when missing."""
+        if not (self.current_studies and self.current_study_uid and self.current_series_uid):
+            return None, None
+        if (self.current_study_uid not in self.current_studies or
+                self.current_series_uid not in self.current_studies[self.current_study_uid]):
+            return None, None
 
-                    # Also regenerate series navigator thumbnail with corrected window/level
-                    if (self.series_navigator and self.current_study_uid and self.current_series_uid and
-                            self.current_study_uid in self.current_studies and
-                            self.current_series_uid in self.current_studies[self.current_study_uid]):
-                        series_datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
-                        if series_datasets:
-                            first_dataset = series_datasets[0]
-                            self.series_navigator.regenerate_series_thumbnail(
-                                self.current_study_uid,
-                                self.current_series_uid,
-                                first_dataset,
-                                stored_wc,
-                                stored_ww,
-                                stored_rescaled
-                            )
+        series_datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
+        if not series_datasets:
+            return None, None
 
-                    # Only update zoom/pan and inversion, preserve window/level values in series_defaults
-                    self.series_defaults[self.current_series_identifier].update({
-                        'zoom': self.image_viewer.current_zoom,
-                        'h_scroll': self.image_viewer.horizontalScrollBar().value(),
-                        'v_scroll': self.image_viewer.verticalScrollBar().value(),
-                        'scene_center': scene_center,
-                        'image_inverted': self.image_viewer.image_inverted
-                    })
-                    # Keep the flag set
-                    self.series_defaults[self.current_series_identifier]['window_level_defaults_set'] = True
+        dataset = series_datasets[0]
+        use_rescaled = self.use_rescaled_values
+
+        try:
+            series_pixel_min, series_pixel_max = self.dicom_processor.get_series_pixel_value_range(
+                series_datasets, apply_rescale=use_rescaled
+            )
+            self.set_series_pixel_range(series_pixel_min, series_pixel_max)
+        except Exception:
+            series_pixel_min = None
+            series_pixel_max = None
+
+        wc, ww, is_rescaled = self.dicom_processor.get_window_level_from_dataset(
+            dataset,
+            rescale_slope=self.rescale_slope,
+            rescale_intercept=self.rescale_intercept
+        )
+        if wc is not None and ww is not None:
+            return self._convert_dataset_wl_to_use_rescaled(wc, ww, is_rescaled, use_rescaled)
+
+        if series_pixel_min is not None and series_pixel_max is not None:
+            return self._wl_from_series_pixel_range(
+                series_datasets, series_pixel_min, series_pixel_max, use_rescaled
+            )
+
+        return self._wl_from_single_slice_fallback(dataset, use_rescaled)
+
+    def _convert_dataset_wl_to_use_rescaled(
+        self,
+        wc: float,
+        ww: float,
+        is_rescaled: bool,
+        use_rescaled: bool,
+    ) -> tuple[float, float]:
+        """Convert dataset W/L values to the requested rescale display mode."""
+        if is_rescaled and not use_rescaled:
+            if (self.rescale_slope is not None and self.rescale_intercept is not None and
+                    self.rescale_slope != 0.0):  # NOSONAR(S1244)
+                return self.dicom_processor.convert_window_level_rescaled_to_raw(
+                    wc, ww, self.rescale_slope, self.rescale_intercept
+                )
+        elif not is_rescaled and use_rescaled:
+            if self.rescale_slope is not None and self.rescale_intercept is not None:
+                return self.dicom_processor.convert_window_level_raw_to_rescaled(
+                    wc, ww, self.rescale_slope, self.rescale_intercept
+                )
+        return wc, ww
+
+    def _wl_from_series_pixel_range(
+        self,
+        series_datasets: list[Dataset],
+        series_pixel_min: float,
+        series_pixel_max: float,
+        use_rescaled: bool,
+    ) -> tuple[float, float]:
+        """Derive W/L from series pixel range statistics."""
+        midpoint = (series_pixel_min + series_pixel_max) / 2.0
+        if series_datasets:
+            median = self.dicom_processor.get_series_pixel_median(
+                series_datasets, apply_rescale=use_rescaled
+            )
+            reset_window_center = midpoint if median is None else max(median, midpoint)
+        else:
+            reset_window_center = midpoint
+        reset_window_width = series_pixel_max - series_pixel_min
+        if reset_window_width <= 0:
+            reset_window_width = 1.0
+        return reset_window_center, reset_window_width
+
+    def _wl_from_single_slice_fallback(
+        self, dataset: Dataset, use_rescaled: bool
+    ) -> tuple[float | None, float | None]:
+        """Fallback W/L calculation from a single slice pixel range."""
+        try:
+            pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(
+                dataset, apply_rescale=use_rescaled
+            )
+            if pixel_min is None or pixel_max is None:
+                return None, None
+
+            pixel_array = self.dicom_processor.get_pixel_array(dataset)
+            midpoint = (pixel_min + pixel_max) / 2.0
+            if pixel_array is not None:
+                if use_rescaled:
+                    rescale_slope, rescale_intercept, _ = self.dicom_processor.get_rescale_parameters(dataset)
+                    if rescale_slope is not None and rescale_intercept is not None:
+                        pixel_array = (
+                            pixel_array.astype(np.float32) * float(rescale_slope) + float(rescale_intercept)
+                        )
+                non_zero_values = pixel_array[pixel_array != 0]
+                if len(non_zero_values) > 0:
+                    median = float(np.median(non_zero_values))
+                    reset_window_center = max(median, midpoint)
                 else:
-                    # No defaults set yet, update all fields including window/level
-                    # print(f"[DEBUG-WL] UPDATING existing series_defaults entry (all fields)")
-                    self.series_defaults[self.current_series_identifier].update({
-                        'window_center': self.current_window_center,
-                        'window_width': self.current_window_width,
-                        'zoom': self.image_viewer.current_zoom,
-                        'h_scroll': self.image_viewer.horizontalScrollBar().value(),
-                        'v_scroll': self.image_viewer.verticalScrollBar().value(),
-                        'scene_center': scene_center,
-                        'use_rescaled_values': self.use_rescaled_values,  # Always update to match current state
-                        'image_inverted': self.image_viewer.image_inverted
-                    })
-            # print(f"[DEBUG-WL] Stored in series_defaults: wc={self.series_defaults[self.current_series_identifier]['window_center']}, ww={self.series_defaults[self.current_series_identifier]['window_width']}, use_rescaled={self.series_defaults[self.current_series_identifier]['use_rescaled_values']}")
+                    reset_window_center = midpoint
+            else:
+                reset_window_center = midpoint
+
+            reset_window_width = pixel_max - pixel_min
+            if reset_window_width <= 0:
+                reset_window_width = 1.0
+            return reset_window_center, reset_window_width
+        except Exception:
+            return None, None
+
+    def _wl_ranges_from_pixel_extrema(
+        self, pixel_min: float, pixel_max: float
+    ) -> tuple[tuple[float, float], tuple[float, float]]:
+        """Build center/width control ranges from slice extrema, preferring series range."""
+        series_pixel_min, series_pixel_max = self.get_series_pixel_range()
+        if series_pixel_min is not None and series_pixel_max is not None:
+            center_range = (series_pixel_min, series_pixel_max)
+            width_range = (1.0, max(1.0, series_pixel_max - series_pixel_min))
+        else:
+            center_range = (pixel_min, pixel_max)
+            width_range = (1.0, max(1.0, pixel_max - pixel_min))
+        return center_range, width_range
+
+    def _apply_reset_window_level_values(
+        self, reset_window_center: float | None, reset_window_width: float | None
+    ) -> None:
+        """Push reset W/L into controls and view-state fields when both values exist."""
+        if reset_window_center is None or reset_window_width is None:
+            return
+        unit = self.rescale_type if (self.use_rescaled_values and self.rescale_type) else None
+        self.window_level_controls.set_window_level(
+            reset_window_center,
+            reset_window_width,
+            block_signals=True,
+            unit=unit,
+        )
+        self.current_window_center = reset_window_center
+        self.current_window_width = reset_window_width
+        self.window_level_user_modified = False
+
+    def _apply_reset_rescale_and_wl_controls(
+        self,
+        reset_use_rescaled_values: bool,
+        reset_window_center: float | None,
+        reset_window_width: float | None,
+    ) -> None:
+        """Apply rescale state, control ranges, and window/level after reset."""
+        self.use_rescaled_values = reset_use_rescaled_values
+        self.main_window.set_rescale_toggle_state(reset_use_rescaled_values)
+        self.image_viewer.set_rescale_toggle_state(reset_use_rescaled_values)
+
+        if self.current_dataset is not None:
+            pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(
+                self.current_dataset, apply_rescale=self.use_rescaled_values
+            )
+            if pixel_min is not None and pixel_max is not None:
+                center_range, width_range = self._wl_ranges_from_pixel_extrema(
+                    pixel_min, pixel_max
+                )
+                self.window_level_controls.set_ranges(center_range, width_range)
+
+            unit = self.rescale_type if (self.use_rescaled_values and self.rescale_type) else None
+            self.window_level_controls.set_unit(unit)
+
+        self._apply_reset_window_level_values(reset_window_center, reset_window_width)
 
     def reset_view(self, skip_redisplay: bool = False) -> None:
         """
@@ -397,225 +596,106 @@ class ViewStateManager:
             skip_redisplay: If True, skip the internal redisplay (caller will handle it)
         """
         if self.current_dataset is None:
-            # No current dataset
             return
 
         getattr(self.current_dataset, 'Modality', 'Unknown')
-        # print(f"[DEBUG-WL] ===== reset_view called: modality={modality}, current_use_rescaled={self.use_rescaled_values} =====")
 
-        # Get series identifier
         series_identifier = self.get_series_identifier(self.current_dataset)
-        # print(f"[DEBUG-WL] Series identifier: {series_identifier[:20]}...")
         self.clear_user_window_level(series_identifier)
 
-        # Try to get series-specific defaults
-        if series_identifier in self.series_defaults:
-            # print(f"[DEBUG-WL] Found series_defaults for this series")
-            defaults = self.series_defaults[series_identifier]
-            reset_zoom = defaults.get('zoom')
-            defaults.get('h_scroll')
-            defaults.get('v_scroll')
-            defaults.get('scene_center')  # Preferred: scene center point
-            reset_window_center = defaults.get('window_center')
-            reset_window_width = defaults.get('window_width')
-            reset_use_rescaled_values = defaults.get('use_rescaled_values')
-            # print(f"[DEBUG-WL] Retrieved from series_defaults: wc={reset_window_center}, ww={reset_window_width}, stored_use_rescaled={reset_use_rescaled_values}")
-        else:
-            # Fall back to global initial values
-            # print(f"[DEBUG-WL] No series_defaults found, using global initial values")
-            reset_zoom = self.initial_zoom
-            reset_window_center = self.initial_window_center
-            reset_window_width = self.initial_window_width
-            reset_use_rescaled_values = None
-            # print(f"[DEBUG-WL] Global initial values: wc={reset_window_center}, ww={reset_window_width}")
+        reset_zoom, reset_window_center, reset_window_width, reset_use_rescaled_values = (
+            self._load_reset_defaults_for_series(series_identifier)
+        )
 
-        # If we have window/level values but they're in a different rescale state than current,
-        # convert them to match the current rescale state
         if (reset_window_center is not None and reset_window_width is not None and
-            reset_use_rescaled_values is not None and
-            reset_use_rescaled_values != self.use_rescaled_values):
-            # print(f"[DEBUG-WL] Rescale state mismatch! stored={reset_use_rescaled_values}, current={self.use_rescaled_values}")
-            _orig_wc, _orig_ww = reset_window_center, reset_window_width
-            # Stored values are in different units than current display mode - convert them
-            if reset_use_rescaled_values and not self.use_rescaled_values:
-                # Stored in rescaled, need raw
-                if (self.rescale_slope is not None and self.rescale_intercept is not None and
-                    # RescaleSlope is DICOM DS-VR; exact 0.0 is well-defined
-                    self.rescale_slope != 0.0):  # NOSONAR(S1244)
-                    reset_window_center, reset_window_width = self.dicom_processor.convert_window_level_rescaled_to_raw(
-                        reset_window_center, reset_window_width, self.rescale_slope, self.rescale_intercept
-                    )
-                    # print(f"[DEBUG-WL] Converted rescaled->raw: ({orig_wc}, {orig_ww}) -> ({reset_window_center}, {reset_window_width})")
-            elif not reset_use_rescaled_values and self.use_rescaled_values:
-                # Stored in raw, need rescaled
-                if self.rescale_slope is not None and self.rescale_intercept is not None:
-                    reset_window_center, reset_window_width = self.dicom_processor.convert_window_level_raw_to_rescaled(
-                        reset_window_center, reset_window_width, self.rescale_slope, self.rescale_intercept
-                    )
-                    # print(f"[DEBUG-WL] Converted raw->rescaled: ({orig_wc}, {orig_ww}) -> ({reset_window_center}, {reset_window_width})")
-        else:
-            # print(f"[DEBUG-WL] No conversion needed (rescale states match or values missing)")
-            pass
+                reset_use_rescaled_values is not None and
+                reset_use_rescaled_values != self.use_rescaled_values):
+            reset_window_center, reset_window_width = self._convert_reset_wl_for_current_rescale(
+                reset_window_center, reset_window_width, reset_use_rescaled_values
+            )
 
-        # If window/level defaults are missing, recalculate them based on current dataset
-        # Always use current rescale state when recalculating to ensure consistency
         if reset_window_center is None or reset_window_width is None:
-            # Recalculate window/level defaults from current dataset
-            if self.current_studies and self.current_study_uid and self.current_series_uid:
-                if (self.current_study_uid in self.current_studies and
-                    self.current_series_uid in self.current_studies[self.current_study_uid]):
-                    series_datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
-                    if series_datasets and len(series_datasets) > 0:
-                        dataset = series_datasets[0]  # Use first dataset in series
-                        # Use current rescale state to ensure defaults match current display mode
-                        # This is important when toggling between raw and rescaled values
-                        use_rescaled = self.use_rescaled_values
+            recalc_wc, recalc_ww = self._recalculate_missing_reset_wl()
+            if recalc_wc is not None:
+                reset_window_center = recalc_wc
+            if recalc_ww is not None:
+                reset_window_width = recalc_ww
 
-                        # Calculate series pixel range
-                        try:
-                            series_pixel_min, series_pixel_max = self.dicom_processor.get_series_pixel_value_range(
-                                series_datasets, apply_rescale=use_rescaled
-                            )
-                            self.set_series_pixel_range(series_pixel_min, series_pixel_max)
-                        except Exception:
-                            series_pixel_min = None
-                            series_pixel_max = None
-
-                        # Check for window/level in DICOM metadata
-                        wc, ww, is_rescaled = self.dicom_processor.get_window_level_from_dataset(
-                            dataset,
-                            rescale_slope=self.rescale_slope,
-                            rescale_intercept=self.rescale_intercept
-                        )
-                        if wc is not None and ww is not None:
-                            # Convert if needed
-                            if is_rescaled and not use_rescaled:
-                                # RescaleSlope is DICOM DS-VR; exact 0.0 is well-defined
-                                if (self.rescale_slope is not None and self.rescale_intercept is not None and self.rescale_slope != 0.0):  # NOSONAR(S1244)
-                                    wc, ww = self.dicom_processor.convert_window_level_rescaled_to_raw(
-                                        wc, ww, self.rescale_slope, self.rescale_intercept
-                                    )
-                            elif not is_rescaled and use_rescaled:
-                                if (self.rescale_slope is not None and self.rescale_intercept is not None):
-                                    wc, ww = self.dicom_processor.convert_window_level_raw_to_rescaled(
-                                        wc, ww, self.rescale_slope, self.rescale_intercept
-                                    )
-                            reset_window_center = wc
-                            reset_window_width = ww
-                        elif series_pixel_min is not None and series_pixel_max is not None:
-                            # Calculate median from series for window center
-                            midpoint = (series_pixel_min + series_pixel_max) / 2.0
-                            if series_datasets:
-                                median = self.dicom_processor.get_series_pixel_median(
-                                    series_datasets, apply_rescale=use_rescaled
-                                )
-                                # If median calculation failed, use midpoint
-                                if median is None:
-                                    reset_window_center = midpoint
-                                else:
-                                    # Use the greater of median or midpoint
-                                    reset_window_center = max(median, midpoint)
-                            else:
-                                reset_window_center = midpoint
-                            reset_window_width = series_pixel_max - series_pixel_min
-                            if reset_window_width <= 0:
-                                reset_window_width = 1.0
-                        else:
-                            # Fallback to single slice
-                            try:
-                                pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(
-                                    dataset, apply_rescale=use_rescaled
-                                )
-                                if pixel_min is not None and pixel_max is not None:
-                                    # Calculate median from single slice pixel array
-                                    pixel_array = self.dicom_processor.get_pixel_array(dataset)
-                                    if pixel_array is not None:
-                                        # Apply rescale if needed
-                                        if use_rescaled:
-                                            rescale_slope, rescale_intercept, _ = self.dicom_processor.get_rescale_parameters(dataset)
-                                            if rescale_slope is not None and rescale_intercept is not None:
-                                                pixel_array = pixel_array.astype(np.float32) * float(rescale_slope) + float(rescale_intercept)
-                                        # Calculate both median (excluding zeros) and midpoint, use the greater value
-                                        midpoint = (pixel_min + pixel_max) / 2.0
-                                        non_zero_values = pixel_array[pixel_array != 0]
-                                        if len(non_zero_values) > 0:
-                                            median = float(np.median(non_zero_values))
-                                            reset_window_center = max(median, midpoint)
-                                        else:
-                                            # Fall back to midpoint if all values are zero
-                                            reset_window_center = midpoint
-                                    else:
-                                        # Fall back to midpoint if pixel array unavailable
-                                        reset_window_center = (pixel_min + pixel_max) / 2.0
-                                    reset_window_width = pixel_max - pixel_min
-                                    if reset_window_width <= 0:
-                                        reset_window_width = 1.0
-                            except Exception:
-                                pass  # Will use None values which will be handled below
-
-        # Ensure we have a valid rescale state value - calculate default if missing
         if reset_use_rescaled_values is None:
-            # Default to True if rescale parameters exist, False otherwise
-            reset_use_rescaled_values = (self.rescale_slope is not None and self.rescale_intercept is not None)
+            reset_use_rescaled_values = (
+                self.rescale_slope is not None and self.rescale_intercept is not None
+            )
 
         if reset_zoom is None:
-            # No reset values available
             return
 
-        # Reset rescale state to default FIRST (before window/level to avoid incorrect conversion)
-        # Always restore rescale state, even if it's the same as current
-        # Restore rescale state directly without converting window/level values
-        # (the stored window/level values are already in the correct units for the restored state)
-        self.use_rescaled_values = reset_use_rescaled_values
-        # Update UI toggle states
-        self.main_window.set_rescale_toggle_state(reset_use_rescaled_values)
-        self.image_viewer.set_rescale_toggle_state(reset_use_rescaled_values)
+        self._apply_reset_rescale_and_wl_controls(
+            reset_use_rescaled_values, reset_window_center, reset_window_width
+        )
 
-        # Recalculate pixel value ranges for window/level controls
-        if self.current_dataset is not None:
-            pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(
-                self.current_dataset, apply_rescale=self.use_rescaled_values
-            )
-            if pixel_min is not None and pixel_max is not None:
-                # Get series pixel range for both center and width ranges
-                series_pixel_min, series_pixel_max = self.get_series_pixel_range()
-
-                if series_pixel_min is not None and series_pixel_max is not None:
-                    # Use series range for both center and width ranges
-                    center_range = (series_pixel_min, series_pixel_max)
-                    width_range = (1.0, max(1.0, series_pixel_max - series_pixel_min))
-                else:
-                    # Fallback to current slice range if series range not available
-                    center_range = (pixel_min, pixel_max)
-                    width_range = (1.0, max(1.0, pixel_max - pixel_min))
-
-                self.window_level_controls.set_ranges(center_range, width_range)
-
-            # Update window/level unit labels
-            unit = self.rescale_type if (self.use_rescaled_values and self.rescale_type) else None
-            self.window_level_controls.set_unit(unit)
-
-        # Reset window/level to initial values (already in correct units for current rescale state)
-        if reset_window_center is not None and reset_window_width is not None:
-            # print(f"[DEBUG-WL] Applying final values: wc={reset_window_center}, ww={reset_window_width}, use_rescaled={self.use_rescaled_values}")
-            # Get unit for window/level display
-            unit = self.rescale_type if (self.use_rescaled_values and self.rescale_type) else None
-            self.window_level_controls.set_window_level(
-                reset_window_center,
-                reset_window_width,
-                block_signals=True,
-                unit=unit
-            )
-            self.current_window_center = reset_window_center
-            self.current_window_width = reset_window_width
-            self.window_level_user_modified = False
-
-        # Re-display current slice with reset window/level and rescale state
-        # Skip if caller will handle redisplay (e.g., to apply projection mode)
         if skip_redisplay:
             return
 
         self._redisplay_current_slice(preserve_view=False)
+
+    def _resolve_match_center_width_for_presets(
+        self, center: float, width: float
+    ) -> tuple[float, float]:
+        """Resolve W/L values used for preset matching (handles stale series values)."""
+        match_tolerance = 0.1
+        values_match_stored = (
+            self.current_window_center is not None and
+            self.current_window_width is not None and
+            abs(self.current_window_center - center) < match_tolerance and
+            abs(self.current_window_width - width) < match_tolerance
+        )
+
+        if (self.window_level_presets and not values_match_stored and
+                self.current_window_center is not None and self.current_window_width is not None):
+            match_center = self.current_window_center
+            match_width = self.current_window_width
+            self.current_window_center = center
+            self.current_window_width = width
+            return match_center, match_width
+
+        self.current_window_center = center
+        self.current_window_width = width
+        return center, width
+
+    def _convert_preset_wl_for_current_rescale(
+        self, preset_wc: float, preset_ww: float, preset_is_rescaled: bool
+    ) -> tuple[float, float]:
+        """Convert preset W/L values to match the current rescale display mode."""
+        if preset_is_rescaled and not self.use_rescaled_values:
+            if (self.rescale_slope is not None and self.rescale_intercept is not None and
+                    self.rescale_slope != 0.0):  # NOSONAR(S1244)
+                return self.dicom_processor.convert_window_level_rescaled_to_raw(
+                    preset_wc, preset_ww, self.rescale_slope, self.rescale_intercept
+                )
+        elif not preset_is_rescaled and self.use_rescaled_values:
+            if self.rescale_slope is not None and self.rescale_intercept is not None:
+                return self.dicom_processor.convert_window_level_raw_to_rescaled(
+                    preset_wc, preset_ww, self.rescale_slope, self.rescale_intercept
+                )
+        return preset_wc, preset_ww
+
+    def _match_window_to_presets(self, match_center: float, match_width: float) -> bool:
+        """Return True if W/L matches a loaded preset."""
+        center_tolerance = max(0.1, abs(match_center) * 0.001)
+        width_tolerance = max(0.1, abs(match_width) * 0.001)
+
+        for idx, (preset_wc, preset_ww, preset_is_rescaled, _preset_name_val) in enumerate(
+            self.window_level_presets
+        ):
+            compare_wc, compare_ww = self._convert_preset_wl_for_current_rescale(
+                preset_wc, preset_ww, preset_is_rescaled
+            )
+            if (abs(compare_wc - match_center) < center_tolerance and
+                    abs(compare_ww - match_width) < width_tolerance):
+                self.current_preset_index = idx
+                self.window_level_user_modified = False
+                return True
+        return False
 
     def handle_window_changed(self, center: float, width: float) -> None:
         """
@@ -628,122 +708,99 @@ class ViewStateManager:
         if DEBUG_LAYOUT:
             ts = datetime.now().strftime("%H:%M:%S.%f")
             print(f"[DEBUG-LAYOUT] [{ts}] handle_window_changed: view_state_manager id={id(self)} image_viewer id={id(self.image_viewer)} center={center:.2f} width={width:.2f}")
-        # DEBUG: Print received values and current state
-        # print(f"[DEBUG-WL] handle_window_changed called: center={center:.2f}, width={width:.2f}")
-        # print(f"[DEBUG-WL]   Current stored: center={self.current_window_center}, width={self.current_window_width}")
-        # print(f"[DEBUG-WL]   ImageViewer: {self.image_viewer}")
-        # print(f"[DEBUG-WL]   Rescale state: use_rescaled={self.use_rescaled_values}, slope={self.rescale_slope}, intercept={self.rescale_intercept}")
-        # print(f"[DEBUG-WL]   Available presets: {len(self.window_level_presets) if self.window_level_presets else 0}")
 
-        # Check if received values match stored values (to detect stale values from previous series)
-        # Use small tolerance for comparison
-        match_tolerance = 0.1
-        values_match_stored = (
-            self.current_window_center is not None and
-            self.current_window_width is not None and
-            abs(self.current_window_center - center) < match_tolerance and
-            abs(self.current_window_width - width) < match_tolerance
-        )
+        match_center, match_width = self._resolve_match_center_width_for_presets(center, width)
 
-        # If presets exist and received values don't match stored values, use stored values for preset matching
-        # This handles the case where stale values from previous series are received
-        match_center = center
-        match_width = width
-        if self.window_level_presets and not values_match_stored and self.current_window_center is not None and self.current_window_width is not None:
-            # print(f"[DEBUG-PRESET-MATCH] Received values don't match stored values - using stored values for preset matching")
-            # print(f"[DEBUG-PRESET-MATCH]   Received: center={center:.2f}, width={width:.2f}")
-            # print(f"[DEBUG-PRESET-MATCH]   Stored: center={self.current_window_center:.2f}, width={self.current_window_width:.2f}")
-            match_center = self.current_window_center
-            match_width = self.current_window_width
-            # CRITICAL FIX: Always store the new values, even if we use stored values for matching
-            # This ensures window/level changes are actually applied
-            self.current_window_center = center
-            self.current_window_width = width
-        else:
-            # Store current window/level values (only if they match stored or no stored values exist)
-            self.current_window_center = center
-            self.current_window_width = width
-
-        # Check if the new values match any existing preset
-        matched_preset = False
-
-        # Skip preset matching if no presets are loaded yet
         if not self.window_level_presets:
-            # No presets available, mark as user-modified
-            # print(f"[DEBUG-PRESET-MATCH] No presets available, marking as user-modified")
             self.window_level_user_modified = True
+            matched_preset = False
         else:
-            # Use relative tolerance for better matching with larger values
-            # Use 0.1% relative tolerance, with minimum absolute tolerance of 0.1
-            center_tolerance = max(0.1, abs(match_center) * 0.001)
-            width_tolerance = max(0.1, abs(match_width) * 0.001)
-            # print(f"[DEBUG-PRESET-MATCH] Using values for matching: center={match_center:.2f}, width={match_width:.2f}")
-            # print(f"[DEBUG-PRESET-MATCH] Tolerances: center_tol={center_tolerance:.4f}, width_tol={width_tolerance:.4f}")
+            matched_preset = self._match_window_to_presets(match_center, match_width)
 
-            for idx, (preset_wc, preset_ww, preset_is_rescaled, _preset_name_val) in enumerate(self.window_level_presets):
-                # print(f"[DEBUG-PRESET-MATCH] Checking preset {idx}: original wc={preset_wc:.2f}, ww={preset_ww:.2f}, is_rescaled={preset_is_rescaled}, name={preset_name_val}")
-
-                # Convert preset values to match current rescale state before comparing
-                compare_wc = preset_wc
-                compare_ww = preset_ww
-
-                # Convert if needed based on current rescale state
-                # Only convert if rescale parameters are available
-                if preset_is_rescaled and not self.use_rescaled_values:
-                    # Preset is rescaled, but we're using raw - convert preset to raw
-                    if (self.rescale_slope is not None and self.rescale_intercept is not None and
-                        # RescaleSlope is DICOM DS-VR; exact 0.0 is well-defined
-                        self.rescale_slope != 0.0):  # NOSONAR(S1244)
-                        compare_wc, compare_ww = self.dicom_processor.convert_window_level_rescaled_to_raw(
-                            preset_wc, preset_ww, self.rescale_slope, self.rescale_intercept
-                        )
-                        # print(f"[DEBUG-PRESET-MATCH] Converted rescaled->raw: ({preset_wc:.2f}, {preset_ww:.2f}) -> ({compare_wc:.2f}, {compare_ww:.2f})")
-                elif not preset_is_rescaled and self.use_rescaled_values:
-                    # Preset is raw, but we're using rescaled - convert preset to rescaled
-                    if (self.rescale_slope is not None and self.rescale_intercept is not None):
-                        compare_wc, compare_ww = self.dicom_processor.convert_window_level_raw_to_rescaled(
-                            preset_wc, preset_ww, self.rescale_slope, self.rescale_intercept
-                        )
-                        # print(f"[DEBUG-PRESET-MATCH] Converted raw->rescaled: ({preset_wc:.2f}, {preset_ww:.2f}) -> ({compare_wc:.2f}, {compare_ww:.2f})")
-                else:
-                    # print(f"[DEBUG-PRESET-MATCH] No conversion needed: preset_is_rescaled={preset_is_rescaled}, use_rescaled={self.use_rescaled_values}")
-                    pass
-
-                # Compare converted preset values with match values using relative tolerance
-                center_diff = abs(compare_wc - match_center)
-                width_diff = abs(compare_ww - match_width)
-                center_match = center_diff < center_tolerance
-                width_match = width_diff < width_tolerance
-
-                # print(f"[DEBUG-PRESET-MATCH] Comparison: compare_wc={compare_wc:.2f} vs match_center={match_center:.2f} (diff={center_diff:.4f}, tol={center_tolerance:.4f}, match={center_match})")
-                # print(f"[DEBUG-PRESET-MATCH] Comparison: compare_ww={compare_ww:.2f} vs match_width={match_width:.2f} (diff={width_diff:.4f}, tol={width_tolerance:.4f}, match={width_match})")
-
-                if center_match and width_match:
-                    # Found a match - this is a preset, not a user modification
-                    # print(f"[DEBUG-PRESET-MATCH] MATCH FOUND! Preset {idx} matches: {preset_name_val if preset_name_val else 'Default'}")
-                    self.current_preset_index = idx
-                    self.window_level_user_modified = False
-                    matched_preset = True
-                    break
-                else:
-                    # print(f"[DEBUG-PRESET-MATCH] No match for preset {idx}")
-                    pass
-
-        # If no preset match found, mark as user-modified
         if not matched_preset:
-            # print(f"[DEBUG-PRESET-MATCH] No preset match found, marking as user-modified")
             self.window_level_user_modified = True
 
-        # Update status bar widget (numeric W/L only — no preset name)
         from core.view_state_handlers import update_zoom_wl_status_from_view_state
 
         update_zoom_wl_status_from_view_state(self)
 
-        # DEBUG: Log final stored values before redisplay
-        # print(f"[DEBUG-WL]   After update: center={self.current_window_center}, width={self.current_window_width}")
-        # print(f"[DEBUG-WL]   Calling _redisplay_current_slice(preserve_view=True)")
+        self._redisplay_current_slice(preserve_view=True)
 
-        # Re-display current slice with new window/level
+    def _convert_wl_for_rescale_toggle(
+        self, checked: bool, current_center: float | None, current_width: float | None
+    ) -> tuple[float | None, float | None]:
+        """Convert W/L values when toggling rescale display mode."""
+        if (current_center is None or current_width is None or
+                self.rescale_slope is None or self.rescale_intercept is None or
+                self.rescale_slope == 0.0):  # NOSONAR(S1244)
+            return current_center, current_width
+
+        if self.use_rescaled_values and not checked:
+            return self.dicom_processor.convert_window_level_rescaled_to_raw(
+                current_center, current_width, self.rescale_slope, self.rescale_intercept
+            )
+        if not self.use_rescaled_values and checked:
+            return self.dicom_processor.convert_window_level_raw_to_rescaled(
+                current_center, current_width, self.rescale_slope, self.rescale_intercept
+            )
+        return current_center, current_width
+
+    def _compute_rescale_toggle_control_ranges(
+        self, pixel_min: float, pixel_max: float
+    ) -> tuple[tuple[float, float], tuple[float, float]]:
+        """Compute W/L control ranges after a rescale toggle."""
+        if self.current_studies and self.current_study_uid and self.current_series_uid:
+            if (self.current_study_uid in self.current_studies and
+                    self.current_series_uid in self.current_studies[self.current_study_uid]):
+                series_datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
+                try:
+                    series_pixel_min, series_pixel_max = self.dicom_processor.get_series_pixel_value_range(
+                        series_datasets, apply_rescale=self.use_rescaled_values
+                    )
+                    self.set_series_pixel_range(series_pixel_min, series_pixel_max)
+                    if series_pixel_min is not None and series_pixel_max is not None:
+                        return (
+                            (series_pixel_min, series_pixel_max),
+                            (1.0, max(1.0, series_pixel_max - series_pixel_min)),
+                        )
+                except Exception as e:
+                    error_type = type(e).__name__
+                    print_redacted(
+                        f"Error recalculating series pixel range for rescale toggle ({error_type}): {e}"
+                    )
+                    self.clear_series_pixel_range()
+
+        return (
+            (pixel_min, pixel_max),
+            (1.0, max(1.0, pixel_max - pixel_min)),
+        )
+
+    def _refresh_ranges_after_rescale_toggle(
+        self, current_center: float | None, current_width: float | None
+    ) -> None:
+        """Recalculate control ranges and W/L after rescale toggle."""
+        dataset = self.current_dataset
+        if dataset is None:
+            return
+        pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(
+            dataset, apply_rescale=self.use_rescaled_values
+        )
+        if pixel_min is not None and pixel_max is not None:
+            center_range, width_range = self._compute_rescale_toggle_control_ranges(
+                pixel_min, pixel_max
+            )
+            self.window_level_controls.set_ranges(center_range, width_range)
+
+        unit = self.rescale_type if (self.use_rescaled_values and self.rescale_type) else None
+        self.window_level_controls.set_unit(unit)
+
+        if current_center is not None and current_width is not None:
+            self.current_window_center = current_center
+            self.current_window_width = current_width
+            self.window_level_controls.set_window_level(
+                current_center, current_width, block_signals=True, unit=unit
+            )
+
         self._redisplay_current_slice(preserve_view=True)
 
     def handle_rescale_toggle(self, checked: bool) -> None:
@@ -755,103 +812,56 @@ class ViewStateManager:
         Args:
             checked: True to use rescaled values, False to use raw values
         """
-        # Get current window/level values before updating state
         current_center = self.current_window_center
         current_width = self.current_window_width
 
-        # Convert window/level values if we have rescale parameters
-        if (current_center is not None and current_width is not None and
-            self.rescale_slope is not None and self.rescale_intercept is not None and
-            # RescaleSlope is DICOM DS-VR; exact 0.0 is well-defined
-            self.rescale_slope != 0.0):  # NOSONAR(S1244)
+        current_center, current_width = self._convert_wl_for_rescale_toggle(
+            checked, current_center, current_width
+        )
 
-            # Determine conversion direction
-            if self.use_rescaled_values and not checked:
-                # Toggling from rescaled to raw: convert rescaled -> raw
-                current_center, current_width = self.dicom_processor.convert_window_level_rescaled_to_raw(
-                    current_center, current_width, self.rescale_slope, self.rescale_intercept
-                )
-            elif not self.use_rescaled_values and checked:
-                # Toggling from raw to rescaled: convert raw -> rescaled
-                current_center, current_width = self.dicom_processor.convert_window_level_raw_to_rescaled(
-                    current_center, current_width, self.rescale_slope, self.rescale_intercept
-                )
-
-        # Update state
         self.use_rescaled_values = checked
-
-        # Update UI toggle states
         self.main_window.set_rescale_toggle_state(checked)
         self.image_viewer.set_rescale_toggle_state(checked)
 
-        # Recalculate and update everything
         if self.current_dataset is not None:
-            # Recalculate pixel value ranges
-            pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(
-                self.current_dataset, apply_rescale=self.use_rescaled_values
-            )
-            if pixel_min is not None and pixel_max is not None:
-                # Recalculate series pixel range for both center and width ranges
-                # Get all datasets for current series
-                if self.current_studies and self.current_study_uid and self.current_series_uid:
-                    if (self.current_study_uid in self.current_studies and
-                        self.current_series_uid in self.current_studies[self.current_study_uid]):
-                        series_datasets = self.current_studies[self.current_study_uid][self.current_series_uid]
-                        try:
-                            series_pixel_min, series_pixel_max = self.dicom_processor.get_series_pixel_value_range(
-                                series_datasets, apply_rescale=self.use_rescaled_values
-                            )
-                            # Store the recalculated series pixel range
-                            self.set_series_pixel_range(series_pixel_min, series_pixel_max)
-
-                            # Use series range for both center and width ranges if available
-                            if series_pixel_min is not None and series_pixel_max is not None:
-                                center_range = (series_pixel_min, series_pixel_max)
-                                width_range = (1.0, max(1.0, series_pixel_max - series_pixel_min))
-                            else:
-                                # Fallback to current slice range
-                                center_range = (pixel_min, pixel_max)
-                                width_range = (1.0, max(1.0, pixel_max - pixel_min))
-                        except Exception as e:
-                            # If series pixel range calculation fails, use current slice range
-                            error_type = type(e).__name__
-                            print_redacted(f"Error recalculating series pixel range for rescale toggle ({error_type}): {e}")
-                            center_range = (pixel_min, pixel_max)
-                            width_range = (1.0, max(1.0, pixel_max - pixel_min))
-                            # Clear stored series pixel range on error
-                            self.clear_series_pixel_range()
-                    else:
-                        # Series not found, use current slice range
-                        center_range = (pixel_min, pixel_max)
-                        width_range = (1.0, max(1.0, pixel_max - pixel_min))
-                else:
-                    # No series data available, use current slice range
-                    center_range = (pixel_min, pixel_max)
-                    width_range = (1.0, max(1.0, pixel_max - pixel_min))
-
-                self.window_level_controls.set_ranges(center_range, width_range)
-
-            # Update window/level unit labels
-            # Note: rescale_type in view_state_manager should already be inferred (from display_slice)
-            unit = self.rescale_type if (self.use_rescaled_values and self.rescale_type) else None
-            self.window_level_controls.set_unit(unit)  # unit may be None to clear display
-
-            # Update window/level controls with converted values
-            if current_center is not None and current_width is not None:
-                self.current_window_center = current_center
-                self.current_window_width = current_width
-                self.window_level_controls.set_window_level(
-                    current_center, current_width, block_signals=True, unit=unit
-                )
-
-            # Re-display current slice with new rescale setting
-            self._redisplay_current_slice(preserve_view=True)
+            self._refresh_ranges_after_rescale_toggle(current_center, current_width)
 
         from core.view_state_handlers import update_zoom_wl_status_from_view_state
 
         update_zoom_wl_status_from_view_state(self)
 
-    def handle_zoom_changed(self, zoom_level: float) -> None:
+    def _is_subwindow_focused(self) -> bool:
+        """Return True when this viewer's subwindow is focused (or not in a subwindow)."""
+        from gui.sub_window_container import SubWindowContainer
+        parent = self.image_viewer.parent()
+        if isinstance(parent, SubWindowContainer):
+            return parent.is_focused
+        return True
+
+    def _refit_image_after_viewport_resize(self, vw: int, vh: int) -> None:
+        """Fit or recenter image after viewport size change."""
+        if self.saved_scene_center is not None:
+            self.image_viewer.fit_to_view(center_image=False)
+            self.image_viewer.centerOn(self.saved_scene_center)
+            self.saved_scene_center = None
+            return
+
+        skip_fit = (
+            self._viewport_pixel_size_at_last_resize is not None
+            and self._viewport_pixel_size_at_last_resize == (vw, vh)
+            and self.image_viewer.is_effectively_fit_and_centered()
+        )
+        if not skip_fit:
+            self.image_viewer.fit_to_view(center_image=True)
+
+    def _update_overlays_after_viewport_resize(self, is_focused: bool) -> None:
+        """Update overlay positions after viewport resize."""
+        if self.current_dataset is None:
+            return
+        if self.overlay_manager.use_widget_overlays or is_focused:
+            self.overlay_manager.update_overlay_positions(self.image_viewer.scene)
+
+    def handle_zoom_changed(self, _zoom_level: float) -> None:
         """
         Handle zoom level change.
         
@@ -864,9 +874,6 @@ class ViewStateManager:
         Args:
             zoom_level: Current zoom level
         """
-        # Diagnostic logging: Zoom change event (commented out to reduce noise)
-        # view_transform = self.image_viewer.transform()
-        # print(f"[DEBUG-DIAG] handle_zoom_changed: zoom_level={zoom_level:.6f}, transform_scale={view_transform.m11():.6f}")
 
         # Update overlay positions immediately when zoom changes
         # This eliminates jitter by updating synchronously with zoom changes,
@@ -931,56 +938,24 @@ class ViewStateManager:
         Only updates overlay if the subwindow is focused, preventing overlay movement
         when hovering over unfocused subwindows.
         """
-        # Check if this subwindow is focused before updating overlay
-        # This prevents overlay from moving when hovering over unfocused subwindows
-        from gui.sub_window_container import SubWindowContainer
-        parent = self.image_viewer.parent()
-        is_focused = True  # Default to True if not in a subwindow container
-        if isinstance(parent, SubWindowContainer):
-            is_focused = parent.is_focused
+        is_focused = self._is_subwindow_focused()
         if DEBUG_LAYOUT:
             had_center = self.saved_scene_center is not None
             center_val = self.saved_scene_center
             ts = datetime.now().strftime("%H:%M:%S.%f")
             if DEBUG_LAYOUT:
                 print(f"[DEBUG-LAYOUT] [{ts}] handle_viewport_resized: view_state_manager id={id(self)} image_viewer id={id(self.image_viewer)} is_focused={is_focused} had_saved_scene_center={had_center} center={center_val}")
-        # This works for splitter moves, series navigator show/hide, and layout changes
+
         if self.image_viewer.image_item is not None:
             vp = self.image_viewer.viewport()
             vw = int(vp.width()) if vp is not None else 0
             vh = int(vp.height()) if vp is not None else 0
-            if self.saved_scene_center is not None:
-                # print(f"[DEBUG-LAYOUT] handle_viewport_resized: Restoring scene center = {self.saved_scene_center}")
-                # First, fit the image to the new viewport size (rescale to fill)
-                self.image_viewer.fit_to_view(center_image=False)
-                # Then restore the center point that was captured before the resize
-                self.image_viewer.centerOn(self.saved_scene_center)
-                self.saved_scene_center = None  # Clear after use
-                # print(f"[DEBUG-LAYOUT] handle_viewport_resized: Center restored, saved_scene_center cleared")
-            else:
-                # No saved center: refit unless viewport size unchanged and already fit+centered (avoid redundant refit/recenter).
-                skip_fit = (
-                    self._viewport_pixel_size_at_last_resize is not None
-                    and self._viewport_pixel_size_at_last_resize == (vw, vh)
-                    and self.image_viewer.is_effectively_fit_and_centered()
-                )
-                if not skip_fit:
-                    # Unfocused pane or no saved center: still fit image to new viewport (e.g. when switching 2x2→1x2 the unfocused visible pane must rescale)
-                    self.image_viewer.fit_to_view(center_image=True)
+            self._refit_image_after_viewport_resize(vw, vh)
             self._viewport_pixel_size_at_last_resize = (vw, vh)
         else:
             self._viewport_pixel_size_at_last_resize = None
 
-        # Update overlay positions when viewport size changes
-        # For QWidget overlays, always update (they stay fixed at viewport corners)
-        # For QGraphicsItem overlays, only update if focused
-        if self.current_dataset is not None:
-            if self.overlay_manager.use_widget_overlays:
-                # QWidget overlays: always update on resize
-                self.overlay_manager.update_overlay_positions(self.image_viewer.scene)
-            elif is_focused:
-                # QGraphicsItem overlays: only update if focused
-                self.overlay_manager.update_overlay_positions(self.image_viewer.scene)
+        self._update_overlays_after_viewport_resize(is_focused)
 
     def handle_window_level_drag(self, center_delta: float, width_delta: float) -> None:
         """
@@ -1082,9 +1057,6 @@ class ViewStateManager:
         self._user_wl_cache.clear()
 
     def set_rescale_parameters(self, slope: float | None, intercept: float | None, rescale_type: str | None) -> None:
-        # DEBUG: Log when rescale_type is set
-        # print(f"[WL UNIT DEBUG] set_rescale_parameters called")
-        # print(f"[WL UNIT DEBUG]   slope: {slope}, intercept: {intercept}, rescale_type: {rescale_type}")
         """
         Set rescale parameters from dataset.
         

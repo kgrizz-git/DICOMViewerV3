@@ -63,6 +63,10 @@ MEASUREMENT_CSV_HEADERS: list[str] = [
 ]
 
 
+
+_TAG_SERIES_DESCRIPTION = "SeriesDescription"
+_DEFAULT_UNKNOWN_SERIES = "Unknown Series"
+
 def _sanitize_filename(s: str) -> str:
     """Replace characters invalid in filenames with underscore."""
     return re.sub(r'[/\\:*?"<>|]', '_', s).strip()
@@ -437,7 +441,7 @@ def write_txt(
             continue
         first_ds = series_dict[0]
         series_num = getattr(first_ds, "SeriesNumber", "")
-        series_desc = getattr(first_ds, "SeriesDescription", "Unknown Series")
+        series_desc = getattr(first_ds, _TAG_SERIES_DESCRIPTION, _DEFAULT_UNKNOWN_SERIES)
         lines.append(sep)
         lines.append(f"Series {series_num}: {series_desc}")
         lines.append(sep)
@@ -580,7 +584,7 @@ def write_csv(
         first_ds = series_dict[0]
         study_uid_short = (study_uid[:36] + "..") if len(study_uid) > 38 else study_uid
         series_num = getattr(first_ds, "SeriesNumber", "")
-        series_desc = getattr(first_ds, "SeriesDescription", "Unknown Series")
+        series_desc = getattr(first_ds, _TAG_SERIES_DESCRIPTION, _DEFAULT_UNKNOWN_SERIES)
 
         for z, rois, crosshairs, measurements in slice_list:
             dataset = series_dict[z] if z < len(series_dict) else None
@@ -772,7 +776,7 @@ def write_xlsx(
             continue
         first_ds = series_dict[0]
         series_num = getattr(first_ds, "SeriesNumber", "")
-        series_desc = getattr(first_ds, "SeriesDescription", "Unknown Series")
+        series_desc = getattr(first_ds, _TAG_SERIES_DESCRIPTION, _DEFAULT_UNKNOWN_SERIES)
         study_desc = getattr(first_ds, "StudyDescription", "Study")[:31]
         study_desc = _sanitize_filename(study_desc) or "Study"
 

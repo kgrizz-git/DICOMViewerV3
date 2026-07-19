@@ -101,6 +101,12 @@ _NUCLEAR_CLASS_ROUTING = {
 from qa.worker import QAAnalysisWorker, QABatchWorker
 from version import __version__ as APP_VERSION
 
+_BTN_USE_FOCUSED_SERIES = "Use Focused Series"
+_BTN_CHOOSE_FOLDER = "Choose Folder"
+
+
+
+_UTC_TIMESTAMP_FMT = "%Y%m%dT%H%M%SZ"
 
 class QAAppFacade:
     """Cohesive ACR QA / pylinac entry paths cut from ``DICOMViewerApp``."""
@@ -252,7 +258,7 @@ class QAAppFacade:
         document.
         """
         app = self._app
-        timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+        timestamp = datetime.now(UTC).strftime(_UTC_TIMESTAMP_FMT)
         path = app._prompt_save_path(
             "Save QA Results (JSON or CSV)",
             f"{default_stem}-{timestamp}.json",
@@ -283,7 +289,7 @@ class QAAppFacade:
     ) -> None:
         """Offer JSON export for a finished Stage 1 QA run."""
         app = self._app
-        timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+        timestamp = datetime.now(UTC).strftime(_UTC_TIMESTAMP_FMT)
         json_path = app._prompt_save_path(
             "Save QA Results JSON",
             f"{default_stem}-{timestamp}.json",
@@ -465,8 +471,8 @@ class QAAppFacade:
             choice = QMessageBox(app.main_window)
             choice.setWindowTitle("ACR CT Analysis Source")
             choice.setText("Use the focused series or choose a folder?")
-            choice.addButton("Use Focused Series", QMessageBox.ButtonRole.AcceptRole)
-            choice.addButton("Choose Folder", QMessageBox.ButtonRole.ActionRole)
+            choice.addButton(_BTN_USE_FOCUSED_SERIES, QMessageBox.ButtonRole.AcceptRole)
+            choice.addButton(_BTN_CHOOSE_FOLDER, QMessageBox.ButtonRole.ActionRole)
             choice.addButton(QMessageBox.StandardButton.Cancel)
             choice.setWindowFlags(choice.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
             choice.activateWindow()
@@ -475,9 +481,9 @@ class QAAppFacade:
             clicked = choice.clickedButton()
             if clicked is None or clicked == choice.button(QMessageBox.StandardButton.Cancel):
                 return
-            if clicked.text() == "Choose Folder":
+            if clicked.text() == _BTN_CHOOSE_FOLDER:
                 use_focused = False
-            elif clicked.text() == "Use Focused Series":
+            elif clicked.text() == _BTN_USE_FOCUSED_SERIES:
                 use_focused = True
             else:
                 return
@@ -568,8 +574,8 @@ class QAAppFacade:
             choice = QMessageBox(app.main_window)
             choice.setWindowTitle("ACR MRI Analysis Source")
             choice.setText("Use the focused series or choose a folder?")
-            choice.addButton("Use Focused Series", QMessageBox.ButtonRole.AcceptRole)
-            choice.addButton("Choose Folder", QMessageBox.ButtonRole.ActionRole)
+            choice.addButton(_BTN_USE_FOCUSED_SERIES, QMessageBox.ButtonRole.AcceptRole)
+            choice.addButton(_BTN_CHOOSE_FOLDER, QMessageBox.ButtonRole.ActionRole)
             choice.addButton(QMessageBox.StandardButton.Cancel)
             choice.setWindowFlags(choice.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
             choice.activateWindow()
@@ -578,9 +584,9 @@ class QAAppFacade:
             clicked = choice.clickedButton()
             if clicked is None or clicked == choice.button(QMessageBox.StandardButton.Cancel):
                 return
-            if clicked.text() == "Choose Folder":
+            if clicked.text() == _BTN_CHOOSE_FOLDER:
                 use_focused = False
-            elif clicked.text() == "Use Focused Series":
+            elif clicked.text() == _BTN_USE_FOCUSED_SERIES:
                 use_focused = True
             else:
                 return
@@ -966,7 +972,7 @@ class QAAppFacade:
             inputs: Top-level inputs dict to embed (from json_inputs).
         """
         app = self._app
-        timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+        timestamp = datetime.now(UTC).strftime(_UTC_TIMESTAMP_FMT)
         json_path = app._prompt_save_path(
             "Save QA Compare Results JSON",
             f"qa-acr-mri-compare-{timestamp}.json",

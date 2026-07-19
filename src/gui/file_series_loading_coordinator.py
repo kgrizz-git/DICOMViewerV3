@@ -272,10 +272,9 @@ class FileSeriesLoadingCoordinator:
                             'current_datasets': []
                         }
                         stale_count += 1
-            if stale_count > 0 and DEBUG_LOADING:
-                if DEBUG_SERIES:
+            if stale_count > 0 and DEBUG_LOADING and DEBUG_SERIES:
 
-                    print(f"[DEBUG] Cleared stale data from {stale_count} subwindow(s)")
+                print(f"[DEBUG] Cleared stale data from {stale_count} subwindow(s)")
 
             # Load Presentation States and Key Objects into annotation manager
             all_presentation_states = {}
@@ -343,14 +342,12 @@ class FileSeriesLoadingCoordinator:
             extracted_series_uid = get_composite_series_key(displayed_dataset)
             extracted_study_uid = getattr(displayed_dataset, 'StudyInstanceUID', '')
 
-            if extracted_series_uid != app.current_series_uid:
-                if DEBUG_SERIES:
+            if extracted_series_uid != app.current_series_uid and DEBUG_SERIES:
 
-                    print("[DEBUG] Syncing subwindow_data after initial load: MISMATCH detected!")
-            if extracted_study_uid != app.current_study_uid:
-                if DEBUG_SERIES:
+                print("[DEBUG] Syncing subwindow_data after initial load: MISMATCH detected!")
+            if extracted_study_uid != app.current_study_uid and DEBUG_SERIES:
 
-                    print_redacted(f"[DEBUG]   Extracted study_uid from dataset: {extracted_study_uid}")
+                print_redacted(f"[DEBUG]   Extracted study_uid from dataset: {extracted_study_uid}")
 
             app.subwindow_data[focused_idx]['current_dataset'] = displayed_dataset
             app.subwindow_data[focused_idx]['current_slice_index'] = app.current_slice_index

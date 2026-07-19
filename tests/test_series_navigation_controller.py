@@ -393,27 +393,27 @@ class TestTryNavigateMultiframeInstance:
     def test_returns_false_when_show_instances_separately_disabled(self):
         app = _make_app()
         app.config_manager.get_show_instances_separately.return_value = False
-        assert _try_navigate_multiframe_instance(app, 0, "study1", "series1", 0, 1) is False
+        assert _try_navigate_multiframe_instance(app, "study1", "series1", 0, 1) is False
 
     def test_returns_false_when_study_or_series_missing(self):
         app = _make_app(current_studies={})
         app.config_manager.get_show_instances_separately.return_value = True
-        assert _try_navigate_multiframe_instance(app, 0, "study1", "series1", 0, 1) is False
+        assert _try_navigate_multiframe_instance(app, "study1", "series1", 0, 1) is False
 
     def test_returns_false_when_study_uid_empty(self):
         app = _make_app(current_studies={})
         app.config_manager.get_show_instances_separately.return_value = True
-        assert _try_navigate_multiframe_instance(app, 0, "", "series1", 0, 1) is False
+        assert _try_navigate_multiframe_instance(app, "", "series1", 0, 1) is False
 
     def test_returns_false_when_series_uid_empty(self):
         app = _make_app(current_studies={})
         app.config_manager.get_show_instances_separately.return_value = True
-        assert _try_navigate_multiframe_instance(app, 0, "study1", "", 0, 1) is False
+        assert _try_navigate_multiframe_instance(app, "study1", "", 0, 1) is False
 
     def test_returns_false_when_series_datasets_empty(self):
         app = _make_app(current_studies={"study1": {"series1": []}})
         app.config_manager.get_show_instances_separately.return_value = True
-        assert _try_navigate_multiframe_instance(app, 0, "study1", "series1", 0, 1) is False
+        assert _try_navigate_multiframe_instance(app, "study1", "series1", 0, 1) is False
 
     def test_returns_false_when_not_multiframe(self):
         ds = _make_dataset()
@@ -422,7 +422,7 @@ class TestTryNavigateMultiframeInstance:
         app.dicom_organizer.get_series_multiframe_info.return_value = SimpleNamespace(
             instance_count=1, max_frame_count=1
         )
-        assert _try_navigate_multiframe_instance(app, 0, "study1", "series1", 0, 1) is False
+        assert _try_navigate_multiframe_instance(app, "study1", "series1", 0, 1) is False
 
     def test_returns_false_when_single_instance_entry(self):
         ds = _make_dataset()
@@ -432,7 +432,7 @@ class TestTryNavigateMultiframeInstance:
             instance_count=2, max_frame_count=3
         )
         app.series_navigator.build_instance_entries.return_value = [(0, 3)]
-        assert _try_navigate_multiframe_instance(app, 0, "study1", "series1", 0, 1) is False
+        assert _try_navigate_multiframe_instance(app, "study1", "series1", 0, 1) is False
 
     def test_navigates_forward_to_next_instance_start(self, qapp):
         subwindow = MagicMock()
@@ -445,7 +445,7 @@ class TestTryNavigateMultiframeInstance:
             instance_count=2, max_frame_count=2
         )
         app.series_navigator.build_instance_entries.return_value = [(0, 2), (2, 2)]
-        result = _try_navigate_multiframe_instance(app, 0, "study1", "series1", 0, 1)
+        result = _try_navigate_multiframe_instance(app, "study1", "series1", 0, 1)
         assert result is True
         subwindow.set_assigned_series.assert_called_once_with("series1", 2)
 
@@ -457,7 +457,7 @@ class TestTryNavigateMultiframeInstance:
             instance_count=2, max_frame_count=2
         )
         app.series_navigator.build_instance_entries.return_value = [(0, 2), (2, 2)]
-        assert _try_navigate_multiframe_instance(app, 0, "study1", "series1", 2, 1) is False
+        assert _try_navigate_multiframe_instance(app, "study1", "series1", 2, 1) is False
 
     def test_navigates_backward_to_previous_instance_start(self, qapp):
         subwindow = MagicMock()
@@ -470,7 +470,7 @@ class TestTryNavigateMultiframeInstance:
             instance_count=2, max_frame_count=2
         )
         app.series_navigator.build_instance_entries.return_value = [(0, 2), (2, 2)]
-        result = _try_navigate_multiframe_instance(app, 0, "study1", "series1", 2, -1)
+        result = _try_navigate_multiframe_instance(app, "study1", "series1", 2, -1)
         assert result is True
         subwindow.set_assigned_series.assert_called_once_with("series1", 0)
 
@@ -482,7 +482,7 @@ class TestTryNavigateMultiframeInstance:
             instance_count=2, max_frame_count=2
         )
         app.series_navigator.build_instance_entries.return_value = [(0, 2), (2, 2)]
-        assert _try_navigate_multiframe_instance(app, 0, "study1", "series1", 0, -1) is False
+        assert _try_navigate_multiframe_instance(app, "study1", "series1", 0, -1) is False
 
     def test_returns_false_when_no_focused_subwindow(self):
         datasets = [_make_dataset() for _ in range(4)]
@@ -493,7 +493,7 @@ class TestTryNavigateMultiframeInstance:
             instance_count=2, max_frame_count=2
         )
         app.series_navigator.build_instance_entries.return_value = [(0, 2), (2, 2)]
-        assert _try_navigate_multiframe_instance(app, 0, "study1", "series1", 0, 1) is False
+        assert _try_navigate_multiframe_instance(app, "study1", "series1", 0, 1) is False
 
     def test_loop_completes_without_break_when_slice_index_before_first_start(self):
         datasets = [_make_dataset() for _ in range(4)]
@@ -506,7 +506,7 @@ class TestTryNavigateMultiframeInstance:
         # "slice_index >= starts[j]" and the search loop runs to completion.
         app.series_navigator.build_instance_entries.return_value = [(1, 2), (3, 2)]
         app.multi_window_layout.get_focused_subwindow.return_value = None
-        assert _try_navigate_multiframe_instance(app, 0, "study1", "series1", 0, -1) is False
+        assert _try_navigate_multiframe_instance(app, "study1", "series1", 0, -1) is False
 
 
 class TestOnSeriesNavigationRequested:

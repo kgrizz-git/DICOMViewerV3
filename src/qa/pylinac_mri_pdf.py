@@ -130,6 +130,7 @@ def build_mri_pdf_notes(result: QAResult) -> list[str]:
     Returns:
         List[str] for the ``notes`` argument of ``ACRMRILarge.publish_pdf``.
     """
+    _ = result  # reserved for result-dependent notes
     return _build_mri_notes_lines()
 
 
