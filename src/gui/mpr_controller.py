@@ -422,6 +422,7 @@ class MprController(QObject):
             worker.quit()
             worker.wait(2000)
 
+
     def _tear_down_mpr_at_subwindow(self, idx: int) -> None:
         """
         Remove MPR keys from *idx*, restore the pre-MPR 2-D state (if any), and
@@ -431,8 +432,25 @@ class MprController(QObject):
         if data is None:
             return
 
-        # Drop slice-location line manager before scene changes so stale line items
-        # cannot survive scene.clear() / restore ordering (matches _clear_subwindow).
+        self._tear_down_remove_slice_location_manager(idx)
+        previous_state = data.get("mpr_previous_state")
+        image_viewer = self._get_image_viewer(idx)
+        self._tear_down_clear_mpr_keys(data)
+        self._set_tools_enabled(idx, enabled=True)
+        self._tear_down_clear_mpr_banner(idx)
+
+        if isinstance(previous_state, dict):
+            self._tear_down_restore_previous_state(idx, data, previous_state)
+        else:
+            self._tear_down_clear_dataset_fields(data)
+
+        if data.get("current_dataset") is None and image_viewer is not None:
+            self._tear_down_clear_empty_viewer(idx, image_viewer)
+
+        self._tear_down_refresh_navigators_and_ui(idx, data)
+
+    def _tear_down_remove_slice_location_manager(self, idx: int) -> None:
+        """Drop slice-location line manager before scene changes."""
         try:
             line_coord = getattr(self._app, "_slice_location_line_coordinator", None)
             if line_coord is not None:
@@ -440,9 +458,8 @@ class MprController(QObject):
         except Exception:
             pass
 
-        previous_state = data.get("mpr_previous_state")
-        image_viewer = self._get_image_viewer(idx)
-
+    def _tear_down_clear_mpr_keys(self, data: dict[str, Any]) -> None:
+        """Remove MPR-specific keys from subwindow data."""
         for key in (
             "is_mpr",
             "mpr_result",
@@ -456,75 +473,89 @@ class MprController(QObject):
         ):
             data.pop(key, None)
 
-        self._set_tools_enabled(idx, enabled=True)
-
+    def _tear_down_clear_mpr_banner(self, idx: int) -> None:
+        """Clear the MPR banner on the overlay manager, if present."""
         managers = self._app.subwindow_managers.get(idx, {})
         overlay_manager = managers.get("overlay_manager")
         if overlay_manager is not None and hasattr(overlay_manager, "set_mpr_banner"):
             overlay_manager.set_mpr_banner(None)
 
-        if isinstance(previous_state, dict):
-            data.update(previous_state)
-            previous_dataset = previous_state.get("current_dataset")
-            previous_slice_index = previous_state.get("current_slice_index", 0)
-            previous_study_uid = previous_state.get("current_study_uid", "")
-            previous_series_uid = previous_state.get("current_series_uid", "")
+    def _tear_down_clear_dataset_fields(self, data: dict[str, Any]) -> None:
+        """Reset current dataset fields when no previous state exists."""
+        data["current_dataset"] = None
+        data["current_slice_index"] = 0
+        data["current_study_uid"] = ""
+        data["current_series_uid"] = ""
+        data["current_datasets"] = []
 
-            sdm = self._app.subwindow_managers.get(idx, {}).get("slice_display_manager")
-            if sdm is not None and previous_dataset is not None:
-                try:
-                    sdm.display_slice(
-                        previous_dataset,
-                        self._app.current_studies,
-                        previous_study_uid,
-                        previous_series_uid,
-                        previous_slice_index,
-                        preserve_view_override=True,
-                        update_controls=(idx == getattr(self._app, "focused_subwindow_index", -1)),
-                        update_metadata=(idx == getattr(self._app, "focused_subwindow_index", -1)),
-                    )
-                except Exception as exc:
-                    print_redacted(f"[MprController] Failed to restore prior slice in window {idx}: {exc}")
+    def _tear_down_restore_previous_state(
+        self, idx: int, data: dict[str, Any], previous_state: dict[str, Any]
+    ) -> None:
+        """Restore pre-MPR 2-D state and redisplay the prior slice when possible."""
+        data.update(previous_state)
+        previous_dataset = previous_state.get("current_dataset")
+        previous_slice_index = previous_state.get("current_slice_index", 0)
+        previous_study_uid = previous_state.get("current_study_uid", "")
+        previous_series_uid = previous_state.get("current_series_uid", "")
 
-            if idx == getattr(self._app, "focused_subwindow_index", -1):
-                self._app.current_dataset = previous_dataset
-                self._app.current_slice_index = previous_slice_index
-                self._app.current_study_uid = previous_study_uid
-                self._app.current_series_uid = previous_series_uid
-                self._app.current_datasets = previous_state.get("current_datasets", [])
-        else:
-            data["current_dataset"] = None
-            data["current_slice_index"] = 0
-            data["current_study_uid"] = ""
-            data["current_series_uid"] = ""
-            data["current_datasets"] = []
-
-        if data.get("current_dataset") is None and image_viewer is not None:
+        sdm = self._app.subwindow_managers.get(idx, {}).get("slice_display_manager")
+        if sdm is not None and previous_dataset is not None:
             try:
-                if overlay_manager is not None:
-                    overlay_manager.clear_overlay_items(image_viewer.scene)
-                image_viewer.scene.clear()
-                image_viewer.image_item = None
-                image_viewer.original_image = None
-                image_viewer.viewport().update()
+                sdm.display_slice(
+                    previous_dataset,
+                    self._app.current_studies,
+                    previous_study_uid,
+                    previous_series_uid,
+                    previous_slice_index,
+                    preserve_view_override=True,
+                    update_controls=(idx == getattr(self._app, "focused_subwindow_index", -1)),
+                    update_metadata=(idx == getattr(self._app, "focused_subwindow_index", -1)),
+                )
             except Exception as exc:
-                print_redacted(f"[MprController] Failed to clear MPR view in window {idx}: {exc}")
+                print_redacted(
+                    f"[MprController] Failed to restore prior slice in window {idx}: {exc}"
+                )
 
-            view_state_manager = self._app.subwindow_managers.get(idx, {}).get("view_state_manager")
-            if view_state_manager is not None:
-                try:
-                    view_state_manager.set_current_data_context(None, {}, "", "", 0)
-                    view_state_manager.set_current_series_identifier(None)
-                except Exception as exc:
-                    print_redacted(f"[MprController] Failed to reset view state for window {idx}: {exc}")
+        if idx == getattr(self._app, "focused_subwindow_index", -1):
+            self._app.current_dataset = previous_dataset
+            self._app.current_slice_index = previous_slice_index
+            self._app.current_study_uid = previous_study_uid
+            self._app.current_series_uid = previous_series_uid
+            self._app.current_datasets = previous_state.get("current_datasets", [])
 
-            if idx == getattr(self._app, "focused_subwindow_index", -1):
-                self._app.current_dataset = None
-                self._app.current_slice_index = 0
-                self._app.current_study_uid = ""
-                self._app.current_series_uid = ""
-                self._app.current_datasets = []
+    def _tear_down_clear_empty_viewer(self, idx: int, image_viewer: Any) -> None:
+        """Clear the viewer and view-state when no dataset remains after tear-down."""
+        managers = self._app.subwindow_managers.get(idx, {})
+        overlay_manager = managers.get("overlay_manager")
+        try:
+            if overlay_manager is not None:
+                overlay_manager.clear_overlay_items(image_viewer.scene)
+            image_viewer.scene.clear()
+            image_viewer.image_item = None
+            image_viewer.original_image = None
+            image_viewer.viewport().update()
+        except Exception as exc:
+            print_redacted(f"[MprController] Failed to clear MPR view in window {idx}: {exc}")
 
+        view_state_manager = managers.get("view_state_manager")
+        if view_state_manager is not None:
+            try:
+                view_state_manager.set_current_data_context(None, {}, "", "", 0)
+                view_state_manager.set_current_series_identifier(None)
+            except Exception as exc:
+                print_redacted(
+                    f"[MprController] Failed to reset view state for window {idx}: {exc}"
+                )
+
+        if idx == getattr(self._app, "focused_subwindow_index", -1):
+            self._app.current_dataset = None
+            self._app.current_slice_index = 0
+            self._app.current_study_uid = ""
+            self._app.current_series_uid = ""
+            self._app.current_datasets = []
+
+    def _tear_down_refresh_navigators_and_ui(self, idx: int, data: dict[str, Any]) -> None:
+        """Refresh navigators, slot map, lines, and slider after tear-down."""
         try:
             if (
                 hasattr(self._app, "slice_navigator")
@@ -533,13 +564,17 @@ class MprController(QObject):
                 datasets = data.get("current_datasets") or []
                 self._app.slice_navigator.set_total_slices(len(datasets))
                 self._app.slice_navigator.blockSignals(True)
-                self._app.slice_navigator.current_slice_index = data.get("current_slice_index", 0)
+                self._app.slice_navigator.current_slice_index = data.get(
+                    "current_slice_index", 0
+                )
                 self._app.slice_navigator.blockSignals(False)
         except Exception:
             pass
 
         try:
-            if hasattr(self._app, "series_navigator") and hasattr(self._app, "_get_subwindow_assignments"):
+            if hasattr(self._app, "series_navigator") and hasattr(
+                self._app, "_get_subwindow_assignments"
+            ):
                 assignments = self._app._get_subwindow_assignments()
                 self._app.series_navigator.set_subwindow_assignments(assignments)
         except Exception:
@@ -740,6 +775,7 @@ class MprController(QObject):
         self._tear_down_mpr_at_subwindow(idx)
         self.mpr_detached.emit(idx)
 
+
     def _install_mpr_payload_at_subwindow(self, idx: int, payload: dict[str, Any]) -> bool:
         """
         Apply a captured MPR payload to *idx* (same end state as _activate_mpr).
@@ -756,15 +792,7 @@ class MprController(QObject):
             return False
 
         orientation_label = str(payload.get("mpr_orientation", "MPR") or "MPR")
-
-        if "mpr_previous_state" not in data:
-            data["mpr_previous_state"] = {
-                "current_dataset": data.get("current_dataset"),
-                "current_slice_index": data.get("current_slice_index", 0),
-                "current_series_uid": data.get("current_series_uid", ""),
-                "current_study_uid": data.get("current_study_uid", ""),
-                "current_datasets": list(data.get("current_datasets", [])),
-            }
+        self._ensure_mpr_previous_state(data)
 
         try:
             source_ds = result.source_volume.source_datasets[0]
@@ -776,62 +804,108 @@ class MprController(QObject):
         si = int(payload.get("mpr_slice_index", 0))
         si = max(0, min(si, n_sl - 1))
 
+        self._install_write_payload_fields(
+            data, payload, result, orientation_label, source_ds, si
+        )
+
+        try:
+            self._sync_slice_navigator_for_mpr(idx, result.n_slices, data["mpr_slice_index"])
+            self._set_tools_enabled(idx, enabled=False)
+            self._reset_window_level_for_mpr(idx, source_ds)
+
+            self.display_mpr_slice(idx, data["mpr_slice_index"])
+            self._fit_image_viewer_after_mpr(idx)
+            self._apply_mpr_banner(idx, data)
+            self._sync_intensity_projection_if_focused(idx, data)
+        except Exception as exc:
+            _mpr_log(f"_install_mpr_payload_at_subwindow failed: {exc}")
+            return False
+        return True
+
+    def _ensure_mpr_previous_state(self, data: dict[str, Any]) -> None:
+        """Snapshot pre-MPR 2-D state once per subwindow session."""
+        if "mpr_previous_state" in data:
+            return
+        data["mpr_previous_state"] = {
+            "current_dataset": data.get("current_dataset"),
+            "current_slice_index": data.get("current_slice_index", 0),
+            "current_series_uid": data.get("current_series_uid", ""),
+            "current_study_uid": data.get("current_study_uid", ""),
+            "current_datasets": list(data.get("current_datasets", [])),
+        }
+
+    def _install_write_payload_fields(
+        self,
+        data: dict[str, Any],
+        payload: dict[str, Any],
+        result: MprResult,
+        orientation_label: str,
+        source_ds: Any,
+        slice_index: int,
+    ) -> None:
+        """Copy payload / result fields into subwindow_data for install."""
         data["is_mpr"] = True
         data["mpr_result"] = result
         data["mpr_orientation"] = orientation_label
-        data["mpr_slice_index"] = si
+        data["mpr_slice_index"] = slice_index
         data["mpr_source_dataset"] = payload.get("mpr_source_dataset") or source_ds
         data["current_study_uid"] = str(payload.get("current_study_uid", "") or "")
         data["current_series_uid"] = str(payload.get("current_series_uid", "") or "")
         data["current_datasets"] = list(payload.get("current_datasets") or [])
-
         data["mpr_combine_enabled"] = bool(payload.get("mpr_combine_enabled", False))
         data["mpr_combine_mode"] = str(payload.get("mpr_combine_mode", "aip") or "aip")
         data["mpr_combine_slice_count"] = int(
             payload.get("mpr_combine_slice_count", 4) or 4
         )
 
+    def _sync_slice_navigator_for_mpr(
+        self, idx: int, n_slices: int, slice_index: int
+    ) -> None:
+        """Update the shared slice navigator when *idx* is focused."""
         try:
-            try:
-                if hasattr(self._app, "slice_navigator") and idx == getattr(
-                    self._app, "focused_subwindow_index", -1
-                ):
-                    self._app.slice_navigator.set_total_slices(result.n_slices)
-                    self._app.slice_navigator.blockSignals(True)
-                    self._app.slice_navigator.current_slice_index = data["mpr_slice_index"]
-                    self._app.slice_navigator.blockSignals(False)
-            except Exception:
-                pass
+            if hasattr(self._app, "slice_navigator") and idx == getattr(
+                self._app, "focused_subwindow_index", -1
+            ):
+                self._app.slice_navigator.set_total_slices(n_slices)
+                self._app.slice_navigator.blockSignals(True)
+                self._app.slice_navigator.current_slice_index = slice_index
+                self._app.slice_navigator.blockSignals(False)
+        except Exception:
+            pass
 
-            self._set_tools_enabled(idx, enabled=False)
-            self._reset_window_level_for_mpr(idx, source_ds)
+    def _fit_image_viewer_after_mpr(self, idx: int) -> None:
+        """Fit the image viewer after installing/activating an MPR stack."""
+        image_viewer = self._get_image_viewer(idx)
+        if image_viewer is None:
+            return
+        try:
+            image_viewer.fit_to_view(center_image=True)
+        except Exception:
+            pass
 
-            self.display_mpr_slice(idx, data["mpr_slice_index"])
-            image_viewer = self._get_image_viewer(idx)
-            if image_viewer is not None:
-                try:
-                    image_viewer.fit_to_view(center_image=True)
-                except Exception:
-                    pass
+    def _apply_mpr_banner(self, idx: int, data: dict[str, Any]) -> None:
+        """Show or clear the MPR banner based on overlay visibility settings."""
+        managers = self._app.subwindow_managers.get(idx, {})
+        overlay_manager = managers.get("overlay_manager")
+        if overlay_manager is None or not hasattr(overlay_manager, "set_mpr_banner"):
+            return
+        if getattr(overlay_manager, "should_show_text_overlays", lambda: True)():
+            overlay_manager.set_mpr_banner(self._build_mpr_banner_text(data))
+        else:
+            overlay_manager.set_mpr_banner(None)
 
-            managers = self._app.subwindow_managers.get(idx, {})
-            overlay_manager = managers.get("overlay_manager")
-            if overlay_manager is not None and hasattr(overlay_manager, "set_mpr_banner"):
-                if getattr(overlay_manager, "should_show_text_overlays", lambda: True)():
-                    overlay_manager.set_mpr_banner(self._build_mpr_banner_text(data))
-                else:
-                    overlay_manager.set_mpr_banner(None)
+    def _sync_intensity_projection_if_focused(
+        self, idx: int, data: dict[str, Any]
+    ) -> None:
+        """Sync the intensity-projection widget when *idx* is focused."""
+        if idx != getattr(self._app, "focused_subwindow_index", -1):
+            return
+        sync = getattr(
+            self._app, "_sync_intensity_projection_widget_from_mpr_data", None
+        )
+        if callable(sync):
+            sync(data)
 
-            if idx == getattr(self._app, "focused_subwindow_index", -1):
-                sync = getattr(
-                    self._app, "_sync_intensity_projection_widget_from_mpr_data", None
-                )
-                if callable(sync):
-                    sync(data)
-        except Exception as exc:
-            _mpr_log(f"_install_mpr_payload_at_subwindow failed: {exc}")
-            return False
-        return True
 
     def display_mpr_slice(self, idx: int, slice_index: int) -> None:
         """
@@ -862,9 +936,33 @@ class MprController(QObject):
         if image_viewer is None:
             return
 
-        # Keep measurement scaling consistent with the displayed MPR slice.
-        # MPR bypasses the normal SliceDisplayManager path, so we must
-        # explicitly set the measurement tool's pixel spacing here.
+        self._display_mpr_sync_measurement_spacing(managers, result)
+        array = self._display_mpr_prepare_array(data, result, slice_index, managers)
+        wc, ww = self._get_preferred_mpr_window_level(
+            managers.get("view_state_manager"),
+            wl_controls,
+            array,
+        )
+        pil_image = self._array_to_pil(array, wc, ww)
+        if pil_image is None:
+            return
+
+        overlay_dataset = self._display_mpr_apply_image_and_context(
+            idx, data, result, slice_index, managers, image_viewer, pil_image
+        )
+        self._display_mpr_render_annotations(
+            managers, overlay_dataset, data.get("current_study_uid", ""),
+            data.get("current_series_uid", ""), slice_index,
+        )
+        self._display_mpr_refresh_overlay(
+            idx, data, result, slice_index, managers, image_viewer, overlay_dataset
+        )
+        self._display_mpr_post_display_sync(idx, result, slice_index, overlay_dataset, array)
+
+    def _display_mpr_sync_measurement_spacing(
+        self, managers: dict[str, Any], result: MprResult
+    ) -> None:
+        """Set measurement-tool spacing for the displayed MPR plane."""
         try:
             measurement_tool = managers.get("measurement_tool")
             if measurement_tool is not None:
@@ -872,6 +970,14 @@ class MprController(QObject):
         except Exception:
             pass
 
+    def _display_mpr_prepare_array(
+        self,
+        data: dict[str, Any],
+        result: MprResult,
+        slice_index: int,
+        managers: dict[str, Any],
+    ) -> np.ndarray:
+        """Combine raw planes then optionally rescale (order must be preserved)."""
         raw_array = apply_mpr_stack_combine(
             result.slices,
             slice_index,
@@ -879,29 +985,27 @@ class MprController(QObject):
             mode=str(data.get("mpr_combine_mode", "aip") or "aip"),
             n_planes=int(data.get("mpr_combine_slice_count", 4) or 4),
         )
-        # Keep MPR rendering aligned with the global raw/rescaled toggle.
-        # Order must remain: combine raw planes -> optional rescale -> W/L.
         view_state_manager = managers.get("view_state_manager")
         use_rescaled_values = bool(
             getattr(view_state_manager, "use_rescaled_values", True)
         )
         if use_rescaled_values:
-            array = result.apply_rescale(raw_array)
-        else:
-            array = raw_array if raw_array.dtype == np.float32 else raw_array.astype(np.float32)
+            return result.apply_rescale(raw_array)
+        if raw_array.dtype == np.float32:
+            return raw_array
+        return raw_array.astype(np.float32)
 
-        # Determine window/level from this pane's stored MPR state first so a new
-        # MPR does not inherit stale toolbar values from another series/window.
-        wc, ww = self._get_preferred_mpr_window_level(
-            view_state_manager,
-            wl_controls,
-            array,
-        )
-
-        pil_image = self._array_to_pil(array, wc, ww)
-        if pil_image is None:
-            return
-
+    def _display_mpr_apply_image_and_context(
+        self,
+        idx: int,
+        data: dict[str, Any],
+        result: MprResult,
+        slice_index: int,
+        managers: dict[str, Any],
+        image_viewer: Any,
+        pil_image: Any,
+    ) -> Any:
+        """Write overlay dataset/context and put the PIL image on the viewer."""
         overlay_dataset = self._build_overlay_dataset(result, slice_index)
         data["current_slice_index"] = slice_index
         data["current_dataset"] = overlay_dataset
@@ -909,9 +1013,7 @@ class MprController(QObject):
         current_study_uid = data.get("current_study_uid", "")
         current_series_uid = data.get("current_series_uid", "")
 
-        # Keep the normal view-state pipeline informed even though MPR bypasses
-        # SliceDisplayManager. This preserves overlay anchoring on pan/zoom and
-        # keeps viewer state in sync with what is on screen.
+        view_state_manager = managers.get("view_state_manager")
         if view_state_manager is not None:
             try:
                 view_state_manager.set_current_data_context(
@@ -925,87 +1027,110 @@ class MprController(QObject):
                     view_state_manager.get_series_identifier(overlay_dataset)
                 )
             except Exception as exc:
-                print_redacted(f"[MprController] Failed to update MPR view state in window {idx}: {exc}")
+                print_redacted(
+                    f"[MprController] Failed to update MPR view state in window {idx}: {exc}"
+                )
 
-        is_same_series = True  # Always preserve zoom when scrolling MPR.
-        image_viewer.set_image(pil_image, preserve_view=is_same_series)
+        image_viewer.set_image(pil_image, preserve_view=True)
+        return overlay_dataset
 
-        # Render per-slice ROI + measurement overlays for this MPR slice.
-        # MPR bypasses SliceDisplayManager.display_slice(), so we need to
-        # invoke the slice-scoped display helpers explicitly.
+    def _display_mpr_render_annotations(
+        self,
+        managers: dict[str, Any],
+        overlay_dataset: Any,
+        current_study_uid: str,
+        current_series_uid: str,
+        slice_index: int,
+    ) -> None:
+        """Render ROI / measurement / annotation overlays for the MPR slice."""
         slice_display_manager = managers.get("slice_display_manager")
         roi_coordinator = managers.get("roi_coordinator")
-        if slice_display_manager is not None:
-            try:
-                slice_display_manager.set_current_data_context(
-                    self._app.current_studies,
-                    current_study_uid,
-                    current_series_uid,
-                    slice_index,
-                )
-                slice_display_manager.display_rois_for_slice(overlay_dataset)
-                slice_display_manager.display_measurements_for_slice(
-                    overlay_dataset
-                )
-                slice_display_manager.display_text_annotations_for_slice(
-                    overlay_dataset
-                )
-                slice_display_manager.display_arrow_annotations_for_slice(
-                    overlay_dataset
-                )
-                if roi_coordinator is not None and hasattr(
-                    roi_coordinator, "update_roi_statistics_overlays"
-                ):
-                    roi_coordinator.update_roi_statistics_overlays()
-            except Exception as exc:
-                print_redacted(
-                    f"[MprController] Failed to render ROIs/measurements for MPR slice: {exc}"
-                )
+        if slice_display_manager is None:
+            return
+        try:
+            slice_display_manager.set_current_data_context(
+                self._app.current_studies,
+                current_study_uid,
+                current_series_uid,
+                slice_index,
+            )
+            slice_display_manager.display_rois_for_slice(overlay_dataset)
+            slice_display_manager.display_measurements_for_slice(overlay_dataset)
+            slice_display_manager.display_text_annotations_for_slice(overlay_dataset)
+            slice_display_manager.display_arrow_annotations_for_slice(overlay_dataset)
+            if roi_coordinator is not None and hasattr(
+                roi_coordinator, "update_roi_statistics_overlays"
+            ):
+                roi_coordinator.update_roi_statistics_overlays()
+        except Exception as exc:
+            print_redacted(
+                f"[MprController] Failed to render ROIs/measurements for MPR slice: {exc}"
+            )
 
+    def _display_mpr_refresh_overlay(
+        self,
+        idx: int,
+        data: dict[str, Any],
+        result: MprResult,
+        slice_index: int,
+        managers: dict[str, Any],
+        image_viewer: Any,
+        overlay_dataset: Any,
+    ) -> None:
+        """Refresh DICOM overlay items and MPR banner for the current slice."""
         overlay_manager = managers.get("overlay_manager")
-        if overlay_manager is not None:
-            try:
-                combine_enabled = bool(data.get("mpr_combine_enabled", False))
-                combine_mode = str(data.get("mpr_combine_mode", "aip") or "aip")
-                combine_slice_count = int(data.get("mpr_combine_slice_count", 4) or 4)
-                projection_start_slice = None
-                projection_end_slice = None
-                projection_total_thickness = None
-                if combine_enabled:
-                    projection_start_slice, projection_end_slice = (
-                        self._compute_mpr_combine_range(
-                            result.n_slices, slice_index, combine_slice_count
-                        )
+        if overlay_manager is None:
+            return
+        try:
+            combine_enabled = bool(data.get("mpr_combine_enabled", False))
+            combine_mode = str(data.get("mpr_combine_mode", "aip") or "aip")
+            combine_slice_count = int(data.get("mpr_combine_slice_count", 4) or 4)
+            projection_start_slice = None
+            projection_end_slice = None
+            projection_total_thickness = None
+            if combine_enabled:
+                projection_start_slice, projection_end_slice = (
+                    self._compute_mpr_combine_range(
+                        result.n_slices, slice_index, combine_slice_count
                     )
-                    n_combined = max(0, projection_end_slice - projection_start_slice + 1)
-                    projection_total_thickness = (
-                        float(n_combined) * float(result.output_thickness_mm)
-                    )
-                overlay_manager.create_overlay_items(
-                    image_viewer.scene,
-                    DICOMParser(overlay_dataset),
-                    total_slices=result.n_slices,
-                    projection_enabled=combine_enabled,
-                    projection_start_slice=projection_start_slice,
-                    projection_end_slice=projection_end_slice,
-                    projection_total_thickness=projection_total_thickness,
-                    projection_type=combine_mode if combine_enabled else None,
-                    # MPR overlay dataset's InstanceNumber is the 1-based stack
-                    # index, so this keeps the label as "Slice N/M" (no Inst suffix).
-                    stack_position=slice_index + 1,
                 )
-                if hasattr(overlay_manager, "set_mpr_banner"):
-                    if getattr(overlay_manager, "should_show_text_overlays", lambda: True)():
-                        overlay_manager.set_mpr_banner(self._build_mpr_banner_text(data))
-                    else:
-                        overlay_manager.set_mpr_banner(None)
-            except Exception as exc:
-                print_redacted(f"[MprController] Failed to refresh MPR overlay in window {idx}: {exc}")
+                n_combined = max(0, projection_end_slice - projection_start_slice + 1)
+                projection_total_thickness = (
+                    float(n_combined) * float(result.output_thickness_mm)
+                )
+            overlay_manager.create_overlay_items(
+                image_viewer.scene,
+                DICOMParser(overlay_dataset),
+                total_slices=result.n_slices,
+                projection_enabled=combine_enabled,
+                projection_start_slice=projection_start_slice,
+                projection_end_slice=projection_end_slice,
+                projection_total_thickness=projection_total_thickness,
+                projection_type=combine_mode if combine_enabled else None,
+                stack_position=slice_index + 1,
+            )
+            if hasattr(overlay_manager, "set_mpr_banner"):
+                if getattr(overlay_manager, "should_show_text_overlays", lambda: True)():
+                    overlay_manager.set_mpr_banner(self._build_mpr_banner_text(data))
+                else:
+                    overlay_manager.set_mpr_banner(None)
+        except Exception as exc:
+            print_redacted(
+                f"[MprController] Failed to refresh MPR overlay in window {idx}: {exc}"
+            )
 
+    def _display_mpr_post_display_sync(
+        self,
+        idx: int,
+        result: MprResult,
+        slice_index: int,
+        overlay_dataset: Any,
+        array: np.ndarray,
+    ) -> None:
+        """Sync focused app state, histogram, slider, and deferred line refresh."""
         if idx == getattr(self._app, "focused_subwindow_index", -1):
             self._app.current_dataset = overlay_dataset
             self._app.current_slice_index = slice_index
-        # Keep per-pane histogram dialog in sync with MPR scroll.
         try:
             self._app.dialog_coordinator.update_histogram_for_subwindow(idx)
         except Exception:
@@ -1016,27 +1141,18 @@ class MprController(QObject):
             f"shape={array.shape} min={float(np.min(array)):.4f} "
             f"max={float(np.max(array)):.4f} mean={float(np.mean(array)):.4f}"
         )
-
         try:
             sync = getattr(self._app, "_sync_navigation_slider_for_subwindow", None)
             if callable(sync):
                 sync(idx)
         except Exception:
             pass
-
-        # Cross-view slice plane lines read MPR geometry after this method returns
-        # (e.g. ``SliceSyncCoordinator`` may update other panes in the same call stack).
-        # A deferred refresh avoids stale segments on MPR panes when native slices move.
         try:
             line_coord = getattr(self._app, "_slice_location_line_coordinator", None)
             if line_coord is not None:
                 QTimer.singleShot(0, line_coord.refresh_all)
         except Exception:
             pass
-
-    # ------------------------------------------------------------------
-    # Internal: dialog response handler
-    # ------------------------------------------------------------------
 
     def _on_mpr_requested(self, target_idx: int, request) -> None:
         """
@@ -1243,6 +1359,7 @@ class MprController(QObject):
     # Internal: activate MPR in a subwindow
     # ------------------------------------------------------------------
 
+
     def _activate_mpr(
         self,
         idx: int,
@@ -1264,10 +1381,7 @@ class MprController(QObject):
         if data is None:
             return
 
-        # A new in-pane MPR replaces any detached (unassigned) session.
         self._detached_mpr_payload = None
-
-        # Debug logging to track state
         _mpr_log(
             f"Activating MPR: window={idx} "
             f"has_image_viewer={self._get_image_viewer(idx) is not None} "
@@ -1275,18 +1389,31 @@ class MprController(QObject):
             f"result_slices={result.n_slices}"
         )
 
-        if "mpr_previous_state" not in data:
-            data["mpr_previous_state"] = {
-                "current_dataset": data.get("current_dataset"),
-                "current_slice_index": data.get("current_slice_index", 0),
-                "current_series_uid": data.get("current_series_uid", ""),
-                "current_study_uid": data.get("current_study_uid", ""),
-                "current_datasets": list(data.get("current_datasets", [])),
-            }
-
+        self._ensure_mpr_previous_state(data)
         source_ds = result.source_volume.source_datasets[0]
+        self._activate_write_mpr_fields(
+            idx, data, result, orientation_label, request, source_ds
+        )
+        self._sync_slice_navigator_for_mpr(idx, result.n_slices, 0)
+        self._set_tools_enabled(idx, enabled=False)
+        self._reset_window_level_for_mpr(idx, source_ds)
+        self.display_mpr_slice(idx, 0)
+        self._fit_image_viewer_after_mpr(idx)
+        self._apply_mpr_banner(idx, data)
+        self._activate_focus_subwindow(idx)
+        self._sync_intensity_projection_if_focused(idx, data)
+        self.mpr_activated.emit(idx)
 
-        # Store MPR state in subwindow_data.
+    def _activate_write_mpr_fields(
+        self,
+        idx: int,
+        data: dict[str, Any],
+        result: MprResult,
+        orientation_label: str,
+        request: Any | None,
+        source_ds: Any,
+    ) -> None:
+        """Install MPR result fields and seed combine state on *data*."""
         data["is_mpr"] = True
         data["mpr_result"] = result
         data["mpr_orientation"] = orientation_label
@@ -1295,9 +1422,7 @@ class MprController(QObject):
         data["current_study_uid"] = str(getattr(source_ds, "StudyInstanceUID", ""))
         data["current_series_uid"] = get_composite_series_key(source_ds)
         data["current_datasets"] = result.source_volume.source_datasets
-        seed_mpr_combine_state(
-            data, request, float(result.output_thickness_mm)
-        )
+        seed_mpr_combine_state(data, request, float(result.output_thickness_mm))
         _mpr_log(
             f"Activate MPR in window {idx}: "
             f"orientation={orientation_label} "
@@ -1306,69 +1431,14 @@ class MprController(QObject):
             f"output_thickness={result.output_thickness_mm:.4f}"
         )
 
-        managers = self._app.subwindow_managers.get(idx, {})
-
-        # Update shared slice navigator to MPR stack length (only when this
-        # subwindow is the focused one; if not, it will update on next focus).
-        try:
-            if hasattr(self._app, "slice_navigator") and idx == getattr(
-                self._app, "focused_subwindow_index", -1
-            ):
-                self._app.slice_navigator.set_total_slices(result.n_slices)
-                self._app.slice_navigator.blockSignals(True)
-                self._app.slice_navigator.current_slice_index = 0
-                self._app.slice_navigator.blockSignals(False)
-        except Exception:
-            pass
-
-        # Enter MPR mode interaction restrictions.
-        # We keep the existing _mpr_mode_override flag, but allow ROI/measurement
-        # and Window/Level ROI modes by narrowing the restrictions inside
-        # ImageViewer (see image_viewer.py changes).
-        self._set_tools_enabled(idx, enabled=False)
-
-        # Reset window/level from the new MPR source series to avoid using
-        # stale values from a previous series.
-        self._reset_window_level_for_mpr(idx, source_ds)
-
-        # Display first slice.
-        self.display_mpr_slice(idx, 0)
-        image_viewer = self._get_image_viewer(idx)
-        if image_viewer is not None:
-            try:
-                image_viewer.fit_to_view(center_image=True)
-            except Exception:
-                pass
-
-        # Show MPR banner via OverlayManager.
-        overlay_manager = managers.get("overlay_manager")
-        if overlay_manager is not None and hasattr(overlay_manager, "set_mpr_banner"):
-            if getattr(overlay_manager, "should_show_text_overlays", lambda: True)():
-                overlay_manager.set_mpr_banner(self._build_mpr_banner_text(data))
-            else:
-                overlay_manager.set_mpr_banner(None)
-
-        # Focus the subwindow so the user sees the result immediately.
+    def _activate_focus_subwindow(self, idx: int) -> None:
+        """Focus the target subwindow after MPR activation."""
         try:
             subwindow = self._app.multi_window_layout.get_subwindow(idx)
             if subwindow is not None:
                 subwindow.setFocus()
         except Exception:
             pass
-
-        if idx == getattr(self._app, "focused_subwindow_index", -1):
-            sync = getattr(
-                self._app, "_sync_intensity_projection_widget_from_mpr_data", None
-            )
-            if callable(sync):
-                sync(data)
-
-        # Notify observers (e.g. series navigator thumbnail) that MPR is active.
-        self.mpr_activated.emit(idx)
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
 
     def _get_image_viewer(self, idx: int):
         """
@@ -1424,6 +1494,7 @@ class MprController(QObject):
                 }
         return result
 
+
     def _build_overlay_dataset(self, result: MprResult, slice_index: int):
         """
         Build a synthetic dataset for MPR overlay text.
@@ -1452,6 +1523,14 @@ class MprController(QObject):
         # first source slice so MPR-only metadata edits stay isolated.
         source_ds = copy.deepcopy(result.source_volume.source_datasets[0])
         source_ds.InstanceNumber = int(slice_index + 1)
+        self._overlay_apply_thickness(source_ds, result)
+        self._overlay_apply_orientation(source_ds, result, slice_index)
+        self._overlay_apply_spacing(source_ds, result)
+        self._overlay_strip_location_attrs(source_ds)
+        return source_ds
+
+    def _overlay_apply_thickness(self, source_ds: Any, result: MprResult) -> None:
+        """Set SliceThickness / SpacingBetweenSlices from MPR output thickness."""
         try:
             source_ds.SliceThickness = float(result.output_thickness_mm)
         except Exception:
@@ -1461,38 +1540,47 @@ class MprController(QObject):
         except Exception:
             pass
 
+    def _overlay_apply_orientation(
+        self, source_ds: Any, result: MprResult, slice_index: int
+    ) -> None:
+        """Set ImageOrientationPatient from the displayed MPR plane."""
         planes = getattr(result.slice_stack, "planes", None) or []
         si = int(slice_index)
-        if planes and 0 <= si < len(planes):
-            plane = planes[si]
-            rc = np.asarray(plane.row_cosine, dtype=float).reshape(-1)
-            cc = np.asarray(plane.col_cosine, dtype=float).reshape(-1)
-            if rc.size == 3 and cc.size == 3:
-                try:
-                    source_ds.ImageOrientationPatient = [
-                        float(rc[0]),
-                        float(rc[1]),
-                        float(rc[2]),
-                        float(cc[0]),
-                        float(cc[1]),
-                        float(cc[2]),
-                    ]
-                except Exception:
-                    pass
+        if not planes or not (0 <= si < len(planes)):
+            return
+        plane = planes[si]
+        rc = np.asarray(plane.row_cosine, dtype=float).reshape(-1)
+        cc = np.asarray(plane.col_cosine, dtype=float).reshape(-1)
+        if rc.size != 3 or cc.size != 3:
+            return
+        try:
+            source_ds.ImageOrientationPatient = [
+                float(rc[0]),
+                float(rc[1]),
+                float(rc[2]),
+                float(cc[0]),
+                float(cc[1]),
+                float(cc[2]),
+            ]
+        except Exception:
+            pass
 
+    def _overlay_apply_spacing(self, source_ds: Any, result: MprResult) -> None:
+        """Set PixelSpacing from MPR output spacing."""
         try:
             rs, cs = result.output_spacing_mm[0], result.output_spacing_mm[1]
             source_ds.PixelSpacing = [float(rs), float(cs)]
         except Exception:
             pass
 
+    def _overlay_strip_location_attrs(self, source_ds: Any) -> None:
+        """Remove SliceLocation / ImagePositionPatient from the overlay dataset."""
         for attr in ("SliceLocation", "ImagePositionPatient"):
             if hasattr(source_ds, attr):
                 try:
                     delattr(source_ds, attr)
                 except Exception:
                     setattr(source_ds, attr, "")
-        return source_ds
 
     @staticmethod
     def _compute_mpr_combine_range(

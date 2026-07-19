@@ -39,11 +39,12 @@ This file tracks active and near-term tasks.
 
 ## Static analysis
 
-- [ ] **[P2]** **Continue the local SonarQube code-smell backlog after S1192:**
-  `S108` cleared; non-font `S1192` extracted; `bundled_fonts` S1192 ignored
-  via file-scoped multicriteria only. Next: larger controller `S3776`
-  clusters (`mpr_controller` / `roi_manager` / `fusion_coordinator`) or MAJOR
-  `S107`. Plan references:
+- [ ] **[P2]** **Continue the local SonarQube code-smell backlog after the MPR
+  controller slice:** that slice is complete (308 → 303; five
+  `mpr_controller` `S3776` findings cleared). Next suggested domains: remaining
+  `mpr_controller` methods (`_on_mpr_requested` / save / attach / W/L), then
+  `roi_manager` / `fusion_coordinator` `S3776` clusters. Plan references:
+  [MPR controller slice](plans/SONARQUBE_MPR_CONTROLLER_SLICE_PLAN_20260718.md),
   [Critical first slice](plans/SONARQUBE_CRITICAL_CODE_SMELL_FIRST_SLICE_PLAN_20260718.md),
   [Undo/redo annotation commands slice](plans/SONARQUBE_UNDO_REDO_ANNOTATION_COMMANDS_SLICE_PLAN_20260718.md),
   [ROI coordinator stats slice](plans/SONARQUBE_ROI_COORDINATOR_STATS_SLICE_PLAN_20260718.md),

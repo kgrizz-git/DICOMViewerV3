@@ -8,6 +8,13 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-18
 
+- Completed the MPR controller Sonar slice
+  (`plans/SONARQUBE_MPR_CONTROLLER_SLICE_PLAN_20260718.md`): extracted helpers
+  for `display_mpr_slice`, `_activate_mpr`, `_tear_down_mpr_at_subwindow`,
+  `_install_mpr_payload_at_subwindow`, and `_build_overlay_dataset`. Added
+  `tests/gui/test_mpr_controller_sonar_slice.py`. Fresh analysis: **303**
+  priority findings (down from 308); five targeted `S3776` cleared (`mpr_controller`
+  `S3776` 9 → 4 remaining out-of-scope methods).
 - Finished non-font `python:S1192` cleanup and added a file-scoped ignore for
   `S1192` on `src/utils/bundled_fonts.py` only
   (`tools/sonarqube/sonar-project.properties` multicriteria
