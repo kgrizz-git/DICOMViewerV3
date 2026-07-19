@@ -325,7 +325,9 @@ class MprController(QObject):
         opts: MprDicomExportOptions = opt_dialog.build_options(orient)
         self._save_mpr_write_series(mw, output_root, result, template, opts)
 
-    def _save_mpr_resolve_export_context(self, mw) -> tuple[dict, Any, Any] | None:
+    def _save_mpr_resolve_export_context(
+        self, mw
+    ) -> tuple[dict[str, Any], Any, Any] | None:
         """Validate focused MPR pane and resolve export template dataset."""
         app = self._app
         idx = app.get_focused_subwindow_index()

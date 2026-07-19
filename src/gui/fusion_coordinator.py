@@ -366,7 +366,7 @@ class FusionCoordinator:
             )
 
     @staticmethod
-    def _overlay_load_sample_datasets(datasets: list) -> list:
+    def _overlay_load_sample_datasets(datasets: list[Dataset]) -> list[Dataset]:
         """Sample large series so pixel-range scans stay responsive."""
         max_slices = 24
         if len(datasets) <= max_slices:
@@ -380,7 +380,7 @@ class FusionCoordinator:
         return [datasets[i] for i in sorted(set(indices))]
 
     def _overlay_load_resolve_window_level(
-        self, datasets: list, datasets_to_scan: list
+        self, datasets: list[Dataset], datasets_to_scan: list[Dataset]
     ) -> tuple[float, float] | None:
         """
         Resolve overlay window/level from DICOM tags or series pixel range.
@@ -421,7 +421,7 @@ class FusionCoordinator:
 
     @staticmethod
     def _overlay_load_debug_pixel_ranges(
-        datasets_to_scan: list,
+        datasets_to_scan: list[Dataset],
         has_rescale: bool,
         rescale_slope,
         rescale_intercept,
@@ -462,7 +462,7 @@ class FusionCoordinator:
 
     @staticmethod
     def _overlay_load_fallback_window_level(
-        datasets_to_scan: list, rescale_slope, rescale_intercept
+        datasets_to_scan: list[Dataset], rescale_slope, rescale_intercept
     ) -> tuple[float, float]:
         """Compute window/level from series range or defaults when tags are absent."""
         from core.dicom_processor import DICOMProcessor
@@ -697,7 +697,7 @@ class FusionCoordinator:
 
     def _resampling_status_resolve_datasets(
         self,
-    ) -> tuple[list, list] | None:
+    ) -> tuple[list[Dataset], list[Dataset]] | None:
         """Return base/overlay dataset lists when both series are available."""
         if (
             not self.fusion_handler.base_series_uid
@@ -725,8 +725,8 @@ class FusionCoordinator:
 
     def _resampling_status_compute_warning(
         self,
-        base_datasets: list,
-        overlay_datasets: list,
+        base_datasets: list[Dataset],
+        overlay_datasets: list[Dataset],
         use_3d: bool,
         actual_mode: bool | None,
     ) -> tuple[bool, str]:
@@ -1014,7 +1014,7 @@ class FusionCoordinator:
             )
         self._update_resampling_status()
 
-    def _spatial_restore_from_cache(self, cached_alignment: dict) -> None:
+    def _spatial_restore_from_cache(self, cached_alignment: dict[str, Any]) -> None:
         """Restore scale/offset UI from a cached alignment pair."""
         scale = cached_alignment.get("scale")
         offset = cached_alignment.get("offset")
@@ -1227,10 +1227,13 @@ class FusionCoordinator:
         studies: dict[str, Any],
         study_uid: str,
         series_list: list[tuple[str, str]],
-    ) -> tuple[list, list]:
+    ) -> tuple[
+        list[tuple[str, str, list[Dataset]]],
+        list[tuple[str, str, list[Dataset]]],
+    ]:
         """Partition series into PET/NM and CT/MR candidate lists."""
-        pet_series = []
-        ct_series = []
+        pet_series: list[tuple[str, str, list[Dataset]]] = []
+        ct_series: list[tuple[str, str, list[Dataset]]] = []
         for series_uid, display_name in series_list:
             datasets = studies[study_uid].get(series_uid, [])
             if not datasets:
@@ -1243,7 +1246,9 @@ class FusionCoordinator:
         return pet_series, ct_series
 
     def _auto_detect_find_compatible_pair(
-        self, pet_series: list, ct_series: list
+        self,
+        pet_series: list[tuple[str, str, list[Dataset]]],
+        ct_series: list[tuple[str, str, list[Dataset]]],
     ) -> tuple[str, str, str, str] | None:
         """
         Find the first FoR-compatible PET/CT pair.

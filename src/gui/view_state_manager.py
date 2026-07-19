@@ -280,7 +280,10 @@ class ViewStateManager:
 
     def _upsert_series_defaults_from_current_view(self, scene_center: QPointF | None) -> None:
         """Update series defaults with current view state including window/level."""
-        self.series_defaults[self.current_series_identifier].update({
+        series_id = self.current_series_identifier
+        if series_id is None:
+            return
+        self.series_defaults[series_id].update({
             'window_center': self.current_window_center,
             'window_width': self.current_window_width,
             'zoom': self.image_viewer.current_zoom,
@@ -293,7 +296,10 @@ class ViewStateManager:
 
     def _restore_stored_series_wl_and_refresh(self, scene_center: QPointF | None) -> None:
         """Restore stored W/L, redisplay, and update zoom/pan without overwriting W/L."""
-        series_entry = self.series_defaults[self.current_series_identifier]
+        series_id = self.current_series_identifier
+        if series_id is None:
+            return
+        series_entry = self.series_defaults[series_id]
         stored_wc = series_entry['window_center']
         stored_ww = series_entry['window_width']
         stored_rescaled = series_entry['use_rescaled_values']
@@ -773,8 +779,11 @@ class ViewStateManager:
         self, current_center: float | None, current_width: float | None
     ) -> None:
         """Recalculate control ranges and W/L after rescale toggle."""
+        dataset = self.current_dataset
+        if dataset is None:
+            return
         pixel_min, pixel_max = self.dicom_processor.get_pixel_value_range(
-            self.current_dataset, apply_rescale=self.use_rescaled_values
+            dataset, apply_rescale=self.use_rescaled_values
         )
         if pixel_min is not None and pixel_max is not None:
             center_range, width_range = self._compute_rescale_toggle_control_ranges(

@@ -751,14 +751,14 @@ class ROICoordinator:
 
     def _delete_all_collect_targets(
         self, study_uid: str, series_uid: str, instance_identifier: int
-    ) -> tuple[list, list]:
+    ) -> tuple[list[ROIItem], list[Any]]:
         """Collect ROIs and crosshairs on the current slice before bulk delete."""
         key = (study_uid, series_uid, instance_identifier)
-        rois_to_delete: list = []
+        rois_to_delete: list[ROIItem] = []
         if key in self.roi_manager.rois:
             rois_to_delete = list(self.roi_manager.rois[key])
 
-        crosshairs_to_delete: list = []
+        crosshairs_to_delete: list[Any] = []
         if self.crosshair_coordinator and self.crosshair_coordinator.crosshair_manager:
             if key in self.crosshair_coordinator.crosshair_manager.crosshairs:
                 crosshairs_to_delete = list(
@@ -768,16 +768,16 @@ class ROICoordinator:
 
     def _delete_all_build_commands(
         self,
-        rois_to_delete: list,
-        crosshairs_to_delete: list,
+        rois_to_delete: list[ROIItem],
+        crosshairs_to_delete: list[Any],
         study_uid: str,
         series_uid: str,
         instance_identifier: int,
-    ) -> list:
+    ) -> list[Any]:
         """Build undo commands for bulk ROI and crosshair removal."""
         from utils.undo_redo import CrosshairCommand, ROICommand
 
-        commands = []
+        commands: list[Any] = []
         for roi_item in rois_to_delete:
             commands.append(
                 ROICommand(
@@ -808,8 +808,8 @@ class ROICoordinator:
 
     def _delete_all_execute(
         self,
-        rois_to_delete: list,
-        crosshairs_to_delete: list,
+        rois_to_delete: list[ROIItem],
+        crosshairs_to_delete: list[Any],
         study_uid: str,
         series_uid: str,
         instance_identifier: int,
