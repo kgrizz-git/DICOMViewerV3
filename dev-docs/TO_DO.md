@@ -39,10 +39,12 @@ This file tracks active and near-term tasks.
 
 ## Static analysis
 
-- [ ] **[P2]** **Continue the local SonarQube code-smell backlog after the ROI
-  coordinator finish slice:** `roi_coordinator` `S3776` is now 0 (299 → 295
-  priority findings). Next suggested domain: `fusion_coordinator` `S3776`
-  cluster (8 open). Plan references:
+- [ ] **[P2]** **Continue the local SonarQube code-smell backlog after the fusion
+  coordinator first slice:** five mid-size `fusion_coordinator` `S3776`
+  findings cleared (295 → 290). Next: finish slice for remaining three
+  (`_finish_overlay_series_load`, `get_fused_image`, `_update_spatial_alignment`).
+  Plan references:
+  [Fusion coordinator first slice](plans/SONARQUBE_FUSION_COORDINATOR_SLICE_PLAN_20260718.md),
   [ROI coordinator finish slice](plans/SONARQUBE_ROI_COORDINATOR_FINISH_SLICE_PLAN_20260718.md),
   [MPR controller finish slice](plans/SONARQUBE_MPR_CONTROLLER_FINISH_SLICE_PLAN_20260718.md),
   [MPR controller slice](plans/SONARQUBE_MPR_CONTROLLER_SLICE_PLAN_20260718.md),

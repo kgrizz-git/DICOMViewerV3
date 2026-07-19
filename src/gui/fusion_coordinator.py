@@ -210,38 +210,43 @@ class FusionCoordinator:
         self.fusion_handler.fusion_enabled = enabled
 
         if enabled:
-            # Validate series selection. Treat missing overlay as an
-            # informational prompt rather than an error in the status box.
-            if not self.fusion_handler.base_series_uid or not self.fusion_handler.overlay_series_uid:
-                self._append_status("Please select overlay series", severity="info")
+            if not self._fusion_enabled_has_series_selection():
                 return
-
-            # Update spatial alignment when first enabling fusion
             self._update_spatial_alignment()
-
-            # Check Frame of Reference compatibility
-            studies = self.get_current_studies()
-            study_uid = self.get_current_study_uid()
-
-            if study_uid in studies:
-                base_datasets = studies[study_uid].get(self.fusion_handler.base_series_uid, [])
-                overlay_datasets = studies[study_uid].get(self.fusion_handler.overlay_series_uid, [])
-
-                if base_datasets and overlay_datasets:
-                    if self.fusion_handler.check_frame_of_reference_match(base_datasets, overlay_datasets):
-                        self._append_status("Aligned (Frame of Reference)", severity="info")
-                        # Update resampling status
-                        self._update_resampling_status()
-                    else:
-                        self._append_status("Different Frame of Reference", severity="warning")
-                        # Note: Still allow fusion, but warn user
-                        # Update resampling status
-                        self._update_resampling_status()
+            self._fusion_enabled_report_frame_of_reference()
         else:
             self._append_status("Disabled", severity="info")
 
-        # Request display update
         self.request_display_update()
+
+    def _fusion_enabled_has_series_selection(self) -> bool:
+        """Return True when both series are selected; otherwise prompt and return False."""
+        if self.fusion_handler.base_series_uid and self.fusion_handler.overlay_series_uid:
+            return True
+        self._append_status("Please select overlay series", severity="info")
+        return False
+
+    def _fusion_enabled_report_frame_of_reference(self) -> None:
+        """Append FoR status and refresh resampling status when both series exist."""
+        studies = self.get_current_studies()
+        study_uid = self.get_current_study_uid()
+        if study_uid not in studies:
+            return
+
+        base_datasets = studies[study_uid].get(self.fusion_handler.base_series_uid, [])
+        overlay_datasets = studies[study_uid].get(
+            self.fusion_handler.overlay_series_uid, []
+        )
+        if not base_datasets or not overlay_datasets:
+            return
+
+        if self.fusion_handler.check_frame_of_reference_match(
+            base_datasets, overlay_datasets
+        ):
+            self._append_status("Aligned (Frame of Reference)", severity="info")
+        else:
+            self._append_status("Different Frame of Reference", severity="warning")
+        self._update_resampling_status()
 
     def handle_base_series_changed(self, series_uid: str) -> None:
         """
@@ -272,32 +277,38 @@ class FusionCoordinator:
         Args:
             base_uid: Base series UID
         """
-        display_name = "Not set"
-        if base_uid:
-            studies = self.get_current_studies()
-            study_uid = self.get_current_study_uid()
-            if study_uid in studies and base_uid in studies[study_uid]:
-                datasets = studies[study_uid][base_uid]
-                if datasets:
-                    first_ds = datasets[0]
-                    series_number = getattr(first_ds, 'SeriesNumber', None)
-                    series_desc = getattr(first_ds, 'SeriesDescription', '')
-                    modality = getattr(first_ds, 'Modality', '')
-                    parts = []
-                    if series_number is not None:
-                        parts.append(f"S{series_number}")
-                    if modality:
-                        parts.append(modality)
-                    if series_desc:
-                        parts.append(series_desc)
-                    if parts:
-                        display_name = " - ".join(parts)
-                    else:
-                        display_name = base_uid[:20]
-            else:
-                display_name = base_uid[:20]
+        self.fusion_controls.set_base_display(
+            self._format_base_series_display_name(base_uid)
+        )
 
-        self.fusion_controls.set_base_display(display_name)
+    def _format_base_series_display_name(self, base_uid: str) -> str:
+        """Build the read-only base-series label for fusion controls."""
+        if not base_uid:
+            return "Not set"
+
+        studies = self.get_current_studies()
+        study_uid = self.get_current_study_uid()
+        if study_uid not in studies or base_uid not in studies[study_uid]:
+            return base_uid[:20]
+
+        datasets = studies[study_uid][base_uid]
+        if not datasets:
+            return base_uid[:20]
+
+        first_ds = datasets[0]
+        series_number = getattr(first_ds, "SeriesNumber", None)
+        series_desc = getattr(first_ds, "SeriesDescription", "")
+        modality = getattr(first_ds, "Modality", "")
+        parts = []
+        if series_number is not None:
+            parts.append(f"S{series_number}")
+        if modality:
+            parts.append(modality)
+        if series_desc:
+            parts.append(series_desc)
+        if parts:
+            return " - ".join(parts)
+        return base_uid[:20]
 
     def handle_overlay_series_changed(self, series_uid: str) -> None:
         """
@@ -480,62 +491,68 @@ class FusionCoordinator:
 
     def sync_ui_from_handler_state(self) -> None:
         """Update UI controls to match current FusionHandler state."""
-        # Block signals to prevent recursive updates
-        # Check if fusion_controls has an _updating flag, otherwise use signal blocking
-        if hasattr(self.fusion_controls, '_updating'):
+        if hasattr(self.fusion_controls, "_updating"):
             self.fusion_controls._updating = True
 
-        # Update checkbox
-        if hasattr(self.fusion_controls, 'set_fusion_enabled'):
+        self._sync_ui_enabled_and_blend_controls()
+        self._sync_ui_window_level_and_resampling()
+        self._sync_ui_series_displays()
+
+        if hasattr(self.fusion_controls, "_updating"):
+            self.fusion_controls._updating = False
+
+    def _sync_ui_enabled_and_blend_controls(self) -> None:
+        """Sync fusion enabled, opacity, threshold, and colormap controls."""
+        if hasattr(self.fusion_controls, "set_fusion_enabled"):
             self.fusion_controls.set_fusion_enabled(self.fusion_handler.fusion_enabled)
 
-        # Update opacity, threshold, colormap (set directly on controls)
-        if hasattr(self.fusion_controls, 'opacity_slider'):
+        if hasattr(self.fusion_controls, "opacity_slider"):
             opacity_value = int(self.fusion_handler.opacity * 100)
             self.fusion_controls.opacity_slider.setValue(opacity_value)
-            if hasattr(self.fusion_controls, 'opacity_value_label'):
+            if hasattr(self.fusion_controls, "opacity_value_label"):
                 self.fusion_controls.opacity_value_label.setText(f"{opacity_value}%")
-        if hasattr(self.fusion_controls, 'threshold_slider'):
+        if hasattr(self.fusion_controls, "threshold_slider"):
             threshold_value = int(self.fusion_handler.threshold * 100)
             self.fusion_controls.threshold_slider.setValue(threshold_value)
-            if hasattr(self.fusion_controls, 'threshold_value_label'):
+            if hasattr(self.fusion_controls, "threshold_value_label"):
                 self.fusion_controls.threshold_value_label.setText(f"{threshold_value}%")
-        if hasattr(self.fusion_controls, 'colormap_combo'):
-            colormap_index = self.fusion_controls.colormap_combo.findText(self.fusion_handler.colormap)
+        if hasattr(self.fusion_controls, "colormap_combo"):
+            colormap_index = self.fusion_controls.colormap_combo.findText(
+                self.fusion_handler.colormap
+            )
             if colormap_index >= 0:
                 self.fusion_controls.colormap_combo.setCurrentIndex(colormap_index)
 
-        # Update window/level from handler (now stored per-subwindow)
-        if hasattr(self.fusion_controls, 'set_overlay_window_level'):
+    def _sync_ui_window_level_and_resampling(self) -> None:
+        """Sync overlay W/L and resampling/interpolation controls."""
+        if hasattr(self.fusion_controls, "set_overlay_window_level"):
             self.fusion_controls.set_overlay_window_level(
                 self.fusion_handler.overlay_window,
-                self.fusion_handler.overlay_level
+                self.fusion_handler.overlay_level,
+            )
+        if hasattr(self.fusion_controls, "set_resampling_mode"):
+            self.fusion_controls.set_resampling_mode(self.fusion_handler.resampling_mode)
+        if hasattr(self.fusion_controls, "set_interpolation_method"):
+            self.fusion_controls.set_interpolation_method(
+                self.fusion_handler.interpolation_method
             )
 
-        # Update resampling mode and interpolation
-        if hasattr(self.fusion_controls, 'set_resampling_mode'):
-            self.fusion_controls.set_resampling_mode(self.fusion_handler.resampling_mode)
-        if hasattr(self.fusion_controls, 'set_interpolation_method'):
-            self.fusion_controls.set_interpolation_method(self.fusion_handler.interpolation_method)
-
-        # Update base/overlay series displays
+    def _sync_ui_series_displays(self) -> None:
+        """Sync base display and overlay combo selection from handler state."""
         if self.fusion_handler.base_series_uid:
             self._update_base_display(self.fusion_handler.base_series_uid)
         else:
             self._update_base_display("")
 
-        if self.fusion_handler.overlay_series_uid:
-            # Update overlay combo selection
-            if hasattr(self.fusion_controls, 'overlay_series_combo'):
-                combo = self.fusion_controls.overlay_series_combo
-                for i in range(combo.count()):
-                    if combo.itemData(i) == self.fusion_handler.overlay_series_uid:
-                        combo.setCurrentIndex(i)
-                        break
-
-        # Unblock signals
-        if hasattr(self.fusion_controls, '_updating'):
-            self.fusion_controls._updating = False
+        if not self.fusion_handler.overlay_series_uid:
+            return
+        if not hasattr(self.fusion_controls, "overlay_series_combo"):
+            return
+        combo = self.fusion_controls.overlay_series_combo
+        for i in range(combo.count()):
+            if combo.itemData(i) == self.fusion_handler.overlay_series_uid:
+                combo.setCurrentIndex(i)
+                break
 
     def handle_translation_offset_changed(self, x_offset: float, y_offset: float) -> None:
         """
@@ -583,76 +600,97 @@ class FusionCoordinator:
 
     def _update_resampling_status(self) -> None:
         """Update resampling status display in UI."""
-        if not self.fusion_handler.base_series_uid or not self.fusion_handler.overlay_series_uid:
+        datasets = self._resampling_status_resolve_datasets()
+        if datasets is None:
             return
+        base_datasets, overlay_datasets = datasets
 
-        studies = self.get_current_studies()
-        study_uid = self.get_current_study_uid()
-
-        if study_uid not in studies:
-            return
-
-        base_datasets = studies[study_uid].get(self.fusion_handler.base_series_uid, [])
-        overlay_datasets = studies[study_uid].get(self.fusion_handler.overlay_series_uid, [])
-
-        if not base_datasets or not overlay_datasets:
-            return
-
-        # Get status from handler (this now reflects actual mode if available)
-        mode_display, reason = self.fusion_handler.get_resampling_status(base_datasets, overlay_datasets)
-
-        # Check predicted mode
-        use_3d, _ = self.fusion_handler._should_use_3d_resampling(base_datasets, overlay_datasets)
-
-        # Check actual mode used
+        mode_display, reason = self.fusion_handler.get_resampling_status(
+            base_datasets, overlay_datasets
+        )
+        use_3d, _ = self.fusion_handler._should_use_3d_resampling(
+            base_datasets, overlay_datasets
+        )
         actual_mode = self.fusion_handler.get_actual_resampling_mode_used()
-
-        # Use actual mode if available, otherwise use predicted mode
         actual_use_3d = actual_mode if actual_mode is not None else use_3d
 
-        # Disable offset controls when 3D resampling is active (offset is not applied in 3D mode)
+        self._resampling_status_apply_offset_controls(actual_use_3d)
+        show_warning, warning_text = self._resampling_status_compute_warning(
+            base_datasets, overlay_datasets, use_3d, actual_mode
+        )
+        self.fusion_controls.set_resampling_status(
+            mode_display, reason, show_warning, warning_text
+        )
+
+    def _resampling_status_resolve_datasets(
+        self,
+    ) -> tuple[list, list] | None:
+        """Return base/overlay dataset lists when both series are available."""
+        if (
+            not self.fusion_handler.base_series_uid
+            or not self.fusion_handler.overlay_series_uid
+        ):
+            return None
+        studies = self.get_current_studies()
+        study_uid = self.get_current_study_uid()
+        if study_uid not in studies:
+            return None
+        base_datasets = studies[study_uid].get(self.fusion_handler.base_series_uid, [])
+        overlay_datasets = studies[study_uid].get(
+            self.fusion_handler.overlay_series_uid, []
+        )
+        if not base_datasets or not overlay_datasets:
+            return None
+        return base_datasets, overlay_datasets
+
+    def _resampling_status_apply_offset_controls(self, actual_use_3d: bool) -> None:
+        """Enable/disable offset controls and update offset status text for 2D/3D."""
         if hasattr(self.fusion_controls, "set_offset_controls_enabled"):
             self.fusion_controls.set_offset_controls_enabled(not actual_use_3d)
-
-        # Update offset status text to indicate how alignment is determined
         if hasattr(self.fusion_controls, "set_offset_status_text"):
             self.fusion_controls.set_offset_status_text(actual_use_3d)
 
-        # Check if 3D was attempted but failed (actual mode is False but predicted was True)
-        show_warning = False
-        warning_text = ""
+    def _resampling_status_compute_warning(
+        self,
+        base_datasets: list,
+        overlay_datasets: list,
+        use_3d: bool,
+        actual_mode: bool | None,
+    ) -> tuple[bool, str]:
+        """
+        Compute resampling warning state and apply 3D-failure UI side effects.
+
+        Returns:
+            ``(show_warning, warning_text)`` for the resampling status label.
+        """
         if actual_mode is False and use_3d:
-            # 3D failed and fell back to 2D - show warning in status box and update UI
             failure_reason = self.fusion_handler.get_resampling_failure_reason()
             if failure_reason:
                 warning_msg = f"3D resampling failed ({failure_reason}), using 2D mode"
             else:
                 warning_msg = "3D resampling failed, using 2D mode"
             self._append_status(warning_msg, severity="warning")
-
-            # Update radio buttons and handler mode to reflect actual mode (2D) when 3D fails
-            # This ensures UI matches what's actually being used
-            # Update handler first, then UI
-            self.fusion_handler.resampling_mode = 'fast'
+            self.fusion_handler.resampling_mode = "fast"
             if hasattr(self.fusion_controls, "set_resampling_mode"):
-                self.fusion_controls.set_resampling_mode('fast')  # Switch to 2D mode
+                self.fusion_controls.set_resampling_mode("fast")
+            warning_text = (
+                f"3D resampling failed "
+                f"({failure_reason if failure_reason else 'unknown error'}), "
+                f"using 2D fallback mode"
+            )
+            return True, warning_text
 
-            # Show warning in resampling group
-            show_warning = True
-            warning_text = f"3D resampling failed ({failure_reason if failure_reason else 'unknown error'}), using 2D fallback mode"
-        elif self.fusion_handler.resampling_mode == 'fast':
-            # Check if 3D would be recommended (but user selected 2D)
+        if self.fusion_handler.resampling_mode == "fast":
             needs_3d, _ = self.fusion_handler.image_resampler.needs_resampling(
                 overlay_datasets, base_datasets
             )
             if needs_3d:
-                show_warning = True
-                warning_text = "Warning: 3D resampling recommended for accuracy. Current mode may produce misalignment."
-
-        # Update inline warning label in the resampling group only. We intentionally
-        # do not log the \"Using: ...\" informational message in the fusion status
-        # box to avoid unnecessary noise there.
-        self.fusion_controls.set_resampling_status(mode_display, reason, show_warning, warning_text)
+                return (
+                    True,
+                    "Warning: 3D resampling recommended for accuracy. "
+                    "Current mode may produce misalignment.",
+                )
+        return False, ""
 
     def get_fused_image(
         self,
@@ -1035,43 +1073,59 @@ class FusionCoordinator:
         """
         if study_uid not in studies or len(series_list) < 2:
             return
-
-        # Check if notification was already shown for this study (global check)
         if self._check_notification_shown and self._check_notification_shown(study_uid):
-            return  # Already notified, skip
+            return
 
-        # Look for PET/SPECT and CT/MR combinations
+        pet_series, ct_series = self._auto_detect_partition_modalities(
+            studies, study_uid, series_list
+        )
+        if not pet_series or not ct_series:
+            return
+
+        pair = self._auto_detect_find_compatible_pair(pet_series, ct_series)
+        if pair is None:
+            return
+        ct_uid, ct_name, pet_uid, pet_name = pair
+        self._suggest_fusion(ct_uid, ct_name, pet_uid, pet_name)
+        if self._mark_notification_shown:
+            self._mark_notification_shown(study_uid)
+
+    def _auto_detect_partition_modalities(
+        self,
+        studies: dict[str, Any],
+        study_uid: str,
+        series_list: list[tuple[str, str]],
+    ) -> tuple[list, list]:
+        """Partition series into PET/NM and CT/MR candidate lists."""
         pet_series = []
         ct_series = []
-
         for series_uid, display_name in series_list:
             datasets = studies[study_uid].get(series_uid, [])
             if not datasets:
                 continue
-
-            modality = getattr(datasets[0], 'Modality', '')
-
-            if modality in ['PT', 'NM']:  # PET or Nuclear Medicine
+            modality = getattr(datasets[0], "Modality", "")
+            if modality in ["PT", "NM"]:
                 pet_series.append((series_uid, display_name, datasets))
-            elif modality in ['CT', 'MR']:  # CT or MR
+            elif modality in ["CT", "MR"]:
                 ct_series.append((series_uid, display_name, datasets))
+        return pet_series, ct_series
 
-        # Check if we have compatible pairs
-        if not pet_series or not ct_series:
-            return
+    def _auto_detect_find_compatible_pair(
+        self, pet_series: list, ct_series: list
+    ) -> tuple[str, str, str, str] | None:
+        """
+        Find the first FoR-compatible PET/CT pair.
 
-        # Find first compatible pair (same Frame of Reference)
+        Returns:
+            ``(ct_uid, ct_name, pet_uid, pet_name)`` or ``None``.
+        """
         for pet_uid, pet_name, pet_datasets in pet_series:
             for ct_uid, ct_name, ct_datasets in ct_series:
-                if self.fusion_handler.check_frame_of_reference_match(pet_datasets, ct_datasets):
-                    # Found compatible pair - suggest fusion
-                    self._suggest_fusion(ct_uid, ct_name, pet_uid, pet_name)
-
-                    # Mark study as notified (global tracking)
-                    if self._mark_notification_shown:
-                        self._mark_notification_shown(study_uid)
-
-                    return
+                if self.fusion_handler.check_frame_of_reference_match(
+                    pet_datasets, ct_datasets
+                ):
+                    return ct_uid, ct_name, pet_uid, pet_name
+        return None
 
     def _suggest_fusion(
         self,

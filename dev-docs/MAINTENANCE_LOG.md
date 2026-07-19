@@ -8,6 +8,14 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-18
 
+- Completed the fusion coordinator Sonar first slice
+  (`plans/SONARQUBE_FUSION_COORDINATOR_SLICE_PLAN_20260718.md`): extracted
+  helpers for `handle_fusion_enabled_changed`, `_update_base_display`,
+  `sync_ui_from_handler_state`, `_update_resampling_status`, and
+  `_auto_detect_fusion_candidates`. Added
+  `tests/gui/test_fusion_coordinator_sonar_slice.py`. Fresh analysis: **290**
+  priority findings (down from 295); five targeted `S3776` cleared (3 remaining
+  in-file deferred: overlay load, fused image, spatial alignment).
 - Completed the ROI coordinator Sonar finish slice
   (`plans/SONARQUBE_ROI_COORDINATOR_FINISH_SLICE_PLAN_20260718.md`): extracted
   helpers for `handle_roi_drawing_finished`, `handle_roi_delete_requested`,
