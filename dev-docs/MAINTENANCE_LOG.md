@@ -8,6 +8,12 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-18
 
+- Completed the MPR controller Sonar finish slice
+  (`plans/SONARQUBE_MPR_CONTROLLER_FINISH_SLICE_PLAN_20260718.md`): extracted
+  helpers for `prompt_save_mpr_as_dicom`, `attach_floating_mpr`,
+  `_on_mpr_requested`, and `_reset_window_level_for_mpr`. Extended
+  `tests/gui/test_mpr_controller_sonar_slice.py`. Fresh analysis: **299**
+  priority findings (down from 303); `mpr_controller` `S3776` → 0.
 - Completed the MPR controller Sonar slice
   (`plans/SONARQUBE_MPR_CONTROLLER_SLICE_PLAN_20260718.md`): extracted helpers
   for `display_mpr_slice`, `_activate_mpr`, `_tear_down_mpr_at_subwindow`,

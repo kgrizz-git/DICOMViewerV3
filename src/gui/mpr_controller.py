@@ -309,6 +309,25 @@ class MprController(QObject):
 
         app = self._app
         mw = app.main_window
+        ctx = self._save_mpr_resolve_export_context(mw)
+        if ctx is None:
+            return
+        data, result, template = ctx
+
+        output_root = self._save_mpr_pick_output_root(mw)
+        if output_root is None:
+            return
+
+        orient = str(data.get("mpr_orientation", "") or "")
+        opt_dialog = MprDicomSaveDialog(parent=mw, orientation_label=orient)
+        if opt_dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        opts: MprDicomExportOptions = opt_dialog.build_options(orient)
+        self._save_mpr_write_series(mw, output_root, result, template, opts)
+
+    def _save_mpr_resolve_export_context(self, mw) -> tuple[dict, Any, Any] | None:
+        """Validate focused MPR pane and resolve export template dataset."""
+        app = self._app
         idx = app.get_focused_subwindow_index()
         data = app.subwindow_data.get(idx, {})
         if not data.get("is_mpr"):
@@ -318,7 +337,7 @@ class MprController(QObject):
                 "The focused window is not an MPR view.\n"
                 "Create an MPR in a pane and focus it, then try again.",
             )
-            return
+            return None
         result = data.get("mpr_result")
         if result is None or getattr(result, "n_slices", 0) < 1:
             QMessageBox.information(
@@ -326,7 +345,7 @@ class MprController(QObject):
                 _TITLE_SAVE_MPR_DICOM,
                 "No MPR slice stack is available to export yet.",
             )
-            return
+            return None
 
         template = data.get("mpr_source_dataset")
         if template is None:
@@ -340,8 +359,12 @@ class MprController(QObject):
                 _TITLE_SAVE_MPR_DICOM,
                 "Could not resolve a source DICOM dataset for metadata export.",
             )
-            return
+            return None
+        return data, result, template
 
+    def _save_mpr_pick_output_root(self, mw) -> str | None:
+        """Prompt for an export folder and remember it in config."""
+        app = self._app
         start = app.config_manager.get_last_export_path() or ""
         if not start or not os.path.exists(start):
             start = os.getcwd()
@@ -355,19 +378,23 @@ class MprController(QObject):
         folder_dialog.activateWindow()
         folder_dialog.raise_()
         if not folder_dialog.exec():
-            return
+            return None
         selected = folder_dialog.selectedFiles()
         if not selected:
-            return
+            return None
         output_root = selected[0]
         app.config_manager.set_last_export_path(output_root)
+        return output_root
 
-        orient = str(data.get("mpr_orientation", "") or "")
-        opt_dialog = MprDicomSaveDialog(parent=mw, orientation_label=orient)
-        if opt_dialog.exec() != QDialog.DialogCode.Accepted:
-            return
-        opts: MprDicomExportOptions = opt_dialog.build_options(orient)
-
+    def _save_mpr_write_series(
+        self,
+        mw,
+        output_root: str,
+        result: MprResult,
+        template: Any,
+        opts: MprDicomExportOptions,
+    ) -> None:
+        """Write MPR DICOM files with progress UI and success/error messaging."""
         progress = QProgressDialog(
             "Writing MPR DICOM files…",
             "Cancel",
@@ -718,6 +745,18 @@ class MprController(QObject):
         if payload is None:
             return
 
+        self._attach_focus_destination(to_idx)
+        dest_backup = self._attach_backup_existing_mpr(to_idx)
+        ok = self._install_mpr_payload_at_subwindow(to_idx, payload)
+        if ok:
+            self._detached_mpr_payload = None
+            self._attach_clear_detached_thumbnail()
+            self.mpr_activated.emit(to_idx)
+            return
+        self._attach_restore_or_warn(to_idx, dest_backup)
+
+    def _attach_focus_destination(self, to_idx: int) -> None:
+        """Best-effort focus the destination subwindow before attach."""
         try:
             sub = self._app.multi_window_layout.get_subwindow(to_idx)
             if sub is not None:
@@ -725,39 +764,44 @@ class MprController(QObject):
         except Exception:
             pass
 
-        dest_backup: dict[str, Any] | None = None
-        if self.is_mpr(to_idx):
-            dest_backup = self._capture_mpr_payload(to_idx)
-            self.clear_mpr(to_idx)
+    def _attach_backup_existing_mpr(self, to_idx: int) -> dict[str, Any] | None:
+        """Capture and clear an existing MPR at *to_idx*, if present."""
+        if not self.is_mpr(to_idx):
+            return None
+        dest_backup = self._capture_mpr_payload(to_idx)
+        self.clear_mpr(to_idx)
+        return dest_backup
 
-        ok = self._install_mpr_payload_at_subwindow(to_idx, payload)
-        if ok:
-            self._detached_mpr_payload = None
-            try:
-                if hasattr(self._app, "series_navigator"):
-                    self._app.series_navigator.clear_mpr_thumbnail(-1)
-            except Exception:
-                pass
-            self.mpr_activated.emit(to_idx)
-        else:
-            if dest_backup is not None:
-                restored = self._install_mpr_payload_at_subwindow(to_idx, dest_backup)
-                if restored:
-                    self.mpr_activated.emit(to_idx)
-            try:
-                QMessageBox.warning(
-                    self._app.main_window,
-                    "MPR",
-                    "Could not attach the detached MPR to this window.\n"
-                    "The detached session is still available in the navigator."
-                    + (
-                        "\nThe previous MPR in this window was restored."
-                        if dest_backup is not None
-                        else ""
-                    ),
-                )
-            except Exception:
-                pass
+    def _attach_clear_detached_thumbnail(self) -> None:
+        """Clear the navigator's detached-MPR thumbnail slot."""
+        try:
+            if hasattr(self._app, "series_navigator"):
+                self._app.series_navigator.clear_mpr_thumbnail(-1)
+        except Exception:
+            pass
+
+    def _attach_restore_or_warn(
+        self, to_idx: int, dest_backup: dict[str, Any] | None
+    ) -> None:
+        """Restore a prior MPR backup if possible and warn about attach failure."""
+        if dest_backup is not None:
+            restored = self._install_mpr_payload_at_subwindow(to_idx, dest_backup)
+            if restored:
+                self.mpr_activated.emit(to_idx)
+        try:
+            QMessageBox.warning(
+                self._app.main_window,
+                "MPR",
+                "Could not attach the detached MPR to this window.\n"
+                "The detached session is still available in the navigator."
+                + (
+                    "\nThe previous MPR in this window was restored."
+                    if dest_backup is not None
+                    else ""
+                ),
+            )
+        except Exception:
+            pass
 
     def detach_mpr_from_subwindow(self, idx: int) -> None:
         """
@@ -1162,14 +1206,54 @@ class MprController(QObject):
             target_idx: Subwindow to host the MPR view.
             request:    MprRequest from the dialog.
         """
-        # Cancel any existing build for this subwindow.
+        self._mpr_request_cancel_prior_worker(target_idx)
+
+        resolved = self._mpr_request_resolve_datasets(request)
+        if resolved is None:
+            return
+        datasets_to_use, use_slice_location_fallback = resolved
+
+        volume = self._mpr_request_build_volume(
+            datasets_to_use, use_slice_location_fallback
+        )
+        if volume is None:
+            return
+
+        _mpr_log(
+            "MPR request: "
+            f"target_window={target_idx} "
+            f"orientation={request.orientation_label} "
+            f"spacing={request.output_spacing_mm:.4f} mm "
+            f"thickness={request.output_thickness_mm:.4f} mm "
+            f"interpolation={request.interpolation} "
+            f"combine_mode={getattr(request, 'combine_mode', 'none')} "
+            f"slab_thickness_mm={getattr(request, 'slab_thickness_mm', 0.0):.4f} mm "
+            f"source_slices={len(datasets_to_use)}"
+        )
+
+        if self._mpr_request_try_cache(target_idx, request, volume, datasets_to_use):
+            return
+
+        self._mpr_request_start_worker(target_idx, request, volume)
+
+    def _mpr_request_cancel_prior_worker(self, target_idx: int) -> None:
+        """Cancel any in-flight MPR build for *target_idx*."""
         old_worker = self._workers.pop(target_idx, None)
         if old_worker:
             old_worker.cancel()
             old_worker.quit()
             old_worker.wait(1000)
 
-        # If the series has no valid geometry, offer SliceLocation fallback when available.
+    def _mpr_request_resolve_datasets(
+        self, request
+    ) -> tuple[list[Any], bool] | None:
+        """
+        Resolve a single-orientation dataset list for the MPR build.
+
+        Returns:
+            ``(datasets, use_slice_location_fallback)`` or ``None`` if the user
+            cancels or geometry cannot be resolved.
+        """
         use_slice_location_fallback = False
         groups = get_orientation_groups(request.datasets)
         if len(groups) == 0:
@@ -1196,20 +1280,24 @@ class MprController(QObject):
                     "Ensure the series has ImagePositionPatient (or SliceLocation) and "
                     "ImageOrientationPatient.",
                 )
-                return
+                return None
         if len(groups) > 1:
             dlg = MprOrientationChoiceDialog(groups, self._app.main_window)
             if dlg.exec() != QDialog.DialogCode.Accepted:
-                return
+                return None
             datasets_to_use = dlg.get_selected_datasets()
             if not datasets_to_use:
-                return
+                return None
         else:
             datasets_to_use = groups[0][1]
+        return datasets_to_use, use_slice_location_fallback
 
-        # Build the source volume from the chosen (single-orientation) slice set.
+    def _mpr_request_build_volume(
+        self, datasets_to_use: list[Any], use_slice_location_fallback: bool
+    ):
+        """Build ``MprVolume`` or show an error and return ``None``."""
         try:
-            volume = MprVolume.from_datasets(
+            return MprVolume.from_datasets(
                 datasets_to_use,
                 use_slice_location_if_no_position=use_slice_location_fallback,
             )
@@ -1219,67 +1307,69 @@ class MprController(QObject):
                 _TITLE_MPR_ERROR,
                 "Cannot build the MPR volume. Details were withheld to protect private data.",
             )
-            return
+            return None
 
-        _mpr_log(
-            "MPR request: "
-            f"target_window={target_idx} "
-            f"orientation={request.orientation_label} "
-            f"spacing={request.output_spacing_mm:.4f} mm "
-            f"thickness={request.output_thickness_mm:.4f} mm "
-            f"interpolation={request.interpolation} "
-            f"combine_mode={getattr(request, 'combine_mode', 'none')} "
-            f"slab_thickness_mm={getattr(request, 'slab_thickness_mm', 0.0):.4f} mm "
-            f"source_slices={len(datasets_to_use)}"
-        )
+    def _mpr_request_try_cache(
+        self,
+        target_idx: int,
+        request,
+        volume,
+        datasets_to_use: list[Any],
+    ) -> bool:
+        """
+        Attempt a disk-cache hit and activate if found.
 
-        # Check disk cache.
-        if self._cache is not None:
+        Returns:
+            True when a cache hit activated MPR (caller should return).
+        """
+        if self._cache is None:
+            return False
+        try:
+            cache_normal = request.output_plane.normal
+            n_ds = len(datasets_to_use)
             try:
-                cache_normal = request.output_plane.normal
-                n_ds = len(datasets_to_use)
-                try:
-                    series_uid = str(datasets_to_use[0].SeriesInstanceUID)
-                except (AttributeError, IndexError):
-                    series_uid = "__unknown__"
-                from core.mpr_cache import _make_cache_key
-                key = _make_cache_key(
-                    series_uid=series_uid,
-                    normal=cache_normal,
-                    output_spacing_mm=request.output_spacing_mm,
-                    output_thickness_mm=request.output_thickness_mm,
-                    interpolation=request.interpolation,
-                    source_dataset_count=n_ds,
+                series_uid = str(datasets_to_use[0].SeriesInstanceUID)
+            except (AttributeError, IndexError):
+                series_uid = "__unknown__"
+            from core.mpr_cache import _make_cache_key
+            key = _make_cache_key(
+                series_uid=series_uid,
+                normal=cache_normal,
+                output_spacing_mm=request.output_spacing_mm,
+                output_thickness_mm=request.output_thickness_mm,
+                interpolation=request.interpolation,
+                source_dataset_count=n_ds,
+            )
+            hit = self._cache.load(key)
+            if hit is not None:
+                _mpr_log(f"Cache hit: key={key[:12]}...")
+                slices, stack, meta = hit
+                cached_result = MprResult(
+                    slices=slices,
+                    slice_stack=stack,
+                    output_spacing_mm=tuple(meta["output_spacing_mm"]),
+                    output_thickness_mm=float(meta["output_thickness_mm"]),
+                    source_volume=volume,
+                    interpolation=meta["interpolation"],
+                    rescale_slope=meta.get("rescale_slope"),
+                    rescale_intercept=meta.get("rescale_intercept"),
+                    combine_mode=meta.get("combine_mode", "none"),
+                    slab_thickness_mm=float(meta.get("slab_thickness_mm", 0.0)),
                 )
-                hit = self._cache.load(key)
-                if hit is not None:
-                    _mpr_log(f"Cache hit: key={key[:12]}...")
-                    slices, stack, meta = hit
-                    # Reconstruct MprResult from cache hit.
-                    cached_result = MprResult(
-                        slices=slices,
-                        slice_stack=stack,
-                        output_spacing_mm=tuple(meta["output_spacing_mm"]),
-                        output_thickness_mm=float(meta["output_thickness_mm"]),
-                        source_volume=volume,
-                        interpolation=meta["interpolation"],
-                        rescale_slope=meta.get("rescale_slope"),
-                        rescale_intercept=meta.get("rescale_intercept"),
-                        combine_mode=meta.get("combine_mode", "none"),
-                        slab_thickness_mm=float(meta.get("slab_thickness_mm", 0.0)),
-                    )
-                    self._activate_mpr(
-                        target_idx,
-                        cached_result,
-                        request.orientation_label,
-                        request=request,
-                    )
-                    return
-                _mpr_log(f"Cache miss: key={key[:12]}...")
-            except Exception as exc:
-                print_redacted(f"[MprController] Cache lookup error: {exc}")
+                self._activate_mpr(
+                    target_idx,
+                    cached_result,
+                    request.orientation_label,
+                    request=request,
+                )
+                return True
+            _mpr_log(f"Cache miss: key={key[:12]}...")
+        except Exception as exc:
+            print_redacted(f"[MprController] Cache lookup error: {exc}")
+        return False
 
-        # No cache hit — run the builder in a background thread.
+    def _mpr_request_start_worker(self, target_idx: int, request, volume) -> None:
+        """Create the background MPR worker, progress dialog, and start the build."""
         worker = MprBuilder.create_worker(
             source_volume=volume,
             output_plane=request.output_plane,
@@ -1290,7 +1380,6 @@ class MprController(QObject):
             slab_thickness_mm=float(getattr(request, "slab_thickness_mm", 0.0)),
         )
 
-        # Progress dialog.
         progress_dlg = QProgressDialog(
             f"Building MPR ({request.orientation_label})…",
             "Cancel",
@@ -1317,14 +1406,12 @@ class MprController(QObject):
                 f"Build finished for window {target_idx}: "
                 f"slices={result.n_slices} interpolation={result.interpolation}"
             )
-            # Save to cache.
             if self._cache is not None:
                 try:
                     self._cache.save(result)
                 except Exception as exc:
                     print_redacted(f"[MprController] Cache save error: {exc}")
 
-            # Verify image viewer exists before activating MPR
             image_viewer = self._get_image_viewer(target_idx)
             if image_viewer is None:
                 QMessageBox.critical(
@@ -1654,57 +1741,115 @@ class MprController(QObject):
                 get_window_level_presets_from_dataset,
             )
 
-            # Get rescale parameters
-            rescale_slope, rescale_intercept, rescale_type = get_rescale_parameters(source_dataset)
-            if rescale_type is None and rescale_slope is not None and rescale_intercept is not None:
+            rescale_slope, rescale_intercept, rescale_type = get_rescale_parameters(
+                source_dataset
+            )
+            if (
+                rescale_type is None
+                and rescale_slope is not None
+                and rescale_intercept is not None
+            ):
                 rescale_type = DICOMProcessor.infer_rescale_type(
                     source_dataset, rescale_slope, rescale_intercept, None
                 )
 
-            # Always sync this pane's view state + viewer rescale toggle (MPR bypasses SliceDisplayManager).
-            managers = self._app.subwindow_managers.get(idx, {})
-            view_state_manager = managers.get("view_state_manager")
-            if view_state_manager is not None:
-                view_state_manager.set_rescale_parameters(rescale_slope, rescale_intercept, rescale_type)
-                use_rescaled_default = (
-                    rescale_slope is not None and rescale_intercept is not None
-                )
-                view_state_manager.use_rescaled_values = use_rescaled_default
-                if idx == focused and hasattr(self._app, "main_window"):
-                    self._app.main_window.set_rescale_toggle_state(use_rescaled_default)
-                image_viewer = self._get_image_viewer(idx)
-                if image_viewer is not None:
-                    image_viewer.set_rescale_toggle_state(use_rescaled_default)
-
-            # Try to get presets first
-            presets = get_window_level_presets_from_dataset(
-                source_dataset, rescale_slope, rescale_intercept
+            view_state_manager = self._mpr_wl_sync_pane_rescale(
+                idx, focused, rescale_slope, rescale_intercept, rescale_type
             )
-
-            if presets:
-                # Use first preset
-                wc, ww, is_rescaled, preset_name = presets[0]
-            else:
-                # Fall back to single window/level or auto-calculation
-                wc, ww, is_rescaled = get_window_level_from_dataset(
-                    source_dataset, rescale_slope, rescale_intercept
-                )
-
-            if wc is not None and ww is not None and ww > 0:
-                if view_state_manager is not None:
-                    view_state_manager.current_window_center = wc
-                    view_state_manager.current_window_width = ww
-                    view_state_manager.window_level_user_modified = False
-                # Toolbar W/L is shared, so only sync it when this pane is focused.
-                if idx != focused or wl_controls is None:
-                    return
-                unit = None
-                if rescale_slope is not None and rescale_intercept is not None:
-                    unit = rescale_type
-                wl_controls.set_window_level(wc, ww, block_signals=False, unit=unit)
-                _mpr_log(f"Reset W/L for MPR: center={wc:.1f} width={ww:.1f} rescaled={is_rescaled}")
+            wc, ww, is_rescaled = self._mpr_wl_resolve_center_width(
+                source_dataset,
+                rescale_slope,
+                rescale_intercept,
+                get_window_level_presets_from_dataset,
+                get_window_level_from_dataset,
+            )
+            self._mpr_wl_apply_values(
+                idx,
+                focused,
+                wl_controls,
+                view_state_manager,
+                wc,
+                ww,
+                is_rescaled,
+                rescale_slope,
+                rescale_intercept,
+                rescale_type,
+            )
         except Exception as exc:
             print_redacted(f"[MprController] Failed to reset W/L for MPR in window {idx}: {exc}")
+
+    def _mpr_wl_sync_pane_rescale(
+        self,
+        idx: int,
+        focused: int,
+        rescale_slope,
+        rescale_intercept,
+        rescale_type,
+    ):
+        """Sync per-pane rescale state; also sync main-window toggle when focused."""
+        managers = self._app.subwindow_managers.get(idx, {})
+        view_state_manager = managers.get("view_state_manager")
+        if view_state_manager is None:
+            return None
+        view_state_manager.set_rescale_parameters(
+            rescale_slope, rescale_intercept, rescale_type
+        )
+        use_rescaled_default = (
+            rescale_slope is not None and rescale_intercept is not None
+        )
+        view_state_manager.use_rescaled_values = use_rescaled_default
+        if idx == focused and hasattr(self._app, "main_window"):
+            self._app.main_window.set_rescale_toggle_state(use_rescaled_default)
+        image_viewer = self._get_image_viewer(idx)
+        if image_viewer is not None:
+            image_viewer.set_rescale_toggle_state(use_rescaled_default)
+        return view_state_manager
+
+    @staticmethod
+    def _mpr_wl_resolve_center_width(
+        source_dataset,
+        rescale_slope,
+        rescale_intercept,
+        get_presets,
+        get_single_wl,
+    ) -> tuple[Any, Any, Any]:
+        """Resolve window center/width from presets or single-tag fallback."""
+        presets = get_presets(source_dataset, rescale_slope, rescale_intercept)
+        if presets:
+            wc, ww, is_rescaled, _preset_name = presets[0]
+            return wc, ww, is_rescaled
+        wc, ww, is_rescaled = get_single_wl(
+            source_dataset, rescale_slope, rescale_intercept
+        )
+        return wc, ww, is_rescaled
+
+    def _mpr_wl_apply_values(
+        self,
+        idx: int,
+        focused: int,
+        wl_controls,
+        view_state_manager,
+        wc,
+        ww,
+        is_rescaled,
+        rescale_slope,
+        rescale_intercept,
+        rescale_type,
+    ) -> None:
+        """Write W/L into pane view state and optionally sync shared toolbar."""
+        if wc is None or ww is None or ww <= 0:
+            return
+        if view_state_manager is not None:
+            view_state_manager.current_window_center = wc
+            view_state_manager.current_window_width = ww
+            view_state_manager.window_level_user_modified = False
+        if idx != focused or wl_controls is None:
+            return
+        unit = None
+        if rescale_slope is not None and rescale_intercept is not None:
+            unit = rescale_type
+        wl_controls.set_window_level(wc, ww, block_signals=False, unit=unit)
+        _mpr_log(f"Reset W/L for MPR: center={wc:.1f} width={ww:.1f} rescaled={is_rescaled}")
 
     @staticmethod
     def _get_preferred_mpr_window_level(view_state_manager, wl_controls, array: np.ndarray):

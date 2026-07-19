@@ -1,8 +1,8 @@
 """
-Characterize MprController contracts targeted by the Sonar S3776 slice.
+Characterize MprController contracts targeted by the Sonar S3776 slices.
 
-Covers display_mpr_slice, _activate_mpr, _tear_down_mpr_at_subwindow,
-_install_mpr_payload_at_subwindow, and _build_overlay_dataset.
+Covers display / activate / tear-down / install / overlay helpers from the
+first slice, plus save / attach / request / W-L helpers from the finish slice.
 """
 
 from __future__ import annotations
@@ -346,3 +346,206 @@ def test_build_overlay_dataset_sets_geometry_and_strips_location() -> None:
     # Source study slice must remain unchanged (deep copy).
     assert result.source_volume.source_datasets[0].InstanceNumber == 7
     assert result.source_volume.source_datasets[0].SOPInstanceUID == source_uid
+
+
+def test_prompt_save_mpr_rejects_non_mpr_focus() -> None:
+    ctrl, app = _make_controller()
+    app.get_focused_subwindow_index = MagicMock(return_value=0)
+    app.main_window = MagicMock()
+    app.subwindow_data[0] = {}
+    with patch("gui.mpr_controller.QMessageBox.information") as info:
+        ctrl.prompt_save_mpr_as_dicom()
+    info.assert_called_once()
+    assert "not an MPR" in info.call_args[0][2]
+
+
+def test_prompt_save_mpr_rejects_empty_stack() -> None:
+    ctrl, app = _make_controller()
+    app.get_focused_subwindow_index = MagicMock(return_value=0)
+    app.main_window = MagicMock()
+    empty = SimpleNamespace(n_slices=0)
+    app.subwindow_data[0] = {"is_mpr": True, "mpr_result": empty}
+    with patch("gui.mpr_controller.QMessageBox.information") as info:
+        ctrl.prompt_save_mpr_as_dicom()
+    info.assert_called_once()
+    assert "No MPR slice stack" in info.call_args[0][2]
+
+
+def test_attach_floating_mpr_noop_without_payload() -> None:
+    ctrl, app = _make_controller()
+    ctrl._detached_mpr_payload = None
+    with patch.object(ctrl, "_install_mpr_payload_at_subwindow") as install:
+        ctrl.attach_floating_mpr(0)
+    install.assert_not_called()
+
+
+def test_attach_floating_mpr_clears_detached_on_success() -> None:
+    ctrl, app = _make_controller()
+    result = _make_result()
+    payload = {"mpr_result": result, "mpr_orientation": "Axial", "mpr_slice_index": 0}
+    ctrl._detached_mpr_payload = payload
+    activated: list[int] = []
+    ctrl.mpr_activated.connect(activated.append)
+    with patch.object(ctrl, "_install_mpr_payload_at_subwindow", return_value=True):
+        ctrl.attach_floating_mpr(0)
+    assert ctrl._detached_mpr_payload is None
+    assert activated == [0]
+    app.series_navigator.clear_mpr_thumbnail.assert_called_once_with(-1)
+
+
+def test_attach_floating_mpr_restores_backup_on_install_failure() -> None:
+    ctrl, app = _make_controller()
+    result = _make_result()
+    payload = {"mpr_result": result, "mpr_orientation": "Axial", "mpr_slice_index": 0}
+    ctrl._detached_mpr_payload = payload
+    app.subwindow_data[0] = {
+        "is_mpr": True,
+        "mpr_result": result,
+        "mpr_orientation": "Old",
+        "mpr_slice_index": 1,
+        "current_study_uid": "st",
+        "current_series_uid": "se",
+        "current_datasets": [],
+        "mpr_combine_enabled": False,
+        "mpr_combine_mode": "aip",
+        "mpr_combine_slice_count": 1,
+    }
+    app.main_window = MagicMock()
+    installs: list[Any] = []
+
+    def _install(idx: int, p: dict[str, Any]) -> bool:
+        installs.append(p)
+        return len(installs) != 1
+
+    with (
+        patch.object(ctrl, "_install_mpr_payload_at_subwindow", side_effect=_install),
+        patch.object(ctrl, "clear_mpr"),
+        patch.object(ctrl, "_capture_mpr_payload", return_value={"backup": True}),
+        patch("gui.mpr_controller.QMessageBox.warning") as warn,
+    ):
+        ctrl.attach_floating_mpr(0)
+
+    assert len(installs) == 2
+    assert installs[0] is payload
+    assert installs[1] == {"backup": True}
+    warn.assert_called_once()
+    assert "previous MPR" in warn.call_args[0][2]
+
+
+def test_on_mpr_requested_errors_when_no_orientation_groups() -> None:
+    ctrl, app = _make_controller()
+    app.main_window = MagicMock()
+    request = SimpleNamespace(datasets=[_source_dataset()], orientation_label="Axial")
+    with (
+        patch("gui.mpr_controller.get_orientation_groups", return_value=[]),
+        patch(
+            "gui.mpr_controller.has_slice_location_fallback_available",
+            return_value=False,
+        ),
+        patch("gui.mpr_controller.QMessageBox.critical") as critical,
+        patch.object(ctrl, "_activate_mpr") as activate,
+    ):
+        ctrl._on_mpr_requested(0, request)
+    critical.assert_called_once()
+    activate.assert_not_called()
+
+
+def test_on_mpr_requested_activates_from_cache_hit() -> None:
+    ctrl, app = _make_controller()
+    app.main_window = MagicMock()
+    ds = _source_dataset()
+    request = SimpleNamespace(
+        datasets=[ds],
+        orientation_label="Coronal",
+        output_spacing_mm=0.5,
+        output_thickness_mm=1.0,
+        interpolation="linear",
+        combine_mode="none",
+        slab_thickness_mm=0.0,
+        output_plane=SimpleNamespace(normal=np.array([0.0, 1.0, 0.0])),
+    )
+    result = _make_result(n_slices=2)
+    volume = SimpleNamespace(source_datasets=[ds])
+    cache = MagicMock()
+    cache.load.return_value = (
+        result.slices,
+        result.slice_stack,
+        {
+            "output_spacing_mm": result.output_spacing_mm,
+            "output_thickness_mm": result.output_thickness_mm,
+            "interpolation": "linear",
+            "rescale_slope": 1.0,
+            "rescale_intercept": 0.0,
+            "combine_mode": "none",
+            "slab_thickness_mm": 0.0,
+        },
+    )
+    ctrl._cache = cache
+    with (
+        patch(
+            "gui.mpr_controller.get_orientation_groups",
+            return_value=[("Axial", [ds])],
+        ),
+        patch("gui.mpr_controller.MprVolume.from_datasets", return_value=volume),
+        patch.object(ctrl, "_activate_mpr") as activate,
+        patch("gui.mpr_controller.MprBuilder.create_worker") as create_worker,
+    ):
+        ctrl._on_mpr_requested(0, request)
+    activate.assert_called_once()
+    assert activate.call_args[0][0] == 0
+    assert activate.call_args[0][2] == "Coronal"
+    create_worker.assert_not_called()
+
+
+def test_reset_window_level_updates_pane_even_when_unfocused() -> None:
+    ctrl, app = _make_controller(focused=-1)
+    app.window_level_controls = MagicMock()
+    app.main_window = MagicMock()
+    ds = _source_dataset()
+    vsm = app.subwindow_managers[0]["view_state_manager"]
+    with (
+        patch(
+            "core.dicom_rescale.get_rescale_parameters",
+            return_value=(1.0, -1024.0, "HU"),
+        ),
+        patch(
+            "core.dicom_window_level.get_window_level_presets_from_dataset",
+            return_value=[(40.0, 400.0, True, "Soft Tissue")],
+        ),
+    ):
+        ctrl._reset_window_level_for_mpr(0, ds)
+
+    vsm.set_rescale_parameters.assert_called_once_with(1.0, -1024.0, "HU")
+    assert vsm.use_rescaled_values is True
+    assert vsm.current_window_center == 40.0
+    assert vsm.current_window_width == 400.0
+    app.window_level_controls.set_window_level.assert_not_called()
+    viewer = app.multi_window_layout.get_subwindow(0).image_viewer
+    viewer.set_rescale_toggle_state.assert_called_once_with(True)
+
+
+def test_reset_window_level_syncs_toolbar_when_focused() -> None:
+    ctrl, app = _make_controller(focused=0)
+    app.window_level_controls = MagicMock()
+    app.main_window = MagicMock()
+    ds = _source_dataset()
+    with (
+        patch(
+            "core.dicom_rescale.get_rescale_parameters",
+            return_value=(1.0, 0.0, "HU"),
+        ),
+        patch(
+            "core.dicom_window_level.get_window_level_presets_from_dataset",
+            return_value=[],
+        ),
+        patch(
+            "core.dicom_window_level.get_window_level_from_dataset",
+            return_value=(50.0, 350.0, True),
+        ),
+    ):
+        ctrl._reset_window_level_for_mpr(0, ds)
+
+    app.window_level_controls.set_window_level.assert_called_once()
+    args = app.window_level_controls.set_window_level.call_args
+    assert args[0][:2] == (50.0, 350.0)
+    app.main_window.set_rescale_toggle_state.assert_called_once_with(True)
