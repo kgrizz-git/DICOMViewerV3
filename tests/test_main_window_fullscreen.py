@@ -108,7 +108,8 @@ def test_toolbar_places_export_and_index_immediately_after_open(qapp):
         if text:
             visible_texts.append(text.replace("&", ""))
 
-    assert visible_texts[:4] == ["Open", "Export", "Index", "Ellipse"]
+    # Recent sits immediately after Open; Export/Index follow.
+    assert visible_texts[:5] == ["Open", "Recent", "Export", "Index", "Ellipse"]
 
 
 @pytest.mark.qt
