@@ -2,6 +2,7 @@
 
 **Status:** Not started  
 **Priority:** P1  
+**Execution breakdown (Phases A→2, agent-run):** [Study index browser, integrity & portability execution plan](STUDY_INDEX_BROWSER_AND_INTEGRITY_EXECUTION_PLAN.md)
 **TO_DO refs:** UX/Workflow — "First-launch study-index opt-in prompt," "Study index — optional encryption (off by default)," "Study index — location & portability UI," "Allow a button in study index that checks all indexed studies still exist," "Study index — relative file paths"
 
 ---
