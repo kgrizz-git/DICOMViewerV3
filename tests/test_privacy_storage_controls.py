@@ -13,7 +13,12 @@ from PySide6.QtWidgets import QMessageBox
 from core.study_index.index_service import LocalStudyIndexService
 from gui.mpr_controller import MprController
 from gui.privacy_storage_settings import PrivacyStorageSettingsPanel
-from gui.study_index_consent import ensure_study_index_auto_add_consent
+from gui.study_index_consent import (
+    StudyIndexFirstOpenDialog,
+    StudyIndexOpenChoice,
+    apply_first_open_choice,
+    prompt_study_index_first_open,
+)
 from utils import debug_log as debug_log_module
 from utils.config_manager import ConfigManager
 from utils.privacy.safe_storage import DeletionResult
@@ -83,21 +88,46 @@ def test_legacy_enabled_index_setting_fails_closed_until_migration_choice(
     assert config.get_study_index_auto_add_on_open() is False
 
 
-def test_index_consent_prompt_records_no_once(monkeypatch, tmp_path: Path) -> None:
+def test_apply_first_open_choice_never_records_consent(tmp_path: Path) -> None:
     config = _config(tmp_path)
-    calls = 0
-
-    def answer_no(*_args, **_kwargs):
-        nonlocal calls
-        calls += 1
-        return QMessageBox.StandardButton.No
-
-    monkeypatch.setattr(QMessageBox, "question", answer_no)
-
-    assert ensure_study_index_auto_add_consent(config, None) is False
-    assert ensure_study_index_auto_add_consent(config, None) is False
-    assert calls == 1
+    apply_first_open_choice(config, StudyIndexOpenChoice.NEVER)
     assert config.has_study_index_auto_add_consent() is True
+    assert config.get_study_index_auto_add_on_open() is False
+
+
+def test_apply_first_open_choice_always_records_consent(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    apply_first_open_choice(config, StudyIndexOpenChoice.ALWAYS)
+    assert config.has_study_index_auto_add_consent() is True
+    assert config.get_study_index_auto_add_on_open() is True
+
+
+def test_apply_first_open_choice_one_time_options_leave_consent_unrecorded(
+    tmp_path: Path,
+) -> None:
+    for choice in (StudyIndexOpenChoice.ADD_ONCE, StudyIndexOpenChoice.SKIP_ONCE):
+        config = _config(tmp_path / choice.value)
+        apply_first_open_choice(config, choice)
+        # One-time actions must not record a persistent preference, so the
+        # prompt appears again on a later load.
+        assert config.needs_study_index_auto_add_consent() is True
+        assert config.get_study_index_auto_add_on_open() is False
+
+
+def test_prompt_returns_and_persists_choice(qapp, monkeypatch, tmp_path: Path) -> None:
+    _ = qapp
+    config = _config(tmp_path)
+
+    def fake_exec(self):
+        self.choice = StudyIndexOpenChoice.ADD_ONCE
+        return 1
+
+    monkeypatch.setattr(StudyIndexFirstOpenDialog, "exec", fake_exec)
+
+    result = prompt_study_index_first_open(config, None)
+    assert result is StudyIndexOpenChoice.ADD_ONCE
+    # ADD_ONCE leaves consent unrecorded.
+    assert config.needs_study_index_auto_add_consent() is True
 
 
 def test_explicit_index_opt_in_persists(tmp_path: Path) -> None:

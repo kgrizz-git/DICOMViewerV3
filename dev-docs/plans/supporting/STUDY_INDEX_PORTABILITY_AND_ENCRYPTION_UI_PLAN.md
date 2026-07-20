@@ -2,7 +2,7 @@
 
 **Status:** Not started  
 **Priority:** P1  
-**TO_DO refs:** UX/Workflow — "Study index — optional encryption (off by default)," "Study index — location & portability UI," "Allow a button in study index that checks all indexed studies still exist," "Study index — relative file paths"
+**TO_DO refs:** UX/Workflow — "First-launch study-index opt-in prompt," "Study index — optional encryption (off by default)," "Study index — location & portability UI," "Allow a button in study index that checks all indexed studies still exist," "Study index — relative file paths"
 
 ---
 
@@ -16,6 +16,30 @@ Expose the study index's encryption, location, and health features through clear
 4. (Future / P2) Store relative file paths for USB portability.
 
 Currently the index is **always SQLCipher-encrypted**, the passphrase is auto-generated in the OS keyring, the DB path is configurable in **Edit → Settings…**, and there is no integrity scan or export/import UI.
+
+---
+
+## Phase 0 — First-open indexing prompt (persistent choice + one-time options)
+
+**Current behavior:** `gui/study_index_consent.py::ensure_study_index_auto_add_consent()` shows a binary **Yes / No** `QMessageBox` on the **first successful load** when no consent is recorded (invoked from `main.py:1564`), and remembers the answer via `study_index_auto_add_consent` / `study_index_auto_add_on_open`. Auto-add defaults **off**.
+
+**Target:** replace the binary prompt with a small custom dialog offering **four** choices, plus inline disclosure of what/where the index is:
+
+- **Always add to index** — set auto-add **on** + record consent; never ask again.
+- **Never add to index** — set auto-add **off** + record consent; never ask again.
+- **Add this one time** — index the current study now, but **do not** record persistent consent (prompt can appear again later).
+- **Skip this one time** — do **not** index now, and **do not** record consent (prompt can appear again later).
+- Inline **info disclosure**: where the index is saved (DB path), that it stores clinical metadata + file locations **on this device**, encryption status, and that it can be changed/cleared later in **Settings**. Reuse the Phase 2 "About this index" copy so wording stays consistent.
+
+**Re-prompt cadence for the one-time options (decided 2026-07-20):** the prompt is shown on each load while consent is unrecorded (i.e. `needs_study_index_auto_add_consent()`), so `ADD_ONCE`/`SKIP_ONCE` naturally re-prompt on the next load until the user picks `ALWAYS`/`NEVER`. A "don't ask again this session" nuance can be layered on later if the per-load prompt proves noisy.
+
+### Tasks — **DONE 2026-07-20**
+
+- [x] New dialog `StudyIndexFirstOpenDialog` in `gui/study_index_consent.py` with 4 buttons + an info panel (index location, what's stored, "change later in Settings") and an **Open location** button.
+- [x] Return an explicit decision enum `StudyIndexOpenChoice{ALWAYS, NEVER, ADD_ONCE, SKIP_ONCE}` via `prompt_study_index_first_open()`.
+- [x] `main.py` load-time call: `ADD_ONCE` indexes just this load via `schedule_index_after_load(..., force=True)` without recording consent; `SKIP_ONCE` skips without recording consent; `ALWAYS`/`NEVER` record consent (via `apply_first_open_choice`).
+- [x] Show index location/info inline (shared `gui/study_index_info.py` helper, reused by Phase 2).
+- [x] Tests: `test_privacy_storage_controls.py` (choice → config state; one-time leaves consent unrecorded; prompt returns/persists) + `test_index_service.py::test_schedule_force_indexes_when_auto_add_off`.
 
 ---
 
@@ -58,7 +82,7 @@ Currently the index is **always SQLCipher-encrypted**, the passphrase is auto-ge
   - **Encryption status** (on/off, credential-store location).
   - **Row count** / size on disk.
   - **Last modified** timestamp.
-- [ ] **Open index location** button → `QDesktopServices.openUrl(QUrl.fromLocalFile(parent_dir))`.
+- [x] **Open index location** button → `QDesktopServices.openUrl(QUrl.fromLocalFile(parent_dir))`. **DONE 2026-07-20** — in the Study Index dialog and the first-open prompt, via `gui/study_index_info.py::open_study_index_location()` (opens the nearest existing ancestor if the DB file doesn't exist yet).
 - [ ] **Move index…** button:
   - File-save dialog for new location.
   - Copy DB file → verify integrity (open + `PRAGMA integrity_check`) → update config → delete old file.

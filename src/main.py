@@ -56,7 +56,10 @@ from gui.multi_window_layout import MultiWindowLayout
 from gui.overlay_manager import OverlayManager
 from gui.series_navigator import SeriesNavigator
 from gui.slice_navigator import SliceNavigator
-from gui.study_index_consent import ensure_study_index_auto_add_consent
+from gui.study_index_consent import (
+    StudyIndexOpenChoice,
+    prompt_study_index_first_open,
+)
 from gui.sub_window_container import SubWindowContainer
 from gui.window_level_controls import WindowLevelControls
 from gui.window_slot_map_widget import WindowSlotMapPopupDialog, WindowSlotMapWidget
@@ -1555,22 +1558,26 @@ class DICOMViewerApp(QObject):
         was_cancelled: bool = False,
     ) -> None:
         """Record opened files in the local study index when enabled in settings."""
+        force_index = False
         if was_cancelled:
             show_cancelled_index_skip_toast(self)
         elif (
             self.study_index_service.is_backend_available()
             and self.config_manager.needs_study_index_auto_add_consent()
         ):
-            ensure_study_index_auto_add_consent(
+            choice = prompt_study_index_first_open(
                 self.config_manager,
                 self.main_window,
             )
+            # "Add this one time" indexes this batch without recording consent.
+            force_index = choice is StudyIndexOpenChoice.ADD_ONCE
         self.study_index_service.schedule_index_after_load(
             datasets,
             merge_paths,
             source_dir,
             merge_result,
             was_cancelled=was_cancelled,
+            force=force_index,
         )
 
     def _open_study_index_search(self) -> None:

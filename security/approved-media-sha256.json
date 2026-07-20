@@ -1,7 +1,7 @@
 {
   "purpose": "Reviewed binary, extensionless, DICOM, image, PDF, PostScript, archive, and document-package assets. Any new or changed entry requires PHI and burned-in-text review before its SHA-256 or image-tree hash is added.",
   "image_trees": {
-    "resources/icons": "bf7a76920150fa903c4b53288e8c47af55ddaa80b4d6c31527e440bca1f99884"
+    "resources/icons": "6c62fd1a5fd3093a2e50f3708fa36b8395ecdf8b7ae73c0d84903a9165d76ec5"
   },
   "files": {
     ".coveragerc": "14c7aae3c792624e702df322962c1eed4fec3776b8ad11b6a5eaa4aeb52da659",

@@ -179,6 +179,7 @@ class LocalStudyIndexService:
         _merge_result: MergeResult,
         *,
         was_cancelled: bool = False,
+        force: bool = False,
     ) -> None:
         """
         Queue a background upsert for datasets opened in this load batch.
@@ -189,11 +190,15 @@ class LocalStudyIndexService:
         When *was_cancelled* is True (user stopped a folder/file load part-way),
         indexing is skipped so the encrypted index is not left with incomplete
         study metadata.
+
+        When *force* is True (e.g. the user chose "Add this one time" at the
+        first-open prompt), this batch is indexed even though the persistent
+        auto-add-on-open preference is off/unrecorded.
         """
         if was_cancelled:
             _logger.info("Skipping auto-index: load was cancelled by user")
             return
-        if not self._config.get_study_index_auto_add_on_open():
+        if not force and not self._config.get_study_index_auto_add_on_open():
             return
         if not self.is_backend_available():
             return
