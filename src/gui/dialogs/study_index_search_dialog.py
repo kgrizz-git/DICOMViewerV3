@@ -32,16 +32,24 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QMenu,
     QMessageBox,
+    QProgressDialog,
     QPushButton,
     QTableView,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
 )
 
-from core.study_index.index_service import LocalStudyIndexService
+from core.study_index.index_integrity_thread import StudyIndexIntegrityThread
+from core.study_index.index_service import (
+    LocalStudyIndexService,
+    MissingStudyRecord,
+)
 from core.study_index.metadata_extract import repair_str_bytes_repr_artifact
 from core.study_index.study_date_format import (
     format_partial_mdy_digits,
@@ -245,6 +253,7 @@ class StudyIndexSearchDialog(QDialog):
         self._offset = 0
         self._sort_column_id = "study_date"
         self._sort_descending = True
+        self._integrity_thread: StudyIndexIntegrityThread | None = None
         self._save_columns_timer = QTimer(self)
         self._save_columns_timer.setSingleShot(True)
         self._save_columns_timer.timeout.connect(self._persist_column_visual_order)
@@ -320,6 +329,12 @@ class StudyIndexSearchDialog(QDialog):
         self._load_more_btn.clicked.connect(self._on_load_more)
         index_btn = QPushButton("Index folder…")
         index_btn.clicked.connect(self._index_folder)
+        check_btn = QPushButton("Check indexed studies…")
+        check_btn.setToolTip(
+            "Scan the index for studies whose DICOM files are missing on disk, "
+            "then relocate or remove them"
+        )
+        check_btn.clicked.connect(self._check_indexed_studies)
         open_loc_btn = QPushButton("Open index location")
         open_loc_btn.setToolTip(
             f"Reveal the index database folder in your file manager\n{study_index_db_path(self._config)}"
@@ -329,6 +344,7 @@ class StudyIndexSearchDialog(QDialog):
         btn_row.addWidget(clear_btn)
         btn_row.addWidget(self._load_more_btn)
         btn_row.addWidget(index_btn)
+        btn_row.addWidget(check_btn)
         btn_row.addWidget(open_loc_btn)
         btn_row.addStretch()
         layout.addLayout(btn_row)
@@ -712,6 +728,73 @@ class StudyIndexSearchDialog(QDialog):
             on_failed=on_fail,
         )
 
+    def _check_indexed_studies(self) -> None:
+        """Scan the index for missing files on a background thread, then show results."""
+        if not self._backend_ok_or_warn():
+            return
+
+        progress = QProgressDialog(
+            "Checking indexed studies…", "Cancel", 0, 0, self
+        )
+        progress.setWindowTitle(_TITLE_STUDY_INDEX)
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.setAutoClose(False)
+        progress.setAutoReset(False)
+
+        thread = StudyIndexIntegrityThread(self._service, parent=self)
+        self._integrity_thread = thread
+
+        def on_progress(done: int, total: int) -> None:
+            if total > 0:
+                progress.setMaximum(total)
+                progress.setValue(done)
+
+        def cleanup() -> None:
+            progress.close()
+            self._integrity_thread = None
+
+        def on_ok(records: object) -> None:
+            cleanup()
+            recs = list(records) if isinstance(records, list) else []
+            self._show_missing_studies(recs)
+
+        def on_fail(msg: str) -> None:
+            cleanup()
+            safe = sanitize_message(msg, redact_paths=True)
+            QMessageBox.warning(
+                self, _TITLE_STUDY_INDEX, f"Checking the index failed:\n{safe}"
+            )
+
+        thread.progress.connect(on_progress)
+        thread.finished_ok.connect(on_ok)
+        thread.failed.connect(on_fail)
+        # Cancelling the progress dialog just detaches the UI; the scan is read-only.
+        progress.canceled.connect(progress.close)
+        thread.start()
+
+    def _show_missing_studies(self, records: list[MissingStudyRecord]) -> None:
+        if not records:
+            QMessageBox.information(
+                self,
+                _TITLE_STUDY_INDEX,
+                "All indexed studies were found on disk. Nothing to relocate or remove.",
+            )
+            return
+
+        def on_changed() -> None:
+            self._run_browse(reset=True, strict_dates=False)
+
+        dlg = _MissingStudiesDialog(
+            records,
+            self._service,
+            privacy=self._privacy(),
+            on_changed=on_changed,
+            parent=self,
+        )
+        dlg.exec()
+        # A relocate/remove already refreshed the browse list via on_changed.
+
     def _on_header_section_moved(self, _logical: int, _old_v: int, _new_v: int) -> None:
         self._save_columns_timer.start(150)
 
@@ -732,3 +815,208 @@ class StudyIndexSearchDialog(QDialog):
         finally:
             hdr.blockSignals(False)
         self._apply_hidden_columns()
+
+
+_MISSING_COLUMNS = (
+    "Patient name",
+    "Study date",
+    "Modalities",
+    "Study folder",
+    "Files missing",
+)
+
+
+class _MissingStudiesDialog(QDialog):
+    """Results of an integrity scan: relocate or remove studies with missing files."""
+
+    def __init__(
+        self,
+        records: list[MissingStudyRecord],
+        service: LocalStudyIndexService,
+        *,
+        privacy: bool,
+        on_changed: Callable[[], None],
+        parent=None,
+    ) -> None:
+        super().__init__(parent)
+        self._records: list[MissingStudyRecord] = list(records)
+        self._service = service
+        self._privacy = privacy
+        self._on_changed = on_changed
+        self.setWindowTitle("Check indexed studies")
+        self.resize(880, 480)
+        self._build_ui()
+        self._populate()
+
+    def _build_ui(self) -> None:
+        layout = QVBoxLayout(self)
+        hint = QLabel(
+            "These indexed studies have files that were not found on disk. "
+            "<b>Relocate…</b> points the index at a new folder (the files must exist "
+            "there); <b>Remove from index</b> deletes only the database rows for that "
+            "study (never files on disk)."
+        )
+        hint.setTextFormat(Qt.TextFormat.RichText)
+        hint.setWordWrap(True)
+        layout.addWidget(hint)
+
+        self._table = QTableWidget()
+        self._table.setColumnCount(len(_MISSING_COLUMNS))
+        self._table.setHorizontalHeaderLabels(list(_MISSING_COLUMNS))
+        self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self._table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self._table.verticalHeader().setVisible(False)
+        hdr = self._table.horizontalHeader()
+        hdr.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        layout.addWidget(self._table)
+
+        btn_row = QHBoxLayout()
+        self._relocate_btn = QPushButton("Relocate…")
+        self._relocate_btn.setToolTip("Point the selected study at a new folder")
+        self._relocate_btn.clicked.connect(self._relocate_selected)
+        self._remove_btn = QPushButton("Remove from index")
+        self._remove_btn.setToolTip(
+            "Delete the selected study’s index rows (does not delete DICOM files)"
+        )
+        self._remove_btn.clicked.connect(self._remove_selected)
+        remove_all_btn = QPushButton("Remove all missing")
+        remove_all_btn.setToolTip(
+            "Delete index rows for every study listed here (does not delete DICOM files)"
+        )
+        remove_all_btn.clicked.connect(self._remove_all)
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(self.accept)
+        btn_row.addWidget(self._relocate_btn)
+        btn_row.addWidget(self._remove_btn)
+        btn_row.addWidget(remove_all_btn)
+        btn_row.addStretch()
+        btn_row.addWidget(close_btn)
+        layout.addLayout(btn_row)
+
+    def _populate(self) -> None:
+        self._table.setRowCount(len(self._records))
+        for row, rec in enumerate(self._records):
+            pn = "***" if self._privacy else (
+                repair_str_bytes_repr_artifact(rec.patient_name) or ""
+            )
+            values = (
+                pn,
+                format_study_date_display_us(rec.study_date or ""),
+                rec.modalities or "",
+                rec.study_root_path or "",
+                f"{rec.missing_count} of {rec.total_count} files missing",
+            )
+            for col, text in enumerate(values):
+                item = QTableWidgetItem(text)
+                item.setToolTip(text)
+                self._table.setItem(row, col, item)
+        self._table.resizeColumnsToContents()
+        has_rows = bool(self._records)
+        self._relocate_btn.setEnabled(has_rows)
+        self._remove_btn.setEnabled(has_rows)
+
+    def _selected_record(self) -> MissingStudyRecord | None:
+        row = self._table.currentRow()
+        if row < 0 or row >= len(self._records):
+            return None
+        return self._records[row]
+
+    def _drop_record(self, rec: MissingStudyRecord) -> None:
+        try:
+            self._records.remove(rec)
+        except ValueError:
+            pass
+        self._populate()
+
+    def _relocate_selected(self) -> None:
+        rec = self._selected_record()
+        if rec is None:
+            QMessageBox.information(self, _TITLE_STUDY_INDEX, "Select a study first.")
+            return
+        start = rec.study_root_path or os.path.expanduser("~")
+        new_root = QFileDialog.getExistingDirectory(
+            self, "Select the study’s new folder", start
+        )
+        if not new_root:
+            return
+        try:
+            n = self._service.relocate_study(
+                rec.study_uid, rec.study_root_path, new_root
+            )
+        except Exception as e:
+            safe = sanitize_message(str(e), redact_paths=True)
+            QMessageBox.critical(self, _TITLE_STUDY_INDEX, f"Relocate failed:\n{safe}")
+            return
+        if n <= 0:
+            QMessageBox.warning(
+                self,
+                _TITLE_STUDY_INDEX,
+                "No relocated files were found in that folder. The index was not changed.",
+            )
+            return
+        QMessageBox.information(
+            self,
+            _TITLE_STUDY_INDEX,
+            f"Relocated {n} indexed file(s) to the new folder.",
+        )
+        self._drop_record(rec)
+        self._on_changed()
+
+    def _remove_selected(self) -> None:
+        rec = self._selected_record()
+        if rec is None:
+            QMessageBox.information(self, _TITLE_STUDY_INDEX, "Select a study first.")
+            return
+        patient_label = (
+            "***" if self._privacy
+            else repair_str_bytes_repr_artifact(rec.patient_name) or "(unknown patient)"
+        )
+        msg = (
+            "Remove this study from the local encrypted index only?\n\n"
+            f"Patient: {patient_label}\n"
+            f"Folder: {rec.study_root_path}\n\n"
+            "DICOM files on disk are not deleted."
+        )
+        if (
+            QMessageBox.question(self, _TITLE_STUDY_INDEX, msg)
+            != QMessageBox.StandardButton.Yes
+        ):
+            return
+        if self._delete_one(rec):
+            self._drop_record(rec)
+            self._on_changed()
+
+    def _remove_all(self) -> None:
+        if not self._records:
+            return
+        msg = (
+            f"Remove all {len(self._records)} listed studies from the local encrypted "
+            "index?\n\nDICOM files on disk are not deleted."
+        )
+        if (
+            QMessageBox.question(self, _TITLE_STUDY_INDEX, msg)
+            != QMessageBox.StandardButton.Yes
+        ):
+            return
+        removed = 0
+        for rec in list(self._records):
+            if self._delete_one(rec):
+                removed += 1
+        self._records = []
+        self._populate()
+        QMessageBox.information(
+            self,
+            _TITLE_STUDY_INDEX,
+            f"Removed {removed} study(ies) from the index.",
+        )
+        self._on_changed()
+
+    def _delete_one(self, rec: MissingStudyRecord) -> bool:
+        try:
+            self._service.delete_grouped_study(rec.study_uid, rec.study_root_path)
+        except Exception as e:
+            safe = sanitize_message(str(e), redact_paths=True)
+            QMessageBox.critical(self, _TITLE_STUDY_INDEX, f"Remove failed:\n{safe}")
+            return False
+        return True
