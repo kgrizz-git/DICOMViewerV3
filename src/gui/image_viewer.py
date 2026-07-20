@@ -609,15 +609,26 @@ class ImageViewer(ImageViewerInputMixin, ImageViewerViewMixin, QGraphicsView):
             self._no_pixel_placeholder_overlay.raise_()
 
     def _reposition_no_pixel_placeholder_overlay(self) -> None:
-        """Pin the SR / no-pixel hint bar to the bottom of the viewport."""
+        """Pin the SR / no-pixel hint bar to the bottom of the viewport.
+
+        The bar height is derived from its contents (the hint wraps, so it can
+        need one or several lines) instead of a fixed value, so the button is
+        never clipped at the bottom.
+        """
         vp = self.viewport()
         if vp is None:
             return
-        bar_h = 88
-        if not self._no_pixel_placeholder_overlay.isVisible():
+        overlay = self._no_pixel_placeholder_overlay
+        if not overlay.isVisible():
             return
-        if vp.height() < bar_h + 40:
-            self._no_pixel_placeholder_overlay.setGeometry(0, 0, vp.width(), min(vp.height(), bar_h + 20))
-            return
-        self._no_pixel_placeholder_overlay.setGeometry(0, vp.height() - bar_h, vp.width(), bar_h)
+        width = vp.width()
+        layout = overlay.layout()
+        if layout is not None and layout.hasHeightForWidth():
+            bar_h = layout.heightForWidth(width)
+        else:
+            bar_h = -1
+        if bar_h <= 0:
+            bar_h = overlay.sizeHint().height()
+        bar_h = min(bar_h, vp.height())
+        overlay.setGeometry(0, vp.height() - bar_h, width, bar_h)
 

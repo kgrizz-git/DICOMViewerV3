@@ -1,8 +1,6 @@
 <!--
-tags: [pile, elements, layout, wrap, stack, creative, artistic, visual, aesthetic, style]
+tags: [overlay, info, text, caption, image, frame, toggle, annotation]
 category: Design
-version: "1.39"
-unicode: "eef7"
 -->
 <svg
   xmlns="http://www.w3.org/2000/svg"
@@ -15,7 +13,7 @@ unicode: "eef7"
   stroke-linecap="round"
   stroke-linejoin="round"
 >
-  <path d="M12 4l-8 4l8 4l8 -4l-8 -4" />
-  <path d="M4 12l8 4l8 -4" />
-  <path d="M4 16l8 4l8 -4" />
+  <rect x="3" y="4" width="18" height="16" rx="2" />
+  <path d="M6 8h8" />
+  <path d="M6 11h5" />
 </svg>
