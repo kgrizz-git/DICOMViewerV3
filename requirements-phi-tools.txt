@@ -8,7 +8,7 @@
 # image redaction additionally requires a locally installed OCR engine and an
 # appropriate spaCy model.
 phi-scan==0.7.0; python_version >= "3.12"
-typer==0.24.1; python_version >= "3.12"
+typer==0.26.8; python_version >= "3.12"
 presidio-analyzer==2.2.363
 presidio-image-redactor==0.0.59
 # Presidio's default AnalyzerEngine otherwise tries to download this model at
