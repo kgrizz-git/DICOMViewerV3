@@ -354,3 +354,79 @@ def test_study_index_store_migrate_v1_schema_to_v2_fts(tmp_path) -> None:
     g = store.search_grouped_studies(global_fts_query="LegacyPat", limit=10, offset=0)
     assert len(g) == 1
     assert g[0]["study_uid"] == "1.legacy"
+
+
+def _seed_two_studies(store, tmp_path):
+    """Two grouped studies with distinct patient names and study dates."""
+    root = os.path.abspath(str(tmp_path))
+    store.upsert_rows(
+        [
+            {
+                "file_path": os.path.abspath(str(tmp_path / "alpha.dcm")),
+                "study_root_path": root,
+                "study_uid": "1.alpha",
+                "series_uid": "1.alpha.s1",
+                "sop_instance_uid": "1.alpha.1",
+                "patient_name": "Alpha^Pat",
+                "patient_id": "PA",
+                "accession_number": "",
+                "study_date": "20200101",
+                "study_description": "A",
+                "modality": "CT",
+            },
+            {
+                "file_path": os.path.abspath(str(tmp_path / "bravo.dcm")),
+                "study_root_path": root,
+                "study_uid": "2.bravo",
+                "series_uid": "2.bravo.s1",
+                "sop_instance_uid": "2.bravo.1",
+                "patient_name": "Bravo^Pat",
+                "patient_id": "PB",
+                "accession_number": "",
+                "study_date": "20211231",
+                "study_description": "B",
+                "modality": "MR",
+            },
+        ]
+    )
+
+
+def test_study_index_store_grouped_includes_indexed_at(tmp_path) -> None:
+    db = tmp_path / "idxat.sqlite"
+    store = StudyIndexStore(str(db), "pw-idxat")
+    store.init_schema()
+    _seed_two_studies(store, tmp_path)
+    g = store.search_grouped_studies(limit=50, offset=0)
+    assert len(g) == 2
+    for r in g:
+        assert "indexed_at" in r
+        assert isinstance(r["indexed_at"], float)
+        assert r["indexed_at"] > 0
+
+
+def test_study_index_store_grouped_order_by_fallback(tmp_path) -> None:
+    """A non-whitelisted (potentially malicious) order_by falls back to study_date DESC."""
+    db = tmp_path / "fallback.sqlite"
+    store = StudyIndexStore(str(db), "pw-fallback")
+    store.init_schema()
+    _seed_two_studies(store, tmp_path)
+    g = store.search_grouped_studies(
+        limit=50, offset=0, order_by="study_date; DROP TABLE study_index_entry"
+    )
+    # No SQL error, and default study_date DESC ordering applied (bravo=2021 first).
+    assert [r["study_uid"] for r in g] == ["2.bravo", "1.alpha"]
+
+
+def test_study_index_store_grouped_ascending_vs_descending(tmp_path) -> None:
+    db = tmp_path / "sortdir.sqlite"
+    store = StudyIndexStore(str(db), "pw-sortdir")
+    store.init_schema()
+    _seed_two_studies(store, tmp_path)
+    asc = store.search_grouped_studies(
+        limit=50, offset=0, order_by="patient_name", descending=False
+    )
+    desc = store.search_grouped_studies(
+        limit=50, offset=0, order_by="patient_name", descending=True
+    )
+    assert [r["study_uid"] for r in asc] == ["1.alpha", "2.bravo"]
+    assert [r["study_uid"] for r in desc] == ["2.bravo", "1.alpha"]
