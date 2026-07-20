@@ -63,17 +63,17 @@ def build_menu_bar(main_window) -> None:
     # --- File menu ---
     file_menu = menubar.addMenu("&File")
 
-    open_file_action = QAction("&Open File(s)...", main_window)
-    open_file_action.setShortcut(QKeySequence(QKeySequence.StandardKey.Open))
-    open_file_action.triggered.connect(main_window.open_file_requested.emit)
-    _mi(open_file_action, "open-file")
-    file_menu.addAction(open_file_action)
-
     open_folder_action = QAction("Open &Folder...", main_window)
     open_folder_action.setShortcut(QKeySequence("Ctrl+Shift+O"))
     open_folder_action.triggered.connect(main_window.open_folder_requested.emit)
     _mi(open_folder_action, "open-folder")
     file_menu.addAction(open_folder_action)
+
+    open_file_action = QAction("&Open File(s)...", main_window)
+    open_file_action.setShortcut(QKeySequence(QKeySequence.StandardKey.Open))
+    open_file_action.triggered.connect(main_window.open_file_requested.emit)
+    _mi(open_file_action, "open-file")
+    file_menu.addAction(open_file_action)
 
     open_study_index_action = QAction("Open &Study Index…", main_window)
     open_study_index_action.setStatusTip(

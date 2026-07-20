@@ -2,7 +2,7 @@
 
 **Status:** Not started  
 **Priority:** P1  
-**TO_DO refs:** UX/Workflow — "Study index — optional encryption (off by default)," "Study index — location & portability UI," "Allow a button in study index that checks all indexed studies still exist," "Study index — relative file paths"
+**TO_DO refs:** UX/Workflow — "First-launch study-index opt-in prompt," "Study index — optional encryption (off by default)," "Study index — location & portability UI," "Allow a button in study index that checks all indexed studies still exist," "Study index — relative file paths"
 
 ---
 
@@ -16,6 +16,30 @@ Expose the study index's encryption, location, and health features through clear
 4. (Future / P2) Store relative file paths for USB portability.
 
 Currently the index is **always SQLCipher-encrypted**, the passphrase is auto-generated in the OS keyring, the DB path is configurable in **Edit → Settings…**, and there is no integrity scan or export/import UI.
+
+---
+
+## Phase 0 — First-open indexing prompt (persistent choice + one-time options)
+
+**Current behavior:** `gui/study_index_consent.py::ensure_study_index_auto_add_consent()` shows a binary **Yes / No** `QMessageBox` on the **first successful load** when no consent is recorded (invoked from `main.py:1564`), and remembers the answer via `study_index_auto_add_consent` / `study_index_auto_add_on_open`. Auto-add defaults **off**.
+
+**Target:** replace the binary prompt with a small custom dialog offering **four** choices, plus inline disclosure of what/where the index is:
+
+- **Always add to index** — set auto-add **on** + record consent; never ask again.
+- **Never add to index** — set auto-add **off** + record consent; never ask again.
+- **Add this one time** — index the current study now, but **do not** record persistent consent (prompt can appear again later).
+- **Skip this one time** — do **not** index now, and **do not** record consent (prompt can appear again later).
+- Inline **info disclosure**: where the index is saved (DB path), that it stores clinical metadata + file locations **on this device**, encryption status, and that it can be changed/cleared later in **Settings**. Reuse the Phase 2 "About this index" copy so wording stays consistent.
+
+**Open question — re-prompt cadence for the one-time options:** every app launch? every load of a not-yet-indexed study? add a "don't ask again this session" nuance? Decide before building.
+
+### Tasks
+
+- [ ] New dialog (extend `study_index_consent.py` or add `gui/study_index_first_open_dialog.py`) with 4 buttons + an info/disclosure area (optionally a collapsible "Where is this saved?").
+- [ ] Return an explicit decision enum `{ALWAYS, NEVER, ADD_ONCE, SKIP_ONCE}` to the caller.
+- [ ] Update the `main.py` load-time call so `ADD_ONCE` indexes just this load without recording consent, and `SKIP_ONCE` skips without recording consent; `ALWAYS`/`NEVER` set consent as today.
+- [ ] Show index location/info inline (shared text with Phase 2 About-this-index).
+- [ ] Tests: each choice sets the correct config state; the two one-time options leave consent **unrecorded**; no prompt once consent is recorded.
 
 ---
 

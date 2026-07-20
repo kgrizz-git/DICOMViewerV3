@@ -195,11 +195,15 @@ def build_main_toolbar(main_window) -> None:
         tb.setToolButtonStyle(qt_style)
         # QToolButton widgets added via addWidget() don't follow toolbar style.
         text_under = style == "text_under_icon"
-        for _btn_attr in ("_open_split_btn", "_wl_toolbar_btn"):
-            btn = getattr(main_window, _btn_attr, None)
-            if btn is not None:
-                btn.setToolButtonStyle(qt_style)
-                _apply_split_toolbutton_layout(btn, text_under_icon=text_under)
+        # The Open button follows the label style but is a plain menu button
+        # (InstantPopup), so it does not get the split-button arrow-strip layout.
+        open_btn = getattr(main_window, "_open_split_btn", None)
+        if open_btn is not None:
+            open_btn.setToolButtonStyle(qt_style)
+        wl_btn = getattr(main_window, "_wl_toolbar_btn", None)
+        if wl_btn is not None:
+            wl_btn.setToolButtonStyle(qt_style)
+            _apply_split_toolbutton_layout(wl_btn, text_under_icon=text_under)
         # Small condensed font when text is visible under icons.
         if text_under:
             tb.setStyleSheet(_split_toolbutton_text_under_stylesheet())
@@ -214,24 +218,25 @@ def build_main_toolbar(main_window) -> None:
     toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)  # default; overridden below
     main_window.addToolBar(toolbar)
 
-    # ── Open (split button: click = Open File, arrow = dropdown) ──────────
+    # ── Open (whole button opens the Open Folder / Open File menu) ────────
     open_btn = QToolButton(main_window)
     open_btn.setText("Open")
-    open_btn.setToolTip("Open file(s)  (Ctrl+O)")
+    open_btn.setToolTip("Open folder or file(s)  (Ctrl+O)")
     open_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
-    open_btn.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
-    open_btn.clicked.connect(main_window.open_file_requested.emit)
+    # InstantPopup: clicking anywhere on the button opens the menu — no
+    # separate dropdown-arrow strip. Hide the residual menu indicator too.
+    open_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+    open_btn.setStyleSheet("QToolButton::menu-indicator { image: none; width: 0; }")
     _ri(open_btn, "open-file")
 
     _open_menu = QMenu(open_btn)
-    _open_file_act = QAction("Open File(s)…", open_btn)
-    _open_file_act.triggered.connect(main_window.open_file_requested.emit)
     _open_folder_act = QAction("Open Folder…", open_btn)
     _open_folder_act.triggered.connect(main_window.open_folder_requested.emit)
-    _open_menu.addAction(_open_file_act)
+    _open_file_act = QAction("Open File(s)…", open_btn)
+    _open_file_act.triggered.connect(main_window.open_file_requested.emit)
     _open_menu.addAction(_open_folder_act)
+    _open_menu.addAction(_open_file_act)
     open_btn.setMenu(_open_menu)
-    _apply_split_toolbutton_layout(open_btn, text_under_icon=False)
     toolbar.addWidget(open_btn)
     main_window._open_split_btn = open_btn  # stored for style refresh
 
