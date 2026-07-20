@@ -307,6 +307,77 @@ class StudyIndexStore:
             )
             return [row[0] for row in cur.fetchall()]
 
+    def iter_study_groups(self) -> list[dict[str, Any]]:
+        """
+        Return every unique (``study_uid``, ``study_root_path``) group with light metadata.
+
+        Used by the integrity scan to walk all indexed studies. Each dict has
+        ``study_uid``, ``study_root_path``, ``patient_name``, ``study_date``,
+        ``instance_count``, and a normalised ``modalities`` string.
+        """
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT e.study_uid, e.study_root_path, "
+                "MAX(e.patient_name) AS patient_name, "
+                "MAX(e.study_date) AS study_date, "
+                "COUNT(*) AS instance_count, "
+                "GROUP_CONCAT(DISTINCT NULLIF(TRIM(e.modality), '')) AS _modalities_raw "
+                "FROM study_index_entry AS e "
+                "GROUP BY e.study_uid, e.study_root_path"
+            )
+            cols = [d[0] for d in cur.description]
+            rows = [dict(zip(cols, row, strict=False)) for row in cur.fetchall()]
+        for r in rows:
+            raw = r.pop("_modalities_raw", None)
+            r["modalities"] = _normalize_modalities_group_concat(raw)
+            r["instance_count"] = int(r.get("instance_count") or 0)
+        return rows
+
+    def relocate_study_paths(
+        self, study_uid: str, old_root: str, new_root: str
+    ) -> int:
+        """
+        Rewrite ``file_path``/``study_root_path`` for one study by swapping the root prefix.
+
+        Each entry's ``file_path`` has its ``old_root`` prefix replaced with ``new_root``
+        (falling back to ``new_root``/basename when a stored path does not start with the
+        old root). ``study_root_path`` is set to the normalised new root. The change is only
+        committed when **at least one** relocated path exists on disk; otherwise nothing is
+        written and ``0`` is returned. Returns the number of rows updated.
+        """
+        su = (study_uid or "").strip()
+        if not su or not (old_root or "").strip() or not (new_root or "").strip():
+            return 0
+        old = os.path.normpath(os.path.abspath(old_root.strip()))
+        new = os.path.normpath(os.path.abspath(new_root.strip()))
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT id, file_path FROM study_index_entry "
+                "WHERE study_uid = ? AND study_root_path = ?",
+                (su, old),
+            )
+            entries = cur.fetchall()
+            if not entries:
+                return 0
+            updates: list[tuple[str, str, int]] = []
+            for rid, fp in entries:
+                fp = fp or ""
+                if fp.startswith(old):
+                    new_fp = new + fp[len(old):]
+                else:
+                    new_fp = os.path.join(new, os.path.basename(fp))
+                updates.append((new_fp, new, int(rid)))
+            if not any(os.path.isfile(u[0]) for u in updates):
+                return 0
+            cur.executemany(
+                "UPDATE study_index_entry SET file_path = ?, study_root_path = ? WHERE id = ?",
+                updates,
+            )
+            conn.commit()
+        return len(updates)
+
     @staticmethod
     def _col(alias: str | None, name: str) -> str:
         return f"{alias}.{name}" if alias else name

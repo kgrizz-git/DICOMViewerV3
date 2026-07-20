@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import logging
 import os
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +23,19 @@ from core.study_index.metadata_extract import dataset_to_index_row
 from core.study_index.sqlcipher_store import StudyIndexStore
 from utils.config_manager import ConfigManager
 from utils.privacy.safe_storage import DeletionResult, secure_unlink
+
+
+@dataclass
+class MissingStudyRecord:
+    """One indexed study whose files are (partly or wholly) missing on disk."""
+
+    study_uid: str
+    study_root_path: str
+    patient_name: str
+    study_date: str
+    modalities: str
+    missing_count: int
+    total_count: int
 
 
 class LocalStudyIndexService:
@@ -174,6 +189,62 @@ class LocalStudyIndexService:
             return []
         store = self._get_ready_store()
         return store.get_file_paths_for_study(study_uid, study_root_path)
+
+    def integrity_scan(
+        self, progress: Callable[[int, int], None] | None = None
+    ) -> list[MissingStudyRecord]:
+        """
+        Find indexed studies whose files are missing on disk.
+
+        Walks every unique ``(study_uid, study_root_path)`` group, gathers its indexed
+        file paths, and counts how many no longer exist (``os.path.isfile``). A study is
+        reported when its root folder is gone **or** at least one member file is missing.
+
+        ``progress(done, total)`` is called after each study when supplied. Returns an
+        empty list when the backend is unavailable.
+        """
+        if not self.is_backend_available():
+            return []
+        store = self._get_ready_store()
+        groups = store.iter_study_groups()
+        total = len(groups)
+        records: list[MissingStudyRecord] = []
+        for i, g in enumerate(groups):
+            study_uid = (g.get("study_uid") or "").strip()
+            root = (g.get("study_root_path") or "").strip()
+            paths = store.get_file_paths_for_study(study_uid, root)
+            total_count = len(paths)
+            missing_count = sum(1 for p in paths if not os.path.isfile(p))
+            root_gone = bool(root) and not os.path.isdir(root)
+            if root_gone or missing_count > 0:
+                records.append(
+                    MissingStudyRecord(
+                        study_uid=study_uid,
+                        study_root_path=root,
+                        patient_name=str(g.get("patient_name") or ""),
+                        study_date=str(g.get("study_date") or ""),
+                        modalities=str(g.get("modalities") or ""),
+                        missing_count=missing_count,
+                        total_count=total_count,
+                    )
+                )
+            if progress is not None:
+                progress(i + 1, total)
+        return records
+
+    def relocate_study(self, study_uid: str, old_root: str, new_root: str) -> int:
+        """
+        Point an indexed study at a new folder by rewriting its stored paths.
+
+        Delegates the SQL UPDATE to the store, which only commits when at least one
+        relocated path exists on disk. Blank inputs are rejected. Returns rows updated.
+        """
+        if not self.is_backend_available():
+            return 0
+        if not (study_uid or "").strip() or not (old_root or "").strip() or not (new_root or "").strip():
+            return 0
+        store = self._get_ready_store()
+        return store.relocate_study_paths(study_uid, old_root, new_root)
 
     def schedule_index_after_load(
         self,
