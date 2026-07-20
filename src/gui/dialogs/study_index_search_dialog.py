@@ -11,8 +11,10 @@ patient-related fields. Column order is persisted (movable headers).
 
 from __future__ import annotations
 
+import math
 import os
 from collections.abc import Callable
+from datetime import datetime
 from typing import Any
 
 from PySide6.QtCore import (
@@ -88,10 +90,46 @@ _COLUMNS_SANITIZE_BYTES_REPR: frozenset[str] = frozenset(
     }
 )
 
+# Column ids the browser can sort by (server-side). Mirrors the store's grouped-sort
+# whitelist; columns absent here (folder, modalities, sample file, UID) ignore clicks.
+_SORTABLE_COLUMN_IDS: frozenset[str] = frozenset(
+    {
+        "study_date",
+        "patient_name",
+        "patient_id",
+        "accession_number",
+        "study_description",
+        "instance_count",
+        "series_count",
+        "indexed_at",
+    }
+)
+
+
+def _format_indexed_at_display(value: Any) -> str:
+    """Format an ``indexed_at`` epoch-seconds float as local ``YYYY-MM-DD HH:MM``.
+
+    Returns an empty string when the value is missing or not a finite number.
+    """
+    if value is None or value == "":
+        return ""
+    try:
+        epoch = float(value)
+    except (TypeError, ValueError):
+        return ""
+    if not math.isfinite(epoch):
+        return ""
+    try:
+        return datetime.fromtimestamp(epoch).strftime("%Y-%m-%d %H:%M")
+    except (OverflowError, OSError, ValueError):
+        return ""
+
+
 _COLUMN_LABELS: dict[str, str] = {
     "patient_name": "Patient name",
     "patient_id": "Patient ID",
     "study_date": "Study date",
+    "indexed_at": "Indexed",
     "accession_number": "Accession",
     "study_description": "Study description",
     "study_root_path": "Study folder",
@@ -151,6 +189,8 @@ class _StudyIndexGroupedModel(QAbstractTableModel):
             return str(int(val))
         if cid == "study_date":
             return format_study_date_display_us(str(val))
+        if cid == "indexed_at":
+            return _format_indexed_at_display(val)
         s = str(val)
         if cid in _COLUMNS_SANITIZE_BYTES_REPR:
             s = repair_str_bytes_repr_artifact(s)
@@ -203,6 +243,8 @@ class StudyIndexSearchDialog(QDialog):
         self._config = config_manager
         self._open_paths = open_paths_callback
         self._offset = 0
+        self._sort_column_id = "study_date"
+        self._sort_descending = True
         self._save_columns_timer = QTimer(self)
         self._save_columns_timer.setSingleShot(True)
         self._save_columns_timer.timeout.connect(self._persist_column_visual_order)
@@ -300,7 +342,10 @@ class StudyIndexSearchDialog(QDialog):
         hdr.setSectionsMovable(True)
         hdr.setFirstSectionMovable(True)
         hdr.setStretchLastSection(True)
+        hdr.setSectionsClickable(True)
+        hdr.setSortIndicatorShown(True)
         hdr.sectionMoved.connect(self._on_header_section_moved)
+        hdr.sectionClicked.connect(self._on_header_section_clicked)
         self._table.doubleClicked.connect(self._on_double_click)
         self._table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._table.customContextMenuRequested.connect(self._on_table_context_menu)
@@ -400,6 +445,8 @@ class StudyIndexSearchDialog(QDialog):
                 **self._service_query_kwargs(df, dt),
                 limit=_PAGE_SIZE,
                 offset=self._offset,
+                order_by=self._sort_column_id,
+                descending=self._sort_descending,
                 privacy_mode=self._privacy(),
             )
         except ValueError as e:
@@ -420,6 +467,7 @@ class StudyIndexSearchDialog(QDialog):
             return
         if reset:
             self._model.set_rows(batch)
+            self._update_sort_indicator()
         else:
             self._model.append_rows(batch)
         self._offset += len(batch)
@@ -442,6 +490,38 @@ class StudyIndexSearchDialog(QDialog):
 
     def _on_load_more(self) -> None:
         self._run_browse(reset=False)
+
+    def _on_header_section_clicked(self, logical_index: int) -> None:
+        """Set the sort column from the clicked header and re-query from the top.
+
+        Clicking the active column toggles ascending/descending; a new column starts
+        descending. Non-sortable columns (folder, modalities, sample file, UID) are
+        ignored. Current filters are preserved and paging uses the same sort.
+        """
+        if logical_index < 0 or logical_index >= self._model.columnCount():
+            return
+        cid = self._model.column_id_at(logical_index)
+        if cid not in _SORTABLE_COLUMN_IDS:
+            return
+        if cid == self._sort_column_id:
+            self._sort_descending = not self._sort_descending
+        else:
+            self._sort_column_id = cid
+            self._sort_descending = True
+        self._run_browse(reset=True, strict_dates=False)
+
+    def _update_sort_indicator(self) -> None:
+        """Show the sort arrow on the active column's current visual position."""
+        hdr = self._table.horizontalHeader()
+        order = (
+            Qt.SortOrder.DescendingOrder
+            if self._sort_descending
+            else Qt.SortOrder.AscendingOrder
+        )
+        for i in range(self._model.columnCount()):
+            if self._model.column_id_at(i) == self._sort_column_id:
+                hdr.setSortIndicator(i, order)
+                return
 
     def _on_double_click(self, index: QModelIndex) -> None:
         if index.isValid():
