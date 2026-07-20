@@ -195,11 +195,12 @@ def build_main_toolbar(main_window) -> None:
         tb.setToolButtonStyle(qt_style)
         # QToolButton widgets added via addWidget() don't follow toolbar style.
         text_under = style == "text_under_icon"
-        # The Open button follows the label style but is a plain menu button
-        # (InstantPopup), so it does not get the split-button arrow-strip layout.
-        open_btn = getattr(main_window, "_open_split_btn", None)
-        if open_btn is not None:
-            open_btn.setToolButtonStyle(qt_style)
+        # The Open and Recent buttons follow the label style but are plain menu
+        # buttons (InstantPopup), so they skip the split-button arrow-strip layout.
+        for _plain_btn_attr in ("_open_split_btn", "_recent_toolbar_btn"):
+            plain_btn = getattr(main_window, _plain_btn_attr, None)
+            if plain_btn is not None:
+                plain_btn.setToolButtonStyle(qt_style)
         wl_btn = getattr(main_window, "_wl_toolbar_btn", None)
         if wl_btn is not None:
             wl_btn.setToolButtonStyle(qt_style)
@@ -239,6 +240,24 @@ def build_main_toolbar(main_window) -> None:
     open_btn.setMenu(_open_menu)
     toolbar.addWidget(open_btn)
     main_window._open_split_btn = open_btn  # stored for style refresh
+
+    # ── Recent (whole button opens the recent-files menu) ─────────────────
+    # Reuses main_window.recent_menu (built by the menu bar just before this),
+    # so right-click reorder/remove and refresh-on-open work identically here.
+    recent_btn = QToolButton(main_window)
+    recent_btn.setText("Recent")
+    recent_btn.setToolTip("Open a recently used file or folder")
+    recent_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+    recent_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+    recent_btn.setStyleSheet("QToolButton::menu-indicator { image: none; width: 0; }")
+    _ri(recent_btn, "recent")
+    recent_menu = getattr(main_window, "recent_menu", None)
+    if recent_menu is not None:
+        recent_btn.setMenu(recent_menu)
+        # Keep the list fresh whenever the button pops the menu.
+        recent_menu.aboutToShow.connect(main_window._update_recent_menu)
+    toolbar.addWidget(recent_btn)
+    main_window._recent_toolbar_btn = recent_btn
 
     export_action = QAction("Export", main_window)
     export_action.setToolTip("Export…  (Ctrl+E)")
