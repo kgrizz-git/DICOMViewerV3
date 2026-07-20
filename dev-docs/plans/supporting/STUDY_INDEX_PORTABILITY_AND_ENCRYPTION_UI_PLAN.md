@@ -31,15 +31,15 @@ Currently the index is **always SQLCipher-encrypted**, the passphrase is auto-ge
 - **Skip this one time** — do **not** index now, and **do not** record consent (prompt can appear again later).
 - Inline **info disclosure**: where the index is saved (DB path), that it stores clinical metadata + file locations **on this device**, encryption status, and that it can be changed/cleared later in **Settings**. Reuse the Phase 2 "About this index" copy so wording stays consistent.
 
-**Open question — re-prompt cadence for the one-time options:** every app launch? every load of a not-yet-indexed study? add a "don't ask again this session" nuance? Decide before building.
+**Re-prompt cadence for the one-time options (decided 2026-07-20):** the prompt is shown on each load while consent is unrecorded (i.e. `needs_study_index_auto_add_consent()`), so `ADD_ONCE`/`SKIP_ONCE` naturally re-prompt on the next load until the user picks `ALWAYS`/`NEVER`. A "don't ask again this session" nuance can be layered on later if the per-load prompt proves noisy.
 
-### Tasks
+### Tasks — **DONE 2026-07-20**
 
-- [ ] New dialog (extend `study_index_consent.py` or add `gui/study_index_first_open_dialog.py`) with 4 buttons + an info/disclosure area (optionally a collapsible "Where is this saved?").
-- [ ] Return an explicit decision enum `{ALWAYS, NEVER, ADD_ONCE, SKIP_ONCE}` to the caller.
-- [ ] Update the `main.py` load-time call so `ADD_ONCE` indexes just this load without recording consent, and `SKIP_ONCE` skips without recording consent; `ALWAYS`/`NEVER` set consent as today.
-- [ ] Show index location/info inline (shared text with Phase 2 About-this-index).
-- [ ] Tests: each choice sets the correct config state; the two one-time options leave consent **unrecorded**; no prompt once consent is recorded.
+- [x] New dialog `StudyIndexFirstOpenDialog` in `gui/study_index_consent.py` with 4 buttons + an info panel (index location, what's stored, "change later in Settings") and an **Open location** button.
+- [x] Return an explicit decision enum `StudyIndexOpenChoice{ALWAYS, NEVER, ADD_ONCE, SKIP_ONCE}` via `prompt_study_index_first_open()`.
+- [x] `main.py` load-time call: `ADD_ONCE` indexes just this load via `schedule_index_after_load(..., force=True)` without recording consent; `SKIP_ONCE` skips without recording consent; `ALWAYS`/`NEVER` record consent (via `apply_first_open_choice`).
+- [x] Show index location/info inline (shared `gui/study_index_info.py` helper, reused by Phase 2).
+- [x] Tests: `test_privacy_storage_controls.py` (choice → config state; one-time leaves consent unrecorded; prompt returns/persists) + `test_index_service.py::test_schedule_force_indexes_when_auto_add_off`.
 
 ---
 
@@ -82,7 +82,7 @@ Currently the index is **always SQLCipher-encrypted**, the passphrase is auto-ge
   - **Encryption status** (on/off, credential-store location).
   - **Row count** / size on disk.
   - **Last modified** timestamp.
-- [ ] **Open index location** button → `QDesktopServices.openUrl(QUrl.fromLocalFile(parent_dir))`.
+- [x] **Open index location** button → `QDesktopServices.openUrl(QUrl.fromLocalFile(parent_dir))`. **DONE 2026-07-20** — in the Study Index dialog and the first-open prompt, via `gui/study_index_info.py::open_study_index_location()` (opens the nearest existing ancestor if the DB file doesn't exist yet).
 - [ ] **Move index…** button:
   - File-save dialog for new location.
   - Copy DB file → verify integrity (open + `PRAGMA integrity_check`) → update config → delete old file.

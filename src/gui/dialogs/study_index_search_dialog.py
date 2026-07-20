@@ -46,6 +46,7 @@ from core.study_index.study_date_format import (
     format_study_date_display_us,
     parse_study_date_filter_field,
 )
+from gui.study_index_info import open_study_index_location, study_index_db_path
 from utils.config_manager import ConfigManager
 from utils.log_sanitizer import sanitize_message
 
@@ -277,10 +278,16 @@ class StudyIndexSearchDialog(QDialog):
         self._load_more_btn.clicked.connect(self._on_load_more)
         index_btn = QPushButton("Index folder…")
         index_btn.clicked.connect(self._index_folder)
+        open_loc_btn = QPushButton("Open index location")
+        open_loc_btn.setToolTip(
+            f"Reveal the index database folder in your file manager\n{study_index_db_path(self._config)}"
+        )
+        open_loc_btn.clicked.connect(self._on_open_index_location)
         btn_row.addWidget(search_btn)
         btn_row.addWidget(clear_btn)
         btn_row.addWidget(self._load_more_btn)
         btn_row.addWidget(index_btn)
+        btn_row.addWidget(open_loc_btn)
         btn_row.addStretch()
         layout.addLayout(btn_row)
 
@@ -591,6 +598,15 @@ class StudyIndexSearchDialog(QDialog):
                 f"Removed {deleted} indexed instance(s) from the database.",
             )
         self._run_browse(reset=True, strict_dates=False)
+
+    def _on_open_index_location(self) -> None:
+        """Reveal the index database folder in the OS file manager."""
+        if not open_study_index_location(self._config):
+            QMessageBox.information(
+                self,
+                _TITLE_STUDY_INDEX,
+                f"Could not open the index location:\n{study_index_db_path(self._config)}",
+            )
 
     def _index_folder(self) -> None:
         if not self._backend_ok_or_warn():

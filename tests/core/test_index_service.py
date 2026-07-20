@@ -95,6 +95,33 @@ def test_schedule_skips_when_auto_add_off() -> None:
     assert svc._write_thread is None
 
 
+def test_schedule_force_indexes_when_auto_add_off(monkeypatch) -> None:
+    svc = _service()
+    svc._config.get_study_index_auto_add_on_open.return_value = False
+    monkeypatch.setattr(svc, "is_backend_available", lambda: True)
+    monkeypatch.setattr(svc, "_passphrase", lambda: "pw")
+    monkeypatch.setattr(isvc.os.path, "isfile", lambda p: True)
+    monkeypatch.setattr(isvc, "dataset_to_index_row", lambda ds, **k: {"row": 1})
+    started = {}
+
+    class _FakeThread:
+        def __init__(self, *a, **k) -> None:
+            started["created"] = True
+
+        def isRunning(self):
+            return False
+
+        def start(self):
+            started["started"] = True
+
+    monkeypatch.setattr(isvc, "StudyIndexWriteThread", _FakeThread)
+    # "Add this one time" path: force=True indexes despite auto-add being off.
+    svc.schedule_index_after_load(
+        [MagicMock()], ["/x.dcm"], "/src", MagicMock(), force=True
+    )
+    assert started.get("started") is True
+
+
 def test_schedule_builds_rows_and_starts_thread(monkeypatch) -> None:
     svc = _service()
     svc._config.get_study_index_auto_add_on_open.return_value = True
