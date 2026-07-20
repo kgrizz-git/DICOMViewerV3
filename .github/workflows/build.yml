@@ -313,7 +313,7 @@ jobs:
 
       - name: Create Release (Windows, on tag push)
         if: startsWith(github.ref, 'refs/tags/') && matrix.os == 'windows-latest'
-        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
         with:
           files: |
             dist/DICOMViewerV3*
@@ -325,7 +325,7 @@ jobs:
 
       - name: Create Release (macOS DMG, on tag push)
         if: startsWith(github.ref, 'refs/tags/') && matrix.os == 'macos-latest'
-        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
         with:
           files: |
             DICOMViewerV3-*-macOS.dmg
@@ -337,7 +337,7 @@ jobs:
 
       - name: Create Release (Linux AppImage, on tag push)
         if: startsWith(github.ref, 'refs/tags/') && matrix.os == 'ubuntu-latest'
-        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
         with:
           files: |
             DICOMViewerV3-*-x86_64.AppImage
