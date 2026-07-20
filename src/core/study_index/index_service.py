@@ -120,6 +120,8 @@ class LocalStudyIndexService:
         global_fts_query: str = "",
         limit: int = 100,
         offset: int = 0,
+        order_by: str = "study_date",
+        descending: bool = True,
         privacy_mode: bool = False,
     ) -> list[dict[str, Any]]:
         store = self._get_ready_store()
@@ -134,6 +136,8 @@ class LocalStudyIndexService:
             global_fts_query=global_fts_query,
             limit=limit,
             offset=offset,
+            order_by=order_by,
+            descending=descending,
         )
         if not privacy_mode:
             return rows

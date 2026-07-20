@@ -34,6 +34,21 @@ _FTS_QUERY_ERRS: tuple[type[BaseException], ...] = tuple(
 _SQL_WHERE = " WHERE "
 _SQL_AND = " AND "
 
+# Whitelist of grouped-output columns that ``search_grouped_studies`` may sort by.
+# Only a validated name from this set is ever placed into an ORDER BY clause.
+_GROUPED_SORT_COLUMNS: frozenset[str] = frozenset(
+    {
+        "study_date",
+        "patient_name",
+        "patient_id",
+        "accession_number",
+        "study_description",
+        "instance_count",
+        "series_count",
+        "indexed_at",
+    }
+)
+
 def _is_windows() -> bool:
     return os.name == "nt"
 
@@ -422,12 +437,18 @@ class StudyIndexStore:
         global_fts_query: str = "",
         limit: int = 100,
         offset: int = 0,
+        order_by: str = "study_date",
+        descending: bool = True,
     ) -> list[dict[str, Any]]:
         """
         One row per (study_uid, study_root_path) with instance/series counts and modalities.
 
         Study-level text fields use SQLite aggregates (deterministic MAX). ``open_file_path``
         is MIN(file_path) for a stable default when opening from a grouped row.
+
+        ``order_by`` is validated against a whitelist of grouped output columns; any
+        other value falls back to ``study_date``. ``patient_name ASC`` is always the
+        secondary tiebreak so paging stays deterministic.
         """
         where, params = self._search_filter_clauses(
             patient_name_contains=patient_name_contains,
@@ -447,6 +468,10 @@ class StudyIndexStore:
             else:
                 where = _SQL_WHERE + fts_sql
             params.append(fts_q)
+        # Validate the sort column against a whitelist of grouped output columns. Never
+        # interpolate raw user input into SQL — only a known column name reaches the query.
+        order_col = order_by if order_by in _GROUPED_SORT_COLUMNS else "study_date"
+        order_dir = "DESC" if descending else "ASC"
         # COUNT(DISTINCT …): ignore empty series_uid so blank rows do not inflate series_count.
         sql = (
             "SELECT e.study_uid, e.study_root_path, "
@@ -456,6 +481,7 @@ class StudyIndexStore:
             "MAX(e.accession_number) AS accession_number, "
             "MAX(e.study_description) AS study_description, "
             "MAX(e.series_description) AS series_description, "
+            "MAX(e.indexed_at) AS indexed_at, "
             "MIN(e.file_path) AS open_file_path, "
             "COUNT(*) AS instance_count, "
             "COUNT(DISTINCT NULLIF(TRIM(e.series_uid), '')) AS series_count, "
@@ -463,7 +489,7 @@ class StudyIndexStore:
             "FROM study_index_entry AS e"
             + where
             + " GROUP BY e.study_uid, e.study_root_path "
-            + "ORDER BY study_date DESC, patient_name ASC "
+            + f"ORDER BY {order_col} {order_dir}, patient_name ASC "
             + "LIMIT ? OFFSET ?"
         )
         qparams = list(params)
