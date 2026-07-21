@@ -46,6 +46,14 @@ Currently the index is **always SQLCipher-encrypted**, the passphrase is auto-ge
 
 ## Phase 1 — Optional encryption toggle + migration
 
+**Status: DEFERRED (decided 2026-07-21).** A user-facing toggle that lets people
+migrate the PHI index to **plaintext** is closer to a footgun than a feature — it
+downgrades at-rest protection for patient names/IDs/paths with little practical
+upside, and the migration + irreversible-warning surface is non-trivial. The index
+stays **always SQLCipher-encrypted** for now. If a concrete need appears (e.g. a
+platform without keyring), revisit with the 1b off-warning wording already drafted
+below. The remaining Phase 1 tasks are kept for reference, not scheduled.
+
 ### 1a. Config & backend
 
 - [ ] Add setting `study_index_encryption_enabled` (bool, default **False**) in `ConfigManager` / `study_index_config.py`.
@@ -118,7 +126,7 @@ Currently the index is **always SQLCipher-encrypted**, the passphrase is auto-ge
 - [ ] `LocalStudyIndexService.relocate_study(study_uid, old_root, new_root)`:
   - Update all `file_path` entries by replacing `old_root` prefix with `new_root`.
   - Verify at least one relocated path exists before committing.
-- [ ] On load-from-index when files are missing (existing behavior: warns), add a **Relocate…** quick-action in the warning dialog.
+- [x] On load-from-index when files are missing (existing behavior: warns), add a **Relocate…** quick-action in the warning dialog. **DONE 2026-07-21** — `study_index_search_dialog.py::_relocate_and_reopen()`; the fully-missing branches of `_open_row` now offer **Relocate…** (default) and, when a sample fallback exists, **Load sample only**. Relocation calls `relocate_study`, refreshes the list, and reopens the new folder directly. Tests: `tests/gui/test_study_index_open_relocate.py`.
 
 ### Tests
 

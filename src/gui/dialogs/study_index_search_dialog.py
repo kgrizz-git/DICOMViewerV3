@@ -606,28 +606,42 @@ class StudyIndexSearchDialog(QDialog):
 
         if not existing:
             # All indexed paths are gone — files may have been moved or deleted.
-            if fallback and os.path.isfile(fallback):
-                QMessageBox.information(
-                    self,
-                    _TITLE_STUDY_INDEX,
-                    (
-                        "None of the indexed file paths were found at their recorded locations.\n"
-                        "Loading only the sample file as a fallback.\n\n"
-                        f"Study folder: {study_root}"
-                    ),
+            has_fallback = bool(fallback) and os.path.isfile(fallback)
+            box = QMessageBox(self)
+            box.setIcon(QMessageBox.Icon.Warning)
+            box.setWindowTitle(_TITLE_STUDY_INDEX)
+            if has_fallback:
+                box.setText(
+                    "None of the indexed file paths were found at their recorded "
+                    "locations.\n"
+                    "If the study folder moved, you can point the index at its new "
+                    "location, or load only the sample file.\n\n"
+                    f"Study folder: {study_root}"
                 )
+                load_sample_btn = box.addButton(
+                    "Load sample only", QMessageBox.ButtonRole.AcceptRole
+                )
+            else:
+                box.setText(
+                    "None of the indexed files were found on disk.\n"
+                    "If the study folder moved, you can point the index at its new "
+                    "location.\n\n"
+                    f"Study folder: {study_root}"
+                )
+                load_sample_btn = None
+            relocate_btn = box.addButton(
+                "Relocate…", QMessageBox.ButtonRole.ActionRole
+            )
+            box.addButton(QMessageBox.StandardButton.Cancel)
+            box.setDefaultButton(relocate_btn)
+            box.exec()
+            clicked = box.clickedButton()
+            if clicked is relocate_btn:
+                self._relocate_and_reopen(study_uid, study_root)
+                return
+            if load_sample_btn is not None and clicked is load_sample_btn:
                 self._open_paths([fallback])
                 self.accept()
-                return
-            QMessageBox.warning(
-                self,
-                _TITLE_STUDY_INDEX,
-                (
-                    "None of the indexed files were found on disk.\n"
-                    "The study may have been moved or deleted.\n\n"
-                    f"Study folder: {study_root}"
-                ),
-            )
             return
 
         missing_count = len(paths) - len(existing)
@@ -645,6 +659,40 @@ class StudyIndexSearchDialog(QDialog):
 
         self._open_paths(existing)
         self.accept()
+
+    def _relocate_and_reopen(self, study_uid: str, study_root: str) -> bool:
+        """Prompt for the study's new folder, relocate index paths, then retry opening.
+
+        Returns True when relocation updated the index (open was retried), False when
+        the user canceled or no relocated files were found.
+        """
+        if not self._backend_ok_or_warn():
+            return False
+        start = study_root or os.path.expanduser("~")
+        new_root = QFileDialog.getExistingDirectory(
+            self, "Select the study’s new folder", start
+        )
+        if not new_root:
+            return False
+        try:
+            n = self._service.relocate_study(study_uid, study_root, new_root)
+        except Exception as e:
+            safe = sanitize_message(str(e), redact_paths=True)
+            QMessageBox.critical(self, _TITLE_STUDY_INDEX, f"Relocate failed:\n{safe}")
+            return False
+        if n <= 0:
+            QMessageBox.warning(
+                self,
+                _TITLE_STUDY_INDEX,
+                "No relocated files were found in that folder. The index was not changed.",
+            )
+            return False
+        # Index now points at the new location. Refresh so the list reflects the new
+        # paths, then open the chosen folder directly (mirrors the fast-path rescan).
+        self._run_browse(reset=True)
+        self._open_paths([new_root])
+        self.accept()
+        return True
 
     def _on_table_context_menu(self, pos) -> None:
         ix = self._table.indexAt(pos)
