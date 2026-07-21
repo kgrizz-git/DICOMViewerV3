@@ -140,6 +140,7 @@ def test_study_index_remove_failure_sanitizes_paths(monkeypatch, qapp) -> None:
 
     fake_dialog = SimpleNamespace(
         _backend_ok_or_warn=lambda: True,
+        _privacy=lambda: False,
         _model=SimpleNamespace(
             group_row_snapshot=lambda row: {
                 "study_uid": "1.2.3",
@@ -162,8 +163,16 @@ def test_study_index_remove_failure_sanitizes_paths(monkeypatch, qapp) -> None:
         staticmethod(lambda *args, **kwargs: study_index_dialog.QMessageBox.StandardButton.Yes),
     )
     monkeypatch.setattr(study_index_dialog.QMessageBox, "critical", staticmethod(_critical))
+    # Batch remove also surfaces a "nothing removed" warning after a failed delete;
+    # stub it (and information) so the real QMessageBox isn't called with a fake parent.
+    monkeypatch.setattr(
+        study_index_dialog.QMessageBox, "warning", staticmethod(lambda *a, **k: None)
+    )
+    monkeypatch.setattr(
+        study_index_dialog.QMessageBox, "information", staticmethod(lambda *a, **k: None)
+    )
 
-    study_index_dialog.StudyIndexSearchDialog._remove_study_at_row(fake_dialog, 0)
+    study_index_dialog.StudyIndexSearchDialog._remove_studies_at_rows(fake_dialog, [0])
 
     assert captured
     title, text = captured[0]
