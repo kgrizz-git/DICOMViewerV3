@@ -430,3 +430,36 @@ def test_study_index_store_grouped_ascending_vs_descending(tmp_path) -> None:
     )
     assert [r["study_uid"] for r in asc] == ["1.alpha", "2.bravo"]
     assert [r["study_uid"] for r in desc] == ["2.bravo", "1.alpha"]
+
+
+def test_study_index_store_row_count(tmp_path) -> None:
+    db = tmp_path / "count.sqlite"
+    store = StudyIndexStore(str(db), "pw-count")
+    store.init_schema()
+    assert store.row_count() == 0
+    _seed_two_studies(store, tmp_path)  # two instance rows across two studies
+    assert store.row_count() == 2
+
+
+def test_study_index_store_integrity_check_ok(tmp_path) -> None:
+    db = tmp_path / "integ.sqlite"
+    store = StudyIndexStore(str(db), "pw-integ")
+    store.init_schema()
+    _seed_two_studies(store, tmp_path)
+    store.checkpoint()
+    assert store.integrity_check() is True
+
+
+def test_study_index_store_iter_all_entries_and_keys(tmp_path) -> None:
+    db = tmp_path / "entries.sqlite"
+    store = StudyIndexStore(str(db), "pw-entries")
+    store.init_schema()
+    _seed_two_studies(store, tmp_path)
+    entries = store.iter_all_entries()
+    assert len(entries) == 2
+    # Metadata + file paths only — no FTS ``doc`` and no pixel data.
+    assert "doc" not in entries[0]
+    assert {"study_uid", "file_path", "study_root_path"} <= set(entries[0])
+    keys = store.existing_study_file_keys()
+    assert (entries[0]["study_uid"], entries[0]["file_path"]) in keys
+    assert len(keys) == 2
