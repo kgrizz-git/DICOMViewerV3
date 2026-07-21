@@ -28,14 +28,19 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
 
+from core.study_cache import get_total_system_memory_mb
 from gui.accent_presets import ACCENT_PRESETS, get_preset
 from gui.privacy_storage_settings import PrivacyStorageSettingsPanel
 from utils.config_manager import ConfigManager
 from utils.privacy.safe_storage import DeletionResult
+
+#: Mirrors the memory_floor_mb default StudyCache is constructed with in main.py.
+_STUDY_LOAD_MEMORY_FLOOR_MB = 1024.0
 
 
 class SettingsDialog(QDialog):
@@ -159,6 +164,51 @@ class SettingsDialog(QDialog):
         wl_layout.addWidget(wl_manage_btn)
         layout.addWidget(wl_group)
 
+        # ── Study load memory budget ──────────────────────────────────────
+        memory_group = QGroupBox("Study Load Memory Budget")
+        memory_form = QFormLayout(memory_group)
+        memory_hint = QLabel(
+            "Loaded studies are kept in memory up to this budget. When it would "
+            "be exceeded, the oldest (least recently viewed) studies are "
+            "unloaded to make room; the currently displayed study is never "
+            "unloaded automatically."
+        )
+        memory_hint.setWordWrap(True)
+        memory_form.addRow(memory_hint)
+
+        self._memory_fraction_spin = QSpinBox()
+        self._memory_fraction_spin.setRange(10, 90)
+        self._memory_fraction_spin.setSingleStep(5)
+        self._memory_fraction_spin.setSuffix(" %")
+        self._memory_fraction_spin.setValue(
+            round(self.config_manager.get_study_load_memory_fraction() * 100)
+        )
+        self._memory_fraction_spin.valueChanged.connect(
+            self._update_memory_budget_preview
+        )
+        memory_form.addRow("Fraction of system RAM:", self._memory_fraction_spin)
+
+        self._memory_budget_preview = QLabel()
+        memory_form.addRow("Computed budget:", self._memory_budget_preview)
+        self._update_memory_budget_preview()
+
+        self._max_studies_cap_spin = QSpinBox()
+        self._max_studies_cap_spin.setRange(1, 200)
+        self._max_studies_cap_spin.setValue(
+            self.config_manager.get_study_load_max_studies_cap()
+        )
+        memory_form.addRow(
+            "Safety-net study count cap:", self._max_studies_cap_spin
+        )
+        cap_hint = QLabel(
+            "Backstops the memory budget above against pathological cases "
+            "(e.g. many very small studies); the budget is the primary limit."
+        )
+        cap_hint.setWordWrap(True)
+        memory_form.addRow(cap_hint)
+
+        layout.addWidget(memory_group)
+
         self._privacy_storage_panel = PrivacyStorageSettingsPanel(
             self.config_manager,
             clear_study_index_callback=self._clear_study_index_callback,
@@ -190,6 +240,21 @@ class SettingsDialog(QDialog):
                 "border-radius: 3px;"
             )
 
+    def _update_memory_budget_preview(self) -> None:
+        """Recompute the displayed budget preview from the current spin value."""
+        total_ram_mb = get_total_system_memory_mb()
+        fraction = self._memory_fraction_spin.value() / 100.0
+        if total_ram_mb <= 0.0:
+            self._memory_budget_preview.setText(
+                "Total system RAM could not be determined; a fixed fallback "
+                "threshold will be used instead."
+            )
+            return
+        budget_mb = max(fraction * total_ram_mb, _STUDY_LOAD_MEMORY_FLOOR_MB)
+        self._memory_budget_preview.setText(
+            f"~{budget_mb / 1024.0:.1f} GB (of {total_ram_mb / 1024.0:.1f} GB total RAM)"
+        )
+
     def _on_accept(self) -> None:
         accent_key = self._accent_combo.currentData()
         if accent_key:
@@ -197,14 +262,27 @@ class SettingsDialog(QDialog):
         toolbar_style = self._toolbar_label_combo.currentData()
         if toolbar_style:
             self.config_manager.set_toolbar_label_style(toolbar_style)
+        if not self.config_manager.set_study_load_memory_fraction(
+            self._memory_fraction_spin.value() / 100.0
+        ):
+            self._settings_not_saved()
+            return
+        if not self.config_manager.set_study_load_max_studies_cap(
+            self._max_studies_cap_spin.value()
+        ):
+            self._settings_not_saved()
+            return
         if not self._privacy_storage_panel.apply():
             return
         if not self.config_manager.save_config():
-            QMessageBox.warning(
-                self,
-                "Settings Not Saved",
-                "The settings file could not be updated. Your changes were not confirmed.",
-            )
+            self._settings_not_saved()
             return
         self.settings_applied.emit()
         self.accept()
+
+    def _settings_not_saved(self) -> None:
+        QMessageBox.warning(
+            self,
+            "Settings Not Saved",
+            "The settings file could not be updated. Your changes were not confirmed.",
+        )
