@@ -196,8 +196,8 @@ def show_eviction_confirmation(
 
     Args:
         parent: Parent widget for the dialog (e.g. ``app.main_window``).
-        reason: Human-readable reason (e.g. "study limit reached" or
-                "memory limit").
+        reason: Human-readable reason (e.g. "memory budget" or
+                "study count cap").
         study_descriptions: List of study descriptions that will be unloaded.
 
     Returns:
